@@ -1,0 +1,48 @@
+{
+  "name": "local-addon-nexus-ai",
+  "productName": "Nexus AI",
+  "version": "0.1.0",
+  "main": "lib/main.js",
+  "renderer": "lib/renderer.js",
+  "localAddon": {
+    "minimumLocalVersion": "9.0.0",
+    "type": "addon",
+    "category": "developer-tools"
+  },
+  "scripts": {
+    "build": "npm run clean && npm run compile && npm run create-entry-points",
+    "compile": "tsc -p .",
+    "create-entry-points": "node scripts/create-entry-points.js",
+    "clean": "rm -rf lib",
+    "watch": "tsc -p . --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "download-model": "node scripts/download-model.js"
+  },
+  "dependencies": {
+    "@lancedb/lancedb": "^0.13.0",
+    "onnxruntime-node": "^1.20.0",
+    "mysql2": "^3.11.0",
+    "zod": "^3.22.4",
+    "apache-arrow": ">=13.0.0 <=17.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.3",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "@types/jest": "^29.5.0",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "peerDependencies": {
+    "@getflywheel/local": "*",
+    "electron": "*",
+    "react": "*",
+    "react-dom": "*"
+  }
+}

@@ -1,0 +1,166 @@
+// ---------------------------------------------------------------------------
+// Vector Store
+// ---------------------------------------------------------------------------
+
+export interface VectorDocument {
+  /** Unique ID: wp_{siteId}_{postId} or wp_{siteId}_{postId}_chunk_{n} */
+  id: string;
+  siteId: string;
+  title: string;
+  content: string;
+  postType: string;
+  postId: number;
+  chunkIndex: number;
+  vector: Float32Array;
+  /** JSON-serialized metadata (excerpt, author, date, categories, tags, etc.) */
+  metadata: string;
+  indexedAt: number;
+}
+
+export interface SearchOptions {
+  limit: number;
+  postType?: string;
+}
+
+export interface SearchResult {
+  id: string;
+  title: string;
+  content: string;
+  postType: string;
+  postId: number;
+  score: number;
+  metadata: string;
+}
+
+export interface SiteIndexStats {
+  siteId: string;
+  documentCount: number;
+  chunkCount: number;
+  lastIndexed: number;
+}
+
+// ---------------------------------------------------------------------------
+// Content Extraction
+// ---------------------------------------------------------------------------
+
+export interface ExtractedPost {
+  id: number;
+  title: string;
+  content: string;
+  cleanedContent: string;
+  excerpt: string;
+  postType: string;
+  postStatus: string;
+  author: string;
+  date: string;
+  categories: string[];
+  tags: string[];
+  customFields: Record<string, string>;
+}
+
+export interface ExtractedContent {
+  posts: ExtractedPost[];
+  siteInfo: {
+    name: string;
+    url: string;
+    wpVersion: string;
+  };
+  extractedAt: number;
+}
+
+export interface SiteStructure {
+  themes: ThemeInfo[];
+  plugins: PluginInfo[];
+  phpVersion: string;
+  wpVersion: string;
+  isMultisite: boolean;
+  hasWooCommerce: boolean;
+  hasACF: boolean;
+}
+
+export interface ThemeInfo {
+  name: string;
+  slug: string;
+  version: string;
+  isActive: boolean;
+  isChildTheme: boolean;
+  parentTheme?: string;
+}
+
+export interface PluginInfo {
+  name: string;
+  slug: string;
+  version: string;
+  isActive: boolean;
+  description: string;
+}
+
+// ---------------------------------------------------------------------------
+// Index Registry
+// ---------------------------------------------------------------------------
+
+export interface IndexEntry {
+  siteId: string;
+  siteName: string;
+  lastIndexed: number;
+  documentCount: number;
+  chunkCount: number;
+  durationMs: number;
+  structure: SiteStructure | null;
+  state: 'indexed' | 'indexing' | 'error' | 'stale';
+  error?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Content Pipeline
+// ---------------------------------------------------------------------------
+
+export interface IndexResult {
+  siteId: string;
+  documentsIndexed: number;
+  chunksIndexed: number;
+  durationMs: number;
+  errors: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Ollama
+// ---------------------------------------------------------------------------
+
+export interface OllamaModel {
+  name: string;
+  size: number;
+  sizeGB: string;
+  parameterSize: string;
+  quantization: string;
+  family: string;
+}
+
+export interface OllamaStatus {
+  available: boolean;
+  version?: string;
+  models: OllamaModel[];
+  recommended?: OllamaModel;
+}
+
+// ---------------------------------------------------------------------------
+// MCP
+// ---------------------------------------------------------------------------
+
+export interface McpConnectionInfo {
+  url: string;
+  authToken: string;
+  port: number;
+  version: string;
+  tools: string[];
+}
+
+// ---------------------------------------------------------------------------
+// IPC Responses
+// ---------------------------------------------------------------------------
+
+export interface IpcResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}

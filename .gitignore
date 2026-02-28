@@ -1,0 +1,8 @@
+node_modules/
+lib/
+coverage/
+models/all-MiniLM-L6-v2-quantized/model.onnx
+models/all-MiniLM-L6-v2-quantized/vocab.txt
+models/all-MiniLM-L6-v2-quantized/tokenizer_config.json
+*.tgz
+.DS_Store
