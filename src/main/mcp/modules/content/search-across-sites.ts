@@ -1,0 +1,72 @@
+import { McpToolHandler, McpToolResult } from '../../types';
+
+export const searchAcrossSitesHandler: McpToolHandler = {
+  definition: {
+    name: 'search_across_sites',
+    description:
+      'Search indexed WordPress content across ALL indexed sites using semantic similarity. ' +
+      'Returns results grouped by site. Useful for finding content patterns across a fleet.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Natural language search query',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max results per site (default: 3, max: 10)',
+        },
+      },
+      required: ['query'],
+    },
+  },
+
+  async execute(args, services): Promise<McpToolResult> {
+    const entries = services.indexRegistry.listAll();
+    const indexedSites = entries.filter((e) => e.state === 'indexed' || e.state === 'stale');
+
+    if (indexedSites.length === 0) {
+      return {
+        content: [{ type: 'text', text: 'No sites are currently indexed. Start a site to trigger indexing.' }],
+        isError: true,
+      };
+    }
+
+    const queryVector = await services.embeddingService.embed(args.query as string);
+    const limitPerSite = Math.min(Math.max((args.limit as number) || 3, 1), 10);
+
+    const sections: string[] = [];
+    let totalResults = 0;
+
+    for (const entry of indexedSites) {
+      const results = await services.vectorStore.search(entry.siteId, queryVector, {
+        limit: limitPerSite,
+      });
+
+      if (results.length === 0) continue;
+
+      totalResults += results.length;
+
+      const siteLabel = entry.siteName || entry.siteId;
+      const staleNote = entry.state === 'stale' ? ' (index may be stale)' : '';
+      const lines = results.map((r, i) => {
+        const excerpt = r.content.length > 150 ? r.content.substring(0, 150) + '...' : r.content;
+        return `  ${i + 1}. **${r.title}** (${r.postType}, score: ${r.score.toFixed(3)})\n     ${excerpt}`;
+      });
+
+      sections.push(`### ${siteLabel}${staleNote}\n${lines.join('\n\n')}`);
+    }
+
+    if (totalResults === 0) {
+      return {
+        content: [{ type: 'text', text: `No results found for "${args.query}" across ${indexedSites.length} indexed sites.` }],
+      };
+    }
+
+    const header = `Found ${totalResults} results across ${sections.length} sites for "${args.query}":\n`;
+    return {
+      content: [{ type: 'text', text: header + '\n' + sections.join('\n\n') }],
+    };
+  },
+};
