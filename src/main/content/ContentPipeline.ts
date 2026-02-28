@@ -5,6 +5,7 @@ import { FileScanner } from './FileScanner';
 import { IndexRegistry } from './IndexRegistry';
 import { VectorDocument, IndexResult, ExtractedPost } from '../../common/types';
 import { CHUNK_MAX_WORDS } from '../../common/constants';
+import { discoverRestApi } from './extractors/RestApiScanner';
 
 export type IndexStatus =
   | { state: 'idle' }
@@ -66,6 +67,26 @@ export class ContentPipeline {
           structure.customTables = extracted.customTables;
         }
 
+        // Merge DB-backed active detection into structure
+        if (structure && extracted.activeThemeSlug) {
+          for (const theme of structure.themes) {
+            theme.isActive = theme.slug === extracted.activeThemeSlug;
+          }
+        }
+        if (structure && extracted.activePluginSlugs) {
+          const activeSlugs = new Set(extracted.activePluginSlugs);
+          for (const plugin of structure.plugins) {
+            plugin.isActive = activeSlugs.has(plugin.slug);
+          }
+        }
+
+        // Merge new structure fields
+        if (structure) {
+          if (extracted.users) structure.users = extracted.users;
+          if (extracted.permalinks) structure.permalinks = extracted.permalinks;
+          if (extracted.health) structure.health = extracted.health;
+        }
+
         // Collect sub-extractor warnings
         if (extracted.warnings) {
           errors.push(...extracted.warnings);
@@ -75,6 +96,16 @@ export class ContentPipeline {
       }
     } else {
       errors.push('MySQL not available — site may not be running');
+    }
+
+    // REST API discovery (requires running site with domain)
+    if (structure && info.domain) {
+      try {
+        const restApi = await discoverRestApi(info.domain);
+        if (restApi) structure.restApi = restApi;
+      } catch (err) {
+        errors.push(`RestApiScanner: ${(err as Error).message}`);
+      }
     }
 
     if (posts.length === 0) {

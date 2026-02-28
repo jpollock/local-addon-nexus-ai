@@ -6,8 +6,9 @@ export const getSiteStructureHandler: McpToolHandler = {
     name: 'get_site_structure',
     description:
       'Get deep structural context for a WordPress site. Returns themes (active/installed), ' +
-      'plugins, PHP/WP versions, custom post types, multisite status, and key plugin detection ' +
-      '(WooCommerce, ACF). Works whether or not the site is running.',
+      'plugins (active/inactive), PHP/WP versions, user/role summary, REST API namespaces, ' +
+      'permalink structure, site health indicators, custom tables, and key plugin detection ' +
+      '(WooCommerce, ACF). DB-backed details available when site is running.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -50,8 +51,13 @@ export const getSiteStructureHandler: McpToolHandler = {
     lines.push(`**Multisite:** ${structure.isMultisite ? 'Yes' : 'No'}`);
 
     // Themes
+    const activeThemeCount = structure.themes.filter((t) => t.isActive).length;
     lines.push('');
-    lines.push('### Themes');
+    if (activeThemeCount > 0) {
+      lines.push(`### Themes (${activeThemeCount} active)`);
+    } else {
+      lines.push('### Themes');
+    }
     if (structure.themes.length === 0) {
       lines.push('No themes found.');
     } else {
@@ -63,8 +69,13 @@ export const getSiteStructureHandler: McpToolHandler = {
     }
 
     // Plugins
+    const activePluginCount = structure.plugins.filter((p) => p.isActive).length;
     lines.push('');
-    lines.push('### Plugins');
+    if (activePluginCount > 0) {
+      lines.push(`### Plugins (${activePluginCount} active / ${structure.plugins.length} installed)`);
+    } else {
+      lines.push('### Plugins');
+    }
     if (structure.plugins.length === 0) {
       lines.push('No plugins found.');
     } else {
@@ -98,6 +109,47 @@ export const getSiteStructureHandler: McpToolHandler = {
           .join(', ');
         lines.push(`- **${plugin}:** ${tableList}`);
       }
+    }
+
+    // Users
+    if (structure.users && structure.users.totalUsers > 0) {
+      lines.push('');
+      lines.push('### Users');
+      lines.push(`- Total: ${structure.users.totalUsers}`);
+
+      const roleParts = Object.entries(structure.users.roleBreakdown)
+        .sort(([, a], [, b]) => b - a)
+        .map(([role, count]) => `${role.charAt(0).toUpperCase() + role.slice(1)}s: ${count}`);
+      if (roleParts.length > 0) {
+        lines.push(`- ${roleParts.join(', ')}`);
+      }
+
+      if (structure.users.customRoles.length > 0) {
+        lines.push(`- Custom roles: ${structure.users.customRoles.join(', ')}`);
+      }
+    }
+
+    // REST API
+    if (structure.restApi) {
+      lines.push('');
+      lines.push('### REST API');
+      if (structure.restApi.customNamespaces.length > 0) {
+        lines.push(`- Custom namespaces: ${structure.restApi.customNamespaces.join(', ')}`);
+      }
+      lines.push(`- Total routes: ${structure.restApi.routeCount}`);
+    }
+
+    // Site Health
+    if (structure.health) {
+      lines.push('');
+      lines.push('### Site Health');
+      lines.push(`- Search engines: ${structure.health.searchEngineVisibility ? 'Allowed' : 'Blocked'}`);
+      if (structure.permalinks) {
+        lines.push(`- Permalinks: ${structure.permalinks.structure}`);
+      }
+      lines.push(`- Language: ${structure.health.language}`);
+      lines.push(`- Timezone: ${structure.health.timezone}`);
+      lines.push(`- Default role: ${structure.health.defaultRole}`);
     }
 
     // Index status if available

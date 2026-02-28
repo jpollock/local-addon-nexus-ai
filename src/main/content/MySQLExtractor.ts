@@ -9,6 +9,7 @@ import { extractProducts } from './extractors/WooCommerceExtractor';
 import { enrichWithACF } from './extractors/ACFExtractor';
 import { extractMedia } from './extractors/MediaExtractor';
 import { discoverCustomTables } from './extractors/CustomTableDiscovery';
+import { extractSiteStructureData, StructureData } from './extractors/StructureExtractor';
 
 /**
  * Resolves MySQL connection config for a Local site.
@@ -23,6 +24,7 @@ export interface SiteConnectionInfo {
   siteId: string;
   siteName: string;
   sitePath: string;          // e.g. /Users/.../Local Sites/mysite
+  domain?: string;           // e.g. 'mysite.local'
 }
 
 function getSocketPath(siteId: string): string {
@@ -135,12 +137,25 @@ export class MySQLExtractor {
         warnings.push(`CustomTableDiscovery: ${(err as Error).message}`);
       }
 
+      // Structure enrichment (active theme/plugins, users, permalinks, health)
+      let structureData: StructureData | undefined;
+      try {
+        structureData = await extractSiteStructureData(connection, prefix);
+      } catch (err) {
+        warnings.push(`StructureExtractor: ${(err as Error).message}`);
+      }
+
       return {
         posts,
         siteInfo,
         extractedAt: Date.now(),
         customTables,
         warnings: warnings.length > 0 ? warnings : undefined,
+        activeThemeSlug: structureData?.activeThemeSlug,
+        activePluginSlugs: structureData?.activePluginSlugs,
+        users: structureData?.users,
+        permalinks: structureData?.permalinks,
+        health: structureData?.health,
       };
     } finally {
       await connection.end();

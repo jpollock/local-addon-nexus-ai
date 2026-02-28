@@ -355,4 +355,146 @@ describe('ContentPipeline', () => {
     expect(result.documentsIndexed).toBe(3);
     expect(result.errors).toEqual([]);
   });
+
+  test('merges active theme slug into structure', async () => {
+    mockScanner.scan.mockResolvedValue({
+      themes: [
+        { name: 'Twenty Twenty-Four', slug: 'flavor-starter', version: '1.3', isActive: false, isChildTheme: false },
+        { name: 'Flavor Child', slug: 'flavor-child', version: '1.0', isActive: false, isChildTheme: true, parentTheme: 'flavor-starter' },
+      ],
+      plugins: [],
+      phpVersion: '8.2',
+      wpVersion: '6.5',
+      isMultisite: false,
+      hasWooCommerce: false,
+      hasACF: false,
+    });
+
+    mockExtractor.extract.mockResolvedValue({
+      posts: [makePost(1)],
+      siteInfo: { name: 'Test', url: '', wpVersion: '6.5' },
+      extractedAt: Date.now(),
+      activeThemeSlug: 'flavor-child',
+    });
+
+    const pipeline = createPipeline();
+    await pipeline.indexSite(SITE_INFO);
+
+    const entry = indexRegistry.get('test-site');
+    expect(entry).not.toBeNull();
+    const themes = entry!.structure!.themes;
+    expect(themes.find((t) => t.slug === 'flavor-child')!.isActive).toBe(true);
+    expect(themes.find((t) => t.slug === 'flavor-starter')!.isActive).toBe(false);
+  });
+
+  test('merges active plugin slugs into structure', async () => {
+    mockScanner.scan.mockResolvedValue({
+      themes: [],
+      plugins: [
+        { name: 'WooCommerce', slug: 'woocommerce', version: '10.0', isActive: false, description: '' },
+        { name: 'Akismet', slug: 'akismet', version: '5.0', isActive: false, description: '' },
+        { name: 'Hello', slug: 'hello-dolly', version: '1.0', isActive: false, description: '' },
+      ],
+      phpVersion: '8.2',
+      wpVersion: '6.5',
+      isMultisite: false,
+      hasWooCommerce: true,
+      hasACF: false,
+    });
+
+    mockExtractor.extract.mockResolvedValue({
+      posts: [makePost(1)],
+      siteInfo: { name: 'Test', url: '', wpVersion: '6.5' },
+      extractedAt: Date.now(),
+      activePluginSlugs: ['woocommerce', 'hello-dolly'],
+    });
+
+    const pipeline = createPipeline();
+    await pipeline.indexSite(SITE_INFO);
+
+    const entry = indexRegistry.get('test-site');
+    const plugins = entry!.structure!.plugins;
+    expect(plugins.find((p) => p.slug === 'woocommerce')!.isActive).toBe(true);
+    expect(plugins.find((p) => p.slug === 'akismet')!.isActive).toBe(false);
+    expect(plugins.find((p) => p.slug === 'hello-dolly')!.isActive).toBe(true);
+  });
+
+  test('merges user summary into structure', async () => {
+    mockExtractor.extract.mockResolvedValue({
+      posts: [makePost(1)],
+      siteInfo: { name: 'Test', url: '', wpVersion: '6.5' },
+      extractedAt: Date.now(),
+      users: {
+        totalUsers: 10,
+        roleBreakdown: { administrator: 2, subscriber: 8 },
+        customRoles: [],
+      },
+    });
+
+    const pipeline = createPipeline();
+    await pipeline.indexSite(SITE_INFO);
+
+    const entry = indexRegistry.get('test-site');
+    expect(entry!.structure!.users).toBeDefined();
+    expect(entry!.structure!.users!.totalUsers).toBe(10);
+    expect(entry!.structure!.users!.roleBreakdown.administrator).toBe(2);
+  });
+
+  test('merges permalink info into structure', async () => {
+    mockExtractor.extract.mockResolvedValue({
+      posts: [makePost(1)],
+      siteInfo: { name: 'Test', url: '', wpVersion: '6.5' },
+      extractedAt: Date.now(),
+      permalinks: { structure: '/%postname%/', totalRewriteRules: 42 },
+    });
+
+    const pipeline = createPipeline();
+    await pipeline.indexSite(SITE_INFO);
+
+    const entry = indexRegistry.get('test-site');
+    expect(entry!.structure!.permalinks).toBeDefined();
+    expect(entry!.structure!.permalinks!.structure).toBe('/%postname%/');
+    expect(entry!.structure!.permalinks!.totalRewriteRules).toBe(42);
+  });
+
+  test('merges health info into structure', async () => {
+    mockExtractor.extract.mockResolvedValue({
+      posts: [makePost(1)],
+      siteInfo: { name: 'Test', url: '', wpVersion: '6.5' },
+      extractedAt: Date.now(),
+      health: {
+        searchEngineVisibility: true,
+        language: 'en_US',
+        timezone: 'America/New_York',
+        defaultRole: 'subscriber',
+      },
+    });
+
+    const pipeline = createPipeline();
+    await pipeline.indexSite(SITE_INFO);
+
+    const entry = indexRegistry.get('test-site');
+    expect(entry!.structure!.health).toBeDefined();
+    expect(entry!.structure!.health!.searchEngineVisibility).toBe(true);
+    expect(entry!.structure!.health!.timezone).toBe('America/New_York');
+  });
+
+  test('structure enrichment failure is non-fatal', async () => {
+    // No activeThemeSlug, users, etc. — just posts
+    mockExtractor.extract.mockResolvedValue({
+      posts: [makePost(1)],
+      siteInfo: { name: 'Test', url: '', wpVersion: '6.5' },
+      extractedAt: Date.now(),
+    });
+
+    const pipeline = createPipeline();
+    const result = await pipeline.indexSite(SITE_INFO);
+
+    expect(result.documentsIndexed).toBe(1);
+    expect(result.errors).toEqual([]);
+    // Structure should still exist but without enrichment fields
+    const entry = indexRegistry.get('test-site');
+    expect(entry!.structure).not.toBeNull();
+    expect(entry!.structure!.users).toBeUndefined();
+  });
 });

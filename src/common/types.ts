@@ -68,6 +68,11 @@ export interface ExtractedContent {
   extractedAt: number;
   customTables?: CustomTableInfo[];
   warnings?: string[];
+  activeThemeSlug?: string;
+  activePluginSlugs?: string[];
+  users?: UserSummary;
+  permalinks?: PermalinkInfo;
+  health?: SiteHealthInfo;
 }
 
 export interface CustomTableInfo {
@@ -75,6 +80,30 @@ export interface CustomTableInfo {
   prefix: string;
   rowCount: number;
   pluginGuess: string;
+}
+
+export interface UserSummary {
+  totalUsers: number;
+  roleBreakdown: Record<string, number>;
+  customRoles: string[];
+}
+
+export interface RestApiInfo {
+  namespaces: string[];
+  customNamespaces: string[];
+  routeCount: number;
+}
+
+export interface PermalinkInfo {
+  structure: string;
+  totalRewriteRules: number;
+}
+
+export interface SiteHealthInfo {
+  searchEngineVisibility: boolean;
+  language: string;
+  timezone: string;
+  defaultRole: string;
 }
 
 export interface SiteStructure {
@@ -86,6 +115,10 @@ export interface SiteStructure {
   hasWooCommerce: boolean;
   hasACF: boolean;
   customTables?: CustomTableInfo[];
+  users?: UserSummary;
+  restApi?: RestApiInfo;
+  permalinks?: PermalinkInfo;
+  health?: SiteHealthInfo;
 }
 
 export interface ThemeInfo {
