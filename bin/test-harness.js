@@ -59,6 +59,7 @@ const { McpServer } = require(path.join(libDir, 'main', 'mcp', 'McpServer'));
 const { registerContentTools } = require(path.join(libDir, 'main', 'mcp', 'modules', 'content', 'index'));
 const { registerSiteContextTools } = require(path.join(libDir, 'main', 'mcp', 'modules', 'site-context', 'index'));
 const { registerOllamaTools } = require(path.join(libDir, 'main', 'mcp', 'modules', 'ollama', 'index'));
+const { registerFleetTools } = require(path.join(libDir, 'main', 'mcp', 'modules', 'fleet', 'index'));
 const { saveConnectionInfo, deleteConnectionInfo } = require(path.join(libDir, 'main', 'mcp', 'connection-info'));
 
 // --------------------------------------------------------------------------
@@ -191,6 +192,7 @@ async function main() {
   registerContentTools(registry);
   registerSiteContextTools(registry);
   registerOllamaTools(registry);
+  registerFleetTools(registry);
 
   logger.info(`Registered tools: ${registry.allToolNames().join(', ')}`);
 
