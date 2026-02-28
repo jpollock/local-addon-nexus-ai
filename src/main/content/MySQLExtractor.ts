@@ -2,9 +2,13 @@ import * as mysql from 'mysql2/promise';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { ExtractedContent, ExtractedPost } from '../../common/types';
+import { ExtractedContent, ExtractedPost, SiteStructure } from '../../common/types';
 import { EXCLUDED_POST_TYPES } from '../../common/constants';
 import { cleanWordPressContent } from './html-cleaner';
+import { extractProducts } from './extractors/WooCommerceExtractor';
+import { enrichWithACF } from './extractors/ACFExtractor';
+import { extractMedia } from './extractors/MediaExtractor';
+import { discoverCustomTables } from './extractors/CustomTableDiscovery';
 
 /**
  * Resolves MySQL connection config for a Local site.
@@ -65,8 +69,10 @@ export class MySQLExtractor {
 
   /**
    * Extract published content from a running Local site's MySQL database.
+   * When `structure` is provided, conditionally runs sub-extractors for
+   * WooCommerce products, ACF fields, media attachments, and custom tables.
    */
-  async extract(info: SiteConnectionInfo): Promise<ExtractedContent> {
+  async extract(info: SiteConnectionInfo, structure?: SiteStructure | null): Promise<ExtractedContent> {
     const socketPath = getSocketPath(info.siteId);
     const wpConfigPath = path.join(info.sitePath, 'app', 'public', 'wp-config.php');
 
@@ -83,13 +89,58 @@ export class MySQLExtractor {
     });
 
     try {
-      const posts = await this.extractPosts(connection, prefix);
+      const warnings: string[] = [];
+
+      // When WooCommerce is detected, skip products from base query
+      // so WooCommerceExtractor can provide enriched versions
+      const skipPostTypes = structure?.hasWooCommerce ? ['product'] : [];
+
+      const posts = await this.extractPosts(connection, prefix, skipPostTypes);
       const siteInfo = await this.extractSiteInfo(connection, prefix, info.siteName);
+
+      // --- Sub-extractors (each wrapped in try/catch — non-fatal) ---
+
+      // WooCommerce products (enriched with price, SKU, categories, attributes)
+      if (structure?.hasWooCommerce) {
+        try {
+          const products = await extractProducts(connection, prefix);
+          posts.push(...products);
+        } catch (err) {
+          warnings.push(`WooCommerceExtractor: ${(err as Error).message}`);
+        }
+      }
+
+      // ACF custom fields (enriches posts in-place)
+      if (structure?.hasACF) {
+        try {
+          await enrichWithACF(connection, prefix, posts);
+        } catch (err) {
+          warnings.push(`ACFExtractor: ${(err as Error).message}`);
+        }
+      }
+
+      // Media attachments (always — lightweight, self-filtering)
+      try {
+        const media = await extractMedia(connection, prefix);
+        posts.push(...media);
+      } catch (err) {
+        warnings.push(`MediaExtractor: ${(err as Error).message}`);
+      }
+
+      // Custom table discovery (structure-only metadata)
+      let customTables;
+      try {
+        customTables = await discoverCustomTables(connection, prefix);
+      } catch (err) {
+        warnings.push(`CustomTableDiscovery: ${(err as Error).message}`);
+      }
 
       return {
         posts,
         siteInfo,
         extractedAt: Date.now(),
+        customTables,
+        warnings: warnings.length > 0 ? warnings : undefined,
       };
     } finally {
       await connection.end();
@@ -99,9 +150,11 @@ export class MySQLExtractor {
   private async extractPosts(
     conn: mysql.Connection,
     prefix: string,
+    skipPostTypes: string[] = [],
   ): Promise<ExtractedPost[]> {
     // Discover publishable post types
-    const excludeList = EXCLUDED_POST_TYPES.map((t) => `'${t}'`).join(', ');
+    const allExcluded = [...EXCLUDED_POST_TYPES, ...skipPostTypes];
+    const excludeList = allExcluded.map((t) => `'${t}'`).join(', ');
     const [postTypeRows] = await conn.query<mysql.RowDataPacket[]>(
       `SELECT DISTINCT post_type FROM ${prefix}posts
        WHERE post_status = 'publish' AND post_type NOT IN (${excludeList})`,

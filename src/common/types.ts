@@ -66,6 +66,15 @@ export interface ExtractedContent {
     wpVersion: string;
   };
   extractedAt: number;
+  customTables?: CustomTableInfo[];
+  warnings?: string[];
+}
+
+export interface CustomTableInfo {
+  name: string;
+  prefix: string;
+  rowCount: number;
+  pluginGuess: string;
 }
 
 export interface SiteStructure {
@@ -76,6 +85,7 @@ export interface SiteStructure {
   isMultisite: boolean;
   hasWooCommerce: boolean;
   hasACF: boolean;
+  customTables?: CustomTableInfo[];
 }
 
 export interface ThemeInfo {

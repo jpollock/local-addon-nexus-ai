@@ -80,6 +80,26 @@ export const getSiteStructureHandler: McpToolHandler = {
     lines.push(`- WooCommerce: ${structure.hasWooCommerce ? 'Installed' : 'Not found'}`);
     lines.push(`- ACF: ${structure.hasACF ? 'Installed' : 'Not found'}`);
 
+    // Custom tables (grouped by plugin)
+    if (structure.customTables && structure.customTables.length > 0) {
+      lines.push('');
+      lines.push('### Custom Tables');
+
+      const byPlugin = new Map<string, Array<{ name: string; rowCount: number }>>();
+      for (const table of structure.customTables) {
+        const plugin = table.pluginGuess;
+        if (!byPlugin.has(plugin)) byPlugin.set(plugin, []);
+        byPlugin.get(plugin)!.push({ name: table.name, rowCount: table.rowCount });
+      }
+
+      for (const [plugin, tables] of byPlugin) {
+        const tableList = tables
+          .map((t) => `${t.name} (~${t.rowCount} rows)`)
+          .join(', ');
+        lines.push(`- **${plugin}:** ${tableList}`);
+      }
+    }
+
     // Index status if available
     if (indexEntry) {
       lines.push('');

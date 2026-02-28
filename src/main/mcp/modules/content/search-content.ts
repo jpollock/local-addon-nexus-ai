@@ -6,6 +6,7 @@ export const searchContentHandler: McpToolHandler = {
     name: 'search_site_content',
     description:
       'Search indexed WordPress content using semantic similarity. ' +
+      'Searches posts, pages, WooCommerce products, and media attachments. ' +
       'Returns ranked results with titles, excerpts, and relevance scores. ' +
       'The site must be indexed first (indexing happens automatically when a site starts).',
     inputSchema: {
@@ -25,7 +26,7 @@ export const searchContentHandler: McpToolHandler = {
         },
         postType: {
           type: 'string',
-          description: 'Filter by post type (e.g., "post", "page", "product")',
+          description: 'Filter by post type (e.g., "post", "page", "product", "attachment")',
         },
       },
       required: ['site', 'query'],

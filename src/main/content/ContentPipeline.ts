@@ -58,8 +58,18 @@ export class ContentPipeline {
     if (mysqlExtractor.isAvailable(info)) {
       this.setStatus(info.siteId, { state: 'indexing', progress: 10, message: 'Extracting content from database...' });
       try {
-        const extracted = await mysqlExtractor.extract(info);
+        const extracted = await mysqlExtractor.extract(info, structure);
         posts = extracted.posts;
+
+        // Merge custom tables into structure
+        if (extracted.customTables && structure) {
+          structure.customTables = extracted.customTables;
+        }
+
+        // Collect sub-extractor warnings
+        if (extracted.warnings) {
+          errors.push(...extracted.warnings);
+        }
       } catch (err) {
         errors.push(`MySQLExtractor: ${(err as Error).message}`);
       }

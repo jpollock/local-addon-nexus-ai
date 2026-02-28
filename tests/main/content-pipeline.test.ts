@@ -245,4 +245,114 @@ describe('ContentPipeline', () => {
     expect(result.errors.length).toBeGreaterThan(0);
     expect(result.errors[0]).toContain('ONNX crash');
   });
+
+  test('passes structure to extract() as second argument', async () => {
+    const pipeline = createPipeline();
+    await pipeline.indexSite(SITE_INFO);
+
+    // extract should have been called with structure as second arg
+    expect(mockExtractor.extract).toHaveBeenCalledWith(
+      SITE_INFO,
+      expect.objectContaining({
+        hasWooCommerce: false,
+        hasACF: false,
+      }),
+    );
+  });
+
+  test('includes products when hasWooCommerce is true', async () => {
+    // Scanner returns WooCommerce detected
+    mockScanner.scan.mockResolvedValue({
+      themes: [],
+      plugins: [],
+      phpVersion: '8.2',
+      wpVersion: '6.5',
+      isMultisite: false,
+      hasWooCommerce: true,
+      hasACF: false,
+    });
+
+    // Extractor returns posts + products
+    mockExtractor.extract.mockResolvedValue({
+      posts: [
+        makePost(1),
+        makePost(100, { postType: 'product', title: 'Blue Mug', cleanedContent: 'Blue Mug. simple product priced at $24.99' }),
+      ],
+      siteInfo: { name: 'Shop', url: 'http://shop.local', wpVersion: '6.5' },
+      extractedAt: Date.now(),
+    });
+
+    const pipeline = createPipeline();
+    const result = await pipeline.indexSite(SITE_INFO);
+
+    expect(result.documentsIndexed).toBe(2);
+    // Verify structure was passed with hasWooCommerce: true
+    expect(mockExtractor.extract).toHaveBeenCalledWith(
+      SITE_INFO,
+      expect.objectContaining({ hasWooCommerce: true }),
+    );
+  });
+
+  test('includes media attachments in results', async () => {
+    mockExtractor.extract.mockResolvedValue({
+      posts: [
+        makePost(1),
+        makePost(50, {
+          postType: 'attachment',
+          title: 'Hero Image',
+          cleanedContent: 'Image: Hero Image. Alt text: Beautiful sunset',
+        }),
+      ],
+      siteInfo: { name: 'Test', url: '', wpVersion: '6.5' },
+      extractedAt: Date.now(),
+    });
+
+    const pipeline = createPipeline();
+    const result = await pipeline.indexSite(SITE_INFO);
+
+    expect(result.documentsIndexed).toBe(2);
+  });
+
+  test('merges custom tables into saved structure', async () => {
+    mockExtractor.extract.mockResolvedValue({
+      posts: [makePost(1)],
+      siteInfo: { name: 'Test', url: '', wpVersion: '6.5' },
+      extractedAt: Date.now(),
+      customTables: [
+        { name: 'wp_wc_orders', prefix: 'wc_orders', rowCount: 42, pluginGuess: 'WooCommerce' },
+      ],
+    });
+
+    const pipeline = createPipeline();
+    await pipeline.indexSite(SITE_INFO);
+
+    const entry = indexRegistry.get('test-site');
+    expect(entry).not.toBeNull();
+    expect(entry!.structure?.customTables).toHaveLength(1);
+    expect(entry!.structure?.customTables![0].name).toBe('wp_wc_orders');
+  });
+
+  test('collects sub-extractor warnings', async () => {
+    mockExtractor.extract.mockResolvedValue({
+      posts: [makePost(1)],
+      siteInfo: { name: 'Test', url: '', wpVersion: '6.5' },
+      extractedAt: Date.now(),
+      warnings: ['WooCommerceExtractor: table not found'],
+    });
+
+    const pipeline = createPipeline();
+    const result = await pipeline.indexSite(SITE_INFO);
+
+    expect(result.errors).toContain('WooCommerceExtractor: table not found');
+  });
+
+  test('works when neither WooCommerce nor ACF present (regression)', async () => {
+    // Default mocks have hasWooCommerce: false, hasACF: false
+    const pipeline = createPipeline();
+    const result = await pipeline.indexSite(SITE_INFO);
+
+    expect(result.siteId).toBe('test-site');
+    expect(result.documentsIndexed).toBe(3);
+    expect(result.errors).toEqual([]);
+  });
 });
