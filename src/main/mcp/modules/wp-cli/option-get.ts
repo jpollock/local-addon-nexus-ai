@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
 import { requireRunning, ok, error } from './preflight';
+import { resolveTarget, remoteWpCliRun } from './remote-exec';
 
 export const optionGetHandler: McpToolHandler = {
   definition: {
@@ -9,25 +9,34 @@ export const optionGetHandler: McpToolHandler = {
     inputSchema: {
       type: 'object',
       properties: {
-        site: { type: 'string', description: 'Site name, ID, or domain' },
+        site: { type: 'string', description: 'Local site name, ID, or domain' },
+        install_name: { type: 'string', description: 'WPE install name for remote execution via SSH' },
         option: { type: 'string', description: 'Option name (e.g. "blogname", "siteurl")' },
       },
-      required: ['site', 'option'],
+      required: ['option'],
     },
     isAvailable: (services) => !!services.localServices,
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
-    if (!site) return error(`Site "${args.site}" not found.`);
-
-    const check = requireRunning(site, services);
-    if (check) return check;
-
     const option = args.option as string;
     if (!option) return error('Option name is required.');
 
-    const value = await services.localServices!.getOption(site.id, option);
+    const target = await resolveTarget(args, services);
+    if ('content' in target) return target;
+
+    if (target.type === 'remote') {
+      const result = await remoteWpCliRun(target.installName, ['option', 'get', option], services);
+      if (!result.success) {
+        return error(`Remote WP-CLI error: ${result.stdout}`);
+      }
+      return ok(`${option}: ${result.stdout?.trim() ?? '(empty)'}`);
+    }
+
+    const check = requireRunning(target.site, services);
+    if (check) return check;
+
+    const value = await services.localServices!.getOption(target.site.id, option);
     if (value === null) {
       return error(`Option "${option}" not found.`);
     }

@@ -1,29 +1,37 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
 import { requireRunning, ok, error } from './preflight';
+import { resolveTarget, remoteWpCliRun } from './remote-exec';
 
 export const coreVersionHandler: McpToolHandler = {
   definition: {
     name: 'wp_core_version',
-    description: 'Get the WordPress core version for a site.',
+    description: 'Get the WordPress core version for a local site or remote WPE install.',
     inputSchema: {
       type: 'object',
       properties: {
-        site: { type: 'string', description: 'Site name, ID, or domain' },
+        site: { type: 'string', description: 'Local site name, ID, or domain' },
+        install_name: { type: 'string', description: 'WPE install name for remote execution via SSH' },
       },
-      required: ['site'],
     },
     isAvailable: (services) => !!services.localServices,
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
-    if (!site) return error(`Site "${args.site}" not found.`);
+    const target = await resolveTarget(args, services);
+    if ('content' in target) return target;
 
-    const check = requireRunning(site, services);
+    if (target.type === 'remote') {
+      const result = await remoteWpCliRun(target.installName, ['core', 'version'], services);
+      if (!result.success) {
+        return error(`Remote WP-CLI error: ${result.stdout}`);
+      }
+      return ok(`WordPress ${result.stdout?.trim() ?? 'unknown'}`);
+    }
+
+    const check = requireRunning(target.site, services);
     if (check) return check;
 
-    const version = await services.localServices!.getWpVersion(site.id);
+    const version = await services.localServices!.getWpVersion(target.site.id);
     return ok(`WordPress ${version ?? 'unknown'}`);
   },
 };

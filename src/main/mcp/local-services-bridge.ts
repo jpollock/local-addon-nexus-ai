@@ -4,6 +4,10 @@
  * Each method wraps a service container call with error handling and
  * site object resolution. Easily mockable for testing.
  */
+import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
+import { spawn } from 'child_process';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,6 +37,14 @@ export interface CreateSiteOpts {
   name: string;
   phpVersion?: string;
   webServer?: string;
+}
+
+export interface WpeInstallInfo {
+  installName: string;
+  installId: string;
+  remoteSiteId: string;
+  primaryDomain: string;
+  environment?: string;
 }
 
 export interface LocalServicesBridge {
@@ -75,6 +87,11 @@ export interface LocalServicesBridge {
 
   // Full site object (for advanced operations)
   resolveSiteObject(siteId: string): unknown;
+
+  // Remote WP-CLI (via SSH to WP Engine)
+  remoteWpCliRun(installName: string, args: string[]): Promise<WpCliResult>;
+  resolveWpeInstall(siteId: string): Promise<WpeInstallInfo | null>;
+  isSSHKeyAvailable(): boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,24 +99,18 @@ export interface LocalServicesBridge {
 // ---------------------------------------------------------------------------
 
 export function createLocalServicesBridge(serviceContainer: any): LocalServicesBridge {
-  const {
-    siteData,
-    siteProcessManager,
-    wpCli,
-    addSite,
-    deleteSite: deleteSiteService,
-    cloneSite: cloneSiteService,
-    exportSite: exportSiteService,
-    siteDatabase,
-    x509CertService,
-    lightningServices,
-  } = serviceContainer;
-
-  // Internal helpers to get CAPI — may not exist in all installs
-  const capi = serviceContainer.capi ?? null;
+  // Access services lazily via helper to avoid Awilix resolution errors
+  // for services that may not exist in every Local build.
+  function svc(name: string): any {
+    try {
+      return serviceContainer[name];
+    } catch {
+      return null;
+    }
+  }
 
   function requireSite(siteId: string): any {
-    const site = siteData.getSite(siteId);
+    const site = svc('siteData').getSite(siteId);
     if (!site) {
       throw new Error(`Site not found: ${siteId}`);
     }
@@ -111,39 +122,58 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     async startSite(siteId: string): Promise<void> {
       const site = requireSite(siteId);
-      await siteProcessManager.start(site);
+      await svc('siteProcessManager').start(site);
     },
 
     async stopSite(siteId: string): Promise<void> {
       const site = requireSite(siteId);
-      await siteProcessManager.stop(site);
+      await svc('siteProcessManager').stop(site);
     },
 
     async restartSite(siteId: string): Promise<void> {
       const site = requireSite(siteId);
-      await siteProcessManager.restart(site);
+      await svc('siteProcessManager').restart(site);
     },
 
     getSiteStatus(siteId: string): string {
       const site = requireSite(siteId);
-      return siteProcessManager.getSiteStatus(site) ?? 'unknown';
+      return svc('siteProcessManager').getSiteStatus(site) ?? 'unknown';
     },
 
     getAllSiteStatuses(): Record<string, string> {
-      return siteProcessManager.getSiteStatuses();
+      return svc('siteProcessManager').getSiteStatuses();
     },
 
     // --- Site CRUD ---
 
     async createSite(opts: CreateSiteOpts): Promise<{ id: string; name: string; domain: string }> {
+      // Resolve the default sites directory (e.g. ~/Local Sites/)
+      const defaultSettings = {
+        sitesPath: '~/Local Sites/',
+        ...(svc('userData')?.get?.('settings-new-site-defaults', {}) ?? {}),
+      };
+      const sitesPath = defaultSettings.sitesPath.replace(/^~/, os.homedir());
+
+      // Format site nicename: strip special chars, replace spaces with dashes, lowercase
+      const niceName = opts.name
+        .replace(/[^a-z0-9\s-]/gi, '')
+        .replace(/\s+/g, '-')
+        .replace(/-{2,}/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase();
+
+      const siteDomain = `${niceName}.local`;
+      const sitePath = path.join(sitesPath, niceName);
+
       const newSiteInfo: any = {
         siteName: opts.name,
-        siteDomain: `${opts.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}.local`,
+        siteDomain,
+        sitePath,
       };
       if (opts.phpVersion) newSiteInfo.phpVersion = opts.phpVersion;
       if (opts.webServer) newSiteInfo.webServer = opts.webServer;
 
-      const site = await addSite.addSite({
+      const site = await svc('addSite').addSite({
         newSiteInfo,
         wpCredentials: {
           adminUsername: 'admin',
@@ -159,19 +189,20 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     async deleteSite(siteId: string, trashFiles: boolean): Promise<void> {
       const site = requireSite(siteId);
-      await deleteSiteService.deleteSite({ site, trashFiles, updateHosts: true });
+      await svc('deleteSite').deleteSite({ site, trashFiles, updateHosts: true });
     },
 
     async cloneSite(siteId: string, newName: string): Promise<{ id: string; name: string }> {
       const site = requireSite(siteId);
-      const cloned = await cloneSiteService.cloneSite({ site, newSiteName: newName });
+      const cloned = await svc('cloneSite').cloneSite({ site, newSiteName: newName });
       return { id: cloned.id, name: cloned.name };
     },
 
     async exportSite(siteId: string, outputPath: string): Promise<string> {
       const site = requireSite(siteId);
-      if (exportSiteService?.exportSite) {
-        return await exportSiteService.exportSite({ site, outputPath });
+      const exportService = svc('exportSite');
+      if (exportService?.exportSite) {
+        return await exportService.exportSite({ site, outputPath });
       }
       throw new Error('Export service not available');
     },
@@ -181,7 +212,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     async wpCliRun(siteId: string, args: string[]): Promise<WpCliResult> {
       const site = requireSite(siteId);
       try {
-        const stdout = await wpCli.run(site, args);
+        const stdout = await svc('wpCli').run(site, args);
         return { stdout, success: true };
       } catch (err) {
         return {
@@ -193,70 +224,76 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     async getPlugins(siteId: string): Promise<WpPlugin[]> {
       const site = requireSite(siteId);
-      const plugins = await wpCli.getPlugins(site);
+      const plugins = await svc('wpCli').getPlugins(site);
       return plugins ?? [];
     },
 
     async getThemes(siteId: string): Promise<WpTheme[]> {
       const site = requireSite(siteId);
-      const themes = await wpCli.getThemes(site);
+      const themes = await svc('wpCli').getThemes(site);
       return themes ?? [];
     },
 
     async getWpVersion(siteId: string): Promise<string | null> {
       const site = requireSite(siteId);
-      return wpCli.getWpVersion(site);
+      return svc('wpCli').getWpVersion(site);
     },
 
     async getOption(siteId: string, option: string): Promise<string | null> {
       const site = requireSite(siteId);
-      return wpCli.getOption(site, option);
+      return svc('wpCli').getOption(site, option);
     },
 
     // --- Database ---
 
     async dumpDatabase(siteId: string, destination?: string): Promise<string> {
       const site = requireSite(siteId);
-      return siteDatabase.dump(site, destination);
+      return svc('siteDatabase').dump(site, destination);
     },
 
     // --- CAPI (WP Engine) ---
 
     capiGetAccounts: async () => {
+      const capi = svc('capi');
       if (!capi) throw new Error('CAPI not available');
       return capi.getAccountList();
     },
 
     capiGetInstalls: async () => {
+      const capi = svc('capi');
       if (!capi) throw new Error('CAPI not available');
       return capi.getInstallList();
     },
 
     capiGetInstall: async (installId: string) => {
+      const capi = svc('capi');
       if (!capi) throw new Error('CAPI not available');
       return capi.getInstall(installId);
     },
 
     capiCreateBackup: async (installId: string, description: string) => {
+      const capi = svc('capi');
       if (!capi) throw new Error('CAPI not available');
       return capi.createBackup(installId, description);
     },
 
     capiPurgeCache: async (installId: string) => {
+      const capi = svc('capi');
       if (!capi) throw new Error('CAPI not available');
       return capi.purgeCache(installId, 'all');
     },
 
     isCAPIAvailable(): boolean {
-      return capi !== null;
+      return !!svc('capi');
     },
 
     // --- SSL ---
 
     async trustCert(siteId: string): Promise<void> {
       const site = requireSite(siteId);
-      if (x509CertService?.trustCert) {
-        await x509CertService.trustCert(site);
+      const certService = svc('x509CertService');
+      if (certService?.trustCert) {
+        await certService.trustCert(site);
       } else {
         throw new Error('SSL certificate service not available');
       }
@@ -265,8 +302,9 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     // --- Lightning Services ---
 
     async getAvailablePhpVersions(): Promise<string[]> {
-      if (!lightningServices?.getAvailableServices) return [];
-      const services = await lightningServices.getAvailableServices('php');
+      const ls = svc('lightningServices');
+      if (!ls?.getAvailableServices) return [];
+      const services = await ls.getAvailableServices('php');
       if (Array.isArray(services)) {
         return services.map((s: any) => s.version ?? s.name ?? String(s));
       }
@@ -277,6 +315,110 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     resolveSiteObject(siteId: string): unknown {
       return requireSite(siteId);
+    },
+
+    // --- Remote WP-CLI (via SSH to WP Engine) ---
+
+    async remoteWpCliRun(installName: string, args: string[]): Promise<WpCliResult> {
+      // Build the WP-CLI command with safety flags
+      const wpCommand = `wp --skip-plugins --skip-themes ${args.join(' ')}`;
+
+      // SSH key path: {userDataPath}/ssh/wpe-connect
+      const userDataPath = (process as any).electronPaths?.userDataPath
+        ?? path.join(os.homedir(), 'Library', 'Application Support', 'Local');
+      const sshKeyPath = path.join(userDataPath, 'ssh', 'wpe-connect');
+
+      const username = `local+ssh+${installName}`;
+      const host = `${installName}.ssh.wpengine.net`;
+
+      const sshArgs = [
+        '-F', '/dev/null',
+        '-o', 'IdentitiesOnly=yes',
+        '-o', 'PubkeyAcceptedKeyTypes=+ssh-rsa',
+        '-o', 'ServerAliveInterval=60',
+        '-o', 'ServerAliveCountMax=120',
+        '-o', 'StrictHostKeyChecking=accept-new',
+        '-i', sshKeyPath,
+        `${username}@${host}`,
+        wpCommand,
+      ];
+
+      return new Promise<WpCliResult>((resolve) => {
+        let stdout = '';
+        let stderr = '';
+
+        const proc = spawn('ssh', sshArgs, {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: 60000,
+        });
+
+        proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
+        proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+        proc.on('close', (code: number | null) => {
+          if (code === 0) {
+            resolve({ stdout, success: true });
+          } else {
+            resolve({ stdout: stderr || `SSH exited with code ${code}`, success: false });
+          }
+        });
+
+        proc.on('error', (err: Error) => {
+          resolve({ stdout: err.message, success: false });
+        });
+      });
+    },
+
+    async resolveWpeInstall(siteId: string): Promise<WpeInstallInfo | null> {
+      const site = requireSite(siteId) as any;
+
+      // Find WPE host connection
+      const connections = site.hostConnections;
+      if (!connections) return null;
+
+      // hostConnections can be an object keyed by ID or an array
+      const connList = Array.isArray(connections) ? connections : Object.values(connections);
+      const wpeConn = (connList as any[]).find(
+        (c: any) => c.hostId === 'wpe' || c.accountId,
+      );
+      if (!wpeConn) return null;
+
+      const remoteSiteId = wpeConn.remoteSiteId;
+      if (!remoteSiteId) return null;
+
+      // Resolve install name via CAPI
+      const capi = svc('capi');
+      if (!capi) return null;
+
+      try {
+        const installs = await capi.getInstallList();
+        if (!installs) return null;
+
+        const match = (installs as any[]).find(
+          (i: any) =>
+            i.site?.id === remoteSiteId &&
+            (!wpeConn.remoteSiteEnv || i.environment === wpeConn.remoteSiteEnv),
+        );
+
+        if (!match) return null;
+
+        return {
+          installName: match.name,
+          installId: match.id,
+          remoteSiteId,
+          primaryDomain: match.primaryDomain ?? match.cname ?? `${match.name}.wpengine.com`,
+          environment: match.environment ?? wpeConn.remoteSiteEnv,
+        };
+      } catch {
+        return null;
+      }
+    },
+
+    isSSHKeyAvailable(): boolean {
+      const userDataPath = (process as any).electronPaths?.userDataPath
+        ?? path.join(os.homedir(), 'Library', 'Application Support', 'Local');
+      const sshKeyPath = path.join(userDataPath, 'ssh', 'wpe-connect');
+      return fs.existsSync(sshKeyPath);
     },
   };
 }

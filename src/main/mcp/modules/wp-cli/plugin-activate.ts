@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
 import { requireRunning, ok, error, validateSlug } from './preflight';
+import { resolveTarget, remoteWpCliRun } from './remote-exec';
 
 export const pluginActivateHandler: McpToolHandler = {
   definition: {
@@ -9,26 +9,35 @@ export const pluginActivateHandler: McpToolHandler = {
     inputSchema: {
       type: 'object',
       properties: {
-        site: { type: 'string', description: 'Site name, ID, or domain' },
+        site: { type: 'string', description: 'Local site name, ID, or domain' },
+        install_name: { type: 'string', description: 'WPE install name for remote execution via SSH' },
         slug: { type: 'string', description: 'Plugin slug to activate' },
       },
-      required: ['site', 'slug'],
+      required: ['slug'],
     },
     isAvailable: (services) => !!services.localServices,
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
-    if (!site) return error(`Site "${args.site}" not found.`);
-
-    const check = requireRunning(site, services);
-    if (check) return check;
-
     const slug = args.slug as string;
     const slugErr = validateSlug(slug, 'plugin');
     if (slugErr) return slugErr;
 
-    const result = await services.localServices!.wpCliRun(site.id, ['plugin', 'activate', slug]);
+    const target = await resolveTarget(args, services);
+    if ('content' in target) return target;
+
+    if (target.type === 'remote') {
+      const result = await remoteWpCliRun(target.installName, ['plugin', 'activate', slug], services);
+      if (!result.success) {
+        return error(`Failed to activate plugin "${slug}" on ${target.installName}: ${result.stdout}`);
+      }
+      return ok(`Plugin "${slug}" activated on ${target.installName}.`);
+    }
+
+    const check = requireRunning(target.site, services);
+    if (check) return check;
+
+    const result = await services.localServices!.wpCliRun(target.site.id, ['plugin', 'activate', slug]);
     if (!result.success) {
       return error(`Failed to activate plugin "${slug}": ${result.stdout}`);
     }
