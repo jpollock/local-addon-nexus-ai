@@ -88,8 +88,17 @@ export default function main(context: any): void {
     },
   });
 
-  // Phase 2: Register lifecycle hooks
-  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger);
+  // Readiness gate: resolves when VectorStore + EmbeddingService are initialized.
+  // Lifecycle hooks await this before indexing to avoid race conditions.
+  let resolveReady: () => void;
+  let rejectReady: (err: Error) => void;
+  const readyPromise = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+
+  // Phase 2: Register lifecycle hooks (pass readyPromise so they wait for init)
+  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise);
 
   // Phase 3: Boot MCP server (async — does not block addon load)
   const localServicesBridge = createLocalServicesBridge(serviceContainer);
@@ -127,6 +136,9 @@ export default function main(context: any): void {
       await embeddingService.initialize();
       localLogger.info('[NexusAI] EmbeddingService initialized');
 
+      // Signal readiness — lifecycle hooks waiting to index can now proceed
+      resolveReady!();
+
       mcpServer = new McpServer({ services: nexusServices, registry });
       const connectionInfo = await mcpServer.start();
       saveConnectionInfo(connectionInfo);
@@ -134,6 +146,7 @@ export default function main(context: any): void {
       localLogger.info(`[NexusAI] MCP server running on ${connectionInfo.url}`);
       localLogger.info(`[NexusAI] Tools: ${connectionInfo.tools.join(', ')}`);
     } catch (err) {
+      rejectReady!(err as Error);
       localLogger.error('[NexusAI] Failed to start:', (err as Error).message, (err as Error).stack);
     }
   })();

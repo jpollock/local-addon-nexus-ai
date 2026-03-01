@@ -21,15 +21,30 @@ export interface Logger {
 
 /**
  * Register addon lifecycle hooks that trigger indexing on site events.
+ *
+ * @param readyPromise — resolves when VectorStore + EmbeddingService are initialized.
+ *   Hooks wait on this before indexing so sites that start before init completes
+ *   don't hit "EmbeddingService not initialized" errors.
  */
 export function registerLifecycleHooks(
   context: LifecycleContext,
   pipeline: ContentPipeline,
   indexRegistry: IndexRegistry,
   logger: Logger,
+  readyPromise?: Promise<void>,
 ): void {
   context.hooks.addAction('siteStarted', async (site: LocalSiteRef) => {
     logger.info(`[NexusAI] Site started: ${site.name}, triggering index`);
+
+    // Wait for services to be ready (VectorStore + EmbeddingService)
+    if (readyPromise) {
+      try {
+        await readyPromise;
+      } catch {
+        logger.error(`[NexusAI] Services failed to initialize, skipping index for ${site.name}`);
+        return;
+      }
+    }
 
     const info: SiteConnectionInfo = {
       siteId: site.id,

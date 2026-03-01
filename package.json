@@ -18,6 +18,13 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:integration": "jest --config tests/integration/jest.integration.config.js",
+    "test:integration:verbose": "jest --config tests/integration/jest.integration.config.js --verbose",
+    "test:e2e": "jest --config tests/e2e/jest.e2e.config.js",
+    "test:e2e:verbose": "jest --config tests/e2e/jest.e2e.config.js --verbose",
+    "pretest:e2e": "echo 'Requires Local running with Nexus AI addon loaded'",
+    "test:all": "npm test && npm run test:integration && npm run test:e2e",
+    "pretest:integration": "npm run download-model",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "download-model": "node scripts/download-model.js"
