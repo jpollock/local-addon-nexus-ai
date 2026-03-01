@@ -13,8 +13,13 @@ import { registerContentTools } from './mcp/modules/content/index';
 import { registerSiteContextTools } from './mcp/modules/site-context/index';
 import { registerOllamaTools } from './mcp/modules/ollama/index';
 import { registerFleetTools } from './mcp/modules/fleet/index';
+import { registerSiteManagementTools } from './mcp/modules/site-management/index';
+import { registerWpCliTools } from './mcp/modules/wp-cli/index';
+import { registerWpeTools } from './mcp/modules/wpe/index';
 import { saveConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
 import { registerLifecycleHooks } from './content/lifecycle-hooks';
+import { createLocalServicesBridge } from './mcp/local-services-bridge';
+import { createAuditLogger } from './mcp/audit';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -87,6 +92,11 @@ export default function main(context: any): void {
   registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger);
 
   // Phase 3: Boot MCP server (async — does not block addon load)
+  const localServicesBridge = createLocalServicesBridge(serviceContainer);
+  const auditLogger = createAuditLogger(
+    path.join(localDataDir, 'nexus-ai', 'audit.log'),
+  );
+
   const nexusServices: NexusServices = {
     vectorStore,
     embeddingService,
@@ -95,6 +105,8 @@ export default function main(context: any): void {
     fileScanner,
     siteData: siteDataAccessor,
     logger: localLogger,
+    localServices: localServicesBridge,
+    auditLogger,
   };
 
   const registry = new ToolRegistry();
@@ -102,6 +114,9 @@ export default function main(context: any): void {
   registerSiteContextTools(registry);
   registerOllamaTools(registry);
   registerFleetTools(registry);
+  registerSiteManagementTools(registry);
+  registerWpCliTools(registry);
+  registerWpeTools(registry);
 
   // Async initialization
   (async () => {

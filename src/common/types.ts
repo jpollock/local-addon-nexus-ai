@@ -20,6 +20,8 @@ export interface VectorDocument {
 export interface SearchOptions {
   limit: number;
   postType?: string;
+  /** Minimum relevance score (0-1). Results below this threshold are filtered out. Default: 0.3 */
+  relevanceFloor?: number;
 }
 
 export interface SearchResult {

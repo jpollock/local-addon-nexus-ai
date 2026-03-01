@@ -17,6 +17,10 @@ export const searchAcrossSitesHandler: McpToolHandler = {
           type: 'number',
           description: 'Max results per site (default: 3, max: 10)',
         },
+        min_score: {
+          type: 'number',
+          description: 'Minimum relevance score (0-1). Results below this are filtered out. Default: 0.3',
+        },
       },
       required: ['query'],
     },
@@ -42,6 +46,7 @@ export const searchAcrossSitesHandler: McpToolHandler = {
     for (const entry of indexedSites) {
       const results = await services.vectorStore.search(entry.siteId, queryVector, {
         limit: limitPerSite,
+        relevanceFloor: args.min_score as number | undefined,
       });
 
       if (results.length === 0) continue;
