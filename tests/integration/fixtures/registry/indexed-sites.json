@@ -1,0 +1,52 @@
+{
+  "site-1": {
+    "siteId": "site-1",
+    "siteName": "Production Blog",
+    "lastIndexed": 1704067200000,
+    "documentCount": 42,
+    "chunkCount": 68,
+    "durationMs": 3200,
+    "state": "indexed",
+    "structure": {
+      "themes": [
+        { "name": "Astra", "slug": "astra", "version": "4.5.0", "isActive": true, "isChildTheme": false },
+        { "name": "Astra Child", "slug": "astra-child", "version": "1.0.0", "isActive": false, "isChildTheme": true, "parentTheme": "astra" }
+      ],
+      "plugins": [
+        { "name": "WooCommerce", "slug": "woocommerce", "version": "8.4.0", "isActive": true, "description": "eCommerce toolkit" },
+        { "name": "Yoast SEO", "slug": "wordpress-seo", "version": "21.7", "isActive": true, "description": "SEO plugin" },
+        { "name": "Advanced Custom Fields", "slug": "advanced-custom-fields", "version": "6.2.4", "isActive": true, "description": "Custom fields" },
+        { "name": "Akismet", "slug": "akismet", "version": "5.3", "isActive": false, "description": "Spam protection" }
+      ],
+      "phpVersion": "8.2",
+      "wpVersion": "6.4.2",
+      "isMultisite": false,
+      "hasWooCommerce": true,
+      "hasACF": true
+    }
+  },
+  "site-2": {
+    "siteId": "site-2",
+    "siteName": "Staging Site",
+    "lastIndexed": 1704153600000,
+    "documentCount": 38,
+    "chunkCount": 55,
+    "durationMs": 2800,
+    "state": "indexed",
+    "structure": {
+      "themes": [
+        { "name": "GeneratePress", "slug": "generatepress", "version": "3.4.0", "isActive": true, "isChildTheme": false }
+      ],
+      "plugins": [
+        { "name": "WooCommerce", "slug": "woocommerce", "version": "8.3.1", "isActive": true, "description": "eCommerce toolkit" },
+        { "name": "Yoast SEO", "slug": "wordpress-seo", "version": "21.6", "isActive": true, "description": "SEO plugin" },
+        { "name": "Contact Form 7", "slug": "contact-form-7", "version": "5.8.5", "isActive": true, "description": "Contact forms" }
+      ],
+      "phpVersion": "8.1",
+      "wpVersion": "6.4.1",
+      "isMultisite": false,
+      "hasWooCommerce": true,
+      "hasACF": false
+    }
+  }
+}

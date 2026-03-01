@@ -1,0 +1,33 @@
+{
+  "site-ok": {
+    "siteId": "site-ok",
+    "siteName": "Healthy Site",
+    "lastIndexed": 1704067200000,
+    "documentCount": 10,
+    "chunkCount": 15,
+    "durationMs": 1200,
+    "state": "indexed",
+    "structure": null
+  },
+  "site-stale": {
+    "siteId": "site-stale",
+    "siteName": "Stale Site",
+    "lastIndexed": 1700000000000,
+    "documentCount": 5,
+    "chunkCount": 8,
+    "durationMs": 900,
+    "state": "stale",
+    "structure": null
+  },
+  "site-error": {
+    "siteId": "site-error",
+    "siteName": "Error Site",
+    "lastIndexed": 1704067200000,
+    "documentCount": 0,
+    "chunkCount": 0,
+    "durationMs": 500,
+    "state": "error",
+    "error": "MySQL connection refused",
+    "structure": null
+  }
+}
