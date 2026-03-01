@@ -1,0 +1,14 @@
+{
+  "site-abc123": {
+    "id": "site-abc123",
+    "name": "Dev Blog",
+    "path": "/tmp/nexus-test/sites/dev-blog",
+    "domain": "dev-blog.local"
+  },
+  "site-def456": {
+    "id": "site-def456",
+    "name": "Store Site",
+    "path": "/tmp/nexus-test/sites/store",
+    "domain": "store.local"
+  }
+}

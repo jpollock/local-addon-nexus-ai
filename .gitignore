@@ -6,3 +6,5 @@ models/all-MiniLM-L6-v2-quantized/vocab.txt
 models/all-MiniLM-L6-v2-quantized/tokenizer_config.json
 *.tgz
 .DS_Store
+.data/
+.claude/

@@ -3,6 +3,8 @@ import { EmbeddingService } from '../embeddings/EmbeddingService';
 import { ContentPipeline } from '../content/ContentPipeline';
 import { IndexRegistry } from '../content/IndexRegistry';
 import { FileScanner } from '../content/FileScanner';
+import type { LocalServicesBridge } from './local-services-bridge';
+import type { AuditLogger } from './audit';
 
 // ---------------------------------------------------------------------------
 // MCP JSON-RPC
@@ -81,6 +83,10 @@ export interface NexusServices {
   siteData: SiteDataAccessor;
   /** Local's logger */
   logger: { info(...args: unknown[]): void; error(...args: unknown[]): void };
+  /** Typed bridge over Local's service container. Optional for backward compat. */
+  localServices?: LocalServicesBridge;
+  /** Audit logger for operation tracking. Optional for backward compat. */
+  auditLogger?: AuditLogger;
 }
 
 /**

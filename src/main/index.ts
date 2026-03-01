@@ -13,8 +13,13 @@ import { registerContentTools } from './mcp/modules/content/index';
 import { registerSiteContextTools } from './mcp/modules/site-context/index';
 import { registerOllamaTools } from './mcp/modules/ollama/index';
 import { registerFleetTools } from './mcp/modules/fleet/index';
+import { registerSiteManagementTools } from './mcp/modules/site-management/index';
+import { registerWpCliTools } from './mcp/modules/wp-cli/index';
+import { registerWpeTools } from './mcp/modules/wpe/index';
 import { saveConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
 import { registerLifecycleHooks } from './content/lifecycle-hooks';
+import { createLocalServicesBridge } from './mcp/local-services-bridge';
+import { createAuditLogger } from './mcp/audit';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -83,10 +88,24 @@ export default function main(context: any): void {
     },
   });
 
-  // Phase 2: Register lifecycle hooks
-  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger);
+  // Readiness gate: resolves when VectorStore + EmbeddingService are initialized.
+  // Lifecycle hooks await this before indexing to avoid race conditions.
+  let resolveReady: () => void;
+  let rejectReady: (err: Error) => void;
+  const readyPromise = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+
+  // Phase 2: Register lifecycle hooks (pass readyPromise so they wait for init)
+  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise);
 
   // Phase 3: Boot MCP server (async — does not block addon load)
+  const localServicesBridge = createLocalServicesBridge(serviceContainer);
+  const auditLogger = createAuditLogger(
+    path.join(localDataDir, 'nexus-ai', 'audit.log'),
+  );
+
   const nexusServices: NexusServices = {
     vectorStore,
     embeddingService,
@@ -95,6 +114,8 @@ export default function main(context: any): void {
     fileScanner,
     siteData: siteDataAccessor,
     logger: localLogger,
+    localServices: localServicesBridge,
+    auditLogger,
   };
 
   const registry = new ToolRegistry();
@@ -102,6 +123,9 @@ export default function main(context: any): void {
   registerSiteContextTools(registry);
   registerOllamaTools(registry);
   registerFleetTools(registry);
+  registerSiteManagementTools(registry);
+  registerWpCliTools(registry);
+  registerWpeTools(registry);
 
   // Async initialization
   (async () => {
@@ -112,6 +136,9 @@ export default function main(context: any): void {
       await embeddingService.initialize();
       localLogger.info('[NexusAI] EmbeddingService initialized');
 
+      // Signal readiness — lifecycle hooks waiting to index can now proceed
+      resolveReady!();
+
       mcpServer = new McpServer({ services: nexusServices, registry });
       const connectionInfo = await mcpServer.start();
       saveConnectionInfo(connectionInfo);
@@ -119,6 +146,7 @@ export default function main(context: any): void {
       localLogger.info(`[NexusAI] MCP server running on ${connectionInfo.url}`);
       localLogger.info(`[NexusAI] Tools: ${connectionInfo.tools.join(', ')}`);
     } catch (err) {
+      rejectReady!(err as Error);
       localLogger.error('[NexusAI] Failed to start:', (err as Error).message, (err as Error).stack);
     }
   })();

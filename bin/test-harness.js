@@ -60,6 +60,10 @@ const { registerContentTools } = require(path.join(libDir, 'main', 'mcp', 'modul
 const { registerSiteContextTools } = require(path.join(libDir, 'main', 'mcp', 'modules', 'site-context', 'index'));
 const { registerOllamaTools } = require(path.join(libDir, 'main', 'mcp', 'modules', 'ollama', 'index'));
 const { registerFleetTools } = require(path.join(libDir, 'main', 'mcp', 'modules', 'fleet', 'index'));
+const { registerSiteManagementTools } = require(path.join(libDir, 'main', 'mcp', 'modules', 'site-management', 'index'));
+const { registerWpCliTools } = require(path.join(libDir, 'main', 'mcp', 'modules', 'wp-cli', 'index'));
+const { registerWpeTools } = require(path.join(libDir, 'main', 'mcp', 'modules', 'wpe', 'index'));
+const { createAuditLogger } = require(path.join(libDir, 'main', 'mcp', 'audit'));
 const { saveConnectionInfo, deleteConnectionInfo } = require(path.join(libDir, 'main', 'mcp', 'connection-info'));
 
 // --------------------------------------------------------------------------
@@ -176,7 +180,39 @@ async function main() {
   const allSites = siteData.getSites();
   logger.info(`Loaded ${Object.keys(allSites).length} sites from Local`);
 
-  // 3. Build NexusServices
+  // 3. Build mock localServices bridge for standalone mode
+  // These methods log warnings since the test harness runs outside Electron
+  const mockLocalServices = {
+    startSite: async (id) => { logger.info(`[mock] startSite(${id})`); },
+    stopSite: async (id) => { logger.info(`[mock] stopSite(${id})`); },
+    restartSite: async (id) => { logger.info(`[mock] restartSite(${id})`); },
+    getSiteStatus: (id) => 'halted',
+    getAllSiteStatuses: () => ({}),
+    createSite: async (opts) => ({ id: 'mock-id', name: opts.name, domain: `${opts.name}.local` }),
+    deleteSite: async () => { },
+    cloneSite: async (id, name) => ({ id: 'mock-clone', name }),
+    exportSite: async (id) => '/tmp/mock-export.zip',
+    wpCliRun: async (id, args) => ({ stdout: `[mock] wp ${args.join(' ')}`, stderr: '', code: 0 }),
+    wpCliRunJson: async () => ([]),
+    getPlugins: async () => ([]),
+    getThemes: async () => ([]),
+    getWpVersion: async () => '6.4',
+    getOption: async () => null,
+    dumpDatabase: async (id) => `/tmp/${id}-dump.sql`,
+    capiGetAccounts: async () => ([]),
+    capiGetInstalls: async () => ([]),
+    capiGetInstall: async () => null,
+    capiCreateBackup: async () => ({ status: 'mock' }),
+    capiPurgeCache: async () => ({ status: 'mock' }),
+    isCAPIAvailable: () => false,
+    trustCert: async () => { },
+    getAvailablePhpVersions: async () => ['8.1', '8.2', '8.3'],
+    resolveSiteObject: (id) => siteData.getSite(id),
+  };
+
+  const auditLogger = createAuditLogger(path.join(projectRoot, '.data', 'audit.log'));
+
+  // 4. Build NexusServices
   const services = {
     vectorStore,
     embeddingService,
@@ -185,18 +221,23 @@ async function main() {
     fileScanner,
     siteData,
     logger,
+    localServices: mockLocalServices,
+    auditLogger,
   };
 
-  // 4. Register MCP tools
+  // 5. Register MCP tools
   const registry = new ToolRegistry();
   registerContentTools(registry);
   registerSiteContextTools(registry);
   registerOllamaTools(registry);
   registerFleetTools(registry);
+  registerSiteManagementTools(registry);
+  registerWpCliTools(registry);
+  registerWpeTools(registry);
 
   logger.info(`Registered tools: ${registry.allToolNames().join(', ')}`);
 
-  // 5. Index sites if requested
+  // 6. Index sites if requested
   if (indexSiteId) {
     await indexSite(indexSiteId, siteData, contentPipeline);
   }
@@ -205,7 +246,7 @@ async function main() {
     await indexAllRunning(siteData, contentPipeline);
   }
 
-  // 6. Start MCP server
+  // 7. Start MCP server
   const server = new McpServer({ services, registry });
   const connectionInfo = await server.start();
 

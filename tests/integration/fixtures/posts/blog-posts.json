@@ -1,0 +1,72 @@
+[
+  {
+    "id": 1,
+    "title": "Getting Started with WordPress Development",
+    "content": "<p>WordPress development begins with understanding themes, plugins, and the WordPress REST API.</p>",
+    "cleanedContent": "WordPress development begins with understanding themes, plugins, and the WordPress REST API. The plugin architecture allows developers to extend functionality through hooks, filters, and actions. Theme development involves creating template files, using the template hierarchy, and leveraging the customizer API for user-configurable options. Understanding the WordPress loop is essential for displaying posts and pages correctly. The REST API enables headless WordPress development and integration with external applications.",
+    "excerpt": "A guide to WordPress development basics",
+    "postType": "post",
+    "postStatus": "publish",
+    "author": "1",
+    "date": "2024-06-15",
+    "categories": ["Development", "WordPress"],
+    "tags": ["wordpress", "php", "development"],
+    "customFields": {}
+  },
+  {
+    "id": 2,
+    "title": "WooCommerce Payment Gateway Integration",
+    "content": "<p>Integrating a custom payment gateway with WooCommerce requires implementing the WC_Payment_Gateway class.</p>",
+    "cleanedContent": "Integrating a custom payment gateway with WooCommerce requires implementing the WC_Payment_Gateway class. You need to handle checkout fields, process payments, and manage refunds. The gateway must support both test and live modes, validate card details securely, and communicate with your payment processor API. Implementing webhooks for asynchronous payment confirmations is also critical for reliable order management.",
+    "excerpt": "How to build a custom WooCommerce payment gateway",
+    "postType": "post",
+    "postStatus": "publish",
+    "author": "1",
+    "date": "2024-07-20",
+    "categories": ["WooCommerce"],
+    "tags": ["woocommerce", "payments", "ecommerce"],
+    "customFields": {}
+  },
+  {
+    "id": 3,
+    "title": "Complete Guide to WordPress Performance Optimization",
+    "content": "<p>A comprehensive guide to making your WordPress site fast.</p>",
+    "cleanedContent": "WordPress performance optimization is a critical aspect of building successful websites. This comprehensive guide covers every aspect of making your WordPress site fast and responsive. First, let us discuss server-side optimization. Choosing the right hosting provider is the foundation of good performance. Managed WordPress hosting providers like WP Engine offer optimized server configurations, built-in caching, and CDN integration. Server-level caching through tools like Varnish or Redis can dramatically reduce database queries and page generation time. PHP version matters significantly for performance. PHP 8.2 offers substantial speed improvements over older versions, with JIT compilation providing additional benefits for CPU-intensive operations. Always use the latest stable PHP version supported by your WordPress installation. Database optimization is another crucial area. Regular maintenance including optimizing tables, removing post revisions, cleaning up transients, and deleting spam comments keeps your database lean and queries fast. Consider using a plugin like WP-Optimize or running manual SQL optimization queries. Using an object cache like Redis or Memcached stores frequently accessed data in memory, reducing the load on your MySQL database. Front-end optimization includes minifying CSS and JavaScript files, combining stylesheets, lazy loading images, and implementing responsive image techniques with srcset. Critical CSS extraction ensures above-the-fold content renders quickly. Image optimization through compression, WebP conversion, and proper sizing can reduce page weight by 50 percent or more. Content Delivery Networks distribute your static assets across global edge servers, reducing latency for users worldwide. Most managed hosting providers include CDN functionality, but standalone CDN services like Cloudflare offer additional performance and security benefits. Caching plugins like WP Super Cache or W3 Total Cache generate static HTML versions of your dynamic WordPress pages. Page caching, browser caching, and object caching each address different performance bottlenecks. Code optimization involves avoiding unnecessary plugins, writing efficient custom queries, using WordPress transients API for expensive operations, and implementing proper pagination for large datasets. Monitoring tools like Query Monitor, New Relic, and Google PageSpeed Insights help identify specific bottlenecks. Regular performance auditing ensures your site maintains optimal speed as content and functionality grow over time.",
+    "excerpt": "A comprehensive guide to making your WordPress site fast",
+    "postType": "post",
+    "postStatus": "publish",
+    "author": "2",
+    "date": "2024-08-01",
+    "categories": ["Performance", "WordPress"],
+    "tags": ["performance", "optimization", "speed", "caching"],
+    "customFields": {}
+  },
+  {
+    "id": 4,
+    "title": "Contact Us",
+    "content": "<p>Get in touch with our team.</p>",
+    "cleanedContent": "Get in touch with our team. You can reach us by email at hello@example.com or by phone at 555-0123. Our office hours are Monday through Friday, 9am to 5pm Eastern Time.",
+    "excerpt": "Contact information for our team",
+    "postType": "page",
+    "postStatus": "publish",
+    "author": "1",
+    "date": "2024-01-10",
+    "categories": [],
+    "tags": [],
+    "customFields": {}
+  },
+  {
+    "id": 5,
+    "title": "MySQL Database Optimization for Large Sites",
+    "content": "<p>Database optimization strategies for high-traffic WordPress installations.</p>",
+    "cleanedContent": "MySQL database optimization is essential for large WordPress sites handling thousands of posts and high traffic volumes. Start with proper indexing strategies. WordPress core tables have basic indexes, but custom post types and meta queries often benefit from additional composite indexes. Use EXPLAIN to analyze slow queries and identify missing indexes. Query optimization involves reducing the number of database calls per page load. Avoid using meta queries in WP_Query when possible, and consider denormalizing frequently accessed data into custom tables for complex queries.",
+    "excerpt": "Database optimization for high-traffic WordPress",
+    "postType": "post",
+    "postStatus": "publish",
+    "author": "2",
+    "date": "2024-09-05",
+    "categories": ["Database", "Performance"],
+    "tags": ["mysql", "database", "optimization", "performance"],
+    "customFields": {}
+  }
+]

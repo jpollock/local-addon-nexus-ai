@@ -97,3 +97,89 @@ describe('registerLifecycleHooks', () => {
     expect(logger.error).toHaveBeenCalled();
   });
 });
+
+describe('readyPromise gate', () => {
+  let hooks: Record<string, Function>;
+  let context: LifecycleContext;
+  let pipeline: jest.Mocked<ContentPipeline>;
+  let indexRegistry: IndexRegistry;
+  let logger: jest.Mocked<Logger>;
+
+  function createMockStorage(): RegistryStorage {
+    const store = new Map<string, any>();
+    return {
+      get: (key: string) => store.get(key) ?? null,
+      set: (key: string, value: any) => store.set(key, value),
+    };
+  }
+
+  beforeEach(() => {
+    hooks = {};
+    context = {
+      hooks: {
+        addAction: (name: string, cb: Function) => {
+          hooks[name] = cb;
+        },
+      },
+    };
+
+    pipeline = {
+      indexSite: jest.fn().mockResolvedValue({
+        siteId: 'site1',
+        documentsIndexed: 5,
+        chunksIndexed: 8,
+        durationMs: 200,
+        errors: [],
+      }),
+      removeSite: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
+    indexRegistry = new IndexRegistry(createMockStorage());
+
+    logger = {
+      info: jest.fn(),
+      error: jest.fn(),
+    };
+  });
+
+  test('siteStarted waits for readyPromise before indexing', async () => {
+    let resolveReady!: () => void;
+    const readyPromise = new Promise<void>((resolve) => { resolveReady = resolve; });
+
+    registerLifecycleHooks(context, pipeline, indexRegistry, logger, readyPromise);
+
+    // Start the hook but don't await it yet
+    const hookPromise = hooks.siteStarted({ id: 'site1', name: 'My Site', path: '/tmp/site' });
+
+    // Pipeline should NOT have been called yet
+    expect(pipeline.indexSite).not.toHaveBeenCalled();
+
+    // Now resolve readiness
+    resolveReady();
+    await hookPromise;
+
+    // Now it should have been called
+    expect(pipeline.indexSite).toHaveBeenCalled();
+  });
+
+  test('siteStarted skips indexing if readyPromise rejects', async () => {
+    const readyPromise = Promise.reject(new Error('init failed'));
+
+    registerLifecycleHooks(context, pipeline, indexRegistry, logger, readyPromise);
+
+    await hooks.siteStarted({ id: 'site1', name: 'My Site', path: '/tmp/site' });
+
+    expect(pipeline.indexSite).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('Services failed to initialize'),
+    );
+  });
+
+  test('siteStarted works without readyPromise (backward compat)', async () => {
+    registerLifecycleHooks(context, pipeline, indexRegistry, logger);
+
+    await hooks.siteStarted({ id: 'site1', name: 'My Site', path: '/tmp/site' });
+
+    expect(pipeline.indexSite).toHaveBeenCalled();
+  });
+});

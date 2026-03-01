@@ -67,7 +67,8 @@ describe('VectorStore', () => {
     await store.upsert('site1', docs);
 
     // Search with the same vector as doc 1 — it should rank highest
-    const results = await store.search('site1', docs[0].vector, { limit: 3 });
+    // relevanceFloor: 0 to include all results regardless of cosine similarity
+    const results = await store.search('site1', docs[0].vector, { limit: 3, relevanceFloor: 0 });
     expect(results.length).toBe(3);
     expect(results[0].postId).toBe(1);
     expect(results[0].score).toBeGreaterThan(0);
@@ -143,6 +144,7 @@ describe('VectorStore', () => {
     const results = await store.search('site1', makeVector(1), {
       limit: 10,
       postType: 'page',
+      relevanceFloor: 0,
     });
     expect(results.length).toBe(1);
     expect(results[0].postType).toBe('page');

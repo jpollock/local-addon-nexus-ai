@@ -80,23 +80,48 @@ export class VectorStore {
     const table = await db.openTable(name);
     const vecArray = Array.from(queryVector);
 
-    let query = table.vectorSearch(vecArray).limit(options.limit);
+    // Over-fetch for deduplication, then re-limit
+    const fetchLimit = options.limit * 3;
+    let query = table.vectorSearch(vecArray)
+      .distanceType('cosine')
+      .limit(fetchLimit);
 
     if (options.postType) {
       query = query.where(`\`postType\` = '${options.postType}'`);
     }
 
-    const results = await query.toArray();
+    const rawResults = await query.toArray();
 
-    return results.map((row: Record<string, unknown>) => ({
+    const relevanceFloor = options.relevanceFloor ?? 0.3;
+
+    // Map to SearchResult with cosine similarity score
+    let results = rawResults.map((row: Record<string, unknown>) => ({
       id: row.id as string,
       title: row.title as string,
       content: row.content as string,
       postType: row.postType as string,
       postId: row.postId as number,
-      score: 1 - ((row._distance as number) ?? 0), // LanceDB returns L2 distance; convert to similarity
+      // Cosine distance → similarity: 1 - distance
+      score: 1 - ((row._distance as number) ?? 0),
       metadata: row.metadata as string,
     }));
+
+    // Apply relevance floor
+    results = results.filter((r) => r.score >= relevanceFloor);
+
+    // Deduplicate by postId: keep highest-scoring chunk per post
+    const bestByPost = new Map<number, SearchResult>();
+    for (const r of results) {
+      const existing = bestByPost.get(r.postId);
+      if (!existing || r.score > existing.score) {
+        bestByPost.set(r.postId, r);
+      }
+    }
+
+    // Re-limit to requested count
+    return Array.from(bestByPost.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, options.limit);
   }
 
   async delete(siteId: string, documentIds: string[]): Promise<void> {

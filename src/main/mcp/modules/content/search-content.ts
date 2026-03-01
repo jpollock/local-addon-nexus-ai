@@ -28,6 +28,10 @@ export const searchContentHandler: McpToolHandler = {
           type: 'string',
           description: 'Filter by post type (e.g., "post", "page", "product", "attachment")',
         },
+        min_score: {
+          type: 'number',
+          description: 'Minimum relevance score (0-1). Results below this are filtered out. Default: 0.3',
+        },
       },
       required: ['site', 'query'],
     },
@@ -50,6 +54,7 @@ export const searchContentHandler: McpToolHandler = {
     const results = await services.vectorStore.search(site.id, queryVector, {
       limit,
       postType: args.postType as string | undefined,
+      relevanceFloor: args.min_score as number | undefined,
     });
 
     if (results.length === 0) {
