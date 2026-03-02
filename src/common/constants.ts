@@ -6,11 +6,30 @@ export const ADDON_PREFIX = 'nexus-ai';
 // ---------------------------------------------------------------------------
 
 export const IPC_CHANNELS = {
-  GET_SITE_STATUS: `${ADDON_PREFIX}:get-site-status`,
-  REINDEX_SITE: `${ADDON_PREFIX}:reindex-site`,
   GET_MCP_INFO: `${ADDON_PREFIX}:get-mcp-info`,
   GET_FLEET_STATUS: `${ADDON_PREFIX}:get-fleet-status`,
-  GET_OLLAMA_STATUS: `${ADDON_PREFIX}:get-ollama-status`,
+  GET_SITES: `${ADDON_PREFIX}:get-sites`,
+  GET_WPE_SITE_IDS: `${ADDON_PREFIX}:get-wpe-site-ids`,
+  GET_DASHBOARD_STATS: `${ADDON_PREFIX}:get-dashboard-stats`,
+  START_SITE: `${ADDON_PREFIX}:start-site`,
+  STOP_SITE: `${ADDON_PREFIX}:stop-site`,
+  STATUS_CHANGE: `${ADDON_PREFIX}:status-change`,
+} as const;
+
+// ---------------------------------------------------------------------------
+// UI
+// ---------------------------------------------------------------------------
+
+export const UI_COLORS = {
+  WPE_BRAND: '#0ECAD4',
+  STATUS_RUNNING: '#51c356',
+  STATUS_HALTED: '#999',
+  STATUS_ERROR: '#ef4444',
+  STATUS_WARNING: '#f59e0b',
+} as const;
+
+export const POLL_INTERVALS = {
+  DASHBOARD_STATS_MS: 10_000,
 } as const;
 
 // ---------------------------------------------------------------------------

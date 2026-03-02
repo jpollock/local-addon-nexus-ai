@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
+import { IPC_CHANNELS } from '../common/constants';
 import { VectorStore } from './vector-store/VectorStore';
 import { EmbeddingService } from './embeddings/EmbeddingService';
 import { ContentPipeline } from './content/ContentPipeline';
@@ -22,6 +23,7 @@ import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
+import { registerIpcHandlers } from './ipc-handlers';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -83,7 +85,7 @@ export default function main(context: any): void {
         localLogger.info(`[NexusAI] Indexing ${siteId}: ${status.message} (${status.progress}%)`);
       }
       try {
-        ipcMain?.emit?.('nexus-ai:status-change', siteId, status);
+        ipcMain?.emit?.(IPC_CHANNELS.STATUS_CHANGE, siteId, status);
       } catch {
         // Renderer may not be ready
       }
@@ -157,13 +159,14 @@ export default function main(context: any): void {
     }
   })();
 
-  // Phase 4: IPC handlers (for future UI)
-  ipcMain.handle('nexus-ai:get-mcp-info', () => {
-    return mcpServer?.getConnectionInfo() ?? null;
-  });
-
-  ipcMain.handle('nexus-ai:get-fleet-status', () => {
-    return indexRegistry.listAll();
+  // Phase 4: IPC handlers
+  registerIpcHandlers({
+    siteData,
+    localServicesBridge,
+    indexRegistry,
+    embeddingService,
+    localLogger,
+    getMcpServer: () => mcpServer,
   });
 
   localLogger.info('[NexusAI] Addon loaded');
