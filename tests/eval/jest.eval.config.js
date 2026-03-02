@@ -8,6 +8,6 @@ module.exports = {
     '^.+\\.ts$': 'ts-jest',
   },
   testEnvironment: 'node',
-  testTimeout: 30000,
+  testTimeout: 180000,
   verbose: true,
 };

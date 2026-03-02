@@ -7,7 +7,12 @@ import { getToolSafety, ConfirmationManager } from './safety';
  */
 export class ToolRegistry {
   private handlers = new Map<string, McpToolHandler>();
-  private confirmations = new ConfirmationManager();
+  private _confirmations = new ConfirmationManager();
+
+  /** Public access to the ConfirmationManager for ChatService tier 3 approval flow. */
+  get confirmations(): ConfirmationManager {
+    return this._confirmations;
+  }
 
   register(handler: McpToolHandler): void {
     if (this.handlers.has(handler.definition.name)) {
@@ -74,7 +79,7 @@ export class ToolRegistry {
 
       if (!token) {
         // Generate confirmation token
-        const confirmationToken = this.confirmations.generate(name, args);
+        const confirmationToken = this._confirmations.generate(name, args);
         this.auditLog(services, name, safety.tier, args, null, 'confirmation_required', undefined, Date.now() - startTime);
 
         return {
@@ -96,7 +101,7 @@ export class ToolRegistry {
       // Validate confirmation token
       const validationParams = { ...args };
       delete validationParams._confirmationToken;
-      const error = this.confirmations.validate(token, name, validationParams);
+      const error = this._confirmations.validate(token, name, validationParams);
       if (error) {
         this.auditLog(services, name, safety.tier, args, false, 'error', error, Date.now() - startTime);
         return {

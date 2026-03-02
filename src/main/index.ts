@@ -24,6 +24,9 @@ import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
 import { registerIpcHandlers } from './ipc-handlers';
+import { initializeProviders } from './chat/providers/index';
+import { ChatService } from './chat/ChatService';
+import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -132,6 +135,25 @@ export default function main(context: any): void {
   registerWpeTools(registry);
   registerCompositeTools(registry);
 
+  // Phase 3b: Chat providers + service
+  initializeProviders();
+
+  const chatService = new ChatService({
+    registry,
+    services: nexusServices,
+    sendToRenderer: (channel: string, ...args: unknown[]) => {
+      try {
+        const { BrowserWindow } = require('electron');
+        const windows = BrowserWindow.getAllWindows();
+        for (const win of windows) {
+          win.webContents.send(channel, ...args);
+        }
+      } catch {
+        // Renderer may not be ready
+      }
+    },
+  });
+
   // Async initialization
   (async () => {
     try {
@@ -174,6 +196,12 @@ export default function main(context: any): void {
     registryStorage,
     localLogger,
     getMcpServer: () => mcpServer,
+  });
+
+  registerChatIpcHandlers({
+    chatService,
+    registryStorage,
+    localLogger,
   });
 
   localLogger.info('[NexusAI] Addon loaded');

@@ -18,6 +18,20 @@ export const IPC_CHANNELS = {
   INDEX_SITE: `${ADDON_PREFIX}:index-site`,
   GET_SETTINGS: `${ADDON_PREFIX}:get-settings`,
   UPDATE_SETTINGS: `${ADDON_PREFIX}:update-settings`,
+
+  // Chat
+  CHAT_SEND: `${ADDON_PREFIX}:chat-send`,
+  CHAT_STREAM: `${ADDON_PREFIX}:chat-stream`,
+  CHAT_TOOL_APPROVE: `${ADDON_PREFIX}:chat-tool-approve`,
+  CHAT_STOP: `${ADDON_PREFIX}:chat-stop`,
+  CHAT_CLEAR: `${ADDON_PREFIX}:chat-clear`,
+
+  // Provider management
+  VALIDATE_API_KEY: `${ADDON_PREFIX}:validate-api-key`,
+  SAVE_API_KEY: `${ADDON_PREFIX}:save-api-key`,
+  GET_MODELS: `${ADDON_PREFIX}:get-models`,
+  GET_PROVIDERS: `${ADDON_PREFIX}:get-providers`,
+  GET_API_KEY_STATUS: `${ADDON_PREFIX}:get-api-key-status`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -64,6 +78,8 @@ export const STORAGE_KEYS = {
   INDEX_REGISTRY: `${ADDON_PREFIX}_index_registry`,
   SETTINGS: `${ADDON_PREFIX}_settings`,
   MCP_TOKEN: `${ADDON_PREFIX}_mcp_token`,
+  API_KEYS: `${ADDON_PREFIX}_api_keys`,
+  API_KEY_STATUS: `${ADDON_PREFIX}_api_key_status`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -112,3 +128,12 @@ export const CHUNK_MAX_WORDS = 500;
 
 export const OLLAMA_BASE_URL = 'http://localhost:11434';
 export const OLLAMA_POLL_INTERVAL_MS = 30_000;
+
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
+
+export const CHAT_DEFAULTS = {
+  DEFAULT_PROVIDER: 'ollama',
+  MAX_AGENT_ITERATIONS: 10,
+} as const;

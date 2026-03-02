@@ -6,6 +6,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS, POLL_INTERVALS } from '../../common/constants';
+import { ChatTab } from './ChatTab';
 
 interface FleetOverviewProps {
   NavLink: any;
@@ -70,7 +71,7 @@ interface FleetOverviewState {
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'search' | 'index';
+  activeTab: 'overview' | 'search' | 'index' | 'chat';
 }
 
 // -- Shared styles --
@@ -767,6 +768,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
       { key: 'overview', label: 'Overview' },
       { key: 'search', label: 'Search' },
       { key: 'index', label: 'Index' },
+      { key: 'chat', label: 'Chat' },
     ];
 
     return React.createElement('div', {
@@ -795,11 +797,16 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     );
   }
 
+  renderChatTab(): React.ReactNode {
+    return React.createElement(ChatTab, { electron: this.props.electron });
+  }
+
   renderActiveTab(): React.ReactNode {
     switch (this.state.activeTab) {
       case 'overview': return this.renderOverviewTab();
       case 'search': return this.renderSearchTab();
       case 'index': return this.renderIndexTab();
+      case 'chat': return this.renderChatTab();
       default: return this.renderOverviewTab();
     }
   }
@@ -808,7 +815,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     const { loading, error, stats } = this.state;
 
     return React.createElement('div', {
-      style: { display: 'flex', flexDirection: 'column' as const, height: '100%', overflow: 'hidden', color: 'var(--nxai-card-text)' },
+      style: { display: 'flex', flexDirection: 'column' as const, height: '100%', overflow: 'hidden', color: 'var(--nxai-card-text)', userSelect: 'text' as const },
     },
       // Header: title + tab bar (fixed)
       React.createElement('div', {

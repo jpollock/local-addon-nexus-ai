@@ -217,4 +217,6 @@ export interface IpcResponse<T = unknown> {
 export interface NexusSettings {
   autoIndex: boolean;
   excludedSiteIds: string[];
+  chatProvider?: string;   // 'anthropic' | 'openai' | 'google' | 'ollama' | 'wpe-gateway'
+  chatModel?: string;      // Model name within provider
 }
