@@ -23,6 +23,7 @@ describe('01 — Connectivity', () => {
       protocolVersion: string;
       serverInfo: { name: string; version: string };
       capabilities: Record<string, unknown>;
+      instructions?: string;
     };
 
     expect(result.protocolVersion).toBe('2024-11-05');
@@ -30,6 +31,24 @@ describe('01 — Connectivity', () => {
     expect(result.serverInfo.name).toBeTruthy();
     expect(result.serverInfo.version).toBeTruthy();
     expect(result.capabilities).toBeDefined();
+  });
+
+  it('initialize includes server instructions', async () => {
+    const result = await client.initialize() as {
+      instructions?: string;
+    };
+
+    expect(result.instructions).toBeDefined();
+    expect(typeof result.instructions).toBe('string');
+    expect(result.instructions!.length).toBeGreaterThan(100);
+  });
+
+  it('initialize capabilities include resources', async () => {
+    const result = await client.initialize() as {
+      capabilities: Record<string, unknown>;
+    };
+
+    expect(result.capabilities).toHaveProperty('resources');
   });
 
   it('tools/list returns registered tools', async () => {

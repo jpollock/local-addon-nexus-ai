@@ -16,10 +16,12 @@ import { registerFleetTools } from './mcp/modules/fleet/index';
 import { registerSiteManagementTools } from './mcp/modules/site-management/index';
 import { registerWpCliTools } from './mcp/modules/wp-cli/index';
 import { registerWpeTools } from './mcp/modules/wpe/index';
+import { registerCompositeTools } from './mcp/modules/composite/index';
 import { saveConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
 import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
+import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -126,6 +128,7 @@ export default function main(context: any): void {
   registerSiteManagementTools(registry);
   registerWpCliTools(registry);
   registerWpeTools(registry);
+  registerCompositeTools(registry);
 
   // Async initialization
   (async () => {
@@ -139,7 +142,10 @@ export default function main(context: any): void {
       // Signal readiness — lifecycle hooks waiting to index can now proceed
       resolveReady!();
 
-      mcpServer = new McpServer({ services: nexusServices, registry });
+      const instructionRegistry = new InstructionRegistry();
+      registerAllInstructions(instructionRegistry);
+
+      mcpServer = new McpServer({ services: nexusServices, registry, instructionRegistry });
       const connectionInfo = await mcpServer.start();
       saveConnectionInfo(connectionInfo);
 
