@@ -24,6 +24,13 @@ export interface ToolInfo {
   inputSchema: Record<string, unknown>;
 }
 
+export interface ResourceInfo {
+  uri: string;
+  name: string;
+  description: string;
+  mimeType?: string;
+}
+
 export interface McpToolResult {
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
@@ -103,6 +110,25 @@ export class McpClient {
    */
   async callToolRaw(name: string, args: Record<string, unknown> = {}): Promise<JsonRpcResponse> {
     return this.sendJsonRpc('tools/call', { name, arguments: args });
+  }
+
+  /**
+   * JSON-RPC resources/list.
+   */
+  async listResources(): Promise<ResourceInfo[]> {
+    const res = await this.sendJsonRpc('resources/list', {});
+    if (res.error) {
+      throw new Error(`resources/list failed: ${res.error.message}`);
+    }
+    const result = res.result as { resources: ResourceInfo[] };
+    return result.resources;
+  }
+
+  /**
+   * JSON-RPC resources/read — returns raw response for flexible assertions.
+   */
+  async readResource(uri: string): Promise<JsonRpcResponse> {
+    return this.sendJsonRpc('resources/read', { uri });
   }
 
   // ---------------------------------------------------------------------------

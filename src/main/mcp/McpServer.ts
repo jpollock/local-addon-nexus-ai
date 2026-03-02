@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as crypto from 'crypto';
 import { McpAuth } from './McpAuth';
 import { ToolRegistry } from './tool-registry';
+import { InstructionRegistry } from './instructions';
 import {
   JsonRpcRequest,
   JsonRpcResponse,
@@ -19,6 +20,8 @@ import {
 export interface McpServerOptions {
   services: NexusServices;
   registry: ToolRegistry;
+  /** Instruction, prompt, and resource registry */
+  instructionRegistry?: InstructionRegistry;
   /** Pre-existing auth token to reuse across restarts */
   existingToken?: string;
   /** Override port for testing */
@@ -37,6 +40,7 @@ export class McpServer {
   private server: http.Server | null = null;
   private auth: McpAuth;
   private registry: ToolRegistry;
+  private instructionRegistry: InstructionRegistry;
   private services: NexusServices;
   private port = 0;
   private sseClients = new Map<string, http.ServerResponse>();
@@ -44,6 +48,7 @@ export class McpServer {
   constructor(options: McpServerOptions) {
     this.auth = new McpAuth(options.existingToken);
     this.registry = options.registry;
+    this.instructionRegistry = options.instructionRegistry ?? new InstructionRegistry();
     this.services = options.services;
     if (options.port) this.port = options.port;
   }
@@ -199,13 +204,18 @@ export class McpServer {
   private async dispatch(request: JsonRpcRequest): Promise<JsonRpcResponse> {
     const { method, id, params } = request;
 
+    const instructions = this.instructionRegistry.getInstructions();
+
     switch (method) {
-      case 'initialize':
-        return this.jsonRpcResult(id, {
+      case 'initialize': {
+        const result: McpInitializeResult = {
           protocolVersion: MCP_PROTOCOL_VERSION,
-          capabilities: { tools: {} },
-          serverInfo: { name: 'nexus-ai', version: '0.1.0' },
-        } as McpInitializeResult);
+          capabilities: { tools: {}, resources: {} },
+          serverInfo: { name: 'nexus-ai', version: '0.2.0' },
+        };
+        if (instructions) result.instructions = instructions;
+        return this.jsonRpcResult(id, result);
+      }
 
       case 'ping':
         return this.jsonRpcResult(id, {});
@@ -213,6 +223,8 @@ export class McpServer {
       case 'notifications/initialized':
         // Client acknowledgement — no response needed for notifications
         return this.jsonRpcResult(id, {});
+
+      // --- Tools ---
 
       case 'tools/list':
         return this.jsonRpcResult(id, {
@@ -225,6 +237,33 @@ export class McpServer {
         const result = await this.registry.call(toolName, toolArgs, this.services);
         return this.jsonRpcResult(id, result);
       }
+
+      // --- Resources ---
+
+      case 'resources/list':
+        return this.jsonRpcResult(id, {
+          resources: this.instructionRegistry.listResources(),
+        });
+
+      case 'resources/read': {
+        const uri = (params as any)?.uri as string;
+        const resource = await this.instructionRegistry.readResource(uri);
+        if (!resource) {
+          return {
+            jsonrpc: '2.0',
+            id,
+            error: { code: -32602, message: `Resource not found: ${uri}` },
+          };
+        }
+        return this.jsonRpcResult(id, {
+          contents: [{ uri, mimeType: resource.mimeType, text: resource.text }],
+        });
+      }
+
+      case 'resources/templates/list':
+        return this.jsonRpcResult(id, {
+          resourceTemplates: this.instructionRegistry.listResourceTemplates(),
+        });
 
       default:
         return {

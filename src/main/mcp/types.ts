@@ -35,12 +35,36 @@ export interface McpServerInfo {
 
 export interface McpCapabilities {
   tools?: Record<string, never>;
+  resources?: Record<string, never>;
 }
 
 export interface McpInitializeResult {
   protocolVersion: string;
   capabilities: McpCapabilities;
   serverInfo: McpServerInfo;
+  instructions?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Resources
+// ---------------------------------------------------------------------------
+
+export interface McpResourceDefinition {
+  uri: string;
+  name: string;
+  description: string;
+  mimeType?: string;
+}
+
+export interface McpResource extends McpResourceDefinition {
+  read: () => Promise<{ text: string; mimeType: string }>;
+}
+
+export interface McpResourceTemplate {
+  uriTemplate: string;
+  name: string;
+  description: string;
+  read: (uri: string) => Promise<{ text: string; mimeType: string }>;
 }
 
 // ---------------------------------------------------------------------------

@@ -18,3 +18,25 @@ fs.writeFileSync(
 );
 
 console.log('Entry points created: lib/main.js, lib/renderer.js');
+
+// Copy markdown resource files to lib (TypeScript doesn't copy non-TS files)
+const srcResourceDir = path.join(__dirname, '..', 'src', 'main', 'mcp', 'instructions', 'resources');
+const destResourceDir = path.join(libDir, 'main', 'mcp', 'instructions', 'resources');
+
+function copyMarkdownFiles(srcDir, destDir) {
+  if (!fs.existsSync(srcDir)) return;
+  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const srcPath = path.join(srcDir, entry.name);
+    const destPath = path.join(destDir, entry.name);
+    if (entry.isDirectory()) {
+      copyMarkdownFiles(srcPath, destPath);
+    } else if (entry.name.endsWith('.md')) {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+copyMarkdownFiles(srcResourceDir, destResourceDir);
+console.log('Markdown resources copied to lib/');
