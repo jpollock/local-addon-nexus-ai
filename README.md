@@ -14,6 +14,7 @@ Nexus AI indexes your WordPress sites into a vector database and exposes them th
 
 ## Features
 
+- **AI Chat** — Built-in chat interface with streaming responses and tool calling
 - Semantic search across all site content with relevance scoring
 - WooCommerce product extraction (price, SKU, stock, attributes, categories)
 - ACF custom field enrichment (text, repeater, group, flexible content)
@@ -23,11 +24,31 @@ Nexus AI indexes your WordPress sites into a vector database and exposes them th
 - 3-tier safety system with confirmation tokens for destructive operations
 - Per-platform packaging with native binary stripping
 
+## Chat
+
+The Chat tab provides an AI assistant inside Local that can manage your WordPress sites using natural language. It calls the same MCP tools that external clients use — listing sites, checking plugins, running WP-CLI commands, and more.
+
+**Providers:** Ollama (local, default), OpenAI, Anthropic, Google, WPE Gateway
+
+**How it works:**
+1. You type a message in the Chat tab
+2. The system prompt instructs the model to use tools for real data (never guess)
+3. The agent loop streams the response, executes any tool calls, feeds results back to the model, and repeats until done
+4. Tier 3 (destructive) tool calls require your approval in the UI before executing
+
+**Setup:** Install [Ollama](https://ollama.com/) and pull a tool-capable model:
+```bash
+ollama pull llama3.2
+```
+
+Configure other providers in Preferences > Nexus AI.
+
 ## Requirements
 
 - [Local](https://localwp.com/) 9.0.0 or later
 - Node.js 20+
 - ~200 MB disk space (ONNX model + LanceDB binaries)
+- [Ollama](https://ollama.com/) (optional, for local AI chat)
 
 ## Installation
 
@@ -59,9 +80,9 @@ npm install                    # Install dependencies
 npm run download-model         # Download ONNX model (~30 MB)
 npm run build                  # Compile TypeScript + create entry points
 npm run watch                  # Watch mode for development
-npm test                       # Run unit tests (450+)
+npm test                       # Run unit tests (576+)
+npm run test:eval              # Run eval tests (52, LLM evals need Ollama)
 npm run test:integration       # Run integration tests (82+)
-npm run test:eval              # Run eval tests (44)
 npm run test:e2e               # Run E2E tests (90+, requires Local running)
 npm run test:all               # Run all test suites
 npm run package:mac-arm        # Package for macOS Apple Silicon
@@ -81,39 +102,56 @@ This file contains the URL, auth token, and port for connecting an MCP client.
 
 ```
 src/
-├── common/           # Shared types and constants
+├── common/              # Shared types and constants
 │   ├── types.ts
-│   └── constants.ts
-└── main/
-    ├── content/      # Extraction and chunking pipeline
-    │   ├── ContentPipeline.ts
-    │   ├── MySQLExtractor.ts
-    │   ├── FileScanner.ts
-    │   ├── IndexRegistry.ts
-    │   ├── html-cleaner.ts
-    │   └── extractors/
-    │       ├── WooCommerceExtractor.ts
-    │       ├── ACFExtractor.ts
-    │       ├── MediaExtractor.ts
-    │       └── ...
-    ├── embeddings/    # ONNX inference + tokenizer
-    │   ├── EmbeddingService.ts
-    │   └── tokenizer.ts
-    ├── vector-store/  # LanceDB wrapper
-    │   └── VectorStore.ts
-    └── mcp/           # MCP server + tool modules
-        ├── McpServer.ts
-        ├── tool-registry.ts
-        ├── site-resolver.ts
-        └── modules/
-            ├── content/          # 2 tools
-            ├── site-context/     # 4 tools
-            ├── ollama/           # 2 tools
-            ├── fleet/            # 6 tools
-            ├── site-management/  # 11 tools
-            ├── wp-cli/           # 12 tools
-            ├── wpe/              # 9 tools
-            └── composite/        # 2 tools
+│   ├── constants.ts
+│   └── chat-types.ts    # Chat message and stream event types
+├── main/
+│   ├── chat/            # AI chat system (IPC-based)
+│   │   ├── ChatService.ts          # Agent loop, system prompt, tool execution
+│   │   ├── chat-ipc-handlers.ts    # IPC wiring for renderer communication
+│   │   ├── tool-adapter.ts         # Converts MCP tools to chat provider format
+│   │   └── providers/              # LLM provider implementations
+│   │       ├── ollama.ts           # Ollama (local, default)
+│   │       ├── openai.ts           # OpenAI API
+│   │       ├── anthropic.ts        # Anthropic API
+│   │       ├── google.ts           # Google Gemini API
+│   │       └── wpe-gateway.ts      # WP Engine AI Gateway
+│   ├── content/         # Extraction and chunking pipeline
+│   │   ├── ContentPipeline.ts
+│   │   ├── MySQLExtractor.ts
+│   │   ├── FileScanner.ts
+│   │   ├── IndexRegistry.ts
+│   │   ├── html-cleaner.ts
+│   │   └── extractors/
+│   │       ├── WooCommerceExtractor.ts
+│   │       ├── ACFExtractor.ts
+│   │       ├── MediaExtractor.ts
+│   │       └── ...
+│   ├── embeddings/      # ONNX inference + tokenizer
+│   │   ├── EmbeddingService.ts
+│   │   └── tokenizer.ts
+│   ├── vector-store/    # LanceDB wrapper
+│   │   └── VectorStore.ts
+│   └── mcp/             # MCP server + tool modules
+│       ├── McpServer.ts
+│       ├── tool-registry.ts
+│       ├── site-resolver.ts
+│       └── modules/
+│           ├── content/          # 2 tools
+│           ├── site-context/     # 4 tools
+│           ├── ollama/           # 2 tools
+│           ├── fleet/            # 6 tools
+│           ├── site-management/  # 11 tools
+│           ├── wp-cli/           # 12 tools
+│           ├── wpe/              # 9 tools
+│           └── composite/        # 2 tools
+└── renderer/
+    └── components/
+        ├── ChatTab.tsx             # Chat UI with streaming and tool approval
+        ├── NexusPreferences.tsx     # Provider and model configuration
+        ├── FleetOverview.tsx        # Fleet dashboard
+        └── ...
 ```
 
 ## MCP Tools (48)
@@ -128,6 +166,19 @@ src/
 | WP-CLI | 12 | Plugin/theme/user management, local and remote |
 | WPE | 9 | WP Engine account, install, and sync operations |
 | Composite | 2 | Parallel site and plugin audits |
+
+## Testing
+
+Four-tier test pyramid. See [tests/TESTING-STRATEGY.md](tests/TESTING-STRATEGY.md) for full details.
+
+| Tier | Command | What it tests |
+|------|---------|---------------|
+| Unit | `npm test` | Code logic with mocked deps (576+ tests) |
+| Eval | `npm run test:eval` | Content quality + LLM tool routing (52 tests) |
+| Integration | `npm run test:integration` | Real ONNX, LanceDB, MCP (82+ tests) |
+| E2E | `npm run test:e2e` | Full addon in running Local (90+ tests) |
+
+LLM evals call Ollama directly to verify the model routes to the correct tools and doesn't hallucinate. They skip automatically when Ollama is not available.
 
 ## License
 
