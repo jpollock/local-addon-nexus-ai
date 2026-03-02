@@ -29,7 +29,13 @@
     "pretest:integration": "npm run download-model",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
-    "download-model": "node scripts/download-model.js"
+    "download-model": "node scripts/download-model.js",
+    "strip": "bash scripts/strip-platforms.sh",
+    "package": "node scripts/package-addon.js",
+    "package:mac-arm": "node scripts/package-addon.js --platform darwin --arch arm64",
+    "package:mac-x64": "node scripts/package-addon.js --platform darwin --arch x64",
+    "package:linux-x64": "node scripts/package-addon.js --platform linux --arch x64",
+    "package:win-x64": "node scripts/package-addon.js --platform win32 --arch x64"
   },
   "dependencies": {
     "@lancedb/lancedb": "^0.13.0",

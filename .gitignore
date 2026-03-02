@@ -1,6 +1,7 @@
 node_modules/
 lib/
 coverage/
+dist/
 models/all-MiniLM-L6-v2-quantized/model.onnx
 models/all-MiniLM-L6-v2-quantized/vocab.txt
 models/all-MiniLM-L6-v2-quantized/tokenizer_config.json

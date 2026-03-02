@@ -86,4 +86,48 @@ describe('cleanWordPressContent', () => {
   test('preserves plain text content', () => {
     expect(cleanWordPressContent('Just plain text')).toBe('Just plain text');
   });
+
+  test('preserves CJK characters', () => {
+    const input = '<p>这是一个测试。日本語テスト。한국어 테스트.</p>';
+    const result = cleanWordPressContent(input);
+    expect(result).toContain('这是一个测试');
+    expect(result).toContain('日本語テスト');
+    expect(result).toContain('한국어 테스트');
+  });
+
+  test('preserves emoji content', () => {
+    const input = '<p>Hello 🌍 world! 🎉 Great news 👍</p>';
+    const result = cleanWordPressContent(input);
+    expect(result).toContain('🌍');
+    expect(result).toContain('🎉');
+    expect(result).toContain('👍');
+    expect(result).toBe('Hello 🌍 world! 🎉 Great news 👍');
+  });
+
+  test('handles deeply nested HTML without stack overflow', () => {
+    // Build 500-level nested HTML
+    let nested = 'innermost text';
+    for (let i = 0; i < 500; i++) {
+      nested = `<div>${nested}</div>`;
+    }
+    const result = cleanWordPressContent(nested);
+    expect(result).toBe('innermost text');
+  });
+
+  test('handles null bytes and control characters', () => {
+    const input = 'Hello\x00 world\x01\x02\x03 test';
+    expect(() => cleanWordPressContent(input)).not.toThrow();
+    const result = cleanWordPressContent(input);
+    expect(typeof result).toBe('string');
+  });
+
+  test('handles unclosed HTML tags without throwing', () => {
+    const input = '<p>Unclosed paragraph <div>And unclosed div <span>and span';
+    expect(() => cleanWordPressContent(input)).not.toThrow();
+    const result = cleanWordPressContent(input);
+    expect(result).toContain('Unclosed paragraph');
+    expect(result).toContain('And unclosed div');
+    expect(result).toContain('and span');
+    expect(result).not.toContain('<');
+  });
 });
