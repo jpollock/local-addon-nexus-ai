@@ -36,7 +36,7 @@ export class FleetBreadcrumb extends React.Component<FleetBreadcrumbProps> {
             fontWeight: 500,
           },
         },
-        '\u2190 Fleet Overview',
+        '\u2190 Nexus AI',
       ),
     );
   }

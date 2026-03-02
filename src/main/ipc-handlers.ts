@@ -4,26 +4,40 @@
  * All Electron IPC handlers for the Nexus AI addon, extracted from index.ts
  * to keep the main entry point focused on initialization.
  */
-import { IPC_CHANNELS } from '../common/constants';
-import type { IndexRegistry } from './content/IndexRegistry';
+import { IPC_CHANNELS, STORAGE_KEYS } from '../common/constants';
+import type { NexusSettings } from '../common/types';
+import type { IndexRegistry, RegistryStorage } from './content/IndexRegistry';
+import type { ContentPipeline } from './content/ContentPipeline';
 import type { EmbeddingService } from './embeddings/EmbeddingService';
+import type { VectorStore } from './vector-store/VectorStore';
 import type { McpServer } from './mcp/McpServer';
 import type { LocalServicesBridge } from './mcp/local-services-bridge';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
 
+const DEFAULT_SETTINGS: NexusSettings = {
+  autoIndex: true,
+  excludedSiteIds: [],
+};
+
 export interface IpcHandlerDeps {
   siteData: any;
   localServicesBridge: LocalServicesBridge;
   indexRegistry: IndexRegistry;
   embeddingService: EmbeddingService;
+  contentPipeline: ContentPipeline;
+  vectorStore: VectorStore;
+  registryStorage: RegistryStorage;
   localLogger: any;
   getMcpServer: () => McpServer | null;
 }
 
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
-  const { siteData, localServicesBridge, indexRegistry, embeddingService, localLogger, getMcpServer } = deps;
+  const {
+    siteData, localServicesBridge, indexRegistry, embeddingService,
+    contentPipeline, vectorStore, registryStorage, localLogger, getMcpServer,
+  } = deps;
 
   ipcMain.handle(IPC_CHANNELS.GET_MCP_INFO, () => {
     return getMcpServer()?.getConnectionInfo() ?? null;
@@ -185,6 +199,84 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     } catch (err) {
       localLogger.error('[NexusAI] stop-site failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SEARCH, async (_event: any, query: string, siteId?: string, limit?: number) => {
+    try {
+      const maxResults = limit ?? 10;
+      const [queryVector] = await embeddingService.embedBatch([query]);
+
+      if (siteId) {
+        const results = await vectorStore.search(siteId, queryVector, { limit: maxResults });
+        const site = siteData.getSite(siteId);
+        return {
+          results: results.map((r: any) => ({ ...r, siteId, siteName: site?.name ?? siteId })),
+        };
+      }
+
+      // Search all indexed sites, merge results
+      const entries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
+      const allResults: any[] = [];
+      for (const entry of entries) {
+        const results = await vectorStore.search(entry.siteId, queryVector, { limit: maxResults });
+        const site = siteData.getSite(entry.siteId);
+        for (const r of results) {
+          allResults.push({ ...r, siteId: entry.siteId, siteName: site?.name ?? entry.siteName });
+        }
+      }
+
+      allResults.sort((a, b) => b.score - a.score);
+      return { results: allResults.slice(0, maxResults) };
+    } catch (err) {
+      localLogger.error('[NexusAI] search failed:', (err as Error).message);
+      return { results: [], error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.INDEX_SITE, async (_event: any, siteId: string) => {
+    try {
+      const site = siteData.getSite(siteId);
+      if (!site) {
+        return { success: false, error: `Site ${siteId} not found` };
+      }
+      const result = await contentPipeline.indexSite({
+        siteId: site.id,
+        siteName: site.name,
+        sitePath: site.path,
+      });
+      return {
+        success: true,
+        documentsIndexed: result.documentsIndexed,
+        chunksIndexed: result.chunksIndexed,
+        durationMs: result.durationMs,
+        errors: result.errors,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] index-site failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.GET_SETTINGS, () => {
+    try {
+      const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
+      return raw ?? DEFAULT_SETTINGS;
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.UPDATE_SETTINGS, (_event: any, partial: Partial<NexusSettings>) => {
+    try {
+      const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
+      const current: NexusSettings = raw ?? DEFAULT_SETTINGS;
+      const updated = { ...current, ...partial };
+      registryStorage.set(STORAGE_KEYS.SETTINGS, updated as any);
+      return updated;
+    } catch (err) {
+      localLogger.error('[NexusAI] update-settings failed:', (err as Error).message);
+      return DEFAULT_SETTINGS;
     }
   });
 }

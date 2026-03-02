@@ -1,9 +1,7 @@
 /**
  * Fleet Overview Dashboard
  *
- * Stats dashboard showing what Nexus AI knows about the fleet.
- * No site list — just summary cards with key metrics.
- *
+ * Hub page showing stats, MCP connection panel, site index table, and search.
  * Class-based — Local uses older React, no hooks allowed.
  */
 import * as React from 'react';
@@ -23,10 +21,56 @@ interface DashboardStats {
   index: { sitesIndexed: number; totalSites: number; totalDocuments: number; totalChunks: number; lastIndexed: number | null };
 }
 
+interface McpInfo {
+  url: string;
+  authToken: string;
+  port: number;
+  version: string;
+  tools: string[];
+}
+
+interface SiteListItem {
+  id: string;
+  name: string;
+  domain: string;
+  status: string;
+  isWpe: boolean;
+  indexed: boolean;
+}
+
+interface IndexEntry {
+  siteId: string;
+  siteName: string;
+  state: string;
+  documentCount: number;
+  chunkCount: number;
+  lastIndexed: number;
+}
+
+interface UISearchResult {
+  id: string;
+  title: string;
+  content: string;
+  postType: string;
+  postId: number;
+  score: number;
+  siteId: string;
+  siteName: string;
+}
+
 interface FleetOverviewState {
   stats: DashboardStats | null;
+  mcpInfo: McpInfo | null;
+  sites: SiteListItem[];
+  indexEntries: IndexEntry[];
+  searchQuery: string;
+  searchResults: UISearchResult[];
+  searching: boolean;
+  indexingId: string | null;
+  copiedField: string | null;
   loading: boolean;
   error: string | null;
+  activeTab: 'overview' | 'search' | 'index';
 }
 
 // -- Shared styles --
@@ -88,6 +132,45 @@ const tagStyle = (bg: string, fg: string): React.CSSProperties => ({
   verticalAlign: 'middle',
 });
 
+const sectionLabelStyle: React.CSSProperties = {
+  fontSize: '13px',
+  fontWeight: 600,
+  color: 'var(--nxai-section-label, #374151)',
+  marginBottom: '12px',
+  marginTop: '8px',
+};
+
+const btnStyle: React.CSSProperties = {
+  padding: '6px 14px',
+  borderRadius: '6px',
+  border: '1px solid var(--nxai-card-border, #e5e7eb)',
+  backgroundColor: 'var(--nxai-card-bg, #fff)',
+  color: 'var(--nxai-card-text, #111827)',
+  fontSize: '12px',
+  fontWeight: 500,
+  cursor: 'pointer',
+};
+
+const btnPrimaryStyle: React.CSSProperties = {
+  ...btnStyle,
+  backgroundColor: UI_COLORS.WPE_BRAND,
+  color: '#fff',
+  border: 'none',
+};
+
+const codeBlockStyle: React.CSSProperties = {
+  fontFamily: 'monospace',
+  fontSize: '12px',
+  backgroundColor: 'var(--nxai-code-bg, #f3f4f6)',
+  border: '1px solid var(--nxai-card-border, #e5e7eb)',
+  borderRadius: '8px',
+  padding: '14px',
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-all',
+  lineHeight: 1.5,
+  color: 'var(--nxai-card-text, #111827)',
+};
+
 function formatTimeAgo(timestamp: number): string {
   if (!timestamp) return 'Never';
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -100,35 +183,44 @@ function formatTimeAgo(timestamp: number): string {
   return `${days}d ago`;
 }
 
+function truncate(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen) + '...';
+}
+
 export class FleetOverview extends React.Component<FleetOverviewProps, FleetOverviewState> {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private mounted = false;
 
   state: FleetOverviewState = {
     stats: null,
+    mcpInfo: null,
+    sites: [],
+    indexEntries: [],
+    searchQuery: '',
+    searchResults: [],
+    searching: false,
+    indexingId: null,
+    copiedField: null,
     loading: true,
     error: null,
+    activeTab: 'overview',
   };
 
   componentDidMount(): void {
     this.mounted = true;
     this.injectCssVars();
-    this.fetchStats();
-    this.pollTimer = setInterval(() => this.fetchStats(), POLL_INTERVALS.DASHBOARD_STATS_MS);
+    this.fetchAll();
+    this.pollTimer = setInterval(() => this.fetchAll(), POLL_INTERVALS.DASHBOARD_STATS_MS);
   }
 
   componentWillUnmount(): void {
     this.mounted = false;
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
-    }
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    if (this.searchTimer) clearTimeout(this.searchTimer);
   }
 
-  /**
-   * Inject CSS custom properties that adapt to Local's theme.
-   * Local uses .Theme__Dark on a parent element for dark mode.
-   */
   injectCssVars(): void {
     const id = 'nexus-ai-dashboard-vars';
     if (document.getElementById(id)) return;
@@ -142,6 +234,12 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
         --nxai-card-sub: #6b7280;
         --nxai-card-text: #111827;
         --nxai-section-label: #374151;
+        --nxai-code-bg: #f3f4f6;
+        --nxai-table-hover: #f9fafb;
+        --nxai-input-bg: #ffffff;
+        --nxai-input-border: #d1d5db;
+        --nxai-score-bg: #e5e7eb;
+        --nxai-score-fill: ${UI_COLORS.WPE_BRAND};
       }
       .Theme__Dark {
         --nxai-card-bg: #2a2a2a;
@@ -150,36 +248,92 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
         --nxai-card-sub: #9ca3af;
         --nxai-card-text: #f3f4f6;
         --nxai-section-label: #d1d5db;
+        --nxai-code-bg: #1f1f1f;
+        --nxai-table-hover: #333333;
+        --nxai-input-bg: #2a2a2a;
+        --nxai-input-border: #555;
+        --nxai-score-bg: #404040;
+        --nxai-score-fill: ${UI_COLORS.WPE_BRAND};
       }
     `;
     document.head.appendChild(style);
   }
 
-  fetchStats = async (): Promise<void> => {
+  fetchAll = async (): Promise<void> => {
+    const ipc = this.props.electron.ipcRenderer;
     try {
-      const stats = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS);
+      const [stats, mcpInfo, sites, indexEntries] = await Promise.all([
+        ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
+        ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
+        ipc.invoke(IPC_CHANNELS.GET_SITES),
+        ipc.invoke(IPC_CHANNELS.GET_FLEET_STATUS),
+      ]);
       if (!this.mounted) return;
-      if (stats) {
-        this.setState({ stats, loading: false, error: null });
-      } else {
-        this.setState({ error: 'Failed to load stats', loading: false });
-      }
+      this.setState({
+        stats,
+        mcpInfo: mcpInfo ?? null,
+        sites: sites ?? [],
+        indexEntries: indexEntries ?? [],
+        loading: false,
+        error: stats ? null : 'Failed to load stats',
+      });
     } catch (err: any) {
       if (!this.mounted) return;
-      this.setState({ error: err.message || 'Failed to load stats', loading: false });
+      this.setState({ error: err.message || 'Failed to load', loading: false });
     }
   };
 
+  handleSearch = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const query = e.target.value;
+    this.setState({ searchQuery: query });
+
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+
+    if (!query.trim()) {
+      this.setState({ searchResults: [], searching: false });
+      return;
+    }
+
+    this.setState({ searching: true });
+    this.searchTimer = setTimeout(async () => {
+      try {
+        const result = await this.props.electron.ipcRenderer.invoke(
+          IPC_CHANNELS.SEARCH, query, undefined, 10,
+        );
+        if (!this.mounted) return;
+        this.setState({ searchResults: result?.results ?? [], searching: false });
+      } catch {
+        if (!this.mounted) return;
+        this.setState({ searchResults: [], searching: false });
+      }
+    }, 300);
+  };
+
+  handleIndex = async (siteId: string): Promise<void> => {
+    this.setState({ indexingId: siteId });
+    try {
+      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_SITE, siteId);
+      if (!this.mounted) return;
+      await this.fetchAll();
+    } catch {
+      // Error handled by fetchAll refresh
+    }
+    if (this.mounted) this.setState({ indexingId: null });
+  };
+
+  copyToClipboard = (text: string, field: string): void => {
+    navigator.clipboard.writeText(text).then(() => {
+      this.setState({ copiedField: field });
+      setTimeout(() => {
+        if (this.mounted) this.setState({ copiedField: null });
+      }, 2000);
+    });
+  };
+
+  // -- Card renders (unchanged from original) --
+
   renderSectionLabel(text: string): React.ReactNode {
-    return React.createElement('div', {
-      style: {
-        fontSize: '13px',
-        fontWeight: 600,
-        color: 'var(--nxai-section-label, #374151)',
-        marginBottom: '12px',
-        marginTop: '8px',
-      },
-    }, text);
+    return React.createElement('div', { style: sectionLabelStyle }, text);
   }
 
   renderLocalSitesCard(stats: DashboardStats): React.ReactNode {
@@ -215,16 +369,14 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     if (!remoteSites.capiAvailable) {
       return React.createElement('div', { style: cardStyle },
         React.createElement('div', { style: cardTitleStyle }, 'Remote Sites'),
-        React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-sub)' } }, '—'),
+        React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-sub)' } }, '\u2014'),
         React.createElement('div', { style: subStatStyle }, 'WPE not authenticated'),
       );
     }
     return React.createElement('div', { style: cardStyle },
       React.createElement('div', { style: cardTitleStyle }, 'Remote Sites'),
       React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-text)' } }, remoteSites.total),
-      React.createElement('div', { style: subStatStyle },
-        `${remoteSites.unlinked} not linked to Local`,
-      ),
+      React.createElement('div', { style: subStatStyle }, `${remoteSites.unlinked} not linked to Local`),
     );
   }
 
@@ -252,9 +404,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
       React.createElement('div', { style: cardTitleStyle }, 'Embedding Model'),
       React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
         React.createElement('span', { style: dotStyle(embedding.ready ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_WARNING) }),
-        React.createElement('span', { style: { fontSize: '14px', fontWeight: 600, color: 'var(--nxai-card-text)' } },
-          embedding.model,
-        ),
+        React.createElement('span', { style: { fontSize: '14px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, embedding.model),
         embedding.quantized
           ? React.createElement('span', { style: tagStyle('rgba(14, 202, 212, 0.15)', UI_COLORS.WPE_BRAND) }, 'QUANTIZED')
           : null,
@@ -289,43 +439,403 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     );
   }
 
-  render(): React.ReactNode {
-    const { stats, loading, error } = this.state;
+  // -- New sections --
+
+  renderSetupBanner(stats: DashboardStats): React.ReactNode {
+    if (stats.embedding.ready) return null;
+    return React.createElement('div', {
+      style: {
+        padding: '12px 16px',
+        borderRadius: '8px',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        border: `1px solid ${UI_COLORS.STATUS_WARNING}`,
+        marginBottom: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+      },
+    },
+      React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_WARNING) }),
+      React.createElement('span', { style: { fontSize: '13px', color: 'var(--nxai-card-text)' } },
+        'Setting up Nexus AI\u2026 Embedding model loading.',
+      ),
+    );
+  }
+
+  renderMcpPanel(): React.ReactNode {
+    const { mcpInfo, copiedField } = this.state;
+    if (!mcpInfo) {
+      return React.createElement('div', {
+        style: { ...cardStyle, marginBottom: '24px', textAlign: 'center' as const, padding: '24px', color: 'var(--nxai-card-sub)' },
+      }, 'MCP server not yet running. Waiting for initialization...');
+    }
+
+    const claudeCodeCmd = `claude mcp add nexus-ai -- curl ${mcpInfo.url}`;
+    const claudeDesktopConfig = JSON.stringify({
+      mcpServers: {
+        'nexus-ai': {
+          url: mcpInfo.url,
+          headers: { Authorization: `Bearer ${mcpInfo.authToken}` },
+        },
+      },
+    }, null, 2);
+
+    const copyBtn = (text: string, field: string) =>
+      React.createElement('button', {
+        style: { ...btnStyle, marginTop: '8px', fontSize: '11px' },
+        onClick: () => this.copyToClipboard(text, field),
+      }, copiedField === field ? 'Copied!' : 'Copy');
+
+    return React.createElement('div', { style: { marginBottom: '24px' } },
+      this.renderSectionLabel('Connect to AI Tools'),
+      React.createElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' },
+      },
+        React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
+        React.createElement('span', { style: { fontSize: '13px', color: 'var(--nxai-card-text)' } },
+          `Server running on port ${mcpInfo.port}`,
+        ),
+        React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } },
+          `\u2022 ${mcpInfo.tools.length} tools \u2022 v${mcpInfo.version}`,
+        ),
+      ),
+
+      React.createElement('div', {
+        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' },
+      },
+        // Claude Code
+        React.createElement('div', { style: cardStyle },
+          React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--nxai-card-text)' } }, 'Claude Code'),
+          React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginBottom: '8px' } },
+            'Run in your terminal:',
+          ),
+          React.createElement('div', { style: codeBlockStyle }, claudeCodeCmd),
+          copyBtn(claudeCodeCmd, 'claude-code'),
+        ),
+
+        // Claude Desktop
+        React.createElement('div', { style: cardStyle },
+          React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--nxai-card-text)' } }, 'Claude Desktop'),
+          React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginBottom: '8px' } },
+            'Add to claude_desktop_config.json:',
+          ),
+          React.createElement('div', { style: codeBlockStyle }, claudeDesktopConfig),
+          copyBtn(claudeDesktopConfig, 'claude-desktop'),
+        ),
+      ),
+    );
+  }
+
+  renderSiteTable(): React.ReactNode {
+    const { sites, indexEntries, indexingId } = this.state;
+
+    const indexMap = new Map<string, IndexEntry>();
+    for (const entry of indexEntries) {
+      indexMap.set(entry.siteId, entry);
+    }
+
+    // Sort: running first, then alphabetical
+    const sorted = [...sites].sort((a, b) => {
+      if (a.status === 'running' && b.status !== 'running') return -1;
+      if (b.status === 'running' && a.status !== 'running') return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    const thStyle: React.CSSProperties = {
+      textAlign: 'left' as const,
+      padding: '8px 12px',
+      fontSize: '11px',
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      color: 'var(--nxai-card-label)',
+      borderBottom: '2px solid var(--nxai-card-border)',
+    };
+
+    const tdStyle: React.CSSProperties = {
+      padding: '10px 12px',
+      fontSize: '13px',
+      color: 'var(--nxai-card-text)',
+      borderBottom: '1px solid var(--nxai-card-border)',
+    };
+
+    return React.createElement('div', { style: { marginBottom: '24px' } },
+      this.renderSectionLabel('Content Index'),
+      React.createElement('div', { style: { ...cardStyle, padding: 0, overflow: 'hidden' } },
+        React.createElement('table', {
+          style: { width: '100%', borderCollapse: 'collapse' as const },
+        },
+          React.createElement('thead', null,
+            React.createElement('tr', null,
+              React.createElement('th', { style: thStyle }, 'Site'),
+              React.createElement('th', { style: thStyle }, 'Status'),
+              React.createElement('th', { style: thStyle }, 'Index'),
+              React.createElement('th', { style: thStyle }, 'Documents'),
+              React.createElement('th', { style: thStyle }, 'Chunks'),
+              React.createElement('th', { style: thStyle }, 'Last Indexed'),
+              React.createElement('th', { style: { ...thStyle, textAlign: 'right' as const } }, ''),
+            ),
+          ),
+          React.createElement('tbody', null,
+            sorted.length === 0
+              ? React.createElement('tr', null,
+                  React.createElement('td', {
+                    colSpan: 7,
+                    style: { ...tdStyle, textAlign: 'center' as const, color: 'var(--nxai-card-sub)', padding: '24px' },
+                  }, 'No sites found'),
+                )
+              : sorted.map((site) => {
+                  const idx = indexMap.get(site.id);
+                  const isIndexing = indexingId === site.id;
+                  const indexState = idx?.state ?? 'none';
+                  const stateColor = indexState === 'indexed' ? UI_COLORS.STATUS_RUNNING
+                    : indexState === 'stale' ? UI_COLORS.STATUS_WARNING
+                    : indexState === 'indexing' ? UI_COLORS.WPE_BRAND
+                    : indexState === 'error' ? UI_COLORS.STATUS_ERROR
+                    : 'var(--nxai-card-sub)';
+
+                  return React.createElement('tr', { key: site.id },
+                    React.createElement('td', { style: tdStyle },
+                      React.createElement('span', { style: { fontWeight: 500 } }, site.name),
+                      site.isWpe ? React.createElement('span', {
+                        style: tagStyle('rgba(14, 202, 212, 0.15)', UI_COLORS.WPE_BRAND),
+                      }, 'WPE') : null,
+                    ),
+                    React.createElement('td', { style: tdStyle },
+                      React.createElement('span', { style: dotStyle(site.status === 'running' ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_HALTED) }),
+                      site.status,
+                    ),
+                    React.createElement('td', { style: tdStyle },
+                      React.createElement('span', { style: dotStyle(stateColor) }),
+                      indexState === 'none' ? '\u2014' : indexState,
+                    ),
+                    React.createElement('td', { style: tdStyle }, idx?.documentCount?.toLocaleString() ?? '\u2014'),
+                    React.createElement('td', { style: tdStyle }, idx?.chunkCount?.toLocaleString() ?? '\u2014'),
+                    React.createElement('td', { style: tdStyle },
+                      idx?.lastIndexed ? formatTimeAgo(idx.lastIndexed) : '\u2014',
+                    ),
+                    React.createElement('td', { style: { ...tdStyle, textAlign: 'right' as const } },
+                      site.status === 'running'
+                        ? React.createElement('button', {
+                            style: isIndexing ? { ...btnStyle, opacity: 0.6, cursor: 'not-allowed' } : btnPrimaryStyle,
+                            onClick: isIndexing ? undefined : () => this.handleIndex(site.id),
+                            disabled: isIndexing,
+                          }, isIndexing ? 'Indexing...' : (idx ? 'Re-index' : 'Index'))
+                        : React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } }, 'Site stopped'),
+                    ),
+                  );
+                }),
+          ),
+        ),
+      ),
+    );
+  }
+
+  renderSearchTab(): React.ReactNode {
+    const { searchQuery, searchResults, searching, stats } = this.state;
+    const totalDocs = stats?.index?.totalDocuments ?? 0;
+
+    return React.createElement('div', null,
+      React.createElement('div', { style: { position: 'relative' as const, marginBottom: '16px' } },
+        React.createElement('input', {
+          type: 'text',
+          value: searchQuery,
+          onChange: this.handleSearch,
+          placeholder: `Search across ${totalDocs.toLocaleString()} indexed documents...`,
+          style: {
+            width: '100%',
+            padding: '12px 16px',
+            fontSize: '14px',
+            borderRadius: '8px',
+            border: '1px solid var(--nxai-input-border, #d1d5db)',
+            backgroundColor: 'var(--nxai-input-bg, #fff)',
+            color: 'var(--nxai-card-text)',
+            outline: 'none',
+            boxSizing: 'border-box' as const,
+          },
+        }),
+        searching
+          ? React.createElement('span', {
+              style: { position: 'absolute' as const, right: '14px', top: '14px', fontSize: '12px', color: 'var(--nxai-card-sub)' },
+            }, 'Searching...')
+          : null,
+      ),
+
+      // Results
+      searchQuery && !searching && searchResults.length === 0
+        ? React.createElement('div', {
+            style: { padding: '16px', textAlign: 'center' as const, color: 'var(--nxai-card-sub)', fontSize: '13px' },
+          }, 'No results found')
+        : null,
+
+      searchResults.length > 0
+        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '8px' } },
+            searchResults.map((result, i) =>
+              React.createElement('div', {
+                key: `${result.id}-${i}`,
+                style: {
+                  ...cardStyle,
+                  padding: '14px 16px',
+                  display: 'flex',
+                  flexDirection: 'column' as const,
+                  gap: '6px',
+                },
+              },
+                // Header row: title + meta
+                React.createElement('div', {
+                  style: { display: 'flex', alignItems: 'center', gap: '8px' },
+                },
+                  React.createElement('span', { style: { fontWeight: 600, fontSize: '14px', color: 'var(--nxai-card-text)' } }, result.title),
+                  React.createElement('span', {
+                    style: tagStyle('rgba(14, 202, 212, 0.1)', UI_COLORS.WPE_BRAND),
+                  }, result.postType),
+                  React.createElement('span', {
+                    style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginLeft: 'auto' },
+                  }, result.siteName),
+                ),
+
+                // Snippet
+                React.createElement('div', {
+                  style: { fontSize: '13px', color: 'var(--nxai-card-sub)', lineHeight: 1.5 },
+                }, truncate(result.content, 200)),
+
+                // Score bar
+                React.createElement('div', {
+                  style: { display: 'flex', alignItems: 'center', gap: '8px' },
+                },
+                  React.createElement('div', {
+                    style: {
+                      flex: 1,
+                      height: '4px',
+                      borderRadius: '2px',
+                      backgroundColor: 'var(--nxai-score-bg)',
+                      overflow: 'hidden',
+                    },
+                  },
+                    React.createElement('div', {
+                      style: {
+                        width: `${Math.round(result.score * 100)}%`,
+                        height: '100%',
+                        backgroundColor: 'var(--nxai-score-fill)',
+                        borderRadius: '2px',
+                      },
+                    }),
+                  ),
+                  React.createElement('span', {
+                    style: { fontSize: '11px', color: 'var(--nxai-card-sub)', minWidth: '32px' },
+                  }, `${Math.round(result.score * 100)}%`),
+                ),
+              ),
+            ),
+          )
+        : null,
+    );
+  }
+
+  renderOverviewTab(): React.ReactNode {
+    const { stats } = this.state;
+    if (!stats) return null;
+
+    return React.createElement(React.Fragment, null,
+      this.renderSetupBanner(stats),
+
+      this.renderSectionLabel('Sites'),
+      React.createElement('div', { style: cardContainerStyle },
+        this.renderLocalSitesCard(stats),
+        this.renderWpeConnectedCard(stats),
+        this.renderRemoteSitesCard(stats),
+      ),
+
+      this.renderSectionLabel('Nexus AI'),
+      React.createElement('div', { style: cardContainerStyle },
+        this.renderMcpCard(stats),
+        this.renderEmbeddingCard(stats),
+        this.renderIndexCard(stats),
+      ),
+
+      this.renderMcpPanel(),
+    );
+  }
+
+  renderIndexTab(): React.ReactNode {
+    return this.renderSiteTable();
+  }
+
+  renderTabBar(): React.ReactNode {
+    const { activeTab } = this.state;
+    const tabs: { key: FleetOverviewState['activeTab']; label: string }[] = [
+      { key: 'overview', label: 'Overview' },
+      { key: 'search', label: 'Search' },
+      { key: 'index', label: 'Index' },
+    ];
 
     return React.createElement('div', {
       style: {
-        padding: '24px 32px',
-        color: 'var(--nxai-card-text)',
+        display: 'flex',
+        gap: '0',
+        borderBottom: '1px solid var(--nxai-card-border, #e5e7eb)',
+        marginBottom: '0',
       },
     },
-      // Title
-      React.createElement('h1', {
-        style: { fontSize: '22px', fontWeight: 600, marginBottom: '24px', color: 'var(--nxai-card-text)' },
-      }, 'Fleet Overview'),
+      ...tabs.map((tab) => {
+        const isActive = activeTab === tab.key;
+        return React.createElement('div', {
+          key: tab.key,
+          style: {
+            padding: '10px 16px',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            borderBottom: isActive ? `3px solid ${UI_COLORS.WPE_BRAND}` : '3px solid transparent',
+            color: isActive ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
+          },
+          onClick: () => this.setState({ activeTab: tab.key }),
+        }, tab.label);
+      }),
+    );
+  }
 
-      loading
-        ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)', padding: '40px 0', textAlign: 'center' as const } }, 'Loading dashboard...')
-        : error
-          ? React.createElement('div', { style: { color: UI_COLORS.STATUS_ERROR, padding: '40px 0', textAlign: 'center' as const } }, `Error: ${error}`)
-          : stats
-            ? React.createElement(React.Fragment, null,
-                // Sites section
-                this.renderSectionLabel('Sites'),
-                React.createElement('div', { style: cardContainerStyle },
-                  this.renderLocalSitesCard(stats),
-                  this.renderWpeConnectedCard(stats),
-                  this.renderRemoteSitesCard(stats),
-                ),
+  renderActiveTab(): React.ReactNode {
+    switch (this.state.activeTab) {
+      case 'overview': return this.renderOverviewTab();
+      case 'search': return this.renderSearchTab();
+      case 'index': return this.renderIndexTab();
+      default: return this.renderOverviewTab();
+    }
+  }
 
-                // Nexus AI section
-                this.renderSectionLabel('Nexus AI'),
-                React.createElement('div', { style: cardContainerStyle },
-                  this.renderMcpCard(stats),
-                  this.renderEmbeddingCard(stats),
-                  this.renderIndexCard(stats),
-                ),
-              )
-            : null,
+  render(): React.ReactNode {
+    const { loading, error, stats } = this.state;
+
+    return React.createElement('div', {
+      style: { display: 'flex', flexDirection: 'column' as const, height: '100%', overflow: 'hidden', color: 'var(--nxai-card-text)' },
+    },
+      // Header: title + tab bar (fixed)
+      React.createElement('div', {
+        style: { flexShrink: 0, padding: '24px 32px 0' },
+      },
+        React.createElement('h1', {
+          style: { fontSize: '22px', fontWeight: 600, marginBottom: '16px', color: 'var(--nxai-card-text)' },
+        }, 'Nexus AI Dashboard'),
+        this.renderTabBar(),
+      ),
+
+      // Content: scrollable area
+      React.createElement('div', {
+        style: { flexGrow: 1, overflowY: 'auto' as const, padding: '24px 32px' },
+      },
+        loading
+          ? React.createElement('div', {
+              style: { color: 'var(--nxai-card-sub)', padding: '40px 0', textAlign: 'center' as const },
+            }, 'Loading dashboard...')
+          : error
+            ? React.createElement('div', {
+                style: { color: UI_COLORS.STATUS_ERROR, padding: '40px 0', textAlign: 'center' as const },
+              }, `Error: ${error}`)
+            : stats
+              ? this.renderActiveTab()
+              : null,
+      ),
     );
   }
 }

@@ -2,13 +2,13 @@ import { IndexEntry, SiteStructure } from '../../common/types';
 import { STORAGE_KEYS } from '../../common/constants';
 
 /**
- * Callback type for persisting registry data.
- * In production, this wraps Local's userData.get/set.
+ * Callback type for persisting data via Local's userData.
+ * In production, this wraps userData.get/set.
  * In tests, it can be backed by a simple Map.
  */
 export interface RegistryStorage {
-  get(key: string): Record<string, IndexEntry> | null;
-  set(key: string, value: Record<string, IndexEntry>): void;
+  get(key: string): any;
+  set(key: string, value: any): void;
 }
 
 /**

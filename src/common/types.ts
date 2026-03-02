@@ -209,3 +209,12 @@ export interface IpcResponse<T = unknown> {
   data?: T;
   error?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+export interface NexusSettings {
+  autoIndex: boolean;
+  excludedSiteIds: string[];
+}

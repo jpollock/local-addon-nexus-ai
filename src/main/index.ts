@@ -102,7 +102,7 @@ export default function main(context: any): void {
   });
 
   // Phase 2: Register lifecycle hooks (pass readyPromise so they wait for init)
-  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise);
+  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage);
 
   // Phase 3: Boot MCP server (async — does not block addon load)
   const localServicesBridge = createLocalServicesBridge(serviceContainer);
@@ -169,6 +169,9 @@ export default function main(context: any): void {
     localServicesBridge,
     indexRegistry,
     embeddingService,
+    contentPipeline,
+    vectorStore,
+    registryStorage,
     localLogger,
     getMcpServer: () => mcpServer,
   });

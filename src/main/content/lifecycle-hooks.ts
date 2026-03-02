@@ -1,6 +1,8 @@
 import { ContentPipeline } from './ContentPipeline';
-import { IndexRegistry } from './IndexRegistry';
+import { IndexRegistry, RegistryStorage } from './IndexRegistry';
 import { SiteConnectionInfo } from './MySQLExtractor';
+import { STORAGE_KEYS } from '../../common/constants';
+import type { NexusSettings } from '../../common/types';
 
 export interface LifecycleContext {
   hooks: {
@@ -32,9 +34,27 @@ export function registerLifecycleHooks(
   indexRegistry: IndexRegistry,
   logger: Logger,
   readyPromise?: Promise<void>,
+  settingsStorage?: RegistryStorage,
 ): void {
   context.hooks.addAction('siteStarted', async (site: LocalSiteRef) => {
     logger.info(`[NexusAI] Site started: ${site.name}, triggering index`);
+
+    // Check auto-index settings
+    if (settingsStorage) {
+      try {
+        const settings = settingsStorage.get(STORAGE_KEYS.SETTINGS) as unknown as NexusSettings | null;
+        if (settings?.autoIndex === false) {
+          logger.info(`[NexusAI] Auto-index disabled, skipping ${site.name}`);
+          return;
+        }
+        if (settings?.excludedSiteIds?.includes(site.id)) {
+          logger.info(`[NexusAI] Site ${site.name} excluded from auto-index`);
+          return;
+        }
+      } catch {
+        // Settings read failed — proceed with default (auto-index enabled)
+      }
+    }
 
     // Wait for services to be ready (VectorStore + EmbeddingService)
     if (readyPromise) {

@@ -14,6 +14,10 @@ export const IPC_CHANNELS = {
   START_SITE: `${ADDON_PREFIX}:start-site`,
   STOP_SITE: `${ADDON_PREFIX}:stop-site`,
   STATUS_CHANGE: `${ADDON_PREFIX}:status-change`,
+  SEARCH: `${ADDON_PREFIX}:search`,
+  INDEX_SITE: `${ADDON_PREFIX}:index-site`,
+  GET_SETTINGS: `${ADDON_PREFIX}:get-settings`,
+  UPDATE_SETTINGS: `${ADDON_PREFIX}:update-settings`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -30,6 +34,7 @@ export const UI_COLORS = {
 
 export const POLL_INTERVALS = {
   DASHBOARD_STATS_MS: 10_000,
+  SITE_LIST_MS: 5_000,
 } as const;
 
 // ---------------------------------------------------------------------------

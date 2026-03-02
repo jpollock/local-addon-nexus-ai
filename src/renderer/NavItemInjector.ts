@@ -77,8 +77,8 @@ export class NavItemInjector {
         background: rgba(0, 0, 0, 0.2);
       }
       #${NAV_ITEM_ID} svg {
-        width: 24px;
-        height: 24px;
+        width: 38px;
+        height: 38px;
         color: rgba(255, 255, 255, 0.7);
         transition: transform 0.1s ease;
       }
@@ -124,7 +124,7 @@ export class NavItemInjector {
 
     const link = document.createElement('a');
     link.href = '#/main/fleet-overview';
-    link.title = 'Fleet Overview';
+    link.title = 'Nexus AI';
     link.innerHTML = FLEET_SVG;
 
     link.addEventListener('click', (e) => {
@@ -154,6 +154,9 @@ export class NavItemInjector {
     if (this.observer) return;
 
     this.observer = new MutationObserver(() => {
+      if (this.injected && !document.getElementById(NAV_ITEM_ID)) {
+        this.injected = false;
+      }
       if (!this.injected) {
         this.tryInject();
       }

@@ -3,6 +3,8 @@ import { NavItemInjector } from './NavItemInjector';
 import { SiteHeaderBadge } from './components/SiteHeaderBadge';
 import { FleetOverview } from './components/FleetOverview';
 import { FleetBreadcrumb } from './components/FleetBreadcrumb';
+import { NexusPreferences } from './components/NexusPreferences';
+import { SiteNexusSection } from './components/SiteNexusSection';
 
 export default function renderer(context: any): void {
   const { React, hooks, ReactRouter } = context;
@@ -34,4 +36,22 @@ export default function renderer(context: any): void {
   hooks.addContent('SiteInfoOverview:Before', () =>
     React.createElement(FleetBreadcrumb, { NavLink }),
   );
+
+  // Feature 4: Addon preferences page
+  hooks.addFilter('preferencesMenuItems', (items: any[]) => {
+    return [...items, {
+      path: '/nexus-ai',
+      displayName: 'Nexus AI',
+      sections: () => React.createElement(NexusPreferences, { electron }),
+      onApply: async () => { /* Settings saved inline on change */ },
+    }];
+  });
+
+  // Feature 5: Per-site Nexus AI section on site overview
+  hooks.addFilter('SiteInfoOverview_Addon_Section', (sections: any[], { site }: any) => {
+    return [...sections, {
+      title: 'Nexus AI',
+      component: () => React.createElement(SiteNexusSection, { site, electron }),
+    }];
+  });
 }
