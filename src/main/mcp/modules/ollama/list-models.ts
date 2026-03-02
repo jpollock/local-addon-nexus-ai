@@ -1,7 +1,9 @@
 import * as http from 'http';
+import * as os from 'os';
 import { McpToolHandler, McpToolResult } from '../../types';
 import { OLLAMA_BASE_URL } from '../../../../common/constants';
-import { getOllamaStatus, refreshOllamaStatus } from './ask-ollama';
+import { getOllamaStatus } from './ask-ollama';
+import { recommendModel } from './model-recommender';
 
 export const listOllamaModelsHandler: McpToolHandler = {
   definition: {
@@ -23,8 +25,17 @@ export const listOllamaModelsHandler: McpToolHandler = {
       const data = JSON.parse(response);
       const models = data.models ?? [];
 
+      const totalMemGB = Math.round(os.totalmem() / (1024 ** 3));
+      const modelNames = (models as any[]).map((m: any) => m.name as string);
+      const recommendation = recommendModel(totalMemGB, modelNames);
+
       if (models.length === 0) {
-        return ok('No Ollama models installed. Pull one with: `ollama pull llama3.2`');
+        return ok(
+          `No Ollama models installed.\n\n` +
+          `## System Info\n` +
+          `- Total RAM: ${totalMemGB} GB\n` +
+          `- Suggested: \`ollama pull ${recommendation.model}\` (${recommendation.reason})`,
+        );
       }
 
       const lines = ['## Available Ollama Models\n'];
@@ -40,6 +51,14 @@ export const listOllamaModelsHandler: McpToolHandler = {
           (quant ? ` (${quant})` : '') +
           (family ? ` [${family}]` : ''),
         );
+      }
+
+      lines.push('');
+      lines.push('## System Info');
+      lines.push(`- Total RAM: ${totalMemGB} GB`);
+      lines.push(`- Recommended: ${recommendation.model} (${recommendation.installed ? 'installed' : 'not installed'})`);
+      if (!recommendation.installed) {
+        lines.push(`- To install: \`ollama pull ${recommendation.model}\``);
       }
 
       return ok(lines.join('\n'));

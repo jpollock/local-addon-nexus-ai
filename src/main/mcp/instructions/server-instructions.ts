@@ -37,6 +37,10 @@ Route user requests to the correct tool namespace:
 | Sync with WPE | \`local_wpe_pull\`, \`local_wpe_push\` | "pull from staging", "push to dev" |
 | Local LLM | \`ask_ollama\`, \`list_ollama_models\` | "ask Ollama about this code" |
 
+### Ollama Site Context
+
+\`ask_ollama\` accepts an optional \`site\` parameter. When provided, the tool injects the site's structure (theme, plugins, WP version) and relevant indexed content into the system prompt, giving the local LLM site-aware context. \`list_ollama_models\` includes hardware-aware model recommendations based on available RAM.
+
 ## Local vs Remote Execution
 
 WP-CLI tools (\`wp_*\`) support two execution modes:

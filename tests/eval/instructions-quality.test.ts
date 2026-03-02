@@ -64,6 +64,18 @@ describe('Instructions Quality', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Ollama
+  // -------------------------------------------------------------------------
+
+  it('mentions ask_ollama site context injection', () => {
+    expect(instructions).toMatch(/ask_ollama.*site/is);
+  });
+
+  it('mentions hardware-aware model recommendations', () => {
+    expect(instructions).toMatch(/hardware|RAM/i);
+  });
+
+  // -------------------------------------------------------------------------
   // Local vs Remote
   // -------------------------------------------------------------------------
 

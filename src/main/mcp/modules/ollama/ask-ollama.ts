@@ -1,13 +1,15 @@
 import * as http from 'http';
 import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
 import { OLLAMA_BASE_URL } from '../../../../common/constants';
+import { resolveSite } from '../../site-resolver';
+import { SiteStructure } from '../../../../common/types';
 
 export const askOllamaHandler: McpToolHandler = {
   definition: {
     name: 'ask_ollama',
     description:
       'Send a prompt to a locally running Ollama instance. Requires Ollama to be installed and running. ' +
-      'Supports optional model selection and system prompts.',
+      'Supports optional model selection, system prompts, and site context injection.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -23,6 +25,10 @@ export const askOllamaHandler: McpToolHandler = {
           type: 'string',
           description: 'System prompt to set context for the model',
         },
+        site: {
+          type: 'string',
+          description: 'Site name/ID — injects site structure and relevant content as context',
+        },
       },
       required: ['prompt'],
     },
@@ -35,10 +41,23 @@ export const askOllamaHandler: McpToolHandler = {
       return error('No Ollama models available. Pull a model first: ollama pull llama3.2');
     }
 
+    let systemPrompt = (args.system as string | undefined) ?? '';
+
+    // Site context injection
+    if (args.site) {
+      const siteContext = await buildSiteContext(args.site as string, args.prompt as string, services);
+      if (siteContext.error) {
+        return error(siteContext.error);
+      }
+      if (siteContext.context) {
+        systemPrompt = siteContext.context + (systemPrompt ? '\n\n' + systemPrompt : '');
+      }
+    }
+
     const body = JSON.stringify({
       model,
       prompt: args.prompt as string,
-      system: args.system as string | undefined,
+      system: systemPrompt || undefined,
       stream: false,
     });
 
@@ -51,6 +70,77 @@ export const askOllamaHandler: McpToolHandler = {
     }
   },
 };
+
+// ---------------------------------------------------------------------------
+// Site context builder
+// ---------------------------------------------------------------------------
+
+interface SiteContextResult {
+  context?: string;
+  error?: string;
+}
+
+async function buildSiteContext(
+  siteQuery: string,
+  prompt: string,
+  services: NexusServices,
+): Promise<SiteContextResult> {
+  const site = resolveSite(siteQuery, services.siteData);
+  if (!site) {
+    return { error: `Site not found: "${siteQuery}"` };
+  }
+
+  // Try to get structure from index registry first, then file scanner
+  let structure: SiteStructure | null = null;
+  const indexEntry = services.indexRegistry.get(site.id);
+  if (indexEntry?.structure) {
+    structure = indexEntry.structure;
+  } else {
+    try {
+      structure = await services.fileScanner.scan(site.path);
+    } catch {
+      // Site may not be running — skip structure
+    }
+  }
+
+  if (!structure) {
+    // No structure available — skip context entirely
+    return {};
+  }
+
+  // Build context header
+  const activeTheme = structure.themes.find((t) => t.isActive);
+  const activePlugins = structure.plugins.filter((p) => p.isActive);
+  const lines = [
+    `You are an AI assistant with knowledge about the WordPress site "${site.name}".`,
+    '',
+    `Site: ${site.name}${site.domain ? ` (${site.domain})` : ''}`,
+    `WordPress: ${structure.wpVersion} | PHP: ${structure.phpVersion}`,
+    `Active theme: ${activeTheme?.name ?? 'unknown'}`,
+    `Active plugins: ${activePlugins.map((p) => p.name).join(', ') || 'none'}`,
+  ];
+
+  // Try to inject relevant content via vector search
+  try {
+    const vector = await services.embeddingService.embed(prompt);
+    const results = await services.vectorStore.search(site.id, vector, { limit: 3 });
+    if (results.length > 0) {
+      lines.push('');
+      lines.push('Relevant content from this site:');
+      for (const result of results) {
+        const excerpt = result.content.length > 300
+          ? result.content.slice(0, 300) + '...'
+          : result.content;
+        lines.push('---');
+        lines.push(`${result.title}: ${excerpt}`);
+      }
+    }
+  } catch {
+    // Site not indexed — skip content search, structure-only context is still useful
+  }
+
+  return { context: lines.join('\n') };
+}
 
 // ---------------------------------------------------------------------------
 // Ollama availability tracking

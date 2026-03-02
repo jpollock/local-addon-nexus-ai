@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
-import { IPC_CHANNELS } from '../common/constants';
+import { IPC_CHANNELS, OLLAMA_POLL_INTERVAL_MS } from '../common/constants';
 import { VectorStore } from './vector-store/VectorStore';
 import { EmbeddingService } from './embeddings/EmbeddingService';
 import { ContentPipeline } from './content/ContentPipeline';
@@ -12,7 +12,7 @@ import { McpServer } from './mcp/McpServer';
 import { NexusServices, SiteDataAccessor, LocalSiteInfo } from './mcp/types';
 import { registerContentTools } from './mcp/modules/content/index';
 import { registerSiteContextTools } from './mcp/modules/site-context/index';
-import { registerOllamaTools } from './mcp/modules/ollama/index';
+import { registerOllamaTools, refreshOllamaStatus } from './mcp/modules/ollama/index';
 import { registerFleetTools } from './mcp/modules/fleet/index';
 import { registerSiteManagementTools } from './mcp/modules/site-management/index';
 import { registerWpCliTools } from './mcp/modules/wp-cli/index';
@@ -153,6 +153,10 @@ export default function main(context: any): void {
 
       localLogger.info(`[NexusAI] MCP server running on ${connectionInfo.url}`);
       localLogger.info(`[NexusAI] Tools: ${connectionInfo.tools.join(', ')}`);
+
+      // Start Ollama availability polling
+      refreshOllamaStatus();
+      setInterval(() => refreshOllamaStatus(), OLLAMA_POLL_INTERVAL_MS);
     } catch (err) {
       rejectReady!(err as Error);
       localLogger.error('[NexusAI] Failed to start:', (err as Error).message, (err as Error).stack);
