@@ -2,7 +2,6 @@ import { SidebarBadgeManager } from './SidebarBadgeManager';
 import { NavItemInjector } from './NavItemInjector';
 import { SiteHeaderBadge } from './components/SiteHeaderBadge';
 import { FleetOverview } from './components/FleetOverview';
-import { FleetBreadcrumb } from './components/FleetBreadcrumb';
 import { NexusPreferences } from './components/NexusPreferences';
 import { SiteNexusSection } from './components/SiteNexusSection';
 
@@ -30,11 +29,6 @@ export default function renderer(context: any): void {
       path: '/main/fleet-overview',
       render: () => React.createElement(FleetOverview, { NavLink, electron }),
     }),
-  );
-
-  // Feature 3: Fleet breadcrumb on site overview pages
-  hooks.addContent('SiteInfoOverview:Before', () =>
-    React.createElement(FleetBreadcrumb, { NavLink }),
   );
 
   // Feature 4: Addon preferences page
