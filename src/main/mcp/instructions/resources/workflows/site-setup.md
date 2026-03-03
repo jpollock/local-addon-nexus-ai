@@ -35,9 +35,13 @@ Create and configure a new local WordPress development site.
 - **PHP version**: Pass `phpVersion` to `local_create_site` (e.g., "8.2.0")
 - **Web server**: Pass `webServer` to `local_create_site` (e.g., "nginx")
 
+6. **Setup for AI** (optional)
+   In the Nexus AI dashboard, go to the Sites tab and click "Setup for AI" on the site. This installs the AI Experiments plugin and, if ACF PRO >= 6.8 is present, writes an mu-plugin to enable ACF abilities. After setup, `wp_list_abilities` will show all registered abilities on the site.
+
 ## After Setup
 
 - Access the site at `https://{site-name}.local`
 - Access wp-admin at `https://{site-name}.local/wp-admin`
 - Install plugins: `wp_plugin_install({ site: "{site_id}", slug: "woocommerce" })`
 - Index for search: `reindex_site({ site: "{site_id}" })`
+- Discover abilities: `wp_list_abilities({ site: "{site_id}" })`

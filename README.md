@@ -80,7 +80,7 @@ npm install                    # Install dependencies
 npm run download-model         # Download ONNX model (~30 MB)
 npm run build                  # Compile TypeScript + create entry points
 npm run watch                  # Watch mode for development
-npm test                       # Run unit tests (576+)
+npm test                       # Run unit tests (618+)
 npm run test:eval              # Run eval tests (52, LLM evals need Ollama)
 npm run test:integration       # Run integration tests (82+)
 npm run test:e2e               # Run E2E tests (90+, requires Local running)
@@ -144,6 +144,7 @@ src/
 │           ├── fleet/            # 6 tools
 │           ├── site-management/  # 11 tools
 │           ├── wp-cli/           # 12 tools
+│           ├── wp-connector/     # 3 tools
 │           ├── wpe/              # 9 tools
 │           └── composite/        # 2 tools
 └── renderer/
@@ -154,7 +155,7 @@ src/
         └── ...
 ```
 
-## MCP Tools (48)
+## MCP Tools (51)
 
 | Module | Tools | Description |
 |--------|-------|-------------|
@@ -164,6 +165,7 @@ src/
 | Fleet | 6 | Cross-site analysis, drift detection, comparisons |
 | Site Management | 11 | Create, start, stop, clone, delete Local sites |
 | WP-CLI | 12 | Plugin/theme/user management, local and remote |
+| WP Connector | 3 | AI credential sync, Abilities API discovery and execution |
 | WPE | 9 | WP Engine account, install, and sync operations |
 | Composite | 2 | Parallel site and plugin audits |
 
@@ -173,7 +175,7 @@ Four-tier test pyramid. See [tests/TESTING-STRATEGY.md](tests/TESTING-STRATEGY.m
 
 | Tier | Command | What it tests |
 |------|---------|---------------|
-| Unit | `npm test` | Code logic with mocked deps (576+ tests) |
+| Unit | `npm test` | Code logic with mocked deps (618+ tests) |
 | Eval | `npm run test:eval` | Content quality + LLM tool routing (52 tests) |
 | Integration | `npm run test:integration` | Real ONNX, LanceDB, MCP (82+ tests) |
 | E2E | `npm run test:e2e` | Full addon in running Local (90+ tests) |

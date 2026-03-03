@@ -35,6 +35,8 @@ Route user requests to the correct tool namespace:
 | WP Engine accounts | \`wpe_get_accounts\`, \`wpe_get_installs\` | "show my WPE installs" |
 | WP Engine ops | \`wpe_create_backup\`, \`wpe_purge_cache\` | "backup production", "clear cache" |
 | Sync with WPE | \`local_wpe_pull\`, \`local_wpe_push\` | "pull from staging", "push to dev" |
+| AI abilities | \`wp_list_abilities\`, \`wp_run_ability\` | "what abilities does this site have?", "run acf/list-field-groups" |
+| AI credentials | \`wp_sync_ai_credentials\` | "sync API keys to the site" |
 | Local LLM | \`ask_ollama\`, \`list_ollama_models\` | "ask Ollama about this code" |
 
 ### Ollama Site Context
