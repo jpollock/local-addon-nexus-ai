@@ -3,6 +3,8 @@ import { IndexRegistry, RegistryStorage } from './IndexRegistry';
 import { SiteConnectionInfo } from './MySQLExtractor';
 import { STORAGE_KEYS } from '../../common/constants';
 import type { NexusSettings } from '../../common/types';
+import type { LocalServicesBridge } from '../mcp/local-services-bridge';
+import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
 
 export interface LifecycleContext {
   hooks: {
@@ -35,6 +37,7 @@ export function registerLifecycleHooks(
   logger: Logger,
   readyPromise?: Promise<void>,
   settingsStorage?: RegistryStorage,
+  localServices?: LocalServicesBridge,
 ): void {
   context.hooks.addAction('siteStarted', async (site: LocalSiteRef) => {
     logger.info(`[NexusAI] Site started: ${site.name}, triggering index`);
@@ -82,6 +85,15 @@ export function registerLifecycleHooks(
       }
     } catch (error) {
       logger.error(`[NexusAI] Indexing failed for ${site.name}:`, error);
+    }
+
+    // Auto-sync AI credentials to WP 7.0+ sites
+    if (localServices && settingsStorage) {
+      try {
+        await autoSyncCredentials(site.id, site.name, localServices, settingsStorage, logger);
+      } catch (err) {
+        logger.error(`[NexusAI] Auto-sync credentials failed for ${site.name}:`, err);
+      }
     }
   });
 

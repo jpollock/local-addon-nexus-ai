@@ -162,7 +162,7 @@ describe('LocalServicesBridge', () => {
     test('returns stdout on success', async () => {
       const result = await bridge.wpCliRun('site-1', ['plugin', 'list']);
       expect(result).toEqual({ stdout: 'cli output', success: true });
-      expect(container.wpCli.run).toHaveBeenCalledWith(container.mockSite, ['plugin', 'list']);
+      expect(container.wpCli.run).toHaveBeenCalledWith(container.mockSite, ['plugin', 'list'], undefined);
     });
 
     test('returns error message on failure', async () => {

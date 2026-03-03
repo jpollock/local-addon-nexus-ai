@@ -33,6 +33,13 @@ export interface WpTheme {
   status: string;
 }
 
+export interface WpCliRunOpts {
+  /** When false, plugins are loaded during WP-CLI execution. Default: true (skip). */
+  skipPlugins?: boolean;
+  /** When false, themes are loaded during WP-CLI execution. Default: true (skip). */
+  skipThemes?: boolean;
+}
+
 export interface CreateSiteOpts {
   name: string;
   phpVersion?: string;
@@ -62,7 +69,7 @@ export interface LocalServicesBridge {
   exportSite(siteId: string, outputPath: string): Promise<string>;
 
   // WP-CLI
-  wpCliRun(siteId: string, args: string[]): Promise<WpCliResult>;
+  wpCliRun(siteId: string, args: string[], opts?: WpCliRunOpts): Promise<WpCliResult>;
   getPlugins(siteId: string): Promise<WpPlugin[]>;
   getThemes(siteId: string): Promise<WpTheme[]>;
   getWpVersion(siteId: string): Promise<string | null>;
@@ -209,10 +216,10 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     // --- WP-CLI ---
 
-    async wpCliRun(siteId: string, args: string[]): Promise<WpCliResult> {
+    async wpCliRun(siteId: string, args: string[], opts?: WpCliRunOpts): Promise<WpCliResult> {
       const site = requireSite(siteId);
       try {
-        const stdout = await svc('wpCli').run(site, args);
+        const stdout = await svc('wpCli').run(site, args, opts);
         return { stdout, success: true };
       } catch (err) {
         return {

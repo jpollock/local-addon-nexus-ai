@@ -18,6 +18,7 @@ import { registerSiteManagementTools } from './mcp/modules/site-management/index
 import { registerWpCliTools } from './mcp/modules/wp-cli/index';
 import { registerWpeTools } from './mcp/modules/wpe/index';
 import { registerCompositeTools } from './mcp/modules/composite/index';
+import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
 import { saveConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
 import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
@@ -105,10 +106,10 @@ export default function main(context: any): void {
   });
 
   // Phase 2: Register lifecycle hooks (pass readyPromise so they wait for init)
-  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage);
+  const localServicesBridge = createLocalServicesBridge(serviceContainer);
+  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge);
 
   // Phase 3: Boot MCP server (async — does not block addon load)
-  const localServicesBridge = createLocalServicesBridge(serviceContainer);
   const auditLogger = createAuditLogger(
     path.join(localDataDir, 'nexus-ai', 'audit.log'),
   );
@@ -123,6 +124,7 @@ export default function main(context: any): void {
     logger: localLogger,
     localServices: localServicesBridge,
     auditLogger,
+    registryStorage,
   };
 
   const registry = new ToolRegistry();
@@ -134,6 +136,7 @@ export default function main(context: any): void {
   registerWpCliTools(registry);
   registerWpeTools(registry);
   registerCompositeTools(registry);
+  registerWpConnectorTools(registry);
 
   // Phase 3b: Chat providers + service
   initializeProviders();

@@ -5,6 +5,7 @@ import { IndexRegistry } from '../content/IndexRegistry';
 import { FileScanner } from '../content/FileScanner';
 import type { LocalServicesBridge } from './local-services-bridge';
 import type { AuditLogger } from './audit';
+import type { RegistryStorage } from '../content/IndexRegistry';
 
 // ---------------------------------------------------------------------------
 // MCP JSON-RPC
@@ -111,6 +112,8 @@ export interface NexusServices {
   localServices?: LocalServicesBridge;
   /** Audit logger for operation tracking. Optional for backward compat. */
   auditLogger?: AuditLogger;
+  /** Key-value storage for addon settings (API keys, preferences). Optional for backward compat. */
+  registryStorage?: RegistryStorage;
 }
 
 /**

@@ -33,6 +33,7 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   wpe_get_install: 1,
   local_wpe_link: 1,
   nexus_list_sites: 1,
+  wp_list_abilities: 1,
 
   // Tier 2 — Modify
   local_start_site: 2,
@@ -52,6 +53,8 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   wpe_create_backup: 2,
   wpe_purge_cache: 2,
   local_wpe_pull: 2,
+  wp_sync_ai_credentials: 2,
+  wp_run_ability: 2,
 
   // Tier 3 — Destructive
   local_delete_site: 3,
