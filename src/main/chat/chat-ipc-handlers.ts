@@ -118,6 +118,13 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
     },
   );
 
+  ipcMain.handle(
+    IPC_CHANNELS.GET_API_KEY,
+    (_event: any, providerId: string) => {
+      return getStoredApiKey(registryStorage, providerId);
+    },
+  );
+
   ipcMain.handle(IPC_CHANNELS.GET_API_KEY_STATUS, () => {
     return getKeyStatuses(registryStorage);
   });

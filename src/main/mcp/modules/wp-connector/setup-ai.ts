@@ -1,15 +1,28 @@
 /**
  * Setup Site for AI
  *
- * Installs the AI Experiments plugin and optionally writes the ACF abilities
- * mu-plugin for sites with ACF PRO >= 6.8. Called via IPC from the UI,
- * not exposed as an MCP tool.
+ * Installs the AI Experiments plugin, enables all experiments, syncs
+ * credentials, and optionally writes the ACF abilities mu-plugin for
+ * sites with ACF PRO >= 6.8. Called via IPC from the UI, not exposed
+ * as an MCP tool.
  */
 import type { LocalServicesBridge, WpPlugin } from '../../local-services-bridge';
+import type { RegistryStorage } from '../../../content/IndexRegistry';
+import { STORAGE_KEYS } from '../../../../common/constants';
+import {
+  PROVIDER_TO_WP_OPTION,
+  PROVIDER_PLUGIN_SLUGS,
+  SUPPORTED_PROVIDERS,
+  buildCredentialSyncPhp,
+  CredentialEntry,
+} from './credential-helpers';
 
 export interface SetupAIResult {
   success: boolean;
   aiPlugin: 'installed' | 'activated' | 'already_active' | 'failed';
+  providerPlugins: 'installed' | 'already_active' | 'skipped' | 'failed';
+  aiFeatures: 'enabled' | 'already_enabled' | 'skipped' | 'failed';
+  credentials: 'synced' | 'skipped' | 'failed';
   acfAbilities: 'enabled' | 'already_enabled' | 'skipped' | 'failed';
   message: string;
 }
@@ -35,6 +48,18 @@ const ACF_MU_PLUGIN_CONTENT = `<?php
 add_filter('acf/abilities/enabled', '__return_true');
 `;
 
+/**
+ * All known AI Experiment IDs in WordPress 7.0.
+ */
+const AI_EXPERIMENT_IDS = [
+  'abilities-explorer',
+  'excerpt-generation',
+  'alt-text-generation',
+  'image-generation',
+  'summarization',
+  'title-generation',
+];
+
 function findPlugin(plugins: WpPlugin[], slug: string): WpPlugin | undefined {
   return plugins.find((p) => p.name === slug);
 }
@@ -47,9 +72,20 @@ function meetsMinVersion(version: string, minMajor: number, minMinor: number): b
   return major > minMajor || (major === minMajor && minor >= minMinor);
 }
 
+/**
+ * Returns true if the version string is WordPress 7.0 or later.
+ * Provider plugins require WP 7.0+ core's php-ai-client infrastructure.
+ */
+function isWp7OrLater(version: string): boolean {
+  const match = version.match(/^(\d+)/);
+  if (!match) return false;
+  return parseInt(match[1], 10) >= 7;
+}
+
 export async function setupSiteForAI(
   siteId: string,
   localServices: LocalServicesBridge,
+  registryStorage: RegistryStorage,
   logger: Logger,
 ): Promise<SetupAIResult> {
   const tag = '[NexusAI:setup-ai]';
@@ -60,8 +96,16 @@ export async function setupSiteForAI(
     plugins = await localServices.getPlugins(siteId);
   } catch (err) {
     const msg = `Failed to list plugins: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(tag, msg);
-    return { success: false, aiPlugin: 'failed', acfAbilities: 'failed', message: msg };
+    logger.error(`${tag} ${msg}`);
+    return {
+      success: false,
+      aiPlugin: 'failed',
+      providerPlugins: 'failed',
+      aiFeatures: 'failed',
+      credentials: 'failed',
+      acfAbilities: 'failed',
+      message: msg,
+    };
   }
 
   // Step 2: Handle AI Experiments plugin ("ai")
@@ -71,7 +115,7 @@ export async function setupSiteForAI(
   try {
     if (!existingAi) {
       // Not installed — install and activate
-      logger.info(tag, `Installing AI Experiments plugin on site ${siteId}`);
+      logger.info(`${tag} Installing AI Experiments plugin on site ${siteId}`);
       const result = await localServices.wpCliRun(siteId, ['plugin', 'install', 'ai', '--activate']);
       if (!result.success) {
         throw new Error(result.stdout ?? 'Unknown error');
@@ -79,7 +123,7 @@ export async function setupSiteForAI(
       aiPlugin = 'installed';
     } else if (existingAi.status !== 'active') {
       // Installed but inactive — activate
-      logger.info(tag, `Activating AI Experiments plugin on site ${siteId}`);
+      logger.info(`${tag} Activating AI Experiments plugin on site ${siteId}`);
       const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai']);
       if (!result.success) {
         throw new Error(result.stdout ?? 'Unknown error');
@@ -91,11 +135,168 @@ export async function setupSiteForAI(
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(tag, `AI plugin step failed: ${msg}`);
+    logger.error(`${tag} AI plugin step failed: ${msg}`);
     aiPlugin = 'failed';
   }
 
-  // Step 3: Handle ACF abilities mu-plugin
+  const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+  const configuredProviders = SUPPORTED_PROVIDERS.filter((p) => storedKeys[p]);
+
+  // Step 2b: Install AI provider plugins for configured providers
+  // Each provider needs its own plugin (e.g. ai-provider-for-anthropic) to register
+  // with the ProviderRegistry. Without it, the Connector Screen can't validate keys.
+  //
+  // Provider plugins require WP 7.0+ core — they depend on wp-includes/php-ai-client/
+  // which ships the PSR-18 HTTP adapter. On older WP versions (or with the standalone
+  // "ai" plugin), the provider plugin crashes with DiscoveryFailedException.
+  let providerPlugins: SetupAIResult['providerPlugins'] = 'skipped';
+
+  if (configuredProviders.length > 0 && aiPlugin !== 'failed') {
+    // Check WP version — provider plugins only work on WP 7.0+
+    let wpVersion: string | null = null;
+    try {
+      wpVersion = await localServices.getWpVersion(siteId);
+    } catch {
+      // Can't determine version — skip provider plugins to be safe
+    }
+
+    if (!wpVersion || !isWp7OrLater(wpVersion)) {
+      logger.info(`${tag} Skipping provider plugins — WP ${wpVersion ?? 'unknown'} (requires 7.0+)`);
+    } else {
+      try {
+        // Refresh plugin list after AI plugin install
+        const currentPlugins = await localServices.getPlugins(siteId);
+        let installed = 0;
+        let alreadyActive = 0;
+
+        for (const provider of configuredProviders) {
+          const slug = PROVIDER_PLUGIN_SLUGS[provider];
+          if (!slug) continue;
+
+          const existing = findPlugin(currentPlugins, slug);
+          if (existing && existing.status === 'active') {
+            alreadyActive++;
+            continue;
+          }
+
+          logger.info(`${tag} Installing provider plugin "${slug}" on site ${siteId}`);
+          const result = await localServices.wpCliRun(
+            siteId,
+            ['plugin', 'install', slug, '--activate'],
+          );
+
+          if (!result.success) {
+            logger.error(`${tag} Failed to install provider plugin "${slug}": ${result.stdout}`);
+            continue;
+          }
+
+          // Health check: verify the activated plugin doesn't crash WordPress.
+          // Run with skipPlugins: false so all active plugins (including the new one) are loaded.
+          const healthCheck = await localServices.wpCliRun(
+            siteId,
+            ['eval', "echo 'healthy';"],
+            { skipPlugins: false },
+          );
+
+          if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+            // Plugin crashed WordPress — deactivate it immediately (skipPlugins: true bypasses the crash)
+            logger.error(`${tag} Provider plugin "${slug}" crashes WordPress — deactivating`);
+            await localServices.wpCliRun(siteId, ['plugin', 'deactivate', slug]);
+            continue;
+          }
+
+          installed++;
+        }
+
+        if (installed > 0) {
+          providerPlugins = 'installed';
+          logger.info(`${tag} Installed ${installed} provider plugin(s) on site ${siteId}`);
+        } else if (alreadyActive === configuredProviders.length) {
+          providerPlugins = 'already_active';
+        } else {
+          providerPlugins = 'failed';
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`${tag} Provider plugin step failed: ${msg}`);
+        providerPlugins = 'failed';
+      }
+    }
+  }
+
+  // Step 3: Enable all AI experiments
+  let aiFeatures: SetupAIResult['aiFeatures'] = 'skipped';
+
+  if (aiPlugin !== 'failed') {
+    try {
+      const phpLines: string[] = [];
+      // Set the global toggle
+      phpLines.push("update_option('ai_experiments_enabled', '1');");
+      // Set each experiment toggle
+      for (const id of AI_EXPERIMENT_IDS) {
+        phpLines.push(`update_option('ai_experiment_${id}_enabled', '1');`);
+      }
+      phpLines.push(`echo json_encode(['enabled' => ${AI_EXPERIMENT_IDS.length + 1}]);`);
+
+      const phpCode = phpLines.join(' ');
+      // skipPlugins defaults to true — safe because we're writing simple option values
+      const result = await localServices.wpCliRun(
+        siteId,
+        ['eval', phpCode],
+      );
+
+      if (result.success) {
+        try {
+          const parsed = JSON.parse((result.stdout ?? '').trim());
+          aiFeatures = parsed.enabled > 0 ? 'enabled' : 'failed';
+        } catch {
+          // Got stdout but couldn't parse — assume success if command succeeded
+          aiFeatures = 'enabled';
+        }
+      } else {
+        throw new Error(result.stdout ?? 'Unknown error');
+      }
+
+      logger.info(`${tag} Enabled AI experiments on site ${siteId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`${tag} AI features step failed: ${msg}`);
+      aiFeatures = 'failed';
+    }
+  }
+
+  // Step 4: Sync credentials
+  let credentials: SetupAIResult['credentials'] = 'skipped';
+
+  if (configuredProviders.length > 0 && aiPlugin !== 'failed') {
+    try {
+      const entries: CredentialEntry[] = configuredProviders.map((provider) => ({
+        provider,
+        key: storedKeys[provider],
+        optionName: PROVIDER_TO_WP_OPTION[provider],
+      }));
+
+      const phpCode = buildCredentialSyncPhp(entries);
+      // skipPlugins defaults to true — safe because we remove all filters and verify via $wpdb
+      const result = await localServices.wpCliRun(
+        siteId,
+        ['eval', phpCode],
+      );
+
+      if (result.success) {
+        credentials = 'synced';
+        logger.info(`${tag} Synced ${configuredProviders.length} credential(s) to site ${siteId}`);
+      } else {
+        throw new Error(result.stdout ?? 'Unknown error');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`${tag} Credential sync step failed: ${msg}`);
+      credentials = 'failed';
+    }
+  }
+
+  // Step 5: Handle ACF abilities mu-plugin
   let acfAbilities: SetupAIResult['acfAbilities'] = 'skipped';
   const acfPlugin = findPlugin(plugins, 'advanced-custom-fields-pro');
 
@@ -109,7 +310,7 @@ export async function setupSiteForAI(
         acfAbilities = 'already_enabled';
       } else {
         // Write the mu-plugin
-        logger.info(tag, `Writing ACF abilities mu-plugin on site ${siteId}`);
+        logger.info(`${tag} Writing ACF abilities mu-plugin on site ${siteId}`);
         const phpContent = ACF_MU_PLUGIN_CONTENT.replace(/'/g, "\\'");
         const writePhp = [
           `$dir = WPMU_PLUGIN_DIR;`,
@@ -129,7 +330,7 @@ export async function setupSiteForAI(
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error(tag, `ACF abilities step failed: ${msg}`);
+      logger.error(`${tag} ACF abilities step failed: ${msg}`);
       acfAbilities = 'failed';
     }
   }
@@ -145,6 +346,25 @@ export async function setupSiteForAI(
     case 'failed': parts.push('AI Experiments plugin setup failed'); break;
   }
 
+  switch (providerPlugins) {
+    case 'installed': parts.push('AI provider plugin(s) installed'); break;
+    case 'already_active': parts.push('AI provider plugin(s) already active'); break;
+    case 'skipped': break;
+    case 'failed': parts.push('AI provider plugin installation failed'); break;
+  }
+
+  switch (aiFeatures) {
+    case 'enabled': parts.push('All AI experiments enabled'); break;
+    case 'skipped': break; // Don't clutter message if skipped due to plugin failure
+    case 'failed': parts.push('AI experiment enablement failed'); break;
+  }
+
+  switch (credentials) {
+    case 'synced': parts.push(`${configuredProviders.length} API key(s) synced`); break;
+    case 'skipped': parts.push('No API keys configured to sync'); break;
+    case 'failed': parts.push('Credential sync failed'); break;
+  }
+
   switch (acfAbilities) {
     case 'enabled': parts.push('ACF abilities mu-plugin created'); break;
     case 'already_enabled': parts.push('ACF abilities mu-plugin already present'); break;
@@ -152,10 +372,16 @@ export async function setupSiteForAI(
     case 'failed': parts.push('ACF abilities mu-plugin failed'); break;
   }
 
+  const message = parts.join('. ') + '.';
+  logger.info(`${tag} Result for site ${siteId}: ${message}`);
+
   return {
     success,
     aiPlugin,
+    providerPlugins,
+    aiFeatures,
+    credentials,
     acfAbilities,
-    message: parts.join('. ') + '.',
+    message,
   };
 }

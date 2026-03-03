@@ -158,14 +158,27 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         keyStatus: keyStatus ?? {},
         loading: false,
       }, () => {
-        // Load models for the current provider
+        // Load models and stored key for the current provider
         if (this.state.settings.chatProvider) {
           this.fetchModels(this.state.settings.chatProvider);
+          this.loadStoredKey(this.state.settings.chatProvider);
         }
       });
     } catch {
       if (!this.mounted) return;
       this.setState({ loading: false });
+    }
+  };
+
+  loadStoredKey = async (providerId: string): Promise<void> => {
+    try {
+      const key = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_API_KEY, providerId);
+      if (!this.mounted) return;
+      if (key) {
+        this.setState({ keyInput: key, keySaved: true });
+      }
+    } catch {
+      // Best-effort — key field stays empty
     }
   };
 
@@ -217,11 +230,15 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         settings: { ...prev.settings, chatProvider: providerId, chatModel: '' },
         models: [],
         keyInput: '',
+        keySaved: false,
         saved: false,
       }),
       () => {
         this.saveSettings();
         this.fetchModels(providerId);
+        if (providerId) {
+          this.loadStoredKey(providerId);
+        }
       },
     );
   };
@@ -253,9 +270,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       keyStatus: { ...prev.keyStatus, [providerId]: 'unchecked' },
       keySaved: true,
     }));
-
-    // Auto-trigger validation after save
-    this.handleValidateKey();
   };
 
   handleValidateKey = async (): Promise<void> => {
@@ -374,9 +388,17 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
             style: { ...inputStyle, flex: 1, maxWidth: '350px' },
           }),
           React.createElement('button', {
-            style: btnSmallStyle,
+            style: {
+              ...btnSmallStyle,
+              ...(keyInput.trim() && !keySaved ? { backgroundColor: UI_COLORS.WPE_BRAND, color: '#fff', border: 'none' } : {}),
+            },
             onClick: this.handleSaveKey,
-            disabled: !keyInput.trim(),
+            disabled: !keyInput.trim() || keySaved,
+          }, keySaved ? 'Saved' : 'Apply'),
+          React.createElement('button', {
+            style: btnSmallStyle,
+            onClick: this.handleValidateKey,
+            disabled: !keyInput.trim() || currentStatus === 'checking',
           }, 'Check Key'),
         ),
 
@@ -388,11 +410,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
           React.createElement('span', {
             style: { fontSize: '12px', color: statusColor },
           }, statusLabel),
-          keySaved && currentStatus !== 'checking'
-            ? React.createElement('span', {
-                style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginLeft: '8px' },
-              }, 'Saved')
-            : null,
         ),
       ) : null,
     );

@@ -283,11 +283,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   ipcMain.handle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
     try {
-      return await setupSiteForAI(siteId, localServicesBridge, localLogger);
+      return await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger);
     } catch (err) {
       return {
         success: false,
         aiPlugin: 'failed' as const,
+        providerPlugins: 'failed' as const,
+        aiFeatures: 'failed' as const,
+        credentials: 'failed' as const,
         acfAbilities: 'failed' as const,
         message: (err as Error).message,
       };

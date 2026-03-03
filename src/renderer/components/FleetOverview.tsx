@@ -62,6 +62,9 @@ interface UISearchResult {
 interface SetupAIResult {
   success: boolean;
   aiPlugin: 'installed' | 'activated' | 'already_active' | 'failed';
+  providerPlugins: 'installed' | 'already_active' | 'skipped' | 'failed';
+  aiFeatures: 'enabled' | 'already_enabled' | 'skipped' | 'failed';
+  credentials: 'synced' | 'skipped' | 'failed';
   acfAbilities: 'enabled' | 'already_enabled' | 'skipped' | 'failed';
   message: string;
 }
@@ -75,6 +78,7 @@ interface FleetOverviewState {
   searchResults: UISearchResult[];
   searching: boolean;
   indexingId: string | null;
+  togglingId: string | null;
   setupId: string | null;
   setupResults: Record<string, SetupAIResult>;
   copiedField: string | null;
@@ -212,6 +216,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     searchResults: [],
     searching: false,
     indexingId: null,
+    togglingId: null,
     setupId: null,
     setupResults: {},
     copiedField: null,
@@ -333,6 +338,19 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     if (this.mounted) this.setState({ indexingId: null });
   };
 
+  handleToggleSite = async (siteId: string, currentStatus: string): Promise<void> => {
+    this.setState({ togglingId: siteId });
+    try {
+      const channel = currentStatus === 'running' ? IPC_CHANNELS.STOP_SITE : IPC_CHANNELS.START_SITE;
+      await this.props.electron.ipcRenderer.invoke(channel, siteId);
+      if (!this.mounted) return;
+      await this.fetchAll();
+    } catch {
+      // Error handled by fetchAll refresh
+    }
+    if (this.mounted) this.setState({ togglingId: null });
+  };
+
   handleSetupAI = async (siteId: string): Promise<void> => {
     this.setState({ setupId: siteId });
     try {
@@ -350,7 +368,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
         setupId: null,
         setupResults: {
           ...prev.setupResults,
-          [siteId]: { success: false, aiPlugin: 'failed', acfAbilities: 'failed', message: 'Setup failed' },
+          [siteId]: { success: false, aiPlugin: 'failed', providerPlugins: 'failed', aiFeatures: 'failed', credentials: 'failed', acfAbilities: 'failed', message: 'Setup failed' },
         },
       }));
     }
@@ -589,18 +607,17 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     }
 
     if (result) {
-      if (result.aiPlugin === 'already_active') {
-        return React.createElement('td', { style: tdStyle },
-          React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } }, 'Already set up'),
-        );
-      }
       if (result.success) {
-        const summary = result.aiPlugin === 'installed' ? 'AI plugin installed'
-          : result.aiPlugin === 'activated' ? 'AI plugin activated'
-          : 'Set up';
+        const summaryParts: string[] = [];
+        if (result.aiPlugin === 'installed') summaryParts.push('Plugin installed');
+        else if (result.aiPlugin === 'activated') summaryParts.push('Plugin activated');
+        else if (result.aiPlugin === 'already_active') summaryParts.push('Plugin active');
+        if (result.aiFeatures === 'enabled') summaryParts.push('experiments on');
+        if (result.credentials === 'synced') summaryParts.push('keys synced');
+        const summary = summaryParts.length > 0 ? summaryParts.join(', ') : 'Set up';
         return React.createElement('td', { style: tdStyle },
           React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
-          React.createElement('span', { style: { fontSize: '12px' } }, summary),
+          React.createElement('span', { style: { fontSize: '12px' }, title: result.message }, summary),
         );
       }
       // Failed
@@ -698,7 +715,15 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
                     ),
                     React.createElement('td', { style: tdStyle },
                       React.createElement('span', { style: dotStyle(site.status === 'running' ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_HALTED) }),
-                      site.status,
+                      this.state.togglingId === site.id
+                        ? React.createElement('button', {
+                            style: { ...btnStyle, opacity: 0.6, cursor: 'not-allowed', fontSize: '11px', padding: '2px 8px' },
+                            disabled: true,
+                          }, site.status === 'running' ? 'Stopping...' : 'Starting...')
+                        : React.createElement('button', {
+                            style: { ...btnStyle, fontSize: '11px', padding: '2px 8px' },
+                            onClick: () => this.handleToggleSite(site.id, site.status),
+                          }, site.status === 'running' ? 'Stop' : 'Start'),
                     ),
                     React.createElement('td', { style: tdStyle },
                       React.createElement('span', { style: dotStyle(stateColor) }),

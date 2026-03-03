@@ -34,6 +34,7 @@ export const IPC_CHANNELS = {
   SAVE_API_KEY: `${ADDON_PREFIX}:save-api-key`,
   GET_MODELS: `${ADDON_PREFIX}:get-models`,
   GET_PROVIDERS: `${ADDON_PREFIX}:get-providers`,
+  GET_API_KEY: `${ADDON_PREFIX}:get-api-key`,
   GET_API_KEY_STATUS: `${ADDON_PREFIX}:get-api-key-status`,
 } as const;
 

@@ -1,15 +1,11 @@
 import type { LocalServicesBridge } from '../../local-services-bridge';
 import type { RegistryStorage } from '../../../content/IndexRegistry';
 import { STORAGE_KEYS } from '../../../../common/constants';
-
-/**
- * Maps Local provider IDs to WordPress 7.0 Connector Screen option names.
- */
-const PROVIDER_TO_WP_OPTION: Record<string, string> = {
-  openai: 'connectors_ai_openai_api_key',
-  anthropic: 'connectors_ai_anthropic_api_key',
-  google: 'connectors_ai_google_api_key',
-};
+import {
+  PROVIDER_TO_WP_OPTION,
+  buildCredentialSyncPhp,
+  CredentialEntry,
+} from './credential-helpers';
 
 interface AutoSyncLogger {
   info(...args: unknown[]): void;
@@ -19,6 +15,10 @@ interface AutoSyncLogger {
 /**
  * Automatically sync AI credentials to a WordPress 7.0+ site on start.
  * Called from the siteStarted lifecycle hook.
+ *
+ * Writes to BOTH credential stores:
+ * 1. connectors_ai_{provider}_api_key (WP 7.0 Core Connector Screen)
+ * 2. wp_ai_client_provider_credentials (AI Experiments plugin)
  *
  * Checks WP version first — skips sites below 7.0 (no Connector Screen).
  * Only syncs providers that have a key configured in Local.
@@ -53,32 +53,40 @@ export async function autoSyncCredentials(
 
   logger.info(`[NexusAI] Auto-syncing AI credentials to "${siteName}" (WP ${wpVersion})`);
 
-  let synced = 0;
-  for (const provider of providers) {
-    const key = storedKeys[provider];
-    const optionName = PROVIDER_TO_WP_OPTION[provider];
-    const escapedKey = key.replace(/'/g, "\\'");
+  // Build credential entries for the shared PHP builder
+  const entries: CredentialEntry[] = providers.map((provider) => ({
+    provider,
+    key: storedKeys[provider],
+    optionName: PROVIDER_TO_WP_OPTION[provider],
+  }));
 
-    const phpCode = [
-      `remove_all_filters('sanitize_option_${optionName}');`,
-      `update_option('${optionName}', '${escapedKey}');`,
-      `echo 'synced';`,
-    ].join(' ');
+  const phpCode = buildCredentialSyncPhp(entries);
 
-    try {
-      const result = await localServices.wpCliRun(siteId, ['eval', phpCode]);
-      if (result.success && (result.stdout ?? '').includes('synced')) {
-        synced++;
-      } else {
-        logger.error(`[NexusAI] Failed to sync ${provider} to "${siteName}": ${result.stdout}`);
+  try {
+    // skipPlugins defaults to true — safe because we remove all filters and verify via $wpdb
+    const result = await localServices.wpCliRun(
+      siteId,
+      ['eval', phpCode],
+    );
+
+    if (result.success) {
+      try {
+        const parsed = JSON.parse((result.stdout ?? '').trim());
+        const aiClientStatus = parsed.ai_client ? 'ok' : 'failed';
+        logger.info(
+          `[NexusAI] Credential sync to "${siteName}": connectors=${parsed.connectors}, ai_client=${aiClientStatus}`,
+        );
+        if (parsed.debug && parsed.debug.length > 0) {
+          logger.error(`[NexusAI] Credential sync debug for "${siteName}": ${JSON.stringify(parsed.debug)}`);
+        }
+      } catch {
+        logger.info(`[NexusAI] Credential sync raw output for "${siteName}": ${result.stdout}`);
       }
-    } catch (err) {
-      logger.error(`[NexusAI] Failed to sync ${provider} to "${siteName}":`, err);
+    } else {
+      logger.error(`[NexusAI] Failed to sync credentials to "${siteName}": ${result.stdout}`);
     }
-  }
-
-  if (synced > 0) {
-    logger.info(`[NexusAI] Synced ${synced} AI provider(s) to "${siteName}"`);
+  } catch (err) {
+    logger.error(`[NexusAI] Failed to sync credentials to "${siteName}":`, err);
   }
 }
 
