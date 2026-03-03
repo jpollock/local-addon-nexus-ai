@@ -12,6 +12,7 @@ import type { EmbeddingService } from './embeddings/EmbeddingService';
 import type { VectorStore } from './vector-store/VectorStore';
 import type { McpServer } from './mcp/McpServer';
 import type { LocalServicesBridge } from './mcp/local-services-bridge';
+import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -277,6 +278,19 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     } catch (err) {
       localLogger.error('[NexusAI] update-settings failed:', (err as Error).message);
       return DEFAULT_SETTINGS;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
+    try {
+      return await setupSiteForAI(siteId, localServicesBridge, localLogger);
+    } catch (err) {
+      return {
+        success: false,
+        aiPlugin: 'failed' as const,
+        acfAbilities: 'failed' as const,
+        message: (err as Error).message,
+      };
     }
   });
 }

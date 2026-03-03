@@ -59,6 +59,13 @@ interface UISearchResult {
   siteName: string;
 }
 
+interface SetupAIResult {
+  success: boolean;
+  aiPlugin: 'installed' | 'activated' | 'already_active' | 'failed';
+  acfAbilities: 'enabled' | 'already_enabled' | 'skipped' | 'failed';
+  message: string;
+}
+
 interface FleetOverviewState {
   stats: DashboardStats | null;
   mcpInfo: McpInfo | null;
@@ -68,10 +75,12 @@ interface FleetOverviewState {
   searchResults: UISearchResult[];
   searching: boolean;
   indexingId: string | null;
+  setupId: string | null;
+  setupResults: Record<string, SetupAIResult>;
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'search' | 'index' | 'chat';
+  activeTab: 'overview' | 'search' | 'sites' | 'chat';
 }
 
 // -- Shared styles --
@@ -203,6 +212,8 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     searchResults: [],
     searching: false,
     indexingId: null,
+    setupId: null,
+    setupResults: {},
     copiedField: null,
     loading: true,
     error: null,
@@ -320,6 +331,29 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
       // Error handled by fetchAll refresh
     }
     if (this.mounted) this.setState({ indexingId: null });
+  };
+
+  handleSetupAI = async (siteId: string): Promise<void> => {
+    this.setState({ setupId: siteId });
+    try {
+      const result: SetupAIResult = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.SETUP_AI, siteId,
+      );
+      if (!this.mounted) return;
+      this.setState((prev) => ({
+        setupId: null,
+        setupResults: { ...prev.setupResults, [siteId]: result },
+      }));
+    } catch {
+      if (!this.mounted) return;
+      this.setState((prev) => ({
+        setupId: null,
+        setupResults: {
+          ...prev.setupResults,
+          [siteId]: { success: false, aiPlugin: 'failed', acfAbilities: 'failed', message: 'Setup failed' },
+        },
+      }));
+    }
   };
 
   copyToClipboard = (text: string, field: string): void => {
@@ -527,6 +561,65 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     );
   }
 
+  renderSetupAICell(site: SiteListItem): React.ReactNode {
+    const { setupId, setupResults } = this.state;
+    const result = setupResults[site.id];
+    const isSettingUp = setupId === site.id;
+
+    const tdStyle: React.CSSProperties = {
+      padding: '10px 12px',
+      fontSize: '13px',
+      color: 'var(--nxai-card-text)',
+      borderBottom: '1px solid var(--nxai-card-border)',
+    };
+
+    if (site.status !== 'running') {
+      return React.createElement('td', { style: tdStyle },
+        React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } }, '\u2014'),
+      );
+    }
+
+    if (isSettingUp) {
+      return React.createElement('td', { style: tdStyle },
+        React.createElement('button', {
+          style: { ...btnStyle, opacity: 0.6, cursor: 'not-allowed' },
+          disabled: true,
+        }, 'Setting up...'),
+      );
+    }
+
+    if (result) {
+      if (result.aiPlugin === 'already_active') {
+        return React.createElement('td', { style: tdStyle },
+          React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } }, 'Already set up'),
+        );
+      }
+      if (result.success) {
+        const summary = result.aiPlugin === 'installed' ? 'AI plugin installed'
+          : result.aiPlugin === 'activated' ? 'AI plugin activated'
+          : 'Set up';
+        return React.createElement('td', { style: tdStyle },
+          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
+          React.createElement('span', { style: { fontSize: '12px' } }, summary),
+        );
+      }
+      // Failed
+      return React.createElement('td', { style: tdStyle },
+        React.createElement('span', {
+          style: { fontSize: '12px', color: UI_COLORS.STATUS_ERROR },
+          title: result.message,
+        }, 'Setup failed'),
+      );
+    }
+
+    return React.createElement('td', { style: tdStyle },
+      React.createElement('button', {
+        style: btnPrimaryStyle,
+        onClick: () => this.handleSetupAI(site.id),
+      }, 'Setup for AI'),
+    );
+  }
+
   renderSiteTable(): React.ReactNode {
     const { sites, indexEntries, indexingId } = this.state;
 
@@ -561,7 +654,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     };
 
     return React.createElement('div', { style: { marginBottom: '24px' } },
-      this.renderSectionLabel('Content Index'),
+      this.renderSectionLabel('Sites'),
       React.createElement('div', { style: { ...cardStyle, padding: 0, overflow: 'hidden' } },
         React.createElement('table', {
           style: { width: '100%', borderCollapse: 'collapse' as const },
@@ -575,13 +668,14 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
               React.createElement('th', { style: thStyle }, 'Chunks'),
               React.createElement('th', { style: thStyle }, 'Last Indexed'),
               React.createElement('th', { style: { ...thStyle, textAlign: 'right' as const } }, ''),
+              React.createElement('th', { style: thStyle }, 'AI Setup'),
             ),
           ),
           React.createElement('tbody', null,
             sorted.length === 0
               ? React.createElement('tr', null,
                   React.createElement('td', {
-                    colSpan: 7,
+                    colSpan: 8,
                     style: { ...tdStyle, textAlign: 'center' as const, color: 'var(--nxai-card-sub)', padding: '24px' },
                   }, 'No sites found'),
                 )
@@ -624,6 +718,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
                           }, isIndexing ? 'Indexing...' : (idx ? 'Re-index' : 'Index'))
                         : React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } }, 'Site stopped'),
                     ),
+                    this.renderSetupAICell(site),
                   );
                 }),
           ),
@@ -758,7 +853,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     );
   }
 
-  renderIndexTab(): React.ReactNode {
+  renderSitesTab(): React.ReactNode {
     return this.renderSiteTable();
   }
 
@@ -767,7 +862,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     const tabs: { key: FleetOverviewState['activeTab']; label: string }[] = [
       { key: 'overview', label: 'Overview' },
       { key: 'search', label: 'Search' },
-      { key: 'index', label: 'Index' },
+      { key: 'sites', label: 'Sites' },
       { key: 'chat', label: 'Chat' },
     ];
 
@@ -805,7 +900,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     switch (this.state.activeTab) {
       case 'overview': return this.renderOverviewTab();
       case 'search': return this.renderSearchTab();
-      case 'index': return this.renderIndexTab();
+      case 'sites': return this.renderSitesTab();
       case 'chat': return this.renderChatTab();
       default: return this.renderOverviewTab();
     }

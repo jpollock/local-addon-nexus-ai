@@ -2,6 +2,7 @@ import { ToolRegistry } from '../../src/main/mcp/tool-registry';
 import { NexusServices, LocalSiteInfo } from '../../src/main/mcp/types';
 import { RegistryStorage } from '../../src/main/content/IndexRegistry';
 import { registerWpConnectorTools } from '../../src/main/mcp/modules/wp-connector/index';
+import { setupSiteForAI, SetupAIResult } from '../../src/main/mcp/modules/wp-connector/setup-ai';
 import { STORAGE_KEYS } from '../../src/common/constants';
 import { TIER_OVERRIDES } from '../../src/main/mcp/safety';
 
@@ -587,5 +588,189 @@ describe('wp_run_ability', () => {
     );
 
     expect(result.isError).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setupSiteForAI
+// ---------------------------------------------------------------------------
+
+describe('setupSiteForAI', () => {
+  const mockLogger = { info: jest.fn(), error: jest.fn() };
+
+  function createMockBridge(
+    plugins: Array<{ name: string; status: string; version: string }>,
+    overrideWpCli?: (siteId: string, args: string[], callIndex: number) => { stdout: string; success: boolean } | null,
+  ) {
+    const wpCliCalls: Array<{ siteId: string; args: string[] }> = [];
+    let callCount = 0;
+    return {
+      bridge: {
+        getPlugins: jest.fn(async () => plugins.map((p) => ({ ...p, title: p.name }))),
+        wpCliRun: jest.fn(async (siteId: string, args: string[]) => {
+          const idx = callCount++;
+          wpCliCalls.push({ siteId, args });
+          if (overrideWpCli) {
+            const resp = overrideWpCli(siteId, args, idx);
+            if (resp) return resp;
+          }
+          return { stdout: 'ok', success: true };
+        }),
+      } as any,
+      wpCliCalls,
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('installs and activates AI plugin when not present', async () => {
+    const { bridge, wpCliCalls } = createMockBridge([]);
+
+    const result = await setupSiteForAI('site1', bridge, mockLogger);
+
+    expect(result.success).toBe(true);
+    expect(result.aiPlugin).toBe('installed');
+    expect(result.acfAbilities).toBe('skipped');
+    expect(wpCliCalls[0].args).toEqual(['plugin', 'install', 'ai', '--activate']);
+    expect(result.message).toContain('AI Experiments plugin installed');
+  });
+
+  test('activates AI plugin when installed but inactive', async () => {
+    const { bridge, wpCliCalls } = createMockBridge([
+      { name: 'ai', status: 'inactive', version: '1.0.0' },
+    ]);
+
+    const result = await setupSiteForAI('site1', bridge, mockLogger);
+
+    expect(result.success).toBe(true);
+    expect(result.aiPlugin).toBe('activated');
+    expect(wpCliCalls[0].args).toEqual(['plugin', 'activate', 'ai']);
+    expect(result.message).toContain('AI Experiments plugin activated');
+  });
+
+  test('skips when AI plugin already active', async () => {
+    const { bridge } = createMockBridge([
+      { name: 'ai', status: 'active', version: '1.0.0' },
+    ]);
+
+    const result = await setupSiteForAI('site1', bridge, mockLogger);
+
+    expect(result.success).toBe(true);
+    expect(result.aiPlugin).toBe('already_active');
+    expect(result.message).toContain('already active');
+  });
+
+  test('enables ACF abilities when ACF PRO >= 6.8 is active', async () => {
+    const { bridge, wpCliCalls } = createMockBridge(
+      [
+        { name: 'ai', status: 'active', version: '1.0.0' },
+        { name: 'advanced-custom-fields-pro', status: 'active', version: '6.8.1' },
+      ],
+      (_siteId, args) => {
+        // First eval: check if mu-plugin exists → missing
+        // Second eval: write mu-plugin → ok
+        if (args[0] === 'eval' && args[1].includes('file_exists')) {
+          return { stdout: 'missing', success: true };
+        }
+        if (args[0] === 'eval' && args[1].includes('file_put_contents')) {
+          return { stdout: 'ok', success: true };
+        }
+        return null;
+      },
+    );
+
+    const result = await setupSiteForAI('site1', bridge, mockLogger);
+
+    expect(result.success).toBe(true);
+    expect(result.acfAbilities).toBe('enabled');
+    expect(result.message).toContain('ACF abilities mu-plugin created');
+    // Should have called wpCliRun for the check and the write
+    const evalCalls = wpCliCalls.filter((c) => c.args[0] === 'eval');
+    expect(evalCalls.length).toBe(2);
+  });
+
+  test('skips ACF abilities when mu-plugin already exists', async () => {
+    const { bridge } = createMockBridge(
+      [
+        { name: 'ai', status: 'active', version: '1.0.0' },
+        { name: 'advanced-custom-fields-pro', status: 'active', version: '6.8.0' },
+      ],
+      (_siteId, args) => {
+        if (args[0] === 'eval' && args[1].includes('file_exists')) {
+          return { stdout: 'exists', success: true };
+        }
+        return null;
+      },
+    );
+
+    const result = await setupSiteForAI('site1', bridge, mockLogger);
+
+    expect(result.success).toBe(true);
+    expect(result.acfAbilities).toBe('already_enabled');
+    expect(result.message).toContain('already present');
+  });
+
+  test('skips ACF when not installed', async () => {
+    const { bridge } = createMockBridge([
+      { name: 'ai', status: 'active', version: '1.0.0' },
+    ]);
+
+    const result = await setupSiteForAI('site1', bridge, mockLogger);
+
+    expect(result.acfAbilities).toBe('skipped');
+    expect(result.message).toContain('ACF PRO >= 6.8 not found');
+  });
+
+  test('skips ACF when version < 6.8', async () => {
+    const { bridge } = createMockBridge([
+      { name: 'ai', status: 'active', version: '1.0.0' },
+      { name: 'advanced-custom-fields-pro', status: 'active', version: '6.7.9' },
+    ]);
+
+    const result = await setupSiteForAI('site1', bridge, mockLogger);
+
+    expect(result.acfAbilities).toBe('skipped');
+  });
+
+  test('handles plugin install failure', async () => {
+    const { bridge } = createMockBridge([], (_siteId, args) => {
+      if (args[0] === 'plugin' && args[1] === 'install') {
+        return { stdout: 'Could not install plugin', success: false };
+      }
+      return null;
+    });
+
+    const result = await setupSiteForAI('site1', bridge, mockLogger);
+
+    expect(result.success).toBe(false);
+    expect(result.aiPlugin).toBe('failed');
+    expect(result.message).toContain('setup failed');
+  });
+
+  test('returns combined result message', async () => {
+    const { bridge } = createMockBridge(
+      [
+        { name: 'advanced-custom-fields-pro', status: 'active', version: '6.9.0' },
+      ],
+      (_siteId, args) => {
+        if (args[0] === 'eval' && args[1].includes('file_exists')) {
+          return { stdout: 'missing', success: true };
+        }
+        if (args[0] === 'eval' && args[1].includes('file_put_contents')) {
+          return { stdout: 'ok', success: true };
+        }
+        return null;
+      },
+    );
+
+    const result = await setupSiteForAI('site1', bridge, mockLogger);
+
+    expect(result.success).toBe(true);
+    expect(result.aiPlugin).toBe('installed');
+    expect(result.acfAbilities).toBe('enabled');
+    expect(result.message).toContain('installed and activated');
+    expect(result.message).toContain('ACF abilities mu-plugin created');
   });
 });

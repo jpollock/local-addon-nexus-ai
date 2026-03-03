@@ -19,6 +19,9 @@ export const IPC_CHANNELS = {
   GET_SETTINGS: `${ADDON_PREFIX}:get-settings`,
   UPDATE_SETTINGS: `${ADDON_PREFIX}:update-settings`,
 
+  // AI Setup
+  SETUP_AI: `${ADDON_PREFIX}:setup-ai`,
+
   // Chat
   CHAT_SEND: `${ADDON_PREFIX}:chat-send`,
   CHAT_STREAM: `${ADDON_PREFIX}:chat-stream`,
