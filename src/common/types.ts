@@ -214,9 +214,11 @@ export interface IpcResponse<T = unknown> {
 // Settings
 // ---------------------------------------------------------------------------
 
+export type ChatProvider = 'anthropic' | 'openai' | 'google' | 'ollama' | 'wpe-gateway';
+
 export interface NexusSettings {
   autoIndex: boolean;
   excludedSiteIds: string[];
-  chatProvider?: string;   // 'anthropic' | 'openai' | 'google' | 'ollama' | 'wpe-gateway'
+  chatProvider?: ChatProvider;
   chatModel?: string;      // Model name within provider
 }

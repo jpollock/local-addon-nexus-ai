@@ -8,7 +8,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
-import type { NexusSettings } from '../../common/types';
+import type { ChatProvider, NexusSettings } from '../../common/types';
 
 interface NexusPreferencesProps {
   electron: any;
@@ -224,7 +224,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   };
 
   handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
-    const providerId = e.target.value;
+    const providerId = e.target.value as ChatProvider;
     this.setState(
       (prev) => ({
         settings: { ...prev.settings, chatProvider: providerId, chatModel: '' },

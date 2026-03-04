@@ -45,6 +45,11 @@ console.log('Markdown resources copied to lib/');
 const wpPluginsSource = path.join(__dirname, '..', 'wp-plugins');
 const wpPluginsDest = path.join(libDir, 'wp-plugins');
 if (fs.existsSync(wpPluginsSource)) {
-  fs.cpSync(wpPluginsSource, wpPluginsDest, { recursive: true });
-  console.log('WP plugins copied to lib/wp-plugins/');
+  try {
+    fs.cpSync(wpPluginsSource, wpPluginsDest, { recursive: true });
+    console.log('WP plugins copied to lib/wp-plugins/');
+  } catch (err) {
+    console.error('Failed to copy WP plugins:', err.message);
+    process.exit(1);
+  }
 }

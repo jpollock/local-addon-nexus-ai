@@ -20,6 +20,13 @@ import {
 } from './credential-helpers';
 import { getOllamaStatus } from '../ollama/ask-ollama';
 
+/**
+ * Path to bundled WP plugins directory.
+ * Resolved from the compiled lib/ directory up to package root, then to wp-plugins/.
+ * This is more robust than __dirname traversal which breaks if directory structure changes.
+ */
+const WP_PLUGINS_ROOT = path.resolve(__dirname, '..', '..', '..', '..', 'wp-plugins');
+
 export interface SetupAIResult {
   success: boolean;
   aiPlugin: 'installed' | 'activated' | 'already_active' | 'failed';
@@ -280,13 +287,25 @@ export async function setupSiteForAI(
         } else {
           // Not installed — copy from bundled source and activate
           const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
-          if (sitePluginsDir) {
+          if (!sitePluginsDir) {
+            logger.error(`${tag} Could not determine site plugins directory`);
+            ollamaProvider = 'failed';
+          } else {
             const pluginDest = path.join(sitePluginsDir, 'ai-provider-for-ollama');
-            // Resolve source relative to compiled lib/ location
-            const pluginSource = path.join(__dirname, '..', '..', '..', '..', 'wp-plugins', 'ai-provider-for-ollama');
+            const pluginSource = path.join(WP_PLUGINS_ROOT, 'ai-provider-for-ollama');
 
-            if (fs.existsSync(pluginSource)) {
-              fs.cpSync(pluginSource, pluginDest, { recursive: true });
+            if (!fs.existsSync(pluginSource)) {
+              logger.error(`${tag} Ollama provider plugin source not found at ${pluginSource}`);
+              ollamaProvider = 'failed';
+            } else {
+              try {
+                fs.cpSync(pluginSource, pluginDest, { recursive: true });
+              } catch (copyErr) {
+                const msg = copyErr instanceof Error ? copyErr.message : String(copyErr);
+                logger.error(`${tag} Failed to copy Ollama provider plugin: ${msg}`);
+                ollamaProvider = 'failed';
+                throw copyErr;
+              }
 
               const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-ollama']);
               if (!result.success) {
@@ -307,13 +326,7 @@ export async function setupSiteForAI(
               } else {
                 ollamaProvider = 'installed';
               }
-            } else {
-              logger.error(`${tag} Ollama provider plugin source not found at ${pluginSource}`);
-              ollamaProvider = 'failed';
             }
-          } else {
-            logger.error(`${tag} Could not determine site plugins directory`);
-            ollamaProvider = 'failed';
           }
         }
 
