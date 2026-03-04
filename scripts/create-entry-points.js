@@ -40,3 +40,11 @@ function copyMarkdownFiles(srcDir, destDir) {
 
 copyMarkdownFiles(srcResourceDir, destResourceDir);
 console.log('Markdown resources copied to lib/');
+
+// Copy WP plugin files to lib (these are PHP files bundled with the addon)
+const wpPluginsSource = path.join(__dirname, '..', 'wp-plugins');
+const wpPluginsDest = path.join(libDir, 'wp-plugins');
+if (fs.existsSync(wpPluginsSource)) {
+  fs.cpSync(wpPluginsSource, wpPluginsDest, { recursive: true });
+  console.log('WP plugins copied to lib/wp-plugins/');
+}

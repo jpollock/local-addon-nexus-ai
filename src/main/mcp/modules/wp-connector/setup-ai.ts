@@ -6,6 +6,8 @@
  * sites with ACF PRO >= 6.8. Called via IPC from the UI, not exposed
  * as an MCP tool.
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import type { LocalServicesBridge, WpPlugin } from '../../local-services-bridge';
 import type { RegistryStorage } from '../../../content/IndexRegistry';
 import { STORAGE_KEYS } from '../../../../common/constants';
@@ -16,11 +18,13 @@ import {
   buildCredentialSyncPhp,
   CredentialEntry,
 } from './credential-helpers';
+import { getOllamaStatus } from '../ollama/ask-ollama';
 
 export interface SetupAIResult {
   success: boolean;
   aiPlugin: 'installed' | 'activated' | 'already_active' | 'failed';
   providerPlugins: 'installed' | 'already_active' | 'skipped' | 'failed';
+  ollamaProvider: 'installed' | 'activated' | 'already_active' | 'skipped' | 'failed';
   aiFeatures: 'enabled' | 'already_enabled' | 'skipped' | 'failed';
   credentials: 'synced' | 'skipped' | 'failed';
   acfAbilities: 'enabled' | 'already_enabled' | 'skipped' | 'failed';
@@ -64,6 +68,24 @@ function findPlugin(plugins: WpPlugin[], slug: string): WpPlugin | undefined {
   return plugins.find((p) => p.name === slug);
 }
 
+/**
+ * Returns the absolute path to the site's wp-content/plugins directory.
+ */
+async function getSitePluginsDir(
+  siteId: string,
+  localServices: LocalServicesBridge,
+): Promise<string | null> {
+  try {
+    const result = await localServices.wpCliRun(siteId, ['eval', "echo WP_PLUGIN_DIR;"]);
+    if (result.success && result.stdout?.trim()) {
+      return result.stdout.trim();
+    }
+  } catch {
+    // Fall through
+  }
+  return null;
+}
+
 function meetsMinVersion(version: string, minMajor: number, minMinor: number): boolean {
   const parts = version.split('.');
   const major = parseInt(parts[0], 10);
@@ -82,11 +104,17 @@ function isWp7OrLater(version: string): boolean {
   return parseInt(match[1], 10) >= 7;
 }
 
+export interface SetupAIOptions {
+  /** Install the Ollama provider plugin if Ollama is running. Defaults to false. */
+  enableOllama?: boolean;
+}
+
 export async function setupSiteForAI(
   siteId: string,
   localServices: LocalServicesBridge,
   registryStorage: RegistryStorage,
   logger: Logger,
+  options: SetupAIOptions = {},
 ): Promise<SetupAIResult> {
   const tag = '[NexusAI:setup-ai]';
 
@@ -101,6 +129,7 @@ export async function setupSiteForAI(
       success: false,
       aiPlugin: 'failed',
       providerPlugins: 'failed',
+      ollamaProvider: 'failed',
       aiFeatures: 'failed',
       credentials: 'failed',
       acfAbilities: 'failed',
@@ -220,6 +249,81 @@ export async function setupSiteForAI(
         const msg = err instanceof Error ? err.message : String(err);
         logger.error(`${tag} Provider plugin step failed: ${msg}`);
         providerPlugins = 'failed';
+      }
+    }
+  }
+
+  // Step 2c: Install Ollama provider plugin (only when explicitly requested)
+  let ollamaProvider: SetupAIResult['ollamaProvider'] = 'skipped';
+
+  if (options.enableOllama && aiPlugin !== 'failed') {
+    const ollamaStatus = getOllamaStatus();
+
+    if (!ollamaStatus.available) {
+      logger.info(`${tag} Skipping Ollama provider — Ollama not running`);
+    } else {
+      try {
+        // Refresh plugin list
+        const currentPlugins = await localServices.getPlugins(siteId);
+        const existingOllama = findPlugin(currentPlugins, 'ai-provider-for-ollama');
+
+        if (existingOllama && existingOllama.status === 'active') {
+          ollamaProvider = 'already_active';
+        } else if (existingOllama) {
+          // Installed but inactive — activate
+          const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-ollama']);
+          if (result.success) {
+            ollamaProvider = 'activated';
+          } else {
+            throw new Error(result.stdout ?? 'Failed to activate');
+          }
+        } else {
+          // Not installed — copy from bundled source and activate
+          const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
+          if (sitePluginsDir) {
+            const pluginDest = path.join(sitePluginsDir, 'ai-provider-for-ollama');
+            // Resolve source relative to compiled lib/ location
+            const pluginSource = path.join(__dirname, '..', '..', '..', '..', 'wp-plugins', 'ai-provider-for-ollama');
+
+            if (fs.existsSync(pluginSource)) {
+              fs.cpSync(pluginSource, pluginDest, { recursive: true });
+
+              const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-ollama']);
+              if (!result.success) {
+                throw new Error(result.stdout ?? 'Failed to activate');
+              }
+
+              // Health check: verify the plugin doesn't crash WordPress
+              const healthCheck = await localServices.wpCliRun(
+                siteId,
+                ['eval', "echo 'healthy';"],
+                { skipPlugins: false },
+              );
+
+              if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+                logger.error(`${tag} Ollama provider plugin crashes WordPress — deactivating`);
+                await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'ai-provider-for-ollama']);
+                ollamaProvider = 'failed';
+              } else {
+                ollamaProvider = 'installed';
+              }
+            } else {
+              logger.error(`${tag} Ollama provider plugin source not found at ${pluginSource}`);
+              ollamaProvider = 'failed';
+            }
+          } else {
+            logger.error(`${tag} Could not determine site plugins directory`);
+            ollamaProvider = 'failed';
+          }
+        }
+
+        if (ollamaProvider === 'installed' || ollamaProvider === 'activated') {
+          logger.info(`${tag} Ollama provider plugin ${ollamaProvider} on site ${siteId}`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`${tag} Ollama provider step failed: ${msg}`);
+        ollamaProvider = 'failed';
       }
     }
   }
@@ -353,6 +457,14 @@ export async function setupSiteForAI(
     case 'failed': parts.push('AI provider plugin installation failed'); break;
   }
 
+  switch (ollamaProvider) {
+    case 'installed': parts.push('Ollama provider plugin installed'); break;
+    case 'activated': parts.push('Ollama provider plugin activated'); break;
+    case 'already_active': parts.push('Ollama provider plugin already active'); break;
+    case 'skipped': break;
+    case 'failed': parts.push('Ollama provider plugin failed'); break;
+  }
+
   switch (aiFeatures) {
     case 'enabled': parts.push('All AI experiments enabled'); break;
     case 'skipped': break; // Don't clutter message if skipped due to plugin failure
@@ -379,6 +491,7 @@ export async function setupSiteForAI(
     success,
     aiPlugin,
     providerPlugins,
+    ollamaProvider,
     aiFeatures,
     credentials,
     acfAbilities,

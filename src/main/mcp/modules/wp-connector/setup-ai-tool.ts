@@ -19,6 +19,7 @@ function formatResult(result: SetupAIResult, siteName: string): string {
 
   lines.push(`  AI Plugin: ${result.aiPlugin}`);
   lines.push(`  Provider Plugins: ${result.providerPlugins}`);
+  lines.push(`  Ollama Provider: ${result.ollamaProvider}`);
   lines.push(`  AI Experiments: ${result.aiFeatures}`);
   lines.push(`  Credentials: ${result.credentials}`);
   lines.push(`  ACF Abilities: ${result.acfAbilities}`);
@@ -42,6 +43,10 @@ export const setupAIToolHandler: McpToolHandler = {
           type: 'string',
           description: 'Local site name, ID, or domain',
         },
+        enable_ollama: {
+          type: 'boolean',
+          description: 'Install the Ollama provider plugin for local AI (requires Ollama running). Defaults to false.',
+        },
       },
       required: ['site'],
     },
@@ -64,7 +69,9 @@ export const setupAIToolHandler: McpToolHandler = {
     if (check) return check;
 
     try {
-      const result = await setupSiteForAI(site.id, localServices, registryStorage, logger);
+      const result = await setupSiteForAI(site.id, localServices, registryStorage, logger, {
+        enableOllama: args.enable_ollama === true,
+      });
       const text = formatResult(result, site.name);
       return result.success ? ok(text) : error(text);
     } catch (err) {

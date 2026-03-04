@@ -283,12 +283,19 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   ipcMain.handle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
     try {
-      return await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger);
+      // Check if user has selected Ollama as their chat provider
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+      const enableOllama = settings?.chatProvider === 'ollama';
+
+      return await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, {
+        enableOllama,
+      });
     } catch (err) {
       return {
         success: false,
         aiPlugin: 'failed' as const,
         providerPlugins: 'failed' as const,
+        ollamaProvider: 'failed' as const,
         aiFeatures: 'failed' as const,
         credentials: 'failed' as const,
         acfAbilities: 'failed' as const,
