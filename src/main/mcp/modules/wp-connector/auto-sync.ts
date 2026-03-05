@@ -6,6 +6,7 @@ import {
   buildCredentialSyncPhp,
   CredentialEntry,
 } from './credential-helpers';
+import { redactCredentials } from '../../security/credential-redaction';
 
 interface AutoSyncLogger {
   info(...args: unknown[]): void;
@@ -77,16 +78,17 @@ export async function autoSyncCredentials(
           `[NexusAI] Credential sync to "${siteName}": connectors=${parsed.connectors}, ai_client=${aiClientStatus}`,
         );
         if (parsed.debug && parsed.debug.length > 0) {
-          logger.error(`[NexusAI] Credential sync debug for "${siteName}": ${JSON.stringify(parsed.debug)}`);
+          logger.error(`[NexusAI] Credential sync debug for "${siteName}": ${redactCredentials(JSON.stringify(parsed.debug))}`);
         }
       } catch {
-        logger.info(`[NexusAI] Credential sync raw output for "${siteName}": ${result.stdout}`);
+        logger.info(`[NexusAI] Credential sync raw output for "${siteName}": ${redactCredentials(result.stdout ?? '')}`);
       }
     } else {
-      logger.error(`[NexusAI] Failed to sync credentials to "${siteName}": ${result.stdout}`);
+      logger.error(`[NexusAI] Failed to sync credentials to "${siteName}": ${redactCredentials(result.stdout ?? '')}`);
     }
   } catch (err) {
-    logger.error(`[NexusAI] Failed to sync credentials to "${siteName}":`, err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    logger.error(`[NexusAI] Failed to sync credentials to "${siteName}": ${redactCredentials(errMsg)}`);
   }
 }
 

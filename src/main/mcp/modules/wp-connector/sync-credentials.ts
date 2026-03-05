@@ -9,6 +9,7 @@ import {
   maskKey,
   CredentialEntry,
 } from './credential-helpers';
+import { redactCredentials } from '../../security/credential-redaction';
 
 export const syncCredentialsHandler: McpToolHandler = {
   definition: {
@@ -109,7 +110,7 @@ export const syncCredentialsHandler: McpToolHandler = {
       );
 
       if (!result.success) {
-        return error(`WP-CLI error: ${result.stdout ?? 'Unknown error'}`);
+        return error(`WP-CLI error: ${redactCredentials(result.stdout ?? 'Unknown error')}`);
       }
 
       // Parse JSON result: { connectors: N, ai_client: true/false }
@@ -119,7 +120,7 @@ export const syncCredentialsHandler: McpToolHandler = {
       } catch {
         // Fallback: if we got stdout but couldn't parse, treat as success
         // if it contains our expected data
-        return error(`Unexpected response: ${result.stdout}`);
+        return error(`Unexpected response: ${redactCredentials(result.stdout ?? '')}`);
       }
 
       const lines: string[] = [];
@@ -135,7 +136,8 @@ export const syncCredentialsHandler: McpToolHandler = {
 
       return ok(lines.join('\n'));
     } catch (err) {
-      return error(`Credential sync failed: ${err instanceof Error ? err.message : String(err)}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      return error(`Credential sync failed: ${redactCredentials(msg)}`);
     }
   },
 };

@@ -19,6 +19,7 @@ import {
   CredentialEntry,
 } from './credential-helpers';
 import { getOllamaStatus } from '../ollama/ask-ollama';
+import { redactCredentials } from '../../security/credential-redaction';
 
 /**
  * Path to bundled WP plugins directory.
@@ -257,7 +258,7 @@ export async function setupSiteForAI(
           );
 
           if (!result.success) {
-            logger.error(`${tag} Failed to install provider plugin "${slug}": ${result.stdout}`);
+            logger.error(`${tag} Failed to install provider plugin "${slug}": ${redactCredentials(result.stdout ?? '')}`);
             continue;
           }
 
@@ -289,7 +290,7 @@ export async function setupSiteForAI(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        logger.error(`${tag} Provider plugin step failed: ${msg}`);
+        logger.error(`${tag} Provider plugin step failed: ${redactCredentials(msg)}`);
         providerPlugins = 'failed';
       }
     }
@@ -334,7 +335,7 @@ export async function setupSiteForAI(
               pathValid = true;
             } catch (validationErr) {
               const msg = validationErr instanceof Error ? validationErr.message : String(validationErr);
-              logger.error(`${tag} ${msg}`);
+              logger.error(`${tag} ${redactCredentials(msg)}`);
               ollamaProvider = 'failed';
             }
 
@@ -350,7 +351,7 @@ export async function setupSiteForAI(
                   fs.cpSync(pluginSource, pluginDest, { recursive: true });
                 } catch (copyErr) {
                   const msg = copyErr instanceof Error ? copyErr.message : String(copyErr);
-                  logger.error(`${tag} Failed to copy Ollama provider plugin: ${msg}`);
+                  logger.error(`${tag} Failed to copy Ollama provider plugin: ${redactCredentials(msg)}`);
                   ollamaProvider = 'failed';
                   throw copyErr;
                 }
@@ -384,7 +385,7 @@ export async function setupSiteForAI(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        logger.error(`${tag} Ollama provider step failed: ${msg}`);
+        logger.error(`${tag} Ollama provider step failed: ${redactCredentials(msg)}`);
         ollamaProvider = 'failed';
       }
     }
@@ -426,7 +427,7 @@ export async function setupSiteForAI(
       logger.info(`${tag} Enabled AI experiments on site ${siteId}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`${tag} AI features step failed: ${msg}`);
+      logger.error(`${tag} AI features step failed: ${redactCredentials(msg)}`);
       aiFeatures = 'failed';
     }
   }
@@ -457,7 +458,7 @@ export async function setupSiteForAI(
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`${tag} Credential sync step failed: ${msg}`);
+      logger.error(`${tag} Credential sync step failed: ${redactCredentials(msg)}`);
       credentials = 'failed';
     }
   }
@@ -496,7 +497,7 @@ export async function setupSiteForAI(
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`${tag} ACF abilities step failed: ${msg}`);
+      logger.error(`${tag} ACF abilities step failed: ${redactCredentials(msg)}`);
       acfAbilities = 'failed';
     }
   }
