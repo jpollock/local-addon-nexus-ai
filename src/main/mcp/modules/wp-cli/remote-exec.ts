@@ -4,18 +4,49 @@ import { resolveSite } from '../../site-resolver';
 import { error } from './preflight';
 
 // ---------------------------------------------------------------------------
-// Blocked Commands (security)
+// Command Security (blocklist + whitelist)
 // ---------------------------------------------------------------------------
 
 const BLOCKED_COMMANDS = ['eval', 'eval-file', 'shell', 'db query', 'db cli'];
 
+// Allowed WP-CLI commands for remote execution (whitelist approach)
+const ALLOWED_REMOTE_COMMANDS = new Set([
+  // Plugin management
+  'plugin list',
+  'plugin install',
+  'plugin activate',
+  'plugin deactivate',
+  'plugin update',
+  // Theme management
+  'theme list',
+  // Core
+  'core version',
+  // Users
+  'user list',
+  // Options
+  'option get',
+  // Site health
+  'site health',
+]);
+
 export function isBlockedCommand(args: string[]): string | null {
   const joined = args.join(' ').toLowerCase();
+
+  // Check blocklist (legacy - eval, shell, etc.)
   for (const blocked of BLOCKED_COMMANDS) {
     if (joined.startsWith(blocked) || joined.includes(` ${blocked}`)) {
       return blocked;
     }
   }
+
+  // Check whitelist for remote commands
+  if (args.length >= 2) {
+    const command = `${args[0]} ${args[1]}`.toLowerCase();
+    if (!ALLOWED_REMOTE_COMMANDS.has(command)) {
+      return `Command "${command}" not allowed for remote execution. Use local WP-CLI for advanced operations.`;
+    }
+  }
+
   return null;
 }
 

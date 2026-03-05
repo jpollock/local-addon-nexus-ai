@@ -327,8 +327,16 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     // --- Remote WP-CLI (via SSH to WP Engine) ---
 
     async remoteWpCliRun(installName: string, args: string[]): Promise<WpCliResult> {
-      // Build the WP-CLI command with safety flags
-      const wpCommand = `wp --skip-plugins --skip-themes ${args.join(' ')}`;
+      // Shell-escape each argument to prevent command injection
+      const escapeShellArg = (arg: string): string => {
+        // Replace single quotes with '\'' (close quote, escaped quote, open quote)
+        // This is the safest way to escape for SSH which uses sh/bash
+        return `'${arg.replace(/'/g, "'\\''")}'`;
+      };
+
+      // Build WP-CLI command with individually escaped arguments
+      const escapedArgs = args.map(escapeShellArg);
+      const wpCommand = `wp --skip-plugins --skip-themes ${escapedArgs.join(' ')}`;
 
       // SSH key path: {userDataPath}/ssh/wpe-connect
       const userDataPath = (process as any).electronPaths?.userDataPath

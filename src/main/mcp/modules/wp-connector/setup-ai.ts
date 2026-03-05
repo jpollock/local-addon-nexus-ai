@@ -27,6 +27,41 @@ import { getOllamaStatus } from '../ollama/ask-ollama';
  */
 const WP_PLUGINS_ROOT = path.resolve(__dirname, '..', '..', '..', '..', 'wp-plugins');
 
+/**
+ * Validates that a plugin directory path is safe and within the expected location.
+ * Prevents path traversal attacks where a malicious wp-config.php could define
+ * WP_PLUGIN_DIR to point outside the site directory.
+ *
+ * @throws Error if path is invalid or outside site boundaries
+ */
+function validatePluginPath(pluginDir: string, siteWebRoot: string): void {
+  // Resolve to absolute paths to handle any '..' or symlinks
+  const absolutePluginDir = path.resolve(pluginDir);
+  const absoluteSiteRoot = path.resolve(siteWebRoot);
+
+  // Security check 1: Must be inside site directory
+  if (!absolutePluginDir.startsWith(absoluteSiteRoot)) {
+    throw new Error(
+      `Security: Plugin directory is outside site root. ` +
+      `Expected inside "${absoluteSiteRoot}", got "${absolutePluginDir}"`
+    );
+  }
+
+  // Security check 2: Must end with wp-content/plugins (no traversal)
+  const expectedSuffix = path.join('wp-content', 'plugins');
+  if (!absolutePluginDir.endsWith(expectedSuffix)) {
+    throw new Error(
+      `Security: Invalid plugin directory structure. ` +
+      `Expected path ending with "wp-content/plugins", got "${absolutePluginDir}"`
+    );
+  }
+
+  // Security check 3: No path traversal sequences in resolved path
+  if (absolutePluginDir.includes('..')) {
+    throw new Error(`Security: Path traversal detected in plugin directory: ${absolutePluginDir}`);
+  }
+}
+
 export interface SetupAIResult {
   success: boolean;
   aiPlugin: 'installed' | 'activated' | 'already_active' | 'failed';
@@ -291,40 +326,54 @@ export async function setupSiteForAI(
             logger.error(`${tag} Could not determine site plugins directory`);
             ollamaProvider = 'failed';
           } else {
-            const pluginDest = path.join(sitePluginsDir, 'ai-provider-for-ollama');
-            const pluginSource = path.join(WP_PLUGINS_ROOT, 'ai-provider-for-ollama');
-
-            if (!fs.existsSync(pluginSource)) {
-              logger.error(`${tag} Ollama provider plugin source not found at ${pluginSource}`);
+            // Security: Validate plugin path before file operations
+            let pathValid = false;
+            try {
+              const site = localServices.resolveSiteObject(siteId) as any;
+              validatePluginPath(sitePluginsDir, site.paths.webRoot);
+              pathValid = true;
+            } catch (validationErr) {
+              const msg = validationErr instanceof Error ? validationErr.message : String(validationErr);
+              logger.error(`${tag} ${msg}`);
               ollamaProvider = 'failed';
-            } else {
-              try {
-                fs.cpSync(pluginSource, pluginDest, { recursive: true });
-              } catch (copyErr) {
-                const msg = copyErr instanceof Error ? copyErr.message : String(copyErr);
-                logger.error(`${tag} Failed to copy Ollama provider plugin: ${msg}`);
-                ollamaProvider = 'failed';
-                throw copyErr;
-              }
+            }
 
-              const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-ollama']);
-              if (!result.success) {
-                throw new Error(result.stdout ?? 'Failed to activate');
-              }
+            if (pathValid) {
+              const pluginDest = path.join(sitePluginsDir, 'ai-provider-for-ollama');
+              const pluginSource = path.join(WP_PLUGINS_ROOT, 'ai-provider-for-ollama');
 
-              // Health check: verify the plugin doesn't crash WordPress
-              const healthCheck = await localServices.wpCliRun(
-                siteId,
-                ['eval', "echo 'healthy';"],
-                { skipPlugins: false },
-              );
-
-              if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
-                logger.error(`${tag} Ollama provider plugin crashes WordPress — deactivating`);
-                await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'ai-provider-for-ollama']);
+              if (!fs.existsSync(pluginSource)) {
+                logger.error(`${tag} Ollama provider plugin source not found at ${pluginSource}`);
                 ollamaProvider = 'failed';
               } else {
-                ollamaProvider = 'installed';
+                try {
+                  fs.cpSync(pluginSource, pluginDest, { recursive: true });
+                } catch (copyErr) {
+                  const msg = copyErr instanceof Error ? copyErr.message : String(copyErr);
+                  logger.error(`${tag} Failed to copy Ollama provider plugin: ${msg}`);
+                  ollamaProvider = 'failed';
+                  throw copyErr;
+                }
+
+                const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-ollama']);
+                if (!result.success) {
+                  throw new Error(result.stdout ?? 'Failed to activate');
+                }
+
+                // Health check: verify the plugin doesn't crash WordPress
+                const healthCheck = await localServices.wpCliRun(
+                  siteId,
+                  ['eval', "echo 'healthy';"],
+                  { skipPlugins: false },
+                );
+
+                if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+                  logger.error(`${tag} Ollama provider plugin crashes WordPress — deactivating`);
+                  await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'ai-provider-for-ollama']);
+                  ollamaProvider = 'failed';
+                } else {
+                  ollamaProvider = 'installed';
+                }
               }
             }
           }
