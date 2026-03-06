@@ -379,7 +379,25 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   ipcMain.handle(IPC_CHANNELS.STORAGE_GET_HEALTH, async () => {
     try {
       // vectorDbPath is passed as a dep
-      const health = await graphService.getStorageHealth(vectorDbPath);
+      const rawHealth = await graphService.getStorageHealth(vectorDbPath);
+
+      // Transform snake_case to camelCase for renderer
+      const health = {
+        graphDb: {
+          sizeBytes: rawHealth.graph_db.size_bytes,
+          path: rawHealth.graph_db.path,
+          eventCount: rawHealth.graph_db.event_count,
+          oldestEvent: rawHealth.graph_db.oldest_event,
+          newestEvent: rawHealth.graph_db.newest_event,
+        },
+        vectorDb: {
+          sizeBytes: rawHealth.vector_db.size_bytes,
+          path: rawHealth.vector_db.path,
+          tableCount: rawHealth.vector_db.table_count,
+        },
+        pendingEvents: rawHealth.pending_events,
+        failedEvents: rawHealth.failed_events,
+      };
 
       return { success: true, health };
     } catch (err) {
