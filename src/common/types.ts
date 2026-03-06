@@ -385,3 +385,45 @@ export interface DashboardV2Stats {
   groupSummaries: { groupId: string; name: string; siteCount: number; avgHealth: number }[];
   recentBulkOps: BulkOperationStatus[];
 }
+
+// ---------------------------------------------------------------------------
+// Credential Sync (Sprint 4)
+// ---------------------------------------------------------------------------
+
+export interface CredentialSyncStatus {
+  lastSync: number | null;
+  providers: string[];
+  success: boolean;
+  error?: string;
+}
+
+export interface CredentialSyncResult {
+  siteId: string;
+  siteName: string;
+  success: boolean;
+  providers: string[];
+  error?: string;
+}
+
+// ---------------------------------------------------------------------------
+// AI Status (Sprint 4)
+// ---------------------------------------------------------------------------
+
+export interface SiteAiStatus {
+  siteId: string;
+  aiPlugin: 'active' | 'inactive' | 'not_installed';
+  credentialsSynced: boolean;
+  lastSync: number | null;
+  providers: string[];
+  proxyConfigured: boolean;
+  ollamaAvailable: boolean;
+}
+
+export interface AiProxyInfo {
+  url: string;
+  port: number;
+  running: boolean;
+  models: string[];
+  toolCapableModels: string[];
+  toolCount: number;
+}

@@ -333,4 +333,83 @@ describe('BulkOperationManager', () => {
     // Already completed (empty siteIds)
     expect(manager.cancel(opId)).toBe(false);
   });
+
+  // 14. setup-ai calls setupSiteForAI for each running site
+  it('should call setupSiteForAI for each site in setup-ai operation', async () => {
+    const setupFn = jest.fn().mockResolvedValue({ success: true, message: 'Done' });
+    deps.setupSiteForAI = setupFn;
+    manager = new BulkOperationManager(deps);
+
+    const opId = manager.execute({
+      type: 'setup-ai',
+      siteIds: ['site-1', 'site-2'],
+      options: { enableOllama: true },
+    });
+
+    await manager.waitForCompletion(opId);
+
+    expect(setupFn).toHaveBeenCalledTimes(2);
+    expect(setupFn).toHaveBeenCalledWith('site-1', { enableOllama: true });
+    expect(setupFn).toHaveBeenCalledWith('site-2', { enableOllama: true });
+
+    const status = manager.getStatus(opId)!;
+    expect(status.status).toBe('completed');
+  });
+
+  // 15. setup-ai skips halted sites
+  it('should fail setup-ai for halted sites', async () => {
+    const setupFn = jest.fn().mockResolvedValue({ success: true });
+    deps.setupSiteForAI = setupFn;
+    deps.siteDataBridge.getSiteStatus = jest.fn().mockReturnValue('halted');
+    manager = new BulkOperationManager(deps);
+
+    const opId = manager.execute({
+      type: 'setup-ai',
+      siteIds: ['halted-site'],
+    });
+
+    await manager.waitForCompletion(opId);
+
+    expect(setupFn).not.toHaveBeenCalled();
+    const status = manager.getStatus(opId)!;
+    expect(status.siteResults['halted-site'].status).toBe('failed');
+    expect(status.siteResults['halted-site'].error).toContain('not running');
+  });
+
+  // 16. setup-ai isolates per-site failures
+  it('should isolate per-site failures in setup-ai', async () => {
+    const setupFn = jest.fn().mockImplementation(async (siteId: string) => {
+      if (siteId === 'bad-site') return { success: false, message: 'Plugin install failed' };
+      return { success: true, message: 'OK' };
+    });
+    deps.setupSiteForAI = setupFn;
+    manager = new BulkOperationManager(deps);
+
+    const opId = manager.execute({
+      type: 'setup-ai',
+      siteIds: ['good-site', 'bad-site'],
+    });
+
+    await manager.waitForCompletion(opId);
+
+    const status = manager.getStatus(opId)!;
+    expect(status.siteResults['good-site'].status).toBe('completed');
+    expect(status.siteResults['bad-site'].status).toBe('failed');
+    expect(status.status).toBe('completed_with_errors');
+  });
+
+  // 17. setup-ai throws when setupSiteForAI not configured
+  it('should fail setup-ai when setupSiteForAI dep not configured', async () => {
+    // Default deps don't include setupSiteForAI
+    const opId = manager.execute({
+      type: 'setup-ai',
+      siteIds: ['site-1'],
+    });
+
+    await manager.waitForCompletion(opId);
+
+    const status = manager.getStatus(opId)!;
+    expect(status.siteResults['site-1'].status).toBe('failed');
+    expect(status.siteResults['site-1'].error).toContain('not configured');
+  });
 });

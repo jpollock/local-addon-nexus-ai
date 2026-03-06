@@ -42,10 +42,10 @@ export default function renderer(context: any): void {
   });
 
   // Feature 5: Per-site Nexus AI section on site overview
-  hooks.addFilter('SiteInfoOverview_Addon_Section', (sections: any[], { site }: any) => {
+  hooks.addFilter('SiteInfoOverview_Addon_Section', (sections: any[], site: any) => {
     return [...sections, {
       title: 'Nexus AI',
-      component: () => React.createElement(SiteNexusSection, { site, electron }),
+      component: React.createElement(SiteNexusSection, { site, electron }),
     }];
   });
 }

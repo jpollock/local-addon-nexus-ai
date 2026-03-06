@@ -2,7 +2,7 @@
  * Per-Site Nexus AI Section
  *
  * Renders on the site overview page via `SiteInfoOverview_Addon_Section` filter.
- * Shows index status, index/reindex controls, per-site search, and auto-index toggle.
+ * Uses Local's global TableList/TableListRow CSS classes for native dark-theme styling.
  *
  * Class-based — Local uses older React, no hooks allowed.
  */
@@ -23,43 +23,23 @@ interface IndexEntry {
   lastIndexed: number;
 }
 
-interface UISearchResult {
-  id: string;
-  title: string;
-  content: string;
-  postType: string;
-  score: number;
-  siteName: string;
+interface SiteAiStatus {
+  aiPlugin: 'active' | 'inactive' | 'not_installed';
+  ollamaProvider: 'active' | 'inactive' | 'not_installed';
+  credentialsSynced: boolean;
+  providers: string[];
 }
 
 interface SiteNexusSectionState {
   indexEntry: IndexEntry | null;
   indexing: boolean;
-  searchQuery: string;
-  searchResults: UISearchResult[];
-  searching: boolean;
   excluded: boolean;
   loading: boolean;
+  aiStatus: SiteAiStatus | null;
+  settingUpAI: boolean;
+  setupResult: { success: boolean; message: string } | null;
+  syncingCreds: boolean;
 }
-
-const cardStyle: React.CSSProperties = {
-  borderRadius: '10px',
-  padding: '16px',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  backgroundColor: 'var(--nxai-card-bg, #fff)',
-  marginBottom: '12px',
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: '6px 14px',
-  borderRadius: '6px',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  backgroundColor: UI_COLORS.WPE_BRAND,
-  color: '#fff',
-  fontSize: '12px',
-  fontWeight: 500,
-  cursor: 'pointer',
-};
 
 function formatTimeAgo(timestamp: number): string {
   if (!timestamp) return 'Never';
@@ -73,23 +53,58 @@ function formatTimeAgo(timestamp: number): string {
   return `${days}d ago`;
 }
 
-function truncate(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen) + '...';
+/** Matches Local's TextButton (green text link) */
+const linkStyle: React.CSSProperties = {
+  color: '#51bb7b',
+  cursor: 'pointer',
+  background: 'none',
+  border: 'none',
+  padding: 0,
+  fontSize: 'inherit',
+  fontWeight: 400,
+  marginLeft: 10,
+};
+
+const dotStyle = (color: string): React.CSSProperties => ({
+  display: 'inline-block',
+  width: 8,
+  height: 8,
+  borderRadius: '50%',
+  backgroundColor: color,
+  marginRight: 8,
+  verticalAlign: 'middle',
+});
+
+const pluginColor = (status: string) =>
+  status === 'active' ? UI_COLORS.STATUS_RUNNING
+  : status === 'inactive' ? UI_COLORS.STATUS_WARNING
+  : '#888';
+
+const pluginLabel = (status: string) =>
+  status === 'active' ? 'Active'
+  : status === 'inactive' ? 'Installed (inactive)'
+  : 'Not installed';
+
+/** Mimics Local's <TableListRow label="..."> — renders a <li class="TableListRow"> */
+function row(label: string, ...children: React.ReactNode[]): React.ReactElement {
+  return React.createElement('li', { className: 'TableListRow', key: label },
+    React.createElement('strong', null, label),
+    React.createElement('div', null, ...children),
+  );
 }
 
 export class SiteNexusSection extends React.Component<SiteNexusSectionProps, SiteNexusSectionState> {
   private mounted = false;
-  private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   state: SiteNexusSectionState = {
     indexEntry: null,
     indexing: false,
-    searchQuery: '',
-    searchResults: [],
-    searching: false,
     excluded: false,
     loading: true,
+    aiStatus: null,
+    settingUpAI: false,
+    setupResult: null,
+    syncingCreds: false,
   };
 
   componentDidMount(): void {
@@ -99,7 +114,6 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
 
   componentWillUnmount(): void {
     this.mounted = false;
-    if (this.searchTimer) clearTimeout(this.searchTimer);
   }
 
   fetchData = async (): Promise<void> => {
@@ -121,6 +135,15 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       if (!this.mounted) return;
       this.setState({ loading: false });
     }
+
+    // Fetch AI status separately so it can't break the core UI
+    try {
+      const aiResult = await ipc.invoke(IPC_CHANNELS.GET_AI_STATUS, this.props.site.id);
+      if (!this.mounted) return;
+      this.setState({ aiStatus: aiResult?.sites?.[this.props.site.id] ?? null });
+    } catch {
+      // AI status unavailable — non-fatal
+    }
   };
 
   handleIndex = async (): Promise<void> => {
@@ -135,30 +158,35 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     if (this.mounted) this.setState({ indexing: false });
   };
 
-  handleSearch = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const query = e.target.value;
-    this.setState({ searchQuery: query });
-
-    if (this.searchTimer) clearTimeout(this.searchTimer);
-
-    if (!query.trim()) {
-      this.setState({ searchResults: [], searching: false });
-      return;
+  handleSetupAI = async (): Promise<void> => {
+    this.setState({ settingUpAI: true, setupResult: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.SETUP_AI, this.props.site.id,
+      );
+      if (!this.mounted) return;
+      this.setState({
+        settingUpAI: false,
+        setupResult: { success: result.success, message: result.message },
+      });
+      this.fetchData();
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ settingUpAI: false, setupResult: { success: false, message: 'Setup failed' } });
     }
+  };
 
-    this.setState({ searching: true });
-    this.searchTimer = setTimeout(async () => {
-      try {
-        const result = await this.props.electron.ipcRenderer.invoke(
-          IPC_CHANNELS.SEARCH, query, this.props.site.id, 5,
-        );
-        if (!this.mounted) return;
-        this.setState({ searchResults: result?.results ?? [], searching: false });
-      } catch {
-        if (!this.mounted) return;
-        this.setState({ searchResults: [], searching: false });
-      }
-    }, 300);
+  handleSyncCredentials = async (): Promise<void> => {
+    this.setState({ syncingCreds: true });
+    try {
+      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_ALL_CREDENTIALS);
+      if (!this.mounted) return;
+      this.setState({ syncingCreds: false });
+      this.fetchData();
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ syncingCreds: false });
+    }
   };
 
   handleExclusionToggle = async (): Promise<void> => {
@@ -179,150 +207,109 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   };
 
   render(): React.ReactNode {
-    const { indexEntry, indexing, searchQuery, searchResults, searching, excluded, loading } = this.state;
+    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds } = this.state;
 
     if (loading) {
-      return React.createElement('div', {
-        style: { padding: '12px', color: 'var(--nxai-card-sub, #6b7280)', fontSize: '13px' },
-      }, 'Loading...');
+      return React.createElement('ul', { className: 'TableList' },
+        row('Status', 'Loading...'),
+      );
     }
 
-    const dotStyle = (color: string): React.CSSProperties => ({
-      display: 'inline-block',
-      width: '8px',
-      height: '8px',
-      borderRadius: '50%',
-      backgroundColor: color,
-      marginRight: '6px',
-    });
-
-    const stateColor = !indexEntry ? 'var(--nxai-card-sub)'
+    const stateColor = !indexEntry ? '#888'
       : indexEntry.state === 'indexed' ? UI_COLORS.STATUS_RUNNING
       : indexEntry.state === 'stale' ? UI_COLORS.STATUS_WARNING
       : indexEntry.state === 'error' ? UI_COLORS.STATUS_ERROR
       : UI_COLORS.WPE_BRAND;
 
-    return React.createElement('div', { style: { padding: '4px 0' } },
-      // Index status card
-      React.createElement('div', { style: cardStyle },
-        React.createElement('div', {
-          style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
-        },
-          React.createElement('div', {
-            style: { display: 'flex', alignItems: 'center', gap: '6px' },
-          },
-            React.createElement('span', { style: dotStyle(stateColor) }),
-            React.createElement('span', {
-              style: { fontSize: '14px', fontWeight: 600, color: 'var(--nxai-card-text, #111827)' },
-            }, indexEntry ? indexEntry.state.charAt(0).toUpperCase() + indexEntry.state.slice(1) : 'Not indexed'),
-          ),
-          React.createElement('button', {
-            style: indexing ? { ...btnStyle, opacity: 0.6, cursor: 'not-allowed' } : btnStyle,
-            onClick: indexing ? undefined : this.handleIndex,
-            disabled: indexing,
-          }, indexing ? 'Indexing...' : (indexEntry ? 'Re-index' : 'Index Now')),
-        ),
-        indexEntry
-          ? React.createElement('div', {
-              style: { fontSize: '13px', color: 'var(--nxai-card-sub, #6b7280)', lineHeight: 1.6 },
-            },
-              `${indexEntry.documentCount.toLocaleString()} documents \u2022 ${indexEntry.chunkCount.toLocaleString()} chunks`,
-              React.createElement('br'),
-              `Last indexed: ${formatTimeAgo(indexEntry.lastIndexed)}`,
-            )
-          : React.createElement('div', {
-              style: { fontSize: '13px', color: 'var(--nxai-card-sub, #6b7280)' },
-            }, 'Click "Index Now" to make this site searchable by AI.'),
-      ),
+    const stateLabel = indexEntry
+      ? indexEntry.state.charAt(0).toUpperCase() + indexEntry.state.slice(1)
+      : 'Not indexed';
 
-      // Auto-index toggle
-      React.createElement('label', {
-        style: {
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '8px 0',
-          marginBottom: '12px',
-        },
-      },
-        React.createElement('input', {
-          type: 'checkbox',
-          checked: !excluded,
-          onChange: this.handleExclusionToggle,
-          style: { width: '14px', height: '14px', cursor: 'pointer' },
-        }),
-        React.createElement('span', {
-          style: { fontSize: '13px', color: 'var(--nxai-card-text, #111827)' },
-        }, 'Auto-index this site when started'),
-      ),
+    const rows: React.ReactElement[] = [];
 
-      // Per-site search
+    // Index status + action
+    rows.push(row('Index status',
+      React.createElement('span', { style: dotStyle(stateColor) }),
+      stateLabel,
+      React.createElement('button', {
+        style: indexing ? { ...linkStyle, opacity: 0.5, cursor: 'not-allowed' } : linkStyle,
+        onClick: indexing ? undefined : this.handleIndex,
+        disabled: indexing,
+      }, indexing ? 'Indexing...' : (indexEntry ? 'Re-index' : 'Index Now')),
+    ));
+
+    // Documents + chunks
+    rows.push(row('Documents',
       indexEntry
-        ? React.createElement('div', null,
-            React.createElement('input', {
-              type: 'text',
-              value: searchQuery,
-              onChange: this.handleSearch,
-              placeholder: `Search ${this.props.site.name}...`,
-              style: {
-                width: '100%',
-                padding: '10px 14px',
-                fontSize: '13px',
-                borderRadius: '8px',
-                border: '1px solid var(--nxai-input-border, #d1d5db)',
-                backgroundColor: 'var(--nxai-input-bg, #fff)',
-                color: 'var(--nxai-card-text)',
-                outline: 'none',
-                boxSizing: 'border-box' as const,
-                marginBottom: '8px',
-              },
-            }),
+        ? `${indexEntry.documentCount.toLocaleString()} documents \u2022 ${indexEntry.chunkCount.toLocaleString()} chunks`
+        : '\u2014',
+    ));
 
-            searching
-              ? React.createElement('div', {
-                  style: { fontSize: '12px', color: 'var(--nxai-card-sub)', padding: '8px 0' },
-                }, 'Searching...')
-              : null,
+    // Last indexed
+    rows.push(row('Last indexed',
+      indexEntry ? formatTimeAgo(indexEntry.lastIndexed) : 'Never',
+    ));
 
-            searchQuery && !searching && searchResults.length === 0
-              ? React.createElement('div', {
-                  style: { fontSize: '12px', color: 'var(--nxai-card-sub)', padding: '8px 0' },
-                }, 'No results found')
-              : null,
+    // Auto-index toggle
+    rows.push(row('Auto-index',
+      React.createElement('input', {
+        type: 'checkbox',
+        checked: !excluded,
+        onChange: this.handleExclusionToggle,
+        style: { cursor: 'pointer', verticalAlign: 'middle', marginRight: 8 },
+      }),
+      !excluded ? 'On' : 'Off',
+    ));
 
-            searchResults.map((r, i) =>
-              React.createElement('div', {
-                key: `${r.id}-${i}`,
-                style: {
-                  padding: '10px 0',
-                  borderBottom: '1px solid var(--nxai-card-border, #e5e7eb)',
-                },
-              },
-                React.createElement('div', {
-                  style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' },
-                },
-                  React.createElement('span', {
-                    style: { fontWeight: 600, fontSize: '13px', color: 'var(--nxai-card-text)' },
-                  }, r.title),
-                  React.createElement('span', {
-                    style: {
-                      fontSize: '10px',
-                      padding: '1px 6px',
-                      borderRadius: '3px',
-                      backgroundColor: 'rgba(14, 202, 212, 0.1)',
-                      color: UI_COLORS.WPE_BRAND,
-                    },
-                  }, r.postType),
-                  React.createElement('span', {
-                    style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginLeft: 'auto' },
-                  }, `${Math.round(r.score * 100)}%`),
-                ),
-                React.createElement('div', {
-                  style: { fontSize: '12px', color: 'var(--nxai-card-sub)', lineHeight: 1.4 },
-                }, truncate(r.content, 150)),
-              ),
-            ),
-          )
+    // AI rows
+    {
+      // AI Plugin
+      rows.push(row('AI plugin',
+        React.createElement('span', { style: dotStyle(pluginColor(aiStatus?.aiPlugin ?? 'not_installed')) }),
+        pluginLabel(aiStatus?.aiPlugin ?? 'not_installed'),
+        aiStatus?.aiPlugin !== 'active'
+          ? React.createElement('button', {
+              style: settingUpAI ? { ...linkStyle, opacity: 0.5, cursor: 'not-allowed' } : linkStyle,
+              onClick: settingUpAI ? undefined : this.handleSetupAI,
+              disabled: settingUpAI,
+            }, settingUpAI ? 'Setting up...' : 'Setup AI')
+          : null,
+      ));
+
+      // Ollama Provider
+      rows.push(row('Ollama provider',
+        React.createElement('span', { style: dotStyle(pluginColor(aiStatus?.ollamaProvider ?? 'not_installed')) }),
+        pluginLabel(aiStatus?.ollamaProvider ?? 'not_installed'),
+      ));
+
+      // Credentials
+      const credsSynced = aiStatus?.credentialsSynced ?? false;
+      rows.push(row('Credentials',
+        React.createElement('span', { style: dotStyle(credsSynced ? UI_COLORS.STATUS_RUNNING : '#888') }),
+        credsSynced ? `Synced (${aiStatus!.providers.join(', ')})` : 'Not synced',
+        React.createElement('button', {
+          style: syncingCreds ? { ...linkStyle, opacity: 0.5, cursor: 'not-allowed' } : linkStyle,
+          onClick: syncingCreds ? undefined : this.handleSyncCredentials,
+          disabled: syncingCreds,
+        }, syncingCreds ? 'Syncing...' : 'Sync Keys'),
+      ));
+    }
+
+    return React.createElement('div', null,
+      React.createElement('ul', { className: 'TableList' }, ...rows),
+
+      // Setup result banner
+      setupResult
+        ? React.createElement('div', {
+            style: {
+              margin: '8px 30px',
+              padding: '6px 12px',
+              borderRadius: 4,
+              fontSize: 13,
+              backgroundColor: setupResult.success ? 'rgba(81, 195, 86, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+              color: setupResult.success ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_ERROR,
+            },
+          }, setupResult.message)
         : null,
     );
   }

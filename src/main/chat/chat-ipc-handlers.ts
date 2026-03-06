@@ -1,6 +1,7 @@
 import { IPC_CHANNELS, STORAGE_KEYS, CHAT_DEFAULTS } from '../../common/constants';
 import type { RegistryStorage } from '../content/IndexRegistry';
 import type { ChatService } from './ChatService';
+import type { CredentialSyncBroadcaster } from '../credentials/CredentialSyncBroadcaster';
 import { getProvider, listProviders } from './providers/index';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -10,10 +11,11 @@ export interface ChatIpcHandlerDeps {
   chatService: ChatService;
   registryStorage: RegistryStorage;
   localLogger: { info(...args: unknown[]): void; error(...args: unknown[]): void };
+  credentialBroadcaster?: CredentialSyncBroadcaster;
 }
 
 export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
-  const { chatService, registryStorage, localLogger } = deps;
+  const { chatService, registryStorage, localLogger, credentialBroadcaster } = deps;
 
   // -----------------------------------------------------------------------
   // Chat
@@ -111,9 +113,17 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
 
   ipcMain.handle(
     IPC_CHANNELS.SAVE_API_KEY,
-    (_event: any, providerId: string, apiKey: string) => {
+    async (_event: any, providerId: string, apiKey: string) => {
       storeApiKey(registryStorage, providerId, apiKey);
       setKeyStatus(registryStorage, providerId, 'unchecked');
+
+      // Broadcast key change to all running WordPress sites (fire-and-forget)
+      if (credentialBroadcaster) {
+        credentialBroadcaster.broadcastKeyChange(providerId).catch((err) => {
+          localLogger.error('[NexusAI] Credential broadcast failed:', (err as Error).message);
+        });
+      }
+
       return { success: true };
     },
   );
@@ -127,6 +137,41 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
 
   ipcMain.handle(IPC_CHANNELS.GET_API_KEY_STATUS, () => {
     return getKeyStatuses(registryStorage);
+  });
+
+  // -----------------------------------------------------------------------
+  // Credential Sync (Sprint 4)
+  // -----------------------------------------------------------------------
+
+  ipcMain.handle(IPC_CHANNELS.SYNC_ALL_CREDENTIALS, async () => {
+    if (!credentialBroadcaster) {
+      return { success: false, error: 'Credential broadcaster not available' };
+    }
+    try {
+      // Broadcast all configured providers
+      const keys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+      const providers = Object.keys(keys).filter((k) => keys[k]);
+      const allResults = [];
+      for (const providerId of providers) {
+        const results = await credentialBroadcaster.broadcastKeyChange(providerId);
+        allResults.push(...results);
+      }
+      // Deduplicate by siteId (keep last result per site)
+      const bySite = new Map<string, typeof allResults[0]>();
+      for (const r of allResults) {
+        bySite.set(r.siteId, r);
+      }
+      return { success: true, results: Array.from(bySite.values()) };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS, () => {
+    if (!credentialBroadcaster) {
+      return {};
+    }
+    return credentialBroadcaster.getSyncStatus();
   });
 }
 
