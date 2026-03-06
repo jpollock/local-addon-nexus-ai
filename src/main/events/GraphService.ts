@@ -11,6 +11,11 @@ import {
   User,
   Relationship,
   GraphStats,
+  EventQueueEntry,
+  EventStatsData,
+  EventType,
+  StorageHealthData,
+  IssueData,
 } from './types';
 
 export interface GraphServiceOptions {
@@ -30,6 +35,7 @@ CREATE TABLE IF NOT EXISTS event_queue (
   retry_count INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_event_status ON event_queue(status);
+CREATE INDEX IF NOT EXISTS idx_event_type ON event_queue(event_type);
 CREATE INDEX IF NOT EXISTS idx_event_site_created ON event_queue(site_id, created_at);
 
 CREATE TABLE IF NOT EXISTS sites (
@@ -544,12 +550,118 @@ export class GraphService {
     };
   }
 
+  // ===== Event Queue Queries (Sprint 1) =====
+
+  /**
+   * Get recent events from event_queue with optional filtering
+   */
+  async getRecentEvents(options?: {
+    limit?: number;
+    filter?: EventType;
+    status?: 'pending' | 'processed' | 'failed';
+    siteId?: string;
+  }): Promise<EventQueueEntry[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const limit = options?.limit ?? 50;
+    const params: any[] = [];
+    let query = 'SELECT * FROM event_queue WHERE 1=1';
+
+    if (options?.filter) {
+      query += ' AND event_type = ?';
+      params.push(options.filter);
+    }
+
+    if (options?.status) {
+      query += ' AND status = ?';
+      params.push(options.status);
+    }
+
+    if (options?.siteId) {
+      query += ' AND site_id = ?';
+      params.push(options.siteId);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT ?';
+    params.push(limit);
+
+    const rows = this.db.prepare(query).all(...params) as any[];
+
+    return rows.map(row => ({
+      id: row.id,
+      site_id: row.site_id,
+      event_type: row.event_type,
+      payload: JSON.parse(row.payload),
+      status: row.status,
+      created_at: row.created_at,
+      processed_at: row.processed_at,
+      error: row.error,
+      retry_count: row.retry_count,
+    }));
+  }
+
+  /**
+   * Get event statistics for dashboard
+   */
+  async getEventStats(timeRange?: {
+    startTimestamp?: number;
+    endTimestamp?: number;
+  }): Promise<EventStatsData> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Total events
+    const totalRow = this.db.prepare('SELECT COUNT(*) as count FROM event_queue').get() as { count: number };
+
+    // Pending and failed
+    const pendingRow = this.db.prepare('SELECT COUNT(*) as count FROM event_queue WHERE status = ?').get('pending') as { count: number };
+    const failedRow = this.db.prepare('SELECT COUNT(*) as count FROM event_queue WHERE status = ?').get('failed') as { count: number };
+
+    // Today and yesterday
+    const now = Date.now();
+    const todayStart = new Date(now).setHours(0, 0, 0, 0);
+    const yesterdayStart = todayStart - (24 * 60 * 60 * 1000);
+    const yesterdayEnd = todayStart;
+
+    const todayRow = this.db
+      .prepare('SELECT COUNT(*) as count FROM event_queue WHERE created_at >= ?')
+      .get(todayStart) as { count: number };
+
+    const yesterdayRow = this.db
+      .prepare('SELECT COUNT(*) as count FROM event_queue WHERE created_at >= ? AND created_at < ?')
+      .get(yesterdayStart, yesterdayEnd) as { count: number };
+
+    // Group by type
+    const byTypeRows = this.db
+      .prepare('SELECT event_type, COUNT(*) as count FROM event_queue GROUP BY event_type')
+      .all() as Array<{ event_type: EventType; count: number }>;
+
+    const byType: Record<EventType, number> = {} as any;
+    for (const row of byTypeRows) {
+      byType[row.event_type] = row.count;
+    }
+
+    return {
+      total: totalRow.count,
+      today: todayRow.count,
+      yesterday: yesterdayRow.count,
+      pending: pendingRow.count,
+      failed: failedRow.count,
+      by_type: byType,
+    };
+  }
+
   // ===== Cleanup =====
 
-  async cleanupOldData(retentionDays: number): Promise<{ sites: number; content: number }> {
+  async cleanupOldData(retentionDays: number): Promise<{ sites: number; content: number; events: number }> {
     if (!this.db) throw new Error('Database not initialized');
 
     const cutoffTime = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+
+    // Delete old processed events from event_queue
+    const deletedEventsResult = this.db
+      .prepare('DELETE FROM event_queue WHERE status = ? AND created_at < ?')
+      .run('processed', cutoffTime);
+    const deletedEvents = deletedEventsResult.changes;
 
     // Only delete inactive sites
     const deletedSites = this.db
@@ -575,6 +687,109 @@ export class GraphService {
     return {
       sites: deletedSites.length,
       content: deletedContent,
+      events: deletedEvents,
     };
+  }
+
+  /**
+   * Get storage health metrics
+   */
+  async getStorageHealth(vectorDbPath: string): Promise<StorageHealthData> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Graph DB stats
+    const eventCountRow = this.db.prepare('SELECT COUNT(*) as count FROM event_queue').get() as { count: number };
+    
+    const oldestRow = this.db.prepare('SELECT MIN(created_at) as oldest FROM event_queue').get() as { oldest: number | null };
+    const newestRow = this.db.prepare('SELECT MAX(created_at) as newest FROM event_queue').get() as { newest: number | null };
+
+    const pendingRow = this.db.prepare('SELECT COUNT(*) as count FROM event_queue WHERE status = ?').get('pending') as { count: number };
+    const failedRow = this.db.prepare('SELECT COUNT(*) as count FROM event_queue WHERE status = ?').get('failed') as { count: number };
+
+    // Get graph DB file size
+    let graphDbSize = 0;
+    if (this.dbPath !== ':memory:' && fs.existsSync(this.dbPath)) {
+      graphDbSize = fs.statSync(this.dbPath).size;
+    }
+
+    // Get vector DB directory size
+    let vectorDbSize = 0;
+    let vectorTableCount = 0;
+    if (fs.existsSync(vectorDbPath)) {
+      const getDirectorySize = (dirPath: string): number => {
+        let size = 0;
+        const files = fs.readdirSync(dirPath);
+        for (const file of files) {
+          const filePath = path.join(dirPath, file);
+          const stats = fs.statSync(filePath);
+          if (stats.isDirectory()) {
+            size += getDirectorySize(filePath);
+            if (file.startsWith('site_')) vectorTableCount++;
+          } else {
+            size += stats.size;
+          }
+        }
+        return size;
+      };
+      vectorDbSize = getDirectorySize(vectorDbPath);
+    }
+
+    return {
+      graph_db: {
+        size_bytes: graphDbSize,
+        path: this.dbPath,
+        event_count: eventCountRow.count,
+        oldest_event: oldestRow.oldest,
+        newest_event: newestRow.newest,
+      },
+      vector_db: {
+        size_bytes: vectorDbSize,
+        path: vectorDbPath,
+        table_count: vectorTableCount,
+      },
+      pending_events: pendingRow.count,
+      failed_events: failedRow.count,
+    };
+  }
+
+  /**
+   * Detect issues requiring attention
+   */
+  async detectIssues(): Promise<IssueData[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const issues: IssueData[] = [];
+
+    // Check for failed events
+    const failedRow = this.db.prepare('SELECT COUNT(*) as count FROM event_queue WHERE status = ?').get('failed') as { count: number };
+    if (failedRow.count > 0) {
+      issues.push({
+        id: 'failed_events',
+        type: 'failed_events',
+        severity: 'error',
+        title: `${failedRow.count} Failed Event${failedRow.count > 1 ? 's' : ''}`,
+        description: 'Events failed to process and may need retry',
+        count: failedRow.count,
+      });
+    }
+
+    // Check for stale sites (not synced in 7+ days)
+    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    const staleSitesRows = this.db
+      .prepare('SELECT COUNT(*) as count FROM sites WHERE is_active = 1 AND last_sync_at IS NOT NULL AND last_sync_at < ?')
+      .get(sevenDaysAgo) as { count: number };
+
+    if (staleSitesRows.count > 0) {
+      issues.push({
+        id: 'stale_sites',
+        type: 'stale_sites',
+        severity: 'warning',
+        title: `${staleSitesRows.count} Stale Site${staleSitesRows.count > 1 ? 's' : ''}`,
+        description: 'Sites not synced in over 7 days',
+        count: staleSitesRows.count,
+      });
+    }
+
+    return issues;
   }
 }

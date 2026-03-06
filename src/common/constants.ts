@@ -36,6 +36,14 @@ export const IPC_CHANNELS = {
   GET_PROVIDERS: `${ADDON_PREFIX}:get-providers`,
   GET_API_KEY: `${ADDON_PREFIX}:get-api-key`,
   GET_API_KEY_STATUS: `${ADDON_PREFIX}:get-api-key-status`,
+
+  // Event tracking & visibility (Sprint 1)
+  EVENTS_GET_TIMELINE: `${ADDON_PREFIX}:events:get-timeline`,
+  EVENTS_GET_STATS: `${ADDON_PREFIX}:events:get-stats`,
+  STORAGE_GET_HEALTH: `${ADDON_PREFIX}:storage:get-health`,
+  ISSUES_DETECT: `${ADDON_PREFIX}:issues:detect`,
+  STORAGE_CLEANUP: `${ADDON_PREFIX}:storage:cleanup`,
+  EVENTS_RETRY_FAILED: `${ADDON_PREFIX}:events:retry-failed`,
 } as const;
 
 // ---------------------------------------------------------------------------

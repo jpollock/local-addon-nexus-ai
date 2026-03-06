@@ -9,3 +9,6 @@ models/all-MiniLM-L6-v2-quantized/tokenizer_config.json
 .DS_Store
 .data/
 .claude/
+
+# Test database files
+tests/unit/events/test-graph-*.db*

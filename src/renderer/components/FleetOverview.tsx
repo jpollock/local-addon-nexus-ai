@@ -1,12 +1,16 @@
 /**
  * Fleet Overview Dashboard
  *
- * Hub page showing stats, MCP connection panel, site index table, and search.
+ * Hub page showing stats, MCP connection panel, site index table, search, and visibility.
  * Class-based — Local uses older React, no hooks allowed.
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS, POLL_INTERVALS } from '../../common/constants';
 import { ChatTab } from './ChatTab';
+import { EventStatsCards } from './EventStatsCards';
+import { EventTimeline } from './EventTimeline';
+import { StorageHealthPanel } from './StorageHealthPanel';
+import { TopIssuesPanel } from './TopIssuesPanel';
 
 interface FleetOverviewProps {
   NavLink: any;
@@ -84,7 +88,7 @@ interface FleetOverviewState {
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'search' | 'sites' | 'chat';
+  activeTab: 'overview' | 'search' | 'sites' | 'chat' | 'visibility';
 }
 
 // -- Shared styles --
@@ -882,6 +886,31 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     return this.renderSiteTable();
   }
 
+  renderVisibilityTab(): React.ReactNode {
+    return React.createElement('div', null,
+      // Stats cards at top (full width)
+      React.createElement(EventStatsCards, { electron: this.props.electron }),
+
+      // 2-column layout below: timeline (left) + issues/storage (right)
+      React.createElement('div', {
+        style: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' },
+      },
+        // Left column: Timeline
+        React.createElement('div', null,
+          React.createElement(EventTimeline, { electron: this.props.electron }),
+        ),
+
+        // Right column: Issues + Storage
+        React.createElement('div', {
+          style: { display: 'flex', flexDirection: 'column' as const, gap: '16px' },
+        },
+          React.createElement(TopIssuesPanel, { electron: this.props.electron }),
+          React.createElement(StorageHealthPanel, { electron: this.props.electron }),
+        ),
+      ),
+    );
+  }
+
   renderTabBar(): React.ReactNode {
     const { activeTab } = this.state;
     const tabs: { key: FleetOverviewState['activeTab']; label: string }[] = [
@@ -889,6 +918,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
       { key: 'search', label: 'Search' },
       { key: 'sites', label: 'Sites' },
       { key: 'chat', label: 'Chat' },
+      { key: 'visibility', label: 'Visibility' },
     ];
 
     return React.createElement('div', {
@@ -927,6 +957,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
       case 'search': return this.renderSearchTab();
       case 'sites': return this.renderSitesTab();
       case 'chat': return this.renderChatTab();
+      case 'visibility': return this.renderVisibilityTab();
       default: return this.renderOverviewTab();
     }
   }

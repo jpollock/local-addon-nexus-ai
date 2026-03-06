@@ -155,3 +155,64 @@ export interface GraphStats {
   total_relationships: number;
   storage_size_bytes: number;
 }
+
+// ===== Sprint 1: Visibility Types =====
+
+/**
+ * Event queue entry with parsed payload
+ */
+export interface EventQueueEntry {
+  id: number;
+  site_id: string;
+  event_type: EventType;
+  payload: any;  // Parsed JSON
+  status: 'pending' | 'processed' | 'failed';
+  created_at: number;
+  processed_at: number | null;
+  error: string | null;
+  retry_count: number;
+}
+
+/**
+ * Event statistics for dashboard
+ */
+export interface EventStatsData {
+  total: number;
+  today: number;
+  yesterday: number;
+  pending: number;
+  failed: number;
+  by_type: Record<EventType, number>;
+}
+
+/**
+ * Storage health metrics
+ */
+export interface StorageHealthData {
+  graph_db: {
+    size_bytes: number;
+    path: string;
+    event_count: number;
+    oldest_event: number | null;
+    newest_event: number | null;
+  };
+  vector_db: {
+    size_bytes: number;
+    path: string;
+    table_count: number;
+  };
+  pending_events: number;
+  failed_events: number;
+}
+
+/**
+ * Issue detection for proactive alerts
+ */
+export interface IssueData {
+  id: string;
+  type: string;
+  severity: 'warning' | 'error';
+  title: string;
+  description: string;
+  count: number;
+}
