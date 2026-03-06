@@ -36,11 +36,20 @@ export const optionGetHandler: McpToolHandler = {
     const check = requireRunning(target.site, services);
     if (check) return check;
 
-    const value = await services.localServices!.getOption(target.site.id, option);
-    if (value === null) {
-      return error(`Option "${option}" not found.`);
-    }
+    try {
+      const value = await services.localServices!.getOption(target.site.id, option);
+      if (value === null) {
+        return error(`Option "${option}" not found.`);
+      }
 
-    return ok(`${option}: ${value}`);
+      return ok(`${option}: ${value}`);
+    } catch (err) {
+      // Fall back to WP-CLI if getOption fails
+      const result = await services.localServices!.wpCliRun(target.site.id, ['option', 'get', option, '--format=json']);
+      if (!result.success) {
+        return error(`Option "${option}" not found.`);
+      }
+      return ok(`${option}: ${result.stdout?.trim() ?? '(empty)'}`);
+    }
   },
 };

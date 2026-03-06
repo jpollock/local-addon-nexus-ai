@@ -28,6 +28,9 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { initializeProviders } from './chat/providers/index';
 import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
+import { GraphService } from './events/GraphService';
+import { EventProcessor } from './events/EventProcessor';
+import { HttpEventInterface } from './events/HttpEventInterface';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -69,6 +72,7 @@ export default function main(context: any): void {
   const modelsDir = path.join(addonDir, 'models', 'all-MiniLM-L6-v2-quantized');
   const localDataDir = path.join(os.homedir(), 'Library', 'Application Support', 'Local');
   const vectorDbDir = path.join(localDataDir, 'nexus-ai', 'vectors');
+  const graphDbPath = path.join(localDataDir, 'nexus-ai', 'graph.db');
 
   // Phase 1: Initialize foundation services (async)
   const vectorStore = new VectorStore(vectorDbDir);
@@ -76,6 +80,7 @@ export default function main(context: any): void {
   const fileScanner = new FileScanner();
   const mysqlExtractor = new MySQLExtractor();
   const indexRegistry = new IndexRegistry(registryStorage);
+  const graphService = new GraphService(graphDbPath);
 
   const contentPipeline = new ContentPipeline({
     vectorStore,
@@ -114,6 +119,20 @@ export default function main(context: any): void {
     path.join(localDataDir, 'nexus-ai', 'audit.log'),
   );
 
+  // Initialize event processor
+  const eventProcessor = new EventProcessor({
+    graphService,
+    vectorStore,
+    embeddingService,
+    logger: localLogger,
+  });
+
+  // Initialize HTTP event interface
+  const httpEventInterface = new HttpEventInterface({
+    eventProcessor,
+    logger: localLogger,
+  });
+
   const nexusServices: NexusServices = {
     vectorStore,
     embeddingService,
@@ -125,6 +144,9 @@ export default function main(context: any): void {
     localServices: localServicesBridge,
     auditLogger,
     registryStorage,
+    graphService: graphService as any,
+    eventProcessor: eventProcessor as any,
+    httpEventInterface: httpEventInterface as any,
   };
 
   const registry = new ToolRegistry();
@@ -165,6 +187,20 @@ export default function main(context: any): void {
 
       await embeddingService.initialize();
       localLogger.info('[NexusAI] EmbeddingService initialized');
+
+      await graphService.initialize();
+      localLogger.info('[NexusAI] GraphService initialized');
+
+      await eventProcessor.initialize();
+      localLogger.info('[NexusAI] EventProcessor initialized');
+
+      const httpInfo = await httpEventInterface.start();
+      localLogger.info(`[NexusAI] HTTP Event Interface running on ${httpInfo.url}`);
+      localLogger.info(`[NexusAI] WordPress webhook endpoint: ${httpInfo.url}/wp-events`);
+      localLogger.info(`[NexusAI] Auth token: ${httpInfo.authToken.substring(0, 16)}...`);
+
+      // Store connection info for WordPress plugin configuration
+      registryStorage.set('http_webhook_info', httpInfo);
 
       // Signal readiness — lifecycle hooks waiting to index can now proceed
       resolveReady!();

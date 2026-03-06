@@ -114,6 +114,12 @@ export interface NexusServices {
   auditLogger?: AuditLogger;
   /** Key-value storage for addon settings (API keys, preferences). Optional for backward compat. */
   registryStorage?: RegistryStorage;
+  /** Knowledge graph service. Optional for backward compat. */
+  graphService?: any;
+  /** Event processor. Optional for backward compat. */
+  eventProcessor?: any;
+  /** HTTP event interface. Optional for backward compat. */
+  httpEventInterface?: any;
 }
 
 /**

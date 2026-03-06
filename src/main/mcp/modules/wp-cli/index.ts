@@ -11,6 +11,10 @@ import { optionGetHandler } from './option-get';
 import { siteHealthHandler } from './site-health';
 import { dbExportHandler } from './db-export';
 import { searchReplaceHandler } from './search-replace';
+import { wpPostCreateHandler } from './post-create';
+import { wpPostUpdateHandler } from './post-update';
+import { wpPostDeleteHandler } from './post-delete';
+import { evalHandler } from './eval';
 
 /**
  * WP-CLI module — WordPress management tools via Local's wpCli service.
@@ -29,4 +33,8 @@ export function registerWpCliTools(registry: ToolRegistry): void {
   registry.register(siteHealthHandler);
   registry.register(dbExportHandler);
   registry.register(searchReplaceHandler);
+  registry.register(wpPostCreateHandler);
+  registry.register(wpPostUpdateHandler);
+  registry.register(wpPostDeleteHandler);
+  registry.register(evalHandler);
 }

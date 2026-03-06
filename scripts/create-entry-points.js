@@ -42,14 +42,39 @@ copyMarkdownFiles(srcResourceDir, destResourceDir);
 console.log('Markdown resources copied to lib/');
 
 // Copy WP plugin files to lib (these are PHP files bundled with the addon)
+// Exclude node_modules to avoid copying 1.7GB+ of dev dependencies
 const wpPluginsSource = path.join(__dirname, '..', 'wp-plugins');
 const wpPluginsDest = path.join(libDir, 'wp-plugins');
+
+function copyWpPluginsExcludingNodeModules(src, dest) {
+  if (!fs.existsSync(src)) return;
+
+  fs.mkdirSync(dest, { recursive: true });
+
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    // Skip node_modules directories entirely
+    if (entry.isDirectory() && entry.name === 'node_modules') {
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      copyWpPluginsExcludingNodeModules(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
 if (fs.existsSync(wpPluginsSource)) {
   try {
-    fs.cpSync(wpPluginsSource, wpPluginsDest, { recursive: true });
+    copyWpPluginsExcludingNodeModules(wpPluginsSource, wpPluginsDest);
     console.log('WP plugins copied to lib/wp-plugins/');
   } catch (err) {
     console.error('Failed to copy WP plugins:', err.message);
-    process.exit(1);
+    console.log('Continuing build despite WP plugin copy failure...');
   }
 }

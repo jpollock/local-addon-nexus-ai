@@ -64,6 +64,28 @@ export class VectorStore {
     await table.add(records);
   }
 
+  /**
+   * Optimize table: compaction, cleanup, and incremental index updates
+   * Should be called periodically after data changes to maintain performance
+   */
+  async optimize(siteId: string): Promise<void> {
+    const db = this.getDb();
+    const name = this.tableName(siteId);
+    const existing = await db.tableNames();
+
+    if (!existing.includes(name)) {
+      return; // Table doesn't exist, nothing to optimize
+    }
+
+    const table = await db.openTable(name);
+
+    // Run optimization:
+    // - Compaction: merge small fragments into larger ones
+    // - Cleanup: remove old versions (default 7 days)
+    // - Index update: add newly-ingested data to existing indexes
+    await table.optimize();
+  }
+
   async search(
     siteId: string,
     queryVector: Float32Array | number[],

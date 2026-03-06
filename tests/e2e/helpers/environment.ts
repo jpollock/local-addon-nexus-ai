@@ -352,6 +352,14 @@ export async function discoverEnvironment(): Promise<E2EEnvironment> {
         try {
           await client.callTool('local_start_site', { site: existing.name });
           await waitForSiteRunning(client, existing.name, 120000);
+
+          // Re-fetch site list to update runningSites array
+          const result = await client.callTool('local_list_sites');
+          if (!result.isError && result.content[0]?.text) {
+            const parsed = parseSiteListOutput(result.content[0].text);
+            runningSites = parsed.running;
+            haltedSites = parsed.halted;
+          }
         } catch (err) {
           console.warn(`[E2E Setup] Failed to start test site: ${err}`);
         }
