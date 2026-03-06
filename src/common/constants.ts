@@ -44,6 +44,18 @@ export const IPC_CHANNELS = {
   ISSUES_DETECT: `${ADDON_PREFIX}:issues:detect`,
   STORAGE_CLEANUP: `${ADDON_PREFIX}:storage:cleanup`,
   EVENTS_RETRY_FAILED: `${ADDON_PREFIX}:events:retry-failed`,
+
+  // Search & Discovery (Sprint 2)
+  SEARCH_UNIFIED: `${ADDON_PREFIX}:search:unified`,
+  FILTERS_GET_COUNTS: `${ADDON_PREFIX}:filters:get-counts`,
+  FILTERS_APPLY: `${ADDON_PREFIX}:filters:apply`,
+  HEALTH_GET_SCORE: `${ADDON_PREFIX}:health:get-score`,
+  HEALTH_GET_ALL_SCORES: `${ADDON_PREFIX}:health:get-all-scores`,
+  QUERIES_LIST: `${ADDON_PREFIX}:queries:list`,
+  QUERIES_CREATE: `${ADDON_PREFIX}:queries:create`,
+  QUERIES_UPDATE: `${ADDON_PREFIX}:queries:update`,
+  QUERIES_DELETE: `${ADDON_PREFIX}:queries:delete`,
+  QUERIES_RUN: `${ADDON_PREFIX}:queries:run`,
 } as const;
 
 // ---------------------------------------------------------------------------

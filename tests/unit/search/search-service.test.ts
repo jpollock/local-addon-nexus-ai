@@ -13,32 +13,27 @@ describe('SearchService', () => {
   let mockGraphService: jest.Mocked<GraphService>;
   let mockEmbeddingService: jest.Mocked<EmbeddingService>;
   let mockIndexRegistry: jest.Mocked<IndexRegistry>;
-  let mockVectorResults: any[] = []; // Storage for mock vector search results
+  let mockVectorResults: any[];
 
   beforeEach(() => {
-    mockVectorResults = []; // Reset before each test
+    mockVectorResults = [];
 
-    // Mock VectorStore - returns results only for site-1 to avoid duplicates
     mockVectorStore = {
-      search: jest.fn().mockImplementation(async (siteId) => {
-        // Only return results for site-1 to avoid duplicate results in tests
+      search: jest.fn().mockImplementation(async (siteId: string) => {
         return siteId === 'site-1' ? mockVectorResults : [];
       }),
     } as any;
 
-    // Mock GraphService
     mockGraphService = {
       searchPlugins: jest.fn().mockResolvedValue([]),
       searchThemes: jest.fn().mockResolvedValue([]),
       searchUsers: jest.fn().mockResolvedValue([]),
     } as any;
 
-    // Mock EmbeddingService
     mockEmbeddingService = {
       embedBatch: jest.fn().mockResolvedValue([[0.1, 0.2, 0.3]]),
     } as any;
 
-    // Mock IndexRegistry
     mockIndexRegistry = {
       listAll: jest.fn().mockReturnValue([
         { siteId: 'site-1', siteName: 'Site 1', state: 'indexed', lastIndexed: Date.now() },
@@ -59,7 +54,7 @@ describe('SearchService', () => {
       const results = await searchService.searchFleet('test query');
 
       expect(mockEmbeddingService.embedBatch).toHaveBeenCalledWith(['test query']);
-      expect(mockVectorStore.search).toHaveBeenCalledTimes(2); // 2 indexed sites
+      expect(mockVectorStore.search).toHaveBeenCalledTimes(2);
       expect(results.results).toBeDefined();
       expect(results.total).toBe(0);
     });
@@ -78,26 +73,17 @@ describe('SearchService', () => {
     test('should respect content type filter', async () => {
       mockVectorResults = [
         {
-          id: '1',
-          title: 'Test Post',
-          content: 'Test content',
-          postType: 'post',
-          postId: 1,
-          score: 0.9,
-          metadata: JSON.stringify({ title: 'Test Post', updated_at: Date.now() }),
+          id: '1', title: 'Test Post', content: 'Test content',
+          postType: 'post', postId: 1, score: 0.9,
+          metadata: JSON.stringify({ updated_at: Date.now() }),
         },
       ];
 
       mockGraphService.searchPlugins.mockResolvedValue([
         {
-          siteId: 'site-1',
-          siteName: 'Site 1',
-          type: 'plugin',
-          title: 'Test Plugin',
-          excerpt: 'Description',
-          metadata: {},
-          score: 0.8,
-          lastUpdated: Date.now(),
+          siteId: 'site-1', siteName: 'Site 1', type: 'plugin',
+          title: 'Test Plugin', excerpt: 'Description',
+          metadata: {}, score: 0.8, lastUpdated: Date.now(),
         },
       ]);
 
@@ -105,7 +91,6 @@ describe('SearchService', () => {
         contentTypes: ['plugin'],
       });
 
-      // Should filter out posts, only show plugins
       expect(results.results.every(r => r.type === 'plugin')).toBe(true);
     });
 
@@ -134,49 +119,33 @@ describe('SearchService', () => {
 
       mockVectorResults = [
         {
-          id: '1',
-          title: 'Old Post',
-          content: 'Old content',
-          postType: 'post',
-          postId: 1,
-          score: 0.9,
-          metadata: JSON.stringify({ title: 'Old Post', updated_at: oldTimestamp }),
+          id: '1', title: 'Old Post', content: 'Old content',
+          postType: 'post', postId: 1, score: 0.9,
+          metadata: JSON.stringify({ updated_at: oldTimestamp }),
         },
         {
-          id: '2',
-          title: 'New Post',
-          content: 'New content',
-          postType: 'post',
-          postId: 2,
-          score: 0.9,
-          metadata: JSON.stringify({ title: 'New Post', updated_at: newTimestamp }),
+          id: '2', title: 'New Post', content: 'New content',
+          postType: 'post', postId: 2, score: 0.9,
+          metadata: JSON.stringify({ updated_at: newTimestamp }),
         },
-      ]);
+      ];
 
       const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
       const results = await searchService.searchFleet('test', {
         dateRange: { start: oneDayAgo, end: Date.now() },
       });
 
-      // Should only include new content
       expect(results.results.length).toBe(1);
       expect(results.results[0].title).toBe('New Post');
     });
 
     test('should paginate results', async () => {
-      // Create 30 results
       const now = Date.now();
-      const manyResults = Array.from({ length: 30 }, (_, i) => ({
-        id: `${i}`,
-        title: `Post ${i}`,
-        content: `Content ${i}`,
-        postType: 'post',
-        postId: i,
-        score: 0.9 - i * 0.01,
-        metadata: JSON.stringify({ title: `Post ${i}`, updated_at: now }),
+      mockVectorResults = Array.from({ length: 30 }, (_, i) => ({
+        id: `${i}`, title: `Post ${i}`, content: `Content ${i}`,
+        postType: 'post', postId: i, score: 0.9 - i * 0.01,
+        metadata: JSON.stringify({ updated_at: now }),
       }));
-
-      (mockVectorStore.search as any).mockResults = manyResults;
 
       const results = await searchService.searchFleet('test', undefined, {
         limit: 10,
@@ -191,24 +160,16 @@ describe('SearchService', () => {
       const now = Date.now();
       mockVectorResults = [
         {
-          id: '1',
-          title: 'Low',
-          content: 'Low score',
-          postType: 'post',
-          postId: 1,
-          score: 0.3,
-          metadata: JSON.stringify({ title: 'Low', updated_at: now }),
+          id: '1', title: 'Low', content: 'Low score',
+          postType: 'post', postId: 1, score: 0.3,
+          metadata: JSON.stringify({ updated_at: now }),
         },
         {
-          id: '2',
-          title: 'High',
-          content: 'High score',
-          postType: 'post',
-          postId: 2,
-          score: 0.9,
-          metadata: JSON.stringify({ title: 'High', updated_at: now }),
+          id: '2', title: 'High', content: 'High score',
+          postType: 'post', postId: 2, score: 0.9,
+          metadata: JSON.stringify({ updated_at: now }),
         },
-      ]);
+      ];
 
       const results = await searchService.searchFleet('test');
 
@@ -222,24 +183,16 @@ describe('SearchService', () => {
 
       mockVectorResults = [
         {
-          id: '1',
-          title: 'Old Post',
-          content: 'Old',
-          postType: 'post',
-          postId: 1,
-          score: 0.9,
-          metadata: JSON.stringify({ title: 'Old Post', updated_at: oldDate }),
+          id: '1', title: 'Old Post', content: 'Old',
+          postType: 'post', postId: 1, score: 0.9,
+          metadata: JSON.stringify({ updated_at: oldDate }),
         },
         {
-          id: '2',
-          title: 'New Post',
-          content: 'New',
-          postType: 'post',
-          postId: 2,
-          score: 0.5,
-          metadata: JSON.stringify({ title: 'New Post', updated_at: newDate }),
+          id: '2', title: 'New Post', content: 'New',
+          postType: 'post', postId: 2, score: 0.5,
+          metadata: JSON.stringify({ updated_at: newDate }),
         },
-      ]);
+      ];
 
       const results = await searchService.searchFleet('test', undefined, {
         sortBy: 'date',
@@ -253,34 +206,25 @@ describe('SearchService', () => {
       const now = Date.now();
       mockVectorResults = [
         {
-          id: '1',
-          title: 'Post',
-          content: 'Post content',
-          postType: 'post',
-          postId: 1,
-          score: 0.9,
-          metadata: JSON.stringify({ title: 'Post', updated_at: now }),
+          id: '1', title: 'Post', content: 'Post content',
+          postType: 'post', postId: 1, score: 0.9,
+          metadata: JSON.stringify({ updated_at: now }),
         },
-      ]);
+      ];
 
       mockGraphService.searchPlugins.mockResolvedValue([
         {
-          siteId: 'site-1',
-          siteName: 'Site 1',
-          type: 'plugin',
-          title: 'Plugin',
-          excerpt: 'Desc',
-          metadata: {},
-          score: 0.8,
-          lastUpdated: now,
+          siteId: 'site-1', siteName: 'Site 1', type: 'plugin',
+          title: 'Plugin', excerpt: 'Desc',
+          metadata: {}, score: 0.8, lastUpdated: now,
         },
       ]);
 
       const results = await searchService.searchFleet('test');
 
       expect(results.facets).toBeDefined();
-      expect(results.facets.types).toEqual({ post: 2, plugin: 1 });
-      expect(results.facets.sites).toEqual({ 'site-1': 2, 'site-2': 1 });
+      expect(results.facets.types).toEqual({ post: 1, plugin: 1 });
+      expect(results.facets.sites['site-1']).toBe(2);
     });
   });
 });

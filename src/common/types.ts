@@ -283,3 +283,53 @@ export interface Issue {
   description: string;
   count: number;
 }
+
+// ---------------------------------------------------------------------------
+// Search & Discovery (Sprint 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Health score breakdown for a site
+ */
+export interface HealthBreakdown {
+  overall: number;
+  factors: {
+    security: number;
+    performance: number;
+    maintenance: number;
+    activity: number;
+    stability: number;
+  };
+  issues: string[];
+  recommendations: string[];
+}
+
+/**
+ * Smart filter for fleet-wide filtering
+ */
+export interface SmartFilter {
+  id: string;
+  category: 'security' | 'maintenance' | 'activity' | 'health';
+  label: string;
+  description: string;
+  count: number;
+  severity: 'info' | 'warning' | 'error';
+}
+
+/**
+ * Saved query for reusable searches
+ */
+export interface SavedQuery {
+  id: string;
+  name: string;
+  description?: string;
+  filters: {
+    contentTypes?: string[];
+    siteIds?: string[];
+    searchText?: string;
+  };
+  createdAt: number;
+  lastRun: number | null;
+  resultCount: number;
+  pinned: boolean;
+}

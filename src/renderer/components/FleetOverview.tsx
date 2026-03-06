@@ -11,6 +11,10 @@ import { EventStatsCards } from './EventStatsCards';
 import { EventTimeline } from './EventTimeline';
 import { StorageHealthPanel } from './StorageHealthPanel';
 import { TopIssuesPanel } from './TopIssuesPanel';
+import { UnifiedSearchPanel } from './UnifiedSearchPanel';
+import { SmartFiltersPanel } from './SmartFiltersPanel';
+import { SavedQueriesPanel } from './SavedQueriesPanel';
+import { SiteHealthBadge } from './SiteHealthBadge';
 
 interface FleetOverviewProps {
   NavLink: any;
@@ -683,6 +687,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
           React.createElement('thead', null,
             React.createElement('tr', null,
               React.createElement('th', { style: thStyle }, 'Site'),
+              React.createElement('th', { style: thStyle }, 'Health'),
               React.createElement('th', { style: thStyle }, 'Status'),
               React.createElement('th', { style: thStyle }, 'Index'),
               React.createElement('th', { style: thStyle }, 'Documents'),
@@ -696,7 +701,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
             sorted.length === 0
               ? React.createElement('tr', null,
                   React.createElement('td', {
-                    colSpan: 8,
+                    colSpan: 9,
                     style: { ...tdStyle, textAlign: 'center' as const, color: 'var(--nxai-card-sub)', padding: '24px' },
                   }, 'No sites found'),
                 )
@@ -716,6 +721,13 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
                       site.isWpe ? React.createElement('span', {
                         style: tagStyle('rgba(14, 202, 212, 0.15)', UI_COLORS.WPE_BRAND),
                       }, 'WPE') : null,
+                    ),
+                    React.createElement('td', { style: { ...tdStyle, textAlign: 'center' as const } },
+                      React.createElement(SiteHealthBadge, {
+                        electron: this.props.electron,
+                        siteId: site.id,
+                        size: 'small',
+                      }),
                     ),
                     React.createElement('td', { style: tdStyle },
                       React.createElement('span', { style: dotStyle(site.status === 'running' ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_HALTED) }),
@@ -757,103 +769,25 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
   }
 
   renderSearchTab(): React.ReactNode {
-    const { searchQuery, searchResults, searching, stats } = this.state;
-    const totalDocs = stats?.index?.totalDocuments ?? 0;
-
-    return React.createElement('div', null,
-      React.createElement('div', { style: { position: 'relative' as const, marginBottom: '16px' } },
-        React.createElement('input', {
-          type: 'text',
-          value: searchQuery,
-          onChange: this.handleSearch,
-          placeholder: `Search across ${totalDocs.toLocaleString()} indexed documents...`,
-          style: {
-            width: '100%',
-            padding: '12px 16px',
-            fontSize: '14px',
-            borderRadius: '8px',
-            border: '1px solid var(--nxai-input-border, #d1d5db)',
-            backgroundColor: 'var(--nxai-input-bg, #fff)',
-            color: 'var(--nxai-card-text)',
-            outline: 'none',
-            boxSizing: 'border-box' as const,
-          },
+    return React.createElement('div', {
+      style: { display: 'flex', gap: '20px' },
+    },
+      // Left column: main search
+      React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+        React.createElement(UnifiedSearchPanel, {
+          electron: this.props.electron,
         }),
-        searching
-          ? React.createElement('span', {
-              style: { position: 'absolute' as const, right: '14px', top: '14px', fontSize: '12px', color: 'var(--nxai-card-sub)' },
-            }, 'Searching...')
-          : null,
       ),
 
-      // Results
-      searchQuery && !searching && searchResults.length === 0
-        ? React.createElement('div', {
-            style: { padding: '16px', textAlign: 'center' as const, color: 'var(--nxai-card-sub)', fontSize: '13px' },
-          }, 'No results found')
-        : null,
-
-      searchResults.length > 0
-        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '8px' } },
-            searchResults.map((result, i) =>
-              React.createElement('div', {
-                key: `${result.id}-${i}`,
-                style: {
-                  ...cardStyle,
-                  padding: '14px 16px',
-                  display: 'flex',
-                  flexDirection: 'column' as const,
-                  gap: '6px',
-                },
-              },
-                // Header row: title + meta
-                React.createElement('div', {
-                  style: { display: 'flex', alignItems: 'center', gap: '8px' },
-                },
-                  React.createElement('span', { style: { fontWeight: 600, fontSize: '14px', color: 'var(--nxai-card-text)' } }, result.title),
-                  React.createElement('span', {
-                    style: tagStyle('rgba(14, 202, 212, 0.1)', UI_COLORS.WPE_BRAND),
-                  }, result.postType),
-                  React.createElement('span', {
-                    style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginLeft: 'auto' },
-                  }, result.siteName),
-                ),
-
-                // Snippet
-                React.createElement('div', {
-                  style: { fontSize: '13px', color: 'var(--nxai-card-sub)', lineHeight: 1.5 },
-                }, truncate(result.content, 200)),
-
-                // Score bar
-                React.createElement('div', {
-                  style: { display: 'flex', alignItems: 'center', gap: '8px' },
-                },
-                  React.createElement('div', {
-                    style: {
-                      flex: 1,
-                      height: '4px',
-                      borderRadius: '2px',
-                      backgroundColor: 'var(--nxai-score-bg)',
-                      overflow: 'hidden',
-                    },
-                  },
-                    React.createElement('div', {
-                      style: {
-                        width: `${Math.round(result.score * 100)}%`,
-                        height: '100%',
-                        backgroundColor: 'var(--nxai-score-fill)',
-                        borderRadius: '2px',
-                      },
-                    }),
-                  ),
-                  React.createElement('span', {
-                    style: { fontSize: '11px', color: 'var(--nxai-card-sub)', minWidth: '32px' },
-                  }, `${Math.round(result.score * 100)}%`),
-                ),
-              ),
-            ),
-          )
-        : null,
+      // Right column: filters + saved queries
+      React.createElement('div', { style: { width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column' as const, gap: '16px' } },
+        React.createElement(SmartFiltersPanel, {
+          electron: this.props.electron,
+        }),
+        React.createElement(SavedQueriesPanel, {
+          electron: this.props.electron,
+        }),
+      ),
     );
   }
 
