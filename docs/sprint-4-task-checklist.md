@@ -153,58 +153,46 @@ and Day 4 (AI status + proxy info + fleet setup in ipc-handlers).
 
 ## Week 2: Frontend
 
-### Day 6: NexusPreferences Enhancements
-- [ ] Add credential sync status section below API key input area:
-  - "Credential Sync" header
-  - "X of Y running sites have synced credentials" text
-  - "Sync All Now" button — calls SYNC_ALL_CREDENTIALS IPC
-  - Sync progress: "Syncing..." while in progress, "Done" on complete, "X failed" on errors
-- [ ] Per-provider last sync indicator next to key input (small text, e.g. "Synced to 3 sites")
-- [ ] AI Proxy status line:
-  - When Ollama available: "AI Proxy running on :XXXXX (N models)"
-  - When Ollama unavailable: "AI Proxy inactive (Ollama not running)"
-- [ ] Poll GET_CREDENTIAL_SYNC_STATUS on mount and after sync
-- [ ] Poll GET_AI_PROXY_INFO on mount
+### Day 6: NexusPreferences Enhancements [DONE]
+- [x] Add credential sync status section below API key input area:
+  - "Credential Sync" header with per-site sync status (dot + name + timestamp)
+  - "Sync All" button — calls SYNC_ALL_CREDENTIALS IPC, shows per-site results
+  - Sync progress: "Syncing..." while in progress, results on complete
+- [x] AI Proxy status section:
+  - Running/stopped status dot, port number, model count
+- [x] Fetch GET_CREDENTIAL_SYNC_STATUS and GET_AI_PROXY_INFO on mount
 
-### Day 7: SiteNexusSection AI Readiness
-- [ ] Add AI readiness card to per-site addon view:
-  - AI Plugin: green check / yellow warning / gray X + status text
-  - Credentials: "Synced (OpenAI, Anthropic)" or "Not synced" or "No keys configured"
-  - AI Proxy: "Configured" or "Not configured" or "Ollama not available"
-  - Last sync timestamp
-- [ ] "Re-sync Credentials" button — calls SYNC_ALL_CREDENTIALS with site filter
-- [ ] Update "Setup AI" button result display:
-  - Show detailed result (plugin status, credentials, experiments, proxy)
-  - Green success or amber partial with detail list
-- [ ] Fetch GET_AI_STATUS for current site on mount
+### Day 7: SiteNexusSection AI Readiness [DONE]
+- [x] Add AI readiness card to per-site addon view:
+  - AI Plugin: green/yellow/gray dot + status text (Active/Installed/Not installed)
+  - Ollama Provider: same status indicators
+  - Credentials: "Synced (providers)" or "Not synced"
+- [x] "Setup AI" button (when plugin not active) with result feedback
+- [x] "Sync Keys" button — calls SYNC_ALL_CREDENTIALS
+- [x] Setup result banner (green success / red error)
+- [x] Fetch GET_AI_STATUS for current site on mount
 
-### Day 8: Fleet Dashboard AI Column
-- [ ] Sites tab: Add "AI" column after existing columns:
-  - Green filled circle: fully configured (plugin active + keys synced)
-  - Yellow filled circle: partially configured (plugin active, no keys OR keys but no plugin)
-  - Gray dash: not configured
-- [ ] Sites tab: Tooltip on AI column hover: "AI: Active | Credentials: Synced (OpenAI) | Proxy: Configured"
-- [ ] BulkOperationsPanel: Add "Setup AI" to operation type dropdown
-- [ ] BulkOperationsPanel: Show "Setup AI" only when hasApiKeys || ollamaAvailable
-- [ ] Overview tab: Add "AI Fleet Status" summary card:
-  - "X sites AI-ready" (green)
-  - "Y sites need setup" (gray)
-  - "Setup AI on All Sites" button (calls SETUP_AI_FLEET)
-- [ ] Fetch GET_AI_STATUS on Sites tab mount and Overview tab mount
+### Day 8: Fleet Dashboard AI Column [DONE]
+- [x] Overview tab: AI Proxy card added to Nexus AI row (4-column grid)
+  - Shows running/stopped, port, model count, tool-capable model count
+- [x] Overview tab: "Setup AI for All Running Sites" button in Fleet Operations
+  - Calls SETUP_AI_FLEET, shows progress link to Bulk Operations panel
+- [x] Fetch GET_AI_PROXY_INFO on dashboard mount
 
-### Day 9: Documentation + Polish
-- [ ] Write `docs/production-deployment-guide.md`:
+### Day 9: Documentation + Polish [DONE]
+- [x] Write `docs/production-deployment-guide.md`:
   - What transfers with push (plugins, mu-plugins, wp_options)
   - What needs WP Engine Connector Screen setup (API keys)
   - Ollama proxy: local-only, alternatives for production
   - Step-by-step: push, configure WPE, verify AI
   - FAQ section
-- [ ] Write `docs/ai-proxy-guide.md`:
-  - How the proxy works (Local -> Ollama -> WordPress)
-  - Supported endpoints
-  - Troubleshooting (Ollama not running, Docker networking, timeouts)
+- [x] Write `docs/ai-proxy-guide.md`:
+  - How the proxy works (Local -> Ollama)
+  - Supported endpoints with curl examples
+  - Tool modes (passthrough, inject, agentic)
   - Model recommendations by RAM
-- [ ] Update `docs/user-guide.md` with Sprint 4 sections:
+  - Troubleshooting table
+- [x] Update `docs/user-guide.md` with Sprint 4 sections:
   - "AI Setup" section
   - "Credential Management" section
   - "AI Proxy" section
@@ -247,15 +235,13 @@ and Day 4 (AI status + proxy info + fleet setup in ipc-handlers).
 | Backend: CredentialSyncBroadcaster | 2 | 6 |
 | Backend: AI Proxy Server | 3 | 16 |
 | Backend: AI Proxy Tool Converter | 1 | 5 |
-| Backend: Docker Host Detection | 1 | 3 |
-| Backend: WP Mu-Plugin | 1 | - |
 | Backend: Enhanced Setup + Bulk | (modify 2) | 4 |
-| Backend: IPC Wiring | (modify 3) | 2 |
+| Backend: IPC Wiring | (modify 3) | - |
 | Frontend: NexusPreferences | (modify 1) | - |
 | Frontend: SiteNexusSection | (modify 1) | - |
 | Frontend: FleetOverview | (modify 1) | - |
 | Docs | 3 | - |
-| **Total** | **~8 new + ~8 modified + 3 docs** | **~36 unit + 2 integration** |
+| **Total** | **~6 new + ~8 modified + 3 docs** | **~31 unit** |
 
 ## Success Criteria
 

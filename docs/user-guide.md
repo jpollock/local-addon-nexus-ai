@@ -208,3 +208,52 @@ Nexus AI indexes WordPress content for semantic search:
 Indexing happens on-demand when you click "Index" in the Sites tab, or programmatically via the `reindex_site` tool. Content is automatically re-indexed when a site starts if auto-indexing is enabled.
 
 Supported content types: posts, pages, custom post types, WooCommerce products (price, SKU, stock, attributes), ACF custom fields (text, repeater, group, flexible content), and media metadata.
+
+## AI Setup
+
+Nexus AI can configure WordPress sites for AI features with one click. The "Setup AI" button (found in the Sites tab or per-site addon section) performs these steps:
+
+1. Installs and activates the AI Experiments plugin
+2. Installs the Ollama provider plugin (registers Ollama as a WordPress AI service provider)
+3. Installs the Nexus AI Connector plugin (sends WordPress events to Local)
+4. Enables WordPress AI experiment flags
+5. Syncs configured API keys to WordPress
+6. Enables ACF abilities (for sites using Advanced Custom Fields)
+
+**Fleet-wide setup:** Click "Setup AI for All Running Sites" on the Overview tab to configure all running sites at once. Progress is tracked in the Bulk Operations panel.
+
+**Requirements:**
+- Site must be running
+- WordPress 6.8+ for AI plugin compatibility
+- Ollama installed for local AI features (optional — cloud providers also work)
+
+## Credential Management
+
+API keys configured in Preferences (OpenAI, Anthropic, Google, etc.) can be synced to WordPress sites so their AI features use your configured providers.
+
+- **Auto-sync:** When you save an API key in Preferences, it's automatically broadcast to all running WordPress 7.0+ sites
+- **Manual sync:** Click "Sync All" in Preferences or "Sync Keys" on a per-site basis
+- **Sync status:** The Preferences panel shows which sites have synced credentials and when
+
+Keys are stored in WordPress as `nexus_ai_credentials` in wp_options, accessible through the Connector Screen API.
+
+## AI Proxy
+
+The AI Proxy is an OpenAI-compatible HTTP server backed by local Ollama. It's built into the addon and starts automatically.
+
+**What it's for:** Enhanced AI clients that want tool injection or agentic mode. WordPress AI features don't need the proxy — they talk directly to Ollama via the provider plugin.
+
+**Connection info:** Shown in Preferences under "AI Proxy Server" (port + status).
+
+**Tool modes** (set via `X-Nexus-Tools` header):
+- `passthrough` (default) — forwards tools as-is
+- `inject` — merges Nexus MCP tools into requests
+- `agentic` — executes MCP tools server-side
+
+See [AI Proxy Guide](ai-proxy-guide.md) for full documentation.
+
+## Production Deployment
+
+When pushing a Local site to WP Engine, AI plugins and settings transfer with the push. However, Ollama-based features only work locally — use cloud providers (OpenAI, Anthropic) for production AI.
+
+See [Production Deployment Guide](production-deployment-guide.md) for step-by-step instructions.
