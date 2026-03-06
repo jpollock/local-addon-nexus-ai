@@ -472,8 +472,8 @@
 - Day 5: EventStatsCards (8h) ✅
 - Day 6: EventTimeline (9h)
 - Day 7: StorageHealthPanel (9.5h) ✅
-- Day 8: TopIssuesPanel (9h)
-- Day 9: FleetOverview integration (8h)
+- Day 8: TopIssuesPanel (9h) ✅
+- Day 9: FleetOverview integration (8h) ✅
 - Day 10: E2E tests & polish (10.5h)
 
 ---
@@ -540,19 +540,19 @@
 - ✅ T7.6 Unit tests
 
 **Day 8: TopIssuesPanel**
-- ⬜ T8.1 Component scaffold
-- ⬜ T8.2 Fetching logic
-- ⬜ T8.3 Issue list UI
-- ⬜ T8.4 Action handlers
-- ⬜ T8.5 Unit tests
+- ✅ T8.1 Component scaffold
+- ✅ T8.2 Fetching logic
+- ✅ T8.3 Issue list UI
+- ✅ T8.4 Action handlers
+- ✅ T8.5 Unit tests
 
 **Day 9: Integration**
-- ⬜ T9.1 Add Visibility tab
-- ⬜ T9.2 Import components
-- ⬜ T9.3 renderVisibilityTab()
-- ⬜ T9.4 Tab navigation
-- ⬜ T9.5 Styling
-- ⬜ T9.6 Manual testing
+- ✅ T9.1 Add Visibility tab
+- ✅ T9.2 Import components
+- ✅ T9.3 renderVisibilityTab()
+- ✅ T9.4 Tab navigation
+- ✅ T9.5 Styling
+- ✅ T9.6 Manual testing
 
 **Day 10: Testing & Polish**
 - ⬜ T10.1 E2E dashboard test
