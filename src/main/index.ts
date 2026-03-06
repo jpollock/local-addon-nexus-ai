@@ -32,6 +32,8 @@ import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
 import { GraphService } from './events/GraphService';
 import { EventProcessor } from './events/EventProcessor';
 import { HttpEventInterface } from './events/HttpEventInterface';
+import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcaster';
+import { AiProxyServer } from './ai-proxy/AiProxyServer';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -217,6 +219,21 @@ export default function main(context: any): void {
       localLogger.info(`[NexusAI] MCP server running on ${connectionInfo.url}`);
       localLogger.info(`[NexusAI] Tools: ${connectionInfo.tools.join(', ')}`);
 
+      // Start AI Proxy Server (OpenAI-compatible endpoint backed by Ollama)
+      const aiProxyServer = new AiProxyServer({
+        logger: localLogger,
+        embeddingService,
+        toolRegistry: registry,
+        nexusServices,
+      });
+      try {
+        const proxyInfo = await aiProxyServer.start();
+        registryStorage.set('ai_proxy_info', proxyInfo);
+        localLogger.info(`[NexusAI] AI Proxy running on ${proxyInfo.url} (${proxyInfo.models.length} models)`);
+      } catch (proxyErr) {
+        localLogger.error('[NexusAI] AI Proxy failed to start:', (proxyErr as Error).message);
+      }
+
       // Start Ollama availability polling
       refreshOllamaStatus();
       setInterval(() => refreshOllamaStatus(), OLLAMA_POLL_INTERVAL_MS);
@@ -244,10 +261,19 @@ export default function main(context: any): void {
     nexusServices,
   });
 
+  // Sprint 4: Credential sync broadcaster
+  const credentialBroadcaster = new CredentialSyncBroadcaster({
+    localServices: localServicesBridge,
+    registryStorage,
+    siteData: siteDataAccessor,
+    logger: localLogger,
+  });
+
   registerChatIpcHandlers({
     chatService,
     registryStorage,
     localLogger,
+    credentialBroadcaster,
   });
 
   localLogger.info('[NexusAI] Addon loaded');

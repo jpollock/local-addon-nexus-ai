@@ -21,6 +21,8 @@ export interface BulkOpDeps {
   };
   healthCalculator: { calculateScore(siteId: string, siteInfo: any): Promise<any> };
   onProgress: (opId: string, status: BulkOperationStatus) => void;
+  /** Optional: called for 'setup-ai' bulk operations */
+  setupSiteForAI?: (siteId: string, options?: any) => Promise<any>;
 }
 
 const MAX_CONCURRENCY = 3;
@@ -161,6 +163,8 @@ export class BulkOperationManager {
         return this.deps.siteDataBridge.stopSite(siteId);
       case 'health-refresh':
         return this.executeHealthRefresh(siteId);
+      case 'setup-ai':
+        return this.executeSetupAI(siteId, op.options);
       default:
         throw new Error(`Unknown operation type: ${op.type}`);
     }
@@ -210,6 +214,25 @@ export class BulkOperationManager {
 
     if (!result.success) {
       throw new Error(`Plugin update failed for ${pluginSlug}`);
+    }
+  }
+
+  private async executeSetupAI(siteId: string, options: Record<string, any>): Promise<void> {
+    if (!this.deps.setupSiteForAI) {
+      throw new Error('setupSiteForAI not configured');
+    }
+
+    const status = this.deps.siteDataBridge.getSiteStatus(siteId);
+    if (status !== 'running') {
+      throw new Error(`Site is not running: ${siteId}`);
+    }
+
+    const result = await this.deps.setupSiteForAI(siteId, {
+      enableOllama: options.enableOllama ?? false,
+    });
+
+    if (!result.success) {
+      throw new Error(result.message || 'Setup AI failed');
     }
   }
 

@@ -624,6 +624,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     contentPipeline,
     siteDataBridge: localServicesBridge,
     healthCalculator,
+    setupSiteForAI: async (siteId: string, options?: any) => {
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+      const enableOllama = options?.enableOllama ?? (settings?.chatProvider === 'ollama');
+      return setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, { enableOllama });
+    },
     onProgress: (opId, status) => {
       try {
         // Stream progress to all renderer windows
@@ -812,6 +817,116 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       };
     } catch (err) {
       localLogger.error('[NexusAI] dashboard:v2-stats failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // AI Status & Proxy (Sprint 4)
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(IPC_CHANNELS.GET_AI_STATUS, async (_event: any, siteId?: string) => {
+    try {
+      const allSites = siteData.getSites();
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      const targetIds = siteId ? [siteId] : Object.keys(allSites);
+
+      const results: Record<string, any> = {};
+      for (const id of targetIds) {
+        const site = allSites[id];
+        if (!site) continue;
+
+        const isRunning = statuses[id] === 'running';
+        let aiPlugin: 'active' | 'inactive' | 'not_installed' = 'not_installed';
+        let ollamaProvider: 'active' | 'inactive' | 'not_installed' = 'not_installed';
+        let credentialsSynced = false;
+        const providers: string[] = [];
+
+        if (isRunning) {
+          try {
+            const plugins = await localServicesBridge.getPlugins(id);
+            const ai = plugins.find((p: any) => p.name === 'ai');
+            if (ai) {
+              aiPlugin = ai.status === 'active' ? 'active' : 'inactive';
+            }
+            const ollama = plugins.find((p: any) => p.name === 'ai-provider-for-ollama');
+            if (ollama) {
+              ollamaProvider = ollama.status === 'active' ? 'active' : 'inactive';
+            }
+
+            // Check if credentials are synced by looking at wp_options
+            const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+            for (const [provider, key] of Object.entries(storedKeys)) {
+              if (key) providers.push(provider);
+            }
+            credentialsSynced = providers.length > 0;
+          } catch {
+            // Site may not be accessible
+          }
+        }
+
+        results[id] = {
+          siteId: id,
+          siteName: site.name,
+          isRunning,
+          aiPlugin,
+          ollamaProvider,
+          credentialsSynced,
+          providers,
+        };
+      }
+
+      return { success: true, sites: results };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-ai-status failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.GET_AI_PROXY_INFO, () => {
+    try {
+      const proxyInfo = registryStorage.get('ai_proxy_info') as any;
+      return {
+        success: true,
+        proxy: proxyInfo ? {
+          url: proxyInfo.url,
+          port: proxyInfo.port,
+          running: true,
+          models: proxyInfo.models ?? [],
+          toolCapableModels: proxyInfo.toolCapableModels ?? [],
+        } : null,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-ai-proxy-info failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SETUP_AI_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
+    try {
+      const allSites = siteData.getSites();
+      const statuses = localServicesBridge.getAllSiteStatuses();
+
+      // Use provided siteIds or all running sites
+      const targetIds = options?.siteIds
+        ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
+
+      if (targetIds.length === 0) {
+        return { success: true, opId: null, message: 'No running sites to set up' };
+      }
+
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+      const enableOllama = settings?.chatProvider === 'ollama';
+
+      const opId = bulkOpManager.execute({
+        type: 'setup-ai',
+        siteIds: targetIds,
+        options: { enableOllama },
+      });
+
+      return { success: true, opId };
+    } catch (err) {
+      localLogger.error('[NexusAI] setup-ai-fleet failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
     }
   });

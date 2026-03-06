@@ -78,6 +78,15 @@ export const IPC_CHANNELS = {
 
   // Dashboard v2 (Sprint 3)
   DASHBOARD_V2_STATS: `${ADDON_PREFIX}:dashboard:v2-stats`,
+
+  // Credential Sync (Sprint 4)
+  SYNC_ALL_CREDENTIALS: `${ADDON_PREFIX}:credentials:sync-all`,
+  GET_CREDENTIAL_SYNC_STATUS: `${ADDON_PREFIX}:credentials:sync-status`,
+
+  // AI Status (Sprint 4)
+  GET_AI_STATUS: `${ADDON_PREFIX}:ai:get-status`,
+  GET_AI_PROXY_INFO: `${ADDON_PREFIX}:ai:proxy-info`,
+  SETUP_AI_FLEET: `${ADDON_PREFIX}:ai:setup-fleet`,
 } as const;
 
 // ---------------------------------------------------------------------------
