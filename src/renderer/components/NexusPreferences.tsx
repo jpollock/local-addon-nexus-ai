@@ -26,6 +26,21 @@ interface ProviderInfo {
   requiresApiKey: boolean;
 }
 
+interface CredentialSyncResult {
+  siteId: string;
+  siteName: string;
+  success: boolean;
+  providers: string[];
+  error?: string;
+}
+
+interface AiProxyInfo {
+  url: string;
+  port: number;
+  running: boolean;
+  models: string[];
+}
+
 interface NexusPreferencesState {
   settings: NexusSettings;
   sites: SiteListItem[];
@@ -38,6 +53,12 @@ interface NexusPreferencesState {
   keyStatus: Record<string, 'valid' | 'invalid' | 'unchecked' | 'checking'>;
   keyInput: string;
   keySaved: boolean;
+  // Credential sync state (Sprint 4)
+  syncStatus: Record<string, { lastSync: number; success: boolean }>;
+  syncing: boolean;
+  syncResults: CredentialSyncResult[] | null;
+  // AI Proxy state (Sprint 4)
+  aiProxy: AiProxyInfo | null;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -130,6 +151,10 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     keyStatus: {},
     keyInput: '',
     keySaved: false,
+    syncStatus: {},
+    syncing: false,
+    syncResults: null,
+    aiProxy: null,
   };
 
   componentDidMount(): void {
@@ -144,11 +169,13 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   fetchData = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [settings, sites, providers, keyStatus] = await Promise.all([
+      const [settings, sites, providers, keyStatus, syncStatus, proxyResult] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
         ipc.invoke(IPC_CHANNELS.GET_PROVIDERS),
         ipc.invoke(IPC_CHANNELS.GET_API_KEY_STATUS),
+        ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
+        ipc.invoke(IPC_CHANNELS.GET_AI_PROXY_INFO),
       ]);
       if (!this.mounted) return;
       this.setState({
@@ -156,6 +183,8 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         sites: sites ?? [],
         providers: providers ?? [],
         keyStatus: keyStatus ?? {},
+        syncStatus: syncStatus ?? {},
+        aiProxy: proxyResult?.proxy ?? null,
         loading: false,
       }, () => {
         // Load models and stored key for the current provider
@@ -305,6 +334,21 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     }
   };
 
+  handleSyncAll = async (): Promise<void> => {
+    this.setState({ syncing: true, syncResults: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_ALL_CREDENTIALS);
+      if (!this.mounted) return;
+      this.setState({ syncing: false, syncResults: result?.results ?? [] });
+      // Refresh sync status
+      const syncStatus = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS);
+      if (this.mounted) this.setState({ syncStatus: syncStatus ?? {} });
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ syncing: false, syncResults: [] });
+    }
+  };
+
   saveSettings = async (): Promise<void> => {
     try {
       await this.props.electron.ipcRenderer.invoke(
@@ -415,6 +459,105 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     );
   }
 
+  renderCredentialSyncSection(): React.ReactNode {
+    const { syncStatus, syncing, syncResults, sites } = this.state;
+    const runningSites = sites.filter((s) => s.status === 'running');
+    const syncEntries = Object.entries(syncStatus);
+    const hasSyncData = syncEntries.length > 0;
+
+    return React.createElement('div', { style: sectionStyle },
+      React.createElement('div', { style: labelStyle }, 'Credential Sync'),
+      React.createElement('div', { style: descStyle },
+        'Push API keys to running WordPress sites so their AI features can use your configured providers.',
+      ),
+
+      // Sync status summary
+      hasSyncData
+        ? React.createElement('div', { style: { marginBottom: '12px' } },
+            ...syncEntries.map(([siteId, status]: [string, any]) => {
+              const site = sites.find((s) => s.id === siteId);
+              const color = status.success ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_ERROR;
+              const ago = status.lastSync ? this.formatTimeAgo(status.lastSync) : 'Never';
+              return React.createElement('div', {
+                key: siteId,
+                style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0', fontSize: '13px' },
+              },
+                React.createElement('span', { style: dotStyle(color) }),
+                React.createElement('span', { style: { color: 'var(--nxai-card-text)' } }, site?.name ?? siteId),
+                React.createElement('span', { style: { color: 'var(--nxai-card-sub)', fontSize: '12px' } }, `(${ago})`),
+              );
+            }),
+          )
+        : React.createElement('div', { style: { ...descStyle, fontStyle: 'italic' } },
+            'No credentials have been synced yet.',
+          ),
+
+      // Sync All button
+      React.createElement('div', { style: rowStyle },
+        React.createElement('button', {
+          style: {
+            ...btnSmallStyle,
+            ...(syncing ? { opacity: 0.6, cursor: 'not-allowed' } : { backgroundColor: UI_COLORS.WPE_BRAND, color: '#fff', border: 'none' }),
+          },
+          onClick: syncing ? undefined : this.handleSyncAll,
+          disabled: syncing || runningSites.length === 0,
+        }, syncing ? 'Syncing...' : `Sync All (${runningSites.length} running)`),
+      ),
+
+      // Results
+      syncResults && syncResults.length > 0
+        ? React.createElement('div', { style: { marginTop: '8px' } },
+            ...syncResults.map((r: CredentialSyncResult) =>
+              React.createElement('div', {
+                key: r.siteId,
+                style: { fontSize: '12px', padding: '2px 0', color: r.success ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_ERROR },
+              }, `${r.siteName}: ${r.success ? `synced (${r.providers.join(', ')})` : r.error ?? 'failed'}`),
+            ),
+          )
+        : null,
+    );
+  }
+
+  renderAiProxySection(): React.ReactNode {
+    const { aiProxy } = this.state;
+    const running = aiProxy?.running ?? false;
+    const color = running ? UI_COLORS.STATUS_RUNNING : 'var(--nxai-card-sub, #999)';
+
+    return React.createElement('div', { style: sectionStyle },
+      React.createElement('div', { style: labelStyle }, 'AI Proxy Server'),
+      React.createElement('div', { style: descStyle },
+        'OpenAI-compatible proxy backed by Ollama. Enables tool injection and agentic mode for advanced AI clients.',
+      ),
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+        React.createElement('span', { style: dotStyle(color) }),
+        React.createElement('span', { style: { fontSize: '14px', fontWeight: 500, color: 'var(--nxai-card-text)' } },
+          running ? 'Running' : 'Not running',
+        ),
+        aiProxy?.port
+          ? React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } },
+              `Port ${aiProxy.port}`,
+            )
+          : null,
+      ),
+      aiProxy?.models && aiProxy.models.length > 0
+        ? React.createElement('div', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)', marginTop: '6px' } },
+            `Models: ${aiProxy.models.slice(0, 5).join(', ')}${aiProxy.models.length > 5 ? ` +${aiProxy.models.length - 5} more` : ''}`,
+          )
+        : null,
+    );
+  }
+
+  private formatTimeAgo(timestamp: number): string {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  }
+
   render(): React.ReactNode {
     const { settings, sites, loading } = this.state;
 
@@ -490,6 +633,30 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
       // AI Chat section
       this.renderChatSection(),
+
+      // Divider
+      React.createElement('hr', {
+        style: {
+          border: 'none',
+          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
+          marginBottom: '24px',
+        },
+      }),
+
+      // Credential sync section (Sprint 4)
+      this.renderCredentialSyncSection(),
+
+      // Divider
+      React.createElement('hr', {
+        style: {
+          border: 'none',
+          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
+          marginBottom: '24px',
+        },
+      }),
+
+      // AI Proxy section (Sprint 4)
+      this.renderAiProxySection(),
     );
   }
 }

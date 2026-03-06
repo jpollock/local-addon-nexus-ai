@@ -79,6 +79,14 @@ interface SetupAIResult {
   message: string;
 }
 
+interface AiProxyInfo {
+  url: string;
+  port: number;
+  running: boolean;
+  models: string[];
+  toolCapableModels: string[];
+}
+
 interface FleetOverviewState {
   stats: DashboardStats | null;
   mcpInfo: McpInfo | null;
@@ -95,6 +103,9 @@ interface FleetOverviewState {
   loading: boolean;
   error: string | null;
   activeTab: 'overview' | 'search' | 'sites' | 'chat' | 'visibility';
+  aiProxy: AiProxyInfo | null;
+  fleetSetupOpId: string | null;
+  fleetSetupRunning: boolean;
 }
 
 // -- Shared styles --
@@ -233,6 +244,9 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     loading: true,
     error: null,
     activeTab: 'overview',
+    aiProxy: null,
+    fleetSetupOpId: null,
+    fleetSetupRunning: false,
   };
 
   componentDidMount(): void {
@@ -289,11 +303,12 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
         ipc.invoke(IPC_CHANNELS.GET_FLEET_STATUS),
+        ipc.invoke(IPC_CHANNELS.GET_AI_PROXY_INFO),
       ]);
       if (!this.mounted) return;
       this.setState({
@@ -301,6 +316,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
         mcpInfo: mcpInfo ?? null,
         sites: sites ?? [],
         indexEntries: indexEntries ?? [],
+        aiProxy: proxyResult?.proxy ?? null,
         loading: false,
         error: stats ? null : 'Failed to load stats',
       });
@@ -381,6 +397,18 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
           [siteId]: { success: false, aiPlugin: 'failed', providerPlugins: 'failed', aiFeatures: 'failed', credentials: 'failed', acfAbilities: 'failed', message: 'Setup failed' },
         },
       }));
+    }
+  };
+
+  handleSetupAIFleet = async (): Promise<void> => {
+    this.setState({ fleetSetupRunning: true });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SETUP_AI_FLEET);
+      if (!this.mounted) return;
+      this.setState({ fleetSetupOpId: result?.opId ?? null, fleetSetupRunning: false });
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ fleetSetupRunning: false });
     }
   };
 
@@ -498,6 +526,37 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
         `${index.totalChunks.toLocaleString()} chunks`,
         React.createElement('br'),
         `Last indexed: ${index.lastIndexed ? formatTimeAgo(index.lastIndexed) : 'Never'}`,
+      ),
+    );
+  }
+
+  renderAiProxyCard(): React.ReactNode {
+    const { aiProxy } = this.state;
+    const running = aiProxy?.running ?? false;
+    const statusColor = running ? UI_COLORS.STATUS_RUNNING : 'var(--nxai-card-sub)';
+
+    return React.createElement('div', { style: cardStyle },
+      React.createElement('div', { style: cardTitleStyle }, 'AI Proxy'),
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
+        React.createElement('span', { style: dotStyle(statusColor) }),
+        React.createElement('span', { style: { fontSize: '18px', fontWeight: 600, color: 'var(--nxai-card-text)' } },
+          running ? 'Running' : 'Stopped',
+        ),
+      ),
+      React.createElement('div', { style: subStatStyle },
+        aiProxy?.port ? `Port ${aiProxy.port}` : 'Not configured',
+        aiProxy?.models?.length
+          ? React.createElement('span', null,
+              React.createElement('br'),
+              `${aiProxy.models.length} model${aiProxy.models.length !== 1 ? 's' : ''} available`,
+            )
+          : null,
+        aiProxy?.toolCapableModels?.length
+          ? React.createElement('span', null,
+              React.createElement('br'),
+              `${aiProxy.toolCapableModels.length} tool-capable`,
+            )
+          : null,
       ),
     );
   }
@@ -808,16 +867,34 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
       ),
 
       this.renderSectionLabel('Nexus AI'),
-      React.createElement('div', { style: cardContainerStyle },
+      React.createElement('div', { style: { ...cardContainerStyle, gridTemplateColumns: 'repeat(4, 1fr)' } },
         this.renderMcpCard(stats),
         this.renderEmbeddingCard(stats),
         this.renderIndexCard(stats),
+        this.renderAiProxyCard(),
       ),
 
       this.renderMcpPanel(),
 
-      // Sprint 3: Fleet Operations
+      // Sprint 3/4: Fleet Operations
       this.renderSectionLabel('Fleet Operations'),
+
+      // Setup AI Fleet button
+      React.createElement('div', { style: { marginBottom: '16px' } },
+        React.createElement('button', {
+          style: this.state.fleetSetupRunning
+            ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed' }
+            : btnPrimaryStyle,
+          onClick: this.state.fleetSetupRunning ? undefined : this.handleSetupAIFleet,
+          disabled: this.state.fleetSetupRunning,
+        }, this.state.fleetSetupRunning ? 'Setting up...' : 'Setup AI for All Running Sites'),
+        this.state.fleetSetupOpId
+          ? React.createElement('span', {
+              style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginLeft: '10px' },
+            }, 'Started! Check Bulk Operations panel for progress.')
+          : null,
+      ),
+
       React.createElement('div', {
         style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' },
       },
