@@ -13,41 +13,41 @@
 **Goal:** Add data access methods to GraphService
 
 **Tasks:**
-- [ ] **T1.1** Add `getRecentEvents()` method to GraphService.ts
+- [x] **T1.1** Add `getRecentEvents()` method to GraphService.ts
   - Query event_queue table
   - Support limit, filter, status, siteId params
   - Return EventQueueEntry[]
   - Add SQL indexes if needed
   - **Estimated:** 2 hours
 
-- [ ] **T1.2** Add `getEventStats()` method to GraphService.ts
+- [x] **T1.2** Add `getEventStats()` method to GraphService.ts
   - Aggregate total, today, yesterday counts
   - Count by status (pending, failed, processed)
   - Group by event_type
   - Support optional timeRange param
   - **Estimated:** 2 hours
 
-- [ ] **T1.3** Add `getStorageHealth()` method to GraphService.ts
+- [x] **T1.3** Add `getStorageHealth()` method to GraphService.ts
   - Get graph.db file size (fs.statSync)
   - Get vector DB directory size
   - Count rows in event_queue
   - Get oldest/newest event timestamps
   - **Estimated:** 1.5 hours
 
-- [ ] **T1.4** Add `detectIssues()` method to GraphService.ts
+- [x] **T1.4** Add `detectIssues()` method to GraphService.ts
   - Check for failed events
   - Check for storage >75%
   - Check for stale sites (last_sync_at > 7 days)
   - Return IssueData[]
   - **Estimated:** 2 hours
 
-- [ ] **T1.5** Write unit tests for new GraphService methods
+- [x] **T1.5** Write unit tests for new GraphService methods
   - `tests/unit/events/graph-service-queries.test.ts`
   - Test each method with fixtures
   - Test edge cases (empty DB, no events)
   - **Estimated:** 2 hours
 
-**Day 1 Total:** ~9.5 hours
+**Day 1 Total:** ~9.5 hours ✅
 
 ---
 
@@ -56,38 +56,38 @@
 **Goal:** Add TypeScript types and EventProcessor helper
 
 **Tasks:**
-- [ ] **T2.1** Add new types to `src/main/events/types.ts`
+- [x] **T2.1** Add new types to `src/main/events/types.ts`
   - EventQueueEntry interface
   - EventStatsData interface
   - StorageHealthData interface
   - IssueData interface
   - **Estimated:** 1 hour
 
-- [ ] **T2.2** Add shared types to `src/common/types.ts`
+- [x] **T2.2** Add shared types to `src/common/types.ts`
   - EventTimelineEntry (renderer-safe version)
   - EventStats (renderer-safe version)
   - StorageHealth (renderer-safe version)
   - Issue (renderer-safe version)
   - **Estimated:** 1 hour
 
-- [ ] **T2.3** Add helper: `generateEventSummary()` utility
+- [x] **T2.3** Add helper: `generateEventSummary()` utility
   - Parse event payload
   - Generate human-readable summary
   - Support all 10 event types
   - **Estimated:** 2 hours
 
-- [ ] **T2.4** Write unit tests for generateEventSummary
+- [x] **T2.4** Write unit tests for generateEventSummary
   - Test all event types
   - Test edge cases (missing fields)
   - **Estimated:** 1.5 hours
 
-- [ ] **T2.5** Add database indexes for query performance
+- [x] **T2.5** Add database indexes for query performance
   - Index on event_queue.created_at
   - Index on event_queue.status
   - Composite index on (site_id, created_at)
   - **Estimated:** 1 hour
 
-**Day 2 Total:** ~6.5 hours
+**Day 2 Total:** ~6.5 hours ✅
 
 ---
 
@@ -96,7 +96,7 @@
 **Goal:** Register IPC handlers for renderer communication
 
 **Tasks:**
-- [ ] **T3.1** Add IPC channel constants to `src/common/constants.ts`
+- [x] **T3.1** Add IPC channel constants to `src/common/constants.ts`
   - `NEXUS_AI_EVENTS_GET_TIMELINE`
   - `NEXUS_AI_EVENTS_GET_STATS`
   - `NEXUS_AI_STORAGE_GET_HEALTH`
@@ -105,45 +105,45 @@
   - `NEXUS_AI_EVENTS_RETRY_FAILED`
   - **Estimated:** 0.5 hours
 
-- [ ] **T3.2** Register `nexus-ai:events:get-timeline` handler
+- [x] **T3.2** Register `nexus-ai:events:get-timeline` handler
   - Call graphService.getRecentEvents()
   - Enrich with site names
   - Generate event summaries
   - Return { events, total }
   - **Estimated:** 1.5 hours
 
-- [ ] **T3.3** Register `nexus-ai:events:get-stats` handler
+- [x] **T3.3** Register `nexus-ai:events:get-stats` handler
   - Call graphService.getEventStats()
   - Calculate health status (good/warning/error)
   - Return stats with healthStatus
   - **Estimated:** 1 hour
 
-- [ ] **T3.4** Register `nexus-ai:storage:get-health` handler
+- [x] **T3.4** Register `nexus-ai:storage:get-health` handler
   - Call graphService.getStorageHealth()
   - Return storage metrics
   - **Estimated:** 0.5 hours
 
-- [ ] **T3.5** Register `nexus-ai:issues:detect` handler
+- [x] **T3.5** Register `nexus-ai:issues:detect` handler
   - Call graphService.detectIssues()
   - Return issue list
   - **Estimated:** 0.5 hours
 
-- [ ] **T3.6** Register `nexus-ai:storage:cleanup` handler
+- [x] **T3.6** Register `nexus-ai:storage:cleanup` handler
   - Call graphService.cleanupOldData()
   - Return deleted count
   - **Estimated:** 0.5 hours
 
-- [ ] **T3.7** Register `nexus-ai:events:retry-failed` handler
+- [x] **T3.7** Register `nexus-ai:events:retry-failed` handler
   - Call eventProcessor.retryFailed()
   - Return retry stats
   - **Estimated:** 0.5 hours
 
-- [ ] **T3.8** Write integration tests for IPC handlers
+- [x] **T3.8** Write integration tests for IPC handlers
   - Test each handler with mock services
   - Test error handling
   - **Estimated:** 2 hours
 
-**Day 3 Total:** ~7 hours
+**Day 3 Total:** ~7 hours ✅
 
 ---
 
@@ -152,38 +152,38 @@
 **Goal:** Ensure backend is solid before building UI
 
 **Tasks:**
-- [ ] **T4.1** Write integration test: Event timeline flow
+- [x] **T4.1** Write integration test: Event timeline flow
   - Create events → query timeline → verify enrichment
   - Test filtering by event type
   - Test filtering by status
   - **Estimated:** 2 hours
 
-- [ ] **T4.2** Write integration test: Storage health flow
+- [x] **T4.2** Write integration test: Storage health flow
   - Create events → query storage health
   - Run cleanup → verify events deleted
   - Run optimize → verify DB shrunk
   - **Estimated:** 1.5 hours
 
-- [ ] **T4.3** Write integration test: Issue detection
+- [x] **T4.3** Write integration test: Issue detection
   - Create failed event → verify issue detected
   - Fill storage → verify warning
   - Retry failed → verify issue resolved
   - **Estimated:** 2 hours
 
-- [ ] **T4.4** Manual testing: IPC handlers via scripts
+- [x] **T4.4** Manual testing: IPC handlers via scripts
   - Create `scripts/manual-testing/test-visibility-ipc.js`
   - Call each IPC handler
   - Verify responses
   - **Estimated:** 1 hour
 
-- [ ] **T4.5** Code review: Backend implementation
+- [x] **T4.5** Code review: Backend implementation
   - Review all GraphService methods
   - Review all IPC handlers
   - Check error handling
   - Check TypeScript types
   - **Estimated:** 1 hour
 
-**Day 4 Total:** ~7.5 hours
+**Day 4 Total:** ~7.5 hours ✅
 
 ---
 
@@ -194,40 +194,40 @@
 **Goal:** Build event statistics dashboard
 
 **Tasks:**
-- [ ] **T5.1** Create `src/renderer/components/EventStatsCards.tsx`
+- [x] **T5.1** Create `src/renderer/components/EventStatsCards.tsx`
   - Class-based component (Local doesn't support hooks)
   - Props: electron, autoRefresh
   - State: stats, loading, error
   - **Estimated:** 2 hours
 
-- [ ] **T5.2** Implement stats fetching
+- [x] **T5.2** Implement stats fetching
   - IPC call to `nexus-ai:events:get-stats`
   - Auto-refresh every 30s if enabled
   - Error handling
   - **Estimated:** 1.5 hours
 
-- [ ] **T5.3** Implement 3-card layout
+- [x] **T5.3** Implement 3-card layout
   - Card 1: Total Events
   - Card 2: Today (with comparison)
   - Card 3: Health Status
   - Responsive grid layout
   - **Estimated:** 2 hours
 
-- [ ] **T5.4** Add health status indicator
+- [x] **T5.4** Add health status indicator
   - Green: 0 pending, 0 failed
   - Yellow: <10 pending
   - Red: >0 failed
   - Visual icon/color
   - **Estimated:** 1 hour
 
-- [ ] **T5.5** Write unit tests
+- [x] **T5.5** Write unit tests
   - Test rendering with mock data
   - Test health status calculation
   - Test auto-refresh
   - Test error handling
   - **Estimated:** 1.5 hours
 
-**Day 5 Total:** ~8 hours
+**Day 5 Total:** ~8 hours ✅
 
 ---
 
@@ -463,13 +463,13 @@
 ### Total Estimated Hours: 84.5 hours (~10.5 days)
 
 **Week 1 Backend:** 30.5 hours (3.8 days)
-- Day 1: GraphService queries (9.5h)
-- Day 2: Types & helpers (6.5h)
-- Day 3: IPC handlers (7h)
-- Day 4: Testing & validation (7.5h)
+- Day 1: GraphService queries (9.5h) ✅
+- Day 2: Types & helpers (6.5h) ✅
+- Day 3: IPC handlers (7h) ✅
+- Day 4: Testing & validation (7.5h) ✅
 
 **Week 2 UI:** 54 hours (6.7 days)
-- Day 5: EventStatsCards (8h)
+- Day 5: EventStatsCards (8h) ✅
 - Day 6: EventTimeline (9h)
 - Day 7: StorageHealthPanel (9.5h)
 - Day 8: TopIssuesPanel (9h)
@@ -487,42 +487,42 @@
 - ❌ Blocked
 
 **Day 1: Backend Foundation**
-- ⬜ T1.1 getRecentEvents()
-- ⬜ T1.2 getEventStats()
-- ⬜ T1.3 getStorageHealth()
-- ⬜ T1.4 detectIssues()
-- ⬜ T1.5 Unit tests
+- ✅ T1.1 getRecentEvents()
+- ✅ T1.2 getEventStats()
+- ✅ T1.3 getStorageHealth()
+- ✅ T1.4 detectIssues()
+- ✅ T1.5 Unit tests
 
 **Day 2: Types & Helpers**
-- ⬜ T2.1 Main types
-- ⬜ T2.2 Common types
-- ⬜ T2.3 Event summaries
-- ⬜ T2.4 Tests
-- ⬜ T2.5 Indexes
+- ✅ T2.1 Main types
+- ✅ T2.2 Common types
+- ✅ T2.3 Event summaries
+- ✅ T2.4 Tests
+- ✅ T2.5 Indexes
 
 **Day 3: IPC Handlers**
-- ⬜ T3.1 Constants
-- ⬜ T3.2 Timeline handler
-- ⬜ T3.3 Stats handler
-- ⬜ T3.4 Health handler
-- ⬜ T3.5 Issues handler
-- ⬜ T3.6 Cleanup handler
-- ⬜ T3.7 Retry handler
-- ⬜ T3.8 Integration tests
+- ✅ T3.1 Constants
+- ✅ T3.2 Timeline handler
+- ✅ T3.3 Stats handler
+- ✅ T3.4 Health handler
+- ✅ T3.5 Issues handler
+- ✅ T3.6 Cleanup handler
+- ✅ T3.7 Retry handler
+- ✅ T3.8 Integration tests
 
 **Day 4: Backend Testing**
-- ⬜ T4.1 Timeline flow test
-- ⬜ T4.2 Storage flow test
-- ⬜ T4.3 Issue detection test
-- ⬜ T4.4 Manual IPC testing
-- ⬜ T4.5 Code review
+- ✅ T4.1 Timeline flow test
+- ✅ T4.2 Storage flow test
+- ✅ T4.3 Issue detection test
+- ✅ T4.4 Manual IPC testing
+- ✅ T4.5 Code review
 
 **Day 5: EventStatsCards**
-- ⬜ T5.1 Component scaffold
-- ⬜ T5.2 Fetching logic
-- ⬜ T5.3 Card layout
-- ⬜ T5.4 Health indicator
-- ⬜ T5.5 Unit tests
+- ✅ T5.1 Component scaffold
+- ✅ T5.2 Fetching logic
+- ✅ T5.3 Card layout
+- ✅ T5.4 Health indicator
+- ✅ T5.5 Unit tests
 
 **Day 6: EventTimeline**
 - ⬜ T6.1 Component scaffold
@@ -607,4 +607,3 @@ Sprint 1 is complete when:
 ---
 
 **Next Sprint:** Sprint 2 - Easy Fleet Discovery 🔍
-
