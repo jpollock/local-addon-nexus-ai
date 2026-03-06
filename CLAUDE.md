@@ -467,3 +467,36 @@ const phpCode = `do_action('activated_plugin', 'plugin-slug/plugin.php', false);
 ---
 
 **Last Updated:** 2026-03-05
+
+## Native Modules & Electron
+
+**Critical:** This addon uses `better-sqlite3`, a native Node.js module that must be compiled for the correct Node.js version.
+
+**The Issue:**
+- **Tests** run with system Node.js (NODE_MODULE_VERSION 127)
+- **Local** runs with Electron's Node.js (NODE_MODULE_VERSION 136)
+- Native binaries compiled for one won't work in the other
+
+**If you see:** `Error: The module 'better_sqlite3.node' was compiled against a different Node.js version...`
+
+**Quick Fix:**
+```bash
+# For tests (system Node):
+npm run prepare:electron
+
+# For Local (Electron Node):
+npm run rebuild:electron
+```
+
+**See:** `docs/NATIVE_MODULES.md` for complete troubleshooting guide.
+
+**During Development:**
+- Tests work out of the box (use system Node)
+- Testing in Local may require rebuild
+- Local's build process should auto-rebuild when packaging
+
+**For CI/CD:**
+- Tests use system Node (no special handling)
+- E2E in Local requires electron-rebuild
+- Separate builds per platform (macOS, Windows, Linux)
+

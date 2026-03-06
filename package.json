@@ -10,7 +10,7 @@
     "category": "developer-tools"
   },
   "scripts": {
-    "build": "npm run clean && npm run compile && npm run create-entry-points",
+    "build": "npm run clean && npm run compile && npm run create-entry-points && npm run rebuild:electron",
     "compile": "tsc -p .",
     "create-entry-points": "node scripts/create-entry-points.js",
     "clean": "rm -rf lib",
@@ -35,12 +35,13 @@
     "package:mac-arm": "node scripts/package-addon.js --platform darwin --arch arm64",
     "package:mac-x64": "node scripts/package-addon.js --platform darwin --arch x64",
     "package:linux-x64": "node scripts/package-addon.js --platform linux --arch x64",
-    "package:win-x64": "node scripts/package-addon.js --platform win32 --arch x64"
+    "package:win-x64": "node scripts/package-addon.js --platform win32 --arch x64",
+    "rebuild:electron": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
     "@lancedb/lancedb": "^0.13.0",
     "apache-arrow": ">=13.0.0 <=17.0.0",
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^11.10.0",
     "mysql2": "^3.11.0",
     "onnxruntime-node": "^1.20.0",
     "zod": "^3.22.4"
