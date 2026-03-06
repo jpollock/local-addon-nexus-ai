@@ -2,7 +2,7 @@
  * Unit tests for GraphService query methods (Sprint 1)
  */
 import { GraphService } from '../../../src/main/events/GraphService';
-import { EventQueueEntry, EventStatsData } from '../../../src/main/events/types';
+import { EventQueueEntry, EventStatsData, StorageHealthData, IssueData } from '../../../src/main/events/types';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -359,6 +359,156 @@ describe('GraphService - Query Methods (Sprint 1)', () => {
       expect(stats.pending).toBe(0);
       expect(stats.failed).toBe(0);
       expect(Object.keys(stats.by_type).length).toBe(0);
+    });
+  });
+
+  describe('getStorageHealth', () => {
+    beforeEach(async () => {
+      await service.upsertSite({
+        id: 'site1',
+        name: 'Test Site',
+        domain: 'test.local',
+        is_active: true,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      });
+    });
+
+    it('should return storage health metrics', async () => {
+      const now = Date.now();
+
+      await insertEvent(service, {
+        site_id: 'site1',
+        event_type: 'post_created',
+        payload: { post_id: 1 },
+        created_at: now - 10000,
+        status: 'processed',
+      });
+
+      await insertEvent(service, {
+        site_id: 'site1',
+        event_type: 'plugin_activated',
+        payload: { slug: 'test' },
+        created_at: now,
+        status: 'pending',
+      });
+
+      const health = await service.getStorageHealth('/fake/vector/path');
+
+      expect(health.graph_db.event_count).toBe(2);
+      expect(health.graph_db.size_bytes).toBeGreaterThanOrEqual(0); // In-memory DB has size 0
+      expect(health.graph_db.oldest_event).toBe(now - 10000);
+      expect(health.graph_db.newest_event).toBe(now);
+      expect(health.pending_events).toBe(1);
+      expect(health.failed_events).toBe(0);
+      expect(health.vector_db.path).toBe('/fake/vector/path');
+    });
+
+    it('should handle empty event queue', async () => {
+      const health = await service.getStorageHealth('/fake/vector/path');
+
+      expect(health.graph_db.event_count).toBe(0);
+      expect(health.graph_db.oldest_event).toBeNull();
+      expect(health.graph_db.newest_event).toBeNull();
+      expect(health.pending_events).toBe(0);
+      expect(health.failed_events).toBe(0);
+    });
+
+    it('should count failed events', async () => {
+      await insertEvent(service, {
+        site_id: 'site1',
+        event_type: 'post_created',
+        payload: {},
+        created_at: Date.now(),
+        status: 'failed',
+        error: 'Test error',
+      });
+
+      const health = await service.getStorageHealth('/fake/vector/path');
+
+      expect(health.failed_events).toBe(1);
+      expect(health.pending_events).toBe(0);
+    });
+  });
+
+  describe('detectIssues', () => {
+    beforeEach(async () => {
+      await service.upsertSite({
+        id: 'site1',
+        name: 'Test Site',
+        domain: 'test.local',
+        is_active: true,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      });
+    });
+
+    it('should detect failed events', async () => {
+      await insertEvent(service, {
+        site_id: 'site1',
+        event_type: 'post_created',
+        payload: {},
+        created_at: Date.now(),
+        status: 'failed',
+        error: 'Database connection failed',
+      });
+
+      await insertEvent(service, {
+        site_id: 'site1',
+        event_type: 'post_updated',
+        payload: {},
+        created_at: Date.now(),
+        status: 'failed',
+        error: 'Another error',
+      });
+
+      const issues = await service.detectIssues();
+
+      const failedIssue = issues.find((i: IssueData) => i.type === 'failed_events');
+      expect(failedIssue).toBeDefined();
+      expect(failedIssue?.severity).toBe('error');
+      expect(failedIssue?.count).toBe(2);
+    });
+
+    it('should detect stale sites', async () => {
+      const eightDaysAgo = Date.now() - (8 * 24 * 60 * 60 * 1000);
+
+      await service.upsertSite({
+        id: 'stale-site',
+        name: 'Stale Site',
+        domain: 'stale.local',
+        is_active: true,
+        last_sync_at: eightDaysAgo,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      });
+
+      const issues = await service.detectIssues();
+
+      const staleIssue = issues.find((i: IssueData) => i.type === 'stale_sites');
+      expect(staleIssue).toBeDefined();
+      expect(staleIssue?.severity).toBe('warning');
+      expect(staleIssue?.count).toBeGreaterThan(0);
+    });
+
+    it('should return empty array when no issues', async () => {
+      const issues = await service.detectIssues();
+      expect(issues).toEqual([]);
+    });
+
+    it('should not report pending events as issues', async () => {
+      await insertEvent(service, {
+        site_id: 'site1',
+        event_type: 'post_created',
+        payload: {},
+        created_at: Date.now(),
+        status: 'pending',
+      });
+
+      const issues = await service.detectIssues();
+
+      const pendingIssue = issues.find((i: IssueData) => i.type === 'pending_events');
+      expect(pendingIssue).toBeUndefined();
     });
   });
 });
