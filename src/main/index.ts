@@ -19,6 +19,7 @@ import { registerWpCliTools } from './mcp/modules/wp-cli/index';
 import { registerWpeTools } from './mcp/modules/wpe/index';
 import { registerCompositeTools } from './mcp/modules/composite/index';
 import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
+import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence/index';
 import { saveConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
 import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
@@ -159,6 +160,7 @@ export default function main(context: any): void {
   registerWpeTools(registry);
   registerCompositeTools(registry);
   registerWpConnectorTools(registry);
+  registerFleetIntelligenceTools(registry);
 
   // Phase 3b: Chat providers + service
   initializeProviders();
@@ -238,6 +240,8 @@ export default function main(context: any): void {
     graphService,
     eventProcessor,
     vectorDbPath: vectorDbDir,
+    serviceContainer,
+    nexusServices,
   });
 
   registerChatIpcHandlers({

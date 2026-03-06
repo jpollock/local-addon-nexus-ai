@@ -21,6 +21,9 @@ import { SearchService } from './search/SearchService';
 import { HealthScoreCalculator } from './health/HealthScoreCalculator';
 import { FilterEngine } from './search/FilterEngine';
 import { QueryStorage } from './search/QueryStorage';
+import { BulkOperationManager } from './bulk/BulkOperationManager';
+// GroupStorage no longer used — groups come from Local's native siteData
+import { HealthTrendTracker } from './health/HealthTrendTracker';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -43,14 +46,35 @@ export interface IpcHandlerDeps {
   graphService: GraphService;
   eventProcessor: EventProcessor;
   vectorDbPath: string;
+  /** Raw service container for accessing Local services directly */
+  serviceContainer?: any;
+  /** NexusServices object — mutated to add Sprint 2/3 services after creation */
+  nexusServices?: any;
 }
 
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   const {
     siteData, localServicesBridge, indexRegistry, embeddingService,
     contentPipeline, vectorStore, registryStorage, localLogger, getMcpServer,
-    graphService, eventProcessor, vectorDbPath,
+    graphService, eventProcessor, vectorDbPath, serviceContainer,
   } = deps;
+
+  /**
+   * Notify Local's main UI to refresh site groups after a mutation.
+   * moveSitesToGroup([], groupId, refetchGroups=true) is the documented way
+   * to trigger Local's sidebar refresh. We call it as a no-op to fire the event.
+   */
+  function notifyGroupsChanged(): void {
+    try {
+      const org = serviceContainer?.sitesOrganization;
+      if (!org?.moveSitesToGroup) return;
+      const groups = org.getSiteGroups?.() ?? [];
+      const defaultGroup = groups.find((g: any) => g.name === 'Sites') ?? groups[0];
+      if (defaultGroup) {
+        org.moveSitesToGroup([], defaultGroup.id, true);
+      }
+    } catch { /* best-effort */ }
+  }
 
   ipcMain.handle(IPC_CHANNELS.GET_MCP_INFO, () => {
     return getMcpServer()?.getConnectionInfo() ?? null;
@@ -500,7 +524,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         phpVersion: site?.phpVersion,
         domain: site?.domain,
       });
-      return { success: true, ...breakdown };
+      return { success: true, score: breakdown.overall, ...breakdown };
     } catch (err) {
       localLogger.error('[NexusAI] health:get-score failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
@@ -588,6 +612,206 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return { success: true, ...results };
     } catch (err) {
       localLogger.error('[NexusAI] queries:run failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Bulk Operations & Groups (Sprint 3)
+  // ---------------------------------------------------------------------------
+
+  const bulkOpManager = new BulkOperationManager({
+    contentPipeline,
+    siteDataBridge: localServicesBridge,
+    healthCalculator,
+    onProgress: (opId, status) => {
+      try {
+        // Stream progress to all renderer windows
+        const { BrowserWindow } = require('electron');
+        const windows = BrowserWindow.getAllWindows();
+        for (const win of windows) {
+          win.webContents.send(IPC_CHANNELS.BULK_PROGRESS, opId, status);
+        }
+      } catch {
+        // Ignore if no windows
+      }
+    },
+  });
+
+  // Site groups use Local's native siteData service via localServicesBridge
+
+  // Wire Sprint 2/3 services into NexusServices so MCP tools can use them
+  if (deps.nexusServices) {
+    deps.nexusServices.searchService = searchService;
+    deps.nexusServices.healthCalculator = healthCalculator;
+    deps.nexusServices.filterEngine = filterEngine;
+    deps.nexusServices.bulkOpManager = bulkOpManager;
+  }
+
+  let healthTrendTracker: HealthTrendTracker | null = null;
+  try {
+    const db = graphService.getDb();
+    if (db) {
+      healthTrendTracker = new HealthTrendTracker(db);
+    }
+  } catch {
+    localLogger.error('[NexusAI] Failed to init HealthTrendTracker');
+  }
+
+  // --- Bulk Operations ---
+
+  ipcMain.handle(IPC_CHANNELS.BULK_EXECUTE, async (_event: any, request: any) => {
+    try {
+      const opId = await bulkOpManager.execute(request);
+      return { success: true, opId };
+    } catch (err) {
+      localLogger.error('[NexusAI] bulk:execute failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.BULK_STATUS, async (_event: any, opId: string) => {
+    const status = bulkOpManager.getStatus(opId);
+    return status ? { success: true, ...status } : { success: false, error: 'Operation not found' };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.BULK_CANCEL, async (_event: any, opId: string) => {
+    return { success: bulkOpManager.cancel(opId) };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.BULK_LIST, async () => {
+    return { success: true, operations: bulkOpManager.listAll() };
+  });
+
+  // --- Site Groups (Local native) ---
+
+  ipcMain.handle(IPC_CHANNELS.GROUPS_LIST, async () => {
+    try {
+      const groups = localServicesBridge.getSiteGroups();
+      return { success: true, groups };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.GROUPS_CREATE, async (_event: any, args: { name: string }) => {
+    try {
+      const group = localServicesBridge.createSiteGroup(args.name);
+      notifyGroupsChanged();
+      return { success: true, group };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: any, id: string, changes: { name?: string }) => {
+    try {
+      if (changes.name) {
+        const group = localServicesBridge.renameSiteGroup(id, changes.name);
+        notifyGroupsChanged();
+        return { success: true, group };
+      }
+      return { success: false, error: 'No changes specified' };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.GROUPS_DELETE, async (_event: any, id: string) => {
+    try {
+      localServicesBridge.deleteSiteGroup(id);
+      notifyGroupsChanged();
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: any, groupId: string, siteId: string) => {
+    try {
+      localServicesBridge.moveSitesToGroup([siteId], groupId);
+      notifyGroupsChanged();
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: any, groupId: string, siteId: string) => {
+    try {
+      localServicesBridge.removeSitesFromGroups([siteId]);
+      notifyGroupsChanged();
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // --- Health Trends ---
+
+  ipcMain.handle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: any, siteId: string, days?: number) => {
+    if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
+    return { success: true, trend: healthTrendTracker.getSiteTrend(siteId, days || 30) };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: any, days?: number) => {
+    if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
+    return { success: true, trend: healthTrendTracker.getFleetTrend(days || 30) };
+  });
+
+  // --- Dashboard v2 ---
+
+  ipcMain.handle(IPC_CHANNELS.DASHBOARD_V2_STATS, async () => {
+    try {
+      // Health distribution
+      const allEntries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
+      const siteIds = allEntries.map((e: any) => e.siteId);
+      const siteInfoMap: Record<string, any> = {};
+
+      const allSites = siteData.getSites();
+      for (const siteId of siteIds) {
+        const site = allSites[siteId];
+        if (site) {
+          siteInfoMap[siteId] = { domain: site.domain || '', phpVersion: site.phpVersion || '8.0' };
+        }
+      }
+
+      const scores = await healthCalculator.calculateAllScores(siteIds, siteInfoMap);
+      let healthy = 0, warning = 0, critical = 0;
+      for (const score of Object.values(scores)) {
+        if ((score as number) >= 80) healthy++;
+        else if ((score as number) >= 50) warning++;
+        else critical++;
+      }
+
+      // Action items from smart filters
+      const filters = await filterEngine.getFilterCounts();
+      const actionItems = filters
+        .filter((f: any) => f.count > 0)
+        .map((f: any) => ({ filterId: f.id, label: f.label, count: f.count, severity: f.severity }));
+
+      // Group summaries (from Local's native groups)
+      const groups = localServicesBridge.getSiteGroups();
+      const groupSummaries = groups.map((g: any) => {
+        const groupScores = g.siteIds.map((id: string) => scores[id] || 0).filter((s: number) => s > 0);
+        const avgHealth = groupScores.length > 0
+          ? Math.round(groupScores.reduce((a: number, b: number) => a + b, 0) / groupScores.length)
+          : 0;
+        return { groupId: g.id, name: g.name, siteCount: g.siteIds.length, avgHealth };
+      });
+
+      // Recent bulk ops
+      const recentBulkOps = bulkOpManager.listAll().slice(0, 5);
+
+      return {
+        success: true,
+        healthDistribution: { healthy, warning, critical },
+        actionItems,
+        groupSummaries,
+        recentBulkOps,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] dashboard:v2-stats failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
     }
   });

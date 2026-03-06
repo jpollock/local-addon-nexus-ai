@@ -15,6 +15,8 @@ import { UnifiedSearchPanel } from './UnifiedSearchPanel';
 import { SmartFiltersPanel } from './SmartFiltersPanel';
 import { SavedQueriesPanel } from './SavedQueriesPanel';
 import { SiteHealthBadge } from './SiteHealthBadge';
+import { BulkOperationsPanel } from './BulkOperationsPanel';
+import { SiteGroupsPanel } from './SiteGroupsPanel';
 
 interface FleetOverviewProps {
   NavLink: any;
@@ -813,6 +815,18 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
       ),
 
       this.renderMcpPanel(),
+
+      // Sprint 3: Fleet Operations
+      this.renderSectionLabel('Fleet Operations'),
+      React.createElement('div', {
+        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' },
+      },
+        React.createElement(SiteGroupsPanel, {
+          electron: this.props.electron,
+          sites: this.state.sites.map(s => ({ id: s.id, name: s.name, domain: s.domain })),
+        }),
+        React.createElement(BulkOperationsPanel, { electron: this.props.electron }),
+      ),
     );
   }
 
