@@ -836,39 +836,38 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         const site = allSites[id];
         if (!site) continue;
 
-        const isRunning = statuses[id] === 'running';
+        const siteStatus = statuses[id] ?? 'unknown';
         let aiPlugin: 'active' | 'inactive' | 'not_installed' = 'not_installed';
         let ollamaProvider: 'active' | 'inactive' | 'not_installed' = 'not_installed';
         let credentialsSynced = false;
         const providers: string[] = [];
 
-        if (isRunning) {
-          try {
-            const plugins = await localServicesBridge.getPlugins(id);
-            const ai = plugins.find((p: any) => p.name === 'ai');
-            if (ai) {
-              aiPlugin = ai.status === 'active' ? 'active' : 'inactive';
-            }
-            const ollama = plugins.find((p: any) => p.name === 'ai-provider-for-ollama');
-            if (ollama) {
-              ollamaProvider = ollama.status === 'active' ? 'active' : 'inactive';
-            }
-
-            // Check if credentials are synced by looking at wp_options
-            const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-            for (const [provider, key] of Object.entries(storedKeys)) {
-              if (key) providers.push(provider);
-            }
-            credentialsSynced = providers.length > 0;
-          } catch {
-            // Site may not be accessible
+        // Always try to get plugin data — WP-CLI will fail naturally if site isn't running
+        try {
+          const plugins = await localServicesBridge.getPlugins(id);
+          const ai = plugins.find((p: any) => p.name === 'ai');
+          if (ai) {
+            aiPlugin = ai.status === 'active' ? 'active' : 'inactive';
           }
+          const ollama = plugins.find((p: any) => p.name === 'ai-provider-for-ollama');
+          if (ollama) {
+            ollamaProvider = ollama.status === 'active' ? 'active' : 'inactive';
+          }
+
+          // Check if credentials are synced by looking at stored keys
+          const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+          for (const [provider, key] of Object.entries(storedKeys)) {
+            if (key) providers.push(provider);
+          }
+          credentialsSynced = providers.length > 0;
+        } catch {
+          // Site may not be accessible — defaults remain
         }
 
         results[id] = {
           siteId: id,
           siteName: site.name,
-          isRunning,
+          isRunning: siteStatus === 'running',
           aiPlugin,
           ollamaProvider,
           credentialsSynced,
