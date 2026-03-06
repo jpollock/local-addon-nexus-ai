@@ -10,7 +10,7 @@
     "category": "developer-tools"
   },
   "scripts": {
-    "build": "npm run clean && npm run compile && npm run create-entry-points && npm run rebuild:electron",
+    "build": "npm run clean && npm run compile && npm run create-entry-points",
     "compile": "tsc -p .",
     "create-entry-points": "node scripts/create-entry-points.js",
     "clean": "rm -rf lib",

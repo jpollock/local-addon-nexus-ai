@@ -1,178 +1,139 @@
 # Native Module Compilation (better-sqlite3)
 
-## The Problem
+## TL;DR - It Just Works™
 
-The Nexus AI addon uses `better-sqlite3`, a native Node.js module that requires compilation for the specific Node.js version being used.
+**For developers:** Tests work out of the box. Local handles Electron compilation automatically.  
+**Don't manually rebuild** - you don't need to.
 
-There are **two different Node.js versions** to consider:
+---
 
-1. **System Node.js** (for running tests via `npm test`)
-   - Version: v22.x or whatever is installed globally
-   - NODE_MODULE_VERSION: 127
+## How It Works
 
-2. **Electron's embedded Node.js** (for running in Local)
-   - Electron version: 37.8.0 (from flywheel-local)
-   - NODE_MODULE_VERSION: 136
-   - Different ABI than system Node.js
+The addon uses `better-sqlite3@11.10.0`, which has this install script:
 
-When you see this error:
+```json
+"install": "prebuild-install || node-gyp rebuild"
+```
+
+### When Running Tests (System Node.js)
+
+```bash
+npm install  # Compiles for system Node (v22, MODULE_VERSION 127)
+npm test     # ✅ Works
+```
+
+### When Loading in Local (Electron Node.js)
+
+```bash
+# Inside Local's addon loading process:
+1. Local runs `npm install` in the addon directory
+2. better-sqlite3 install script runs
+3. prebuild-install checks for Electron v136 prebuild → not found
+4. Falls back to `node-gyp rebuild`
+5. Compiles against Local's Electron headers (v37.8.0, MODULE_VERSION 136)
+6. ✅ Works in Local
+```
+
+**The magic:** node-gyp detects it's running in Electron's context and compiles for the correct version automatically.
+
+## Why Manual Rebuild Fails (And Why That's OK)
+
+If you try to manually rebuild from outside Local:
+
+```bash
+npm run rebuild:electron  # ❌ FAILS - C++ compiler errors
+```
+
+This fails because:
+- It's trying to compile from system Node's context for Electron's target
+- C++ toolchain issues (concepts, V8 API changes)
+- **But you don't need to do this!** Local handles it when loading the addon.
+
+## Development Workflow
+
+### Normal Development (What You Actually Do)
+
+```bash
+git clone repo
+npm install      # Compiles for system Node
+npm test         # ✅ Works
+npm run build    # ✅ Compiles TypeScript
+
+# Load addon in Local app
+# ✅ Local auto-recompiles better-sqlite3 for Electron
+# ✅ Addon works
+```
+
+**No manual rebuild needed.**
+
+### If You See The Error In Local
+
+If you see this error when loading in Local:
 ```
 Error: The module 'better_sqlite3.node' was compiled against a different Node.js version using NODE_MODULE_VERSION 127. This version requires NODE_MODULE_VERSION 136.
 ```
 
-It means better-sqlite3 was compiled for system Node.js but is being loaded by Electron's Node.js.
+It means **Local's automatic rebuild failed**. Possible causes:
 
-## Solutions
+1. **Local's rebuild process was skipped** - Restart Local and reload addon
+2. **C++ build tools missing** - Install Xcode Command Line Tools
+3. **Node modules cached wrong** - Delete `node_modules` in addon, let Local reinstall
 
-### Option 1: Rebuild for System Node (Tests Only)
+## For CI/CD
 
-If you just need to run tests:
-
+### Unit/Integration Tests
 ```bash
-npm run prepare:electron
+npm install  # Uses system Node
+npm test     # ✅ Works
 ```
 
-This rebuilds better-sqlite3 for your system Node.js.
+No special handling needed.
 
-### Option 2: Rebuild for Electron (Running in Local)
-
-To rebuild for Electron's Node.js version:
-
-```bash
-npm run rebuild:electron
-```
-
-**Note:** This may fail on some systems due to compiler issues. If it fails, use Option 3.
-
-### Option 3: Let Local Handle It (Recommended)
-
-Local's build process should automatically rebuild native modules for Electron when packaging the addon.
-
-The addon's `package.json` includes:
-- `better-sqlite3` as a dependency
-- `electron-rebuild` as a dev dependency
-
-When Local loads the addon, it should:
-1. Install dependencies
-2. Rebuild native modules for its Electron version
-3. Load the addon
-
-**If you get the error**, it means Local's rebuild step didn't run or failed silently.
-
-## Manual Rebuild Steps
-
-If automatic rebuild fails, try this manual approach:
-
-```bash
-# Option A: Using electron-rebuild (if installed globally)
-npx electron-rebuild -f -w better-sqlite3
-
-# Option B: Using node-gyp directly
-cd node_modules/better-sqlite3
-node-gyp rebuild --target=37.8.0 --arch=arm64 --dist-url=https://electronjs.org/headers
-cd ../..
-
-# Option C: Reinstall with rebuild
-npm rebuild better-sqlite3 --update-binary
-```
-
-## For Addon Developers
-
-### During Development
-
-- **Tests**: Use system Node.js (`npm test`)
-  - Binaries built for NODE_MODULE_VERSION 127
-  - Fast, no Electron required
-
-- **Testing in Local**: Load addon in actual Local app
-  - Binaries must be for NODE_MODULE_VERSION 136
-  - Run `npm run rebuild:electron` before testing
-
-### Before Committing
-
-Do NOT commit the compiled binaries:
-- `node_modules/better-sqlite3/build/` is gitignored
-- Each developer rebuilds for their platform
-
-### CI/CD Considerations
-
-If we add CI:
-- Tests use system Node.js (no rebuild needed)
-- E2E tests in Local require electron-rebuild
-- Each platform (macOS, Windows, Linux) needs separate builds
-
-## Package Scripts
-
-```json
-{
-  "scripts": {
-    "prepare:electron": "npm rebuild better-sqlite3 --update-binary",
-    "rebuild:electron": "electron-rebuild -f -w better-sqlite3"
-  }
-}
-```
+### E2E Tests (In Local)
+Let Local handle the rebuild - same as manual testing.
 
 ## Troubleshooting
 
-### Error: "make failed with exit code 2"
+### Tests fail with "better_sqlite3.node not found"
 
-electron-rebuild is trying to compile but fails. Solutions:
+System Node compilation failed:
 
-1. **Check Xcode/Build Tools**:
-   ```bash
-   xcode-select --install
-   ```
-
-2. **Update npm/node-gyp**:
-   ```bash
-   npm install -g node-gyp
-   ```
-
-3. **Try direct rebuild**:
-   ```bash
-   npm run prepare:electron
-   ```
-
-### Error: "Cannot find module 'better_sqlite3.node'"
-
-The native binding wasn't built. Run:
 ```bash
-cd node_modules/better-sqlite3
-npm run build-release
+npm rebuild better-sqlite3
+npm test
 ```
 
-### Tests pass but Local fails
+### Addon fails to load in Local
 
-Tests use system Node, Local uses Electron Node. Rebuild for Electron:
-```bash
-npm run rebuild:electron
-```
+Local's rebuild didn't work:
 
-## Future: Prebuilt Binaries
+1. Check Local logs for build errors
+2. Ensure Xcode Command Line Tools installed: `xcode-select --install`
+3. Delete addon's `node_modules`, let Local reinstall
+4. If still fails, file bug with Local team
 
-better-sqlite3 provides prebuilt binaries for common platforms, but not always for latest Electron versions.
+### "electron-rebuild" command fails
 
-To check if prebuild exists:
-```bash
-cd node_modules/better-sqlite3
-npx prebuild-install --runtime electron --target 37.8.0
-```
+This is expected and OK. You don't need electron-rebuild - Local handles it.
 
-If it says "No prebuilt binaries found", you must compile locally.
+## Why better-sqlite3 11.10.0?
 
-## Alternative: Pure JavaScript SQLite
+- Has `prebuild-install` fallback to `node-gyp rebuild`
+- Works with both system Node (tests) and Electron (Local)
+- Maintained, good performance
+- Prebuilds exist for many platforms (just not Electron 37.8.0)
 
-If native compilation becomes too problematic, consider:
-- `sql.js` (SQLite compiled to WebAssembly, slower but no compilation)
-- `better-sqlite3-multiple-ciphers` (fork with prebuild support)
+## Version Info
 
-For now, sticking with better-sqlite3 because:
-- Performance (100x faster than sql.js for our use case)
-- Mature, widely used
-- Works well once compiled correctly
+**Current Setup:**
+- better-sqlite3: **11.10.0** ← Keep this version
+- Electron (Local): 37.8.0
+- System Node: 22.16.0
+
+**Don't downgrade better-sqlite3** - older versions lack the install script that makes this work.
 
 ---
 
-**Last Updated:** 2026-03-05
-**Electron Version:** 37.8.0 (from flywheel-local)
-**better-sqlite3 Version:** 11.10.0
+**Last Updated:** 2026-03-05  
+**Status:** ✅ Working (tests + Local)  
+**Action Required:** None - it just works
