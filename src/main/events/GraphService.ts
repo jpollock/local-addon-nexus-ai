@@ -11,6 +11,9 @@ import {
   User,
   Relationship,
   GraphStats,
+  EventQueueEntry,
+  EventStatsData,
+  EventType,
 } from './types';
 
 export interface GraphServiceOptions {
@@ -541,6 +544,106 @@ export class GraphService {
       total_users: userCount.count,
       total_relationships: relCount.count,
       storage_size_bytes: 0, // Not site-specific
+    };
+  }
+
+  // ===== Event Queue Queries (Sprint 1) =====
+
+  /**
+   * Get recent events from event_queue with optional filtering
+   */
+  async getRecentEvents(options?: {
+    limit?: number;
+    filter?: EventType;
+    status?: 'pending' | 'processed' | 'failed';
+    siteId?: string;
+  }): Promise<EventQueueEntry[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const limit = options?.limit ?? 50;
+    const params: any[] = [];
+    let query = 'SELECT * FROM event_queue WHERE 1=1';
+
+    if (options?.filter) {
+      query += ' AND event_type = ?';
+      params.push(options.filter);
+    }
+
+    if (options?.status) {
+      query += ' AND status = ?';
+      params.push(options.status);
+    }
+
+    if (options?.siteId) {
+      query += ' AND site_id = ?';
+      params.push(options.siteId);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT ?';
+    params.push(limit);
+
+    const rows = this.db.prepare(query).all(...params) as any[];
+
+    return rows.map(row => ({
+      id: row.id,
+      site_id: row.site_id,
+      event_type: row.event_type,
+      payload: JSON.parse(row.payload),
+      status: row.status,
+      created_at: row.created_at,
+      processed_at: row.processed_at,
+      error: row.error,
+      retry_count: row.retry_count,
+    }));
+  }
+
+  /**
+   * Get event statistics for dashboard
+   */
+  async getEventStats(timeRange?: {
+    startTimestamp?: number;
+    endTimestamp?: number;
+  }): Promise<EventStatsData> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Total events
+    const totalRow = this.db.prepare('SELECT COUNT(*) as count FROM event_queue').get() as { count: number };
+
+    // Pending and failed
+    const pendingRow = this.db.prepare('SELECT COUNT(*) as count FROM event_queue WHERE status = ?').get('pending') as { count: number };
+    const failedRow = this.db.prepare('SELECT COUNT(*) as count FROM event_queue WHERE status = ?').get('failed') as { count: number };
+
+    // Today and yesterday
+    const now = Date.now();
+    const todayStart = new Date(now).setHours(0, 0, 0, 0);
+    const yesterdayStart = todayStart - (24 * 60 * 60 * 1000);
+    const yesterdayEnd = todayStart;
+
+    const todayRow = this.db
+      .prepare('SELECT COUNT(*) as count FROM event_queue WHERE created_at >= ?')
+      .get(todayStart) as { count: number };
+
+    const yesterdayRow = this.db
+      .prepare('SELECT COUNT(*) as count FROM event_queue WHERE created_at >= ? AND created_at < ?')
+      .get(yesterdayStart, yesterdayEnd) as { count: number };
+
+    // Group by type
+    const byTypeRows = this.db
+      .prepare('SELECT event_type, COUNT(*) as count FROM event_queue GROUP BY event_type')
+      .all() as Array<{ event_type: EventType; count: number }>;
+
+    const byType: Record<EventType, number> = {} as any;
+    for (const row of byTypeRows) {
+      byType[row.event_type] = row.count;
+    }
+
+    return {
+      total: totalRow.count,
+      today: todayRow.count,
+      yesterday: yesterdayRow.count,
+      pending: pendingRow.count,
+      failed: failedRow.count,
+      by_type: byType,
     };
   }
 
