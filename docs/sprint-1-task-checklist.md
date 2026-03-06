@@ -277,38 +277,38 @@
 **Goal:** Build storage visualization and cleanup
 
 **Tasks:**
-- [ ] **T7.1** Create `src/renderer/components/StorageHealthPanel.tsx`
+- [x] **T7.1** Create `src/renderer/components/StorageHealthPanel.tsx`
   - Class-based component
   - Props: electron, autoRefresh
   - State: health, loading, cleaning, optimizing, error
   - **Estimated:** 2 hours
 
-- [ ] **T7.2** Implement storage fetching
+- [x] **T7.2** Implement storage fetching
   - IPC call to `nexus-ai:storage:get-health`
   - Auto-refresh every 60s if enabled
   - **Estimated:** 1 hour
 
-- [ ] **T7.3** Implement storage visualization
+- [x] **T7.3** Implement storage visualization
   - Progress bars for graph DB and vector DB
   - Percentage labels
   - Warning color if >75%
   - Event count and date range
   - **Estimated:** 2.5 hours
 
-- [ ] **T7.4** Implement cleanup action
+- [x] **T7.4** Implement cleanup action
   - "Cleanup Old Events" button
   - IPC call to `nexus-ai:storage:cleanup`
   - Show loading state
   - Show success message
   - **Estimated:** 1.5 hours
 
-- [ ] **T7.5** Implement optimize action
+- [x] **T7.5** Implement optimize action
   - "Optimize Databases" button
   - IPC call (if we add it)
   - Show loading state
   - **Estimated:** 1 hour
 
-- [ ] **T7.6** Write unit tests
+- [x] **T7.6** Write unit tests
   - Test rendering with mock data
   - Test cleanup action
   - Test optimize action
@@ -471,7 +471,7 @@
 **Week 2 UI:** 54 hours (6.7 days)
 - Day 5: EventStatsCards (8h) ✅
 - Day 6: EventTimeline (9h)
-- Day 7: StorageHealthPanel (9.5h)
+- Day 7: StorageHealthPanel (9.5h) ✅
 - Day 8: TopIssuesPanel (9h)
 - Day 9: FleetOverview integration (8h)
 - Day 10: E2E tests & polish (10.5h)
@@ -532,12 +532,12 @@
 - ⬜ T6.5 Unit tests
 
 **Day 7: StorageHealthPanel**
-- ⬜ T7.1 Component scaffold
-- ⬜ T7.2 Fetching logic
-- ⬜ T7.3 Visualization
-- ⬜ T7.4 Cleanup action
-- ⬜ T7.5 Optimize action
-- ⬜ T7.6 Unit tests
+- ✅ T7.1 Component scaffold
+- ✅ T7.2 Fetching logic
+- ✅ T7.3 Visualization
+- ✅ T7.4 Cleanup action
+- ✅ T7.5 Optimize action
+- ✅ T7.6 Unit tests
 
 **Day 8: TopIssuesPanel**
 - ⬜ T8.1 Component scaffold
