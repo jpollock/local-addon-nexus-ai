@@ -12,7 +12,11 @@ import type { EmbeddingService } from './embeddings/EmbeddingService';
 import type { VectorStore } from './vector-store/VectorStore';
 import type { McpServer } from './mcp/McpServer';
 import type { LocalServicesBridge } from './mcp/local-services-bridge';
+import type { GraphService } from './events/GraphService';
+import type { EventProcessor } from './events/EventProcessor';
 import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
+import { generateEventSummary } from './events/event-summary';
+import type { EventTimelineEntry, EventStats } from '../common/types';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -32,12 +36,16 @@ export interface IpcHandlerDeps {
   registryStorage: RegistryStorage;
   localLogger: any;
   getMcpServer: () => McpServer | null;
+  graphService: GraphService;
+  eventProcessor: EventProcessor;
+  vectorDbPath: string;
 }
 
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   const {
     siteData, localServicesBridge, indexRegistry, embeddingService,
     contentPipeline, vectorStore, registryStorage, localLogger, getMcpServer,
+    graphService, eventProcessor, vectorDbPath,
   } = deps;
 
   ipcMain.handle(IPC_CHANNELS.GET_MCP_INFO, () => {
@@ -301,6 +309,119 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         acfAbilities: 'failed' as const,
         message: (err as Error).message,
       };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Event Tracking & Visibility (Sprint 1)
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(IPC_CHANNELS.EVENTS_GET_TIMELINE, async (_event: any, options?: {
+    limit?: number;
+    filter?: string;
+    status?: 'pending' | 'processed' | 'failed';
+    siteId?: string;
+  }) => {
+    try {
+      const events = await graphService.getRecentEvents(options as any);
+
+      // Transform to renderer-safe format with site names
+      const timeline: EventTimelineEntry[] = events.map(e => {
+        const site = siteData.getSite(e.site_id);
+        return {
+          id: e.id,
+          siteId: e.site_id,
+          siteName: site?.name ?? e.site_id,
+          eventType: e.event_type,
+          timestamp: e.created_at,
+          status: e.status,
+          summary: generateEventSummary(e),
+          details: e.payload,
+        };
+      });
+
+      return { success: true, events: timeline };
+    } catch (err) {
+      localLogger.error('[NexusAI] events:get-timeline failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message, events: [] };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.EVENTS_GET_STATS, async () => {
+    try {
+      const stats = await graphService.getEventStats();
+
+      // Determine health status
+      let healthStatus: 'good' | 'warning' | 'error' = 'good';
+      if (stats.failed > 0) {
+        healthStatus = 'error';
+      } else if (stats.pending > 10) {
+        healthStatus = 'warning';
+      }
+
+      const eventStats: EventStats = {
+        total: stats.total,
+        today: stats.today,
+        yesterday: stats.yesterday,
+        pending: stats.pending,
+        failed: stats.failed,
+        byType: stats.by_type as Record<string, number>,
+        healthStatus,
+      };
+
+      return { success: true, stats: eventStats };
+    } catch (err) {
+      localLogger.error('[NexusAI] events:get-stats failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.STORAGE_GET_HEALTH, async () => {
+    try {
+      // vectorDbPath is passed as a dep
+      const health = await graphService.getStorageHealth(vectorDbPath);
+
+      return { success: true, health };
+    } catch (err) {
+      localLogger.error('[NexusAI] storage:get-health failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ISSUES_DETECT, async () => {
+    try {
+      const issues = await graphService.detectIssues();
+      return { success: true, issues };
+    } catch (err) {
+      localLogger.error('[NexusAI] issues:detect failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message, issues: [] };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.STORAGE_CLEANUP, async (_event: any, options?: {
+    retentionDays?: number;
+  }) => {
+    try {
+      const retentionDays = options?.retentionDays ?? 30;
+      const deleted = await graphService.cleanupOldData(retentionDays);
+
+      localLogger.info(`[NexusAI] Cleaned up ${deleted} old events (retention: ${retentionDays} days)`);
+      return { success: true, deletedCount: deleted.events };
+    } catch (err) {
+      localLogger.error('[NexusAI] storage:cleanup failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.EVENTS_RETRY_FAILED, async () => {
+    try {
+      const count = await eventProcessor.retryFailed();
+
+      localLogger.info(`[NexusAI] Retrying ${count} failed events`);
+      return { success: true, retriedCount: count };
+    } catch (err) {
+      localLogger.error('[NexusAI] events:retry-failed failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
     }
   });
 }

@@ -652,10 +652,16 @@ export class GraphService {
 
   // ===== Cleanup =====
 
-  async cleanupOldData(retentionDays: number): Promise<{ sites: number; content: number }> {
+  async cleanupOldData(retentionDays: number): Promise<{ sites: number; content: number; events: number }> {
     if (!this.db) throw new Error('Database not initialized');
 
     const cutoffTime = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+
+    // Delete old processed events from event_queue
+    const deletedEventsResult = this.db
+      .prepare('DELETE FROM event_queue WHERE status = ? AND created_at < ?')
+      .run('processed', cutoffTime);
+    const deletedEvents = deletedEventsResult.changes;
 
     // Only delete inactive sites
     const deletedSites = this.db
@@ -681,6 +687,7 @@ export class GraphService {
     return {
       sites: deletedSites.length,
       content: deletedContent,
+      events: deletedEvents,
     };
   }
 

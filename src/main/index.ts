@@ -235,6 +235,9 @@ export default function main(context: any): void {
     registryStorage,
     localLogger,
     getMcpServer: () => mcpServer,
+    graphService,
+    eventProcessor,
+    vectorDbPath: vectorDbDir,
   });
 
   registerChatIpcHandlers({
