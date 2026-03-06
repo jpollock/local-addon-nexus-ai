@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS event_queue (
   retry_count INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_event_status ON event_queue(status);
+CREATE INDEX IF NOT EXISTS idx_event_type ON event_queue(event_type);
 CREATE INDEX IF NOT EXISTS idx_event_site_created ON event_queue(site_id, created_at);
 
 CREATE TABLE IF NOT EXISTS sites (

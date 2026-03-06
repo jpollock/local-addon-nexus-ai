@@ -222,3 +222,64 @@ export interface NexusSettings {
   chatProvider?: ChatProvider;
   chatModel?: string;      // Model name within provider
 }
+
+// ===== Sprint 1: Visibility Types (Renderer-Safe) =====
+
+/**
+ * Event timeline entry for UI display
+ */
+export interface EventTimelineEntry {
+  id: number;
+  siteId: string;
+  siteName: string;
+  eventType: string;
+  timestamp: number;
+  status: 'pending' | 'processed' | 'failed';
+  summary: string;
+  details: any;
+}
+
+/**
+ * Event statistics for dashboard
+ */
+export interface EventStats {
+  total: number;
+  today: number;
+  yesterday: number;
+  pending: number;
+  failed: number;
+  byType: Record<string, number>;
+  healthStatus: 'good' | 'warning' | 'error';
+}
+
+/**
+ * Storage health for visualization
+ */
+export interface StorageHealth {
+  graphDb: {
+    sizeBytes: number;
+    path: string;
+    eventCount: number;
+    oldestEvent: number | null;
+    newestEvent: number | null;
+  };
+  vectorDb: {
+    sizeBytes: number;
+    path: string;
+    tableCount: number;
+  };
+  pendingEvents: number;
+  failedEvents: number;
+}
+
+/**
+ * Issue for proactive alerts
+ */
+export interface Issue {
+  id: string;
+  type: string;
+  severity: 'warning' | 'error';
+  title: string;
+  description: string;
+  count: number;
+}
