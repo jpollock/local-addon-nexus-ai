@@ -17,6 +17,10 @@ import type { EventProcessor } from './events/EventProcessor';
 import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
 import { generateEventSummary } from './events/event-summary';
 import type { EventTimelineEntry, EventStats } from '../common/types';
+import { SearchService } from './search/SearchService';
+import { HealthScoreCalculator } from './health/HealthScoreCalculator';
+import { FilterEngine } from './search/FilterEngine';
+import { QueryStorage } from './search/QueryStorage';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -439,6 +443,151 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return { success: true, retriedCount: count };
     } catch (err) {
       localLogger.error('[NexusAI] events:retry-failed failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Search & Discovery (Sprint 2)
+  // ---------------------------------------------------------------------------
+
+  const searchService = new SearchService(vectorStore, graphService, embeddingService, indexRegistry);
+  const healthCalculator = new HealthScoreCalculator({ graphService, indexRegistry, siteDataBridge: siteData });
+  const filterEngine = new FilterEngine({ graphService, indexRegistry, siteDataBridge: siteData });
+
+  // Determine query storage path (alongside vector DB)
+  const queryStoragePath = vectorDbPath.replace(/\/vectors\/?$/, '');
+  const queryStorage = new QueryStorage(queryStoragePath);
+  queryStorage.load().catch(err => localLogger.error('[NexusAI] Failed to load saved queries:', err.message));
+
+  // Unified search
+  ipcMain.handle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, query: string, filters?: any, options?: any) => {
+    try {
+      const results = await searchService.searchFleet(query, filters, options);
+      return { success: true, ...results };
+    } catch (err) {
+      localLogger.error('[NexusAI] search:unified failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message, results: [], total: 0 };
+    }
+  });
+
+  // Smart filters
+  ipcMain.handle(IPC_CHANNELS.FILTERS_GET_COUNTS, async () => {
+    try {
+      const filters = await filterEngine.getFilterCounts();
+      return { success: true, filters };
+    } catch (err) {
+      localLogger.error('[NexusAI] filters:get-counts failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message, filters: [] };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FILTERS_APPLY, async (_event: any, filterId: string) => {
+    try {
+      const siteIds = await filterEngine.applyFilter(filterId);
+      return { success: true, siteIds };
+    } catch (err) {
+      localLogger.error('[NexusAI] filters:apply failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message, siteIds: [] };
+    }
+  });
+
+  // Health scores
+  ipcMain.handle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: any, siteId: string) => {
+    try {
+      const site = siteData.getSite(siteId);
+      const breakdown = await healthCalculator.calculateScore(siteId, {
+        phpVersion: site?.phpVersion,
+        domain: site?.domain,
+      });
+      return { success: true, ...breakdown };
+    } catch (err) {
+      localLogger.error('[NexusAI] health:get-score failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.HEALTH_GET_ALL_SCORES, async () => {
+    try {
+      const allSites = siteData.getSites();
+      const siteIds = Object.keys(allSites);
+      const siteInfoMap: Record<string, { phpVersion?: string; domain?: string }> = {};
+      for (const id of siteIds) {
+        const s = allSites[id];
+        siteInfoMap[id] = { phpVersion: s?.phpVersion, domain: s?.domain };
+      }
+      const scores = await healthCalculator.calculateAllScores(siteIds, siteInfoMap);
+      return { success: true, scores };
+    } catch (err) {
+      localLogger.error('[NexusAI] health:get-all-scores failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message, scores: {} };
+    }
+  });
+
+  // Saved queries
+  ipcMain.handle(IPC_CHANNELS.QUERIES_LIST, async () => {
+    try {
+      const queries = queryStorage.list();
+      return { success: true, queries };
+    } catch (err) {
+      localLogger.error('[NexusAI] queries:list failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message, queries: [] };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUERIES_CREATE, async (_event: any, query: any) => {
+    try {
+      const saved = await queryStorage.save(query);
+      return { success: true, query: saved };
+    } catch (err) {
+      localLogger.error('[NexusAI] queries:create failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: any, id: string, changes: any) => {
+    try {
+      const updated = await queryStorage.update(id, changes);
+      return { success: true, query: updated };
+    } catch (err) {
+      localLogger.error('[NexusAI] queries:update failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUERIES_DELETE, async (_event: any, id: string) => {
+    try {
+      await queryStorage.delete(id);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] queries:delete failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.QUERIES_RUN, async (_event: any, id: string) => {
+    try {
+      const query = queryStorage.get(id);
+      if (!query) {
+        return { success: false, error: 'Query not found' };
+      }
+
+      const results = await searchService.searchFleet(
+        query.filters.searchText || '',
+        {
+          contentTypes: query.filters.contentTypes,
+          siteIds: query.filters.siteIds,
+        }
+      );
+
+      await queryStorage.update(id, {
+        lastRun: Date.now(),
+        resultCount: results.total,
+      });
+
+      return { success: true, ...results };
+    } catch (err) {
+      localLogger.error('[NexusAI] queries:run failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
     }
   });

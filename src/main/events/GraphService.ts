@@ -792,4 +792,154 @@ export class GraphService {
 
     return issues;
   }
+
+  /**
+   * Search plugins by name or slug across all sites
+   */
+  async searchPlugins(query: string): Promise<Array<{
+    siteId: string;
+    siteName: string;
+    type: 'plugin';
+    title: string;
+    excerpt: string;
+    metadata: Record<string, any>;
+    score: number;
+    lastUpdated: number;
+  }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const lowerQuery = query.toLowerCase();
+
+    const rows = this.db.prepare(`
+      SELECT p.*, s.name as site_name
+      FROM plugins p
+      JOIN sites s ON p.site_id = s.id
+      WHERE LOWER(p.name) LIKE ? OR LOWER(p.slug) LIKE ?
+      ORDER BY p.updated_at DESC
+      LIMIT 50
+    `).all(`%${lowerQuery}%`, `%${lowerQuery}%`) as any[];
+
+    return rows.map(row => ({
+      siteId: row.site_id,
+      siteName: row.site_name,
+      type: 'plugin' as const,
+      title: row.name,
+      excerpt: `${row.slug} • Version ${row.version || 'unknown'} • ${row.is_active ? 'Active' : 'Inactive'}`,
+      metadata: {
+        slug: row.slug,
+        version: row.version,
+        is_active: row.is_active,
+        author: row.author,
+      },
+      score: this.calculateTextScore(lowerQuery, row.name.toLowerCase(), row.slug.toLowerCase()),
+      lastUpdated: row.updated_at,
+    }));
+  }
+
+  /**
+   * Search themes by name or slug across all sites
+   * Note: Themes not currently tracked in GraphService, return empty for now
+   */
+  async searchThemes(query: string): Promise<Array<{
+    siteId: string;
+    siteName: string;
+    type: 'theme';
+    title: string;
+    excerpt: string;
+    metadata: Record<string, any>;
+    score: number;
+    lastUpdated: number;
+  }>> {
+    // Themes not yet tracked in graph database
+    // Return empty array for now
+    return [];
+  }
+
+  /**
+   * Search users by username or email across all sites
+   */
+  async searchUsers(query: string): Promise<Array<{
+    siteId: string;
+    siteName: string;
+    type: 'user';
+    title: string;
+    excerpt: string;
+    metadata: Record<string, any>;
+    score: number;
+    lastUpdated: number;
+  }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const lowerQuery = query.toLowerCase();
+
+    const rows = this.db.prepare(`
+      SELECT u.*, s.name as site_name
+      FROM users u
+      JOIN sites s ON u.site_id = s.id
+      WHERE LOWER(u.username) LIKE ? OR LOWER(u.email) LIKE ?
+      ORDER BY u.updated_at DESC
+      LIMIT 50
+    `).all(`%${lowerQuery}%`, `%${lowerQuery}%`) as any[];
+
+    return rows.map(row => ({
+      siteId: row.site_id,
+      siteName: row.site_name,
+      type: 'user' as const,
+      title: row.username,
+      excerpt: `${row.email || 'No email'} • ${row.roles || 'No roles'}`,
+      metadata: {
+        user_id: row.user_id,
+        username: row.username,
+        email: row.email,
+        roles: row.roles,
+      },
+      score: this.calculateTextScore(lowerQuery, row.username.toLowerCase(), row.email?.toLowerCase() || ''),
+      lastUpdated: row.updated_at,
+    }));
+  }
+
+  /**
+   * Get plugins for a specific site
+   * (Wrapper around existing listPlugins for consistency)
+   */
+  async getPlugins(siteId: string): Promise<Plugin[]> {
+    return this.listPlugins(siteId);
+  }
+
+  /**
+   * Get recent content for a site (last N days)
+   */
+  async getRecentContent(siteId: string, days: number): Promise<Content[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
+
+    const rows = this.db.prepare(`
+      SELECT * FROM content
+      WHERE site_id = ? AND updated_at > ?
+      ORDER BY updated_at DESC
+    `).all(siteId, cutoffTime) as Content[];
+
+    return rows;
+  }
+
+  /**
+   * Calculate text relevance score (0-1)
+   * Higher score for exact matches, lower for partial
+   */
+  private calculateTextScore(query: string, ...fields: string[]): number {
+    let score = 0;
+
+    for (const field of fields) {
+      if (field === query) {
+        score = Math.max(score, 1.0); // Exact match
+      } else if (field.startsWith(query)) {
+        score = Math.max(score, 0.8); // Starts with query
+      } else if (field.includes(query)) {
+        score = Math.max(score, 0.5); // Contains query
+      }
+    }
+
+    return score;
+  }
 }
