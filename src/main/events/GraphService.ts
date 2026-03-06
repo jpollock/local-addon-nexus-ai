@@ -139,6 +139,11 @@ export class GraphService {
     this.db.pragma('journal_mode = WAL');
   }
 
+  /** Expose the underlying database for shared use (e.g., HealthTrendTracker). */
+  getDb(): Database.Database | null {
+    return this.db;
+  }
+
   async close(): Promise<void> {
     if (this.db) {
       this.db.close();

@@ -460,8 +460,18 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
       timestamp: Date.now(),
     };
 
+    // Add a "thinking" placeholder that gets replaced by the first token
+    const thinkingMsg: UIMessage = {
+      id: `msg_thinking_${Date.now()}`,
+      role: 'assistant',
+      content: '',
+      isStreaming: true,
+      timestamp: Date.now(),
+      toolCalls: [],
+    };
+
     this.setState(
-      { messages: [...this.state.messages, userMsg], inputValue: '', isGenerating: true },
+      { messages: [...this.state.messages, userMsg, thinkingMsg], inputValue: '', isGenerating: true },
       () => {
         this.props.electron.ipcRenderer.invoke(
           IPC_CHANNELS.CHAT_SEND,
@@ -637,8 +647,16 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
       }, isUser ? 'You' : 'Nexus AI'),
 
       React.createElement('div', { style: bubbleStyle },
-        msg.content,
-        msg.isStreaming
+        msg.isStreaming && !msg.content && (!msg.toolCalls || msg.toolCalls.length === 0)
+          ? React.createElement('span', {
+              style: {
+                color: 'var(--nxai-card-sub, #9ca3af)',
+                fontStyle: 'italic',
+                fontSize: '13px',
+              },
+            }, 'Thinking\u2026')
+          : msg.content,
+        msg.isStreaming && msg.content
           ? React.createElement('span', {
               style: {
                 display: 'inline-block',

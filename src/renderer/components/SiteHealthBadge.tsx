@@ -85,9 +85,9 @@ export class SiteHealthBadge extends React.Component<SiteHealthBadgeProps, SiteH
 
       if (!this._mounted) return;
 
-      if (result.success) {
+      if (result.success && typeof (result.score ?? result.overall) === 'number') {
         this.setState({
-          score: result.score,
+          score: result.score ?? result.overall,
           loading: false,
           error: null,
         });
@@ -112,7 +112,7 @@ export class SiteHealthBadge extends React.Component<SiteHealthBadgeProps, SiteH
     const { score, loading, error } = this.state;
     const config = SIZE_CONFIG[size];
 
-    const hasScore = score !== null && !loading && !error;
+    const hasScore = typeof score === 'number' && !loading && !error;
     const color = hasScore ? getScoreColor(score!) : '#9ca3af';
     const displayText = hasScore ? String(score) : '\u2014';
 

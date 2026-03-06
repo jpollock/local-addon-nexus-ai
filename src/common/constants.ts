@@ -56,6 +56,28 @@ export const IPC_CHANNELS = {
   QUERIES_UPDATE: `${ADDON_PREFIX}:queries:update`,
   QUERIES_DELETE: `${ADDON_PREFIX}:queries:delete`,
   QUERIES_RUN: `${ADDON_PREFIX}:queries:run`,
+
+  // Bulk Operations (Sprint 3)
+  BULK_EXECUTE: `${ADDON_PREFIX}:bulk:execute`,
+  BULK_STATUS: `${ADDON_PREFIX}:bulk:status`,
+  BULK_CANCEL: `${ADDON_PREFIX}:bulk:cancel`,
+  BULK_LIST: `${ADDON_PREFIX}:bulk:list`,
+  BULK_PROGRESS: `${ADDON_PREFIX}:bulk:progress`,
+
+  // Site Groups (Sprint 3)
+  GROUPS_LIST: `${ADDON_PREFIX}:groups:list`,
+  GROUPS_CREATE: `${ADDON_PREFIX}:groups:create`,
+  GROUPS_UPDATE: `${ADDON_PREFIX}:groups:update`,
+  GROUPS_DELETE: `${ADDON_PREFIX}:groups:delete`,
+  GROUPS_ADD_SITE: `${ADDON_PREFIX}:groups:add-site`,
+  GROUPS_REMOVE_SITE: `${ADDON_PREFIX}:groups:remove-site`,
+
+  // Health Trends (Sprint 3)
+  HEALTH_GET_TREND: `${ADDON_PREFIX}:health:get-trend`,
+  HEALTH_GET_FLEET_TREND: `${ADDON_PREFIX}:health:get-fleet-trend`,
+
+  // Dashboard v2 (Sprint 3)
+  DASHBOARD_V2_STATS: `${ADDON_PREFIX}:dashboard:v2-stats`,
 } as const;
 
 // ---------------------------------------------------------------------------

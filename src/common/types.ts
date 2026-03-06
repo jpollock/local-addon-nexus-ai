@@ -333,3 +333,55 @@ export interface SavedQuery {
   resultCount: number;
   pinned: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Bulk Operations (Sprint 3)
+// ---------------------------------------------------------------------------
+
+export interface BulkOperationStatus {
+  id: string;
+  type: string;
+  siteIds: string[];
+  status: 'running' | 'completed' | 'completed_with_errors' | 'cancelled' | 'failed';
+  progress: { completed: number; total: number; errors: string[] };
+  siteResults: Record<string, {
+    status: 'pending' | 'running' | 'completed' | 'failed';
+    startedAt: number;
+    completedAt?: number;
+    error?: string;
+  }>;
+  createdAt: number;
+  completedAt: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Site Groups (Sprint 3)
+// ---------------------------------------------------------------------------
+
+/** Maps to Local's native SiteGroup type */
+export interface SiteGroupInfo {
+  id: string;
+  name: string;
+  siteIds: string[];
+  index: number;
+}
+
+// ---------------------------------------------------------------------------
+// Health Trends (Sprint 3)
+// ---------------------------------------------------------------------------
+
+export interface HealthTrend {
+  siteId: string;
+  snapshots: { score: number; timestamp: number }[];
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard v2 (Sprint 3)
+// ---------------------------------------------------------------------------
+
+export interface DashboardV2Stats {
+  healthDistribution: { healthy: number; warning: number; critical: number };
+  actionItems: { filterId: string; label: string; count: number; severity: string }[];
+  groupSummaries: { groupId: string; name: string; siteCount: number; avgHealth: number }[];
+  recentBulkOps: BulkOperationStatus[];
+}

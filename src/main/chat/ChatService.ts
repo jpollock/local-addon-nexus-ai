@@ -336,6 +336,19 @@ export class ChatService {
       'IMPORTANT: Always use your tools to get real data. Never fabricate or guess site names, plugin lists, version numbers, or other information.',
       'If asked about sites, call local_list_sites first. If asked about plugins, call wp_plugin_list with the site name.',
       'If asked about WordPress versions, call wp_core_version. If you cannot answer using your available tools, say so.',
+      '',
+      'Fleet management tools:',
+      '- fleet_health_summary: Get health scores for all indexed sites',
+      '- get_site_health: Get detailed health breakdown for a specific site',
+      '- fleet_search: Search across all indexed site content',
+      '- fleet_filter: Apply smart filters (e.g., outdated-php, no-ssl) across the fleet',
+      '- bulk_reindex: Reindex multiple sites at once (pass an array of site_ids)',
+      '- bulk_plugin_update: Update a plugin across multiple sites',
+      '- list_site_groups: List all site groups',
+      '- manage_site_group: Create, rename, delete groups or move sites between groups',
+      '',
+      'When asked to reindex sites, use the bulk_reindex tool with site IDs from local_list_sites.',
+      'Never suggest manual WP-CLI commands when a tool exists for the task.',
     ];
 
     if (siteId) {

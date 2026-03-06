@@ -92,6 +92,14 @@ export interface LocalServicesBridge {
   // Lightning Services
   getAvailablePhpVersions(): Promise<string[]>;
 
+  // Site Groups (Local native)
+  getSiteGroups(): Array<{ id: string; name: string; siteIds: string[]; index: number }>;
+  createSiteGroup(name: string, siteIds?: string[]): { id: string; name: string; siteIds: string[]; index: number };
+  deleteSiteGroup(groupId: string): void;
+  renameSiteGroup(groupId: string, name: string): { id: string; name: string; siteIds: string[]; index: number };
+  moveSitesToGroup(siteIds: string[], groupId: string): void;
+  removeSitesFromGroups(siteIds: string[]): void;
+
   // Full site object (for advanced operations)
   resolveSiteObject(siteId: string): unknown;
 
@@ -316,6 +324,52 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         return services.map((s: any) => s.version ?? s.name ?? String(s));
       }
       return [];
+    },
+
+    // --- Site Groups (Local native — via SitesOrganizationService) ---
+
+    getSiteGroups(): Array<{ id: string; name: string; siteIds: string[]; index: number }> {
+      const org = svc('sitesOrganization');
+      if (!org?.getSiteGroups) return [];
+      const groups = org.getSiteGroups();
+      return (groups ?? []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        siteIds: g.siteIds ?? [],
+        index: g.index ?? 0,
+      }));
+    },
+
+    createSiteGroup(name: string, siteIds?: string[]): { id: string; name: string; siteIds: string[]; index: number } {
+      const org = svc('sitesOrganization');
+      if (!org?.createSiteGroup) throw new Error('Site groups not available');
+      const g = org.createSiteGroup(name, siteIds);
+      return { id: g.id, name: g.name, siteIds: g.siteIds ?? [], index: g.index ?? 0 };
+    },
+
+    deleteSiteGroup(groupId: string): void {
+      const org = svc('sitesOrganization');
+      if (!org?.deleteSiteGroup) throw new Error('Site groups not available');
+      org.deleteSiteGroup(groupId);
+    },
+
+    renameSiteGroup(groupId: string, name: string): { id: string; name: string; siteIds: string[]; index: number } {
+      const org = svc('sitesOrganization');
+      if (!org?.renameSiteGroup) throw new Error('Site groups not available');
+      const g = org.renameSiteGroup(groupId, name);
+      return { id: g.id, name: g.name, siteIds: g.siteIds ?? [], index: g.index ?? 0 };
+    },
+
+    moveSitesToGroup(siteIds: string[], groupId: string): void {
+      const org = svc('sitesOrganization');
+      if (!org?.moveSitesToGroup) throw new Error('Site groups not available');
+      org.moveSitesToGroup(siteIds, groupId, true);
+    },
+
+    removeSitesFromGroups(siteIds: string[]): void {
+      const org = svc('sitesOrganization');
+      if (!org?.deleteSitesFromGroups) throw new Error('Site groups not available');
+      org.deleteSitesFromGroups(siteIds, true);
     },
 
     // --- Raw access ---

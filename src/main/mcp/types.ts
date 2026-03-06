@@ -78,6 +78,8 @@ export interface McpToolDefinition {
   inputSchema: Record<string, unknown>;
   /** Returns true when this tool's prerequisites are met. Omit for always-available tools. */
   isAvailable?: (services: NexusServices) => boolean;
+  /** MCP tool annotations (title, readOnlyHint, etc.) */
+  annotations?: Record<string, unknown>;
 }
 
 export interface McpToolResult {
@@ -120,6 +122,12 @@ export interface NexusServices {
   eventProcessor?: any;
   /** HTTP event interface. Optional for backward compat. */
   httpEventInterface?: any;
+  /** Sprint 2+3 services (optional for backward compat) */
+  searchService?: any;
+  healthCalculator?: any;
+  filterEngine?: any;
+  bulkOpManager?: any;
+  groupStorage?: any;
 }
 
 /**

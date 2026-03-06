@@ -30,8 +30,14 @@ export class OllamaProvider implements ChatProvider {
     // Check if this model supports tool calling
     const supportsTools = await this.checkToolSupport(config.model, baseUrl);
 
+    // If model doesn't support native tools, inject tool descriptions into the system prompt
+    let messagesForChat = messages;
+    if (!supportsTools && tools.length > 0) {
+      messagesForChat = this.injectToolDescriptions(messages, tools);
+    }
+
     // Convert messages to Ollama format
-    const ollamaMessages = this.convertMessages(messages, supportsTools);
+    const ollamaMessages = this.convertMessages(messagesForChat, supportsTools);
 
     // Limit and convert tools
     const limitedTools = supportsTools ? tools.slice(0, MAX_OLLAMA_TOOLS) : [];
@@ -164,6 +170,36 @@ export class OllamaProvider implements ChatProvider {
       }
       yield { type: 'error', message: `Ollama error: ${(err as Error).message}` };
     }
+  }
+
+  /**
+   * When the model doesn't support native tool calling, append tool descriptions
+   * to the system prompt so the model at least knows what's available.
+   * The model won't invoke tools programmatically, but it can describe what
+   * tools exist and suggest the user run them.
+   */
+  private injectToolDescriptions(
+    messages: ChatMessage[],
+    tools: ProviderToolDefinition[],
+  ): ChatMessage[] {
+    const toolList = tools.slice(0, MAX_OLLAMA_TOOLS).map((t) =>
+      `- ${t.name}: ${t.description}`
+    ).join('\n');
+
+    const toolNote = [
+      '',
+      'NOTE: Your model does not support native tool calling. You have access to these tools but cannot call them directly.',
+      'Instead, describe what tool you WOULD call and with what arguments. The user can then run it manually.',
+      'Available tools:',
+      toolList,
+    ].join('\n');
+
+    return messages.map((m, i) => {
+      if (i === 0 && m.role === 'system') {
+        return { ...m, content: m.content + toolNote };
+      }
+      return m;
+    });
   }
 
   /**
