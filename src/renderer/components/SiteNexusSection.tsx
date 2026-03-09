@@ -10,6 +10,15 @@ import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 import type { NexusSettings } from '../../common/types';
 
+// Try to import TextButton from Local's components (available at runtime)
+let TextButton: any = null;
+try {
+  // @ts-ignore - peerDependency, available at runtime from Local
+  TextButton = require('@getflywheel/local-components').TextButton;
+} catch {
+  // Fallback: TextButton not available, use button with CSS classes
+}
+
 interface SiteNexusSectionProps {
   site: { id: string; name: string; path: string; status?: string };
   electron: any;
@@ -53,17 +62,30 @@ function formatTimeAgo(timestamp: number): string {
   return `${days}d ago`;
 }
 
-/** Matches Local's TextButton (green text link) */
-const linkStyle: React.CSSProperties = {
-  color: '#51bb7b',
-  cursor: 'pointer',
-  background: 'none',
-  border: 'none',
-  padding: 0,
-  fontSize: 'inherit',
-  fontWeight: 400,
-  marginLeft: 10,
-};
+/** Helper to create action button using Local's TextButton or fallback */
+function createActionButton(props: {
+  onClick?: () => void;
+  disabled?: boolean;
+  children: string;
+}): React.ReactElement {
+  if (TextButton) {
+    // Use Local's TextButton component
+    return React.createElement(TextButton, {
+      onClick: props.onClick,
+      disabled: props.disabled,
+      inline: true,
+      style: { marginLeft: 10 },
+    }, props.children);
+  }
+
+  // Fallback: button with CSS classes matching Local's TextButton
+  return React.createElement('button', {
+    className: 'TextButton ButtonBase ButtonBase__Color_Green ButtonBase__Form_Text',
+    onClick: props.onClick,
+    disabled: props.disabled,
+    style: { marginLeft: 10, opacity: props.disabled ? 0.5 : 1 },
+  }, props.children);
+}
 
 const dotStyle = (color: string): React.CSSProperties => ({
   display: 'inline-block',
@@ -231,11 +253,11 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     rows.push(row('Index status',
       React.createElement('span', { style: dotStyle(stateColor) }),
       stateLabel,
-      React.createElement('button', {
-        style: indexing ? { ...linkStyle, opacity: 0.5, cursor: 'not-allowed' } : linkStyle,
+      createActionButton({
         onClick: indexing ? undefined : this.handleIndex,
         disabled: indexing,
-      }, indexing ? 'Indexing...' : (indexEntry ? 'Re-index' : 'Index Now')),
+        children: indexing ? 'Indexing...' : (indexEntry ? 'Re-index' : 'Index Now'),
+      }),
     ));
 
     // Documents + chunks
@@ -268,11 +290,11 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
         React.createElement('span', { style: dotStyle(pluginColor(aiStatus?.aiPlugin ?? 'not_installed')) }),
         pluginLabel(aiStatus?.aiPlugin ?? 'not_installed'),
         aiStatus?.aiPlugin !== 'active'
-          ? React.createElement('button', {
-              style: settingUpAI ? { ...linkStyle, opacity: 0.5, cursor: 'not-allowed' } : linkStyle,
+          ? createActionButton({
               onClick: settingUpAI ? undefined : this.handleSetupAI,
               disabled: settingUpAI,
-            }, settingUpAI ? 'Setting up...' : 'Setup AI')
+              children: settingUpAI ? 'Setting up...' : 'Setup AI',
+            })
           : null,
       ));
 
@@ -287,11 +309,11 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       rows.push(row('Credentials',
         React.createElement('span', { style: dotStyle(credsSynced ? UI_COLORS.STATUS_RUNNING : '#888') }),
         credsSynced ? `Synced (${aiStatus!.providers.join(', ')})` : 'Not synced',
-        React.createElement('button', {
-          style: syncingCreds ? { ...linkStyle, opacity: 0.5, cursor: 'not-allowed' } : linkStyle,
+        createActionButton({
           onClick: syncingCreds ? undefined : this.handleSyncCredentials,
           disabled: syncingCreds,
-        }, syncingCreds ? 'Syncing...' : 'Sync Keys'),
+          children: syncingCreds ? 'Syncing...' : 'Sync Keys',
+        }),
       ));
     }
 
