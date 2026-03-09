@@ -1012,49 +1012,47 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     try {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
-      const pluginsSet = new Set<string>();
-      const themesSet = new Set<string>();
+      const db = graphService.getDb();
+
+      // Get plugins from graph (all sites, fast)
+      const pluginRows = db ? db.prepare('SELECT DISTINCT name FROM plugins ORDER BY name').all() as Array<{ name: string }> : [];
+      const plugins = pluginRows.map(r => r.name);
+
+      // Get WP versions from graph (all sites, fast)
+      const wpRows = db ? db.prepare('SELECT DISTINCT wp_version FROM sites WHERE wp_version IS NOT NULL ORDER BY wp_version').all() as Array<{ wp_version: string }> : [];
+      const wpVersions = wpRows.map(r => r.wp_version);
+
+      // Get PHP versions from site data (all sites, fast)
       const phpSet = new Set<string>();
-      const wpSet = new Set<string>();
-
-      // Only query running sites to avoid WP-CLI timeouts
-      for (const [siteId, site] of Object.entries(allSites)) {
-        const isRunning = statuses[siteId] === 'running';
-
-        // Get PHP version from site data (available even when stopped)
+      for (const site of Object.values(allSites)) {
         const phpVersion = (site as any).phpVersion;
         if (phpVersion) phpSet.add(phpVersion);
+      }
+      const phpVersions = Array.from(phpSet).sort();
 
-        // Only query WP-CLI data for running sites
+      // Get themes from WP-CLI (running sites only, slow)
+      const themesSet = new Set<string>();
+      for (const [siteId] of Object.entries(allSites)) {
+        const isRunning = statuses[siteId] === 'running';
         if (isRunning) {
           try {
-            // Get plugins
-            const plugins = await localServicesBridge.getPlugins(siteId);
-            for (const plugin of plugins) {
-              if (plugin.name) pluginsSet.add(plugin.name);
-            }
-
-            // Get themes
             const themes = await localServicesBridge.getThemes(siteId);
             for (const theme of themes) {
               if (theme.name) themesSet.add(theme.name);
             }
-
-            // Get WP version
-            const wpVersion = await localServicesBridge.getWpVersion(siteId);
-            if (wpVersion) wpSet.add(wpVersion);
           } catch {
             // Site WP-CLI call failed, skip
           }
         }
       }
+      const themes = Array.from(themesSet).sort();
 
       return {
         success: true,
-        plugins: Array.from(pluginsSet).sort(),
-        themes: Array.from(themesSet).sort(),
-        phpVersions: Array.from(phpSet).sort(),
-        wpVersions: Array.from(wpSet).sort(),
+        plugins,
+        themes,
+        phpVersions,
+        wpVersions,
       };
     } catch (err) {
       localLogger.error('[NexusAI] site-finder:get-options failed:', (err as Error).message);
@@ -1066,6 +1064,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     try {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
+      const db = graphService.getDb();
       const matchingSiteIds: string[] = [];
 
       for (const [siteId, site] of Object.entries(allSites)) {
@@ -1090,44 +1089,41 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           }
         }
 
-        // Plugin/theme/WP version filters require site to be running
-        if (matches && (filters.plugin || filters.theme || filters.wpVersion)) {
+        // Plugin filter (use graph - works on all sites)
+        if (matches && filters.plugin && filters.plugin.trim()) {
+          if (db) {
+            const pluginRow = db.prepare('SELECT 1 FROM plugins WHERE site_id = ? AND name = ? LIMIT 1')
+              .get(siteId, filters.plugin);
+            if (!pluginRow) matches = false;
+          } else {
+            matches = false;
+          }
+        }
+
+        // WP version filter (use graph - works on all sites)
+        if (matches && filters.wpVersion && filters.wpVersion.trim()) {
+          if (db) {
+            const siteRow = db.prepare('SELECT wp_version FROM sites WHERE id = ? LIMIT 1')
+              .get(siteId) as any;
+            if (!siteRow || siteRow.wp_version !== filters.wpVersion) {
+              matches = false;
+            }
+          } else {
+            matches = false;
+          }
+        }
+
+        // Theme filter (requires WP-CLI - running sites only)
+        if (matches && filters.theme && filters.theme.trim()) {
           if (!isRunning) {
-            // Site must be running to check these filters
             matches = false;
           } else {
-            // Plugin filter
-            if (matches && filters.plugin && filters.plugin.trim()) {
-              try {
-                const plugins = await localServicesBridge.getPlugins(siteId);
-                const hasPlugin = plugins.some((p: any) => p.name === filters.plugin);
-                if (!hasPlugin) matches = false;
-              } catch {
-                matches = false;
-              }
-            }
-
-            // Theme filter
-            if (matches && filters.theme && filters.theme.trim()) {
-              try {
-                const themes = await localServicesBridge.getThemes(siteId);
-                const hasTheme = themes.some((t: any) => t.name === filters.theme);
-                if (!hasTheme) matches = false;
-              } catch {
-                matches = false;
-              }
-            }
-
-            // WP version filter
-            if (matches && filters.wpVersion && filters.wpVersion.trim()) {
-              try {
-                const wpVersion = await localServicesBridge.getWpVersion(siteId);
-                if (wpVersion !== filters.wpVersion) {
-                  matches = false;
-                }
-              } catch {
-                matches = false;
-              }
+            try {
+              const themes = await localServicesBridge.getThemes(siteId);
+              const hasTheme = themes.some((t: any) => t.name === filters.theme);
+              if (!hasTheme) matches = false;
+            } catch {
+              matches = false;
             }
           }
         }
