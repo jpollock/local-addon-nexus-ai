@@ -88,6 +88,10 @@ export const IPC_CHANNELS = {
   GET_AI_PROXY_INFO: `${ADDON_PREFIX}:ai:proxy-info`,
   SETUP_AI_FLEET: `${ADDON_PREFIX}:ai:setup-fleet`,
   INDEX_ALL_FLEET: `${ADDON_PREFIX}:index-fleet`,
+  
+  // Auto-start/stop fleet operations (Phase 4)
+  SETUP_AI_ALL_AUTO: `${ADDON_PREFIX}:ai:setup-all-auto`,
+  INDEX_ALL_AUTO: `${ADDON_PREFIX}:index-all-auto`,
 } as const;
 
 // ---------------------------------------------------------------------------

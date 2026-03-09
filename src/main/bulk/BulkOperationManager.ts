@@ -1,6 +1,7 @@
 /**
  * BulkOperationManager - Queues and executes bulk operations across multiple WordPress sites.
- * Supports concurrency limiting, per-site progress tracking, cancellation, and progress callbacks.
+ * Supports concurrency limiting, per-site progress tracking, cancellation, progress callbacks,
+ * and auto-start/stop for operations on halted sites.
  */
 import type {
   BulkOperation,
@@ -32,6 +33,8 @@ export class BulkOperationManager {
   private ops: Map<string, BulkOperation> = new Map();
   private deps: BulkOpDeps;
   private completionPromises: Map<string, Promise<void>> = new Map();
+  /** Track sites that were started by auto-start (to restore state after) */
+  private autoStartedSites: Map<string, Set<string>> = new Map(); // opId -> Set<siteId>
 
   constructor(deps: BulkOpDeps) {
     this.deps = deps;
@@ -57,6 +60,7 @@ export class BulkOperationManager {
     }
 
     this.ops.set(op.id, op);
+    this.autoStartedSites.set(op.id, new Set());
 
     // Handle empty siteIds immediately
     if (op.siteIds.length === 0) {
@@ -114,6 +118,19 @@ export class BulkOperationManager {
       }
     }
 
+    // Cleanup: stop any auto-started sites that are still running
+    const autoStarted = this.autoStartedSites.get(op.id);
+    if (autoStarted && autoStarted.size > 0) {
+      for (const siteId of autoStarted) {
+        try {
+          await this.deps.siteDataBridge.stopSite(siteId);
+        } catch {
+          // Best effort - ignore errors on cleanup
+        }
+      }
+    }
+    this.autoStartedSites.delete(op.id);
+
     // Finalize operation status
     op.completedAt = Date.now();
     if (op.abortController.signal.aborted) {
@@ -132,9 +149,26 @@ export class BulkOperationManager {
     result.status = 'running';
     result.startedAt = Date.now();
 
+    let wasAutoStarted = false;
+
     try {
       if (op.abortController.signal.aborted) {
         throw new Error('Operation cancelled');
+      }
+
+      // Auto-start logic: if site is halted and autoStartStop is enabled
+      const autoStartStop = op.options.autoStartStop === true;
+      if (autoStartStop) {
+        const currentStatus = this.deps.siteDataBridge.getSiteStatus(siteId);
+        if (currentStatus !== 'running') {
+          // Start the site
+          await this.deps.siteDataBridge.startSite(siteId);
+          wasAutoStarted = true;
+          this.autoStartedSites.get(op.id)?.add(siteId);
+
+          // Wait a bit for site to fully start
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
       }
 
       await this.executeByType(op, siteId);
@@ -145,6 +179,16 @@ export class BulkOperationManager {
       result.completedAt = Date.now();
       result.error = err?.message ?? String(err);
       op.progress.errors.push(siteId);
+    } finally {
+      // Stop site if we auto-started it
+      if (wasAutoStarted) {
+        try {
+          await this.deps.siteDataBridge.stopSite(siteId);
+          this.autoStartedSites.get(op.id)?.delete(siteId);
+        } catch {
+          // Best effort - don't fail the operation if stop fails
+        }
+      }
     }
 
     op.progress.completed++;

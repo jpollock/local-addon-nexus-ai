@@ -955,4 +955,50 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return { success: false, error: (err as Error).message };
     }
   });
+
+  // Auto-start/stop: Setup AI for ALL sites (including halted)
+  ipcMain.handle(IPC_CHANNELS.SETUP_AI_ALL_AUTO, async (_event: any) => {
+    try {
+      const allSites = siteData.getSites();
+      const allSiteIds = Object.keys(allSites);
+
+      if (allSiteIds.length === 0) {
+        return { success: true, opId: null, message: "No sites to setup" };
+      }
+
+      const opId = bulkOpManager.execute({
+        type: "setup-ai",
+        siteIds: allSiteIds,
+        options: { autoStartStop: true, enableOllama: false },
+      });
+
+      return { success: true, opId };
+    } catch (err) {
+      localLogger.error("[NexusAI] setup-ai-all-auto failed:", (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // Auto-start/stop: Index ALL sites (including halted)
+  ipcMain.handle(IPC_CHANNELS.INDEX_ALL_AUTO, async (_event: any) => {
+    try {
+      const allSites = siteData.getSites();
+      const allSiteIds = Object.keys(allSites);
+
+      if (allSiteIds.length === 0) {
+        return { success: true, opId: null, message: "No sites to index" };
+      }
+
+      const opId = bulkOpManager.execute({
+        type: "reindex",
+        siteIds: allSiteIds,
+        options: { autoStartStop: true },
+      });
+
+      return { success: true, opId };
+    } catch (err) {
+      localLogger.error("[NexusAI] index-all-auto failed:", (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
 }

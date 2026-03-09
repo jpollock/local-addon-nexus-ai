@@ -11,6 +11,7 @@ export interface BulkOperationRequest {
     pluginSlug?: string;
     dryRun?: boolean;
     enableOllama?: boolean;
+    autoStartStop?: boolean; // If true, will start halted sites, run operation, then stop them
   };
 }
 

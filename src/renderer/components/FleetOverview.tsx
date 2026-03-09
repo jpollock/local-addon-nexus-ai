@@ -110,6 +110,10 @@ interface FleetOverviewState {
   fleetIndexOpId: string | null;
   fleetIndexRunning: boolean;
   settings: NexusSettings | null;
+  setupAllAutoOpId: string | null;
+  setupAllAutoRunning: boolean;
+  indexAllAutoOpId: string | null;
+  indexAllAutoRunning: boolean;
 }
 
 // -- Shared styles --
@@ -253,6 +257,10 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     fleetSetupRunning: false,
     fleetIndexOpId: null,
     fleetIndexRunning: false,
+    setupAllAutoOpId: null,
+    setupAllAutoRunning: false,
+    indexAllAutoOpId: null,
+    indexAllAutoRunning: false,
     settings: null,
   };
 
@@ -430,6 +438,30 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     } catch {
       if (!this.mounted) return;
       this.setState({ fleetIndexRunning: false });
+    }
+  };
+
+  handleSetupAllAuto = async (): Promise<void> => {
+    this.setState({ setupAllAutoRunning: true });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SETUP_AI_ALL_AUTO);
+      if (!this.mounted) return;
+      this.setState({ setupAllAutoOpId: result?.opId ?? null, setupAllAutoRunning: false });
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ setupAllAutoRunning: false });
+    }
+  };
+
+  handleIndexAllAuto = async (): Promise<void> => {
+    this.setState({ indexAllAutoRunning: true });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_ALL_AUTO);
+      if (!this.mounted) return;
+      this.setState({ indexAllAutoOpId: result?.opId ?? null, indexAllAutoRunning: false });
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ indexAllAutoRunning: false });
     }
   };
 
@@ -948,7 +980,37 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
           this.state.fleetIndexOpId
             ? React.createElement('div', {
                 style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' },
-              }, 'Started! Check Bulk Operations panel for progress.')
+              }, 'Started! Check Bulk Operations panel for progress.') : null, ),
+
+        // Setup AI for ALL Sites (auto-start)
+        React.createElement("div", { style: { flex: "1", minWidth: "250px" } },
+          React.createElement("button", {
+            style: this.state.setupAllAutoRunning
+              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: "not-allowed", width: "100%" }
+              : { ...btnPrimaryStyle, width: "100%" },
+            onClick: this.state.setupAllAutoRunning ? undefined : this.handleSetupAllAuto,
+            disabled: this.state.setupAllAutoRunning,
+          }, this.state.setupAllAutoRunning ? "Setting up..." : "Setup AI for All Sites (auto-start)"),
+          this.state.setupAllAutoOpId
+            ? React.createElement("div", {
+                style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
+              }, "Started! Check Bulk Operations panel for progress.")
+            : null,
+        ),
+
+        // Re-index ALL Sites (auto-start)
+        React.createElement("div", { style: { flex: "1", minWidth: "250px" } },
+          React.createElement("button", {
+            style: this.state.indexAllAutoRunning
+              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: "not-allowed", width: "100%" }
+              : { ...btnPrimaryStyle, width: "100%" },
+            onClick: this.state.indexAllAutoRunning ? undefined : this.handleIndexAllAuto,
+            disabled: this.state.indexAllAutoRunning,
+          }, this.state.indexAllAutoRunning ? "Indexing..." : "Re-index All Sites (auto-start)"),
+          this.state.indexAllAutoOpId
+            ? React.createElement("div", {
+                style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
+              }, "Started! Check Bulk Operations panel for progress.")
             : null,
         ),
       ),
