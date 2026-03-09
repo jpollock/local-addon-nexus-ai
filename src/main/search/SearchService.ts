@@ -86,6 +86,23 @@ export class SearchService {
     
     console.log('[SearchService] searchAllSites - Total entries:', allEntries.length);
     console.log('[SearchService] searchAllSites - Indexed sites:', indexedSites.length);
+    
+    // Show states of ALL entries to diagnose
+    const stateBreakdown: Record<string, number> = {};
+    allEntries.forEach(e => {
+      stateBreakdown[e.state] = (stateBreakdown[e.state] || 0) + 1;
+    });
+    console.log('[SearchService] State breakdown:', stateBreakdown);
+    
+    // Show first 5 entries regardless of state
+    console.log('[SearchService] First 5 entries (any state):', allEntries.slice(0, 5).map(e => ({
+      siteId: e.siteId,
+      siteName: e.siteName,
+      state: e.state,
+      docs: e.documentCount,
+      chunks: e.chunkCount
+    })));
+    
     console.log('[SearchService] Indexed site details:', indexedSites.map(e => ({
       siteId: e.siteId,
       siteName: e.siteName,
