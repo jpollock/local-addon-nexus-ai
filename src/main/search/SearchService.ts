@@ -82,7 +82,7 @@ export class SearchService {
     filters?: SearchFilters
   ): Promise<VectorResult[]> {
     const allEntries = this.indexRegistry.listAll();
-    const indexedSites = allEntries.filter(e => e.state === 'indexed');
+    const indexedSites = allEntries.filter(e => e.state === 'indexed' || e.state === 'stale');
     
     console.log('[SearchService] searchAllSites - Total entries:', allEntries.length);
     console.log('[SearchService] searchAllSites - Indexed sites:', indexedSites.length);
