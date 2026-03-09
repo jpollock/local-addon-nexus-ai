@@ -487,9 +487,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Unified search
   ipcMain.handle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, query: string, filters?: any, options?: any) => {
     try {
-      localLogger.log('[NexusAI] Search request:', { query, filters, options });
+      localLogger.info('[NexusAI] Search request:', { query, filters, options });
       const results = await searchService.searchFleet(query, filters, options);
-      localLogger.log('[NexusAI] Search results:', { total: results.total, resultCount: results.results.length });
+      localLogger.info('[NexusAI] Search results:', { total: results.total, resultCount: results.results.length });
       return { success: true, ...results };
     } catch (err) {
       localLogger.error('[NexusAI] search:unified failed:', (err as Error).message);

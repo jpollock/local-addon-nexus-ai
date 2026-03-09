@@ -81,9 +81,17 @@ export class SearchService {
     queryVector: Float32Array,
     filters?: SearchFilters
   ): Promise<VectorResult[]> {
-    const indexedSites = this.indexRegistry
-      .listAll()
-      .filter(e => e.state === 'indexed');
+    const allEntries = this.indexRegistry.listAll();
+    const indexedSites = allEntries.filter(e => e.state === 'indexed');
+    
+    console.log('[SearchService] searchAllSites - Total entries:', allEntries.length);
+    console.log('[SearchService] searchAllSites - Indexed sites:', indexedSites.length);
+    console.log('[SearchService] Indexed site details:', indexedSites.map(e => ({
+      siteId: e.siteId,
+      siteName: e.siteName,
+      docs: e.documentCount,
+      chunks: e.chunkCount
+    })));
 
     const results: VectorResult[] = [];
 
@@ -94,11 +102,13 @@ export class SearchService {
       }
 
       try {
+        console.log('[SearchService] Searching site:', entry.siteId, entry.siteName);
         const siteResults: VectorSearchResult[] = await this.vectorStore.search(
           entry.siteId,
           queryVector,
           { limit: 10 }
         );
+        console.log('[SearchService] Site results for', entry.siteName, ':', siteResults.length);
 
         // Parse metadata string to object
         results.push(
