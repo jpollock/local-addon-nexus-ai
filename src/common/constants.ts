@@ -87,6 +87,7 @@ export const IPC_CHANNELS = {
   GET_AI_STATUS: `${ADDON_PREFIX}:ai:get-status`,
   GET_AI_PROXY_INFO: `${ADDON_PREFIX}:ai:proxy-info`,
   SETUP_AI_FLEET: `${ADDON_PREFIX}:ai:setup-fleet`,
+  INDEX_ALL_FLEET: `${ADDON_PREFIX}:index-fleet`,
 } as const;
 
 // ---------------------------------------------------------------------------

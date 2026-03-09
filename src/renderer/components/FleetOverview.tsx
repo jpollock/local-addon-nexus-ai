@@ -106,6 +106,8 @@ interface FleetOverviewState {
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
+  fleetIndexOpId: string | null;
+  fleetIndexRunning: boolean;
 }
 
 // -- Shared styles --
@@ -247,6 +249,8 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     aiProxy: null,
     fleetSetupOpId: null,
     fleetSetupRunning: false,
+    fleetIndexOpId: null,
+    fleetIndexRunning: false,
   };
 
   componentDidMount(): void {
@@ -409,6 +413,18 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     } catch {
       if (!this.mounted) return;
       this.setState({ fleetSetupRunning: false });
+    }
+  };
+
+  handleIndexAllFleet = async (): Promise<void> => {
+    this.setState({ fleetIndexRunning: true });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_ALL_FLEET);
+      if (!this.mounted) return;
+      this.setState({ fleetIndexOpId: result?.opId ?? null, fleetIndexRunning: false });
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ fleetIndexRunning: false });
     }
   };
 
@@ -879,20 +895,39 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
       // Sprint 3/4: Fleet Operations
       this.renderSectionLabel('Fleet Operations'),
 
-      // Setup AI Fleet button
-      React.createElement('div', { style: { marginBottom: '16px' } },
-        React.createElement('button', {
-          style: this.state.fleetSetupRunning
-            ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed' }
-            : btnPrimaryStyle,
-          onClick: this.state.fleetSetupRunning ? undefined : this.handleSetupAIFleet,
-          disabled: this.state.fleetSetupRunning,
-        }, this.state.fleetSetupRunning ? 'Setting up...' : 'Setup AI for All Running Sites'),
-        this.state.fleetSetupOpId
-          ? React.createElement('span', {
-              style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginLeft: '10px' },
-            }, 'Started! Check Bulk Operations panel for progress.')
-          : null,
+      // Fleet operation buttons
+      React.createElement('div', { style: { display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' } },
+        // Setup AI Fleet
+        React.createElement('div', { style: { flex: '1', minWidth: '250px' } },
+          React.createElement('button', {
+            style: this.state.fleetSetupRunning
+              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed', width: '100%' }
+              : { ...btnPrimaryStyle, width: '100%' },
+            onClick: this.state.fleetSetupRunning ? undefined : this.handleSetupAIFleet,
+            disabled: this.state.fleetSetupRunning,
+          }, this.state.fleetSetupRunning ? 'Setting up...' : 'Setup AI for All Running Sites'),
+          this.state.fleetSetupOpId
+            ? React.createElement('div', {
+                style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' },
+              }, 'Started! Check Bulk Operations panel for progress.')
+            : null,
+        ),
+
+        // Index All Fleet
+        React.createElement('div', { style: { flex: '1', minWidth: '250px' } },
+          React.createElement('button', {
+            style: this.state.fleetIndexRunning
+              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed', width: '100%' }
+              : { ...btnPrimaryStyle, width: '100%' },
+            onClick: this.state.fleetIndexRunning ? undefined : this.handleIndexAllFleet,
+            disabled: this.state.fleetIndexRunning,
+          }, this.state.fleetIndexRunning ? 'Indexing...' : 'Index All Running Sites'),
+          this.state.fleetIndexOpId
+            ? React.createElement('div', {
+                style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' },
+              }, 'Started! Check Bulk Operations panel for progress.')
+            : null,
+        ),
       ),
 
       React.createElement('div', {

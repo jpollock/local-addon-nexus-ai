@@ -929,4 +929,30 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return { success: false, error: (err as Error).message };
     }
   });
+
+  ipcMain.handle(IPC_CHANNELS.INDEX_ALL_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
+    try {
+      const allSites = siteData.getSites();
+      const statuses = localServicesBridge.getAllSiteStatuses();
+
+      // Use provided siteIds or all running sites
+      const targetIds = options?.siteIds
+        ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
+
+      if (targetIds.length === 0) {
+        return { success: true, opId: null, message: 'No running sites to index' };
+      }
+
+      const opId = bulkOpManager.execute({
+        type: 'reindex',
+        siteIds: targetIds,
+        options: {},
+      });
+
+      return { success: true, opId };
+    } catch (err) {
+      localLogger.error('[NexusAI] index-all-fleet failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
 }
