@@ -74,10 +74,12 @@ const searchInputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px',
   borderRadius: '6px',
-  border: '1px solid #ddd',
+  border: '1px solid var(--nxai-card-border, #ddd)',
   fontSize: '14px',
   outline: 'none',
   boxSizing: 'border-box',
+  backgroundColor: 'var(--nxai-card-bg, #fff)',
+  color: 'var(--nxai-card-text, #000)',
 };
 
 const advancedToggleStyle: React.CSSProperties = {
