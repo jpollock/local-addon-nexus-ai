@@ -35,11 +35,14 @@ export class SearchService {
     filters?: SearchFilters,
     options?: SearchOptions
   ): Promise<SearchResults> {
-    // 1. Generate query embedding
-    const [queryVector] = await this.embeddingService.embedBatch([query]);
-
-    // 2. Vector search across all indexed sites
-    const vectorResults = await this.searchAllSites(queryVector, filters);
+    // 1. Vector search (conditional on vectorSearch option)
+    const enableVectorSearch = options?.vectorSearch !== false; // default: true
+    let vectorResults: VectorResult[] = [];
+    
+    if (enableVectorSearch) {
+      const [queryVector] = await this.embeddingService.embedBatch([query]);
+      vectorResults = await this.searchAllSites(queryVector, filters);
+    }
 
     // 3. Metadata search in GraphService (plugins, themes, users)
     const metadataResults = await this.searchMetadata(query, filters);

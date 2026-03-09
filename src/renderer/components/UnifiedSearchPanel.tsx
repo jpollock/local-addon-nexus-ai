@@ -26,6 +26,7 @@ interface UnifiedSearchPanelState {
   totalResults: number;
   showAdvanced: boolean;
   contentTypeFilters: string[];
+  vectorSearch: boolean;
   currentPage: number;
 }
 
@@ -252,6 +253,7 @@ export class UnifiedSearchPanel extends React.Component<
     showAdvanced: false,
     contentTypeFilters: [],
     currentPage: 0,
+    vectorSearch: true,
   };
 
   componentDidMount(): void {
@@ -296,7 +298,7 @@ export class UnifiedSearchPanel extends React.Component<
           contentTypes:
             contentTypeFilters.length > 0 ? contentTypeFilters : undefined,
         },
-        { limit: PAGE_SIZE, offset: 0 },
+        { limit: PAGE_SIZE, offset: 0, vectorSearch: this.state.vectorSearch },
       );
       if (this._mounted && result.success !== false) {
         this.setState({
@@ -332,7 +334,7 @@ export class UnifiedSearchPanel extends React.Component<
           contentTypes:
             contentTypeFilters.length > 0 ? contentTypeFilters : undefined,
         },
-        { limit: PAGE_SIZE, offset },
+        { limit: PAGE_SIZE, offset, vectorSearch: this.state.vectorSearch },
       );
       if (this._mounted && result.success !== false) {
         this.setState({
@@ -380,7 +382,7 @@ export class UnifiedSearchPanel extends React.Component<
   // Render helpers
   // -----------------------------------------------------------------------
 
-  renderSearchInput(): React.ReactNode {
+renderSearchInput(): React.ReactNode {
     return React.createElement(
       'div',
       null,
@@ -392,6 +394,46 @@ export class UnifiedSearchPanel extends React.Component<
         style: searchInputStyle,
         'data-testid': 'search-input',
       }),
+      // Vector search toggle
+      React.createElement('div', {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          marginTop: '8px',
+          gap: '8px',
+        },
+      },
+        React.createElement('input', {
+          type: 'checkbox',
+          id: 'vector-search-toggle',
+          checked: this.state.vectorSearch,
+          onChange: (e: any) => {
+            this.setState({ vectorSearch: e.target.checked }, () => {
+              // Re-run search if there's a query
+              if (this.state.query.trim()) {
+                this.performSearch();
+              }
+            });
+          },
+          style: { cursor: 'pointer' },
+        }),
+        React.createElement('label', {
+          htmlFor: 'vector-search-toggle',
+          style: {
+            fontSize: '13px',
+            cursor: 'pointer',
+            color: 'var(--nxai-card-sub)',
+          },
+        },
+          'Vector Search ',
+          React.createElement('span', {
+            style: {
+              fontSize: '11px',
+              opacity: 0.7,
+            },
+          }, '(semantic content matching)')
+        ),
+      ),
     );
   }
 

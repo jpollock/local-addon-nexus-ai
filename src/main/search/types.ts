@@ -25,6 +25,7 @@ export interface SearchOptions {
   limit?: number;           // Results per page (default: 20)
   offset?: number;          // Page offset (default: 0)
   sortBy?: 'relevance' | 'date' | 'health' | 'title';
+  vectorSearch?: boolean;   // Enable/disable vector search (default: true)
 }
 
 /**
