@@ -1003,4 +1003,127 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return { success: false, error: (err as Error).message };
     }
   });
+
+  // ---------------------------------------------------------------------------
+  // Site Finder (Advanced Site Search)
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(IPC_CHANNELS.SITE_FINDER_GET_OPTIONS, async (_event: any) => {
+    try {
+      const allSites = siteData.getSites();
+      const pluginsSet = new Set<string>();
+      const themesSet = new Set<string>();
+      const phpSet = new Set<string>();
+      const wpSet = new Set<string>();
+
+      for (const [siteId, site] of Object.entries(allSites)) {
+        try {
+          // Get plugins
+          const plugins = await localServicesBridge.getPlugins(siteId);
+          for (const plugin of plugins) {
+            if (plugin.name) pluginsSet.add(plugin.name);
+          }
+
+          // Get themes
+          const themes = await localServicesBridge.getThemes(siteId);
+          for (const theme of themes) {
+            if (theme.name) themesSet.add(theme.name);
+          }
+
+          // Get PHP version
+          const phpVersion = (site as any).phpVersion;
+          if (phpVersion) phpSet.add(phpVersion);
+
+          // Get WP version
+          const wpVersion = await localServicesBridge.getWpVersion(siteId);
+          if (wpVersion) wpSet.add(wpVersion);
+        } catch {
+          // Site may not be accessible, skip
+        }
+      }
+
+      return {
+        success: true,
+        plugins: Array.from(pluginsSet).sort(),
+        themes: Array.from(themesSet).sort(),
+        phpVersions: Array.from(phpSet).sort(),
+        wpVersions: Array.from(wpSet).sort(),
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] site-finder:get-options failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SITE_FINDER_APPLY, async (_event: any, filters: any) => {
+    try {
+      const allSites = siteData.getSites();
+      const matchingSiteIds: string[] = [];
+
+      for (const [siteId, site] of Object.entries(allSites)) {
+        let matches = true;
+
+        // Text search (name or domain)
+        if (filters.searchText && filters.searchText.trim()) {
+          const searchLower = filters.searchText.toLowerCase();
+          const nameMatch = (site as any).name?.toLowerCase().includes(searchLower);
+          const domainMatch = (site as any).domain?.toLowerCase().includes(searchLower);
+          if (!nameMatch && !domainMatch) {
+            matches = false;
+          }
+        }
+
+        // Plugin filter
+        if (matches && filters.plugin && filters.plugin.trim()) {
+          try {
+            const plugins = await localServicesBridge.getPlugins(siteId);
+            const hasPlugin = plugins.some((p: any) => p.name === filters.plugin);
+            if (!hasPlugin) matches = false;
+          } catch {
+            matches = false;
+          }
+        }
+
+        // Theme filter
+        if (matches && filters.theme && filters.theme.trim()) {
+          try {
+            const themes = await localServicesBridge.getThemes(siteId);
+            const hasTheme = themes.some((t: any) => t.name === filters.theme);
+            if (!hasTheme) matches = false;
+          } catch {
+            matches = false;
+          }
+        }
+
+        // PHP version filter
+        if (matches && filters.phpVersion && filters.phpVersion.trim()) {
+          const phpVersion = (site as any).phpVersion;
+          if (phpVersion !== filters.phpVersion) {
+            matches = false;
+          }
+        }
+
+        // WP version filter
+        if (matches && filters.wpVersion && filters.wpVersion.trim()) {
+          try {
+            const wpVersion = await localServicesBridge.getWpVersion(siteId);
+            if (wpVersion !== filters.wpVersion) {
+              matches = false;
+            }
+          } catch {
+            matches = false;
+          }
+        }
+
+        if (matches) {
+          matchingSiteIds.push(siteId);
+        }
+      }
+
+      return { success: true, siteIds: matchingSiteIds };
+    } catch (err) {
+      localLogger.error('[NexusAI] site-finder:apply failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
 }

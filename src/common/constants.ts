@@ -92,6 +92,10 @@ export const IPC_CHANNELS = {
   // Auto-start/stop fleet operations (Phase 4)
   SETUP_AI_ALL_AUTO: `${ADDON_PREFIX}:ai:setup-all-auto`,
   INDEX_ALL_AUTO: `${ADDON_PREFIX}:index-all-auto`,
+
+  // Site Finder (Advanced site search)
+  SITE_FINDER_GET_OPTIONS: `${ADDON_PREFIX}:site-finder:get-options`,
+  SITE_FINDER_APPLY: `${ADDON_PREFIX}:site-finder:apply`,
 } as const;
 
 // ---------------------------------------------------------------------------

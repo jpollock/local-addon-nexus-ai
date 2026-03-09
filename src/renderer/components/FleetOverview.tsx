@@ -18,6 +18,7 @@ import { SavedQueriesPanel } from './SavedQueriesPanel';
 import { SiteHealthBadge } from './SiteHealthBadge';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
+import { SiteFinderPanel } from './SiteFinderPanel';
 
 interface FleetOverviewProps {
   NavLink: any;
@@ -948,9 +949,9 @@ renderSitesTab(): React.ReactNode {
       // Site table at top
       this.renderSiteTable(),
 
-      // Below: 2-column layout (groups left, search right)
+      // Below: 2-column layout (groups left, site finder right)
       React.createElement('div', {
-        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' },
+        style: { display: 'grid', gridTemplateColumns: '1fr 400px', gap: '16px', marginTop: '16px' },
       },
         // Left: Site Groups
         React.createElement(SiteGroupsPanel, {
@@ -958,12 +959,10 @@ renderSitesTab(): React.ReactNode {
           sites: this.state.sites.map(s => ({ id: s.id, name: s.name, domain: s.domain })),
         }),
 
-        // Right: Search panels stacked
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '16px' } },
-          React.createElement(UnifiedSearchPanel, { electron: this.props.electron }),
-          React.createElement(SmartFiltersPanel, { electron: this.props.electron }),
-          React.createElement(SavedQueriesPanel, { electron: this.props.electron }),
-        ),
+        // Right: Site Finder (advanced search)
+        React.createElement(SiteFinderPanel, {
+          electron: this.props.electron,
+        }),
       ),
     );
   }
