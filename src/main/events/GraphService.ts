@@ -411,6 +411,14 @@ export class GraphService {
       .run(siteId, slug);
   }
 
+  async deletePlugins(siteId: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    this.db
+      .prepare('DELETE FROM plugins WHERE site_id = ?')
+      .run(siteId);
+  }
+
   // ===== User Operations =====
 
   async upsertUser(user: Omit<User, 'id'>): Promise<number> {

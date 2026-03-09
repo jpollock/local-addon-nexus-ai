@@ -115,6 +115,8 @@ interface FleetOverviewState {
   setupAllAutoRunning: boolean;
   indexAllAutoOpId: string | null;
   indexAllAutoRunning: boolean;
+  syncGraphOpId: string | null;
+  syncGraphRunning: boolean;
 }
 
 // -- Shared styles --
@@ -262,6 +264,8 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     setupAllAutoRunning: false,
     indexAllAutoOpId: null,
     indexAllAutoRunning: false,
+    syncGraphOpId: null,
+    syncGraphRunning: false,
     settings: null,
   };
 
@@ -463,6 +467,18 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     } catch {
       if (!this.mounted) return;
       this.setState({ indexAllAutoRunning: false });
+    }
+  };
+
+  handleSyncGraph = async (): Promise<void> => {
+    this.setState({ syncGraphRunning: true });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_GRAPH_ALL);
+      if (!this.mounted) return;
+      this.setState({ syncGraphOpId: result?.opId ?? null, syncGraphRunning: false });
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ syncGraphRunning: false });
     }
   };
 
@@ -1094,6 +1110,22 @@ renderSitesTab(): React.ReactNode {
             disabled: this.state.indexAllAutoRunning,
           }, this.state.indexAllAutoRunning ? "Indexing..." : "Re-index All Sites (auto-start)"),
           this.state.indexAllAutoOpId
+            ? React.createElement("div", {
+                style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
+              }, "Started! Check progress below.")
+            : null,
+        ),
+
+        // Sync Graph (running sites only)
+        React.createElement("div", { style: { flex: "1", minWidth: "250px" } },
+          React.createElement("button", {
+            style: this.state.syncGraphRunning
+              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: "not-allowed", width: "100%" }
+              : { ...btnPrimaryStyle, width: "100%" },
+            onClick: this.state.syncGraphRunning ? undefined : this.handleSyncGraph,
+            disabled: this.state.syncGraphRunning,
+          }, this.state.syncGraphRunning ? "Syncing..." : "Refresh Site Finder Data"),
+          this.state.syncGraphOpId
             ? React.createElement("div", {
                 style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
               }, "Started! Check progress below.")

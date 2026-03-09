@@ -19,8 +19,16 @@ export interface BulkOpDeps {
     startSite(siteId: string): Promise<void>;
     stopSite(siteId: string): Promise<void>;
     wpCliRun(siteId: string, args: string[]): Promise<{ stdout: string | null; success: boolean }>;
+    getPlugins(siteId: string): Promise<Array<{ name: string; title: string; version: string; status: string }>>;
+    getThemes(siteId: string): Promise<Array<{ name: string; title: string; version: string; status: string }>>;
+    getWpVersion(siteId: string): Promise<string | null>;
   };
   healthCalculator: { calculateScore(siteId: string, siteInfo: any): Promise<any> };
+  graphService?: {
+    upsertSite(site: any): Promise<void>;
+    upsertPlugin(plugin: any): Promise<number>;
+    deletePlugins(siteId: string): Promise<void>;
+  };
   onProgress: (opId: string, status: BulkOperationStatus) => void;
   /** Optional: called for 'setup-ai' bulk operations */
   setupSiteForAI?: (siteId: string, options?: any) => Promise<any>;
@@ -209,6 +217,8 @@ export class BulkOperationManager {
         return this.executeHealthRefresh(siteId);
       case 'setup-ai':
         return this.executeSetupAI(siteId, op.options);
+      case 'sync-graph':
+        return this.executeGraphSync(siteId);
       default:
         throw new Error(`Unknown operation type: ${op.type}`);
     }
@@ -290,6 +300,56 @@ export class BulkOperationManager {
       domain: site.domain,
       phpVersion: site.phpVersion,
     });
+  }
+
+  private async executeGraphSync(siteId: string): Promise<void> {
+    if (!this.deps.graphService) {
+      throw new Error('GraphService not available');
+    }
+
+    const site = this.deps.siteDataBridge.resolveSiteObject(siteId);
+    if (!site) {
+      throw new Error(`Site not found: ${siteId}`);
+    }
+
+    const status = this.deps.siteDataBridge.getSiteStatus(siteId);
+    if (status !== 'running') {
+      throw new Error(`Site is not running: ${siteId}`);
+    }
+
+    const now = Date.now();
+
+    // 1. Sync site metadata
+    const wpVersion = await this.deps.siteDataBridge.getWpVersion(siteId);
+    await this.deps.graphService.upsertSite({
+      id: siteId,
+      name: site.name,
+      domain: site.domain,
+      wp_version: wpVersion || null,
+      last_sync_at: now,
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    });
+
+    // 2. Sync plugins (delete all, then re-insert)
+    await this.deps.graphService.deletePlugins(siteId);
+    const plugins = await this.deps.siteDataBridge.getPlugins(siteId);
+    for (const plugin of plugins) {
+      await this.deps.graphService.upsertPlugin({
+        site_id: siteId,
+        slug: plugin.name, // WP-CLI returns 'name' as the slug
+        name: plugin.title, // WP-CLI returns 'title' as the display name
+        version: plugin.version || null,
+        is_active: plugin.status === 'active' ? 1 : 0,
+        author: null,
+        created_at: now,
+        updated_at: now,
+      });
+    }
+
+    // Note: Themes and users not currently tracked in graph
+    // Could add in future if needed
   }
 
   getStatus(opId: string): BulkOperationStatus | null {

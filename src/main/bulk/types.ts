@@ -2,7 +2,7 @@
  * Bulk Operation Types (Sprint 3)
  */
 
-export type BulkOpType = 'reindex' | 'plugin-update' | 'start' | 'stop' | 'health-refresh' | 'setup-ai';
+export type BulkOpType = 'reindex' | 'plugin-update' | 'start' | 'stop' | 'health-refresh' | 'setup-ai' | 'sync-graph';
 
 export interface BulkOperationRequest {
   type: BulkOpType;

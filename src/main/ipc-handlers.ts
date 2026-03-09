@@ -626,6 +626,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     contentPipeline,
     siteDataBridge: localServicesBridge,
     healthCalculator,
+    graphService,
     setupSiteForAI: async (siteId: string, options?: any) => {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const enableOllama = options?.enableOllama ?? (settings?.chatProvider === 'ollama');
@@ -1000,6 +1001,32 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return { success: true, opId };
     } catch (err) {
       localLogger.error("[NexusAI] index-all-auto failed:", (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // Sync Graph: Refresh GraphService with current plugin/theme/user data
+  ipcMain.handle(IPC_CHANNELS.SYNC_GRAPH_ALL, async (_event: any) => {
+    try {
+      const allSites = siteData.getSites();
+      const statuses = localServicesBridge.getAllSiteStatuses();
+
+      // Only sync running sites (WP-CLI required)
+      const runningSiteIds = Object.keys(allSites).filter(id => statuses[id] === 'running');
+
+      if (runningSiteIds.length === 0) {
+        return { success: false, error: "No running sites to sync. Start at least one site." };
+      }
+
+      const opId = bulkOpManager.execute({
+        type: "sync-graph",
+        siteIds: runningSiteIds,
+        options: {},
+      });
+
+      return { success: true, opId, count: runningSiteIds.length };
+    } catch (err) {
+      localLogger.error("[NexusAI] sync-graph-all failed:", (err as Error).message);
       return { success: false, error: (err as Error).message };
     }
   });
