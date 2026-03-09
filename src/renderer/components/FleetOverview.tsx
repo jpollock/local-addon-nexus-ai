@@ -6,6 +6,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS, POLL_INTERVALS } from '../../common/constants';
+import type { NexusSettings } from '../../common/types';
 import { ChatTab } from './ChatTab';
 import { EventStatsCards } from './EventStatsCards';
 import { EventTimeline } from './EventTimeline';
@@ -108,6 +109,7 @@ interface FleetOverviewState {
   fleetSetupRunning: boolean;
   fleetIndexOpId: string | null;
   fleetIndexRunning: boolean;
+  settings: NexusSettings | null;
 }
 
 // -- Shared styles --
@@ -251,6 +253,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     fleetSetupRunning: false,
     fleetIndexOpId: null,
     fleetIndexRunning: false,
+    settings: null,
   };
 
   componentDidMount(): void {
@@ -307,12 +310,13 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
         ipc.invoke(IPC_CHANNELS.GET_FLEET_STATUS),
         ipc.invoke(IPC_CHANNELS.GET_AI_PROXY_INFO),
+        ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
       ]);
       if (!this.mounted) return;
       this.setState({
@@ -321,6 +325,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
         sites: sites ?? [],
         indexEntries: indexEntries ?? [],
         aiProxy: proxyResult?.proxy ?? null,
+        settings: settings ?? null,
         loading: false,
         error: stats ? null : 'Failed to load stats',
       });
@@ -624,10 +629,16 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
         onClick: () => this.copyToClipboard(text, field),
       }, copiedField === field ? 'Copied!' : 'Copy');
 
+    const { settings } = this.state;
+    const activeProvider = settings?.chatProvider
+      ? settings.chatProvider.charAt(0).toUpperCase() + settings.chatProvider.slice(1)
+      : 'Not configured';
+    const activeModel = settings?.chatModel || 'default';
+
     return React.createElement('div', { style: { marginBottom: '24px' } },
       this.renderSectionLabel('Connect to AI Tools'),
       React.createElement('div', {
-        style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' },
+        style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' },
       },
         React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
         React.createElement('span', { style: { fontSize: '13px', color: 'var(--nxai-card-text)' } },
@@ -636,6 +647,18 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
         React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } },
           `\u2022 ${mcpInfo.tools.length} tools \u2022 v${mcpInfo.version}`,
         ),
+      ),
+      React.createElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', paddingLeft: '24px' },
+      },
+        React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } },
+          `Active AI: ${activeProvider}`,
+        ),
+        settings?.chatModel
+          ? React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-text)' } },
+              `(${activeModel})`,
+            )
+          : null,
       ),
 
       React.createElement('div', {
