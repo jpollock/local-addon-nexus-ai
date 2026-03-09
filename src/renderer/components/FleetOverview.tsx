@@ -962,22 +962,19 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
 
 renderSitesTab(): React.ReactNode {
     return React.createElement('div', null,
-      // Site table at top
+      // Site Finder at top (full width above table)
+      React.createElement(SiteFinderPanel, {
+        electron: this.props.electron,
+      }),
+
+      // Site table
       this.renderSiteTable(),
 
-      // Below: 2-column layout (groups left, site finder right)
-      React.createElement('div', {
-        style: { display: 'grid', gridTemplateColumns: '1fr 400px', gap: '16px', marginTop: '16px' },
-      },
-        // Left: Site Groups
+      // Below: Site Groups
+      React.createElement('div', { style: { marginTop: '16px' } },
         React.createElement(SiteGroupsPanel, {
           electron: this.props.electron,
           sites: this.state.sites.map(s => ({ id: s.id, name: s.name, domain: s.domain })),
-        }),
-
-        // Right: Site Finder (advanced search)
-        React.createElement(SiteFinderPanel, {
-          electron: this.props.electron,
         }),
       ),
     );

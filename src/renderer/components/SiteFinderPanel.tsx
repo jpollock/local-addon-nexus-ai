@@ -22,10 +22,10 @@ interface SiteFinderPanelProps {
 
 interface SiteFinderPanelState {
   searchText: string;
-  selectedPlugin: string;
-  selectedTheme: string;
-  selectedPhpVersion: string;
-  selectedWpVersion: string;
+  selectedPlugins: string[];
+  selectedThemes: string[];
+  selectedPhpVersions: string[];
+  selectedWpVersions: string[];
   availablePlugins: string[];
   availableThemes: string[];
   availablePhpVersions: string[];
@@ -43,6 +43,10 @@ const containerStyle: React.CSSProperties = {
   border: '1px solid var(--nxai-card-border, #e5e7eb)',
   backgroundColor: 'var(--nxai-card-bg, #fff)',
   marginBottom: '16px',
+  display: 'grid',
+  gridTemplateColumns: 'repeat(5, 1fr)',
+  gap: '16px',
+  alignItems: 'start',
 };
 
 const titleStyle: React.CSSProperties = {
@@ -52,6 +56,7 @@ const titleStyle: React.CSSProperties = {
   letterSpacing: '0.8px',
   color: 'var(--nxai-card-label, #6b7280)',
   marginBottom: '8px',
+  gridColumn: '1 / -1',
 };
 
 const subtitleStyle: React.CSSProperties = {
@@ -59,6 +64,7 @@ const subtitleStyle: React.CSSProperties = {
   color: 'var(--nxai-card-sub, #6b7280)',
   marginBottom: '12px',
   fontStyle: 'italic',
+  gridColumn: '1 / -1',
 };
 
 const formGroupStyle: React.CSSProperties = {
@@ -96,12 +102,14 @@ const selectStyle: React.CSSProperties = {
   outline: 'none',
   boxSizing: 'border-box',
   cursor: 'pointer',
+  minHeight: '80px',
 };
 
 const buttonRowStyle: React.CSSProperties = {
   display: 'flex',
   gap: '8px',
-  marginTop: '16px',
+  gridColumn: '1 / -1',
+  marginTop: '8px',
 };
 
 const applyButtonStyle: React.CSSProperties = {
@@ -129,7 +137,6 @@ const clearButtonStyle: React.CSSProperties = {
 };
 
 const resultsStyle: React.CSSProperties = {
-  marginTop: '12px',
   padding: '8px 12px',
   borderRadius: '6px',
   backgroundColor: '#3b82f610',
@@ -138,6 +145,7 @@ const resultsStyle: React.CSSProperties = {
   fontSize: '12px',
   fontWeight: 600,
   textAlign: 'center',
+  gridColumn: '1 / -1',
 };
 
 const loadingStyle: React.CSSProperties = {
@@ -155,10 +163,10 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
 
   state: SiteFinderPanelState = {
     searchText: '',
-    selectedPlugin: '',
-    selectedTheme: '',
-    selectedPhpVersion: '',
-    selectedWpVersion: '',
+    selectedPlugins: [],
+    selectedThemes: [],
+    selectedPhpVersions: [],
+    selectedWpVersions: [],
     availablePlugins: [],
     availableThemes: [],
     availablePhpVersions: [],
@@ -212,10 +220,10 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
         IPC_CHANNELS.SITE_FINDER_APPLY,
         {
           searchText: this.state.searchText,
-          plugin: this.state.selectedPlugin,
-          theme: this.state.selectedTheme,
-          phpVersion: this.state.selectedPhpVersion,
-          wpVersion: this.state.selectedWpVersion,
+          plugins: this.state.selectedPlugins,
+          themes: this.state.selectedThemes,
+          phpVersions: this.state.selectedPhpVersions,
+          wpVersions: this.state.selectedWpVersions,
         },
       );
 
@@ -238,10 +246,10 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
   handleClear = (): void => {
     this.setState({
       searchText: '',
-      selectedPlugin: '',
-      selectedTheme: '',
-      selectedPhpVersion: '',
-      selectedWpVersion: '',
+      selectedPlugins: [],
+      selectedThemes: [],
+      selectedPhpVersions: [],
+      selectedWpVersions: [],
       resultsCount: null,
     });
 
@@ -287,16 +295,18 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
       React.createElement(
         'div',
         { style: formGroupStyle },
-        React.createElement('label', { style: labelStyle }, 'Has Plugin'),
+        React.createElement('label', { style: labelStyle }, 'Has Plugin (hold Cmd/Ctrl for multiple)'),
         React.createElement(
           'select',
           {
             style: selectStyle,
-            value: this.state.selectedPlugin,
-            onChange: (e: React.ChangeEvent<HTMLSelectElement>) =>
-              this.setState({ selectedPlugin: e.target.value }),
+            multiple: true,
+            value: this.state.selectedPlugins,
+            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+              const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+              this.setState({ selectedPlugins: selected });
+            },
           },
-          React.createElement('option', { value: '' }, 'Any plugin'),
           this.state.availablePlugins.map(plugin =>
             React.createElement('option', { key: plugin, value: plugin }, plugin),
           ),
@@ -307,16 +317,18 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
       React.createElement(
         'div',
         { style: formGroupStyle },
-        React.createElement('label', { style: labelStyle }, 'Has Theme'),
+        React.createElement('label', { style: labelStyle }, 'Has Theme (hold Cmd/Ctrl for multiple)'),
         React.createElement(
           'select',
           {
             style: selectStyle,
-            value: this.state.selectedTheme,
-            onChange: (e: React.ChangeEvent<HTMLSelectElement>) =>
-              this.setState({ selectedTheme: e.target.value }),
+            multiple: true,
+            value: this.state.selectedThemes,
+            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+              const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+              this.setState({ selectedThemes: selected });
+            },
           },
-          React.createElement('option', { value: '' }, 'Any theme'),
           this.state.availableThemes.map(theme =>
             React.createElement('option', { key: theme, value: theme }, theme),
           ),
@@ -327,16 +339,18 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
       React.createElement(
         'div',
         { style: formGroupStyle },
-        React.createElement('label', { style: labelStyle }, 'PHP Version'),
+        React.createElement('label', { style: labelStyle }, 'PHP Version (hold Cmd/Ctrl for multiple)'),
         React.createElement(
           'select',
           {
             style: selectStyle,
-            value: this.state.selectedPhpVersion,
-            onChange: (e: React.ChangeEvent<HTMLSelectElement>) =>
-              this.setState({ selectedPhpVersion: e.target.value }),
+            multiple: true,
+            value: this.state.selectedPhpVersions,
+            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+              const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+              this.setState({ selectedPhpVersions: selected });
+            },
           },
-          React.createElement('option', { value: '' }, 'Any version'),
           this.state.availablePhpVersions.map(version =>
             React.createElement('option', { key: version, value: version }, version),
           ),
@@ -347,16 +361,18 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
       React.createElement(
         'div',
         { style: formGroupStyle },
-        React.createElement('label', { style: labelStyle }, 'WordPress Version'),
+        React.createElement('label', { style: labelStyle }, 'WordPress Version (hold Cmd/Ctrl for multiple)'),
         React.createElement(
           'select',
           {
             style: selectStyle,
-            value: this.state.selectedWpVersion,
-            onChange: (e: React.ChangeEvent<HTMLSelectElement>) =>
-              this.setState({ selectedWpVersion: e.target.value }),
+            multiple: true,
+            value: this.state.selectedWpVersions,
+            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+              const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+              this.setState({ selectedWpVersions: selected });
+            },
           },
-          React.createElement('option', { value: '' }, 'Any version'),
           this.state.availableWpVersions.map(version =>
             React.createElement('option', { key: version, value: version }, version),
           ),

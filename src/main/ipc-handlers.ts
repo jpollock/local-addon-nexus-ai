@@ -1105,31 +1105,32 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           }
         }
 
-        // PHP version filter (available even when stopped)
-        if (matches && filters.phpVersion && filters.phpVersion.trim()) {
+        // PHP version filter (available even when stopped) - OR logic within array
+        if (matches && filters.phpVersions && filters.phpVersions.length > 0) {
           const phpVersion = (site as any).phpVersion;
-          if (phpVersion !== filters.phpVersion) {
+          if (!filters.phpVersions.includes(phpVersion)) {
             matches = false;
           }
         }
 
-        // Plugin filter (use graph - works on all sites)
-        if (matches && filters.plugin && filters.plugin.trim()) {
+        // Plugin filter (use graph - works on all sites) - OR logic within array
+        if (matches && filters.plugins && filters.plugins.length > 0) {
           if (db) {
-            const pluginRow = db.prepare('SELECT 1 FROM plugins WHERE site_id = ? AND name = ? LIMIT 1')
-              .get(siteId, filters.plugin);
+            const placeholders = filters.plugins.map(() => '?').join(',');
+            const pluginRow = db.prepare(`SELECT 1 FROM plugins WHERE site_id = ? AND name IN (${placeholders}) LIMIT 1`)
+              .get(siteId, ...filters.plugins);
             if (!pluginRow) matches = false;
           } else {
             matches = false;
           }
         }
 
-        // WP version filter (use graph - works on all sites)
-        if (matches && filters.wpVersion && filters.wpVersion.trim()) {
+        // WP version filter (use graph - works on all sites) - OR logic within array
+        if (matches && filters.wpVersions && filters.wpVersions.length > 0) {
           if (db) {
             const siteRow = db.prepare('SELECT wp_version FROM sites WHERE id = ? LIMIT 1')
               .get(siteId) as any;
-            if (!siteRow || siteRow.wp_version !== filters.wpVersion) {
+            if (!siteRow || !filters.wpVersions.includes(siteRow.wp_version)) {
               matches = false;
             }
           } else {
@@ -1137,15 +1138,15 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           }
         }
 
-        // Theme filter (requires WP-CLI - running sites only)
-        if (matches && filters.theme && filters.theme.trim()) {
+        // Theme filter (requires WP-CLI - running sites only) - OR logic within array
+        if (matches && filters.themes && filters.themes.length > 0) {
           if (!isRunning) {
             matches = false;
           } else {
             try {
               const themes = await localServicesBridge.getThemes(siteId);
-              const hasTheme = themes.some((t: any) => t.name === filters.theme);
-              if (!hasTheme) matches = false;
+              const hasAnyTheme = themes.some((t: any) => filters.themes.includes(t.name));
+              if (!hasAnyTheme) matches = false;
             } catch {
               matches = false;
             }
