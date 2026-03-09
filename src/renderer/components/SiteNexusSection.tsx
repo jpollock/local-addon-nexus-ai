@@ -74,7 +74,7 @@ function createActionButton(props: {
       onClick: props.onClick,
       disabled: props.disabled,
       inline: true,
-      style: { marginLeft: 10 },
+      style: { paddingLeft: '10px' },
     }, props.children);
   }
 
@@ -83,7 +83,7 @@ function createActionButton(props: {
     className: 'TextButton ButtonBase ButtonBase__Color_Green ButtonBase__Form_Text',
     onClick: props.onClick,
     disabled: props.disabled,
-    style: { marginLeft: 10, opacity: props.disabled ? 0.5 : 1 },
+    style: { paddingLeft: '10px', opacity: props.disabled ? 0.5 : 1 },
   }, props.children);
 }
 
