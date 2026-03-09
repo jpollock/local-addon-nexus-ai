@@ -10,6 +10,16 @@ export default function renderer(context: any): void {
   const { Route, NavLink } = ReactRouter;
   const electron = context.electron || (window as any).electron;
 
+  // Try to get TextButton from Local's components
+  let TextButton: any = null;
+  try {
+    // @ts-ignore
+    const localComponents = require('@getflywheel/local-components');
+    TextButton = localComponents.TextButton;
+  } catch {
+    // TextButton not available, component will use fallback
+  }
+
   // Feature 1a: Sidebar WPE badges (DOM injection)
   const manager = new SidebarBadgeManager(electron);
   manager.initialize();
@@ -45,7 +55,7 @@ export default function renderer(context: any): void {
   hooks.addFilter('SiteInfoOverview_Addon_Section', (sections: any[], site: any) => {
     return [...sections, {
       title: 'Nexus AI',
-      component: React.createElement(SiteNexusSection, { site, electron }),
+      component: React.createElement(SiteNexusSection, { site, electron, TextButton }),
     }];
   });
 }

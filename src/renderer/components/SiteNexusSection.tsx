@@ -10,18 +10,10 @@ import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 import type { NexusSettings } from '../../common/types';
 
-// Try to import TextButton from Local's components (available at runtime)
-let TextButton: any = null;
-try {
-  // @ts-ignore - peerDependency, available at runtime from Local
-  TextButton = require('@getflywheel/local-components').TextButton;
-} catch {
-  // Fallback: TextButton not available, use button with CSS classes
-}
-
 interface SiteNexusSectionProps {
   site: { id: string; name: string; path: string; status?: string };
   electron: any;
+  TextButton?: any; // Optional: Local's TextButton component passed from renderer
 }
 
 interface IndexEntry {
@@ -60,31 +52,6 @@ function formatTimeAgo(timestamp: number): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
-}
-
-/** Helper to create action button using Local's TextButton or fallback */
-function createActionButton(props: {
-  onClick?: () => void;
-  disabled?: boolean;
-  children: string;
-}): React.ReactElement {
-  if (TextButton) {
-    // Use Local's TextButton component
-    return React.createElement(TextButton, {
-      onClick: props.onClick,
-      disabled: props.disabled,
-      inline: true,
-      style: { paddingLeft: '10px' },
-    }, props.children);
-  }
-
-  // Fallback: button with CSS classes matching Local's TextButton
-  return React.createElement('button', {
-    className: 'TextButton ButtonBase ButtonBase__Color_Green ButtonBase__Form_Text',
-    onClick: props.onClick,
-    disabled: props.disabled,
-    style: { paddingLeft: '10px', opacity: props.disabled ? 0.5 : 1 },
-  }, props.children);
 }
 
 const dotStyle = (color: string): React.CSSProperties => ({
@@ -228,6 +195,32 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     }
   };
 
+  /** Helper to create action button using Local's TextButton if available */
+  createActionButton(props: {
+    onClick?: () => void;
+    disabled?: boolean;
+    children: string;
+  }): React.ReactElement {
+    const { TextButton } = this.props;
+
+    if (TextButton) {
+      return React.createElement(TextButton, {
+        onClick: props.onClick,
+        disabled: props.disabled,
+        inline: true,
+        style: { paddingLeft: '10px' },
+      }, props.children);
+    }
+
+    // Fallback: plain button with TextButton CSS classes
+    return React.createElement('button', {
+      className: 'TextButton ButtonBase ButtonBase__Color_Green ButtonBase__Form_Text',
+      onClick: props.onClick,
+      disabled: props.disabled,
+      style: { paddingLeft: '10px', opacity: props.disabled ? 0.5 : 1 },
+    }, props.children);
+  }
+
   render(): React.ReactNode {
     const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds } = this.state;
 
@@ -253,7 +246,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     rows.push(row('Index status',
       React.createElement('span', { style: dotStyle(stateColor) }),
       stateLabel,
-      createActionButton({
+      this.createActionButton({
         onClick: indexing ? undefined : this.handleIndex,
         disabled: indexing,
         children: indexing ? 'Indexing...' : (indexEntry ? 'Re-index' : 'Index Now'),
@@ -290,7 +283,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
         React.createElement('span', { style: dotStyle(pluginColor(aiStatus?.aiPlugin ?? 'not_installed')) }),
         pluginLabel(aiStatus?.aiPlugin ?? 'not_installed'),
         aiStatus?.aiPlugin !== 'active'
-          ? createActionButton({
+          ? this.createActionButton({
               onClick: settingUpAI ? undefined : this.handleSetupAI,
               disabled: settingUpAI,
               children: settingUpAI ? 'Setting up...' : 'Setup AI',
@@ -309,7 +302,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       rows.push(row('Credentials',
         React.createElement('span', { style: dotStyle(credsSynced ? UI_COLORS.STATUS_RUNNING : '#888') }),
         credsSynced ? `Synced (${aiStatus!.providers.join(', ')})` : 'Not synced',
-        createActionButton({
+        this.createActionButton({
           onClick: syncingCreds ? undefined : this.handleSyncCredentials,
           disabled: syncingCreds,
           children: syncingCreds ? 'Syncing...' : 'Sync Keys',
