@@ -103,7 +103,7 @@ interface FleetOverviewState {
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'sites' | 'operations' | 'chat';
+  activeTab: 'overview' | 'sites' | 'content' | 'operations' | 'chat';
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -973,6 +973,7 @@ renderSitesTab(): React.ReactNode {
     const tabs: { key: FleetOverviewState['activeTab']; label: string }[] = [
       { key: 'overview', label: 'Overview' },
       { key: 'sites', label: 'Sites' },
+      { key: 'content', label: 'Content' },
       { key: 'operations', label: 'Operations' },
       { key: 'chat', label: 'Chat' },
     ];
@@ -1000,6 +1001,32 @@ renderSitesTab(): React.ReactNode {
           onClick: () => this.setState({ activeTab: tab.key }),
         }, tab.label);
       }),
+    );
+  }
+
+  renderContentTab(): React.ReactNode {
+    return React.createElement('div', null,
+      // Content search across all sites
+      React.createElement('div', {
+        style: { display: 'flex', gap: '20px' },
+      },
+        // Left column: main search
+        React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+          React.createElement(UnifiedSearchPanel, {
+            electron: this.props.electron,
+          }),
+        ),
+
+        // Right column: filters + saved queries
+        React.createElement('div', { style: { width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column' as const, gap: '16px' } },
+          React.createElement(SmartFiltersPanel, {
+            electron: this.props.electron,
+          }),
+          React.createElement(SavedQueriesPanel, {
+            electron: this.props.electron,
+          }),
+        ),
+      ),
     );
   }
 
@@ -1088,6 +1115,7 @@ renderSitesTab(): React.ReactNode {
     switch (this.state.activeTab) {
       case 'overview': return this.renderOverviewTab();
       case 'sites': return this.renderSitesTab();
+      case 'content': return this.renderContentTab();
       case 'operations': return this.renderOperationsTab();
       case 'chat': return this.renderChatTab();
       default: return this.renderOverviewTab();
