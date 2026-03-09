@@ -51,7 +51,14 @@ const titleStyle: React.CSSProperties = {
   textTransform: 'uppercase',
   letterSpacing: '0.8px',
   color: 'var(--nxai-card-label, #6b7280)',
-  marginBottom: '16px',
+  marginBottom: '8px',
+};
+
+const subtitleStyle: React.CSSProperties = {
+  fontSize: '11px',
+  color: 'var(--nxai-card-sub, #6b7280)',
+  marginBottom: '12px',
+  fontStyle: 'italic',
 };
 
 const formGroupStyle: React.CSSProperties = {
@@ -163,6 +170,7 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
 
   componentDidMount(): void {
     this._mounted = true;
+    console.log('[SiteFinderPanel] Component mounted');
     this.fetchFilterOptions();
   }
 
@@ -172,13 +180,17 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
 
   fetchFilterOptions = async (): Promise<void> => {
     try {
+      console.log('[SiteFinderPanel] Fetching filter options...');
       const result = await this.props.electron.ipcRenderer.invoke(
         IPC_CHANNELS.SITE_FINDER_GET_OPTIONS,
       );
 
+      console.log('[SiteFinderPanel] Got result:', result);
+
       if (!this._mounted) return;
 
       if (result.success) {
+        console.log('[SiteFinderPanel] Setting state with options');
         this.setState({
           availablePlugins: result.plugins || [],
           availableThemes: result.themes || [],
@@ -187,9 +199,11 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
           loading: false,
         });
       } else {
+        console.error('[SiteFinderPanel] Result not successful:', result.error);
         this.setState({ loading: false });
       }
-    } catch {
+    } catch (err) {
+      console.error('[SiteFinderPanel] Error fetching options:', err);
       if (!this._mounted) return;
       this.setState({ loading: false });
     }
@@ -245,6 +259,7 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
 
   render(): React.ReactNode {
     const { loading, applying, resultsCount } = this.state;
+    console.log('[SiteFinderPanel] Rendering, loading:', loading);
 
     if (loading) {
       return React.createElement(
@@ -259,6 +274,7 @@ export class SiteFinderPanel extends React.Component<SiteFinderPanelProps, SiteF
       'div',
       { style: containerStyle },
       React.createElement('div', { style: titleStyle }, 'Site Finder'),
+      React.createElement('div', { style: subtitleStyle }, 'Plugin/theme filters only include running sites'),
 
       // Search text
       React.createElement(

@@ -1011,34 +1011,41 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   ipcMain.handle(IPC_CHANNELS.SITE_FINDER_GET_OPTIONS, async (_event: any) => {
     try {
       const allSites = siteData.getSites();
+      const statuses = localServicesBridge.getAllSiteStatuses();
       const pluginsSet = new Set<string>();
       const themesSet = new Set<string>();
       const phpSet = new Set<string>();
       const wpSet = new Set<string>();
 
+      // Only query running sites to avoid WP-CLI timeouts
       for (const [siteId, site] of Object.entries(allSites)) {
-        try {
-          // Get plugins
-          const plugins = await localServicesBridge.getPlugins(siteId);
-          for (const plugin of plugins) {
-            if (plugin.name) pluginsSet.add(plugin.name);
+        const isRunning = statuses[siteId] === 'running';
+
+        // Get PHP version from site data (available even when stopped)
+        const phpVersion = (site as any).phpVersion;
+        if (phpVersion) phpSet.add(phpVersion);
+
+        // Only query WP-CLI data for running sites
+        if (isRunning) {
+          try {
+            // Get plugins
+            const plugins = await localServicesBridge.getPlugins(siteId);
+            for (const plugin of plugins) {
+              if (plugin.name) pluginsSet.add(plugin.name);
+            }
+
+            // Get themes
+            const themes = await localServicesBridge.getThemes(siteId);
+            for (const theme of themes) {
+              if (theme.name) themesSet.add(theme.name);
+            }
+
+            // Get WP version
+            const wpVersion = await localServicesBridge.getWpVersion(siteId);
+            if (wpVersion) wpSet.add(wpVersion);
+          } catch {
+            // Site WP-CLI call failed, skip
           }
-
-          // Get themes
-          const themes = await localServicesBridge.getThemes(siteId);
-          for (const theme of themes) {
-            if (theme.name) themesSet.add(theme.name);
-          }
-
-          // Get PHP version
-          const phpVersion = (site as any).phpVersion;
-          if (phpVersion) phpSet.add(phpVersion);
-
-          // Get WP version
-          const wpVersion = await localServicesBridge.getWpVersion(siteId);
-          if (wpVersion) wpSet.add(wpVersion);
-        } catch {
-          // Site may not be accessible, skip
         }
       }
 
@@ -1058,10 +1065,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   ipcMain.handle(IPC_CHANNELS.SITE_FINDER_APPLY, async (_event: any, filters: any) => {
     try {
       const allSites = siteData.getSites();
+      const statuses = localServicesBridge.getAllSiteStatuses();
       const matchingSiteIds: string[] = [];
 
       for (const [siteId, site] of Object.entries(allSites)) {
         let matches = true;
+        const isRunning = statuses[siteId] === 'running';
 
         // Text search (name or domain)
         if (filters.searchText && filters.searchText.trim()) {
@@ -1073,29 +1082,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           }
         }
 
-        // Plugin filter
-        if (matches && filters.plugin && filters.plugin.trim()) {
-          try {
-            const plugins = await localServicesBridge.getPlugins(siteId);
-            const hasPlugin = plugins.some((p: any) => p.name === filters.plugin);
-            if (!hasPlugin) matches = false;
-          } catch {
-            matches = false;
-          }
-        }
-
-        // Theme filter
-        if (matches && filters.theme && filters.theme.trim()) {
-          try {
-            const themes = await localServicesBridge.getThemes(siteId);
-            const hasTheme = themes.some((t: any) => t.name === filters.theme);
-            if (!hasTheme) matches = false;
-          } catch {
-            matches = false;
-          }
-        }
-
-        // PHP version filter
+        // PHP version filter (available even when stopped)
         if (matches && filters.phpVersion && filters.phpVersion.trim()) {
           const phpVersion = (site as any).phpVersion;
           if (phpVersion !== filters.phpVersion) {
@@ -1103,15 +1090,45 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           }
         }
 
-        // WP version filter
-        if (matches && filters.wpVersion && filters.wpVersion.trim()) {
-          try {
-            const wpVersion = await localServicesBridge.getWpVersion(siteId);
-            if (wpVersion !== filters.wpVersion) {
-              matches = false;
-            }
-          } catch {
+        // Plugin/theme/WP version filters require site to be running
+        if (matches && (filters.plugin || filters.theme || filters.wpVersion)) {
+          if (!isRunning) {
+            // Site must be running to check these filters
             matches = false;
+          } else {
+            // Plugin filter
+            if (matches && filters.plugin && filters.plugin.trim()) {
+              try {
+                const plugins = await localServicesBridge.getPlugins(siteId);
+                const hasPlugin = plugins.some((p: any) => p.name === filters.plugin);
+                if (!hasPlugin) matches = false;
+              } catch {
+                matches = false;
+              }
+            }
+
+            // Theme filter
+            if (matches && filters.theme && filters.theme.trim()) {
+              try {
+                const themes = await localServicesBridge.getThemes(siteId);
+                const hasTheme = themes.some((t: any) => t.name === filters.theme);
+                if (!hasTheme) matches = false;
+              } catch {
+                matches = false;
+              }
+            }
+
+            // WP version filter
+            if (matches && filters.wpVersion && filters.wpVersion.trim()) {
+              try {
+                const wpVersion = await localServicesBridge.getWpVersion(siteId);
+                if (wpVersion !== filters.wpVersion) {
+                  matches = false;
+                }
+              } catch {
+                matches = false;
+              }
+            }
           }
         }
 
