@@ -117,6 +117,7 @@ interface FleetOverviewState {
   indexAllAutoRunning: boolean;
   syncGraphOpId: string | null;
   syncGraphRunning: boolean;
+  filteredSiteIds: string[] | null;
 }
 
 // -- Shared styles --
@@ -266,6 +267,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     indexAllAutoRunning: false,
     syncGraphOpId: null,
     syncGraphRunning: false,
+    filteredSiteIds: null,
     settings: null,
   };
 
@@ -795,15 +797,22 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
   }
 
   renderSiteTable(): React.ReactNode {
-    const { sites, indexEntries, indexingId } = this.state;
+    const { sites, indexEntries, indexingId, filteredSiteIds } = this.state;
 
     const indexMap = new Map<string, IndexEntry>();
     for (const entry of indexEntries) {
       indexMap.set(entry.siteId, entry);
     }
 
+    // Filter sites if Site Finder has active filters
+    let displaySites = sites;
+    if (filteredSiteIds !== null) {
+      const filterSet = new Set(filteredSiteIds);
+      displaySites = sites.filter(s => filterSet.has(s.id));
+    }
+
     // Sort: running first, then alphabetical
-    const sorted = [...sites].sort((a, b) => {
+    const sorted = [...displaySites].sort((a, b) => {
       if (a.status === 'running' && b.status !== 'running') return -1;
       if (b.status === 'running' && a.status !== 'running') return 1;
       return a.name.localeCompare(b.name);
@@ -836,6 +845,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
           React.createElement('thead', null,
             React.createElement('tr', null,
               React.createElement('th', { style: thStyle }, 'Site'),
+              React.createElement('th', { style: thStyle }, 'Actions'),
               React.createElement('th', { style: thStyle }, 'Health'),
               React.createElement('th', { style: thStyle }, 'Status'),
               React.createElement('th', { style: thStyle }, 'Index'),
@@ -850,9 +860,9 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
             sorted.length === 0
               ? React.createElement('tr', null,
                   React.createElement('td', {
-                    colSpan: 9,
+                    colSpan: 10,
                     style: { ...tdStyle, textAlign: 'center' as const, color: 'var(--nxai-card-sub)', padding: '24px' },
-                  }, 'No sites found'),
+                  }, filteredSiteIds !== null ? 'No sites match the filters' : 'No sites found'),
                 )
               : sorted.map((site) => {
                   const idx = indexMap.get(site.id);
@@ -864,12 +874,33 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
                     : indexState === 'error' ? UI_COLORS.STATUS_ERROR
                     : 'var(--nxai-card-sub)';
 
+                  const siteUrl = `http://${site.domain}`;
+                  const adminUrl = `${siteUrl}/wp-admin`;
+
                   return React.createElement('tr', { key: site.id },
                     React.createElement('td', { style: tdStyle },
                       React.createElement('span', { style: { fontWeight: 500 } }, site.name),
                       site.isWpe ? React.createElement('span', {
                         style: tagStyle('rgba(14, 202, 212, 0.15)', UI_COLORS.WPE_BRAND),
                       }, 'WPE') : null,
+                    ),
+                    React.createElement('td', { style: tdStyle },
+                      React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+                        React.createElement('a', {
+                          href: siteUrl,
+                          target: '_blank',
+                          rel: 'noopener noreferrer',
+                          style: { color: '#3b82f6', textDecoration: 'none', fontSize: '12px' },
+                          title: 'Open site',
+                        }, 'Site ↗'),
+                        site.status === 'running' ? React.createElement('a', {
+                          href: adminUrl,
+                          target: '_blank',
+                          rel: 'noopener noreferrer',
+                          style: { color: '#3b82f6', textDecoration: 'none', fontSize: '12px' },
+                          title: 'Open WP Admin (login: admin / admin)',
+                        }, 'Admin ↗') : null,
+                      ),
                     ),
                     React.createElement('td', { style: { ...tdStyle, textAlign: 'center' as const } },
                       React.createElement(SiteHealthBadge, {
@@ -965,6 +996,9 @@ renderSitesTab(): React.ReactNode {
       // Site Finder at top (full width above table)
       React.createElement(SiteFinderPanel, {
         electron: this.props.electron,
+        onFilterApply: (siteIds: string[]) => {
+          this.setState({ filteredSiteIds: siteIds.length > 0 ? siteIds : null });
+        },
       }),
 
       // Site table
