@@ -16,8 +16,13 @@ export default function renderer(context: any): void {
     // @ts-ignore
     const localComponents = require('@getflywheel/local-components');
     TextButton = localComponents.TextButton;
-  } catch {
-    // TextButton not available, component will use fallback
+    if (TextButton) {
+      console.log('[Nexus AI] Successfully loaded TextButton from @getflywheel/local-components');
+    } else {
+      console.warn('[Nexus AI] TextButton is undefined in @getflywheel/local-components');
+    }
+  } catch (err) {
+    console.warn('[Nexus AI] Could not load @getflywheel/local-components:', err);
   }
 
   // Feature 1a: Sidebar WPE badges (DOM injection)

@@ -203,6 +203,11 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   }): React.ReactElement {
     const { TextButton } = this.props;
 
+    // Debug: Log whether we have TextButton
+    if (!this.state.loading && !TextButton && typeof console !== 'undefined') {
+      console.warn('[Nexus AI] TextButton component not available, using fallback');
+    }
+
     if (TextButton) {
       return React.createElement(TextButton, {
         onClick: props.onClick,
@@ -212,12 +217,26 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       }, props.children);
     }
 
-    // Fallback: plain button with TextButton CSS classes
-    return React.createElement('button', {
-      className: 'TextButton ButtonBase ButtonBase__Color_Green ButtonBase__Form_Text',
-      onClick: props.onClick,
-      disabled: props.disabled,
-      style: { paddingLeft: '10px', opacity: props.disabled ? 0.5 : 1 },
+    // Fallback: Use a styled anchor that looks like Local's TextButton
+    return React.createElement('a', {
+      onClick: props.disabled ? undefined : props.onClick,
+      style: {
+        paddingLeft: '10px',
+        cursor: props.disabled ? 'default' : 'pointer',
+        color: props.disabled ? '#888' : '#51c356',
+        textDecoration: 'none',
+        fontWeight: 400,
+        fontSize: 'inherit',
+        opacity: props.disabled ? 0.5 : 1,
+      },
+      onMouseEnter: (e: any) => {
+        if (!props.disabled) {
+          e.target.style.textDecoration = 'underline';
+        }
+      },
+      onMouseLeave: (e: any) => {
+        e.target.style.textDecoration = 'none';
+      },
     }, props.children);
   }
 
@@ -276,13 +295,13 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       !excluded ? 'On' : 'Off',
     ));
 
-    // AI rows
-    {
+    // AI rows (only render if AI status is loaded)
+    if (aiStatus) {
       // AI Plugin
       rows.push(row('AI plugin',
-        React.createElement('span', { style: dotStyle(pluginColor(aiStatus?.aiPlugin ?? 'not_installed')) }),
-        pluginLabel(aiStatus?.aiPlugin ?? 'not_installed'),
-        aiStatus?.aiPlugin !== 'active'
+        React.createElement('span', { style: dotStyle(pluginColor(aiStatus.aiPlugin)) }),
+        pluginLabel(aiStatus.aiPlugin),
+        aiStatus.aiPlugin !== 'active'
           ? this.createActionButton({
               onClick: settingUpAI ? undefined : this.handleSetupAI,
               disabled: settingUpAI,
@@ -293,15 +312,15 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
 
       // Ollama Provider
       rows.push(row('Ollama provider',
-        React.createElement('span', { style: dotStyle(pluginColor(aiStatus?.ollamaProvider ?? 'not_installed')) }),
-        pluginLabel(aiStatus?.ollamaProvider ?? 'not_installed'),
+        React.createElement('span', { style: dotStyle(pluginColor(aiStatus.ollamaProvider)) }),
+        pluginLabel(aiStatus.ollamaProvider),
       ));
 
       // Credentials
-      const credsSynced = aiStatus?.credentialsSynced ?? false;
+      const credsSynced = aiStatus.credentialsSynced ?? false;
       rows.push(row('Credentials',
         React.createElement('span', { style: dotStyle(credsSynced ? UI_COLORS.STATUS_RUNNING : '#888') }),
-        credsSynced ? `Synced (${aiStatus!.providers.join(', ')})` : 'Not synced',
+        credsSynced ? `Synced (${aiStatus.providers.join(', ')})` : 'Not synced',
         this.createActionButton({
           onClick: syncingCreds ? undefined : this.handleSyncCredentials,
           disabled: syncingCreds,
