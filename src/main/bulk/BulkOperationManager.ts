@@ -312,6 +312,8 @@ export class BulkOperationManager {
       throw new Error(`Site not found: ${siteId}`);
     }
 
+    // Site must be running for WP-CLI queries
+    // Auto-start/stop is handled by executeSingle() if enabled
     const status = this.deps.siteDataBridge.getSiteStatus(siteId);
     if (status !== 'running') {
       throw new Error(`Site is not running: ${siteId}`);

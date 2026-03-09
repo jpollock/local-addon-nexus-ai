@@ -1005,26 +1005,23 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  // Sync Graph: Refresh GraphService with current plugin/theme/user data
+  // Sync Graph: Refresh GraphService with current plugin/theme/user data (auto-start/stop)
   ipcMain.handle(IPC_CHANNELS.SYNC_GRAPH_ALL, async (_event: any) => {
     try {
       const allSites = siteData.getSites();
-      const statuses = localServicesBridge.getAllSiteStatuses();
+      const allSiteIds = Object.keys(allSites);
 
-      // Only sync running sites (WP-CLI required)
-      const runningSiteIds = Object.keys(allSites).filter(id => statuses[id] === 'running');
-
-      if (runningSiteIds.length === 0) {
-        return { success: false, error: "No running sites to sync. Start at least one site." };
+      if (allSiteIds.length === 0) {
+        return { success: false, error: "No sites to sync." };
       }
 
       const opId = bulkOpManager.execute({
         type: "sync-graph",
-        siteIds: runningSiteIds,
-        options: {},
+        siteIds: allSiteIds,
+        options: { autoStartStop: true },
       });
 
-      return { success: true, opId, count: runningSiteIds.length };
+      return { success: true, opId, count: allSiteIds.length };
     } catch (err) {
       localLogger.error("[NexusAI] sync-graph-all failed:", (err as Error).message);
       return { success: false, error: (err as Error).message };

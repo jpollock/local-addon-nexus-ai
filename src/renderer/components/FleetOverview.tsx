@@ -1116,7 +1116,7 @@ renderSitesTab(): React.ReactNode {
             : null,
         ),
 
-        // Sync Graph (running sites only)
+        // Sync Graph (all sites, auto-start/stop)
         React.createElement("div", { style: { flex: "1", minWidth: "250px" } },
           React.createElement("button", {
             style: this.state.syncGraphRunning
@@ -1124,7 +1124,7 @@ renderSitesTab(): React.ReactNode {
               : { ...btnPrimaryStyle, width: "100%" },
             onClick: this.state.syncGraphRunning ? undefined : this.handleSyncGraph,
             disabled: this.state.syncGraphRunning,
-          }, this.state.syncGraphRunning ? "Syncing..." : "Refresh Site Finder Data"),
+          }, this.state.syncGraphRunning ? "Syncing..." : "Refresh Site Finder Data (auto-start)"),
           this.state.syncGraphOpId
             ? React.createElement("div", {
                 style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
