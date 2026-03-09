@@ -103,7 +103,7 @@ interface FleetOverviewState {
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'search' | 'sites' | 'chat' | 'visibility';
+  activeTab: 'overview' | 'sites' | 'operations' | 'chat';
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -900,29 +900,6 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     );
   }
 
-  renderSearchTab(): React.ReactNode {
-    return React.createElement('div', {
-      style: { display: 'flex', gap: '20px' },
-    },
-      // Left column: main search
-      React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-        React.createElement(UnifiedSearchPanel, {
-          electron: this.props.electron,
-        }),
-      ),
-
-      // Right column: filters + saved queries
-      React.createElement('div', { style: { width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column' as const, gap: '16px' } },
-        React.createElement(SmartFiltersPanel, {
-          electron: this.props.electron,
-        }),
-        React.createElement(SavedQueriesPanel, {
-          electron: this.props.electron,
-        }),
-      ),
-    );
-  }
-
   renderOverviewTab(): React.ReactNode {
     const { stats } = this.state;
     if (!stats) return null;
@@ -947,105 +924,15 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
 
       this.renderMcpPanel(),
 
-      // Sprint 3/4: Fleet Operations
-      this.renderSectionLabel('Fleet Operations'),
-
-      // Fleet operation buttons
-      React.createElement('div', { style: { display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' } },
-        // Setup AI Fleet
-        React.createElement('div', { style: { flex: '1', minWidth: '250px' } },
-          React.createElement('button', {
-            style: this.state.fleetSetupRunning
-              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed', width: '100%' }
-              : { ...btnPrimaryStyle, width: '100%' },
-            onClick: this.state.fleetSetupRunning ? undefined : this.handleSetupAIFleet,
-            disabled: this.state.fleetSetupRunning,
-          }, this.state.fleetSetupRunning ? 'Setting up...' : 'Setup AI for All Running Sites'),
-          this.state.fleetSetupOpId
-            ? React.createElement('div', {
-                style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' },
-              }, 'Started! Check Bulk Operations panel for progress.')
-            : null,
-        ),
-
-        // Index All Fleet
-        React.createElement('div', { style: { flex: '1', minWidth: '250px' } },
-          React.createElement('button', {
-            style: this.state.fleetIndexRunning
-              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed', width: '100%' }
-              : { ...btnPrimaryStyle, width: '100%' },
-            onClick: this.state.fleetIndexRunning ? undefined : this.handleIndexAllFleet,
-            disabled: this.state.fleetIndexRunning,
-          }, this.state.fleetIndexRunning ? 'Indexing...' : 'Index All Running Sites'),
-          this.state.fleetIndexOpId
-            ? React.createElement('div', {
-                style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' },
-              }, 'Started! Check Bulk Operations panel for progress.') : null, ),
-
-        // Setup AI for ALL Sites (auto-start)
-        React.createElement("div", { style: { flex: "1", minWidth: "250px" } },
-          React.createElement("button", {
-            style: this.state.setupAllAutoRunning
-              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: "not-allowed", width: "100%" }
-              : { ...btnPrimaryStyle, width: "100%" },
-            onClick: this.state.setupAllAutoRunning ? undefined : this.handleSetupAllAuto,
-            disabled: this.state.setupAllAutoRunning,
-          }, this.state.setupAllAutoRunning ? "Setting up..." : "Setup AI for All Sites (auto-start)"),
-          this.state.setupAllAutoOpId
-            ? React.createElement("div", {
-                style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
-              }, "Started! Check Bulk Operations panel for progress.")
-            : null,
-        ),
-
-        // Re-index ALL Sites (auto-start)
-        React.createElement("div", { style: { flex: "1", minWidth: "250px" } },
-          React.createElement("button", {
-            style: this.state.indexAllAutoRunning
-              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: "not-allowed", width: "100%" }
-              : { ...btnPrimaryStyle, width: "100%" },
-            onClick: this.state.indexAllAutoRunning ? undefined : this.handleIndexAllAuto,
-            disabled: this.state.indexAllAutoRunning,
-          }, this.state.indexAllAutoRunning ? "Indexing..." : "Re-index All Sites (auto-start)"),
-          this.state.indexAllAutoOpId
-            ? React.createElement("div", {
-                style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
-              }, "Started! Check Bulk Operations panel for progress.")
-            : null,
-        ),
-      ),
-
-      React.createElement('div', {
-        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' },
-      },
-        React.createElement(SiteGroupsPanel, {
-          electron: this.props.electron,
-          sites: this.state.sites.map(s => ({ id: s.id, name: s.name, domain: s.domain })),
-        }),
-        React.createElement(BulkOperationsPanel, { electron: this.props.electron }),
-      ),
-    );
-  }
-
-  renderSitesTab(): React.ReactNode {
-    return this.renderSiteTable();
-  }
-
-  renderVisibilityTab(): React.ReactNode {
-    return React.createElement('div', null,
-      // Stats cards at top (full width)
+      
+      // Visibility: Events and Timeline
+      this.renderSectionLabel('Activity'),
       React.createElement(EventStatsCards, { electron: this.props.electron }),
 
-      // 2-column layout below: timeline (left) + issues/storage (right)
       React.createElement('div', {
-        style: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' },
+        style: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '24px' },
       },
-        // Left column: Timeline
-        React.createElement('div', null,
-          React.createElement(EventTimeline, { electron: this.props.electron }),
-        ),
-
-        // Right column: Issues + Storage
+        React.createElement(EventTimeline, { electron: this.props.electron }),
         React.createElement('div', {
           style: { display: 'flex', flexDirection: 'column' as const, gap: '16px' },
         },
@@ -1056,14 +943,38 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     );
   }
 
+renderSitesTab(): React.ReactNode {
+    return React.createElement('div', null,
+      // Site table at top
+      this.renderSiteTable(),
+
+      // Below: 2-column layout (groups left, search right)
+      React.createElement('div', {
+        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' },
+      },
+        // Left: Site Groups
+        React.createElement(SiteGroupsPanel, {
+          electron: this.props.electron,
+          sites: this.state.sites.map(s => ({ id: s.id, name: s.name, domain: s.domain })),
+        }),
+
+        // Right: Search panels stacked
+        React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '16px' } },
+          React.createElement(UnifiedSearchPanel, { electron: this.props.electron }),
+          React.createElement(SmartFiltersPanel, { electron: this.props.electron }),
+          React.createElement(SavedQueriesPanel, { electron: this.props.electron }),
+        ),
+      ),
+    );
+  }
+
   renderTabBar(): React.ReactNode {
     const { activeTab } = this.state;
     const tabs: { key: FleetOverviewState['activeTab']; label: string }[] = [
       { key: 'overview', label: 'Overview' },
-      { key: 'search', label: 'Search' },
       { key: 'sites', label: 'Sites' },
+      { key: 'operations', label: 'Operations' },
       { key: 'chat', label: 'Chat' },
-      { key: 'visibility', label: 'Visibility' },
     ];
 
     return React.createElement('div', {
@@ -1092,6 +1003,83 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     );
   }
 
+  renderOperationsTab(): React.ReactNode {
+    return React.createElement('div', null,
+      // Fleet Operations section
+      this.renderSectionLabel('Fleet Operations'),
+
+      // Fleet operation buttons (4 buttons)
+      React.createElement('div', { style: { display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' } },
+        // Setup AI Fleet (running only)
+        React.createElement('div', { style: { flex: '1', minWidth: '250px' } },
+          React.createElement('button', {
+            style: this.state.fleetSetupRunning
+              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed', width: '100%' }
+              : { ...btnPrimaryStyle, width: '100%' },
+            onClick: this.state.fleetSetupRunning ? undefined : this.handleSetupAIFleet,
+            disabled: this.state.fleetSetupRunning,
+          }, this.state.fleetSetupRunning ? 'Setting up...' : 'Setup AI for All Running Sites'),
+          this.state.fleetSetupOpId
+            ? React.createElement('div', {
+                style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' },
+              }, 'Started! Check progress below.')
+            : null,
+        ),
+
+        // Index All Fleet (running only)
+        React.createElement('div', { style: { flex: '1', minWidth: '250px' } },
+          React.createElement('button', {
+            style: this.state.fleetIndexRunning
+              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed', width: '100%' }
+              : { ...btnPrimaryStyle, width: '100%' },
+            onClick: this.state.fleetIndexRunning ? undefined : this.handleIndexAllFleet,
+            disabled: this.state.fleetIndexRunning,
+          }, this.state.fleetIndexRunning ? 'Indexing...' : 'Index All Running Sites'),
+          this.state.fleetIndexOpId
+            ? React.createElement('div', {
+                style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' },
+              }, 'Started! Check progress below.')
+            : null,
+        ),
+
+        // Setup AI for ALL Sites (auto-start)
+        React.createElement("div", { style: { flex: "1", minWidth: "250px" } },
+          React.createElement("button", {
+            style: this.state.setupAllAutoRunning
+              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: "not-allowed", width: "100%" }
+              : { ...btnPrimaryStyle, width: "100%" },
+            onClick: this.state.setupAllAutoRunning ? undefined : this.handleSetupAllAuto,
+            disabled: this.state.setupAllAutoRunning,
+          }, this.state.setupAllAutoRunning ? "Setting up..." : "Setup AI for All Sites (auto-start)"),
+          this.state.setupAllAutoOpId
+            ? React.createElement("div", {
+                style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
+              }, "Started! Check progress below.")
+            : null,
+        ),
+
+        // Re-index ALL Sites (auto-start)
+        React.createElement("div", { style: { flex: "1", minWidth: "250px" } },
+          React.createElement("button", {
+            style: this.state.indexAllAutoRunning
+              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: "not-allowed", width: "100%" }
+              : { ...btnPrimaryStyle, width: "100%" },
+            onClick: this.state.indexAllAutoRunning ? undefined : this.handleIndexAllAuto,
+            disabled: this.state.indexAllAutoRunning,
+          }, this.state.indexAllAutoRunning ? "Indexing..." : "Re-index All Sites (auto-start)"),
+          this.state.indexAllAutoOpId
+            ? React.createElement("div", {
+                style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
+              }, "Started! Check progress below.")
+            : null,
+        ),
+      ),
+
+      // Bulk Operations Panel
+      React.createElement(BulkOperationsPanel, { electron: this.props.electron }),
+    );
+  }
+
   renderChatTab(): React.ReactNode {
     return React.createElement(ChatTab, { electron: this.props.electron });
   }
@@ -1099,10 +1087,9 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
   renderActiveTab(): React.ReactNode {
     switch (this.state.activeTab) {
       case 'overview': return this.renderOverviewTab();
-      case 'search': return this.renderSearchTab();
       case 'sites': return this.renderSitesTab();
+      case 'operations': return this.renderOperationsTab();
       case 'chat': return this.renderChatTab();
-      case 'visibility': return this.renderVisibilityTab();
       default: return this.renderOverviewTab();
     }
   }
