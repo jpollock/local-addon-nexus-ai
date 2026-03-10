@@ -102,6 +102,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           id: site.id,
           name: site.name,
           domain: site.domain || '',
+          port: site.ports?.site?.[0] || site.services?.nginx?.ports?.site?.[0] || null,
           status: statuses[site.id] || 'halted',
           isWpe: !!wpeConn,
           wpeEnvironment: wpeConn?.remoteSiteEnv?.environment || null,

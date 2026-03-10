@@ -46,6 +46,7 @@ interface SiteListItem {
   id: string;
   name: string;
   domain: string;
+  port: number | null;
   status: string;
   isWpe: boolean;
   indexed: boolean;
@@ -874,7 +875,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
                     : indexState === 'error' ? UI_COLORS.STATUS_ERROR
                     : 'var(--nxai-card-sub)';
 
-                  const siteUrl = `http://${site.domain}`;
+                  const siteUrl = site.port ? `http://localhost:${site.port}` : `http://${site.domain}`;
                   const adminUrl = `${siteUrl}/wp-admin`;
 
                   return React.createElement('tr', { key: site.id },
