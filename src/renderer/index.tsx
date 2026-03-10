@@ -4,6 +4,8 @@ import { SiteHeaderBadge } from './components/SiteHeaderBadge';
 import { FleetOverview } from './components/FleetOverview';
 import { NexusPreferences } from './components/NexusPreferences';
 import { SiteNexusSection } from './components/SiteNexusSection';
+import { SidebarSearchPanel } from './components/SidebarSearchPanel';
+import { IPC_CHANNELS } from '../common/constants';
 
 export default function renderer(context: any): void {
   const { React, hooks, ReactRouter } = context;
@@ -62,5 +64,216 @@ export default function renderer(context: any): void {
       title: 'Nexus AI',
       component: React.createElement(SiteNexusSection, { site, electron, TextButton }),
     }];
+  });
+
+  // Feature 6: Sidebar Search Panel
+  // Add search button to sidebar header and keyboard shortcut (Cmd+K / Ctrl+K)
+  let searchContainerInstance: SidebarSearchContainer | null = null;
+
+  class SidebarSearchContainer extends React.Component<any, { isOpen: boolean; hasLLM: boolean }> {
+    state = { isOpen: false, hasLLM: false };
+
+    componentDidMount() {
+      searchContainerInstance = this;
+
+      // Check if LLM is configured
+      electron.ipcRenderer.invoke(IPC_CHANNELS.GET_SETTINGS).then((settings: any) => {
+        this.setState({ hasLLM: !!settings?.chatProvider });
+      });
+
+      // Register keyboard shortcut
+      document.addEventListener('keydown', this.handleKeyDown);
+    }
+
+    componentWillUnmount() {
+      document.removeEventListener('keydown', this.handleKeyDown);
+      searchContainerInstance = null;
+    }
+
+    handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        this.toggleSearch();
+      }
+    };
+
+    toggleSearch = () => {
+      this.setState({ isOpen: !this.state.isOpen });
+    };
+
+    render() {
+      return React.createElement(SidebarSearchPanel, {
+        electron,
+        isOpen: this.state.isOpen,
+        onClose: () => this.setState({ isOpen: false }),
+        hasLLM: this.state.hasLLM,
+      });
+    }
+  }
+
+  // Mount search panel container to body
+  const container = document.createElement('div');
+  container.id = 'nexus-sidebar-search';
+  document.body.appendChild(container);
+
+  // Use old React API (Local uses React 16, not 18)
+  const ReactDOM = require('react-dom');
+  ReactDOM.render(React.createElement(SidebarSearchContainer), container);
+
+  // Inject search button into Local's sidebar toolbar
+  const injectSearchButton = () => {
+    console.log('[Nexus AI] Attempting to inject search button...');
+
+    // Target the SitesSidebarToolbar component
+    const toolbar = document.querySelector('[class*="SitesSidebar_Toolbar"]');
+
+    if (!toolbar) {
+      console.warn('[Nexus AI] Could not find SitesSidebar_Toolbar');
+      return false;
+    }
+
+    // Check if button already exists
+    if (toolbar.querySelector('#nexus-search-btn')) {
+      console.log('[Nexus AI] Search button already exists');
+      return true;
+    }
+
+    console.log('[Nexus AI] Found toolbar, injecting button');
+
+    const searchButton = document.createElement('button');
+    searchButton.id = 'nexus-search-btn';
+    searchButton.title = 'AI Site Finder (Cmd+K / Ctrl+K)';
+
+    // SVG magnifying glass icon matching Local's icon style
+    searchButton.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <path d="M10 10L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    `;
+
+    searchButton.style.cssText = `
+      background: none;
+      border: none;
+      color: #7e7e7e;
+      cursor: pointer;
+      padding: 0;
+      margin: 0 8px 0 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      transition: color 0.2s;
+      flex-shrink: 0;
+    `;
+
+    searchButton.addEventListener('mouseenter', () => {
+      searchButton.style.color = '#fff';
+    });
+
+    // Store reference to button for state checks
+    (window as any).nexusSearchButton = searchButton;
+
+    searchButton.addEventListener('mouseleave', () => {
+      // Restore color based on filter state
+      searchButton.style.color = (window as any).nexusFilterActive ? '#51BB7B' : '#7e7e7e';
+    });
+
+    searchButton.addEventListener('click', () => {
+      console.log('[Nexus AI] Search button clicked');
+
+      if ((window as any).nexusFilterActive) {
+        // Filter is active - clear it (turns icon gray)
+        console.log('[Nexus AI] Clearing filter via icon click');
+        electron.ipcRenderer.invoke(IPC_CHANNELS.SIDEBAR_FILTER, { siteIds: [] });
+      } else {
+        // No filter - open search panel
+        if (searchContainerInstance) {
+          searchContainerInstance.toggleSearch();
+        }
+      }
+    });
+
+    // Insert before the first child (clock icon) so it appears on the left
+    toolbar.insertBefore(searchButton, toolbar.firstChild);
+    console.log('[Nexus AI] Search button injected successfully');
+    return true;
+  };
+
+  // Use MutationObserver to wait for sidebar to load
+  const observer = new MutationObserver(() => {
+    if (injectSearchButton()) {
+      observer.disconnect();
+    }
+  });
+
+  // Start observing
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  // Also try immediately and with delays
+  setTimeout(injectSearchButton, 100);
+  setTimeout(injectSearchButton, 500);
+  setTimeout(injectSearchButton, 1000);
+  setTimeout(injectSearchButton, 2000);
+
+  // Filter sites list based on search results using CSS
+  let activeStyleTag: HTMLStyleElement | null = null;
+
+  const applySiteFilter = (siteIds: string[]) => {
+    // Remove old style tag
+    if (activeStyleTag) {
+      activeStyleTag.remove();
+      activeStyleTag = null;
+    }
+
+    const filterActive = siteIds.length > 0;
+
+    // Store filter state globally for button click handler
+    (window as any).nexusFilterActive = filterActive;
+
+    // Update search button color to indicate filter state
+    const searchBtn = document.querySelector('#nexus-search-btn') as HTMLElement;
+    if (searchBtn) {
+      searchBtn.style.color = filterActive ? '#51BB7B' : '#7e7e7e';
+      searchBtn.title = filterActive
+        ? 'Clear filter (show all sites)'
+        : 'AI Site Finder (Cmd+K / Ctrl+K)';
+    }
+
+    if (filterActive) {
+      // Create CSS to hide all sites except the filtered ones
+      const styleTag = document.createElement('style');
+      styleTag.id = 'nexus-site-filter';
+
+      // Hide all sites by default
+      let css = '[data-site-id] { display: none !important; }\n';
+
+      // Show only filtered sites
+      siteIds.forEach(id => {
+        css += `[data-site-id="${id}"] { display: block !important; }\n`;
+      });
+
+      styleTag.textContent = css;
+      document.head.appendChild(styleTag);
+      activeStyleTag = styleTag;
+
+      console.log('[Nexus AI] Applied filter to', siteIds.length, 'sites');
+    } else {
+      console.log('[Nexus AI] Filter cleared - showing all sites');
+    }
+  };
+
+  // Listen for filter updates from search panel
+  electron.ipcRenderer.on('nexus:apply-sidebar-filter', (_event: any, siteIds: string[]) => {
+    applySiteFilter(siteIds);
+  });
+
+  // Clear filter when search closes
+  electron.ipcRenderer.on('nexus:clear-sidebar-filter', () => {
+    applySiteFilter([]);
   });
 }

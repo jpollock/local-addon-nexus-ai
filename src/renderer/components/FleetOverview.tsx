@@ -19,6 +19,7 @@ import { SiteHealthBadge } from './SiteHealthBadge';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
 import { SiteFinderPanel } from './SiteFinderPanel';
+import { AISiteFinderPanel } from './AISiteFinderPanel';
 
 interface FleetOverviewProps {
   NavLink: any;
@@ -119,6 +120,8 @@ interface FleetOverviewState {
   syncGraphOpId: string | null;
   syncGraphRunning: boolean;
   filteredSiteIds: string[] | null;
+  aiSearchMode: boolean;
+  hasLLM: boolean;
 }
 
 // -- Shared styles --
@@ -269,6 +272,8 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     syncGraphOpId: null,
     syncGraphRunning: false,
     filteredSiteIds: null,
+    aiSearchMode: false,
+    hasLLM: false,
     settings: null,
   };
 
@@ -335,6 +340,10 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
       ]);
       if (!this.mounted) return;
+
+      // Check if LLM is configured (any chat provider selected means LLM available)
+      const hasLLM = !!settings?.chatProvider;
+
       this.setState({
         stats,
         mcpInfo: mcpInfo ?? null,
@@ -342,6 +351,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
         indexEntries: indexEntries ?? [],
         aiProxy: proxyResult?.proxy ?? null,
         settings: settings ?? null,
+        hasLLM,
         loading: false,
         error: stats ? null : 'Failed to load stats',
       });
@@ -993,14 +1003,106 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
   }
 
 renderSitesTab(): React.ReactNode {
+    const { aiSearchMode, hasLLM } = this.state;
+
     return React.createElement('div', null,
-      // Site Finder at top (full width above table)
-      React.createElement(SiteFinderPanel, {
-        electron: this.props.electron,
-        onFilterApply: (siteIds: string[]) => {
-          this.setState({ filteredSiteIds: siteIds.length > 0 ? siteIds : null });
+      // Toggle header
+      React.createElement('div', {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '16px',
         },
-      }),
+      },
+        React.createElement('h3', {
+          style: {
+            fontSize: '14px',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.8px',
+            color: 'var(--nxai-card-label, #6b7280)',
+          },
+        }, 'SITE FINDER'),
+
+        // Toggle switch (only if LLM available)
+        hasLLM ? React.createElement('div', {
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+          },
+        },
+          React.createElement('span', {
+            style: {
+              fontSize: '12px',
+              color: 'var(--nxai-card-sub, #6b7280)',
+            },
+          }, 'Manual'),
+          React.createElement('label', {
+            style: {
+              position: 'relative',
+              display: 'inline-block',
+              width: '48px',
+              height: '24px',
+              cursor: 'pointer',
+            },
+          },
+            React.createElement('input', {
+              type: 'checkbox',
+              checked: aiSearchMode,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                this.setState({ aiSearchMode: e.target.checked, filteredSiteIds: null }),
+              style: { display: 'none' },
+            }),
+            React.createElement('span', {
+              style: {
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: aiSearchMode ? '#3b82f6' : '#e5e7eb',
+                borderRadius: '24px',
+                transition: 'background-color 0.3s',
+              },
+            }),
+            React.createElement('span', {
+              style: {
+                position: 'absolute',
+                top: '2px',
+                left: aiSearchMode ? '26px' : '2px',
+                width: '20px',
+                height: '20px',
+                backgroundColor: '#fff',
+                borderRadius: '50%',
+                transition: 'left 0.3s',
+              },
+            }),
+          ),
+          React.createElement('span', {
+            style: {
+              fontSize: '12px',
+              color: 'var(--nxai-card-sub, #6b7280)',
+            },
+          }, 'AI'),
+        ) : null,
+      ),
+
+      // Site Finder (Manual or AI based on toggle)
+      aiSearchMode
+        ? React.createElement(AISiteFinderPanel, {
+            electron: this.props.electron,
+            onFilterApply: (siteIds: string[]) => {
+              this.setState({ filteredSiteIds: siteIds.length > 0 ? siteIds : null });
+            },
+          })
+        : React.createElement(SiteFinderPanel, {
+            electron: this.props.electron,
+            onFilterApply: (siteIds: string[]) => {
+              this.setState({ filteredSiteIds: siteIds.length > 0 ? siteIds : null });
+            },
+          }),
 
       // Site table
       this.renderSiteTable(),

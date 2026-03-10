@@ -96,6 +96,12 @@ export const IPC_CHANNELS = {
   // Site Finder (Advanced site search)
   SITE_FINDER_GET_OPTIONS: `${ADDON_PREFIX}:site-finder:get-options`,
   SITE_FINDER_APPLY: `${ADDON_PREFIX}:site-finder:apply`,
+  SITE_FINDER_AI_PARSE: `${ADDON_PREFIX}:site-finder:ai-parse`,
+
+  // Sidebar Search
+  SIDEBAR_FILTER: `${ADDON_PREFIX}:sidebar:filter`,
+  SIDEBAR_BULK_ACTION: `${ADDON_PREFIX}:sidebar:bulk-action`,
+  SIDEBAR_SEARCH_TOGGLE: `${ADDON_PREFIX}:sidebar:search-toggle`,
 
   // Graph Sync
   SYNC_GRAPH_ALL: `${ADDON_PREFIX}:sync-graph-all`,

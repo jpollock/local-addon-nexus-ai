@@ -1040,8 +1040,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const db = graphService.getDb();
 
       // Get plugins from graph (all sites, fast)
-      const pluginRows = db ? db.prepare('SELECT DISTINCT name FROM plugins ORDER BY name').all() as Array<{ name: string }> : [];
-      const plugins = pluginRows.map(r => r.name);
+      const pluginRows = db ? db.prepare('SELECT DISTINCT slug FROM plugins ORDER BY slug').all() as Array<{ slug: string }> : [];
+      const plugins = pluginRows.map(r => r.slug);
 
       // Get WP versions from graph (all sites, fast)
       const wpRows = db ? db.prepare('SELECT DISTINCT wp_version FROM sites WHERE wp_version IS NOT NULL ORDER BY wp_version').all() as Array<{ wp_version: string }> : [];
@@ -1092,9 +1092,59 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const db = graphService.getDb();
       const matchingSiteIds: string[] = [];
 
+      // Pre-filter by content if contentQuery is provided (semantic search)
+      let contentMatchingSiteIds: Set<string> | null = null;
+      if (filters.contentQuery && filters.contentQuery.trim()) {
+        try {
+          localLogger.info('[NexusAI] Running content search for:', filters.contentQuery);
+
+          // Convert query text to embedding vector
+          const queryVector = await embeddingService.embed(filters.contentQuery);
+
+          // Search across all indexed sites
+          contentMatchingSiteIds = new Set<string>();
+          const siteIds = Object.keys(allSites);
+
+          for (const siteId of siteIds) {
+            try {
+              const results = await vectorStore.search(siteId, queryVector, {
+                limit: 5, // Top 5 results per site
+                relevanceFloor: 0.5, // Only return good matches
+              });
+
+              // If site has matching content, add it to the set
+              if (results.length > 0) {
+                contentMatchingSiteIds.add(siteId);
+                localLogger.info('[NexusAI] Site', siteId, 'has', results.length, 'matching content (top score:', results[0].score.toFixed(3), ')');
+              }
+            } catch (err) {
+              // Site not indexed or search failed - skip it
+            }
+          }
+
+          localLogger.info('[NexusAI] Content search found', contentMatchingSiteIds.size, 'sites with matching content');
+
+          // If no sites have matching content, return empty immediately
+          if (contentMatchingSiteIds.size === 0) {
+            return { success: true, siteIds: [] };
+          }
+        } catch (err) {
+          localLogger.error('[NexusAI] Content search failed:', (err as Error).message);
+          // Continue without content filter if search fails
+        }
+      }
+
       for (const [siteId, site] of Object.entries(allSites)) {
         let matches = true;
         const isRunning = statuses[siteId] === 'running';
+
+        // Content filter - check if this site has matching content
+        if (contentMatchingSiteIds !== null) {
+          if (!contentMatchingSiteIds.has(siteId)) {
+            matches = false;
+            continue; // Skip other checks if content doesn't match
+          }
+        }
 
         // Text search (name or domain)
         if (filters.searchText && filters.searchText.trim()) {
@@ -1118,7 +1168,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         if (matches && filters.plugins && filters.plugins.length > 0) {
           if (db) {
             const placeholders = filters.plugins.map(() => '?').join(',');
-            const pluginRow = db.prepare(`SELECT 1 FROM plugins WHERE site_id = ? AND name IN (${placeholders}) LIMIT 1`)
+            const pluginRow = db.prepare(`SELECT 1 FROM plugins WHERE site_id = ? AND slug IN (${placeholders}) LIMIT 1`)
               .get(siteId, ...filters.plugins);
             if (!pluginRow) matches = false;
           } else {
@@ -1165,4 +1215,250 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return { success: false, error: (err as Error).message };
     }
   });
+
+  ipcMain.handle(IPC_CHANNELS.SITE_FINDER_AI_PARSE, async (_event: any, payload: { conversation: Array<{ role: string; content: string }> }) => {
+    try {
+      const { getProvider } = require('./chat/providers/index');
+
+      // Get settings to determine which provider to use
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+      const apiKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+
+      const chatProvider = settings?.chatProvider ?? 'ollama';
+      const chatModel = settings?.chatModel ?? 'llama3.2';
+      const apiKey = apiKeys[chatProvider];
+
+      localLogger.info('[NexusAI] AI parse request - provider:', chatProvider, 'model:', chatModel, 'hasKey:', !!apiKey);
+
+      // Check if provider is available
+      if (chatProvider !== 'ollama' && !apiKey) {
+        return {
+          success: false,
+          error: `No API key configured for ${chatProvider}. Please configure in Settings.`,
+        };
+      }
+
+      const provider = getProvider(chatProvider);
+      if (!provider) {
+        return {
+          success: false,
+          error: `Provider ${chatProvider} not available. Try reloading the addon.`,
+        };
+      }
+
+      // Build system prompt for query parsing
+      const systemPrompt = `You are a site finder query parser. Convert natural language queries into structured filters for searching WordPress sites.
+
+Available filter types:
+- plugins: array of plugin slugs (e.g., ["advanced-custom-fields", "woocommerce"])
+- themes: array of theme slugs (e.g., ["twentytwentyfour"])
+- phpVersions: array of PHP version strings (e.g., ["8.1", "8.2"])
+- wpVersions: array of WordPress version strings (e.g., ["6.8.1", "6.7"])
+- contentQuery: semantic search for indexed site content - finds sites with posts/pages about a topic (e.g., "cars", "recipes", "travel")
+- searchText: exact text match in site names or domains
+
+Common plugin name mappings:
+- "ACF" or "Advanced Custom Fields" → "advanced-custom-fields"
+- "WooCommerce" → "woocommerce"
+- "Yoast" or "Yoast SEO" → "wordpress-seo"
+- "Akismet" → "akismet"
+
+IMPORTANT: contentQuery searches actual page/post content using AI embeddings. Use it for:
+- "sites about X" → contentQuery: "X"
+- "sites with content about X" → contentQuery: "X"
+- "sites mentioning X" → contentQuery: "X"
+
+CRITICAL OUTPUT FORMAT:
+- You MUST respond with ONLY a JSON object, nothing else
+- NO explanations, NO markdown, NO code blocks
+- Just the raw JSON object starting with { and ending with }
+
+Examples:
+User: "WP 6.8.1 with ACF and content about cars"
+Assistant: { "filters": { "wpVersions": ["6.8.1"], "plugins": ["advanced-custom-fields"], "contentQuery": "cars automobiles vehicles" } }
+
+User: "sites with car content"
+Assistant: { "filters": { "contentQuery": "cars automobiles automotive vehicles" } }
+
+User: "WooCommerce sites on old PHP"
+Assistant: { "needsClarification": true, "question": "What PHP version range? (e.g., below 8.0)" }
+
+User: "sites about cooking"
+Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen" } }`;
+
+      // Build messages array
+      const messages = [
+        { role: 'system' as const, content: systemPrompt },
+        ...payload.conversation.map(msg => ({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+        })),
+      ];
+
+      // Stream and collect response
+      const abortController = new AbortController();
+      let responseText = '';
+      let eventCount = 0;
+
+      localLogger.info('[NexusAI] Starting AI parse with provider:', chatProvider, 'model:', chatModel);
+
+      const stream = provider.streamChat(
+        messages,
+        [], // No tools for this call
+        { model: chatModel, apiKey },
+        abortController.signal,
+      );
+
+      for await (const event of stream) {
+        eventCount++;
+        if (event.type === 'token') {
+          responseText += event.text;
+        } else if (event.type === 'error') {
+          localLogger.error('[NexusAI] Stream error event:', event.message);
+          throw new Error(event.message);
+        } else if (event.type === 'done') {
+          localLogger.info('[NexusAI] Stream done, total events:', eventCount, 'response length:', responseText.length);
+        }
+      }
+
+      if (!responseText.trim()) {
+        throw new Error('AI provider returned empty response. Check your API key and model configuration.');
+      }
+
+      // Log raw response for debugging
+      localLogger.info('[NexusAI] AI parse raw response (first 300 chars):', responseText.substring(0, 300));
+
+      // Extract JSON from response (handle markdown code blocks)
+      let jsonText = responseText.trim();
+
+      // Remove markdown code blocks if present
+      const codeBlockMatch = jsonText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+      if (codeBlockMatch) {
+        jsonText = codeBlockMatch[1].trim();
+        localLogger.info('[NexusAI] Extracted from code block');
+      }
+
+      // Try to find JSON object if surrounded by text
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[0];
+        localLogger.info('[NexusAI] Extracted JSON object');
+      }
+
+      localLogger.info('[NexusAI] Final JSON to parse (first 200 chars):', jsonText.substring(0, 200));
+
+      // Parse JSON response
+      let parsed: any;
+      try {
+        parsed = JSON.parse(jsonText);
+      } catch (parseErr) {
+        localLogger.error('[NexusAI] JSON parse failed, full response:', responseText);
+        throw new Error(`Invalid JSON: ${(parseErr as Error).message}`);
+      }
+
+      if (parsed.needsClarification && parsed.question) {
+        return {
+          success: true,
+          needsClarification: true,
+          question: parsed.question,
+        };
+      } else if (parsed.filters) {
+        return {
+          success: true,
+          filters: parsed.filters,
+        };
+      } else {
+        localLogger.error('[NexusAI] Unexpected response structure:', parsed);
+        throw new Error('Invalid response format from LLM - missing filters or clarification');
+      }
+    } catch (err) {
+      localLogger.error('[NexusAI] site-finder:ai-parse failed:', (err as Error).message);
+      return {
+        success: false,
+        error: `AI parsing failed: ${(err as Error).message}. Try rephrasing your query or use manual filters.`,
+      };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Sidebar Search Panel
+  // ---------------------------------------------------------------------------
+
+  // Store current filter state
+  let sidebarFilteredSiteIds: string[] = [];
+
+  ipcMain.handle(IPC_CHANNELS.SIDEBAR_FILTER, async (event: any, payload: { siteIds: string[] }) => {
+    try {
+      sidebarFilteredSiteIds = payload.siteIds || [];
+
+      // Broadcast filter to renderer via CSS injection
+      const siteIds = payload.siteIds || [];
+      if (siteIds.length > 0) {
+        event.sender.send('nexus:apply-sidebar-filter', siteIds);
+      } else {
+        event.sender.send('nexus:clear-sidebar-filter');
+      }
+
+      localLogger.info('[NexusAI] Sidebar filter applied:', siteIds.length, 'sites');
+
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] sidebar:filter failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.SIDEBAR_BULK_ACTION, async (_event: any, payload: { action: string; siteIds: string[] }) => {
+    try {
+      const { action, siteIds } = payload;
+
+      if (!siteIds || siteIds.length === 0) {
+        return { success: false, error: 'No sites selected' };
+      }
+
+      const bulkMgr = deps.nexusServices?.bulkOperationManager;
+      if (!bulkMgr) {
+        return { success: false, error: 'Bulk operation manager not available' };
+      }
+
+      let opType: string;
+      let options: Record<string, any> = {};
+
+      switch (action) {
+        case 'start':
+          opType = 'start';
+          break;
+        case 'stop':
+          opType = 'stop';
+          break;
+        case 'setup-ai':
+          opType = 'setup-ai';
+          options = { autoStartStop: true };
+          break;
+        default:
+          return { success: false, error: `Unknown action: ${action}` };
+      }
+
+      const opId = bulkMgr.execute({
+        type: opType as any,
+        siteIds,
+        options,
+      });
+
+      return { success: true, operationId: opId };
+    } catch (err) {
+      localLogger.error('[NexusAI] sidebar:bulk-action failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // Synchronous getter for renderer filter hook
+  ipcMain.on('nexus:get-sidebar-filter', (event: any) => {
+    event.returnValue = sidebarFilteredSiteIds;
+  });
+
+  // Expose filter function for SitesList hook
+  if (deps.nexusServices) {
+    (deps.nexusServices as any).getSidebarFilter = () => sidebarFilteredSiteIds;
+  }
 }
