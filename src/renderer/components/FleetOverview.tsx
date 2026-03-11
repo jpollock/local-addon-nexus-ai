@@ -130,6 +130,8 @@ interface FleetOverviewState {
   showWpeSites: boolean;
   wpeSites: SiteListItem[];
   pullingInstall: string | null;
+  wpeSyncing: boolean;
+  wpeSyncProgress: { total: number; current: number; currentSite: string; status: string } | null;
 }
 
 // -- Shared styles --
@@ -287,6 +289,8 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     showWpeSites: true,
     wpeSites: [],
     pullingInstall: null,
+    wpeSyncing: false,
+    wpeSyncProgress: null,
   };
 
   componentDidMount(): void {
@@ -294,12 +298,16 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     this.injectCssVars();
     this.fetchAll();
     this.pollTimer = setInterval(() => this.fetchAll(), POLL_INTERVALS.DASHBOARD_STATS_MS);
+    
+    // Check if WPE sync is already running
+    this.checkWpeSyncStatus();
   }
 
   componentWillUnmount(): void {
     this.mounted = false;
     if (this.pollTimer) clearInterval(this.pollTimer);
     if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.stopWpeSyncProgressPolling();
   }
 
   injectCssVars(): void {
@@ -922,7 +930,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
   }
 
   renderSiteTable(): React.ReactNode {
-    const { sites, wpeSites, indexEntries, indexingId, filteredSiteIds, showLocalSites, showWpeSites } = this.state;
+    const { sites, wpeSites, indexEntries, indexingId, filteredSiteIds, showLocalSites, showWpeSites, wpeSyncing, wpeSyncProgress } = this.state;
 
     const indexMap = new Map<string, IndexEntry>();
     for (const entry of indexEntries) {
@@ -1029,6 +1037,25 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
             }),
             '☁️ WP Engine Sites',
           ),
+
+          // WPE Sync progress indicator
+          wpeSyncProgress && wpeSyncing
+            ? React.createElement('div', {
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '12px',
+                  color: '#3b82f6',
+                  fontStyle: 'italic',
+                  paddingLeft: '16px',
+                  borderLeft: '1px solid var(--nxai-card-border, #e5e7eb)',
+                },
+              },
+                React.createElement('span', { style: { animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' } }, '●'),
+                `Syncing ${wpeSyncProgress.currentSite}... (${wpeSyncProgress.current}/${wpeSyncProgress.total})`,
+              )
+            : null,
         ),
       ),
 
@@ -1556,6 +1583,60 @@ renderSitesTab(): React.ReactNode {
       default: return this.renderOverviewTab();
     }
   }
+
+  // WPE Sync progress polling
+  private wpeSyncPollInterval: NodeJS.Timeout | null = null;
+
+  async checkWpeSyncStatus(): Promise<void> {
+    try {
+      const statusResult = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_STATUS);
+      if (statusResult.success && statusResult.progress) {
+        if (statusResult.progress.status === 'running') {
+          this.setState({
+            wpeSyncing: true,
+            wpeSyncProgress: statusResult.progress,
+          });
+          this.startWpeSyncProgressPolling();
+        }
+      }
+    } catch (err) {
+      console.error('[FleetOverview] Failed to check WPE sync status:', err);
+    }
+  }
+
+  startWpeSyncProgressPolling = (): void => {
+    if (this.wpeSyncPollInterval) {
+      clearInterval(this.wpeSyncPollInterval);
+    }
+
+    this.wpeSyncPollInterval = setInterval(async () => {
+      try {
+        const statusResult = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_STATUS);
+        if (statusResult.success && statusResult.progress) {
+          this.setState({
+            wpeSyncing: statusResult.progress.status === 'running',
+            wpeSyncProgress: statusResult.progress,
+          });
+
+          // Stop polling if sync completed or failed
+          if (statusResult.progress.status === 'completed' || statusResult.progress.status === 'failed') {
+            this.stopWpeSyncProgressPolling();
+            // Refresh WPE sites after sync completes
+            await this.fetchAll();
+          }
+        }
+      } catch (err) {
+        console.error('[FleetOverview] Failed to poll WPE sync status:', err);
+      }
+    }, 2000); // Poll every 2 seconds
+  };
+
+  stopWpeSyncProgressPolling = (): void => {
+    if (this.wpeSyncPollInterval) {
+      clearInterval(this.wpeSyncPollInterval);
+      this.wpeSyncPollInterval = null;
+    }
+  };
 
   render(): React.ReactNode {
     const { loading, error, stats } = this.state;
