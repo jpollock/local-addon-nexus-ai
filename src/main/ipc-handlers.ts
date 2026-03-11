@@ -1627,7 +1627,8 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
       // Check if site already exists
       const existingSites = siteData.getSites();
-      const siteExists = existingSites.some((s: any) => 
+      const sitesArray = Object.values(existingSites);
+      const siteExists = sitesArray.some((s: any) => 
         s.name.toLowerCase() === localSiteName.toLowerCase()
       );
 
