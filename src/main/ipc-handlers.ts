@@ -1613,9 +1613,9 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * Pull a WPE site to Local
    * Creates a new local site and initiates a pull from WP Engine
    */
-  ipcMain.handle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, { wpeSiteId, installName }: { wpeSiteId: string; installName: string }) => {
+  ipcMain.handle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, { wpeSiteId, installName, installId }: { wpeSiteId: string; installName: string; installId?: string }) => {
     try {
-      localLogger.info(`[NexusAI] Starting pull to local for WPE site: ${installName}`);
+      localLogger.info(`[NexusAI] Starting pull to local for WPE site: ${installName} (ID: ${installId})`);
 
       // Generate local site name (strip special chars from install name)
       const localSiteName = installName
@@ -1662,7 +1662,14 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
         success: true,
         siteId: newSite.id,
         siteName: newSite.name,
-        message: `Local site "${newSite.name}" created and started. Now link it to your WP Engine environment and pull via the Local UI.`
+        installName,
+        installId,
+        message: `Local site "${newSite.name}" created and started. To pull content from WP Engine:
+
+1. Find "${newSite.name}" in Local's sidebar
+2. Right-click → Connect → WP Engine
+3. Select environment: "${installName}"
+4. Click Pull to sync database and files`
       };
 
     } catch (err) {

@@ -571,18 +571,14 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
         {
           wpeSiteId: site.id,
           installName: site.name,
+          installId: site.wpeInstallId,
         }
       );
 
       if (result.success) {
         alert(
           `✓ Site created successfully!\n\n` +
-          `Local site: ${result.siteName}\n\n` +
-          `${result.message}\n\n` +
-          `Next steps:\n` +
-          `1. Find "${result.siteName}" in your Local sites\n` +
-          `2. Right-click → Connect to WP Engine\n` +
-          `3. Select this environment and pull`
+          `${result.message}`
         );
 
         // Refresh fleet overview to show new site
