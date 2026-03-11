@@ -24,6 +24,7 @@ import { QueryStorage } from './search/QueryStorage';
 import { BulkOperationManager } from './bulk/BulkOperationManager';
 // GroupStorage no longer used — groups come from Local's native siteData
 import { HealthTrendTracker } from './health/HealthTrendTracker';
+import { WPESyncService } from './events/WPESyncService';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -50,6 +51,8 @@ export interface IpcHandlerDeps {
   serviceContainer?: any;
   /** NexusServices object — mutated to add Sprint 2/3 services after creation */
   nexusServices?: any;
+  /** WPE site sync service (Phase 1) */
+  wpeSyncService?: WPESyncService;
 }
 
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
@@ -1101,11 +1104,18 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           // Convert query text to embedding vector
           const queryVector = await embeddingService.embed(filters.contentQuery);
 
-          // Search across all indexed sites
+          // Search across all indexed sites (local + WPE)
           contentMatchingSiteIds = new Set<string>();
-          const siteIds = Object.keys(allSites);
+          const localSiteIds = Object.keys(allSites);
 
-          for (const siteId of siteIds) {
+          // Get WPE site IDs from graph
+          const wpeSites = await graphService.listSites({ source: 'wpe' });
+          const wpeSiteIds = wpeSites.map(s => s.id);
+
+          const allSearchableSiteIds = [...localSiteIds, ...wpeSiteIds];
+          localLogger.info(`[NexusAI] Searching ${localSiteIds.length} local + ${wpeSiteIds.length} WPE sites for content`);
+
+          for (const siteId of allSearchableSiteIds) {
             try {
               const results = await vectorStore.search(siteId, queryVector, {
                 limit: 5, // Top 5 results per site
@@ -1134,6 +1144,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
       }
 
+      // Check local sites
       for (const [siteId, site] of Object.entries(allSites)) {
         let matches = true;
         const isRunning = statuses[siteId] === 'running';
@@ -1208,6 +1219,60 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           matchingSiteIds.push(siteId);
         }
       }
+
+      // Check WPE sites (remote sites only support content/plugin/WP version filters)
+      const wpeSites = await graphService.listSites({ source: 'wpe' });
+      for (const wpeSite of wpeSites) {
+        let matches = true;
+
+        // Content filter - check if this site has matching content
+        if (contentMatchingSiteIds !== null) {
+          if (!contentMatchingSiteIds.has(wpeSite.id)) {
+            matches = false;
+            continue;
+          }
+        }
+
+        // Text search (name or domain)
+        if (filters.searchText && filters.searchText.trim()) {
+          const searchLower = filters.searchText.toLowerCase();
+          const nameMatch = wpeSite.name?.toLowerCase().includes(searchLower);
+          const domainMatch = wpeSite.domain?.toLowerCase().includes(searchLower);
+          if (!nameMatch && !domainMatch) {
+            matches = false;
+          }
+        }
+
+        // Plugin filter (use graph)
+        if (matches && filters.plugins && filters.plugins.length > 0) {
+          if (db) {
+            const placeholders = filters.plugins.map(() => '?').join(',');
+            const pluginRow = db.prepare(`SELECT 1 FROM plugins WHERE site_id = ? AND slug IN (${placeholders}) LIMIT 1`)
+              .get(wpeSite.id, ...filters.plugins);
+            if (!pluginRow) matches = false;
+          } else {
+            matches = false;
+          }
+        }
+
+        // WP version filter (use graph)
+        if (matches && filters.wpVersions && filters.wpVersions.length > 0) {
+          if (!filters.wpVersions.includes(wpeSite.wp_version)) {
+            matches = false;
+          }
+        }
+
+        // Skip theme filter for WPE sites (requires WP-CLI on running sites)
+        if (matches && filters.themes && filters.themes.length > 0) {
+          matches = false; // WPE sites don't support theme filtering yet
+        }
+
+        if (matches) {
+          matchingSiteIds.push(wpeSite.id);
+        }
+      }
+
+      localLogger.info(`[NexusAI] Site Finder results: ${matchingSiteIds.length} total (local + WPE)`);
 
       return { success: true, siteIds: matchingSiteIds };
     } catch (err) {
@@ -1461,4 +1526,86 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   if (deps.nexusServices) {
     (deps.nexusServices as any).getSidebarFilter = () => sidebarFilteredSiteIds;
   }
+
+  // =========================================================================
+  // WPE Site Sync Handlers (Phase 1)
+  // =========================================================================
+
+  /**
+   * Sync all WPE sites from wp-nexus MCP
+   */
+  ipcMain.handle(IPC_CHANNELS.WPE_SYNC_ALL, async (_event: any, options?: { limit?: number }) => {
+    if (!deps.wpeSyncService) {
+      localLogger.warn('[NexusAI] WPE sync service not initialized');
+      return { success: false, error: 'WPE sync service not available' };
+    }
+
+    try {
+      const limit = options?.limit;
+      localLogger.info(`[NexusAI] Starting WPE site sync${limit ? ` (limit: ${limit})` : ''}...`);
+      const result = await deps.wpeSyncService.syncAllWPESites(limit);
+      localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.failed} failed`);
+      return result;
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const errorStack = err instanceof Error ? err.stack : undefined;
+      localLogger.error('[NexusAI] WPE sync failed:', errorMsg, errorStack);
+      return { success: false, error: errorMsg };
+    }
+  });
+
+  /**
+   * Get current sync progress
+   */
+  ipcMain.handle(IPC_CHANNELS.WPE_SYNC_STATUS, async () => {
+    if (!deps.wpeSyncService) {
+      return { success: false, error: 'WPE sync service not available' };
+    }
+
+    try {
+      const progress = deps.wpeSyncService.getProgress();
+      return { success: true, progress };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  /**
+   * Get list of synced WPE sites
+   */
+  ipcMain.handle(IPC_CHANNELS.WPE_GET_SYNCED_SITES, async () => {
+    if (!deps.wpeSyncService) {
+      return { success: false, error: 'WPE sync service not available' };
+    }
+
+    try {
+      const sites = await deps.wpeSyncService.getSyncedWPESites();
+      return { success: true, sites };
+    } catch (err) {
+      localLogger.error('[NexusAI] Failed to get synced WPE sites:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  /**
+   * Remove a WPE site from the graph
+   */
+  ipcMain.handle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, installId: string) => {
+    if (!deps.wpeSyncService) {
+      return { success: false, error: 'WPE sync service not available' };
+    }
+
+    if (!installId) {
+      return { success: false, error: 'installId is required' };
+    }
+
+    try {
+      await deps.wpeSyncService.removeWPESite(installId);
+      localLogger.info(`[NexusAI] Removed WPE site: ${installId}`);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] Failed to remove WPE site:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
 }

@@ -33,6 +33,8 @@ import { GraphService } from './events/GraphService';
 import { EventProcessor } from './events/EventProcessor';
 import { HttpEventInterface } from './events/HttpEventInterface';
 import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcaster';
+import { WPESyncService } from './events/WPESyncService';
+import { RemoteContentExtractor } from './content/RemoteContentExtractor';
 import { AiProxyServer } from './ai-proxy/AiProxyServer';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -83,7 +85,7 @@ export default function main(context: any): void {
   const fileScanner = new FileScanner();
   const mysqlExtractor = new MySQLExtractor();
   const indexRegistry = new IndexRegistry(registryStorage);
-  const graphService = new GraphService(graphDbPath);
+  const graphService = new GraphService(graphDbPath, localLogger);
 
   const contentPipeline = new ContentPipeline({
     vectorStore,
@@ -133,6 +135,20 @@ export default function main(context: any): void {
   // Initialize HTTP event interface
   const httpEventInterface = new HttpEventInterface({
     eventProcessor,
+    logger: localLogger,
+  });
+
+  // Initialize WPE sync service (Phase 1-2)
+  const remoteContentExtractor = new RemoteContentExtractor({
+    localServices: localServicesBridge,
+    logger: localLogger,
+  });
+  const wpeSyncService = new WPESyncService({
+    graphService,
+    localServices: localServicesBridge,
+    remoteContentExtractor,
+    embeddingService,
+    vectorStore,
     logger: localLogger,
   });
 
@@ -259,6 +275,7 @@ export default function main(context: any): void {
     vectorDbPath: vectorDbDir,
     serviceContainer,
     nexusServices,
+    wpeSyncService,
   });
 
   // Sprint 4: Credential sync broadcaster

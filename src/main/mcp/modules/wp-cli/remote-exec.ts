@@ -27,6 +27,10 @@ const ALLOWED_REMOTE_COMMANDS = new Set([
   'option get',
   // Site health
   'site health',
+  // Post management (Phase 2: WPE content sync)
+  'post list',
+  'post get',
+  'post-type list',
 ]);
 
 export function isBlockedCommand(args: string[]): string | null {

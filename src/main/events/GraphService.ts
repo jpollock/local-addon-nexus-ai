@@ -116,9 +116,11 @@ CREATE TABLE IF NOT EXISTS event_metadata (
 export class GraphService {
   private db: Database.Database | null = null;
   private dbPath: string;
+  private logger: any;
 
-  constructor(dbPath: string) {
+  constructor(dbPath: string, logger?: any) {
     this.dbPath = dbPath;
+    this.logger = logger || console;
   }
 
   async initialize(): Promise<void> {
@@ -137,6 +139,46 @@ export class GraphService {
 
     // Enable WAL mode for better concurrency
     this.db.pragma('journal_mode = WAL');
+
+    // Run migrations
+    await this.runMigrations();
+  }
+
+  /**
+   * Run database migrations for schema updates
+   */
+  private async runMigrations(): Promise<void> {
+    if (!this.db) return;
+
+    this.logger.info('[GraphService] Running migrations...');
+
+    // Check if source column exists
+    const tableInfo = this.db.pragma('table_info(sites)') as Array<{ name: string }>;
+    this.logger.info('[GraphService] Table info columns:', tableInfo.map(c => c.name).join(', '));
+    const hasSourceColumn = tableInfo.some(col => col.name === 'source');
+
+    this.logger.info(`[GraphService] Has source column: ${hasSourceColumn}`);
+
+    if (!hasSourceColumn) {
+      this.logger.info('[GraphService] Adding WPE columns to sites table...');
+      try {
+        // Add new columns for WPE site tracking
+        this.db.exec('ALTER TABLE sites ADD COLUMN source TEXT DEFAULT "local"');
+        this.logger.info('[GraphService]   - Added source column');
+        this.db.exec('ALTER TABLE sites ADD COLUMN remote_install_id TEXT');
+        this.logger.info('[GraphService]   - Added remote_install_id column');
+        this.db.exec('ALTER TABLE sites ADD COLUMN remote_domain TEXT');
+        this.logger.info('[GraphService]   - Added remote_domain column');
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_sites_source ON sites(source)');
+        this.logger.info('[GraphService]   - Created source index');
+        this.logger.info('[GraphService] ✓ WPE columns migration completed');
+      } catch (err) {
+        this.logger.error('[GraphService] Migration failed:', err);
+        throw err;
+      }
+    } else {
+      this.logger.info('[GraphService] WPE columns already exist, skipping migration');
+    }
   }
 
   /** Expose the underlying database for shared use (e.g., HealthTrendTracker). */
@@ -167,15 +209,18 @@ export class GraphService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(`
-      INSERT INTO sites (id, name, domain, wp_version, last_sync_at, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sites (id, name, domain, wp_version, last_sync_at, is_active, created_at, updated_at, source, remote_install_id, remote_domain)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         domain = excluded.domain,
         wp_version = excluded.wp_version,
         last_sync_at = excluded.last_sync_at,
         is_active = excluded.is_active,
-        updated_at = excluded.updated_at
+        updated_at = excluded.updated_at,
+        source = excluded.source,
+        remote_install_id = excluded.remote_install_id,
+        remote_domain = excluded.remote_domain
     `);
 
     stmt.run(
@@ -186,7 +231,10 @@ export class GraphService {
       site.last_sync_at ?? null,
       site.is_active ? 1 : 0,
       site.created_at,
-      site.updated_at
+      site.updated_at,
+      site.source ?? 'local',
+      site.remote_install_id ?? null,
+      site.remote_domain ?? null
     );
   }
 
@@ -208,19 +256,35 @@ export class GraphService {
       is_active: row.is_active === 1,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      source: row.source ?? 'local',
+      remote_install_id: row.remote_install_id,
+      remote_domain: row.remote_domain,
     };
   }
 
-  async listSites(options?: { active_only?: boolean }): Promise<Site[]> {
+  async listSites(options?: { active_only?: boolean; source?: 'local' | 'wpe' }): Promise<Site[]> {
     if (!this.db) throw new Error('Database not initialized');
 
     let query = 'SELECT * FROM sites';
+    const conditions: string[] = [];
+    const params: any[] = [];
+
     if (options?.active_only) {
-      query += ' WHERE is_active = 1';
+      conditions.push('is_active = 1');
     }
+
+    if (options?.source) {
+      conditions.push('source = ?');
+      params.push(options.source);
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
     query += ' ORDER BY name';
 
-    const rows = this.db.prepare(query).all() as any[];
+    const rows = this.db.prepare(query).all(...params) as any[];
 
     return rows.map(row => ({
       id: row.id,
@@ -231,6 +295,9 @@ export class GraphService {
       is_active: row.is_active === 1,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      source: row.source ?? 'local',
+      remote_install_id: row.remote_install_id,
+      remote_domain: row.remote_domain,
     }));
   }
 

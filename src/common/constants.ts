@@ -105,6 +105,12 @@ export const IPC_CHANNELS = {
 
   // Graph Sync
   SYNC_GRAPH_ALL: `${ADDON_PREFIX}:sync-graph-all`,
+
+  // WPE Site Sync (Phase 1)
+  WPE_SYNC_ALL: `${ADDON_PREFIX}:wpe:sync-all`,
+  WPE_SYNC_STATUS: `${ADDON_PREFIX}:wpe:sync-status`,
+  WPE_GET_SYNCED_SITES: `${ADDON_PREFIX}:wpe:get-synced-sites`,
+  WPE_REMOVE_SITE: `${ADDON_PREFIX}:wpe:remove-site`,
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -59,6 +59,11 @@ interface NexusPreferencesState {
   syncResults: CredentialSyncResult[] | null;
   // AI Proxy state (Sprint 4)
   aiProxy: AiProxyInfo | null;
+  // WPE Sync state (Phase 3)
+  wpeSyncProgress: { total: number; current: number; currentSite: string; status: string } | null;
+  wpeSyncedCount: number;
+  wpeSyncing: boolean;
+  wpeSyncError: string | null;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -139,6 +144,7 @@ const rowStyle: React.CSSProperties = {
 
 export class NexusPreferences extends React.Component<NexusPreferencesProps, NexusPreferencesState> {
   private mounted = false;
+  private wpeSyncPollInterval: NodeJS.Timeout | null = null;
 
   state: NexusPreferencesState = {
     settings: { autoIndex: true, excludedSiteIds: [] },
@@ -155,6 +161,10 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     syncing: false,
     syncResults: null,
     aiProxy: null,
+    wpeSyncProgress: null,
+    wpeSyncedCount: 0,
+    wpeSyncing: false,
+    wpeSyncError: null,
   };
 
   componentDidMount(): void {
@@ -164,6 +174,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   componentWillUnmount(): void {
     this.mounted = false;
+    this.stopWpeSyncProgressPolling();
   }
 
   fetchData = async (): Promise<void> => {
@@ -547,6 +558,164 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     );
   }
 
+  // WPE Sync methods (Phase 3)
+  startWpeSyncProgressPolling = (): void => {
+    // Clear any existing interval
+    if (this.wpeSyncPollInterval) {
+      clearInterval(this.wpeSyncPollInterval);
+    }
+
+    // Poll progress every 1 second
+    this.wpeSyncPollInterval = setInterval(async () => {
+      try {
+        const statusResult = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_STATUS);
+        if (statusResult.success && statusResult.progress) {
+          this.setState({ wpeSyncProgress: statusResult.progress });
+
+          // Stop polling if sync completed or failed
+          if (statusResult.progress.status === 'completed' || statusResult.progress.status === 'failed') {
+            if (this.wpeSyncPollInterval) {
+              clearInterval(this.wpeSyncPollInterval);
+              this.wpeSyncPollInterval = null;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[NexusPreferences] Failed to poll WPE sync progress:', error);
+      }
+    }, 1000);
+  };
+
+  stopWpeSyncProgressPolling = (): void => {
+    if (this.wpeSyncPollInterval) {
+      clearInterval(this.wpeSyncPollInterval);
+      this.wpeSyncPollInterval = null;
+    }
+  };
+
+  handleWpeSync = async (): Promise<void> => {
+    if (this.state.wpeSyncing) return;
+
+    this.setState({ wpeSyncing: true, wpeSyncProgress: null, wpeSyncError: null });
+
+    // Start polling for progress
+    this.startWpeSyncProgressPolling();
+
+    try {
+      // Sync all WPE sites
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_ALL);
+
+      // Stop polling
+      this.stopWpeSyncProgressPolling();
+
+      if (result.success) {
+        this.setState({
+          wpeSyncedCount: result.synced || 0,
+          wpeSyncing: false,
+          wpeSyncProgress: null,
+          wpeSyncError: null,
+        });
+      } else {
+        const errorMsg = result.error || 'Unknown error occurred during sync';
+        this.setState({
+          wpeSyncing: false,
+          wpeSyncProgress: null,
+          wpeSyncError: errorMsg,
+        });
+        console.error('[NexusPreferences] WPE sync failed:', errorMsg);
+      }
+    } catch (error) {
+      this.stopWpeSyncProgressPolling();
+      const errorMsg = error instanceof Error ? error.message : 'Failed to sync WPE sites';
+      this.setState({
+        wpeSyncing: false,
+        wpeSyncProgress: null,
+        wpeSyncError: errorMsg,
+      });
+      console.error('[NexusPreferences] WPE sync error:', error);
+    }
+  };
+
+  renderWpeSyncSection(): React.ReactNode {
+    const { wpeSyncing, wpeSyncedCount, wpeSyncProgress, wpeSyncError } = this.state;
+
+    return React.createElement('div', { style: sectionStyle },
+      React.createElement('div', { style: labelStyle }, 'WP Engine Sites'),
+      React.createElement('div', { style: descStyle },
+        'Sync your WP Engine sites to make them searchable alongside local sites. Indexed content is available in Site Finder.',
+      ),
+
+      // Sync button and status
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' } },
+        React.createElement('button', {
+          onClick: this.handleWpeSync,
+          disabled: wpeSyncing,
+          style: {
+            padding: '8px 16px',
+            borderRadius: '6px',
+            border: 'none',
+            backgroundColor: wpeSyncing ? '#9ca3af' : '#3b82f6',
+            color: '#fff',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: wpeSyncing ? 'not-allowed' : 'pointer',
+            opacity: wpeSyncing ? 0.6 : 1,
+          },
+        }, wpeSyncing ? 'Syncing...' : 'Sync Now'),
+
+        // Synced count
+        wpeSyncedCount > 0 && !wpeSyncing
+          ? React.createElement('span', {
+              style: {
+                fontSize: '13px',
+                color: 'var(--nxai-card-sub, #6b7280)',
+              },
+            }, `${wpeSyncedCount} site${wpeSyncedCount === 1 ? '' : 's'} synced`)
+          : null,
+      ),
+
+      // Progress indicator
+      wpeSyncProgress
+        ? React.createElement('div', {
+            style: {
+              fontSize: '12px',
+              color: 'var(--nxai-card-sub, #6b7280)',
+              marginTop: '8px',
+              fontStyle: 'italic',
+            },
+          }, `Syncing ${wpeSyncProgress.currentSite}... (${wpeSyncProgress.current}/${wpeSyncProgress.total})`)
+        : null,
+
+      // Error display
+      wpeSyncError
+        ? React.createElement('div', {
+            style: {
+              padding: '12px',
+              marginTop: '12px',
+              borderRadius: '6px',
+              backgroundColor: '#fee2e2',
+              border: '1px solid #fecaca',
+            },
+          },
+            React.createElement('div', {
+              style: {
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#991b1b',
+                marginBottom: '4px',
+              },
+            }, 'Sync Failed'),
+            React.createElement('div', {
+              style: {
+                fontSize: '12px',
+                color: '#dc2626',
+              },
+            }, wpeSyncError),
+          )
+        : null,
+    );
+  }
+
   private formatTimeAgo(timestamp: number): string {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
     if (seconds < 60) return 'Just now';
@@ -657,6 +826,18 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
       // AI Proxy section (Sprint 4)
       this.renderAiProxySection(),
+
+      // Divider
+      React.createElement('hr', {
+        style: {
+          border: 'none',
+          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
+          marginBottom: '24px',
+        },
+      }),
+
+      // WPE Sync section (Phase 3)
+      this.renderWpeSyncSection(),
     );
   }
 }

@@ -92,6 +92,9 @@ export interface Site {
   is_active: boolean;
   created_at: number;
   updated_at: number;
+  source?: 'local' | 'wpe';
+  remote_install_id?: string;
+  remote_domain?: string;
 }
 
 export interface Content {

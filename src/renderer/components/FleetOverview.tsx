@@ -51,6 +51,10 @@ interface SiteListItem {
   status: string;
   isWpe: boolean;
   indexed: boolean;
+  source?: 'local' | 'wpe';
+  wpVersion?: string;
+  linkedLocalSite?: { id: string; name: string }; // For WPE sites: which local site is linked
+  wpeInstallId?: string; // For WPE sites: the install ID
 }
 
 interface IndexEntry {
@@ -122,6 +126,10 @@ interface FleetOverviewState {
   filteredSiteIds: string[] | null;
   aiSearchMode: boolean;
   hasLLM: boolean;
+  showLocalSites: boolean;
+  showWpeSites: boolean;
+  wpeSites: SiteListItem[];
+  pullingInstall: string | null;
 }
 
 // -- Shared styles --
@@ -275,6 +283,10 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     aiSearchMode: false,
     hasLLM: false,
     settings: null,
+    showLocalSites: true,
+    showWpeSites: true,
+    wpeSites: [],
+    pullingInstall: null,
   };
 
   componentDidMount(): void {
@@ -331,23 +343,64 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
         ipc.invoke(IPC_CHANNELS.GET_FLEET_STATUS),
         ipc.invoke(IPC_CHANNELS.GET_AI_PROXY_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
+        ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES),
       ]);
       if (!this.mounted) return;
 
       // Check if LLM is configured (any chat provider selected means LLM available)
       const hasLLM = !!settings?.chatProvider;
 
+      // Build a map of WPE install IDs to local sites (for linkage detection)
+      const wpeInstallIdToLocalSite = new Map<string, { id: string; name: string }>();
+      if (sites && Array.isArray(sites)) {
+        for (const site of sites) {
+          const connections = (site as any).hostConnections;
+          const connList = connections
+            ? (Array.isArray(connections) ? connections : Object.values(connections))
+            : [];
+
+          for (const conn of connList) {
+            if (conn.host === 'wpe' && conn.id) {
+              wpeInstallIdToLocalSite.set(conn.id, { id: site.id, name: site.name });
+            }
+          }
+        }
+      }
+
+      // Transform WPE sites to SiteListItem format with linkage info
+      const wpeSites: SiteListItem[] = wpeSitesResult?.success && wpeSitesResult.sites
+        ? wpeSitesResult.sites.map((site: any) => {
+            const installId = site.remote_install_id;
+            const linkedLocal = installId ? wpeInstallIdToLocalSite.get(installId) : undefined;
+
+            return {
+              id: site.id,
+              name: site.name,
+              domain: site.domain,
+              port: null,
+              status: 'remote',
+              isWpe: true,
+              indexed: true, // WPE sites are indexed when synced
+              source: 'wpe' as const,
+              wpVersion: site.wp_version,
+              linkedLocalSite: linkedLocal,
+              wpeInstallId: installId,
+            };
+          })
+        : [];
+
       this.setState({
         stats,
         mcpInfo: mcpInfo ?? null,
         sites: sites ?? [],
+        wpeSites,
         indexEntries: indexEntries ?? [],
         aiProxy: proxyResult?.proxy ?? null,
         settings: settings ?? null,
@@ -481,6 +534,19 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
       if (!this.mounted) return;
       this.setState({ indexAllAutoRunning: false });
     }
+  };
+
+  handlePullToLocal = async (installName: string): Promise<void> => {
+    // TODO: Implement actual pull to local via local_wpe_pull MCP tool
+    // For now, show info message
+    const message = `Pull to Local would create a local copy of "${installName}".\n\n` +
+      `This feature requires:\n` +
+      `1. Calling local_wpe_pull MCP tool\n` +
+      `2. Selecting database/files to sync\n` +
+      `3. Starting the new local site\n\n` +
+      `Coming soon!`;
+
+    alert(message);
   };
 
   handleSyncGraph = async (): Promise<void> => {
@@ -761,6 +827,13 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
       borderBottom: '1px solid var(--nxai-card-border)',
     };
 
+    // WPE sites can't have AI setup (remote)
+    if (site.source === 'wpe') {
+      return React.createElement('td', { style: tdStyle },
+        React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } }, 'N/A'),
+      );
+    }
+
     if (site.status !== 'running') {
       return React.createElement('td', { style: tdStyle },
         React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } }, '\u2014'),
@@ -808,22 +881,34 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
   }
 
   renderSiteTable(): React.ReactNode {
-    const { sites, indexEntries, indexingId, filteredSiteIds } = this.state;
+    const { sites, wpeSites, indexEntries, indexingId, filteredSiteIds, showLocalSites, showWpeSites } = this.state;
 
     const indexMap = new Map<string, IndexEntry>();
     for (const entry of indexEntries) {
       indexMap.set(entry.siteId, entry);
     }
 
+    // Merge local and WPE sites based on toggles
+    let allSites: SiteListItem[] = [];
+    if (showLocalSites) {
+      allSites = [...sites.map(s => ({ ...s, source: 'local' as const }))];
+    }
+    if (showWpeSites) {
+      allSites = [...allSites, ...wpeSites];
+    }
+
     // Filter sites if Site Finder has active filters
-    let displaySites = sites;
+    let displaySites = allSites;
     if (filteredSiteIds !== null) {
       const filterSet = new Set(filteredSiteIds);
-      displaySites = sites.filter(s => filterSet.has(s.id));
+      displaySites = allSites.filter(s => filterSet.has(s.id));
     }
 
     // Sort: running first, then alphabetical
     const sorted = [...displaySites].sort((a, b) => {
+      // WPE sites (remote) go after local running sites
+      if (a.source === 'wpe' && b.source === 'local' && b.status === 'running') return 1;
+      if (b.source === 'wpe' && a.source === 'local' && a.status === 'running') return -1;
       if (a.status === 'running' && b.status !== 'running') return -1;
       if (b.status === 'running' && a.status !== 'running') return 1;
       return a.name.localeCompare(b.name);
@@ -848,7 +933,64 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     };
 
     return React.createElement('div', { style: { marginBottom: '24px' } },
-      this.renderSectionLabel('Sites'),
+      // Section header with filters
+      React.createElement('div', {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '12px',
+        },
+      },
+        this.renderSectionLabel('Sites'),
+
+        // Source filters
+        React.createElement('div', {
+          style: {
+            display: 'flex',
+            gap: '16px',
+            alignItems: 'center',
+          },
+        },
+          React.createElement('label', {
+            style: {
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              color: 'var(--nxai-card-sub)',
+            },
+          },
+            React.createElement('input', {
+              type: 'checkbox',
+              checked: showLocalSites,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                this.setState({ showLocalSites: e.target.checked }),
+            }),
+            'Local Sites',
+          ),
+          React.createElement('label', {
+            style: {
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              color: 'var(--nxai-card-sub)',
+            },
+          },
+            React.createElement('input', {
+              type: 'checkbox',
+              checked: showWpeSites,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                this.setState({ showWpeSites: e.target.checked }),
+            }),
+            '☁️ WP Engine Sites',
+          ),
+        ),
+      ),
+
       React.createElement('div', { style: { ...cardStyle, padding: 0, overflow: 'hidden' } },
         React.createElement('table', {
           style: { width: '100%', borderCollapse: 'collapse' as const },
@@ -856,6 +998,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
           React.createElement('thead', null,
             React.createElement('tr', null,
               React.createElement('th', { style: thStyle }, 'Site'),
+              React.createElement('th', { style: thStyle }, 'Source'),
               React.createElement('th', { style: thStyle }, 'Actions'),
               React.createElement('th', { style: thStyle }, 'Health'),
               React.createElement('th', { style: thStyle }, 'Status'),
@@ -871,7 +1014,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
             sorted.length === 0
               ? React.createElement('tr', null,
                   React.createElement('td', {
-                    colSpan: 10,
+                    colSpan: 11,
                     style: { ...tdStyle, textAlign: 'center' as const, color: 'var(--nxai-card-sub)', padding: '24px' },
                   }, filteredSiteIds !== null ? 'No sites match the filters' : 'No sites found'),
                 )
@@ -885,32 +1028,108 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
                     : indexState === 'error' ? UI_COLORS.STATUS_ERROR
                     : 'var(--nxai-card-sub)';
 
-                  const siteUrl = site.port ? `http://localhost:${site.port}` : `http://${site.domain}`;
+                  const isWpeSite = site.source === 'wpe';
+                  const siteUrl = site.port ? `http://localhost:${site.port}` : `https://${site.domain}`;
                   const adminUrl = `${siteUrl}/wp-admin`;
 
                   return React.createElement('tr', { key: site.id },
+                    // Site name
                     React.createElement('td', { style: tdStyle },
-                      React.createElement('span', { style: { fontWeight: 500 } }, site.name),
-                      site.isWpe ? React.createElement('span', {
-                        style: tagStyle('rgba(14, 202, 212, 0.15)', UI_COLORS.WPE_BRAND),
-                      }, 'WPE') : null,
+                      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px' } },
+                        React.createElement('span', { style: { fontWeight: 500 } }, site.name),
+                        site.wpVersion ? React.createElement('span', {
+                          style: { fontSize: '11px', color: 'var(--nxai-card-sub)' },
+                        }, `WP ${site.wpVersion}`) : null,
+                      ),
                     ),
+                    // Source
                     React.createElement('td', { style: tdStyle },
-                      React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
-                        React.createElement('a', {
-                          href: siteUrl,
-                          target: '_blank',
-                          rel: 'noopener noreferrer',
-                          style: { color: '#3b82f6', textDecoration: 'none', fontSize: '12px' },
-                          title: 'Open site',
-                        }, 'Site ↗'),
-                        site.status === 'running' ? React.createElement('a', {
-                          href: adminUrl,
-                          target: '_blank',
-                          rel: 'noopener noreferrer',
-                          style: { color: '#3b82f6', textDecoration: 'none', fontSize: '12px' },
-                          title: 'Open WP Admin (login: admin / admin)',
-                        }, 'Admin ↗') : null,
+                      isWpeSite
+                        ? React.createElement('span', {
+                            style: {
+                              ...tagStyle('rgba(14, 202, 212, 0.15)', UI_COLORS.WPE_BRAND),
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            },
+                          }, '☁️ WPE')
+                        : React.createElement('span', {
+                            style: tagStyle('#f3f4f6', '#6b7280'),
+                          }, 'Local'),
+                    ),
+                    // Actions
+                    React.createElement('td', { style: tdStyle },
+                      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+                        // Links
+                        React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+                          isWpeSite
+                            ? React.createElement('a', {
+                                href: adminUrl,
+                                target: '_blank',
+                                rel: 'noopener noreferrer',
+                                style: { color: '#3b82f6', textDecoration: 'none', fontSize: '12px' },
+                                title: 'Open WP Admin on WP Engine',
+                              }, 'Admin ↗')
+                            : React.createElement(React.Fragment, null,
+                                React.createElement('a', {
+                                  href: siteUrl,
+                                  target: '_blank',
+                                  rel: 'noopener noreferrer',
+                                  style: { color: '#3b82f6', textDecoration: 'none', fontSize: '12px' },
+                                  title: 'Open site',
+                                }, 'Site ↗'),
+                                site.status === 'running' ? React.createElement('a', {
+                                  href: adminUrl,
+                                  target: '_blank',
+                                  rel: 'noopener noreferrer',
+                                  style: { color: '#3b82f6', textDecoration: 'none', fontSize: '12px' },
+                                  title: 'Open WP Admin (login: admin / admin)',
+                                }, 'Admin ↗') : null,
+                              ),
+                        ),
+                        // Linkage status / Pull to Local
+                        isWpeSite
+                          ? (site.linkedLocalSite
+                              ? React.createElement('div', {
+                                  style: {
+                                    fontSize: '11px',
+                                    color: UI_COLORS.STATUS_RUNNING,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                  },
+                                },
+                                  '✓ Linked to ',
+                                  React.createElement('span', {
+                                    style: { fontWeight: 500 },
+                                  }, site.linkedLocalSite.name),
+                                )
+                              : (this.state.pullingInstall === site.name
+                                  ? React.createElement('button', {
+                                      style: {
+                                        ...btnStyle,
+                                        fontSize: '11px',
+                                        padding: '3px 8px',
+                                        opacity: 0.6,
+                                        cursor: 'not-allowed',
+                                      },
+                                      disabled: true,
+                                    }, 'Pulling...')
+                                  : React.createElement('button', {
+                                      style: {
+                                        ...btnStyle,
+                                        fontSize: '11px',
+                                        padding: '3px 8px',
+                                        backgroundColor: UI_COLORS.WPE_BRAND,
+                                        color: '#fff',
+                                        border: 'none',
+                                      },
+                                      onClick: () => this.handlePullToLocal(site.name),
+                                      title: 'Create a local copy of this WP Engine site',
+                                    }, '⬇ Pull to Local')
+                                )
+                            )
+                          : null,
                       ),
                     ),
                     React.createElement('td', { style: { ...tdStyle, textAlign: 'center' as const } },
@@ -921,16 +1140,22 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
                       }),
                     ),
                     React.createElement('td', { style: tdStyle },
-                      React.createElement('span', { style: dotStyle(site.status === 'running' ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_HALTED) }),
-                      this.state.togglingId === site.id
-                        ? React.createElement('button', {
-                            style: { ...btnStyle, opacity: 0.6, cursor: 'not-allowed', fontSize: '11px', padding: '2px 8px' },
-                            disabled: true,
-                          }, site.status === 'running' ? 'Stopping...' : 'Starting...')
-                        : React.createElement('button', {
-                            style: { ...btnStyle, fontSize: '11px', padding: '2px 8px' },
-                            onClick: () => this.handleToggleSite(site.id, site.status),
-                          }, site.status === 'running' ? 'Stop' : 'Start'),
+                      isWpeSite
+                        ? React.createElement('span', {
+                            style: { fontSize: '12px', color: 'var(--nxai-card-sub)' },
+                          }, 'Remote')
+                        : React.createElement(React.Fragment, null,
+                            React.createElement('span', { style: dotStyle(site.status === 'running' ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_HALTED) }),
+                            this.state.togglingId === site.id
+                              ? React.createElement('button', {
+                                  style: { ...btnStyle, opacity: 0.6, cursor: 'not-allowed', fontSize: '11px', padding: '2px 8px' },
+                                  disabled: true,
+                                }, site.status === 'running' ? 'Stopping...' : 'Starting...')
+                              : React.createElement('button', {
+                                  style: { ...btnStyle, fontSize: '11px', padding: '2px 8px' },
+                                  onClick: () => this.handleToggleSite(site.id, site.status),
+                                }, site.status === 'running' ? 'Stop' : 'Start'),
+                          ),
                     ),
                     React.createElement('td', { style: tdStyle },
                       React.createElement('span', { style: dotStyle(stateColor) }),
@@ -942,13 +1167,17 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
                       idx?.lastIndexed ? formatTimeAgo(idx.lastIndexed) : '\u2014',
                     ),
                     React.createElement('td', { style: { ...tdStyle, textAlign: 'right' as const } },
-                      site.status === 'running'
-                        ? React.createElement('button', {
-                            style: isIndexing ? { ...btnStyle, opacity: 0.6, cursor: 'not-allowed' } : btnPrimaryStyle,
-                            onClick: isIndexing ? undefined : () => this.handleIndex(site.id),
-                            disabled: isIndexing,
-                          }, isIndexing ? 'Indexing...' : (idx ? 'Re-index' : 'Index'))
-                        : React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } }, 'Site stopped'),
+                      isWpeSite
+                        ? React.createElement('span', {
+                            style: { fontSize: '11px', color: 'var(--nxai-card-sub)' },
+                          }, 'Via WPE Sync')
+                        : site.status === 'running'
+                          ? React.createElement('button', {
+                              style: isIndexing ? { ...btnStyle, opacity: 0.6, cursor: 'not-allowed' } : btnPrimaryStyle,
+                              onClick: isIndexing ? undefined : () => this.handleIndex(site.id),
+                              disabled: isIndexing,
+                            }, isIndexing ? 'Indexing...' : (idx ? 'Re-index' : 'Index'))
+                          : React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } }, 'Site stopped'),
                     ),
                     this.renderSetupAICell(site),
                   );
