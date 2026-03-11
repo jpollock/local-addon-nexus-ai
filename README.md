@@ -15,6 +15,7 @@ Nexus AI indexes your WordPress sites into a vector database and exposes them th
 ## Features
 
 - **AI Chat** — Built-in chat interface with streaming responses and tool calling
+- **WP Engine Remote Management** — Sync and manage WPE sites alongside local sites (see below)
 - Semantic search across all site content with relevance scoring
 - WooCommerce product extraction (price, SKU, stock, attributes, categories)
 - ACF custom field enrichment (text, repeater, group, flexible content)
@@ -23,6 +24,30 @@ Nexus AI indexes your WordPress sites into a vector database and exposes them th
 - Ollama integration with automatic site context injection
 - 3-tier safety system with confirmation tokens for destructive operations
 - Per-platform packaging with native binary stripping
+
+## WP Engine Remote Management
+
+Nexus AI can sync your **WP Engine sites** into the same fleet view as your local sites, giving you unified search and management across your entire WordPress portfolio.
+
+**Key Capabilities:**
+- 🔍 **Unified Search** — Search content across local + WPE sites in Site Finder
+- ⚡ **Fast Sync** — 251 sites in ~25 minutes with full content indexing
+- 📊 **Full Metadata** — WordPress version, plugins, users extracted via remote WP-CLI
+- 🔗 **Link Detection** — Automatically identifies which WPE sites are already pulled to local
+- ⬇️ **Pull to Local** — One-click creation of local copies for development/testing
+
+**Quick Start:**
+1. Connect Local to your WP Engine account (Local → Connect → WP Engine)
+2. Open Nexus AI → Preferences
+3. Click **"Sync Now"** under "WP Engine Sites"
+4. View synced sites in Fleet Overview
+
+**Performance:**
+- ~6 seconds per site (SSH ControlMaster + 10x concurrency)
+- Live progress indicator in Fleet Overview header
+- Re-sync anytime to refresh data
+
+**See:** [WPE Remote Management User Guide](docs/WPE_REMOTE_MANAGEMENT_USER_GUIDE.md) for full documentation
 
 ## Chat
 
