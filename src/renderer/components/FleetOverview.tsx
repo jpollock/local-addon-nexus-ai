@@ -576,10 +576,16 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
       );
 
       if (result.success) {
-        alert(
-          `✓ Site created successfully!\n\n` +
-          `${result.message}`
-        );
+        const message = result.pulled
+          ? `✓ Pull operation started!\n\n` +
+            `Site: ${result.siteName}\n` +
+            `From: ${result.installName}\n\n` +
+            `The site is now pulling database and files from WP Engine.\n` +
+            `Check the Local app for progress (this may take a few minutes).`
+          : `✓ Site created and linked!\n\n` +
+            `${result.message}`;
+        
+        alert(message);
 
         // Refresh fleet overview to show new site
         await this.fetchAll();

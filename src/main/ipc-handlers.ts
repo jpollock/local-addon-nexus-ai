@@ -1615,9 +1615,38 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    */
   ipcMain.handle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, { wpeSiteId, installName, installId }: { wpeSiteId: string; installName: string; installId?: string }) => {
     try {
-      localLogger.info(`[NexusAI] Starting pull to local for WPE site: ${installName} (ID: ${installId})`);
+      localLogger.info(`[NexusAI] Starting automated pull to local for WPE site: ${installName} (ID: ${installId})`);
 
-      // Generate local site name (strip special chars from install name)
+      if (!installId) {
+        return { success: false, error: 'WPE install ID is required for pull operation' };
+      }
+
+      // Get WPE install details from CAPI
+      const capi = serviceContainer?.capi;
+      if (!capi) {
+        return { success: false, error: 'WP Engine API not available. Connect to WP Engine first.' };
+      }
+
+      let wpeInstall: any;
+      try {
+        wpeInstall = await capi.getInstall(installId);
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        localLogger.error('[NexusAI] Failed to get WPE install details:', errorMsg);
+        return { success: false, error: `Failed to get WPE install details: ${errorMsg}` };
+      }
+
+      const wpeSiteId = wpeInstall?.site?.id;
+      const wpePrimaryDomain = wpeInstall?.primaryDomain || wpeInstall?.cname || `${installName}.wpengine.com`;
+      const wpeEnvironment = wpeInstall?.environment || 'production';
+
+      if (!wpeSiteId) {
+        return { success: false, error: 'Could not determine WPE site ID from install' };
+      }
+
+      localLogger.info(`[NexusAI] WPE Install Details: siteId=${wpeSiteId}, domain=${wpePrimaryDomain}, env=${wpeEnvironment}`);
+
+      // Generate local site name
       const localSiteName = installName
         .replace(/[^a-z0-9\s-]/gi, "")
         .replace(/\s+/g, "-")
@@ -1643,20 +1672,69 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       // Create local site
       localLogger.info(`[NexusAI] Creating local site: ${localSiteName}`);
       const newSite = await localServicesBridge.createSite({
-        name: installName, // Use original name (Local will sanitize it)
+        name: installName,
       });
 
       localLogger.info(`[NexusAI] Local site created: ${newSite.id} (${newSite.name})`);
 
-      // Start the site (required for pull to work)
+      // Start the site
       localLogger.info(`[NexusAI] Starting site ${newSite.id}...`);
       await localServicesBridge.startSite(newSite.id);
 
-      // Wait a bit for site to start
+      // Wait for site to fully start
       await new Promise(resolve => setTimeout(resolve, 3000));
 
-      localLogger.info(`[NexusAI] Site started. Pull operation ready.`);
-      localLogger.info(`[NexusAI] User should manually link site to WPE and pull via Local UI.`);
+      // Add WPE connection to hostConnections
+      localLogger.info(`[NexusAI] Linking site to WPE environment...`);
+      const siteObj = siteData.getSite(newSite.id);
+      
+      if (!siteObj) {
+        throw new Error(`Site ${newSite.id} not found after creation`);
+      }
+
+      // Create hostConnection entry
+      const hostConnection = {
+        hostId: 'wpe',
+        remoteSiteId: wpeSiteId,
+        remoteSiteEnv: wpeEnvironment,
+        installName: installName,
+        installId: installId,
+        primaryDomain: wpePrimaryDomain,
+      };
+
+      // Update site with WPE connection
+      siteData.updateSite(newSite.id, {
+        hostConnections: [hostConnection],
+      });
+
+      localLogger.info(`[NexusAI] Site linked to WPE. Initiating pull...`);
+
+      // Trigger WPE pull
+      const wpePullService = serviceContainer?.wpePull;
+      if (!wpePullService) {
+        localLogger.warn('[NexusAI] WPE Pull service not available, skipping auto-pull');
+        return {
+          success: true,
+          siteId: newSite.id,
+          siteName: newSite.name,
+          linked: true,
+          pulled: false,
+          message: `Site created and linked to WPE, but auto-pull failed. Manually pull from Local UI.`
+        };
+      }
+
+      // Call the pull service directly
+      await wpePullService.pull({
+        localSiteId: newSite.id,
+        wpengineInstallName: installName,
+        wpengineInstallId: installId,
+        wpengineSiteId: wpeSiteId,
+        wpenginePrimaryDomain: wpePrimaryDomain,
+        includeSql: true,
+        requiresProvisioning: false,
+      });
+
+      localLogger.info(`[NexusAI] Pull operation initiated for ${newSite.name}`);
 
       return {
         success: true,
@@ -1664,12 +1742,9 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
         siteName: newSite.name,
         installName,
         installId,
-        message: `Local site "${newSite.name}" created and started. To pull content from WP Engine:
-
-1. Find "${newSite.name}" in Local's sidebar
-2. Right-click → Connect → WP Engine
-3. Select environment: "${installName}"
-4. Click Pull to sync database and files`
+        linked: true,
+        pulled: true,
+        message: `✓ Success! Site "${newSite.name}" is pulling from WPE. Check Local for progress.`
       };
 
     } catch (err) {
