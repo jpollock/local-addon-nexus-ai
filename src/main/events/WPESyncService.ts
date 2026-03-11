@@ -16,6 +16,7 @@ import { EmbeddingService } from '../embeddings/EmbeddingService';
 import { VectorStore } from '../vector-store/VectorStore';
 import { VectorDocument } from '../../common/types';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
+import pLimit from 'p-limit';
 
 export interface WPESyncProgress {
   total: number;
@@ -131,30 +132,39 @@ export class WPESyncService {
 
       this.logger.info(`[WPESyncService] Starting sync loop for ${installsToSync.length} installs${limit ? ` (limited from ${wpeInstalls.length})` : ''}...`);
 
-      // Sync each install
-      for (let i = 0; i < installsToSync.length; i++) {
-        const install = installsToSync[i];
+      // Sync with concurrency control (10 parallel sites max)
+      const concurrencyLimit = pLimit(10);
+      let completed = 0;
 
-        this.currentProgress.current = i + 1;
-        this.currentProgress.currentSite = install.install_name;
+      const syncTasks = installsToSync.map((install, i) =>
+        concurrencyLimit(async () => {
+          if (this.currentProgress) {
+            this.currentProgress.current = completed + 1;
+            this.currentProgress.currentSite = install.install_name;
+          }
 
-        this.logger.info(`[WPESyncService] Syncing ${i + 1}/${installsToSync.length}: ${install.install_name}`);
+          this.logger.info(`[WPESyncService] Syncing ${i + 1}/${installsToSync.length}: ${install.install_name}`);
 
-        try {
-          await this.syncInstall(install);
-          result.synced++;
-          this.logger.info(`[WPESyncService] ✓ Synced ${install.install_name}`);
-        } catch (error: any) {
-          result.failed++;
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          const errorStack = error instanceof Error ? error.stack : undefined;
-          result.errors.push({
-            installId: install.install_id,
-            error: errorMsg || 'Unknown error',
-          });
-          this.logger.error(`[WPESyncService] ✗ Failed to sync ${install.install_name}:`, errorMsg, errorStack);
-        }
-      }
+          try {
+            await this.syncInstall(install);
+            completed++;
+            result.synced++;
+            this.logger.info(`[WPESyncService] ✓ Synced ${install.install_name} (${completed}/${installsToSync.length} complete)`);
+          } catch (error: any) {
+            completed++;
+            result.failed++;
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            const errorStack = error instanceof Error ? error.stack : undefined;
+            result.errors.push({
+              installId: install.install_id,
+              error: errorMsg || 'Unknown error',
+            });
+            this.logger.error(`[WPESyncService] ✗ Failed to sync ${install.install_name}:`, errorMsg, errorStack);
+          }
+        }),
+      );
+
+      await Promise.all(syncTasks);
 
       this.currentProgress.status = 'completed';
       return result;

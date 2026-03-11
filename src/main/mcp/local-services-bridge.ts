@@ -407,6 +407,10 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         '-o', 'ServerAliveInterval=60',
         '-o', 'ServerAliveCountMax=120',
         '-o', 'StrictHostKeyChecking=accept-new',
+        // ControlMaster: reuse SSH connections to reduce overhead
+        '-o', 'ControlMaster=auto',
+        '-o', 'ControlPath=/tmp/ssh-nexus-%C',
+        '-o', 'ControlPersist=10m',
         '-i', sshKeyPath,
         `${username}@${host}`,
         wpCommand,
