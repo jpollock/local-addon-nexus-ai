@@ -25,6 +25,7 @@ import { BulkOperationManager } from './bulk/BulkOperationManager';
 // GroupStorage no longer used — groups come from Local's native siteData
 import { HealthTrendTracker } from './health/HealthTrendTracker';
 import { WPESyncService } from './events/WPESyncService';
+import { WpeAutoPullService } from './wpe-auto-pull';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -1610,148 +1611,67 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   /**
-   * Pull a WPE site to Local
-   * Creates a new local site and initiates a pull from WP Engine
+   * Pull a WPE site to Local (PRODUCTION-READY VERSION)
+   *
+   * Fully automated pull with proper pre-flight checks:
+   * - Validates WPE authentication
+   * - Ensures SSH key is registered with CAPI
+   * - Creates local site
+   * - Links to WPE environment
+   * - Triggers pull operation (database + files)
    */
   ipcMain.handle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, { wpeSiteId, installName, installId }: { wpeSiteId: string; installName: string; installId?: string }) => {
     try {
-      localLogger.info(`[NexusAI] Starting automated pull to local for WPE site: ${installName} (ID: ${installId})`);
-
       if (!installId) {
-        return { success: false, error: 'WPE install ID is required for pull operation' };
+        return { success: false, errorCode: 'INVALID_ARGS', error: 'WPE install ID is required' };
       }
 
-      // Get WPE install details from CAPI
-      const capi = serviceContainer?.capi;
-      if (!capi) {
-        return { success: false, error: 'WP Engine API not available. Connect to WP Engine first.' };
+      if (!serviceContainer) {
+        return { success: false, errorCode: 'SERVICE_UNAVAILABLE', error: 'Service container not initialized' };
       }
 
-      let wpeInstall: any;
-      try {
-        wpeInstall = await capi.getInstall(installId);
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        localLogger.error('[NexusAI] Failed to get WPE install details:', errorMsg);
-        return { success: false, error: `Failed to get WPE install details: ${errorMsg}` };
-      }
+      localLogger.info(`[WpeAutoPull] Starting pull for ${installName} (${installId})`);
 
-      const wpeSiteId = wpeInstall?.site?.id;
-      const wpePrimaryDomain = wpeInstall?.primaryDomain || wpeInstall?.cname || `${installName}.wpengine.com`;
-      const wpeEnvironment = wpeInstall?.environment || 'production';
+      // Initialize WpeAutoPullService with Local's service container
+      const autoPullService = new WpeAutoPullService(serviceContainer);
 
-      if (!wpeSiteId) {
-        return { success: false, error: 'Could not determine WPE site ID from install' };
-      }
-
-      localLogger.info(`[NexusAI] WPE Install Details: siteId=${wpeSiteId}, domain=${wpePrimaryDomain}, env=${wpeEnvironment}`);
-
-      // Generate local site name
-      const localSiteName = installName
-        .replace(/[^a-z0-9\s-]/gi, "")
-        .replace(/\s+/g, "-")
-        .replace(/-{2,}/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .toLowerCase();
-
-      // Check if site already exists
-      const existingSites = siteData.getSites();
-      const sitesArray = Object.values(existingSites);
-      const siteExists = sitesArray.some((s: any) => 
-        s.name.toLowerCase() === localSiteName.toLowerCase()
-      );
-
-      if (siteExists) {
-        localLogger.warn(`[NexusAI] Local site "${localSiteName}" already exists`);
-        return {
-          success: false,
-          error: `A local site named "${localSiteName}" already exists. Use a different name or delete the existing site first.`
-        };
-      }
-
-      // Create local site
-      localLogger.info(`[NexusAI] Creating local site: ${localSiteName}`);
-      const newSite = await localServicesBridge.createSite({
-        name: installName,
+      // Execute the pull with full automation
+      const result = await autoPullService.pullToLocal({
+        installId,
+        installName,
+        includeSql: true,
+        environment: 'production',
       });
 
-      localLogger.info(`[NexusAI] Local site created: ${newSite.id} (${newSite.name})`);
-
-      // Start the site
-      localLogger.info(`[NexusAI] Starting site ${newSite.id}...`);
-      await localServicesBridge.startSite(newSite.id);
-
-      // Wait for site to fully start
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // Add WPE connection to hostConnections
-      localLogger.info(`[NexusAI] Linking site to WPE environment...`);
-      const siteObj = siteData.getSite(newSite.id);
-      
-      if (!siteObj) {
-        throw new Error(`Site ${newSite.id} not found after creation`);
-      }
-
-      // Create hostConnection entry
-      const hostConnection = {
-        hostId: 'wpe',
-        remoteSiteId: wpeSiteId,
-        remoteSiteEnv: wpeEnvironment,
-        installName: installName,
-        installId: installId,
-        primaryDomain: wpePrimaryDomain,
-      };
-
-      // Update site with WPE connection
-      siteData.updateSite(newSite.id, {
-        hostConnections: [hostConnection],
-      });
-
-      localLogger.info(`[NexusAI] Site linked to WPE. Initiating pull...`);
-
-      // Trigger WPE pull
-      const wpePullService = serviceContainer?.wpePull;
-      if (!wpePullService) {
-        localLogger.warn('[NexusAI] WPE Pull service not available, skipping auto-pull');
+      if (result.success) {
+        localLogger.info(`[WpeAutoPull] SUCCESS: ${result.message}`);
         return {
           success: true,
-          siteId: newSite.id,
-          siteName: newSite.name,
-          linked: true,
-          pulled: false,
-          message: `Site created and linked to WPE, but auto-pull failed. Manually pull from Local UI.`
+          siteId: result.siteId,
+          siteName: result.siteName,
+          installName,
+          installId,
+          message: result.message,
+        };
+      } else {
+        localLogger.error(`[WpeAutoPull] FAILED: ${result.message} (${result.errorCode})`);
+        return {
+          success: false,
+          errorCode: result.errorCode,
+          error: result.message,
         };
       }
-
-      // Call the pull service directly
-      await wpePullService.pull({
-        localSiteId: newSite.id,
-        wpengineInstallName: installName,
-        wpengineInstallId: installId,
-        wpengineSiteId: wpeSiteId,
-        wpenginePrimaryDomain: wpePrimaryDomain,
-        includeSql: true,
-        requiresProvisioning: false,
-      });
-
-      localLogger.info(`[NexusAI] Pull operation initiated for ${newSite.name}`);
-
-      return {
-        success: true,
-        siteId: newSite.id,
-        siteName: newSite.name,
-        installName,
-        installId,
-        linked: true,
-        pulled: true,
-        message: `✓ Success! Site "${newSite.name}" is pulling from WPE. Check Local for progress.`
-      };
 
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const errorStack = err instanceof Error ? err.stack : undefined;
-      localLogger.error("[NexusAI] Pull to local failed:", errorMsg, errorStack);
-      return { success: false, error: errorMsg };
+      localLogger.error('[WpeAutoPull] Unexpected error:', errorMsg, errorStack);
+
+      return {
+        success: false,
+        errorCode: 'UNKNOWN',
+        error: `Unexpected error: ${errorMsg}`,
+      };
     }
   });
 
