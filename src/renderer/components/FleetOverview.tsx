@@ -536,17 +536,58 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
     }
   };
 
-  handlePullToLocal = async (installName: string): Promise<void> => {
-    // TODO: Implement actual pull to local via local_wpe_pull MCP tool
-    // For now, show info message
-    const message = `Pull to Local would create a local copy of "${installName}".\n\n` +
-      `This feature requires:\n` +
-      `1. Calling local_wpe_pull MCP tool\n` +
-      `2. Selecting database/files to sync\n` +
-      `3. Starting the new local site\n\n` +
-      `Coming soon!`;
+  handlePullToLocal = async (site: SiteListItem): Promise<void> => {
+    if (!site.wpeInstallId) {
+      alert('Unable to pull: WPE install ID not found');
+      return;
+    }
 
-    alert(message);
+    // Confirm with user
+    const siteName = site.name;
+    const confirmed = confirm(
+      `Pull "${siteName}" to Local?\n\n` +
+      `This will:\n` +
+      `1. Create a new local site named "${siteName}"\n` +
+      `2. Start the site\n` +
+      `3. Prepare it for linking to WP Engine\n\n` +
+      `Continue?`
+    );
+
+    if (!confirmed) return;
+
+    this.setState({ pullingInstall: site.id });
+
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.WPE_PULL_TO_LOCAL,
+        {
+          wpeSiteId: site.id,
+          installName: site.name,
+        }
+      );
+
+      if (result.success) {
+        alert(
+          `✓ Site created successfully!\n\n` +
+          `Local site: ${result.siteName}\n\n` +
+          `${result.message}\n\n` +
+          `Next steps:\n` +
+          `1. Find "${result.siteName}" in your Local sites\n` +
+          `2. Right-click → Connect to WP Engine\n` +
+          `3. Select this environment and pull`
+        );
+
+        // Refresh fleet overview to show new site
+        await this.fetchAll();
+      } else {
+        alert(`Failed to create local site:\n\n${result.error}`);
+      }
+    } catch (error: any) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      alert(`Error: ${errorMsg}`);
+    } finally {
+      this.setState({ pullingInstall: null });
+    }
   };
 
   handleSyncGraph = async (): Promise<void> => {
@@ -1124,7 +1165,7 @@ export class FleetOverview extends React.Component<FleetOverviewProps, FleetOver
                                         color: '#fff',
                                         border: 'none',
                                       },
-                                      onClick: () => this.handlePullToLocal(site.name),
+                                      onClick: () => this.handlePullToLocal(site),
                                       title: 'Create a local copy of this WP Engine site',
                                     }, '⬇ Pull to Local')
                                 )

@@ -1608,4 +1608,68 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       return { success: false, error: (err as Error).message };
     }
   });
+
+  /**
+   * Pull a WPE site to Local
+   * Creates a new local site and initiates a pull from WP Engine
+   */
+  ipcMain.handle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, { wpeSiteId, installName }: { wpeSiteId: string; installName: string }) => {
+    try {
+      localLogger.info(`[NexusAI] Starting pull to local for WPE site: ${installName}`);
+
+      // Generate local site name (strip special chars from install name)
+      const localSiteName = installName
+        .replace(/[^a-z0-9\s-]/gi, "")
+        .replace(/\s+/g, "-")
+        .replace(/-{2,}/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase();
+
+      // Check if site already exists
+      const existingSites = siteData.getSites();
+      const siteExists = existingSites.some((s: any) => 
+        s.name.toLowerCase() === localSiteName.toLowerCase()
+      );
+
+      if (siteExists) {
+        localLogger.warn(`[NexusAI] Local site "${localSiteName}" already exists`);
+        return {
+          success: false,
+          error: `A local site named "${localSiteName}" already exists. Use a different name or delete the existing site first.`
+        };
+      }
+
+      // Create local site
+      localLogger.info(`[NexusAI] Creating local site: ${localSiteName}`);
+      const newSite = await localServicesBridge.createSite({
+        name: installName, // Use original name (Local will sanitize it)
+      });
+
+      localLogger.info(`[NexusAI] Local site created: ${newSite.id} (${newSite.name})`);
+
+      // Start the site (required for pull to work)
+      localLogger.info(`[NexusAI] Starting site ${newSite.id}...`);
+      await localServicesBridge.startSite(newSite.id);
+
+      // Wait a bit for site to start
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      localLogger.info(`[NexusAI] Site started. Pull operation ready.`);
+      localLogger.info(`[NexusAI] User should manually link site to WPE and pull via Local UI.`);
+
+      return {
+        success: true,
+        siteId: newSite.id,
+        siteName: newSite.name,
+        message: `Local site "${newSite.name}" created and started. Now link it to your WP Engine environment and pull via the Local UI.`
+      };
+
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const errorStack = err instanceof Error ? err.stack : undefined;
+      localLogger.error("[NexusAI] Pull to local failed:", errorMsg, errorStack);
+      return { success: false, error: errorMsg };
+    }
+  });
+
 }
