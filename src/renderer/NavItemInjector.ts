@@ -1,45 +1,19 @@
 /**
  * Nav Item Injector
  *
- * Injects THREE navigation items into Local's vertical nav sidebar:
- * 1. Fleet (power user site management)
- * 2. Content (indexed content browser)
- * 3. Nexus AI (addon dashboard)
+ * Injects TWO navigation items into Local's vertical nav sidebar:
+ * 1. Content (indexed content browser)
+ * 2. Nexus AI (addon dashboard)
  *
  * Uses MutationObserver since there's no hook for the vertical nav.
- *
- * DOM structure from Local's MainVerticalNav.tsx + VerticalNav.tsx:
- * <nav id="Sidebar" aria-label="Local Task Sidebar" class="...VerticalNav...">
- *   {login tab}
- *   {local sites}       ← VerticalNavItem with NavLink
- *   {connect}           ← VerticalNavItem with NavLink
- *   {blueprints}        ← VerticalNavItem with NavLink
- *   {addons}            ← VerticalNavItem with NavLink
- *   {support}           ← VerticalNavItem with NavLink
- *   {filler/drag}       ← div with VerticalNavItem_DragRegion class (flex-grow: 1)
- *   {product drawer}    ← VerticalNavItem with button
- *   {add site}          ← VerticalNavItem with NavLink (round white button)
- * </nav>
- *
- * We inject our items before the filler (drag region) so they appear
- * after the built-in nav items but above the bottom section.
  *
  * Navigation: Local uses HashHistory, so setting window.location.hash
  * triggers React Router navigation without a page reload.
  */
 
-const FLEET_NAV_ITEM_ID = 'nexus-ai-fleet-nav';
 const CONTENT_NAV_ITEM_ID = 'nexus-ai-content-nav';
 const NEXUS_NAV_ITEM_ID = 'nexus-ai-overview-nav';
 const STYLE_ID = 'nexus-ai-nav-styles';
-
-// Grid/table icon for Fleet (power user table view)
-const FLEET_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
-  <rect x="3" y="3" width="7" height="7" rx="1" fill="currentColor"/>
-  <rect x="13" y="3" width="7" height="7" rx="1" fill="currentColor"/>
-  <rect x="3" y="13" width="7" height="7" rx="1" fill="currentColor"/>
-  <rect x="13" y="13" width="7" height="7" rx="1" fill="currentColor"/>
-</svg>`;
 
 // Document with search icon for Content Browser
 const CONTENT_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
@@ -73,12 +47,10 @@ export class NavItemInjector {
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      #${FLEET_NAV_ITEM_ID},
       #${CONTENT_NAV_ITEM_ID},
       #${NEXUS_NAV_ITEM_ID} {
         text-align: center;
       }
-      #${FLEET_NAV_ITEM_ID} a,
       #${CONTENT_NAV_ITEM_ID} a,
       #${NEXUS_NAV_ITEM_ID} a {
         display: flex;
@@ -93,22 +65,18 @@ export class NavItemInjector {
         cursor: pointer;
         transition: background-color 0.1s ease;
       }
-      #${FLEET_NAV_ITEM_ID} a:hover,
       #${CONTENT_NAV_ITEM_ID} a:hover,
       #${NEXUS_NAV_ITEM_ID} a:hover {
         background: rgba(255, 255, 255, 0.15);
       }
-      #${FLEET_NAV_ITEM_ID} a:hover svg,
       #${CONTENT_NAV_ITEM_ID} a:hover svg,
       #${NEXUS_NAV_ITEM_ID} a:hover svg {
         transform: scale(1.05);
       }
-      #${FLEET_NAV_ITEM_ID} a.__Active,
       #${CONTENT_NAV_ITEM_ID} a.__Active,
       #${NEXUS_NAV_ITEM_ID} a.__Active {
         background: rgba(0, 0, 0, 0.2);
       }
-      #${FLEET_NAV_ITEM_ID} svg,
       #${CONTENT_NAV_ITEM_ID} svg,
       #${NEXUS_NAV_ITEM_ID} svg {
         width: 38px;
@@ -116,8 +84,6 @@ export class NavItemInjector {
         color: rgba(255, 255, 255, 0.7);
         transition: transform 0.1s ease;
       }
-      #${FLEET_NAV_ITEM_ID} a:hover svg,
-      #${FLEET_NAV_ITEM_ID} a.__Active svg,
       #${CONTENT_NAV_ITEM_ID} a:hover svg,
       #${CONTENT_NAV_ITEM_ID} a.__Active svg,
       #${NEXUS_NAV_ITEM_ID} a:hover svg,
@@ -153,14 +119,11 @@ export class NavItemInjector {
     const nav = document.getElementById('Sidebar');
     if (!nav) return;
 
-    // Find the filler/drag region — it's the div that has flex-grow and acts as spacer
-    // It's a direct child div that's NOT a tooltip/navitem wrapper
+    // Find the filler/drag region
     const children = Array.from(nav.children);
     let fillerEl: Element | null = null;
 
     for (const child of children) {
-      // The drag region div has no tooltip wrapper and no NavLink — it's a bare div
-      // with a class containing "DragRegion"
       if (child.tagName === 'DIV' && child.className.includes('DragRegion')) {
         fillerEl = child;
         break;
@@ -170,22 +133,13 @@ export class NavItemInjector {
     if (!fillerEl) return;
 
     // Check if already injected
-    if (document.getElementById(FLEET_NAV_ITEM_ID) ||
-        document.getElementById(CONTENT_NAV_ITEM_ID) ||
+    if (document.getElementById(CONTENT_NAV_ITEM_ID) ||
         document.getElementById(NEXUS_NAV_ITEM_ID)) {
       this.injected = true;
       return;
     }
 
-    // Create Fleet nav item (first)
-    const fleetItem = this.createNavItem(
-      FLEET_NAV_ITEM_ID,
-      '/main/fleet',
-      'Fleet',
-      FLEET_SVG
-    );
-
-    // Create Content nav item (second)
+    // Create Content nav item
     const contentItem = this.createNavItem(
       CONTENT_NAV_ITEM_ID,
       '/main/content',
@@ -193,7 +147,7 @@ export class NavItemInjector {
       CONTENT_SVG
     );
 
-    // Create Nexus AI nav item (third)
+    // Create Nexus AI nav item
     const nexusItem = this.createNavItem(
       NEXUS_NAV_ITEM_ID,
       '/main/nexus',
@@ -201,8 +155,7 @@ export class NavItemInjector {
       NEXUS_SVG
     );
 
-    // Insert all items before the filler
-    nav.insertBefore(fleetItem, fillerEl);
+    // Insert both items before the filler
     nav.insertBefore(contentItem, fillerEl);
     nav.insertBefore(nexusItem, fillerEl);
     this.injected = true;
@@ -213,14 +166,8 @@ export class NavItemInjector {
   }
 
   private updateActiveState(): void {
-    const fleetLink = document.querySelector(`#${FLEET_NAV_ITEM_ID} a`);
     const contentLink = document.querySelector(`#${CONTENT_NAV_ITEM_ID} a`);
     const nexusLink = document.querySelector(`#${NEXUS_NAV_ITEM_ID} a`);
-
-    if (fleetLink) {
-      const isFleetActive = window.location.hash.includes('/main/fleet');
-      fleetLink.classList.toggle('__Active', isFleetActive);
-    }
 
     if (contentLink) {
       const isContentActive = window.location.hash.includes('/main/content');
@@ -237,11 +184,10 @@ export class NavItemInjector {
     if (this.observer) return;
 
     this.observer = new MutationObserver(() => {
-      const fleetExists = document.getElementById(FLEET_NAV_ITEM_ID);
       const contentExists = document.getElementById(CONTENT_NAV_ITEM_ID);
       const nexusExists = document.getElementById(NEXUS_NAV_ITEM_ID);
 
-      if (this.injected && (!fleetExists || !contentExists || !nexusExists)) {
+      if (this.injected && (!contentExists || !nexusExists)) {
         this.injected = false;
       }
       if (!this.injected) {
@@ -260,7 +206,6 @@ export class NavItemInjector {
       this.observer.disconnect();
       this.observer = null;
     }
-    document.getElementById(FLEET_NAV_ITEM_ID)?.remove();
     document.getElementById(CONTENT_NAV_ITEM_ID)?.remove();
     document.getElementById(NEXUS_NAV_ITEM_ID)?.remove();
     document.getElementById(STYLE_ID)?.remove();

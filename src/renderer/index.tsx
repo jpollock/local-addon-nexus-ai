@@ -2,7 +2,6 @@
 import { SidebarWPEInjector } from './SidebarWPEInjector';
 import { NavItemInjector } from './NavItemInjector';
 import { SiteHeaderBadge } from './components/SiteHeaderBadge';
-import { Fleet } from './components/Fleet';
 import { NexusOverview } from './components/NexusOverview';
 import { ContentBrowser } from './components/ContentBrowser';
 import { NexusPreferences } from './components/NexusPreferences';
@@ -78,14 +77,6 @@ export default function renderer(context: any): void {
     React.createElement(Route, {
       path: '/main/nexus',
       render: () => React.createElement(NexusOverview, { NavLink, electron }),
-    }),
-  );
-
-  // Feature 3: Fleet Management route (power user interface)
-  hooks.addContent('routes[main]', () =>
-    React.createElement(Route, {
-      path: '/main/fleet',
-      render: () => React.createElement(Fleet, { electron }),
     }),
   );
 
