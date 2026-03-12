@@ -235,14 +235,26 @@
 - [x] Update route from `/main/fleet-overview` → `/main/nexus`
 - [ ] Test simplified addon dashboard
 
-### Phase 7: Update Navigation (Multi-Item Injection)
-- [ ] Update NavItemInjector to inject 3 items (Fleet, Content, Nexus AI)
-- [ ] Design and add icons:
-  - Fleet: gauge/dashboard (existing)
-  - Content: document/search
-  - Nexus AI: brain (existing)
-- [ ] Set correct routes for each nav item
+### Phase 7: Update Navigation (Multi-Item Injection) ✅
+- [x] Update NavItemInjector to inject 3 items (Fleet, Content, Nexus AI)
+- [x] Design and add icons:
+  - Fleet: grid/table icon (power user view)
+  - Content: document/search icon
+  - Nexus AI: dashboard/gauge icon
+- [x] Set correct routes for each nav item
 - [ ] Test navigation between all interfaces
+
+### Phase 7a: WPE Site Info Page (Bonus) ✅
+- [x] Create `SiteInfoWPE.tsx` component
+- [x] Use Local's native components (@getflywheel/local-components)
+- [x] Add header with site name, WPE badge, and action buttons (WP Admin, Open site)
+- [x] Add sections: General, Environment, Connection, Nexus AI
+- [x] Add fixed footer with Pull to Local action (matches Local's native pattern)
+- [x] Add fallback renderer when Local components unavailable
+- [x] Add route `/main/site-info-wpe/:installId`
+- [x] Add IPC handlers: WPE_GET_SITE_DETAILS, WPE_SYNC_SINGLE, WPE_DIAGNOSE_SITE
+- [x] Match Local's native styling (header spacing, button styles, footer layout)
+- [ ] Test with real WPE sites
 
 ### Phase 8: Preferences & Settings
 - [ ] Add preference toggle: "Classic View" vs "Fleet View" (optional)

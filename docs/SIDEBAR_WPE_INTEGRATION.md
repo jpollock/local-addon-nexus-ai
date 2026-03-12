@@ -2,6 +2,22 @@
 
 **Goal:** Mix WPE sites into Local's existing Sites sidebar with enhanced badges for all sites.
 
+## Status (2026-03-12)
+
+**Completed:**
+- ✅ Phase 3: WPE Site Info Page with native Local styling
+- ✅ Phase 4: Route registration (/main/site-info-wpe/:installId)
+- ✅ Phase 5: IPC handlers (WPE_GET_SITE_DETAILS, WPE_SYNC_SINGLE, WPE_DIAGNOSE_SITE)
+
+**Remaining:**
+- ⏳ Phase 1: Sidebar DOM injection for WPE sites
+- ⏳ Phase 2: Badge component and styles
+- ⏳ Phase 6: Testing and polish
+
+**Note:** WPE sites are currently accessible via Fleet interface. Sidebar integration will provide an alternative UX for users who prefer the native Local sidebar.
+
+---
+
 ## User Decisions (2026-03-11)
 
 1. ✅ **Mix WPE into existing sidebar** (not separate Fleet-only view)
@@ -182,12 +198,12 @@ hooks.addContent('routes[main]', () =>
 
 ## Implementation Order
 
-1. **SidebarWPEInjector.ts** - Inject WPE sites into sidebar with badges
-2. **Badge styles** - CSS for all badge types
-3. **SiteInfoWPE.tsx** - Remote site info page
-4. **Route registration** - Wire up /main/site-info-wpe/:installId
-5. **IPC handlers** - Add missing handlers for re-sync and pull
-6. **Testing** - Verify sidebar mixing, badges, WPE site clicks
+1. ⏳ **SidebarWPEInjector.ts** - Inject WPE sites into sidebar with badges
+2. ⏳ **Badge styles** - CSS for all badge types
+3. ✅ **SiteInfoWPE.tsx** - Remote site info page (COMPLETE)
+4. ✅ **Route registration** - Wire up /main/site-info-wpe/:installId (COMPLETE)
+5. ✅ **IPC handlers** - Add missing handlers for re-sync and pull (COMPLETE)
+6. ⏳ **Testing** - Verify sidebar mixing, badges, WPE site clicks
 
 ---
 
