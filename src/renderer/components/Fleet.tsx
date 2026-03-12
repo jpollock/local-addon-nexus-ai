@@ -9,6 +9,7 @@
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 import { SiteHealthBadge } from './SiteHealthBadge';
+import { FleetTreeView } from './FleetTreeView';
 
 interface FleetProps {
   electron: any;
@@ -46,6 +47,7 @@ interface FleetState {
   selectedSites: Set<string>;
   filterStatus: 'all' | 'running' | 'halted' | 'remote';
   actionMenuOpen: string | null; // siteId of the open menu
+  viewMode: 'table' | 'tree'; // POC: toggle between flat table and grouped tree
 }
 
 export class Fleet extends React.Component<FleetProps, FleetState> {
@@ -67,6 +69,7 @@ export class Fleet extends React.Component<FleetProps, FleetState> {
       selectedSites: new Set(),
       filterStatus: 'all',
       actionMenuOpen: null,
+      viewMode: 'tree', // Start with tree view for POC
     };
   }
 
@@ -592,10 +595,33 @@ export class Fleet extends React.Component<FleetProps, FleetState> {
 
         React.createElement('div', {
           style: {
-            fontSize: '12px',
-            color: '#6b7280',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
           },
-        }, `${sites.length} sites (${localCount} local, ${wpeCount} WPE)`),
+        },
+          // View mode toggle
+          React.createElement('button', {
+            onClick: () => this.setState({ viewMode: this.state.viewMode === 'table' ? 'tree' : 'table' }),
+            style: {
+              padding: '6px 12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '4px',
+              background: '#fff',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 500,
+              color: '#374151',
+            },
+          }, this.state.viewMode === 'table' ? '📊 Table View' : '🌳 Tree View'),
+
+          React.createElement('div', {
+            style: {
+              fontSize: '12px',
+              color: '#6b7280',
+            },
+          }, `${sites.length} sites (${localCount} local, ${wpeCount} WPE)`),
+        ),
       ),
 
       // Search bar with AI toggle
@@ -696,6 +722,8 @@ export class Fleet extends React.Component<FleetProps, FleetState> {
                 fontSize: '13px',
               },
             }, 'Loading sites...')
+          : this.state.viewMode === 'tree'
+          ? React.createElement(FleetTreeView, { electron: this.props.electron })
           : this.renderSiteTable(),
       ),
     );

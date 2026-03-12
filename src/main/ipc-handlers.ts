@@ -1819,4 +1819,20 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  /**
+   * Get WPE accounts for tree view grouping
+   */
+  ipcMain.handle('capi:get-accounts', async () => {
+    try {
+      if (!localServicesBridge.isCAPIAvailable()) {
+        return [];
+      }
+      const accounts = await localServicesBridge.capiGetAccounts();
+      return accounts || [];
+    } catch (err) {
+      localLogger.error('[NexusAI] Failed to get CAPI accounts:', (err as Error).message);
+      return [];
+    }
+  });
+
 }
