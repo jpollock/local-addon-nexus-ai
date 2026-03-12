@@ -40,9 +40,11 @@
     "postinstall": "npm run rebuild"
   },
   "dependencies": {
+    "@getflywheel/local-components": "^17.8.1",
     "@lancedb/lancedb": "^0.13.0",
     "apache-arrow": ">=13.0.0 <=17.0.0",
     "better-sqlite3": "^11.10.0",
+    "lodash": "^4.17.21",
     "mysql2": "^3.11.0",
     "onnxruntime-node": "^1.20.0",
     "p-limit": "^7.3.0",
@@ -64,7 +66,6 @@
   },
   "peerDependencies": {
     "@getflywheel/local": "*",
-    "@getflywheel/local-components": "*",
     "electron": "*",
     "react": "*",
     "react-dom": "*"

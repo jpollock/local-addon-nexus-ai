@@ -1,7 +1,11 @@
 /**
  * Nav Item Injector
  *
- * Injects a "Fleet" navigation item into Local's vertical nav sidebar.
+ * Injects THREE navigation items into Local's vertical nav sidebar:
+ * 1. Fleet (power user site management)
+ * 2. Content (indexed content browser)
+ * 3. Nexus AI (addon dashboard)
+ *
  * Uses MutationObserver since there's no hook for the vertical nav.
  *
  * DOM structure from Local's MainVerticalNav.tsx + VerticalNav.tsx:
@@ -17,18 +21,36 @@
  *   {add site}          ← VerticalNavItem with NavLink (round white button)
  * </nav>
  *
- * We inject our item before the filler (drag region) so it appears
+ * We inject our items before the filler (drag region) so they appear
  * after the built-in nav items but above the bottom section.
  *
  * Navigation: Local uses HashHistory, so setting window.location.hash
  * triggers React Router navigation without a page reload.
  */
 
-const NAV_ITEM_ID = 'nexus-ai-fleet-nav';
-const STYLE_ID = 'nexus-ai-fleet-nav-styles';
+const FLEET_NAV_ITEM_ID = 'nexus-ai-fleet-nav';
+const CONTENT_NAV_ITEM_ID = 'nexus-ai-content-nav';
+const NEXUS_NAV_ITEM_ID = 'nexus-ai-overview-nav';
+const STYLE_ID = 'nexus-ai-nav-styles';
 
-// Dashboard/gauge SVG icon — distinct from the waffle (3x3 dots) at bottom of nav
+// Grid/table icon for Fleet (power user table view)
 const FLEET_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
+  <rect x="3" y="3" width="7" height="7" rx="1" fill="currentColor"/>
+  <rect x="13" y="3" width="7" height="7" rx="1" fill="currentColor"/>
+  <rect x="3" y="13" width="7" height="7" rx="1" fill="currentColor"/>
+  <rect x="13" y="13" width="7" height="7" rx="1" fill="currentColor"/>
+</svg>`;
+
+// Document with search icon for Content Browser
+const CONTENT_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
+  <path d="M14 2H6C4.9 2 4 2.9 4 4v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" fill="currentColor"/>
+  <path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="14.5" cy="14.5" r="3" fill="#2E3440" stroke="currentColor" stroke-width="1.5"/>
+  <path d="M16.5 16.5l2.5 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+
+// Dashboard/gauge SVG icon for Nexus AI
+const NEXUS_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/>
   <path d="M12 6c-3.31 0-6 2.69-6 6h2c0-2.21 1.79-4 4-4s4 1.79 4 4h2c0-3.31-2.69-6-6-6z" fill="currentColor"/>
   <circle cx="12" cy="12" r="2" fill="currentColor"/>
@@ -51,10 +73,14 @@ export class NavItemInjector {
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      #${NAV_ITEM_ID} {
+      #${FLEET_NAV_ITEM_ID},
+      #${CONTENT_NAV_ITEM_ID},
+      #${NEXUS_NAV_ITEM_ID} {
         text-align: center;
       }
-      #${NAV_ITEM_ID} a {
+      #${FLEET_NAV_ITEM_ID} a,
+      #${CONTENT_NAV_ITEM_ID} a,
+      #${NEXUS_NAV_ITEM_ID} a {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -67,27 +93,58 @@ export class NavItemInjector {
         cursor: pointer;
         transition: background-color 0.1s ease;
       }
-      #${NAV_ITEM_ID} a:hover {
+      #${FLEET_NAV_ITEM_ID} a:hover,
+      #${CONTENT_NAV_ITEM_ID} a:hover,
+      #${NEXUS_NAV_ITEM_ID} a:hover {
         background: rgba(255, 255, 255, 0.15);
       }
-      #${NAV_ITEM_ID} a:hover svg {
+      #${FLEET_NAV_ITEM_ID} a:hover svg,
+      #${CONTENT_NAV_ITEM_ID} a:hover svg,
+      #${NEXUS_NAV_ITEM_ID} a:hover svg {
         transform: scale(1.05);
       }
-      #${NAV_ITEM_ID} a.__Active {
+      #${FLEET_NAV_ITEM_ID} a.__Active,
+      #${CONTENT_NAV_ITEM_ID} a.__Active,
+      #${NEXUS_NAV_ITEM_ID} a.__Active {
         background: rgba(0, 0, 0, 0.2);
       }
-      #${NAV_ITEM_ID} svg {
+      #${FLEET_NAV_ITEM_ID} svg,
+      #${CONTENT_NAV_ITEM_ID} svg,
+      #${NEXUS_NAV_ITEM_ID} svg {
         width: 38px;
         height: 38px;
         color: rgba(255, 255, 255, 0.7);
         transition: transform 0.1s ease;
       }
-      #${NAV_ITEM_ID} a:hover svg,
-      #${NAV_ITEM_ID} a.__Active svg {
+      #${FLEET_NAV_ITEM_ID} a:hover svg,
+      #${FLEET_NAV_ITEM_ID} a.__Active svg,
+      #${CONTENT_NAV_ITEM_ID} a:hover svg,
+      #${CONTENT_NAV_ITEM_ID} a.__Active svg,
+      #${NEXUS_NAV_ITEM_ID} a:hover svg,
+      #${NEXUS_NAV_ITEM_ID} a.__Active svg {
         color: #fff;
       }
     `;
     document.head.appendChild(style);
+  }
+
+  private createNavItem(id: string, route: string, title: string, svg: string): HTMLElement {
+    const wrapper = document.createElement('div');
+    wrapper.id = id;
+
+    const link = document.createElement('a');
+    link.href = `#${route}`;
+    link.title = title;
+    link.innerHTML = svg;
+
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.location.hash = `#${route}`;
+      this.updateActiveState();
+    });
+
+    wrapper.appendChild(link);
+    return wrapper;
   }
 
   private tryInject(): void {
@@ -113,28 +170,41 @@ export class NavItemInjector {
     if (!fillerEl) return;
 
     // Check if already injected
-    if (document.getElementById(NAV_ITEM_ID)) {
+    if (document.getElementById(FLEET_NAV_ITEM_ID) ||
+        document.getElementById(CONTENT_NAV_ITEM_ID) ||
+        document.getElementById(NEXUS_NAV_ITEM_ID)) {
       this.injected = true;
       return;
     }
 
-    // Create nav item container
-    const wrapper = document.createElement('div');
-    wrapper.id = NAV_ITEM_ID;
+    // Create Fleet nav item (first)
+    const fleetItem = this.createNavItem(
+      FLEET_NAV_ITEM_ID,
+      '/main/fleet',
+      'Fleet',
+      FLEET_SVG
+    );
 
-    const link = document.createElement('a');
-    link.href = '#/main/fleet-overview';
-    link.title = 'Nexus AI';
-    link.innerHTML = FLEET_SVG;
+    // Create Content nav item (second)
+    const contentItem = this.createNavItem(
+      CONTENT_NAV_ITEM_ID,
+      '/main/content',
+      'Content',
+      CONTENT_SVG
+    );
 
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      window.location.hash = '#/main/fleet-overview';
-      this.updateActiveState();
-    });
+    // Create Nexus AI nav item (third)
+    const nexusItem = this.createNavItem(
+      NEXUS_NAV_ITEM_ID,
+      '/main/nexus',
+      'Nexus AI',
+      NEXUS_SVG
+    );
 
-    wrapper.appendChild(link);
-    nav.insertBefore(wrapper, fillerEl);
+    // Insert all items before the filler
+    nav.insertBefore(fleetItem, fillerEl);
+    nav.insertBefore(contentItem, fillerEl);
+    nav.insertBefore(nexusItem, fillerEl);
     this.injected = true;
 
     // Update active state on hash changes
@@ -143,18 +213,35 @@ export class NavItemInjector {
   }
 
   private updateActiveState(): void {
-    const link = document.querySelector(`#${NAV_ITEM_ID} a`);
-    if (!link) return;
+    const fleetLink = document.querySelector(`#${FLEET_NAV_ITEM_ID} a`);
+    const contentLink = document.querySelector(`#${CONTENT_NAV_ITEM_ID} a`);
+    const nexusLink = document.querySelector(`#${NEXUS_NAV_ITEM_ID} a`);
 
-    const isActive = window.location.hash.includes('/main/fleet-overview');
-    link.classList.toggle('__Active', isActive);
+    if (fleetLink) {
+      const isFleetActive = window.location.hash.includes('/main/fleet');
+      fleetLink.classList.toggle('__Active', isFleetActive);
+    }
+
+    if (contentLink) {
+      const isContentActive = window.location.hash.includes('/main/content');
+      contentLink.classList.toggle('__Active', isContentActive);
+    }
+
+    if (nexusLink) {
+      const isNexusActive = window.location.hash.includes('/main/nexus');
+      nexusLink.classList.toggle('__Active', isNexusActive);
+    }
   }
 
   private startObserver(): void {
     if (this.observer) return;
 
     this.observer = new MutationObserver(() => {
-      if (this.injected && !document.getElementById(NAV_ITEM_ID)) {
+      const fleetExists = document.getElementById(FLEET_NAV_ITEM_ID);
+      const contentExists = document.getElementById(CONTENT_NAV_ITEM_ID);
+      const nexusExists = document.getElementById(NEXUS_NAV_ITEM_ID);
+
+      if (this.injected && (!fleetExists || !contentExists || !nexusExists)) {
         this.injected = false;
       }
       if (!this.injected) {
@@ -173,7 +260,9 @@ export class NavItemInjector {
       this.observer.disconnect();
       this.observer = null;
     }
-    document.getElementById(NAV_ITEM_ID)?.remove();
+    document.getElementById(FLEET_NAV_ITEM_ID)?.remove();
+    document.getElementById(CONTENT_NAV_ITEM_ID)?.remove();
+    document.getElementById(NEXUS_NAV_ITEM_ID)?.remove();
     document.getElementById(STYLE_ID)?.remove();
   }
 }

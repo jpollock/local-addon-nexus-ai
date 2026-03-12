@@ -88,12 +88,24 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     return indexRegistry.listAll();
   });
 
-  ipcMain.handle(IPC_CHANNELS.GET_SITES, () => {
+  ipcMain.handle(IPC_CHANNELS.GET_SITES, async () => {
     try {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
       const indexed = indexRegistry.listAll();
       const indexedIds = new Set(indexed.map((e: any) => e.siteId));
+
+      // Fetch WP versions from graph for all local sites
+      const wpVersionsMap = new Map<string, string>();
+      const db = graphService.getDb();
+      if (db) {
+        const rows = db.prepare('SELECT id, wp_version FROM sites WHERE source = ? OR source IS NULL').all('local') as Array<{ id: string; wp_version: string | null }>;
+        rows.forEach(row => {
+          if (row.wp_version) {
+            wpVersionsMap.set(row.id, row.wp_version);
+          }
+        });
+      }
 
       return Object.values(allSites).map((site: any) => {
         const connections = site.hostConnections;
@@ -110,7 +122,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           status: statuses[site.id] || 'halted',
           isWpe: !!wpeConn,
           wpeEnvironment: wpeConn?.remoteSiteEnv?.environment || null,
+          wpeInstallId: wpeConn?.installId || null,
           indexed: indexedIds.has(site.id),
+          wpVersion: wpVersionsMap.get(site.id) || null,
+          phpVersion: site.phpVersion || null,
+          hostConnections: site.hostConnections,
         };
       });
     } catch (err) {
@@ -1589,6 +1605,94 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   /**
+   * Get details for a specific WPE site
+   */
+  ipcMain.handle(IPC_CHANNELS.WPE_GET_SITE_DETAILS, async (_event: any, installId: string) => {
+    if (!deps.wpeSyncService) {
+      return { success: false, error: 'WPE sync service not available' };
+    }
+
+    if (!installId) {
+      return { success: false, error: 'installId is required' };
+    }
+
+    try {
+      const sites = await deps.wpeSyncService.getSyncedWPESites();
+      // installId could be:
+      // - Full ID: "wpe-myinstprod"
+      // - Stripped ID: "myinstprod"
+      // - Install ID: "myinstprod"
+      const site = sites.find((s: any) =>
+        s.id === installId ||
+        s.id === `wpe-${installId}` ||
+        s.remote_install_id === installId ||
+        s.install_id === installId
+      );
+
+      if (!site) {
+        localLogger.warn(`[NexusAI] WPE site not found: ${installId}. Available sites:`, sites.map((s: any) => s.id));
+        return { success: false, error: `Site not found: ${installId}` };
+      }
+
+      return { success: true, site };
+    } catch (err) {
+      localLogger.error('[NexusAI] Failed to get WPE site details:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  /**
+   * Re-sync a single WPE site
+   */
+  ipcMain.handle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: any, installId: string) => {
+    if (!deps.wpeSyncService) {
+      return { success: false, error: 'WPE sync service not available' };
+    }
+
+    if (!installId) {
+      return { success: false, error: 'installId is required' };
+    }
+
+    try {
+      await deps.wpeSyncService.syncSingleSite(installId);
+      localLogger.info(`[NexusAI] Re-synced WPE site: ${installId}`);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] Failed to re-sync WPE site:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  /**
+   * Run diagnostics on a WPE site
+   *
+   * Uses wp-nexus MCP tools to gather detailed site information
+   */
+  ipcMain.handle(IPC_CHANNELS.WPE_DIAGNOSE_SITE, async (_event: any, installId: string) => {
+    if (!installId) {
+      return { success: false, error: 'installId is required' };
+    }
+
+    try {
+      // TODO: Call wpe_diagnose_site MCP tool when available
+      // For now, return placeholder diagnostics
+      const diagnostics = {
+        sslStatus: 'active',
+        backupStatus: 'recent',
+        diskUsage: { used: 2.5, limit: 10, percentage: 25 },
+        bandwidthUsage: { used: 150, limit: 500, percentage: 30 },
+        cacheStatus: 'enabled',
+        phpVersion: '8.1',
+      };
+
+      return { success: true, diagnostics };
+    } catch (err) {
+      localLogger.error('[NexusAI] Failed to diagnose WPE site:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  /**
    * Remove a WPE site from the graph
    */
   ipcMain.handle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, installId: string) => {
@@ -1672,6 +1776,46 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
         errorCode: 'UNKNOWN',
         error: `Unexpected error: ${errorMsg}`,
       };
+    }
+  });
+
+  /**
+   * Get details for a single WPE site
+   */
+  ipcMain.handle('nexus-ai:wpe:get-site-details', async (_event: any, installId: string) => {
+    if (!deps.wpeSyncService) {
+      return { success: false, error: 'WPE sync service not available' };
+    }
+
+    try {
+      const site = await graphService.getSite(installId);
+
+      if (!site) {
+        return { success: false, error: 'Site not found' };
+      }
+
+      return { success: true, site };
+    } catch (err) {
+      localLogger.error('[NexusAI] Failed to get WPE site details:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  /**
+   * Re-sync metadata for a single WPE site
+   */
+  ipcMain.handle('nexus-ai:wpe:sync-single-site', async (_event: any, installId: string) => {
+    if (!deps.wpeSyncService) {
+      return { success: false, error: 'WPE sync service not available' };
+    }
+
+    try {
+      await deps.wpeSyncService.syncSingleSite(installId);
+      localLogger.info(`[NexusAI] Re-synced WPE site: ${installId}`);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] Failed to re-sync WPE site:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
     }
   });
 

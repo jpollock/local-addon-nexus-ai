@@ -109,7 +109,10 @@ export const IPC_CHANNELS = {
   // WPE Site Sync (Phase 1)
   WPE_SYNC_ALL: `${ADDON_PREFIX}:wpe:sync-all`,
   WPE_SYNC_STATUS: `${ADDON_PREFIX}:wpe:sync-status`,
+  WPE_SYNC_SINGLE: `${ADDON_PREFIX}:wpe:sync-single`,
   WPE_GET_SYNCED_SITES: `${ADDON_PREFIX}:wpe:get-synced-sites`,
+  WPE_GET_SITE_DETAILS: `${ADDON_PREFIX}:wpe:get-site-details`,
+  WPE_DIAGNOSE_SITE: `${ADDON_PREFIX}:wpe:diagnose-site`,
   WPE_REMOVE_SITE: `${ADDON_PREFIX}:wpe:remove-site`,
   WPE_PULL_TO_LOCAL: `${ADDON_PREFIX}:wpe:pull-to-local`,
 } as const;

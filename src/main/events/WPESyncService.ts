@@ -461,4 +461,33 @@ export class WPESyncService {
   async getSyncedWPESites(): Promise<Site[]> {
     return this.graphService.listSites({ source: 'wpe' });
   }
+
+  /**
+   * Re-sync a single WPE site's metadata
+   */
+  async syncSingleSite(installId: string): Promise<void> {
+    this.logger?.info(`[WPESyncService] Re-syncing single site: ${installId}`);
+
+    try {
+      const install = await this.localServices.capiGetInstall(installId) as any;
+
+      if (!install) {
+        throw new Error(`Install ${installId} not found`);
+      }
+
+      // Map to WPEInstallData format
+      const wpeInstall: WPEInstallData = {
+        install_id: install.id,
+        install_name: install.name,
+        environment: install.environment ?? 'production',
+        primary_domain: install.primaryDomain || `${install.name}.wpengine.com`,
+      };
+
+      await this.syncInstall(wpeInstall);
+      this.logger?.info(`[WPESyncService] Successfully re-synced: ${install.name}`);
+    } catch (error) {
+      this.logger?.error(`[WPESyncService] Failed to re-sync ${installId}:`, error);
+      throw error;
+    }
+  }
 }
