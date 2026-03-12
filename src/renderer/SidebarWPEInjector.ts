@@ -29,8 +29,11 @@ export class SidebarWPEInjector {
   private injected: boolean = false;
   private wpeSites: any[] = [];
   private localSites: any[] = [];
+  private accounts: any[] = [];
   private indexedSiteIds: Set<string> = new Set();
   private isCollapsed: boolean = false;
+  private expandedAccounts: Set<string> = new Set();
+  private expandedSites: Set<string> = new Set();
 
   constructor(electron: any) {
     this.electron = electron;
@@ -72,6 +75,12 @@ export class SidebarWPEInjector {
       this.localSites = localSitesResult || [];
       console.log('[SidebarWPEInjector] Local sites loaded:', this.localSites.length);
 
+      // Fetch WPE accounts
+      console.log('[SidebarWPEInjector] Fetching WPE accounts...');
+      const accountsResult = await this.electron.ipcRenderer.invoke('capi:get-accounts');
+      this.accounts = accountsResult || [];
+      console.log('[SidebarWPEInjector] WPE accounts loaded:', this.accounts.length);
+
       // Fetch WPE sites
       console.log('[SidebarWPEInjector] Fetching WPE sites...');
       const wpeSitesResult = await this.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES);
@@ -84,6 +93,11 @@ export class SidebarWPEInjector {
       // GET_FLEET_STATUS returns an array of IndexEntry objects directly
       this.indexedSiteIds = new Set((indexEntries || []).map((e: any) => e.siteId));
       console.log('[SidebarWPEInjector] Index status loaded:', this.indexedSiteIds.size);
+
+      // Auto-expand first account on initial load
+      if (this.accounts.length > 0 && this.expandedAccounts.size === 0) {
+        this.expandedAccounts.add(this.accounts[0].id);
+      }
 
       console.log('[SidebarWPEInjector] Data load complete');
 
@@ -194,6 +208,22 @@ export class SidebarWPEInjector {
         margin-right: 6px;
         opacity: 0.6;
       }
+
+      /* Tree view styles */
+      .nexus-tree-account-row:hover,
+      .nexus-tree-site-row:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .nexus-tree-install-link {
+        transition: background 0.15s ease;
+      }
+
+      .nexus-tree-install-link:visited,
+      .nexus-tree-install-link:link,
+      .nexus-tree-install-link:active {
+        color: rgba(255, 255, 255, 0.75) !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -253,43 +283,101 @@ export class SidebarWPEInjector {
   }
 
   /**
-   * Inject WPE sites into the sidebar
+   * Extract base site name from install name
+   * E.g., "acflikebutton-prod" → "acflikebutton"
+   */
+  private extractSiteName(installName: string, environment: string): string {
+    const envSuffixes = ['-prod', '-production', '-stg', '-staging', '-dev', '-development'];
+
+    for (const suffix of envSuffixes) {
+      if (installName.endsWith(suffix)) {
+        return installName.slice(0, -suffix.length);
+      }
+    }
+
+    if (environment !== 'production') {
+      const regex = new RegExp(`[-_]?${environment}$`, 'i');
+      const match = installName.match(regex);
+      if (match) {
+        return installName.slice(0, match.index);
+      }
+    }
+
+    return installName;
+  }
+
+  /**
+   * Build tree structure: Account → Site → Install[]
+   */
+  private buildTree() {
+    const tree = new Map<string, Map<string, any[]>>();
+
+    // Group sites by account
+    const sitesByAccount = new Map<string, any[]>();
+    this.wpeSites.forEach((site) => {
+      const accountId = site.account_id || site.accountId || 'unknown';
+      if (!sitesByAccount.has(accountId)) {
+        sitesByAccount.set(accountId, []);
+      }
+      sitesByAccount.get(accountId)!.push(site);
+    });
+
+    // Build tree for each account
+    this.accounts.forEach((account) => {
+      const accountSites = sitesByAccount.get(account.id) || [];
+
+      // Group installs by site name
+      const installsBySiteName = new Map<string, any[]>();
+      accountSites.forEach((install) => {
+        const siteName = this.extractSiteName(install.name, install.environment || 'production');
+        if (!installsBySiteName.has(siteName)) {
+          installsBySiteName.set(siteName, []);
+        }
+        installsBySiteName.get(siteName)!.push(install);
+      });
+
+      tree.set(account.id, installsBySiteName);
+    });
+
+    return tree;
+  }
+
+  /**
+   * Inject WPE sites into the sidebar (grouped tree view)
    */
   private injectWPESites(): void {
     console.log('[SidebarWPEInjector] injectWPESites() called, wpeSites.length:', this.wpeSites.length);
 
-    if (this.wpeSites.length === 0) {
-      console.log('[SidebarWPEInjector] No WPE sites to inject');
+    if (this.wpeSites.length === 0 || this.accounts.length === 0) {
+      console.log('[SidebarWPEInjector] No WPE sites/accounts to inject');
       return;
     }
 
-    // Find the Sites LIST container
-    // This is the <nav id="SiteList"> element that contains the actual site items
     const siteListNav = document.getElementById('SiteList');
-
-    console.log('[SidebarWPEInjector] SiteList nav found:', !!siteListNav, siteListNav?.className);
-
     if (!siteListNav) {
       console.warn('[SidebarWPEInjector] Could not find #SiteList nav element');
       return;
     }
 
-    // Remove existing WPE section if present
+    // Remove existing WPE section
     const existingSection = document.getElementById(WPE_SECTION_ID);
     if (existingSection) {
       existingSection.remove();
     }
 
+    // Build tree structure
+    const tree = this.buildTree();
+
     // Create WPE sites section
     const wpeSection = document.createElement('div');
     wpeSection.id = WPE_SECTION_ID;
 
-    // Add separator line before the header (like between groups)
+    // Add separator
     const separator = document.createElement('div');
     separator.className = 'nexus-wpe-separator';
     wpeSection.appendChild(separator);
 
-    // Add header wrapper - collapsible like other groups
+    // Main header
     const headerWrapper = document.createElement('div');
     headerWrapper.className = 'nexus-wpe-header-wrapper';
     headerWrapper.style.cssText = `
@@ -301,55 +389,218 @@ export class SidebarWPEInjector {
       user-select: none;
     `;
 
-    // Header text - matches other group headers
     const headerText = document.createElement('div');
     headerText.className = 'SiteListGroupHeader_Name';
-    headerText.style.padding = '0'; // Remove padding from text element
-    headerText.textContent = `WP Engine Sites (${this.wpeSites.length})`;
+    headerText.style.padding = '0';
+    headerText.textContent = `WP Engine Sites (${this.accounts.length} accounts)`;
 
-    // Collapse/expand icon
     const collapseIcon = document.createElement('span');
     collapseIcon.className = 'nexus-wpe-collapse-icon';
     collapseIcon.textContent = this.isCollapsed ? '›' : '⌄';
-    collapseIcon.style.cssText = `
-      font-size: 14px;
-      transition: transform 0.2s;
-      opacity: 0.6;
-    `;
+    collapseIcon.style.cssText = `font-size: 14px; opacity: 0.6;`;
 
     headerWrapper.appendChild(headerText);
     headerWrapper.appendChild(collapseIcon);
     wpeSection.appendChild(headerWrapper);
 
-    // Sites container (can be shown/hidden)
-    const sitesContainer = document.createElement('div');
-    sitesContainer.className = 'nexus-wpe-sites-container';
-    sitesContainer.style.display = this.isCollapsed ? 'none' : 'block';
+    // Tree container
+    const treeContainer = document.createElement('div');
+    treeContainer.className = 'nexus-wpe-tree-container';
+    treeContainer.style.display = this.isCollapsed ? 'none' : 'block';
 
-    // Add WPE site items to container
-    this.wpeSites.forEach(site => {
-      const siteItem = this.createWPESiteItem(site);
-      sitesContainer.appendChild(siteItem);
+    // Render each account
+    this.accounts.forEach((account) => {
+      const sitesMap = tree.get(account.id);
+      if (!sitesMap || sitesMap.size === 0) return;
+
+      const totalInstalls = Array.from(sitesMap.values()).reduce((sum, installs) => sum + installs.length, 0);
+
+      // Account row
+      const accountRow = this.createAccountRow(account, sitesMap.size, totalInstalls);
+      treeContainer.appendChild(accountRow);
+
+      // Sites under this account (if expanded)
+      if (this.expandedAccounts.has(account.id)) {
+        sitesMap.forEach((installs, siteName) => {
+          const siteRow = this.createSiteRow(siteName, installs, account.id);
+          treeContainer.appendChild(siteRow);
+
+          // Installs under this site (if expanded)
+          const siteKey = `${account.id}:${siteName}`;
+          if (this.expandedSites.has(siteKey)) {
+            installs.forEach((install) => {
+              const installRow = this.createInstallRow(install);
+              treeContainer.appendChild(installRow);
+            });
+          }
+        });
+      }
     });
 
-    wpeSection.appendChild(sitesContainer);
+    wpeSection.appendChild(treeContainer);
 
-    // Toggle collapse on header click
+    // Toggle main section
     headerWrapper.addEventListener('click', () => {
       this.isCollapsed = !this.isCollapsed;
-      sitesContainer.style.display = this.isCollapsed ? 'none' : 'block';
+      treeContainer.style.display = this.isCollapsed ? 'none' : 'block';
       collapseIcon.textContent = this.isCollapsed ? '›' : '⌄';
     });
 
-    // Append to SiteList nav
     siteListNav.appendChild(wpeSection);
     this.injected = true;
 
-    console.log('[SidebarWPEInjector] Injected', this.wpeSites.length, 'WPE sites into #SiteList');
+    console.log('[SidebarWPEInjector] Injected tree with', this.accounts.length, 'accounts');
+  }
+
+  /**
+   * Create account row (level 1 of tree)
+   */
+  private createAccountRow(account: any, siteCount: number, installCount: number): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'nexus-tree-account-row';
+    row.style.cssText = `
+      display: flex;
+      align-items: center;
+      padding: 6px 12px 6px 24px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.9);
+    `;
+
+    const isExpanded = this.expandedAccounts.has(account.id);
+    const icon = document.createElement('span');
+    icon.textContent = isExpanded ? '▼' : '▶';
+    icon.style.cssText = `margin-right: 6px; font-size: 10px; opacity: 0.7;`;
+
+    const name = document.createElement('span');
+    name.textContent = account.name;
+    name.style.fontWeight = '500';
+
+    const meta = document.createElement('span');
+    meta.textContent = ` (${siteCount} sites, ${installCount} installs)`;
+    meta.style.cssText = `margin-left: 4px; opacity: 0.6; font-size: 12px;`;
+
+    row.appendChild(icon);
+    row.appendChild(name);
+    row.appendChild(meta);
+
+    row.addEventListener('click', () => {
+      if (this.expandedAccounts.has(account.id)) {
+        this.expandedAccounts.delete(account.id);
+      } else {
+        this.expandedAccounts.add(account.id);
+      }
+      this.tryInject();
+    });
+
+    return row;
+  }
+
+  /**
+   * Create site row (level 2 of tree)
+   */
+  private createSiteRow(siteName: string, installs: any[], accountId: string): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'nexus-tree-site-row';
+    row.style.cssText = `
+      display: flex;
+      align-items: center;
+      padding: 5px 12px 5px 40px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.85);
+    `;
+
+    const siteKey = `${accountId}:${siteName}`;
+    const isExpanded = this.expandedSites.has(siteKey);
+    const icon = document.createElement('span');
+    icon.textContent = isExpanded ? '▼' : '▶';
+    icon.style.cssText = `margin-right: 6px; font-size: 9px; opacity: 0.6;`;
+
+    const name = document.createElement('span');
+    name.textContent = siteName;
+
+    const meta = document.createElement('span');
+    meta.textContent = ` (${installs.length} env${installs.length === 1 ? '' : 's'})`;
+    meta.style.cssText = `margin-left: 4px; opacity: 0.5; font-size: 11px;`;
+
+    row.appendChild(icon);
+    row.appendChild(name);
+    row.appendChild(meta);
+
+    row.addEventListener('click', () => {
+      if (this.expandedSites.has(siteKey)) {
+        this.expandedSites.delete(siteKey);
+      } else {
+        this.expandedSites.add(siteKey);
+      }
+      this.tryInject();
+    });
+
+    return row;
+  }
+
+  /**
+   * Create install row (level 3 of tree - actual sites)
+   */
+  private createInstallRow(install: any): HTMLElement {
+    const link = document.createElement('a');
+    link.className = 'nexus-tree-install-link';
+    link.style.cssText = `
+      display: flex;
+      align-items: center;
+      padding: 4px 12px 4px 56px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.75);
+      text-decoration: none;
+      cursor: pointer;
+      gap: 6px;
+    `;
+
+    const siteId = install.id || `wpe-${install.remote_install_id}`;
+    link.setAttribute('data-site-id', siteId);
+
+    // Environment name
+    const env = document.createElement('span');
+    env.textContent = install.environment || 'production';
+    env.style.flexShrink = '0';
+
+    link.appendChild(env);
+
+    // Badges
+    const badges = this.buildBadgesForWPESite(install);
+    badges.forEach((badge, index) => {
+      const badgeEl = document.createElement('span');
+      badgeEl.className = `nexus-badge nexus-badge-${badge.type}`;
+      badgeEl.textContent = badge.text;
+      if (badge.title) badgeEl.title = badge.title;
+      if (index === 0) badgeEl.style.marginLeft = 'auto';
+      link.appendChild(badgeEl);
+    });
+
+    // Click handler
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const installId = install.id || install.remote_install_id || install.install_id;
+      window.location.hash = `#/main/site-info-wpe/${installId}`;
+    });
+
+    // Hover effect
+    link.addEventListener('mouseenter', () => {
+      link.style.background = 'rgba(255, 255, 255, 0.05)';
+    });
+    link.addEventListener('mouseleave', () => {
+      link.style.background = '';
+    });
+
+    return link;
   }
 
   /**
    * Create a WPE site item element matching Local's native structure
+   * (DEPRECATED - kept for backwards compatibility but not used in tree view)
    */
   private createWPESiteItem(site: any): HTMLElement {
     // Main link element (matches Local's NavLink structure)
