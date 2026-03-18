@@ -18,8 +18,10 @@ interface ResolverContext {
 interface ParsedTarget {
   type: 'local' | 'wpe';
   siteName?: string;
-  installName?: string;
+  installName?: string; // For WPE: "account/install" format
   environment?: string;
+  account?: string;
+  installId?: string;
 }
 
 function parseTarget(target: string): ParsedTarget {
@@ -62,7 +64,7 @@ function resolveSite(identifier: string, siteData: any): any {
  * Resolvers
  */
 export function createResolvers(context: ResolverContext) {
-  const { services } = context;
+  const { services, registry } = context;
 
   return {
     Mutation: {
@@ -616,9 +618,14 @@ export function createResolvers(context: ResolverContext) {
       nexusSyncPull: async (_parent: any, { input }: { input: any }) => {
         try {
           const localParsed = parseTarget(input.localSite);
+          const wpeParsed = parseTarget(input.wpeTarget);
 
           if (localParsed.type !== 'local') {
             throw new Error('Local target must use @local syntax (e.g., mysite@local)');
+          }
+
+          if (wpeParsed.type !== 'wpe') {
+            throw new Error('WPE target must use wpe:account/install@env syntax');
           }
 
           const site = resolveSite(localParsed.siteName!, services.siteData);
@@ -630,13 +637,72 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          // For POC: sync operations require the site to be linked in Local's UI first
-          // This matches how the actual MCP tools work
+          // Verify site is running
+          const status = services.localServices.getSiteStatus(site.id);
+          if (status !== 'running') {
+            return {
+              success: false,
+              error: `Site "${site.name}" is ${status}. Start it first with: nexus sites start ${site.name}@local`,
+              linkCreated: false,
+            };
+          }
+
+          // Get WPE install ID from install name
+          // The install name in wpeTarget is "account/install" format, we need to find the actual install ID
+          const [accountName, installName] = wpeParsed.installName!.split('/');
+
+          // Get all WPE installs to find the one matching our target
+          const installs = await services.localServices.capiGetInstalls();
+          const targetInstall = installs.find((i: any) =>
+            i.name === installName && i.environment === wpeParsed.environment
+          );
+
+          if (!targetInstall) {
+            return {
+              success: false,
+              error: `WPE install not found: ${installName} (${wpeParsed.environment}). ` +
+                     `Check nexus sites list --wpe-only to verify the install name.`,
+              linkCreated: false,
+            };
+          }
+
+          // Call our local MCP tool which will use Local's wpePull service
+          const pullArgs = {
+            site: site.name,
+            remote_install_id: targetInstall.id,
+            include_database: !input.filesOnly, // Default to true unless files-only
+          };
+
+          const result = await registry.call('local_wpe_pull', pullArgs, services);
+
+          // Parse JSON response from MCP tool
+          let pullResult: any;
+          try {
+            const responseText = result.content[0].text;
+            pullResult = JSON.parse(responseText);
+          } catch (parseError: any) {
+            return {
+              success: false,
+              error: `Failed to parse pull result: ${result.content?.[0]?.text || 'No response'}`,
+              linkCreated: false,
+            };
+          }
+
+          if (pullResult.status !== 'queued') {
+            return {
+              success: false,
+              error: pullResult.message || 'Pull failed',
+              linkCreated: false,
+            };
+          }
+
+          // Success - pull queued
           return {
-            success: false,
-            error: 'Sync operations require the site to be linked to WP Engine via Local\'s UI first. ' +
-                   'Use Connect > WP Engine in the site overview to link the site.',
-            linkCreated: false,
+            success: true,
+            error: null,
+            linkCreated: false, // Linking happens automatically during pull
+            bytesTransferred: null, // Not available until pull completes
+            duration: null,
           };
         } catch (error: any) {
           return {
@@ -653,9 +719,14 @@ export function createResolvers(context: ResolverContext) {
       nexusSyncPush: async (_parent: any, { input }: { input: any }) => {
         try {
           const localParsed = parseTarget(input.localSite);
+          const wpeParsed = parseTarget(input.wpeTarget);
 
           if (localParsed.type !== 'local') {
             throw new Error('Local target must use @local syntax (e.g., mysite@local)');
+          }
+
+          if (wpeParsed.type !== 'wpe') {
+            throw new Error('WPE target must use wpe:account/install@env syntax');
           }
 
           const site = resolveSite(localParsed.siteName!, services.siteData);
@@ -668,14 +739,76 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          // For POC: sync operations require the site to be linked in Local's UI first
-          // This matches how the actual MCP tools work
+          // Verify site is running
+          const status = services.localServices.getSiteStatus(site.id);
+          if (status !== 'running') {
+            return {
+              success: false,
+              error: `Site "${site.name}" is ${status}. Start it first with: nexus sites start ${site.name}@local`,
+              linkCreated: false,
+              installCreated: false,
+            };
+          }
+
+          // Get WPE install ID from install name
+          const [accountName, installName] = wpeParsed.installName!.split('/');
+
+          // Get all WPE installs to find the one matching our target
+          const installs = await services.localServices.capiGetInstalls();
+          const targetInstall = installs.find((i: any) =>
+            i.name === installName && i.environment === wpeParsed.environment
+          );
+
+          if (!targetInstall) {
+            return {
+              success: false,
+              error: `WPE install not found: ${installName} (${wpeParsed.environment}). ` +
+                     `Check nexus sites list --wpe-only to verify the install name.`,
+              linkCreated: false,
+              installCreated: false,
+            };
+          }
+
+          // Call our local MCP tool which will use Local's wpePush service
+          const pushArgs: any = {
+            site: site.name,
+            remote_install_id: targetInstall.id,
+            include_database: input.includeDb || input.dbOnly || false,
+          };
+
+          const result = await registry.call('local_wpe_push', pushArgs, services);
+
+          // Parse JSON response from MCP tool
+          let pushResult: any;
+          try {
+            const responseText = result.content[0].text;
+            pushResult = JSON.parse(responseText);
+          } catch (parseError: any) {
+            return {
+              success: false,
+              error: `Failed to parse push result: ${result.content?.[0]?.text || 'No response'}`,
+              linkCreated: false,
+              installCreated: false,
+            };
+          }
+
+          if (pushResult.status !== 'queued') {
+            return {
+              success: false,
+              error: pushResult.message || 'Push failed',
+              linkCreated: false,
+              installCreated: false,
+            };
+          }
+
+          // Success - push queued
           return {
-            success: false,
-            error: 'Sync operations require the site to be linked to WP Engine via Local\'s UI first. ' +
-                   'Use Connect > WP Engine in the site overview to link the site.',
-            linkCreated: false,
-            installCreated: false,
+            success: true,
+            error: null,
+            linkCreated: false, // Linking happens automatically during push
+            installCreated: false, // Install must already exist
+            bytesTransferred: null, // Not available until push completes
+            duration: null,
           };
         } catch (error: any) {
           return {

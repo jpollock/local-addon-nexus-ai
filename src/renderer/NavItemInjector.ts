@@ -149,10 +149,9 @@ export class NavItemInjector {
     if (this.observer) return;
 
     this.observer = new MutationObserver(() => {
-      const contentExists = document.getElementById(CONTENT_NAV_ITEM_ID);
       const nexusExists = document.getElementById(NEXUS_NAV_ITEM_ID);
 
-      if (this.injected && (!contentExists || !nexusExists)) {
+      if (this.injected && !nexusExists) {
         this.injected = false;
       }
       if (!this.injected) {
@@ -171,7 +170,6 @@ export class NavItemInjector {
       this.observer.disconnect();
       this.observer = null;
     }
-    document.getElementById(CONTENT_NAV_ITEM_ID)?.remove();
     document.getElementById(NEXUS_NAV_ITEM_ID)?.remove();
     document.getElementById(STYLE_ID)?.remove();
   }

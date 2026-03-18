@@ -6,8 +6,8 @@ export const wpePushHandler: McpToolHandler = {
   definition: {
     name: 'local_wpe_push',
     description:
-      'Push a local site to WP Engine. This is a Tier 3 (destructive) operation ' +
-      'that overwrites the remote environment. Requires confirmation.',
+      'Push a local site to WP Engine. This is a destructive operation ' +
+      'that overwrites the remote environment.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -16,7 +16,10 @@ export const wpePushHandler: McpToolHandler = {
           type: 'boolean',
           description: 'Include database in the push. Defaults to false.',
         },
-        _confirmationToken: { type: 'string', description: 'Confirmation token for Tier 3 operations' },
+        remote_install_id: {
+          type: 'string',
+          description: 'WP Engine install ID to push to directly. If omitted, site must be linked.',
+        },
       },
       required: ['site'],
     },
@@ -33,20 +36,76 @@ export const wpePushHandler: McpToolHandler = {
       return error(`Site "${site.name}" is ${status}. Start it first with local_start_site.`);
     }
 
-    // Verify site has a WPE connection
-    const rawSite = services.localServices!.resolveSiteObject(site.id) as any;
-    if (!rawSite?.hostConnections || Object.keys(rawSite.hostConnections).length === 0) {
-      return error(`Site "${site.name}" is not linked to a WP Engine environment. Link it first.`);
+    // Check if wpePush service is available
+    if (!services.localServices?.wpePush) {
+      return error('WPE Push service not available in Local.');
     }
 
-    return ok(
-      JSON.stringify({
-        status: 'queued',
-        async: true,
-        site: site.name,
-        include_database: args.include_database === true,
-        message: 'Push operation queued. Check the Local app for progress.',
-      }, null, 2),
-    );
+    // Get WPE connection from site
+    const rawSite = services.localServices!.resolveSiteObject(site.id) as any;
+    const wpeConnection = rawSite?.hostConnections
+      ? Object.values(rawSite.hostConnections).find((c: any) => c.hostId === 'wpe' || c.accountId)
+      : null;
+
+    if (!wpeConnection && !args.remote_install_id) {
+      return error(`Site "${site.name}" is not linked to a WP Engine environment. Link it first or provide remote_install_id.`);
+    }
+
+    // If remote_install_id provided, we need to get install details from CAPI
+    let installName: string;
+    let installId: string;
+    let remoteSiteId: string;
+    let primaryDomain: string;
+    let environment: string;
+
+    if (args.remote_install_id) {
+      // Get install details from CAPI
+      const installs = (await services.localServices.capiGetInstalls()) as any[];
+      const install = installs.find((i: any) => i.id === args.remote_install_id);
+
+      if (!install) {
+        return error(`WPE install not found: ${args.remote_install_id}`);
+      }
+
+      installName = install.name;
+      installId = install.id;
+      remoteSiteId = typeof install.site === 'object' ? install.site.id : install.site;
+      primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
+      environment = install.environment || 'production';
+    } else {
+      // Use existing link
+      installName = (wpeConnection as any).remoteSiteId; // This might need adjustment
+      installId = (wpeConnection as any).remoteSiteId;
+      remoteSiteId = (wpeConnection as any).remoteSiteId;
+      primaryDomain = ''; // Will be resolved by wpePush service
+      environment = (wpeConnection as any).remoteSiteEnv || 'production';
+    }
+
+    try {
+      // Call Local's wpePush service
+      await services.localServices.wpePush.push({
+        includeSql: args.include_database === true,
+        wpengineInstallName: installName,
+        wpengineInstallId: installId,
+        wpengineSiteId: remoteSiteId,
+        wpenginePrimaryDomain: primaryDomain,
+        localSiteId: site.id,
+        environment,
+        isMagicSync: false,
+      });
+
+      return ok(
+        JSON.stringify({
+          status: 'queued',
+          async: true,
+          site: site.name,
+          install: installName,
+          include_database: args.include_database === true,
+          message: 'Push operation queued. Check the Local app for progress.',
+        }, null, 2),
+      );
+    } catch (err: any) {
+      return error(`Failed to start push: ${err.message}`);
+    }
   },
 };

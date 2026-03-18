@@ -107,6 +107,34 @@ export interface LocalServicesBridge {
   remoteWpCliRun(installName: string, args: string[]): Promise<WpCliResult>;
   resolveWpeInstall(siteId: string): Promise<WpeInstallInfo | null>;
   isSSHKeyAvailable(): boolean;
+
+  // WPE Sync (Pull/Push)
+  wpePull?: {
+    pull(args: {
+      includeSql?: boolean;
+      wpengineInstallName: string;
+      wpengineInstallId: string;
+      wpengineSiteId: string;
+      wpenginePrimaryDomain: string;
+      localSiteId: string;
+      environment?: string;
+      files?: string[];
+      isMagicSync?: boolean;
+    }): Promise<void>;
+  };
+  wpePush?: {
+    push(args: {
+      includeSql?: boolean;
+      wpengineInstallName: string;
+      wpengineInstallId: string;
+      wpengineSiteId: string;
+      wpenginePrimaryDomain: string;
+      localSiteId: string;
+      environment?: string;
+      files?: string[];
+      isMagicSync?: boolean;
+    }): Promise<void>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -492,6 +520,17 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         ?? path.join(os.homedir(), 'Library', 'Application Support', 'Local');
       const sshKeyPath = path.join(userDataPath, 'ssh', 'wpe-connect');
       return fs.existsSync(sshKeyPath);
+    },
+
+    // --- WPE Sync (Pull/Push) ---
+    // These are optional services provided by Local
+
+    get wpePull() {
+      return svc('wpePull') ?? undefined;
+    },
+
+    get wpePush() {
+      return svc('wpePush') ?? undefined;
     },
   };
 }

@@ -54,35 +54,19 @@ syncCommand
         },
       });
 
-      const { success, error, linkCreated, bytesTransferred, duration } =
-        result.nexusSyncPull;
+      const { success, error } = result.nexusSyncPull;
 
       if (!success) {
         console.error(`\n❌ Failed to pull: ${error}`);
         process.exit(1);
       }
 
-      if (linkCreated) {
-        console.log(`✅ Created link: ${localSite} ↔ ${options.from}`);
-      }
-
-      if (bytesTransferred) {
-        const mb = (bytesTransferred / 1024 / 1024).toFixed(2);
-        console.log(`✅ Transferred: ${mb} MB`);
-      }
-
-      if (duration) {
-        console.log(`✅ Duration: ${duration.toFixed(1)}s`);
-      }
-
-      console.log(`\n✅ Successfully pulled from WPE`);
-
-      if (linkCreated) {
-        console.log('\nYou can now use shorthand syntax:');
-        console.log(`  nexus wp ${localSiteName}@${wpeTarget.environment} plugin list`);
-        console.log(`  nexus sync pull ${localSite} --from=${wpeTarget.environment}`);
-      }
-
+      // Pull operation is async - tell user to check Local app
+      console.log(`\n✅ Pull operation queued successfully`);
+      console.log(`\n📱 Check the Local app for pull progress.`);
+      console.log(`⏳ The pull operation runs in the background.`);
+      console.log(`\n⚠️  Do NOT run wp-cli commands on ${localSite} until the pull completes.`);
+      console.log(`   Wait for Local to show "Pull complete" before using the site.`);
       console.log('');
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
@@ -112,12 +96,27 @@ syncCommand
         console.log(`\n⚠️  WARNING: This will overwrite the database on ${options.to}`);
 
         if (wpeTarget.environment === 'production') {
-          console.log('⚠️  This is a PRODUCTION environment. Data loss is permanent.');
+          console.log('⚠️⚠️⚠️  This is a PRODUCTION environment. Data loss is permanent.');
         }
 
-        // In POC, we'll skip confirmation. In production, use readline to prompt.
-        console.log('');
-        console.log('(Confirmation skipped in POC - use with caution!)');
+        // Prompt for confirmation
+        const readline = require('readline');
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+
+        const answer = await new Promise<string>((resolve) => {
+          rl.question(`\nType 'yes' to confirm database push: `, resolve);
+        });
+
+        rl.close();
+
+        if (answer.toLowerCase() !== 'yes') {
+          console.log('\nCancelled.');
+          process.exit(0);
+        }
+
         console.log('');
       }
 
@@ -157,37 +156,30 @@ syncCommand
         },
       });
 
-      const { success, error, linkCreated, installCreated, bytesTransferred, duration } =
-        result.nexusSyncPush;
+      const { success, error, confirmationToken } = result.nexusSyncPush;
+
+      // Handle confirmation token (though we do CLI-level confirmation, MCP tool might also need it)
+      if (confirmationToken) {
+        console.error(`\n❌ Unexpected confirmation required at MCP level.`);
+        console.error(`   This should have been handled at CLI level.`);
+        process.exit(1);
+      }
 
       if (!success) {
         console.error(`\n❌ Failed to push: ${error}`);
         process.exit(1);
       }
 
-      if (installCreated) {
-        console.log(`✅ Created WPE install: ${wpeTarget.installId} (${wpeTarget.environment})`);
-      }
+      // Push operation is async - tell user to check Local app
+      console.log(`\n✅ Push operation queued successfully`);
+      console.log(`\n📱 Check the Local app for push progress.`);
+      console.log(`⏳ The push operation runs in the background.`);
 
-      if (linkCreated) {
-        console.log(`✅ Created link: ${localSite} ↔ ${options.to}`);
-      }
-
-      if (bytesTransferred) {
-        const mb = (bytesTransferred / 1024 / 1024).toFixed(2);
-        console.log(`✅ Transferred: ${mb} MB`);
-      }
-
-      if (duration) {
-        console.log(`✅ Duration: ${duration.toFixed(1)}s`);
-      }
-
-      console.log(`\n✅ Successfully pushed to WPE`);
-
-      if (linkCreated) {
-        console.log('\nYou can now use shorthand syntax:');
-        console.log(`  nexus wp ${localSiteName}@${wpeTarget.environment} plugin list`);
-        console.log(`  nexus sync push ${localSite} --to=${wpeTarget.environment}`);
+      if (options.db || options.dbOnly) {
+        console.log(`\n⚠️  Database is being pushed to ${options.to}`);
+        if (wpeTarget.environment === 'production') {
+          console.log(`⚠️  Monitor the push carefully in Local app.`);
+        }
       }
 
       console.log('');

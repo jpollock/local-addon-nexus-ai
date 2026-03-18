@@ -191,6 +191,8 @@ export const typeDefs = gql`
     filesOnly: Boolean
     "Create WPE install if doesn't exist"
     create: Boolean
+    "Confirmation token from previous call"
+    _confirmationToken: String
   }
 
   type NexusSyncPushResult {
@@ -198,6 +200,10 @@ export const typeDefs = gql`
     success: Boolean!
     "Error message if failed"
     error: String
+    "Confirmation token (if confirmation required)"
+    confirmationToken: String
+    "Confirmation message"
+    confirmationMessage: String
     "Link was created during this operation"
     linkCreated: Boolean!
     "Install was created during this operation"
