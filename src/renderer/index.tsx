@@ -1,14 +1,8 @@
-// import { SidebarBadgeManager } from './SidebarBadgeManager'; // DEPRECATED - replaced by SidebarWPEInjector
-import { SidebarWPEInjector } from './SidebarWPEInjector';
 import { NavItemInjector } from './NavItemInjector';
-import { SiteHeaderBadge } from './components/SiteHeaderBadge';
 import { NexusOverview } from './components/NexusOverview';
-import { ContentBrowser } from './components/ContentBrowser';
 import { NexusPreferences } from './components/NexusPreferences';
 import { SiteNexusSection } from './components/SiteNexusSection';
 import { SidebarSearchPanel } from './components/SidebarSearchPanel';
-import { ChatPanel } from './components/ChatPanel';
-import { SiteInfoWPE } from './components/SiteInfoWPE';
 import { IPC_CHANNELS } from '../common/constants';
 
 export default function renderer(context: any): void {
@@ -33,31 +27,7 @@ export default function renderer(context: any): void {
     console.warn('[Nexus AI] Could not load @getflywheel/local-components:', err);
   }
 
-  // Feature 1a: Sidebar WPE badges (DOM injection) - DEPRECATED
-  // NOTE: Disabled in favor of SidebarWPEInjector which handles all badges
-  // try {
-  //   console.log('[Nexus AI] Initializing SidebarBadgeManager...');
-  //   const manager = new SidebarBadgeManager(electron);
-  //   manager.initialize();
-  //   console.log('[Nexus AI] SidebarBadgeManager initialized');
-  // } catch (err) {
-  //   console.error('[Nexus AI] SidebarBadgeManager failed:', err);
-  // }
-
-  // Feature 1b: Sidebar WPE sites + enhanced badges (DOM injection)
-  try {
-    console.log('[Nexus AI] Initializing SidebarWPEInjector...');
-    const wpeInjector = new SidebarWPEInjector(electron);
-    // Run initialization asynchronously (don't block renderer)
-    wpeInjector.initialize().catch((err: Error) => {
-      console.error('[Nexus AI] SidebarWPEInjector async init failed:', err);
-    });
-    console.log('[Nexus AI] SidebarWPEInjector started (async)');
-  } catch (err) {
-    console.error('[Nexus AI] SidebarWPEInjector failed:', err);
-  }
-
-  // Fleet nav item in vertical sidebar (DOM injection)
+  // Nexus AI nav item in vertical sidebar (DOM injection)
   try {
     console.log('[Nexus AI] Initializing NavItemInjector...');
     const navInjector = new NavItemInjector();
@@ -67,12 +37,7 @@ export default function renderer(context: any): void {
     console.error('[Nexus AI] NavItemInjector failed:', err);
   }
 
-  // Feature 1b: Header WPE badge
-  hooks.addContent('SiteInfo_Top_TopRight', (site: any, siteStatus: string) =>
-    React.createElement(SiteHeaderBadge, { site, siteStatus }),
-  );
-
-  // Feature 2: Nexus AI Overview route
+  // Feature 1: Nexus AI Overview route
   hooks.addContent('routes[main]', () =>
     React.createElement(Route, {
       path: '/main/nexus',
@@ -80,26 +45,7 @@ export default function renderer(context: any): void {
     }),
   );
 
-  // Feature 3a: Content Browser route (indexed content search)
-  hooks.addContent('routes[main]', () =>
-    React.createElement(Route, {
-      path: '/main/content',
-      render: () => React.createElement(ContentBrowser, { electron }),
-    }),
-  );
-
-  // Feature 3b: WPE Site Info route (for remote WPE sites)
-  hooks.addContent('routes[main]', () =>
-    React.createElement(Route, {
-      path: '/main/site-info-wpe/:installId',
-      render: (props: any) => React.createElement(SiteInfoWPE, {
-        electron,
-        installId: props.match.params.installId,
-      }),
-    }),
-  );
-
-  // Feature 4: Addon preferences page
+  // Feature 2: Addon preferences page
   hooks.addFilter('preferencesMenuItems', (items: any[]) => {
     return [...items, {
       path: '/nexus-ai',
@@ -109,7 +55,7 @@ export default function renderer(context: any): void {
     }];
   });
 
-  // Feature 5: Per-site Nexus AI section on site overview
+  // Feature 3: Per-site Nexus AI section on site overview
   hooks.addFilter('SiteInfoOverview_Addon_Section', (sections: any[], site: any) => {
     return [...sections, {
       title: 'Nexus AI',
@@ -117,7 +63,7 @@ export default function renderer(context: any): void {
     }];
   });
 
-  // Feature 6: Sidebar Search Panel
+  // Feature 4: Sidebar Search Panel (AI Site Finder)
   // Add search button to sidebar header and keyboard shortcut (Cmd+K / Ctrl+K)
   let searchContainerInstance: SidebarSearchContainer | null = null;
 
@@ -343,122 +289,4 @@ export default function renderer(context: any): void {
     }, 100);
   });
 
-  // Feature 7: Global Chat Panel
-  // Slide-out AI chat accessible from anywhere (Cmd+J / Ctrl+J)
-  let chatPanelInstance: ChatPanelContainer | null = null;
-
-  class ChatPanelContainer extends React.Component<any, { isOpen: boolean }> {
-    state = { isOpen: false };
-
-    componentDidMount() {
-      chatPanelInstance = this;
-
-      // Register keyboard shortcut (Cmd+J / Ctrl+J)
-      document.addEventListener('keydown', this.handleKeyDown);
-    }
-
-    componentWillUnmount() {
-      document.removeEventListener('keydown', this.handleKeyDown);
-      chatPanelInstance = null;
-    }
-
-    handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd+J / Ctrl+J - toggle chat panel
-      if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
-        e.preventDefault();
-        this.toggleChat();
-      }
-    };
-
-    toggleChat = () => {
-      this.setState({ isOpen: !this.state.isOpen });
-    };
-
-    render() {
-      return React.createElement(ChatPanel, {
-        electron,
-        isOpen: this.state.isOpen,
-        onClose: () => this.setState({ isOpen: false }),
-      });
-    }
-  }
-
-  // Mount chat panel container to body
-  const chatContainer = document.createElement('div');
-  chatContainer.id = 'nexus-chat-panel';
-  document.body.appendChild(chatContainer);
-
-  ReactDOM.render(React.createElement(ChatPanelContainer), chatContainer);
-
-  // Inject floating chat button (bottom-right corner)
-  const injectChatButton = () => {
-    console.log('[Nexus AI] Attempting to inject floating chat button...');
-
-    // Check if button already exists
-    if (document.querySelector('#nexus-chat-btn')) {
-      console.log('[Nexus AI] Chat button already exists');
-      return true;
-    }
-
-    console.log('[Nexus AI] Injecting chat button');
-
-    const chatButton = document.createElement('button');
-    chatButton.id = 'nexus-chat-btn';
-    chatButton.title = 'Open AI Chat (Cmd+J / Ctrl+J)';
-
-    // Chat bubble icon
-    chatButton.innerHTML = `
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" fill="currentColor"/>
-        <circle cx="8" cy="11" r="1.5" fill="#fff"/>
-        <circle cx="12" cy="11" r="1.5" fill="#fff"/>
-        <circle cx="16" cy="11" r="1.5" fill="#fff"/>
-      </svg>
-    `;
-
-    chatButton.style.cssText = `
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      background: #51bb7b;
-      color: #fff;
-      border: none;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 12px rgba(81, 187, 123, 0.4);
-      transition: transform 0.2s, box-shadow 0.2s;
-      z-index: 99998;
-    `;
-
-    chatButton.addEventListener('mouseenter', () => {
-      chatButton.style.transform = 'scale(1.05)';
-      chatButton.style.boxShadow = '0 6px 16px rgba(81, 187, 123, 0.5)';
-    });
-
-    chatButton.addEventListener('mouseleave', () => {
-      chatButton.style.transform = 'scale(1)';
-      chatButton.style.boxShadow = '0 4px 12px rgba(81, 187, 123, 0.4)';
-    });
-
-    chatButton.addEventListener('click', () => {
-      console.log('[Nexus AI] Chat button clicked');
-      if (chatPanelInstance) {
-        chatPanelInstance.toggleChat();
-      }
-    });
-
-    document.body.appendChild(chatButton);
-    console.log('[Nexus AI] Chat button injected successfully');
-    return true;
-  };
-
-  // Inject immediately and with delays
-  setTimeout(injectChatButton, 100);
-  setTimeout(injectChatButton, 500);
-  setTimeout(injectChatButton, 1000);
 }

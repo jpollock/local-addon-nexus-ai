@@ -1,9 +1,7 @@
 /**
  * Nav Item Injector
  *
- * Injects TWO navigation items into Local's vertical nav sidebar:
- * 1. Content (indexed content browser)
- * 2. Nexus AI (addon dashboard)
+ * Injects "Nexus AI" navigation item into Local's vertical sidebar.
  *
  * Uses MutationObserver since there's no hook for the vertical nav.
  *
@@ -11,17 +9,8 @@
  * triggers React Router navigation without a page reload.
  */
 
-const CONTENT_NAV_ITEM_ID = 'nexus-ai-content-nav';
 const NEXUS_NAV_ITEM_ID = 'nexus-ai-overview-nav';
 const STYLE_ID = 'nexus-ai-nav-styles';
-
-// Document with search icon for Content Browser
-const CONTENT_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
-  <path d="M14 2H6C4.9 2 4 2.9 4 4v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" fill="currentColor"/>
-  <path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="14.5" cy="14.5" r="3" fill="#2E3440" stroke="currentColor" stroke-width="1.5"/>
-  <path d="M16.5 16.5l2.5 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-</svg>`;
 
 // Dashboard/gauge SVG icon for Nexus AI
 const NEXUS_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
@@ -47,11 +36,9 @@ export class NavItemInjector {
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      #${CONTENT_NAV_ITEM_ID},
       #${NEXUS_NAV_ITEM_ID} {
         text-align: center;
       }
-      #${CONTENT_NAV_ITEM_ID} a,
       #${NEXUS_NAV_ITEM_ID} a {
         display: flex;
         align-items: center;
@@ -65,27 +52,21 @@ export class NavItemInjector {
         cursor: pointer;
         transition: background-color 0.1s ease;
       }
-      #${CONTENT_NAV_ITEM_ID} a:hover,
       #${NEXUS_NAV_ITEM_ID} a:hover {
         background: rgba(255, 255, 255, 0.15);
       }
-      #${CONTENT_NAV_ITEM_ID} a:hover svg,
       #${NEXUS_NAV_ITEM_ID} a:hover svg {
         transform: scale(1.05);
       }
-      #${CONTENT_NAV_ITEM_ID} a.__Active,
       #${NEXUS_NAV_ITEM_ID} a.__Active {
         background: rgba(0, 0, 0, 0.2);
       }
-      #${CONTENT_NAV_ITEM_ID} svg,
       #${NEXUS_NAV_ITEM_ID} svg {
         width: 38px;
         height: 38px;
         color: rgba(255, 255, 255, 0.7);
         transition: transform 0.1s ease;
       }
-      #${CONTENT_NAV_ITEM_ID} a:hover svg,
-      #${CONTENT_NAV_ITEM_ID} a.__Active svg,
       #${NEXUS_NAV_ITEM_ID} a:hover svg,
       #${NEXUS_NAV_ITEM_ID} a.__Active svg {
         color: #fff;
@@ -133,19 +114,10 @@ export class NavItemInjector {
     if (!fillerEl) return;
 
     // Check if already injected
-    if (document.getElementById(CONTENT_NAV_ITEM_ID) ||
-        document.getElementById(NEXUS_NAV_ITEM_ID)) {
+    if (document.getElementById(NEXUS_NAV_ITEM_ID)) {
       this.injected = true;
       return;
     }
-
-    // Create Content nav item
-    const contentItem = this.createNavItem(
-      CONTENT_NAV_ITEM_ID,
-      '/main/content',
-      'Content',
-      CONTENT_SVG
-    );
 
     // Create Nexus AI nav item
     const nexusItem = this.createNavItem(
@@ -155,8 +127,7 @@ export class NavItemInjector {
       NEXUS_SVG
     );
 
-    // Insert both items before the filler
-    nav.insertBefore(contentItem, fillerEl);
+    // Insert before the filler
     nav.insertBefore(nexusItem, fillerEl);
     this.injected = true;
 
@@ -166,13 +137,7 @@ export class NavItemInjector {
   }
 
   private updateActiveState(): void {
-    const contentLink = document.querySelector(`#${CONTENT_NAV_ITEM_ID} a`);
     const nexusLink = document.querySelector(`#${NEXUS_NAV_ITEM_ID} a`);
-
-    if (contentLink) {
-      const isContentActive = window.location.hash.includes('/main/content');
-      contentLink.classList.toggle('__Active', isContentActive);
-    }
 
     if (nexusLink) {
       const isNexusActive = window.location.hash.includes('/main/nexus');
