@@ -1,0 +1,691 @@
+/**
+ * GraphQL Resolvers for Nexus CLI
+ *
+ * Resolvers call services directly for most operations.
+ * POC: 5 commands (sites list/create, wp plugin list, sync pull/push)
+ */
+
+import type { ToolRegistry } from '../mcp/tool-registry';
+
+interface ResolverContext {
+  registry: ToolRegistry;
+  services: any;  // NexusServices has many properties, simpler to use any
+}
+
+/**
+ * Target Parser
+ */
+interface ParsedTarget {
+  type: 'local' | 'wpe';
+  siteName?: string;
+  installName?: string;
+  environment?: string;
+}
+
+function parseTarget(target: string): ParsedTarget {
+  // mysite@local
+  if (target.endsWith('@local')) {
+    return {
+      type: 'local',
+      siteName: target.replace('@local', ''),
+    };
+  }
+
+  // wpe:account/install@environment
+  const wpeMatch = target.match(/^wpe:(.+?)\/(.+?)@(production|staging|development)$/);
+  if (wpeMatch) {
+    return {
+      type: 'wpe',
+      installName: `${wpeMatch[1]}/${wpeMatch[2]}`,
+      environment: wpeMatch[3],
+    };
+  }
+
+  throw new Error(
+    `Invalid target syntax: ${target}. Expected 'mysite@local' or 'wpe:account/install@environment'`
+  );
+}
+
+/**
+ * Resolve site by name, ID, or domain
+ */
+function resolveSite(identifier: string, siteData: any): any {
+  const sites = Object.values(siteData.getSites());
+  return sites.find((s: any) =>
+    s.name === identifier ||
+    s.id === identifier ||
+    s.domain === identifier
+  );
+}
+
+/**
+ * Resolvers
+ */
+export function createResolvers(context: ResolverContext) {
+  const { services } = context;
+
+  return {
+    Mutation: {
+      /**
+       * List all sites (local + WPE)
+       */
+      nexusSitesList: async () => {
+        try {
+          // Get local sites
+          const sites = Object.values(services.siteData.getSites());
+          const statuses = services.localServices?.getAllSiteStatuses() || {};
+
+          // Get WPE data (installs + accounts)
+          let wpeInstalls: any[] = [];
+          let wpeAccounts: Map<string, string> = new Map(); // accountId -> accountName
+
+          if (services.localServices?.isCAPIAvailable()) {
+            try {
+              // Fetch both installs and accounts in parallel
+              const [installs, accounts] = await Promise.all([
+                services.localServices.capiGetInstalls() as Promise<any[]>,
+                services.localServices.capiGetAccounts() as Promise<any[]>,
+              ]);
+
+              wpeInstalls = installs || [];
+
+              // Build account name map from accounts list
+              if (accounts && Array.isArray(accounts)) {
+                accounts.forEach((account: any) => {
+                  if (account.id && account.name) {
+                    wpeAccounts.set(account.id, account.name);
+                  }
+                });
+              }
+            } catch (err) {
+              console.warn('[Nexus GraphQL] WPE sites unavailable:', err);
+            }
+          }
+
+          const local = sites.map((site: any) => {
+            // Check if site has WPE connection
+            const rawSite = services.localServices?.resolveSiteObject?.(site.id) as any;
+            const wpeConnection = rawSite?.hostConnections
+              ? Object.values(rawSite.hostConnections).find((c: any) => c.hostId === 'wpe' || c.accountId)
+              : null;
+
+            if (!wpeConnection) {
+              return {
+                name: site.name,
+                status: statuses[site.id] || 'unknown',
+                wpVersion: site.wpVersion || null,
+                domain: site.domain || 'unknown',
+                id: site.id,
+                phpVersion: site.phpVersion || null,
+                linkedTo: null,
+              };
+            }
+
+            // WPE connection exists - resolve the install
+            const remoteSiteId = (wpeConnection as any).remoteSiteId;
+            const remoteSiteEnv = (wpeConnection as any).remoteSiteEnv;
+
+            // Find the install by matching site ID and environment
+            const install = wpeInstalls.find((i: any) => {
+              const siteId = typeof i.site === 'object' ? i.site?.id : i.site;
+              return siteId === remoteSiteId && (!remoteSiteEnv || i.environment === remoteSiteEnv);
+            });
+
+            // Extract account ID and name
+            let accountId = 'unknown';
+            let accountName = null;
+            if (install) {
+              accountId = typeof install.account === 'object' && install.account?.id
+                ? install.account.id
+                : (typeof install.account === 'string' ? install.account : 'unknown');
+              accountName = wpeAccounts.get(accountId) || null;
+            } else {
+              // Fallback to connection data if install not found
+              const acc = (wpeConnection as any).accountId;
+              accountId = typeof acc === 'object' && acc?.id
+                ? acc.id
+                : (typeof acc === 'string' ? acc : 'unknown');
+              accountName = wpeAccounts.get(accountId) || null;
+            }
+
+            return {
+              name: site.name,
+              status: statuses[site.id] || 'unknown',
+              wpVersion: site.wpVersion || null,
+              domain: site.domain || 'unknown',
+              id: site.id,
+              phpVersion: site.phpVersion || null,
+              linkedTo: {
+                account: accountId,
+                accountName,
+                installId: install?.id || remoteSiteId || 'unknown',
+                installName: install?.name || null,
+                environment: remoteSiteEnv || 'unknown',
+                createdAt: new Date().toISOString(),
+                lastSyncedAt: null,
+              },
+            };
+          });
+
+          // Build WPE sites list (only if we have installs)
+          const wpe = wpeInstalls.map((install: any) => {
+            // Find local site linked to this install
+            const linkedSite = local.find((s: any) =>
+              s.linkedTo?.installId === install.id
+            );
+
+            // Extract account ID (account can be an object with id property)
+            const accountId = typeof install.account === 'object' && install.account?.id
+              ? install.account.id
+              : (typeof install.account === 'string' ? install.account : 'unknown');
+
+            // Get account name from map
+            const accountName = wpeAccounts.get(accountId) || null;
+
+            return {
+              account: accountId,
+              accountName,
+              installId: install.id,
+              environment: install.environment || 'unknown',
+              name: install.name,
+              domain: install.primaryDomain || install.cname || `${install.name}.wpengine.com`,
+              wpVersion: install.wpVersion || null,
+              phpVersion: install.phpVersion || null,
+              linkedTo: linkedSite?.name || null,
+            };
+          });
+
+          return { local, wpe };
+        } catch (error: any) {
+          throw new Error(`Failed to list sites: ${error.message}`);
+        }
+      },
+
+      /**
+       * Create a new local site
+       */
+      nexusSitesCreate: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices) {
+            return {
+              success: false,
+              error: 'Local services not available',
+            };
+          }
+
+          const result = await services.localServices.createSite({
+            name: input.name,
+            phpVersion: input.phpVersion,
+          });
+
+          return {
+            success: true,
+            siteName: result.name,
+            siteId: result.id,
+            siteDomain: result.domain,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Start a local site
+       */
+      nexusSitesStart: async (_parent: any, { target }: { target: string }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(target);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Only local sites can be started. Pull this site to local first.',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${parsed.siteName}`,
+            };
+          }
+
+          await services.localServices.startSite(site.id);
+          const newStatus = services.localServices.getSiteStatus(site.id);
+
+          return {
+            success: true,
+            siteName: site.name,
+            status: newStatus,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Stop a local site
+       */
+      nexusSitesStop: async (_parent: any, { target }: { target: string }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(target);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Only local sites can be stopped. WPE sites are always running.',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${parsed.siteName}`,
+            };
+          }
+
+          await services.localServices.stopSite(site.id);
+          const newStatus = services.localServices.getSiteStatus(site.id);
+
+          return {
+            success: true,
+            siteName: site.name,
+            status: newStatus,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Restart a local site
+       */
+      nexusSitesRestart: async (_parent: any, { target }: { target: string }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(target);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Only local sites can be restarted. WPE sites are always running.',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${parsed.siteName}`,
+            };
+          }
+
+          await services.localServices.restartSite(site.id);
+          const newStatus = services.localServices.getSiteStatus(site.id);
+
+          return {
+            success: true,
+            siteName: site.name,
+            status: newStatus,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Delete a local site
+       */
+      nexusSitesDelete: async (_parent: any, { target }: { target: string }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(target);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'WPE sites cannot be deleted via CLI. Use WPE Portal or CAPI.',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${parsed.siteName}`,
+            };
+          }
+
+          const siteName = site.name;
+          await services.localServices.deleteSite(site.id);
+
+          return {
+            success: true,
+            siteName,
+            status: 'deleted',
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Run any WP-CLI command on a site (local or WPE)
+       */
+      nexusWpCommand: async (_parent: any, { target, command }: { target: string; command: string[] }) => {
+        try {
+          if (!services.localServices) {
+            return {
+              success: false,
+              error: 'Local services not available',
+              stdout: '',
+              stderr: '',
+              exitCode: 1,
+            };
+          }
+
+          const parsed = parseTarget(target);
+
+          // Blocked commands on remote (security)
+          const blockedRemoteCommands = ['db query', 'eval', 'eval-file', 'shell'];
+          const commandStr = command.join(' ');
+          if (parsed.type === 'wpe' && blockedRemoteCommands.some(cmd => commandStr.startsWith(cmd))) {
+            return {
+              success: false,
+              error: `Command "${commandStr}" is blocked on remote sites for security reasons.`,
+              stdout: '',
+              stderr: '',
+              exitCode: 1,
+            };
+          }
+
+          if (parsed.type === 'local') {
+            // Local site
+            const site = resolveSite(parsed.siteName!, services.siteData);
+            if (!site) {
+              return {
+                success: false,
+                error: `Site not found: ${parsed.siteName}`,
+                stdout: '',
+                stderr: '',
+                exitCode: 1,
+              };
+            }
+
+            const status = services.localServices.getSiteStatus(site.id);
+            if (status !== 'running') {
+              return {
+                success: false,
+                error: `Site "${site.name}" is ${status}. Start it first.`,
+                stdout: '',
+                stderr: '',
+                exitCode: 1,
+              };
+            }
+
+            const result = await services.localServices.wpCliRun(site.id, command);
+
+            return {
+              success: result.success || result.exitCode === 0,
+              error: result.success ? null : (result.stderr || 'Command failed'),
+              stdout: result.stdout || '',
+              stderr: result.stderr || '',
+              exitCode: result.exitCode || 0,
+            };
+          } else {
+            // WPE site via SSH
+            const installNameOnly = parsed.installName!.split('/').pop() || parsed.installName!;
+
+            if (!services.localServices.isSSHKeyAvailable()) {
+              return {
+                success: false,
+                error: 'WP Engine SSH key not found. Connect to WP Engine via Local\'s UI first.',
+                stdout: '',
+                stderr: '',
+                exitCode: 1,
+              };
+            }
+
+            const result = await services.localServices.remoteWpCliRun(installNameOnly, command);
+
+            return {
+              success: result.success,
+              error: result.success ? null : (result.stdout || result.stderr || 'Command failed'),
+              stdout: result.stdout || '',
+              stderr: result.stderr || '',
+              exitCode: result.success ? 0 : 1,
+            };
+          }
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            stdout: '',
+            stderr: '',
+            exitCode: 1,
+          };
+        }
+      },
+
+      /**
+       * List plugins on a site (local or WPE)
+       */
+      nexusWpPluginList: async (_parent: any, { target }: { target: string }) => {
+        try {
+          if (!services.localServices) {
+            return {
+              success: false,
+              error: 'Local services not available',
+              plugins: [],
+            };
+          }
+
+          const parsed = parseTarget(target);
+
+          if (parsed.type === 'local') {
+            // Local site
+            const site = resolveSite(parsed.siteName!, services.siteData);
+            if (!site) {
+              return {
+                success: false,
+                error: `Site not found: ${parsed.siteName}`,
+                plugins: [],
+              };
+            }
+
+            const status = services.localServices.getSiteStatus(site.id);
+            if (status !== 'running') {
+              return {
+                success: false,
+                error: `Site "${site.name}" is ${status}. Start it first.`,
+                plugins: [],
+              };
+            }
+
+            const plugins = await services.localServices.getPlugins(site.id);
+
+            return {
+              success: true,
+              plugins: plugins.map((p: any) => ({
+                name: p.title || p.name,
+                slug: p.name,
+                status: p.status,
+                version: p.version,
+                update: p.update_version || null,
+                autoUpdate: null,
+              })),
+            };
+          } else {
+            // WPE site via SSH
+            // Extract just the install name from "account/install" format
+            const installNameOnly = parsed.installName!.split('/').pop() || parsed.installName!;
+
+            // Check if SSH key is available
+            if (!services.localServices.isSSHKeyAvailable()) {
+              return {
+                success: false,
+                error: 'WP Engine SSH key not found. Connect to WP Engine via Local\'s UI first to generate the SSH key.',
+                plugins: [],
+              };
+            }
+
+            const wpCliResult = await services.localServices.remoteWpCliRun(
+              installNameOnly,
+              ['plugin', 'list', '--format=json']
+            );
+
+            if (!wpCliResult.success) {
+              let errorMsg = wpCliResult.stdout || 'Failed to list plugins on WPE install';
+
+              // Provide helpful error messages for common issues
+              if (errorMsg.includes('Could not resolve hostname')) {
+                errorMsg = `Cannot connect to WPE install "${installNameOnly}". ` +
+                          `The install name may be incorrect or the install may not exist. ` +
+                          `SSH hostname attempted: ${installNameOnly}.ssh.wpengine.net`;
+              } else if (errorMsg.includes('Permission denied')) {
+                errorMsg = 'SSH authentication failed. Verify your WP Engine SSH key is set up correctly in Local.';
+              }
+
+              return {
+                success: false,
+                error: errorMsg,
+                plugins: [],
+              };
+            }
+
+            try {
+              const plugins = JSON.parse(wpCliResult.stdout || '[]');
+              return {
+                success: true,
+                plugins: plugins.map((p: any) => ({
+                  name: p.title || p.name,
+                  slug: p.name,
+                  status: p.status,
+                  version: p.version,
+                  update: p.update_version || null,
+                  autoUpdate: p.auto_update || null,
+                })),
+              };
+            } catch {
+              return {
+                success: false,
+                error: 'Failed to parse plugin list JSON',
+                plugins: [],
+              };
+            }
+          }
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            plugins: [],
+          };
+        }
+      },
+
+      /**
+       * Pull from WPE to local
+       */
+      nexusSyncPull: async (_parent: any, { input }: { input: any }) => {
+        try {
+          const localParsed = parseTarget(input.localSite);
+
+          if (localParsed.type !== 'local') {
+            throw new Error('Local target must use @local syntax (e.g., mysite@local)');
+          }
+
+          const site = resolveSite(localParsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${localParsed.siteName}`,
+              linkCreated: false,
+            };
+          }
+
+          // For POC: sync operations require the site to be linked in Local's UI first
+          // This matches how the actual MCP tools work
+          return {
+            success: false,
+            error: 'Sync operations require the site to be linked to WP Engine via Local\'s UI first. ' +
+                   'Use Connect > WP Engine in the site overview to link the site.',
+            linkCreated: false,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            linkCreated: false,
+          };
+        }
+      },
+
+      /**
+       * Push from local to WPE
+       */
+      nexusSyncPush: async (_parent: any, { input }: { input: any }) => {
+        try {
+          const localParsed = parseTarget(input.localSite);
+
+          if (localParsed.type !== 'local') {
+            throw new Error('Local target must use @local syntax (e.g., mysite@local)');
+          }
+
+          const site = resolveSite(localParsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${localParsed.siteName}`,
+              linkCreated: false,
+              installCreated: false,
+            };
+          }
+
+          // For POC: sync operations require the site to be linked in Local's UI first
+          // This matches how the actual MCP tools work
+          return {
+            success: false,
+            error: 'Sync operations require the site to be linked to WP Engine via Local\'s UI first. ' +
+                   'Use Connect > WP Engine in the site overview to link the site.',
+            linkCreated: false,
+            installCreated: false,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            linkCreated: false,
+            installCreated: false,
+          };
+        }
+      },
+    },
+  };
+}

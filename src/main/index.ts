@@ -36,6 +36,8 @@ import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcast
 import { WPESyncService } from './events/WPESyncService';
 import { RemoteContentExtractor } from './content/RemoteContentExtractor';
 import { AiProxyServer } from './ai-proxy/AiProxyServer';
+import { typeDefs } from './graphql/schema';
+import { createResolvers } from './graphql/resolvers';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -46,7 +48,7 @@ let mcpServer: McpServer | null = null;
 export default function main(context: any): void {
   console.log('[NexusAI] 🟢🟢🟢 MAIN ENTRY POINT CALLED');
   const serviceContainer = LocalMain.getServiceContainer().cradle;
-  const { localLogger, userData, siteData } = serviceContainer;
+  const { localLogger, userData, siteData, graphql } = serviceContainer;
   console.log('[NexusAI] 🟢 Service container loaded');
 
   localLogger.info('[NexusAI] Addon loading...');
@@ -181,6 +183,22 @@ export default function main(context: any): void {
   registerCompositeTools(registry);
   registerWpConnectorTools(registry);
   registerFleetIntelligenceTools(registry);
+
+  // Phase 3a: Register GraphQL schema for Nexus CLI
+  if (graphql) {
+    try {
+      const resolvers = createResolvers({
+        registry,
+        services: nexusServices as any,
+      });
+      graphql.registerGraphQLService('nexus-ai', typeDefs, resolvers);
+      localLogger.info('[NexusAI] Registered GraphQL: 5 CLI mutations (POC)');
+    } catch (error: any) {
+      localLogger.error('[NexusAI] Failed to register GraphQL:', error);
+    }
+  } else {
+    localLogger.warn('[NexusAI] GraphQL service not available - CLI will not work');
+  }
 
   // Phase 3b: Chat providers + service
   initializeProviders();

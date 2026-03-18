@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "main": "lib/main.js",
   "renderer": "lib/renderer.js",
+  "bin": {
+    "nexus": "./bin/nexus.js"
+  },
   "localAddon": {
     "minimumLocalVersion": "9.0.0",
     "type": "addon",
@@ -44,6 +47,8 @@
     "@lancedb/lancedb": "^0.13.0",
     "apache-arrow": ">=13.0.0 <=17.0.0",
     "better-sqlite3": "^11.10.0",
+    "commander": "^11.1.0",
+    "graphql-tag": "^2.12.6",
     "lodash": "^4.17.21",
     "mysql2": "^3.11.0",
     "onnxruntime-node": "^1.20.0",
