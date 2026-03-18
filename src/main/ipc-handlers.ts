@@ -30,6 +30,19 @@ import { WpeAutoPullService } from './wpe-auto-pull';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
 
+/**
+ * Safe IPC handler registration - removes existing handler first to prevent
+ * "Attempted to register a second handler" errors during hot-reload
+ */
+function safeHandle(channel: string, handler: (...args: any[]) => any): void {
+  try {
+    ipcMain.removeHandler(channel);
+  } catch {
+    // Handler didn't exist, that's fine
+  }
+  ipcMain.handle(channel, handler);
+}
+
 const DEFAULT_SETTINGS: NexusSettings = {
   autoIndex: true,
   excludedSiteIds: [],
@@ -57,11 +70,29 @@ export interface IpcHandlerDeps {
 }
 
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
+  console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() CALLED - starting execution');
+
+  // Clean up any existing handlers from previous loads (hot-reload scenario)
+  const handlersToRemove = [
+    'nexus-ai:wpe:get-site-details',
+    'nexus-ai:wpe:sync-single-site',
+    'capi:get-accounts',
+  ];
+  handlersToRemove.forEach(channel => {
+    try {
+      ipcMain.removeHandler(channel);
+    } catch {
+      // Handler didn't exist, that's fine
+    }
+  });
+  console.log('[NexusAI] 🟢 Cleaned up existing handlers');
+
   const {
     siteData, localServicesBridge, indexRegistry, embeddingService,
     contentPipeline, vectorStore, registryStorage, localLogger, getMcpServer,
     graphService, eventProcessor, vectorDbPath, serviceContainer,
   } = deps;
+  console.log('[NexusAI] 🟢 registerIpcHandlers() - deps destructured successfully');
 
   /**
    * Notify Local's main UI to refresh site groups after a mutation.
@@ -80,15 +111,15 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     } catch { /* best-effort */ }
   }
 
-  ipcMain.handle(IPC_CHANNELS.GET_MCP_INFO, () => {
+  safeHandle(IPC_CHANNELS.GET_MCP_INFO, () => {
     return getMcpServer()?.getConnectionInfo() ?? null;
   });
 
-  ipcMain.handle(IPC_CHANNELS.GET_FLEET_STATUS, () => {
+  safeHandle(IPC_CHANNELS.GET_FLEET_STATUS, () => {
     return indexRegistry.listAll();
   });
 
-  ipcMain.handle(IPC_CHANNELS.GET_SITES, async () => {
+  safeHandle(IPC_CHANNELS.GET_SITES, async () => {
     try {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
@@ -135,7 +166,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.GET_WPE_SITE_IDS, () => {
+  safeHandle(IPC_CHANNELS.GET_WPE_SITE_IDS, () => {
     try {
       const allSites = siteData.getSites();
       const siteIds: string[] = [];
@@ -155,7 +186,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.GET_DASHBOARD_STATS, async () => {
+  safeHandle(IPC_CHANNELS.GET_DASHBOARD_STATS, async () => {
     try {
       const allSites = siteData.getSites();
       const siteList = Object.values(allSites) as any[];
@@ -240,7 +271,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.START_SITE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.START_SITE, async (_event: any, siteId: string) => {
     try {
       await localServicesBridge.startSite(siteId);
       return { success: true };
@@ -250,7 +281,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.STOP_SITE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.STOP_SITE, async (_event: any, siteId: string) => {
     try {
       await localServicesBridge.stopSite(siteId);
       return { success: true };
@@ -260,7 +291,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.SEARCH, async (_event: any, query: string, siteId?: string, limit?: number) => {
+  safeHandle(IPC_CHANNELS.SEARCH, async (_event: any, query: string, siteId?: string, limit?: number) => {
     try {
       const maxResults = limit ?? 10;
       const [queryVector] = await embeddingService.embedBatch([query]);
@@ -292,7 +323,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.INDEX_SITE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: any, siteId: string) => {
     try {
       const site = siteData.getSite(siteId);
       if (!site) {
@@ -316,7 +347,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.GET_SETTINGS, () => {
+  safeHandle(IPC_CHANNELS.GET_SETTINGS, () => {
     try {
       const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
       return raw ?? DEFAULT_SETTINGS;
@@ -325,7 +356,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.UPDATE_SETTINGS, (_event: any, partial: Partial<NexusSettings>) => {
+  safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, (_event: any, partial: Partial<NexusSettings>) => {
     try {
       const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
       const current: NexusSettings = raw ?? DEFAULT_SETTINGS;
@@ -338,7 +369,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
     try {
       // Check if user has selected Ollama as their chat provider
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
@@ -365,7 +396,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Event Tracking & Visibility (Sprint 1)
   // ---------------------------------------------------------------------------
 
-  ipcMain.handle(IPC_CHANNELS.EVENTS_GET_TIMELINE, async (_event: any, options?: {
+  safeHandle(IPC_CHANNELS.EVENTS_GET_TIMELINE, async (_event: any, options?: {
     limit?: number;
     filter?: string;
     status?: 'pending' | 'processed' | 'failed';
@@ -396,7 +427,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.EVENTS_GET_STATS, async () => {
+  safeHandle(IPC_CHANNELS.EVENTS_GET_STATS, async () => {
     try {
       const stats = await graphService.getEventStats();
 
@@ -425,7 +456,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.STORAGE_GET_HEALTH, async () => {
+  safeHandle(IPC_CHANNELS.STORAGE_GET_HEALTH, async () => {
     try {
       // vectorDbPath is passed as a dep
       const rawHealth = await graphService.getStorageHealth(vectorDbPath);
@@ -455,7 +486,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.ISSUES_DETECT, async () => {
+  safeHandle(IPC_CHANNELS.ISSUES_DETECT, async () => {
     try {
       const issues = await graphService.detectIssues();
       return { success: true, issues };
@@ -465,7 +496,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.STORAGE_CLEANUP, async (_event: any, options?: {
+  safeHandle(IPC_CHANNELS.STORAGE_CLEANUP, async (_event: any, options?: {
     retentionDays?: number;
   }) => {
     try {
@@ -480,7 +511,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.EVENTS_RETRY_FAILED, async () => {
+  safeHandle(IPC_CHANNELS.EVENTS_RETRY_FAILED, async () => {
     try {
       const count = await eventProcessor.retryFailed();
 
@@ -506,7 +537,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   queryStorage.load().catch(err => localLogger.error('[NexusAI] Failed to load saved queries:', err.message));
 
   // Unified search
-  ipcMain.handle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, query: string, filters?: any, options?: any) => {
+  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, query: string, filters?: any, options?: any) => {
     try {
       localLogger.info('[NexusAI] Search request:', { query, filters, options });
       const results = await searchService.searchFleet(query, filters, options);
@@ -519,7 +550,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Smart filters
-  ipcMain.handle(IPC_CHANNELS.FILTERS_GET_COUNTS, async () => {
+  safeHandle(IPC_CHANNELS.FILTERS_GET_COUNTS, async () => {
     try {
       const filters = await filterEngine.getFilterCounts();
       return { success: true, filters };
@@ -529,7 +560,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.FILTERS_APPLY, async (_event: any, filterId: string) => {
+  safeHandle(IPC_CHANNELS.FILTERS_APPLY, async (_event: any, filterId: string) => {
     try {
       const siteIds = await filterEngine.applyFilter(filterId);
       return { success: true, siteIds };
@@ -540,7 +571,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Health scores
-  ipcMain.handle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: any, siteId: string) => {
     try {
       const site = siteData.getSite(siteId);
       const breakdown = await healthCalculator.calculateScore(siteId, {
@@ -554,7 +585,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.HEALTH_GET_ALL_SCORES, async () => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_ALL_SCORES, async () => {
     try {
       const allSites = siteData.getSites();
       const siteIds = Object.keys(allSites);
@@ -572,7 +603,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Saved queries
-  ipcMain.handle(IPC_CHANNELS.QUERIES_LIST, async () => {
+  safeHandle(IPC_CHANNELS.QUERIES_LIST, async () => {
     try {
       const queries = queryStorage.list();
       return { success: true, queries };
@@ -582,7 +613,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.QUERIES_CREATE, async (_event: any, query: any) => {
+  safeHandle(IPC_CHANNELS.QUERIES_CREATE, async (_event: any, query: any) => {
     try {
       const saved = await queryStorage.save(query);
       return { success: true, query: saved };
@@ -592,7 +623,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: any, id: string, changes: any) => {
+  safeHandle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: any, id: string, changes: any) => {
     try {
       const updated = await queryStorage.update(id, changes);
       return { success: true, query: updated };
@@ -602,7 +633,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.QUERIES_DELETE, async (_event: any, id: string) => {
+  safeHandle(IPC_CHANNELS.QUERIES_DELETE, async (_event: any, id: string) => {
     try {
       await queryStorage.delete(id);
       return { success: true };
@@ -612,7 +643,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.QUERIES_RUN, async (_event: any, id: string) => {
+  safeHandle(IPC_CHANNELS.QUERIES_RUN, async (_event: any, id: string) => {
     try {
       const query = queryStorage.get(id);
       if (!query) {
@@ -689,7 +720,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // --- Bulk Operations ---
 
-  ipcMain.handle(IPC_CHANNELS.BULK_EXECUTE, async (_event: any, request: any) => {
+  safeHandle(IPC_CHANNELS.BULK_EXECUTE, async (_event: any, request: any) => {
     try {
       const opId = await bulkOpManager.execute(request);
       return { success: true, opId };
@@ -699,22 +730,22 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.BULK_STATUS, async (_event: any, opId: string) => {
+  safeHandle(IPC_CHANNELS.BULK_STATUS, async (_event: any, opId: string) => {
     const status = bulkOpManager.getStatus(opId);
     return status ? { success: true, ...status } : { success: false, error: 'Operation not found' };
   });
 
-  ipcMain.handle(IPC_CHANNELS.BULK_CANCEL, async (_event: any, opId: string) => {
+  safeHandle(IPC_CHANNELS.BULK_CANCEL, async (_event: any, opId: string) => {
     return { success: bulkOpManager.cancel(opId) };
   });
 
-  ipcMain.handle(IPC_CHANNELS.BULK_LIST, async () => {
+  safeHandle(IPC_CHANNELS.BULK_LIST, async () => {
     return { success: true, operations: bulkOpManager.listAll() };
   });
 
   // --- Site Groups (Local native) ---
 
-  ipcMain.handle(IPC_CHANNELS.GROUPS_LIST, async () => {
+  safeHandle(IPC_CHANNELS.GROUPS_LIST, async () => {
     try {
       const groups = localServicesBridge.getSiteGroups();
       return { success: true, groups };
@@ -723,7 +754,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.GROUPS_CREATE, async (_event: any, args: { name: string }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_CREATE, async (_event: any, args: { name: string }) => {
     try {
       const group = localServicesBridge.createSiteGroup(args.name);
       notifyGroupsChanged();
@@ -733,7 +764,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: any, id: string, changes: { name?: string }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: any, id: string, changes: { name?: string }) => {
     try {
       if (changes.name) {
         const group = localServicesBridge.renameSiteGroup(id, changes.name);
@@ -746,7 +777,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.GROUPS_DELETE, async (_event: any, id: string) => {
+  safeHandle(IPC_CHANNELS.GROUPS_DELETE, async (_event: any, id: string) => {
     try {
       localServicesBridge.deleteSiteGroup(id);
       notifyGroupsChanged();
@@ -756,7 +787,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: any, groupId: string, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: any, groupId: string, siteId: string) => {
     try {
       localServicesBridge.moveSitesToGroup([siteId], groupId);
       notifyGroupsChanged();
@@ -766,7 +797,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: any, groupId: string, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: any, groupId: string, siteId: string) => {
     try {
       localServicesBridge.removeSitesFromGroups([siteId]);
       notifyGroupsChanged();
@@ -778,19 +809,19 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // --- Health Trends ---
 
-  ipcMain.handle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: any, siteId: string, days?: number) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: any, siteId: string, days?: number) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
     return { success: true, trend: healthTrendTracker.getSiteTrend(siteId, days || 30) };
   });
 
-  ipcMain.handle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: any, days?: number) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: any, days?: number) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
     return { success: true, trend: healthTrendTracker.getFleetTrend(days || 30) };
   });
 
   // --- Dashboard v2 ---
 
-  ipcMain.handle(IPC_CHANNELS.DASHBOARD_V2_STATS, async () => {
+  safeHandle(IPC_CHANNELS.DASHBOARD_V2_STATS, async () => {
     try {
       // Health distribution
       const allEntries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
@@ -849,7 +880,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // AI Status & Proxy (Sprint 4)
   // ---------------------------------------------------------------------------
 
-  ipcMain.handle(IPC_CHANNELS.GET_AI_STATUS, async (_event: any, siteId?: string) => {
+  safeHandle(IPC_CHANNELS.GET_AI_STATUS, async (_event: any, siteId?: string) => {
     try {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
@@ -906,7 +937,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.GET_AI_PROXY_INFO, () => {
+  safeHandle(IPC_CHANNELS.GET_AI_PROXY_INFO, () => {
     try {
       const proxyInfo = registryStorage.get('ai_proxy_info') as any;
       return {
@@ -925,7 +956,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.SETUP_AI_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
+  safeHandle(IPC_CHANNELS.SETUP_AI_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
     try {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
@@ -954,7 +985,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.INDEX_ALL_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
+  safeHandle(IPC_CHANNELS.INDEX_ALL_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
     try {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
@@ -981,7 +1012,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Auto-start/stop: Setup AI for ALL sites (including halted)
-  ipcMain.handle(IPC_CHANNELS.SETUP_AI_ALL_AUTO, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.SETUP_AI_ALL_AUTO, async (_event: any) => {
     try {
       const allSites = siteData.getSites();
       const allSiteIds = Object.keys(allSites);
@@ -1004,7 +1035,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Auto-start/stop: Index ALL sites (including halted)
-  ipcMain.handle(IPC_CHANNELS.INDEX_ALL_AUTO, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.INDEX_ALL_AUTO, async (_event: any) => {
     try {
       const allSites = siteData.getSites();
       const allSiteIds = Object.keys(allSites);
@@ -1027,7 +1058,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Sync Graph: Refresh GraphService with current plugin/theme/user data (auto-start/stop)
-  ipcMain.handle(IPC_CHANNELS.SYNC_GRAPH_ALL, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.SYNC_GRAPH_ALL, async (_event: any) => {
     try {
       const allSites = siteData.getSites();
       const allSiteIds = Object.keys(allSites);
@@ -1053,7 +1084,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Site Finder (Advanced Site Search)
   // ---------------------------------------------------------------------------
 
-  ipcMain.handle(IPC_CHANNELS.SITE_FINDER_GET_OPTIONS, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.SITE_FINDER_GET_OPTIONS, async (_event: any) => {
     try {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
@@ -1105,7 +1136,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.SITE_FINDER_APPLY, async (_event: any, filters: any) => {
+  safeHandle(IPC_CHANNELS.SITE_FINDER_APPLY, async (_event: any, filters: any) => {
     try {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
@@ -1298,7 +1329,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.SITE_FINDER_AI_PARSE, async (_event: any, payload: { conversation: Array<{ role: string; content: string }> }) => {
+  safeHandle(IPC_CHANNELS.SITE_FINDER_AI_PARSE, async (_event: any, payload: { conversation: Array<{ role: string; content: string }> }) => {
     try {
       const { getProvider } = require('./chat/providers/index');
 
@@ -1469,7 +1500,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // Store current filter state
   let sidebarFilteredSiteIds: string[] = [];
 
-  ipcMain.handle(IPC_CHANNELS.SIDEBAR_FILTER, async (event: any, payload: { siteIds: string[] }) => {
+  safeHandle(IPC_CHANNELS.SIDEBAR_FILTER, async (event: any, payload: { siteIds: string[] }) => {
     try {
       sidebarFilteredSiteIds = payload.siteIds || [];
 
@@ -1490,7 +1521,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.SIDEBAR_BULK_ACTION, async (_event: any, payload: { action: string; siteIds: string[] }) => {
+  safeHandle(IPC_CHANNELS.SIDEBAR_BULK_ACTION, async (_event: any, payload: { action: string; siteIds: string[] }) => {
     try {
       const { action, siteIds } = payload;
 
@@ -1551,7 +1582,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Sync all WPE sites from wp-nexus MCP
    */
-  ipcMain.handle(IPC_CHANNELS.WPE_SYNC_ALL, async (_event: any, options?: { limit?: number }) => {
+  safeHandle(IPC_CHANNELS.WPE_SYNC_ALL, async (_event: any, options?: { limit?: number }) => {
     if (!deps.wpeSyncService) {
       localLogger.warn('[NexusAI] WPE sync service not initialized');
       return { success: false, error: 'WPE sync service not available' };
@@ -1574,7 +1605,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Get current sync progress
    */
-  ipcMain.handle(IPC_CHANNELS.WPE_SYNC_STATUS, async () => {
+  safeHandle(IPC_CHANNELS.WPE_SYNC_STATUS, async () => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
@@ -1590,13 +1621,31 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Get list of synced WPE sites
    */
-  ipcMain.handle(IPC_CHANNELS.WPE_GET_SYNCED_SITES, async () => {
+  safeHandle(IPC_CHANNELS.WPE_GET_SYNCED_SITES, async () => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
 
     try {
       const sites = await deps.wpeSyncService.getSyncedWPESites();
+
+      // Enrich sites with account_id from CAPI if available
+      if (localServicesBridge.isCAPIAvailable()) {
+        try {
+          const installs = await localServicesBridge.capiGetInstalls() as any[];
+          const installMap = new Map(installs.map((i: any) => [i.id, i.account?.id]));
+
+          sites.forEach((site: any) => {
+            const accountId = installMap.get(site.remote_install_id);
+            if (accountId) {
+              site.account_id = accountId;
+            }
+          });
+        } catch (err) {
+          localLogger.warn('[NexusAI] Failed to enrich sites with account_id:', (err as Error).message);
+        }
+      }
+
       return { success: true, sites };
     } catch (err) {
       localLogger.error('[NexusAI] Failed to get synced WPE sites:', (err as Error).message);
@@ -1607,7 +1656,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Get details for a specific WPE site
    */
-  ipcMain.handle(IPC_CHANNELS.WPE_GET_SITE_DETAILS, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_GET_SITE_DETAILS, async (_event: any, installId: string) => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
@@ -1644,7 +1693,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Re-sync a single WPE site
    */
-  ipcMain.handle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: any, installId: string) => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
@@ -1668,7 +1717,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    *
    * Uses wp-nexus MCP tools to gather detailed site information
    */
-  ipcMain.handle(IPC_CHANNELS.WPE_DIAGNOSE_SITE, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_DIAGNOSE_SITE, async (_event: any, installId: string) => {
     if (!installId) {
       return { success: false, error: 'installId is required' };
     }
@@ -1695,7 +1744,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Remove a WPE site from the graph
    */
-  ipcMain.handle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, installId: string) => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
@@ -1724,7 +1773,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * - Links to WPE environment
    * - Triggers pull operation (database + files)
    */
-  ipcMain.handle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, { wpeSiteId, installName, installId }: { wpeSiteId: string; installName: string; installId?: string }) => {
+  safeHandle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, { wpeSiteId, installName, installId }: { wpeSiteId: string; installName: string; installId?: string }) => {
     try {
       if (!installId) {
         return { success: false, errorCode: 'INVALID_ARGS', error: 'WPE install ID is required' };
@@ -1782,7 +1831,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Get details for a single WPE site
    */
-  ipcMain.handle('nexus-ai:wpe:get-site-details', async (_event: any, installId: string) => {
+  safeHandle('nexus-ai:wpe:get-site-details', async (_event: any, installId: string) => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
@@ -1804,7 +1853,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Re-sync metadata for a single WPE site
    */
-  ipcMain.handle('nexus-ai:wpe:sync-single-site', async (_event: any, installId: string) => {
+  safeHandle('nexus-ai:wpe:sync-single-site', async (_event: any, installId: string) => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
@@ -1818,21 +1867,50 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       return { success: false, error: (err as Error).message };
     }
   });
+  console.log('[NexusAI] 🟢 Registered nexus-ai:wpe:sync-single-site handler');
 
   /**
    * Get WPE accounts for tree view grouping
    */
-  ipcMain.handle('capi:get-accounts', async () => {
+  console.log('[NexusAI] 🟢 About to register capi:get-accounts handler...');
+  safeHandle('capi:get-accounts', async () => {
+    console.log('[NexusAI] 🔵 capi:get-accounts handler called');
+
     try {
       if (!localServicesBridge.isCAPIAvailable()) {
+        console.warn('[NexusAI] ⚠️ CAPI not available - returning empty array');
         return [];
       }
-      const accounts = await localServicesBridge.capiGetAccounts();
+
+      console.log('[NexusAI] 🔵 CAPI available, calling capiGetAccounts...');
+      const accounts = (await localServicesBridge.capiGetAccounts()) as any[];
+      console.log('[NexusAI] ✓ Got accounts:', accounts?.length || 0);
+
+      if (accounts && accounts.length > 0) {
+        console.log('[NexusAI] Sample account:', JSON.stringify(accounts[0]).slice(0, 200));
+      }
+
       return accounts || [];
     } catch (err) {
+      console.error('[NexusAI] ❌ CAPI error:', err);
+
+      // Check if this is a 401 Unauthorized error
+      const errorMessage = (err as Error).message || '';
+      const isUnauthorized = errorMessage.includes('401') ||
+                            errorMessage.includes('Unauthorized') ||
+                            (err as any).response?.status === 401;
+
+      if (isUnauthorized) {
+        console.log('[NexusAI] 🔒 WPE not authenticated (401)');
+        return { error: 'UNAUTHORIZED' };
+      }
+
       localLogger.error('[NexusAI] Failed to get CAPI accounts:', (err as Error).message);
       return [];
     }
   });
 
+  console.log('[NexusAI] ✓ Registered capi:get-accounts IPC handler');
+
+  console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
 }

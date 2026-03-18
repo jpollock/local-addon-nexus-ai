@@ -1373,7 +1373,7 @@ renderSitesTab(): React.ReactNode {
                 left: aiSearchMode ? '26px' : '2px',
                 width: '20px',
                 height: '20px',
-                backgroundColor: '#fff',
+                backgroundColor: 'var(--color-background-primary, #fff)',
                 borderRadius: '50%',
                 transition: 'left 0.3s',
               },

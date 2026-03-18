@@ -44,8 +44,10 @@ const { ipcMain } = require('electron');
 let mcpServer: McpServer | null = null;
 
 export default function main(context: any): void {
+  console.log('[NexusAI] 🟢🟢🟢 MAIN ENTRY POINT CALLED');
   const serviceContainer = LocalMain.getServiceContainer().cradle;
   const { localLogger, userData, siteData } = serviceContainer;
+  console.log('[NexusAI] 🟢 Service container loaded');
 
   localLogger.info('[NexusAI] Addon loading...');
 
@@ -259,6 +261,7 @@ export default function main(context: any): void {
     }
   })();
 
+  console.log('[NexusAI] 🟢 About to call registerIpcHandlers()');
   // Phase 4: IPC handlers
   registerIpcHandlers({
     siteData,

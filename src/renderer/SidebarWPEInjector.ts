@@ -16,6 +16,8 @@ import { IPC_CHANNELS } from '../common/constants';
 
 const STYLE_ID = 'nexus-wpe-sidebar-styles';
 const WPE_SECTION_ID = 'nexus-wpe-sites-section';
+const TABS_CONTAINER_ID = 'nexus-sidebar-tabs';
+const ACTIVE_TAB_KEY = 'nexus-active-sidebar-tab';
 
 interface BadgeConfig {
   type: 'wpe-connected' | 'wpe-remote' | 'wp' | 'php' | 'indexed-yes' | 'indexed-no';
@@ -32,8 +34,8 @@ export class SidebarWPEInjector {
   private accounts: any[] = [];
   private indexedSiteIds: Set<string> = new Set();
   private isCollapsed: boolean = false;
-  private expandedAccounts: Set<string> = new Set();
-  private expandedSites: Set<string> = new Set();
+  private activeTab: 'local' | 'wpe' = 'local'; // Default to local
+  private isWPEAuthenticated: boolean = false;
 
   constructor(electron: any) {
     this.electron = electron;
@@ -43,6 +45,15 @@ export class SidebarWPEInjector {
     console.log('[SidebarWPEInjector] Initializing...');
 
     try {
+      // Restore saved tab state, but default to 'local' if nothing saved
+      const savedTab = localStorage.getItem(ACTIVE_TAB_KEY);
+      if (savedTab === 'wpe') {
+        this.activeTab = 'wpe';
+      } else {
+        this.activeTab = 'local'; // Default to local
+        localStorage.setItem(ACTIVE_TAB_KEY, 'local');
+      }
+
       await this.loadData();
       this.injectStyles();
       this.tryInject();
@@ -53,6 +64,13 @@ export class SidebarWPEInjector {
         console.log('[SidebarWPEInjector] Badge refresh requested - removing all badges first');
         // Remove all existing badges before re-injecting
         document.querySelectorAll('.nexus-badge').forEach(badge => badge.remove());
+        this.tryInject();
+      });
+
+      // Listen for WPE OAuth success (user just authenticated)
+      this.electron.ipcRenderer.on('wpeOauth:success', async () => {
+        console.log('[SidebarWPEInjector] WPE OAuth success - reloading data');
+        await this.loadData();
         this.tryInject();
       });
 
@@ -76,16 +94,38 @@ export class SidebarWPEInjector {
       console.log('[SidebarWPEInjector] Local sites loaded:', this.localSites.length);
 
       // Fetch WPE accounts
-      console.log('[SidebarWPEInjector] Fetching WPE accounts...');
-      const accountsResult = await this.electron.ipcRenderer.invoke('capi:get-accounts');
-      this.accounts = accountsResult || [];
-      console.log('[SidebarWPEInjector] WPE accounts loaded:', this.accounts.length);
+      console.log('[SidebarWPEInjector] 🔵 About to invoke capi:get-accounts IPC handler...');
+      try {
+        const accountsResult = await this.electron.ipcRenderer.invoke('capi:get-accounts');
+        console.log('[SidebarWPEInjector] ✓ capi:get-accounts responded:', accountsResult);
+
+        // Check if result indicates auth failure
+        if (accountsResult && accountsResult.error === 'UNAUTHORIZED') {
+          console.log('[SidebarWPEInjector] WPE not authenticated');
+          this.isWPEAuthenticated = false;
+          this.accounts = [];
+        } else {
+          this.isWPEAuthenticated = true;
+          this.accounts = accountsResult || [];
+          console.log('[SidebarWPEInjector] WPE accounts loaded:', this.accounts.length);
+          if (this.accounts.length > 0) {
+            console.log('[SidebarWPEInjector] Sample account:', JSON.stringify(this.accounts[0]));
+          }
+        }
+      } catch (err) {
+        console.error('[SidebarWPEInjector] ❌ Failed to invoke capi:get-accounts:', err);
+        this.isWPEAuthenticated = false;
+        this.accounts = [];
+      }
 
       // Fetch WPE sites
       console.log('[SidebarWPEInjector] Fetching WPE sites...');
       const wpeSitesResult = await this.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES);
       this.wpeSites = wpeSitesResult?.sites || [];
       console.log('[SidebarWPEInjector] WPE sites loaded:', this.wpeSites.length);
+      if (this.wpeSites.length > 0) {
+        console.log('[SidebarWPEInjector] Sample WPE site:', JSON.stringify(this.wpeSites[0]).slice(0, 300));
+      }
 
       // Fetch index status
       console.log('[SidebarWPEInjector] Fetching index status...');
@@ -93,11 +133,6 @@ export class SidebarWPEInjector {
       // GET_FLEET_STATUS returns an array of IndexEntry objects directly
       this.indexedSiteIds = new Set((indexEntries || []).map((e: any) => e.siteId));
       console.log('[SidebarWPEInjector] Index status loaded:', this.indexedSiteIds.size);
-
-      // Auto-expand first account on initial load
-      if (this.accounts.length > 0 && this.expandedAccounts.size === 0) {
-        this.expandedAccounts.add(this.accounts[0].id);
-      }
 
       console.log('[SidebarWPEInjector] Data load complete');
 
@@ -120,7 +155,7 @@ export class SidebarWPEInjector {
       /* Separator line before WPE sites section */
       .nexus-wpe-separator {
         height: 1px;
-        background-color: var(--color-neutral-20, rgba(0, 0, 0, 0.1));
+        background-color: var(--color-border, var(--color-neutral-20, rgba(0, 0, 0, 0.1)));
         margin: 8px 0;
       }
 
@@ -209,28 +244,502 @@ export class SidebarWPEInjector {
         opacity: 0.6;
       }
 
-      /* Tree view styles */
-      .nexus-tree-account-row:hover,
-      .nexus-tree-site-row:hover {
-        background: rgba(255, 255, 255, 0.05);
+      /* Account divider (matches Local's group dividers) */
+      .nexus-account-divider {
+        height: 1px;
+        background-color: var(--color-border, rgba(0, 0, 0, 0.1));
+        margin: 12px 0 8px 0;
       }
 
-      .nexus-tree-install-link {
+      /* Account header (matches Local's group header) */
+      .nexus-account-header {
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        user-select: none;
+        cursor: default;
+      }
+
+      .nexus-account-meta {
+        margin-left: 6px;
+        opacity: 0.5;
+        font-size: 11px;
+        font-weight: 400;
+        color: var(--color-text-secondary, #6b7280);
+      }
+
+      /* Site name row (non-interactive sub-header) */
+      .nexus-site-name-row {
+        padding: 6px 16px 6px 28px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--color-text-secondary, #6b7280);
+        user-select: none;
+        cursor: default;
+      }
+
+      /* Environment row (clickable, matches Local's site items) */
+      .nexus-env-link {
+        display: flex;
+        align-items: center;
+        padding: 5px 16px 5px 44px;
+        font-size: 12px;
+        color: var(--color-text-secondary, #6b7280);
+        text-decoration: none;
+        cursor: pointer;
         transition: background 0.15s ease;
+        gap: 6px;
+        border-left: 3px solid transparent;
       }
 
-      .nexus-tree-install-link:visited,
-      .nexus-tree-install-link:link,
-      .nexus-tree-install-link:active {
-        color: rgba(255, 255, 255, 0.75) !important;
+      .nexus-env-link:visited,
+      .nexus-env-link:link,
+      .nexus-env-link:active {
+        color: var(--color-text-secondary, #6b7280) !important;
+      }
+
+      .nexus-env-link:hover {
+        background: var(--color-background-hover, rgba(0, 0, 0, 0.05));
+        border-left-color: #0ECAD4;
+      }
+
+      .nexus-env-arrow {
+        opacity: 0.4;
+        margin-right: 4px;
+      }
+
+      /* Hide native "Local sites" header and its parent container */
+      [class*="SiteList_Header"],
+      [class*="SitesPane_Header"],
+      [class*="SitesSidebar_Title"] {
+        display: none !important;
+      }
+
+      /* Hide the container div that holds the title */
+      div:has(> h1[class*="SitesSidebar_Title"]) {
+        display: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      /* Hide native tab elements (the "Local" label) */
+      [role="tablist"],
+      [class*="Tabs_TabList"],
+      [class*="SitesSidebar"] [role="tab"]:not(.nexus-sidebar-tab) {
+        display: none !important;
+      }
+
+      /* Hide any native tab containers */
+      div:has(> [role="tablist"]) {
+        display: none !important;
+      }
+
+      /* Style the moved toolbar to fit in our tabs */
+      .nexus-tabs-right [class*="SitesSidebar_Toolbar"] {
+        display: flex !important;
+        gap: 4px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        margin-bottom: -2px !important;
+        margin-right: 8px !important;
+        background: transparent !important;
+        border: none !important;
+        flex-shrink: 0 !important;
+      }
+
+      /* Make toolbar buttons match our styling */
+      .nexus-tabs-right [class*="SitesSidebar_Toolbar"] button {
+        margin: 0 !important;
+        padding: 6px !important;
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        flex-shrink: 0 !important;
+      }
+
+      /* Ensure WPE sync button doesn't overlap and is hidden by default */
+      .nexus-wpe-sync-btn {
+        margin-left: 4px !important;
+        flex-shrink: 0 !important;
+      }
+
+      /* Hide sync button explicitly when not needed */
+      .nexus-wpe-sync-btn[style*="display: none"] {
+        display: none !important;
+      }
+
+      /* Sidebar tabs */
+      .nexus-sidebar-tabs {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        padding: 16px 16px 0 16px;
+        border-bottom: 2px solid var(--color-border, #e5e7eb);
+        background: var(--color-background-primary, #fff);
+        position: relative;
+        z-index: 10;
+      }
+
+      .nexus-tabs-left {
+        display: flex;
+        gap: 0;
+        flex: 1;
+      }
+
+      .nexus-tabs-right {
+        display: flex;
+        gap: 4px;
+        margin-left: auto;
+        align-items: center;
+        padding-right: 4px;
+      }
+
+      .nexus-sidebar-tab {
+        padding: 8px 20px 12px 20px;
+        border: none;
+        border-bottom: 3px solid transparent;
+        background: transparent;
+        color: var(--color-text-secondary, #6b7280);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer !important;
+        pointer-events: auto !important;
+        user-select: none;
+        -webkit-user-select: none;
+        transition: all 0.2s ease;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        margin-bottom: -2px;
+        white-space: nowrap;
+        position: relative;
+        z-index: 11;
+        outline: none;
+      }
+
+      .nexus-sidebar-tab * {
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .nexus-sidebar-tab:hover:not(.active) {
+        color: var(--color-text-primary, #111);
+        border-bottom-color: var(--color-border, #d1d5db);
+      }
+
+      .nexus-sidebar-tab.active {
+        color: var(--color-brand-primary, #51bb7b);
+        border-bottom-color: var(--color-brand-primary, #51bb7b);
+      }
+
+      .nexus-sidebar-tab .count {
+        opacity: 0.6;
+        font-size: 12px;
+        font-weight: 500;
+        margin-left: 4px;
+      }
+
+      .nexus-sidebar-tab.active .count {
+        opacity: 0.8;
+      }
+
+      /* Tab action buttons */
+      .nexus-tab-action {
+        background: none !important;
+        border: none !important;
+        color: var(--color-text-secondary, #6b7280) !important;
+        cursor: pointer !important;
+        padding: 6px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 4px !important;
+        transition: all 0.15s !important;
+        margin-bottom: -2px !important;
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        flex-shrink: 0 !important;
+      }
+
+      .nexus-tab-action:hover {
+        color: var(--color-text-primary, #111) !important;
+        background: var(--color-background-hover, rgba(0, 0, 0, 0.05)) !important;
+      }
+
+      .nexus-tab-action svg {
+        width: 16px !important;
+        height: 16px !important;
+      }
+
+      /* Preserve the icon styling from native buttons */
+      .nexus-tab-action path {
+        fill: currentColor !important;
+      }
+
+      /* Empty state for WPE tab */
+      .nexus-wpe-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 24px;
+        text-align: center;
+        min-height: 400px;
+      }
+
+      .nexus-wpe-empty-icon {
+        width: 120px;
+        height: 120px;
+        margin-bottom: 24px;
+        opacity: 0.6;
+      }
+
+      .nexus-wpe-empty-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--color-text-primary, #111);
+        margin-bottom: 12px;
+      }
+
+      .nexus-wpe-empty-description {
+        font-size: 14px;
+        color: var(--color-text-secondary, #6b7280);
+        line-height: 1.6;
+        max-width: 400px;
+        margin-bottom: 24px;
+      }
+
+      .nexus-wpe-connect-btn {
+        background: var(--color-brand-primary, #51bb7b);
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 12px 24px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .nexus-wpe-connect-btn:hover {
+        background: var(--color-brand-primary-hover, #47a86d);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(81, 187, 123, 0.3);
+      }
+
+      .nexus-wpe-connect-btn:active {
+        transform: translateY(0);
       }
     `;
     document.head.appendChild(style);
   }
 
   private tryInject(): void {
+    this.injectTabs();
     this.addBadgesToLocalSites();
     this.injectWPESites();
+    this.updateVisibility();
+  }
+
+  /**
+   * Switch between tabs without re-injecting everything
+   */
+  private switchTab(): void {
+    // Update tab button states
+    document.querySelectorAll('.nexus-sidebar-tab').forEach((tab, index) => {
+      const isActive = (index === 0 && this.activeTab === 'local') || (index === 1 && this.activeTab === 'wpe');
+      if (isActive) {
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+      } else {
+        tab.classList.remove('active');
+        tab.setAttribute('aria-selected', 'false');
+      }
+    });
+
+    // Update WPE sync button visibility
+    const wpeSyncBtn = document.querySelector('.nexus-wpe-sync-btn') as HTMLElement;
+    if (wpeSyncBtn) {
+      wpeSyncBtn.style.display = this.activeTab === 'wpe' ? 'flex' : 'none';
+    }
+
+    // Update content visibility
+    this.updateVisibility();
+  }
+
+  /**
+   * Inject tabs at the top of the sidebar
+   */
+  private injectTabs(): void {
+    // Check if tabs already exist
+    const existingTabs = document.getElementById(TABS_CONTAINER_ID);
+    if (existingTabs) {
+      console.log('[SidebarWPEInjector] Tabs already exist, skipping injection');
+      return;
+    }
+
+    // Find the Sites sidebar - try multiple possible containers
+    const sidebarContainer = document.querySelector('[class*="SitesSidebar_Container"]')
+                          || document.querySelector('[class*="SitesPane"]')
+                          || document.getElementById('SiteList')?.parentElement;
+
+    if (!sidebarContainer) {
+      console.warn('[SidebarWPEInjector] Could not find sidebar container');
+      return;
+    }
+
+    // Create tabs container
+    const tabsContainer = document.createElement('div');
+    tabsContainer.id = TABS_CONTAINER_ID;
+    tabsContainer.className = 'nexus-sidebar-tabs';
+
+    // Left side - tabs
+    const tabsLeft = document.createElement('div');
+    tabsLeft.className = 'nexus-tabs-left';
+
+    // Local tab
+    const localTab = document.createElement('button');
+    localTab.className = `nexus-sidebar-tab ${this.activeTab === 'local' ? 'active' : ''}`;
+    localTab.innerHTML = `Local<span class="count">${this.localSites.length}</span>`;
+    localTab.setAttribute('role', 'tab');
+    localTab.setAttribute('aria-selected', this.activeTab === 'local' ? 'true' : 'false');
+    localTab.setAttribute('type', 'button'); // Prevent form submission
+    localTab.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[SidebarWPEInjector] Local tab clicked');
+      this.activeTab = 'local';
+      localStorage.setItem(ACTIVE_TAB_KEY, 'local');
+      this.switchTab();
+    });
+
+    // WPE tab
+    const wpeTab = document.createElement('button');
+    wpeTab.className = `nexus-sidebar-tab ${this.activeTab === 'wpe' ? 'active' : ''}`;
+    wpeTab.innerHTML = `WP Engine<span class="count">${this.wpeSites.length}</span>`;
+    wpeTab.setAttribute('role', 'tab');
+    wpeTab.setAttribute('aria-selected', this.activeTab === 'wpe' ? 'true' : 'false');
+    wpeTab.setAttribute('type', 'button'); // Prevent form submission
+    wpeTab.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[SidebarWPEInjector] WPE tab clicked');
+      this.activeTab = 'wpe';
+      localStorage.setItem(ACTIVE_TAB_KEY, 'wpe');
+      this.switchTab();
+    });
+
+    tabsLeft.appendChild(localTab);
+    tabsLeft.appendChild(wpeTab);
+
+    // Right side - actions
+    const tabsRight = document.createElement('div');
+    tabsRight.className = 'nexus-tabs-right';
+
+    // Find and move the native toolbar into our tabs ONCE (preserves event handlers)
+    const toolbar = document.querySelector('[class*="SitesSidebar_Toolbar"]:not([data-moved])');
+    if (toolbar) {
+      // Mark as moved to prevent re-moving on re-inject
+      toolbar.setAttribute('data-moved', 'true');
+      // Move (not clone) the toolbar to preserve React event handlers
+      tabsRight.appendChild(toolbar);
+      console.log('[SidebarWPEInjector] Moved toolbar into tabs');
+    } else {
+      // Toolbar already moved, find it and re-append
+      const movedToolbar = document.querySelector('[class*="SidesSidebar_Toolbar"][data-moved]');
+      if (movedToolbar) {
+        tabsRight.appendChild(movedToolbar);
+        console.log('[SidebarWPEInjector] Re-appended existing toolbar');
+      }
+    }
+
+    // Now inject the sync button INSIDE the toolbar (only if not already there)
+    const toolbarEl = document.querySelector('[class*="SitesSidebar_Toolbar"][data-moved]') as HTMLElement;
+    if (toolbarEl && !toolbarEl.querySelector('.nexus-wpe-sync-btn')) {
+      const syncButton = document.createElement('button');
+      syncButton.className = 'nexus-tab-action nexus-wpe-sync-btn';
+      syncButton.title = 'Sync WPE sites';
+      syncButton.style.cssText = `
+        display: ${this.activeTab === 'wpe' ? 'flex' : 'none'} !important;
+      `;
+      syncButton.innerHTML = `
+        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M13.65 2.35C12.2 0.9 10.21 0 8 0 3.58 0 0 3.58 0 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L9 7h7V0l-2.35 2.35z" fill="currentColor"/>
+        </svg>
+      `;
+      syncButton.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        syncButton.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 16c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8zm0-14c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6z" opacity="0.3"/><path d="M8 0c4.4 0 8 3.6 8 8h-2c0-3.3-2.7-6-6-6V0z"><animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="1s" repeatCount="indefinite"/></path></svg>`;
+        await this.loadData();
+        // Don't re-inject, just update the data
+        syncButton.innerHTML = `
+          <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13.65 2.35C12.2 0.9 10.21 0 8 0 3.58 0 0 3.58 0 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L9 7h7V0l-2.35 2.35z" fill="currentColor"/>
+          </svg>
+        `;
+      });
+
+      // Insert as FIRST child of toolbar (before search/sort/collapse)
+      toolbarEl.insertBefore(syncButton, toolbarEl.firstChild);
+      console.log('[SidebarWPEInjector] Injected sync button into toolbar as first child');
+    }
+
+    tabsContainer.appendChild(tabsLeft);
+    tabsContainer.appendChild(tabsRight);
+
+    // Insert tabs at the very top of the sidebar container
+    sidebarContainer.insertBefore(tabsContainer, sidebarContainer.firstChild);
+    console.log('[SidebarWPEInjector] Tabs injected at top of sidebar');
+  }
+
+  /**
+   * Update visibility of local vs WPE sites based on active tab
+   */
+  private updateVisibility(): void {
+    const siteListNav = document.getElementById('SiteList');
+    if (!siteListNav) return;
+
+    console.log('[SidebarWPEInjector] updateVisibility - activeTab:', this.activeTab);
+
+    // Find all local site elements and groups
+    const localSiteElements = document.querySelectorAll('[data-site-id]:not([data-site-id^="wpe-"])');
+    const localGroups = siteListNav.querySelectorAll('[class*="SiteListGroup"]');
+
+    // Find WPE section
+    const wpeSection = document.getElementById(WPE_SECTION_ID);
+
+    // Update WPE-specific sync button visibility
+    const wpeSyncBtn = document.querySelector('.nexus-wpe-sync-btn') as HTMLElement;
+    if (wpeSyncBtn) {
+      const shouldShow = this.activeTab === 'wpe';
+      wpeSyncBtn.style.display = shouldShow ? 'flex' : 'none';
+      console.log('[SidebarWPEInjector] Sync button display:', wpeSyncBtn.style.display);
+    }
+
+    if (this.activeTab === 'local') {
+      // Show local sites and groups, hide WPE section
+      localSiteElements.forEach(el => {
+        (el as HTMLElement).style.display = '';
+      });
+      localGroups.forEach(el => {
+        (el as HTMLElement).style.display = '';
+      });
+      if (wpeSection) {
+        wpeSection.style.display = 'none';
+      }
+    } else {
+      // Hide local sites and groups, show WPE section
+      localSiteElements.forEach(el => {
+        (el as HTMLElement).style.display = 'none';
+      });
+      localGroups.forEach(el => {
+        (el as HTMLElement).style.display = 'none';
+      });
+      if (wpeSection) {
+        wpeSection.style.display = 'block';
+      }
+    }
   }
 
   /**
@@ -283,6 +792,72 @@ export class SidebarWPEInjector {
   }
 
   /**
+   * Inject empty state when WPE is not authenticated
+   */
+  private injectWPEEmptyState(): void {
+    const siteListNav = document.getElementById('SiteList');
+    if (!siteListNav) {
+      console.warn('[SidebarWPEInjector] Could not find #SiteList nav element');
+      return;
+    }
+
+    // Remove existing WPE section
+    const existingSection = document.getElementById(WPE_SECTION_ID);
+    if (existingSection) {
+      existingSection.remove();
+    }
+
+    // Create WPE sites section with empty state
+    const wpeSection = document.createElement('div');
+    wpeSection.id = WPE_SECTION_ID;
+    wpeSection.style.cssText = 'padding-top: 4px;';
+
+    // Empty state container
+    const emptyState = document.createElement('div');
+    emptyState.className = 'nexus-wpe-empty-state';
+
+    // Icon (using WPE cloud SVG)
+    const icon = document.createElement('div');
+    icon.className = 'nexus-wpe-empty-icon';
+    icon.innerHTML = `
+      <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M60 20C37.91 20 20 37.91 20 60C20 82.09 37.91 100 60 100C82.09 100 100 82.09 100 60C100 37.91 82.09 20 60 20ZM60 90C43.43 90 30 76.57 30 60C30 43.43 43.43 30 60 30C76.57 30 90 43.43 90 60C90 76.57 76.57 90 60 90Z" fill="currentColor" opacity="0.2"/>
+        <path d="M85 50H75C75 41.72 68.28 35 60 35V25C73.81 25 85 36.19 85 50Z" fill="#0ECAD4"/>
+      </svg>
+    `;
+
+    // Title
+    const title = document.createElement('div');
+    title.className = 'nexus-wpe-empty-title';
+    title.textContent = 'Connect to get started!';
+
+    // Description
+    const description = document.createElement('div');
+    description.className = 'nexus-wpe-empty-description';
+    description.textContent = 'Connect to WP Engine to view and manage your remote WordPress sites directly from Local.';
+
+    // Connect button
+    const connectBtn = document.createElement('button');
+    connectBtn.className = 'nexus-wpe-connect-btn';
+    connectBtn.textContent = 'Connect to WP Engine';
+    connectBtn.addEventListener('click', () => {
+      // Navigate to Settings → Connected accounts
+      window.location.hash = '#/settings/connect';
+    });
+
+    emptyState.appendChild(icon);
+    emptyState.appendChild(title);
+    emptyState.appendChild(description);
+    emptyState.appendChild(connectBtn);
+
+    wpeSection.appendChild(emptyState);
+    siteListNav.appendChild(wpeSection);
+
+    this.injected = true;
+    console.log('[SidebarWPEInjector] Injected WPE empty state');
+  }
+
+  /**
    * Extract base site name from install name
    * E.g., "acflikebutton-prod" → "acflikebutton"
    */
@@ -314,17 +889,25 @@ export class SidebarWPEInjector {
 
     // Group sites by account
     const sitesByAccount = new Map<string, any[]>();
-    this.wpeSites.forEach((site) => {
+    this.wpeSites.forEach((site, index) => {
       const accountId = site.account_id || site.accountId || 'unknown';
+      if (index === 0) {
+        console.log('[SidebarWPEInjector] Sample site data:', JSON.stringify(site).slice(0, 200));
+      }
       if (!sitesByAccount.has(accountId)) {
         sitesByAccount.set(accountId, []);
       }
       sitesByAccount.get(accountId)!.push(site);
     });
 
+    console.log('[SidebarWPEInjector] Grouped sites by account:', sitesByAccount.size, 'accounts');
+    console.log('[SidebarWPEInjector] Account IDs in sites:', Array.from(sitesByAccount.keys()));
+    console.log('[SidebarWPEInjector] Loaded account IDs:', this.accounts.map(a => a.id));
+
     // Build tree for each account
     this.accounts.forEach((account) => {
       const accountSites = sitesByAccount.get(account.id) || [];
+      console.log('[SidebarWPEInjector] Account', account.name, 'has', accountSites.length, 'sites');
 
       // Group installs by site name
       const installsBySiteName = new Map<string, any[]>();
@@ -336,6 +919,7 @@ export class SidebarWPEInjector {
         installsBySiteName.get(siteName)!.push(install);
       });
 
+      console.log('[SidebarWPEInjector] Account', account.name, 'grouped into', installsBySiteName.size, 'unique sites');
       tree.set(account.id, installsBySiteName);
     });
 
@@ -343,13 +927,23 @@ export class SidebarWPEInjector {
   }
 
   /**
-   * Inject WPE sites into the sidebar (grouped tree view)
+   * Inject WPE sites into the sidebar (flat list matching Local's UX)
    */
   private injectWPESites(): void {
-    console.log('[SidebarWPEInjector] injectWPESites() called, wpeSites.length:', this.wpeSites.length);
+    console.log('[SidebarWPEInjector] injectWPESites() called');
+    console.log('[SidebarWPEInjector] wpeSites.length:', this.wpeSites.length);
+    console.log('[SidebarWPEInjector] accounts.length:', this.accounts.length);
+    console.log('[SidebarWPEInjector] isWPEAuthenticated:', this.isWPEAuthenticated);
+
+    // Show empty state if not authenticated
+    if (!this.isWPEAuthenticated) {
+      console.log('[SidebarWPEInjector] Showing WPE auth empty state');
+      this.injectWPEEmptyState();
+      return;
+    }
 
     if (this.wpeSites.length === 0 || this.accounts.length === 0) {
-      console.log('[SidebarWPEInjector] No WPE sites/accounts to inject');
+      console.log('[SidebarWPEInjector] No WPE sites/accounts to inject - wpeSites:', this.wpeSites.length, 'accounts:', this.accounts.length);
       return;
     }
 
@@ -362,211 +956,120 @@ export class SidebarWPEInjector {
     // Remove existing WPE section
     const existingSection = document.getElementById(WPE_SECTION_ID);
     if (existingSection) {
+      console.log('[SidebarWPEInjector] Removing existing WPE section');
       existingSection.remove();
     }
 
     // Build tree structure
+    console.log('[SidebarWPEInjector] Building tree structure...');
     const tree = this.buildTree();
+    console.log('[SidebarWPEInjector] Tree built with', tree.size, 'accounts');
 
     // Create WPE sites section
     const wpeSection = document.createElement('div');
     wpeSection.id = WPE_SECTION_ID;
-
-    // Add separator
-    const separator = document.createElement('div');
-    separator.className = 'nexus-wpe-separator';
-    wpeSection.appendChild(separator);
-
-    // Main header
-    const headerWrapper = document.createElement('div');
-    headerWrapper.className = 'nexus-wpe-header-wrapper';
-    headerWrapper.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 12px 8px 12px;
-      cursor: pointer;
-      user-select: none;
+    wpeSection.style.cssText = `
+      padding-top: 4px;
     `;
 
-    const headerText = document.createElement('div');
-    headerText.className = 'SiteListGroupHeader_Name';
-    headerText.style.padding = '0';
-    headerText.textContent = `WP Engine Sites (${this.accounts.length} accounts)`;
-
-    const collapseIcon = document.createElement('span');
-    collapseIcon.className = 'nexus-wpe-collapse-icon';
-    collapseIcon.textContent = this.isCollapsed ? '›' : '⌄';
-    collapseIcon.style.cssText = `font-size: 14px; opacity: 0.6;`;
-
-    headerWrapper.appendChild(headerText);
-    headerWrapper.appendChild(collapseIcon);
-    wpeSection.appendChild(headerWrapper);
-
-    // Tree container
-    const treeContainer = document.createElement('div');
-    treeContainer.className = 'nexus-wpe-tree-container';
-    treeContainer.style.display = this.isCollapsed ? 'none' : 'block';
-
-    // Render each account
-    this.accounts.forEach((account) => {
+    // Render each account with all its sites (always visible, no collapse)
+    let accountsRendered = 0;
+    this.accounts.forEach((account, accountIndex) => {
       const sitesMap = tree.get(account.id);
-      if (!sitesMap || sitesMap.size === 0) return;
+      if (!sitesMap || sitesMap.size === 0) {
+        console.log('[SidebarWPEInjector] Skipping account', account.name, '- no sites');
+        return;
+      }
 
       const totalInstalls = Array.from(sitesMap.values()).reduce((sum, installs) => sum + installs.length, 0);
 
-      // Account row
-      const accountRow = this.createAccountRow(account, sitesMap.size, totalInstalls);
-      treeContainer.appendChild(accountRow);
-
-      // Sites under this account (if expanded)
-      if (this.expandedAccounts.has(account.id)) {
-        sitesMap.forEach((installs, siteName) => {
-          const siteRow = this.createSiteRow(siteName, installs, account.id);
-          treeContainer.appendChild(siteRow);
-
-          // Installs under this site (if expanded)
-          const siteKey = `${account.id}:${siteName}`;
-          if (this.expandedSites.has(siteKey)) {
-            installs.forEach((install) => {
-              const installRow = this.createInstallRow(install);
-              treeContainer.appendChild(installRow);
-            });
-          }
-        });
+      // Divider before account (except first)
+      if (accountIndex > 0) {
+        const divider = document.createElement('div');
+        divider.className = 'nexus-account-divider';
+        wpeSection.appendChild(divider);
       }
+
+      // Account header (non-interactive)
+      const accountHeader = this.createAccountHeader(account, sitesMap.size, totalInstalls);
+      wpeSection.appendChild(accountHeader);
+      accountsRendered++;
+
+      // All sites under this account (always visible)
+      sitesMap.forEach((installs, siteName) => {
+        // Site name row (non-interactive)
+        const siteNameRow = this.createSiteNameRow(siteName);
+        wpeSection.appendChild(siteNameRow);
+
+        // All environments under this site (always visible)
+        installs.forEach((install) => {
+          const envRow = this.createEnvironmentRow(install);
+          wpeSection.appendChild(envRow);
+        });
+      });
     });
 
-    wpeSection.appendChild(treeContainer);
-
-    // Toggle main section
-    headerWrapper.addEventListener('click', () => {
-      this.isCollapsed = !this.isCollapsed;
-      treeContainer.style.display = this.isCollapsed ? 'none' : 'block';
-      collapseIcon.textContent = this.isCollapsed ? '›' : '⌄';
-    });
+    console.log('[SidebarWPEInjector] WPE section children:', wpeSection.childElementCount);
+    console.log('[SidebarWPEInjector] Accounts rendered:', accountsRendered);
 
     siteListNav.appendChild(wpeSection);
     this.injected = true;
 
-    console.log('[SidebarWPEInjector] Injected tree with', this.accounts.length, 'accounts');
+    console.log('[SidebarWPEInjector] WPE section appended to DOM');
+    console.log('[SidebarWPEInjector] Injected flat list with', this.accounts.length, 'accounts');
   }
 
   /**
-   * Create account row (level 1 of tree)
+   * Create account header (non-interactive, matches Local's group header)
    */
-  private createAccountRow(account: any, siteCount: number, installCount: number): HTMLElement {
-    const row = document.createElement('div');
-    row.className = 'nexus-tree-account-row';
-    row.style.cssText = `
-      display: flex;
-      align-items: center;
-      padding: 6px 12px 6px 24px;
-      cursor: pointer;
-      user-select: none;
-      font-size: 13px;
-      color: rgba(255, 255, 255, 0.9);
-    `;
-
-    const isExpanded = this.expandedAccounts.has(account.id);
-    const icon = document.createElement('span');
-    icon.textContent = isExpanded ? '▼' : '▶';
-    icon.style.cssText = `margin-right: 6px; font-size: 10px; opacity: 0.7;`;
+  private createAccountHeader(account: any, siteCount: number, installCount: number): HTMLElement {
+    const header = document.createElement('div');
+    header.className = 'nexus-account-header';
 
     const name = document.createElement('span');
     name.textContent = account.name;
-    name.style.fontWeight = '500';
 
     const meta = document.createElement('span');
-    meta.textContent = ` (${siteCount} sites, ${installCount} installs)`;
-    meta.style.cssText = `margin-left: 4px; opacity: 0.6; font-size: 12px;`;
+    meta.className = 'nexus-account-meta';
+    meta.textContent = `(${siteCount} sites, ${installCount} envs)`;
 
-    row.appendChild(icon);
-    row.appendChild(name);
-    row.appendChild(meta);
+    header.appendChild(name);
+    header.appendChild(meta);
 
-    row.addEventListener('click', () => {
-      if (this.expandedAccounts.has(account.id)) {
-        this.expandedAccounts.delete(account.id);
-      } else {
-        this.expandedAccounts.add(account.id);
-      }
-      this.tryInject();
-    });
-
-    return row;
+    return header;
   }
 
   /**
-   * Create site row (level 2 of tree)
+   * Create site name row (non-interactive sub-header)
    */
-  private createSiteRow(siteName: string, installs: any[], accountId: string): HTMLElement {
+  private createSiteNameRow(siteName: string): HTMLElement {
     const row = document.createElement('div');
-    row.className = 'nexus-tree-site-row';
-    row.style.cssText = `
-      display: flex;
-      align-items: center;
-      padding: 5px 12px 5px 40px;
-      cursor: pointer;
-      user-select: none;
-      font-size: 13px;
-      color: rgba(255, 255, 255, 0.85);
-    `;
-
-    const siteKey = `${accountId}:${siteName}`;
-    const isExpanded = this.expandedSites.has(siteKey);
-    const icon = document.createElement('span');
-    icon.textContent = isExpanded ? '▼' : '▶';
-    icon.style.cssText = `margin-right: 6px; font-size: 9px; opacity: 0.6;`;
-
-    const name = document.createElement('span');
-    name.textContent = siteName;
-
-    const meta = document.createElement('span');
-    meta.textContent = ` (${installs.length} env${installs.length === 1 ? '' : 's'})`;
-    meta.style.cssText = `margin-left: 4px; opacity: 0.5; font-size: 11px;`;
-
-    row.appendChild(icon);
-    row.appendChild(name);
-    row.appendChild(meta);
-
-    row.addEventListener('click', () => {
-      if (this.expandedSites.has(siteKey)) {
-        this.expandedSites.delete(siteKey);
-      } else {
-        this.expandedSites.add(siteKey);
-      }
-      this.tryInject();
-    });
+    row.className = 'nexus-site-name-row';
+    row.textContent = siteName;
 
     return row;
   }
 
   /**
-   * Create install row (level 3 of tree - actual sites)
+   * Create environment row (clickable link with arrow, matches Local's site items)
    */
-  private createInstallRow(install: any): HTMLElement {
+  private createEnvironmentRow(install: any): HTMLElement {
     const link = document.createElement('a');
-    link.className = 'nexus-tree-install-link';
-    link.style.cssText = `
-      display: flex;
-      align-items: center;
-      padding: 4px 12px 4px 56px;
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.75);
-      text-decoration: none;
-      cursor: pointer;
-      gap: 6px;
-    `;
+    link.className = 'nexus-env-link';
 
     const siteId = install.id || `wpe-${install.remote_install_id}`;
     link.setAttribute('data-site-id', siteId);
+
+    // Arrow prefix
+    const arrow = document.createElement('span');
+    arrow.className = 'nexus-env-arrow';
+    arrow.textContent = '→';
+    link.appendChild(arrow);
 
     // Environment name
     const env = document.createElement('span');
     env.textContent = install.environment || 'production';
     env.style.flexShrink = '0';
-
     link.appendChild(env);
 
     // Badges
@@ -585,14 +1088,6 @@ export class SidebarWPEInjector {
       e.preventDefault();
       const installId = install.id || install.remote_install_id || install.install_id;
       window.location.hash = `#/main/site-info-wpe/${installId}`;
-    });
-
-    // Hover effect
-    link.addEventListener('mouseenter', () => {
-      link.style.background = 'rgba(255, 255, 255, 0.05)';
-    });
-    link.addEventListener('mouseleave', () => {
-      link.style.background = '';
     });
 
     return link;
@@ -764,9 +1259,17 @@ export class SidebarWPEInjector {
       if (timeout) clearTimeout(timeout);
 
       timeout = setTimeout(() => {
+        // Check if tabs disappeared and need re-injection
+        const tabs = document.getElementById(TABS_CONTAINER_ID);
+        if (!tabs) {
+          console.log('[SidebarWPEInjector] Tabs disappeared, re-injecting');
+          this.tryInject();
+          return;
+        }
+
         // Check if WPE section disappeared and needs re-injection
         const wpeSection = document.getElementById(WPE_SECTION_ID);
-        if (!wpeSection && this.wpeSites.length > 0) {
+        if (!wpeSection && this.wpeSites.length > 0 && this.activeTab === 'wpe') {
           console.log('[SidebarWPEInjector] WPE section disappeared, re-injecting');
           this.injected = false;
           this.injectWPESites();
@@ -774,6 +1277,9 @@ export class SidebarWPEInjector {
 
         // Check if local site badges need to be added (for newly rendered sites)
         this.addBadgesToLocalSites();
+
+        // Update visibility in case DOM changed
+        this.updateVisibility();
       }, 100); // 100ms debounce
     });
 
@@ -788,10 +1294,25 @@ export class SidebarWPEInjector {
       this.observer.disconnect();
       this.observer = null;
     }
+    document.getElementById(TABS_CONTAINER_ID)?.remove();
     document.getElementById(WPE_SECTION_ID)?.remove();
     document.getElementById(STYLE_ID)?.remove();
 
     // Remove all badges
     document.querySelectorAll('.nexus-badge').forEach(el => el.remove());
+
+    // Restore local sites and groups visibility
+    const localSiteElements = document.querySelectorAll('[data-site-id]:not([data-site-id^="wpe-"])');
+    localSiteElements.forEach(el => {
+      (el as HTMLElement).style.display = '';
+    });
+
+    const siteListNav = document.getElementById('SiteList');
+    if (siteListNav) {
+      const localGroups = siteListNav.querySelectorAll('[class*="SiteListGroup"]');
+      localGroups.forEach(el => {
+        (el as HTMLElement).style.display = '';
+      });
+    }
   }
 }

@@ -117,7 +117,7 @@ const deleteBtnStyle: React.CSSProperties = {
   borderRadius: '4px',
   border: 'none',
   backgroundColor: '#ef444420',
-  color: '#ef4444',
+  color: 'var(--color-error, #ef4444)',
   fontSize: '11px',
   fontWeight: 600,
   cursor: 'pointer',
@@ -210,7 +210,7 @@ const errorStyle: React.CSSProperties = {
   border: '1px solid #ef4444',
   borderRadius: '6px',
   backgroundColor: '#ef444410',
-  color: '#ef4444',
+  color: 'var(--color-error, #ef4444)',
   fontSize: '13px',
 };
 

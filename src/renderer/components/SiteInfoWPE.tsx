@@ -237,7 +237,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
         fontSize: '15px',
         fontWeight: 600,
         marginBottom: '12px',
-        color: '#111827',
+        color: 'var(--color-text-primary, #111827)',
       },
       row: {
         display: 'flex',
@@ -247,11 +247,11 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
       },
       label: {
         fontSize: '14px',
-        color: '#6b7280',
+        color: 'var(--color-text-secondary, #6b7280)',
       },
       value: {
         fontSize: '14px',
-        color: '#111827',
+        color: 'var(--color-text-primary, #111827)',
       },
       button: {
         padding: '10px 18px',
@@ -259,8 +259,8 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
         fontSize: '13px',
         fontWeight: 500,
         cursor: 'pointer',
-        border: '1px solid #d1d5db',
-        background: '#fff',
+        border: '1px solid var(--color-border, #d1d5db)',
+        background: 'var(--color-background-primary, #fff)',
         marginRight: '8px',
       },
       buttonPrimary: {
@@ -270,7 +270,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
         fontWeight: 600,
         cursor: 'pointer',
         border: 'none',
-        background: '#51bb7b',
+        background: 'var(--color-brand-primary, #51bb7b)',
         color: '#fff',
         marginRight: '8px',
       },
@@ -289,7 +289,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
 
     if (error || !site) {
       return React.createElement('div', { style: styles.container },
-        React.createElement('h2', { style: { color: '#ef4444' } }, 'Error'),
+        React.createElement('h2', { style: { color: 'var(--color-error, #ef4444)' } }, 'Error'),
         React.createElement('p', null, error || 'Site not found'),
         React.createElement('button', {
           style: styles.button,
@@ -301,7 +301,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
     return React.createElement('div', { style: styles.container },
       React.createElement('div', { style: { marginBottom: '24px' } },
         React.createElement('h1', { style: { fontSize: '24px', marginBottom: '4px' } }, site.name),
-        React.createElement('p', { style: { color: '#6b7280', fontSize: '14px' } },
+        React.createElement('p', { style: { color: 'var(--color-text-secondary, #6b7280)', fontSize: '14px' } },
           `☁️ WP Engine Site • ${site.domain}`
         ),
       ),
@@ -344,7 +344,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
         ),
         React.createElement('div', { style: styles.row },
           React.createElement('span', { style: styles.label }, 'Status'),
-          React.createElement('span', { style: { ...styles.value, color: '#51bb7b', fontWeight: 600 } },
+          React.createElement('span', { style: { ...styles.value, color: 'var(--color-brand-primary, #51bb7b)', fontWeight: 600 } },
             site.status || 'active'
           )
         ),
@@ -383,7 +383,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
               }
             }, indexStatus?.indexed ? '● Indexed' : '○ Not indexed'),
             React.createElement('a', {
-              style: { color: '#51bb7b', cursor: 'pointer', fontSize: '14px' },
+              style: { color: 'var(--color-brand-primary, #51bb7b)', cursor: 'pointer', fontSize: '14px' },
               onClick: this.handleReindex,
             }, 'Re-index')
           )
@@ -472,14 +472,14 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
           },
         },
           React.createElement('p', {
-            style: { color: '#ef4444', marginBottom: '16px' },
+            style: { color: 'var(--color-error, #ef4444)', marginBottom: '16px' },
           }, `Error loading site: ${error || 'Site not found'}`),
           React.createElement('button', {
             style: {
               padding: '8px 16px',
-              border: '1px solid #d1d5db',
+              border: '1px solid var(--color-border, #d1d5db)',
               borderRadius: '4px',
-              background: '#fff',
+              background: 'var(--color-background-primary, #fff)',
               cursor: 'pointer',
             },
             onClick: () => window.location.hash = '#/main/fleet',
@@ -494,7 +494,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
         React.createElement('div', {
           style: {
             padding: '24px 32px 16px 32px',
-            borderBottom: '1px solid #e5e7eb',
+            borderBottom: '1px solid var(--color-border, #e5e7eb)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -513,7 +513,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
                 fontSize: '24px',
                 fontWeight: 400,
                 margin: 0,
-                color: '#1f2937',
+                color: 'var(--color-text-primary, #1f2937)',
                 letterSpacing: '-0.01em',
               },
             }, site.name),
@@ -535,7 +535,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
             // "WP Engine" text
             React.createElement('span', {
               style: {
-                color: '#9ca3af',
+                color: 'var(--color-text-secondary, #9ca3af)',
                 fontSize: '13px',
                 marginLeft: '4px',
               },
@@ -556,8 +556,8 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
                 padding: '8px 16px',
                 border: '1.5px solid #51bb7b',
                 borderRadius: '4px',
-                color: '#51bb7b',
-                background: '#fff',
+                color: 'var(--color-brand-primary, #51bb7b)',
+                background: 'var(--color-background-primary, #fff)',
                 fontWeight: 500,
                 fontSize: '13px',
                 cursor: 'pointer',
@@ -570,8 +570,8 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
                 padding: '8px 16px',
                 border: '1.5px solid #51bb7b',
                 borderRadius: '4px',
-                color: '#51bb7b',
-                background: '#fff',
+                color: 'var(--color-brand-primary, #51bb7b)',
+                background: 'var(--color-background-primary, #fff)',
                 fontWeight: 500,
                 fontSize: '13px',
                 cursor: 'pointer',
@@ -621,7 +621,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
           React.createElement(TableListRow, {
             label: 'Status',
           }, React.createElement('span', {
-            style: { color: '#51bb7b', fontWeight: 600 },
+            style: { color: 'var(--color-brand-primary, #51bb7b)', fontWeight: 600 },
           }, site.status || 'active')),
         ),
 
@@ -680,7 +680,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
             left: 0,
             right: 0,
             height: '60px',
-            background: '#fff',
+            background: 'var(--color-background-primary, #fff)',
             borderTop: '1px solid #e5e7eb',
             display: 'flex',
             alignItems: 'center',
@@ -696,7 +696,7 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
             disabled: syncing,
             inline: true,
             style: {
-              color: '#6b7280',
+              color: 'var(--color-text-secondary, #6b7280)',
               fontSize: '13px',
               padding: '6px 12px',
             },
@@ -711,10 +711,10 @@ export class SiteInfoWPE extends React.Component<SiteInfoWPEProps, SiteInfoWPESt
               alignItems: 'center',
               gap: '8px',
               padding: '8px 16px',
-              background: '#fff',
+              background: 'var(--color-background-primary, #fff)',
               border: '1.5px solid #d1d5db',
               borderRadius: '4px',
-              color: '#374151',
+              color: 'var(--color-text-primary, #374151)',
               fontSize: '13px',
               fontWeight: 500,
               cursor: pulling ? 'not-allowed' : 'pointer',

@@ -182,7 +182,7 @@ const errorStyle: React.CSSProperties = {
   borderRadius: '6px',
   backgroundColor: '#fef2f2',
   border: '1px solid #fca5a5',
-  color: '#dc2626',
+  color: 'var(--color-error, #dc2626)',
   fontSize: '13px',
 };
 

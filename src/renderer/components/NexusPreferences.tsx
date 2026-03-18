@@ -708,7 +708,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
             React.createElement('div', {
               style: {
                 fontSize: '12px',
-                color: '#dc2626',
+                color: 'var(--color-error, #dc2626)',
               },
             }, wpeSyncError),
           )

@@ -48,7 +48,7 @@ export class ContentBrowser extends React.Component<ContentBrowserProps> {
         React.createElement('p', {
           style: {
             fontSize: '14px',
-            color: '#6b7280',
+            color: 'var(--color-text-secondary, #6b7280)',
             margin: 0,
           },
         }, 'Search and browse indexed content across all your WordPress sites'),

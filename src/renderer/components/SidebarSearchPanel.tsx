@@ -86,7 +86,7 @@ const titleStyle: React.CSSProperties = {
 const closeButtonStyle: React.CSSProperties = {
   background: 'none',
   border: 'none',
-  color: '#999',
+  color: 'var(--color-text-tertiary, #999)',
   fontSize: '24px',
   cursor: 'pointer',
   padding: 0,
@@ -113,7 +113,7 @@ const toggleContainerStyle: React.CSSProperties = {
 
 const toggleLabelStyle: React.CSSProperties = {
   fontSize: '12px',
-  color: '#999',
+  color: 'var(--color-text-tertiary, #999)',
 };
 
 const inputStyle: React.CSSProperties = {
@@ -145,7 +145,7 @@ const secondaryButtonStyle: React.CSSProperties = {
   ...buttonStyle,
   backgroundColor: 'transparent',
   border: '1px solid #3d3d3d',
-  color: '#999',
+  color: 'var(--color-text-tertiary, #999)',
 };
 
 const exampleStyle: React.CSSProperties = {
@@ -427,7 +427,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
       conversation.length === 0 ? React.createElement('div', {
         style: { marginTop: '16px' },
       },
-        React.createElement('div', { style: { fontSize: '11px', color: '#666', marginBottom: '8px' } }, '💡 Try these:'),
+        React.createElement('div', { style: { fontSize: '11px', color: 'var(--color-text-secondary, #666)', marginBottom: '8px' } }, '💡 Try these:'),
         EXAMPLE_QUERIES.map((ex, idx) =>
           React.createElement('div', {
             key: idx,
@@ -443,7 +443,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     const { loadingOptions, searchText, selectedPlugins, selectedPhpVersions, selectedWpVersions, availablePlugins, availablePhpVersions, availableWpVersions, loading } = this.state;
 
     if (loadingOptions) {
-      return React.createElement('div', { style: { fontSize: '12px', color: '#999', padding: '20px', textAlign: 'center' } },
+      return React.createElement('div', { style: { fontSize: '12px', color: 'var(--color-text-tertiary, #999)', padding: '20px', textAlign: 'center' } },
         'Loading filter options...',
       );
     }
@@ -464,7 +464,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     const labelStyle: React.CSSProperties = {
       fontSize: '11px',
       fontWeight: 600,
-      color: '#999',
+      color: 'var(--color-text-tertiary, #999)',
       marginBottom: '6px',
       display: 'block',
     };
@@ -667,7 +667,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
                   left: aiMode ? '26px' : '2px',
                   width: '20px',
                   height: '20px',
-                  backgroundColor: '#fff',
+                  backgroundColor: 'var(--color-background-primary, #fff)',
                   borderRadius: '50%',
                   transition: 'left 0.3s',
                 },

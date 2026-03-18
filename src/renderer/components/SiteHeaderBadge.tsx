@@ -83,7 +83,7 @@ export class SiteHeaderBadge extends React.Component<SiteHeaderBadgeProps, SiteH
           style: {
             fontSize: '12px',
             fontWeight: 500,
-            color: '#666',
+            color: 'var(--color-text-secondary, #666)',
           },
         },
         environment ? `WP Engine (${environment})` : 'WP Engine',
