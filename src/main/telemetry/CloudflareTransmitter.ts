@@ -47,6 +47,7 @@ export interface TelemetryEvent {
 
   // Tool call metrics (if event_type='tool_call')
   tool_name?: string;            // 'wp_plugin_list', 'search_site_content'
+  access_method?: 'mcp' | 'cli'; // How was tool invoked
   success?: boolean;             // Did it succeed?
   duration_ms?: number;          // How long did it take?
   error_category?: string;       // 'site_not_found', 'timeout', etc.
@@ -255,11 +256,13 @@ export class CloudflareTransmitter {
     toolName: string,
     durationMs: number,
     success: boolean,
+    accessMethod?: 'mcp' | 'cli',
     errorCategory?: ErrorCategory,
   ): void {
     this.recordEvent({
       event_type: 'tool_call',
       tool_name: toolName,
+      access_method: accessMethod,
       duration_ms: durationMs,
       success,
       error_category: errorCategory,

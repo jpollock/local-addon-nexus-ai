@@ -237,7 +237,8 @@ export class ChatService {
         name: toolCall.name,
       });
 
-      const result = await this.registry.call(toolCall.name, toolCall.arguments, this.services);
+      // Mark as 'mcp' since chat is AI agent interaction (similar to MCP)
+      const result = await this.registry.call(toolCall.name, toolCall.arguments, this.services, 'mcp');
       const text = result.content.map((c) => c.text).join('\n');
 
       this.emit(sessionId(session), {
@@ -258,7 +259,8 @@ export class ChatService {
       name: toolCall.name,
     });
 
-    const result = await this.registry.call(toolCall.name, toolCall.arguments, this.services);
+    // Mark as 'mcp' since chat is AI agent interaction (similar to MCP)
+    const result = await this.registry.call(toolCall.name, toolCall.arguments, this.services, 'mcp');
     const text = result.content.map((c) => c.text).join('\n');
 
     this.emit(sessionId(session), {

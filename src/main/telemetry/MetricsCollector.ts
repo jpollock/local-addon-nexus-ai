@@ -71,7 +71,12 @@ export class MetricsCollector {
   /**
    * Record a tool call (duration in ms)
    */
-  recordToolCall(toolName: string, duration_ms: number, isError: boolean = false): void {
+  recordToolCall(
+    toolName: string,
+    duration_ms: number,
+    isError: boolean = false,
+    accessMethod?: 'mcp' | 'cli',
+  ): void {
     // Track duration
     const durations = this.toolCalls.get(toolName) || [];
     durations.push(duration_ms);
@@ -92,7 +97,7 @@ export class MetricsCollector {
     }
 
     // Transmit to Cloudflare for anonymous analytics (fire-and-forget)
-    CloudflareTransmitter.recordToolCall(toolName, duration_ms, !isError);
+    CloudflareTransmitter.recordToolCall(toolName, duration_ms, !isError, accessMethod);
   }
 
   /**

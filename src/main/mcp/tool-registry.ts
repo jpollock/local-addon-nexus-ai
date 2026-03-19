@@ -1,7 +1,9 @@
 import { McpToolHandler, McpToolDefinition, McpToolResult, NexusServices } from './types';
 import { createLogger } from '../logging/Logger';
+import { getMetrics } from '../telemetry/MetricsCollector';
 
 const logger = createLogger('ToolRegistry');
+const metrics = getMetrics();
 
 /**
  * Central registry for MCP tools. Modules register handlers during startup.
@@ -50,13 +52,18 @@ export class ToolRegistry {
    * - MCP Server: Uses McpSafetyWrapper
    * - CLI: Handles confirmations in CLI commands
    * - GraphQL: Calls this directly (no confirmations needed)
+   *
+   * @param accessMethod - 'mcp' if called from MCP server, 'cli' if called from CLI/GraphQL
    */
   async call(
     name: string,
     args: Record<string, unknown>,
     services: NexusServices,
+    accessMethod?: 'mcp' | 'cli',
   ): Promise<McpToolResult> {
-    logger.debug(`call: name="${name}"`, { args });
+    const startTime = Date.now();
+    logger.debug(`call: name="${name}" via ${accessMethod || 'unknown'}`, { args });
+
     const handler = this.handlers.get(name);
     if (!handler) {
       logger.error(`Unknown tool: "${name}"`);
@@ -79,10 +86,20 @@ export class ToolRegistry {
     try {
       logger.debug(`Executing handler for "${name}"`);
       const result = await handler.execute(args, services);
-      logger.debug(`Handler "${name}" completed`, { isError: result.isError });
+      const duration = Date.now() - startTime;
+
+      // Record metrics with access method
+      metrics.recordToolCall(name, duration, result.isError || false, accessMethod);
+
+      logger.debug(`Handler "${name}" completed in ${duration}ms`, { isError: result.isError });
       return result;
     } catch (err) {
+      const duration = Date.now() - startTime;
       const message = err instanceof Error ? err.message : String(err);
+
+      // Record error metrics
+      metrics.recordToolCall(name, duration, true, accessMethod);
+
       logger.error(`Error in handler "${name}"`, { message, stack: err instanceof Error ? err.stack : undefined });
       return {
         content: [{ type: 'text', text: `Tool error: ${message}` }],

@@ -81,7 +81,8 @@ export class McpSafetyWrapper {
     delete handlerArgs._confirmationToken;
 
     // Call tool registry (which calls the handler)
-    const result = await this.registry.call(name, handlerArgs, services);
+    // Mark as 'mcp' access since this is the MCP server path
+    const result = await this.registry.call(name, handlerArgs, services, 'mcp');
 
     // Only audit log if tool executed (not unknown/unavailable)
     const errorMessage = result.content[0]?.text || '';

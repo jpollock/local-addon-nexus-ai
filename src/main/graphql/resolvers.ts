@@ -673,7 +673,8 @@ export function createResolvers(context: ResolverContext) {
             include_database: !input.filesOnly, // Default to true unless files-only
           };
 
-          const result = await registry.call('local_wpe_pull', pullArgs, services);
+          // Mark as 'cli' access since this is the CLI/GraphQL path
+          const result = await registry.call('local_wpe_pull', pullArgs, services, 'cli');
 
           // Parse JSON response from MCP tool
           let pullResult: any;
@@ -776,7 +777,8 @@ export function createResolvers(context: ResolverContext) {
             include_database: input.includeDb || input.dbOnly || false,
           };
 
-          const result = await registry.call('local_wpe_push', pushArgs, services);
+          // Mark as 'cli' access since this is the CLI/GraphQL path
+          const result = await registry.call('local_wpe_push', pushArgs, services, 'cli');
 
           // Check if MCP tool returned an error
           if (result.isError) {
