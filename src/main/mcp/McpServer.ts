@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as crypto from 'crypto';
 import { McpAuth } from './McpAuth';
 import { ToolRegistry } from './tool-registry';
+import { McpSafetyWrapper } from './mcp-safety-wrapper';
 import { InstructionRegistry } from './instructions';
 import {
   JsonRpcRequest,
@@ -40,6 +41,7 @@ export class McpServer {
   private server: http.Server | null = null;
   private auth: McpAuth;
   private registry: ToolRegistry;
+  private safetyWrapper: McpSafetyWrapper;
   private instructionRegistry: InstructionRegistry;
   private services: NexusServices;
   private port = 0;
@@ -48,6 +50,7 @@ export class McpServer {
   constructor(options: McpServerOptions) {
     this.auth = new McpAuth(options.existingToken);
     this.registry = options.registry;
+    this.safetyWrapper = new McpSafetyWrapper(this.registry);
     this.instructionRegistry = options.instructionRegistry ?? new InstructionRegistry();
     this.services = options.services;
     if (options.port) this.port = options.port;
@@ -234,7 +237,8 @@ export class McpServer {
       case 'tools/call': {
         const toolName = (params as any)?.name as string;
         const toolArgs = ((params as any)?.arguments ?? {}) as Record<string, unknown>;
-        const result = await this.registry.call(toolName, toolArgs, this.services);
+        // Use safety wrapper for MCP calls (Tier 3 confirmation tokens, audit logging)
+        const result = await this.safetyWrapper.callWithSafety(toolName, toolArgs, this.services);
         return this.jsonRpcResult(id, result);
       }
 

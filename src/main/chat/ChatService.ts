@@ -229,17 +229,15 @@ export class ChatService {
         return { text: denialText };
       }
 
-      // Generate confirmation token and execute via registry
-      const token = this.registry.confirmations.generate(toolCall.name, toolCall.arguments);
-      const argsWithToken = { ...toolCall.arguments, _confirmationToken: token };
-
+      // User approved - execute directly via registry (no confirmation token needed)
+      // ChatService handles safety at the UI layer, registry is now a dumb router
       this.emit(sessionId(session), {
         type: 'tool_call_executing',
         id: toolCall.id,
         name: toolCall.name,
       });
 
-      const result = await this.registry.call(toolCall.name, argsWithToken, this.services);
+      const result = await this.registry.call(toolCall.name, toolCall.arguments, this.services);
       const text = result.content.map((c) => c.text).join('\n');
 
       this.emit(sessionId(session), {
