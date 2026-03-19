@@ -271,7 +271,7 @@ Final summary: X succeeded, Y failed, Z skipped
 
 ### E2E Test Suite (✅ 100% Pass Rate - 2026-03-19)
 
-**18 test suites, 152 tests** covering all major workflows:
+**19 test suites, 160 tests** covering all major workflows:
 
 | Area | Tests | Coverage |
 |------|-------|----------|
@@ -283,6 +283,7 @@ Final summary: X succeeded, Y failed, Z skipped
 | Fleet intelligence | 4 | Fleet summary, plugin discovery, outdated sites, themes |
 | WP Engine integration | 21 | CAPI, backups, cache, pull/push, remote WP-CLI via SSH |
 | AI & event processing | 51 | Ollama, setup-ai, event flow, graph queries, real-time updates |
+| **Graph deletion & data integrity** | **8** | **Post/plugin/user deletion, vector cleanup, idempotency** |
 
 **Test Infrastructure:**
 - Global setup ensures Local running, test site available
@@ -389,19 +390,22 @@ Final summary: X succeeded, Y failed, Z skipped
 | WP Engine integration | 21 tests | ✅ Complete |
 | AI & event processing | 51 tests | ✅ Complete |
 
-### Option 1: Extended Test Coverage (~1 week)
+### Option 1: Extended Test Coverage ⏳ IN PROGRESS
 
 **Priority: HIGH** - Fills critical gaps in production readiness
 
-| Task | Complexity | Value |
-|------|-----------|-------|
-| WPE management tests (account/install creation, domain mgmt, SSL) | Medium | High - untested core features |
-| Graph deletion events (post_deleted, plugin_deleted) | Low | High - data integrity |
-| Negative test expansion (from 20% to 40%) | Medium | Medium - error resilience |
-| Edge case coverage (multisite, non-MySQL, concurrent ops) | High | Medium - future-proofing |
-| Performance tests (large fleet, bulk ops, search at scale) | Medium | Medium - production confidence |
+| # | Task | Status | Tests | Time |
+|---|------|--------|-------|------|
+| 1 | Graph deletion events (post_deleted, plugin_deleted, user_deleted) | ✅ DONE | 8/8 passing | 0.5 days |
+| 2 | WPE management tests (account/install creation, domain mgmt, SSL) | 🔄 NEXT | - | 2 days |
+| 3 | Negative test expansion (from 20% to 40%) | Pending | - | 1.5 days |
+| 4 | Edge case coverage (multisite, non-MySQL, concurrent ops) | Pending | - | 2 days |
+| 5 | Performance tests (large fleet, bulk ops, search at scale) | Pending | - | 1 day |
 
-**Estimated effort:** 5-7 days
+**Progress:** 1/5 tasks complete (20%)
+**Tests added:** 8 (now 160/160 passing = 100%)
+**Time spent:** 0.5 days
+**Remaining:** 6.5 days
 
 ### Option 2: Production Hardening (~3-5 days)
 
