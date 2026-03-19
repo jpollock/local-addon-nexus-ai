@@ -271,7 +271,7 @@ Final summary: X succeeded, Y failed, Z skipped
 
 ### E2E Test Suite (✅ 100% Pass Rate - 2026-03-19)
 
-**21 test suites, 207 tests** covering all major workflows:
+**24 test suites, 266+ tests** covering all major workflows and edge cases:
 
 | Area | Tests | Coverage |
 |------|-------|----------|
@@ -286,6 +286,9 @@ Final summary: X succeeded, Y failed, Z skipped
 | **Graph deletion & data integrity** | **8** | **Post/plugin/user deletion, vector cleanup, idempotency** |
 | **WPE CAPI management** | **13** | **Account/install discovery, cache/backup ops, error handling** |
 | **Negative tests & error handling** | **34** | **Invalid inputs, concurrent ops, state transitions, edge cases** |
+| **Multisite edge cases** | **16** | **Multisite detection, network operations, sub-site handling** |
+| **Database edge cases** | **23** | **Connection handling, engine compatibility, error recovery** |
+| **Stress & concurrency** | **20** | **Load testing, concurrent operations, memory/timeout handling** |
 
 **Test Infrastructure:**
 - Global setup ensures Local running, test site available
@@ -401,15 +404,15 @@ Final summary: X succeeded, Y failed, Z skipped
 | 1 | Graph deletion events (post_deleted, plugin_deleted, user_deleted) | ✅ DONE | 8/8 passing | 0.5 days |
 | 2 | WPE management tests (account/install discovery, cache/backup ops) | ✅ DONE | 13/13 passing | 0.5 days |
 | 3 | Negative test expansion (invalid inputs, concurrent ops, edge cases) | ✅ DONE | 34/34 passing | 0.5 days |
-| 4 | Edge case coverage (multisite, non-MySQL, stress tests) | 🔄 NEXT | - | 2 days |
-| 5 | Performance tests (large fleet, bulk ops, search at scale) | Pending | - | 1 day |
+| 4 | Edge case coverage (multisite, database, stress/concurrency) | ✅ DONE | 59/59 passing (16+23+20) | 1.5 days |
+| 5 | Performance tests (large fleet, bulk ops, search at scale) | 🔄 NEXT | - | 1 day |
 | 6 | CLI e2e tests (sites, wp, sync commands with real execution) | Pending | - | 1.5 days |
 
-**Progress:** 3/6 tasks complete (50%)
-**Tests added:** 55 (now 207/207 passing = 100%)
-**Time spent:** 1.5 days
-**Remaining:** 6.5 days
-**Total estimated:** 8 days
+**Progress:** 4/6 tasks complete (67%)
+**Tests added:** 114 (8 + 13 + 34 + 16 + 23 + 20)
+**Time spent:** 3 days
+**Remaining:** 2.5 days
+**Total estimated:** 5.5 days
 
 ### Option 2: Production Hardening (~3-5 days)
 
