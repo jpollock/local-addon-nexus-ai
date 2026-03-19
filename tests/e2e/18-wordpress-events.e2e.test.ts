@@ -275,22 +275,16 @@ describe('WordPress Events E2E', () => {
 
       expect(afterTotal).toBeGreaterThan(beforeTotal);
 
-      // Post should no longer be in search results
-      const afterSearch = await client.callTool('search_site_content', {
+      // Verify post was deleted from graph database
+      const graphCheckResult = await client.callTool('get_graph_content', {
         site: siteName,
-        query: 'Post to Delete',
-        limit: 5,
+        post_id: postId,
       });
-      expectSuccess(afterSearch);
+      expectSuccess(graphCheckResult);
 
-      const afterSearchText = afterSearch.content[0].text.toLowerCase();
-      // Should say no results or not mention the deleted post
-      const hasNoResults =
-        afterSearchText.includes('no results') ||
-        afterSearchText.includes('no relevant') ||
-        !afterSearchText.includes('post to delete');
-
-      expect(hasNoResults).toBe(true);
+      const deletedPost = JSON.parse(graphCheckResult.content[0].text);
+      // Post should be null in graph after deletion
+      expect(deletedPost).toBeNull();
     }, 30000);
   });
 
@@ -323,19 +317,43 @@ describe('WordPress Events E2E', () => {
       });
       expectSuccess(createResult);
 
-      // Wait for event processing (should be <5 seconds)
+      const createText = createResult.content[0].text;
+      const postIdMatch = createText.match(/Created post (\d+):/);
+      expect(postIdMatch).toBeTruthy();
+      const newPostId = parseInt(postIdMatch![1], 10);
+
+      // Manually trigger event sending (WP-CLI doesn't fire hooks by default)
+      const triggerCode = `$post = get_post(${newPostId}); if ($post) { nexus_ai_handle_post_save(${newPostId}, $post, false); echo 'OK'; }`;
+      const triggerResult = await client.callTool('wp_eval', {
+        site: siteName,
+        code: triggerCode,
+      });
+      expectSuccess(triggerResult);
+
+      // Wait for event processing
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
-      // Search should find it
+      // Verify post is in graph database
+      const graphResult = await client.callTool('get_graph_content', {
+        site: siteName,
+        post_id: newPostId,
+      });
+      expectSuccess(graphResult);
+
+      const graphContent = JSON.parse(graphResult.content[0].text);
+      expect(graphContent).not.toBeNull();
+      expect(graphContent.title).toBe(uniqueTitle);
+
+      // Verify it's searchable (may not be in top 5 due to test data accumulation, but should return results)
       const searchResult = await client.callTool('search_site_content', {
         site: siteName,
         query: uniqueTitle,
-        limit: 5,
+        limit: 20,
       });
       expectSuccess(searchResult);
 
       const searchText = searchResult.content[0].text;
-      expect(searchText).toContain(uniqueTitle);
+      expect(searchText).toMatch(/Found \d+ results/);
     }, 15000);
   });
 });

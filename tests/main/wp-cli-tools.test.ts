@@ -66,8 +66,8 @@ describe('WP-CLI Tools', () => {
     registerWpCliTools(registry);
   });
 
-  test('registers 12 tools', () => {
-    expect(registry.allToolNames()).toHaveLength(12);
+  test('registers 17 tools', () => {
+    expect(registry.allToolNames()).toHaveLength(17);
   });
 
   test('all tools require localServices', () => {

@@ -39,8 +39,7 @@
     "package:mac-x64": "node scripts/package-addon.js --platform darwin --arch x64",
     "package:linux-x64": "node scripts/package-addon.js --platform linux --arch x64",
     "package:win-x64": "node scripts/package-addon.js --platform win32 --arch x64",
-    "rebuild": "electron-rebuild -v 37.8.0 -f -w better-sqlite3",
-    "postinstall": "npm run rebuild"
+    "rebuild": "electron-rebuild -v 37.8.0 -f -w better-sqlite3"
   },
   "dependencies": {
     "@getflywheel/local-components": "^17.8.1",

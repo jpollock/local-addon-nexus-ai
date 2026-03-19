@@ -42,8 +42,20 @@ function makeLocalServices(capiAvailable = true): jest.Mocked<LocalServicesBridg
     resolveSiteObject: jest.fn(() => ({
       id: 'site-1',
       name: 'My Site',
-      hostConnections: { wpe: { installName: 'mysite-prod' } },
+      hostConnections: {
+        wpe: {
+          hostId: 'wpe',
+          installName: 'mysite-prod',
+          accountId: 'acc-1',
+        },
+      },
     })),
+    wpePull: {
+      pull: jest.fn().mockResolvedValue(undefined),
+    },
+    wpePush: {
+      push: jest.fn().mockResolvedValue(undefined),
+    },
   } as unknown as jest.Mocked<LocalServicesBridge>;
 }
 
@@ -71,8 +83,8 @@ describe('WPE Integration Tools', () => {
     registerWpeTools(registry);
   });
 
-  test('registers 9 tools', () => {
-    expect(registry.allToolNames()).toHaveLength(9);
+  test('registers 11 tools', () => {
+    expect(registry.allToolNames()).toHaveLength(11);
   });
 
   describe('CAPI tool gating', () => {

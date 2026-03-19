@@ -114,7 +114,7 @@ describe('UnifiedSearchPanel', () => {
       IPC_CHANNELS.SEARCH_UNIFIED,
       'hello',
       { contentTypes: undefined },
-      { limit: 20, offset: 0 },
+      { limit: 20, offset: 0, vectorSearch: true },
     );
   });
 
@@ -294,7 +294,7 @@ describe('UnifiedSearchPanel', () => {
       IPC_CHANNELS.SEARCH_UNIFIED,
       'test',
       { contentTypes: undefined },
-      { limit: 20, offset: 20 },
+      { limit: 20, offset: 20, vectorSearch: true },
     );
   });
 });

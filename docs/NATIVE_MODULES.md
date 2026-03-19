@@ -1,9 +1,9 @@
 # Native Module Compilation (better-sqlite3)
 
-## TL;DR - It Just Works™
+## TL;DR - Manual Rebuild Required
 
-**For developers:** Tests work out of the box. Local handles Electron compilation automatically.  
-**Don't manually rebuild** - you don't need to.
+**For developers:** Tests work after `npm install`. Local requires `npm run rebuild`.
+**Manual rebuild IS required** when switching between tests and Local.
 
 ---
 
@@ -25,29 +25,30 @@ npm test     # ✅ Works
 ### When Loading in Local (Electron Node.js)
 
 ```bash
-# Inside Local's addon loading process:
-1. Local runs `npm install` in the addon directory
-2. better-sqlite3 install script runs
-3. prebuild-install checks for Electron v136 prebuild → not found
-4. Falls back to `node-gyp rebuild`
-5. Compiles against Local's Electron headers (v37.8.0, MODULE_VERSION 136)
-6. ✅ Works in Local
+# For development addons loaded from disk:
+# Local does NOT run npm install — uses existing node_modules
+# You must manually rebuild:
+
+npm run rebuild    # Runs: electron-rebuild -v 37.8.0 -f -w better-sqlite3
+                   # Compiles against Electron headers (MODULE_VERSION 136)
+# ✅ Now works in Local
 ```
 
-**The magic:** node-gyp detects it's running in Electron's context and compiles for the correct version automatically.
+**Important:** Local only runs `npm install` for published addons, NOT for local development addons loaded from disk. Manual rebuild required.
 
-## Why Manual Rebuild Fails (And Why That's OK)
+## Why You Need Manual Rebuild
 
-If you try to manually rebuild from outside Local:
+better-sqlite3 compiles native code for the Node.js version that's running:
 
 ```bash
-npm run rebuild:electron  # ❌ FAILS - C++ compiler errors
+npm install       # Runs in system Node → MODULE_VERSION 127 (for tests)
+npm run rebuild   # Uses electron-rebuild → MODULE_VERSION 136 (for Local)
 ```
 
-This fails because:
-- It's trying to compile from system Node's context for Electron's target
-- C++ toolchain issues (concepts, V8 API changes)
-- **But you don't need to do this!** Local handles it when loading the addon.
+The two binaries are incompatible:
+- Tests need MODULE_VERSION 127
+- Local needs MODULE_VERSION 136
+- **You must rebuild when switching contexts**
 
 ## Development Workflow
 
@@ -59,12 +60,14 @@ npm install      # Compiles for system Node
 npm test         # ✅ Works
 npm run build    # ✅ Compiles TypeScript
 
+# Before loading in Local:
+npm run rebuild  # ✅ Recompile for Electron
+
 # Load addon in Local app
-# ✅ Local auto-recompiles better-sqlite3 for Electron
 # ✅ Addon works
 ```
 
-**No manual rebuild needed.**
+**Manual rebuild IS needed** when switching from tests to Local.
 
 ### If You See The Error In Local
 
@@ -73,11 +76,12 @@ If you see this error when loading in Local:
 Error: The module 'better_sqlite3.node' was compiled against a different Node.js version using NODE_MODULE_VERSION 127. This version requires NODE_MODULE_VERSION 136.
 ```
 
-It means **Local's automatic rebuild failed**. Possible causes:
+It means **you forgot to run `npm run rebuild`**. Fix:
 
-1. **Local's rebuild process was skipped** - Restart Local and reload addon
-2. **C++ build tools missing** - Install Xcode Command Line Tools
-3. **Node modules cached wrong** - Delete `node_modules` in addon, let Local reinstall
+1. **Run the rebuild**: `npm run rebuild`
+2. **Restart Local** and reload addon
+3. **If rebuild fails**: Check Xcode Command Line Tools (`xcode-select --install`)
+4. **If still fails**: Delete `node_modules`, run `npm install`, then `npm run rebuild`
 
 ## For CI/CD
 
@@ -105,16 +109,20 @@ npm test
 
 ### Addon fails to load in Local
 
-Local's rebuild didn't work:
+You need to rebuild for Electron:
 
-1. Check Local logs for build errors
-2. Ensure Xcode Command Line Tools installed: `xcode-select --install`
-3. Delete addon's `node_modules`, let Local reinstall
-4. If still fails, file bug with Local team
+1. Run `npm run rebuild`
+2. Restart Local and reload addon
+3. Ensure Xcode Command Line Tools installed: `xcode-select --install`
+4. Delete addon's `node_modules`, run `npm install`, then `npm run rebuild`
 
-### "electron-rebuild" command fails
+### "npm install" hangs or fails with C++ errors
 
-This is expected and OK. You don't need electron-rebuild - Local handles it.
+If `npm install` tries to run electron-rebuild and fails:
+
+1. Check package.json for `postinstall` hook — **remove it** (breaks npm install)
+2. Run `npm install --legacy-peer-deps` to work around peer dependency conflicts
+3. After install succeeds, run `npm run rebuild` manually
 
 ## Why better-sqlite3 11.10.0?
 
@@ -134,6 +142,8 @@ This is expected and OK. You don't need electron-rebuild - Local handles it.
 
 ---
 
-**Last Updated:** 2026-03-05  
-**Status:** ✅ Working (tests + Local)  
-**Action Required:** None - it just works
+**Last Updated:** 2026-03-19
+**Status:** ✅ Working (tests + Local)
+**Action Required:** Run `npm run rebuild` after `npm install` before loading in Local
+
+**Critical:** NO postinstall hook — it breaks `npm install` from shell

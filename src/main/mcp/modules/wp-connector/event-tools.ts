@@ -2,6 +2,7 @@
  * MCP tools for event processing and knowledge graph queries
  */
 import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
+import { resolveSite } from '../../site-resolver';
 
 function success(data: any): McpToolResult {
   return {
@@ -79,17 +80,29 @@ export const getGraphContentTool: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
+    console.log(`[get_graph_content] Called with site="${args.site}", post_id=${args.post_id}`);
+    console.log(`[get_graph_content] services keys: ${Object.keys(services).join(', ')}`);
+
     const graphService = (services as any).graphService;
+    console.log(`[get_graph_content] graphService: ${graphService ? 'EXISTS' : 'NULL'}`);
     if (!graphService) {
+      console.log('[get_graph_content] ERROR: Graph service not initialized');
       return error('Graph service not initialized');
     }
 
-    const site = services.siteData.getSite(args.site as string);
+    const site = resolveSite(args.site as string, services.siteData);
     if (!site) {
+      console.log(`[get_graph_content] ERROR: Site not found: ${args.site}`);
       return error(`Site not found: ${args.site}`);
     }
 
-    const content = await graphService.getContent(site.id, args.post_id);
+    console.log(`[get_graph_content] Resolved site: id="${site.id}", name="${site.name}"`);
+    console.log(`[get_graph_content] Querying with site.name="${site.name}", post_id=${args.post_id}`);
+
+    // Use site.name for GraphService queries (events are stored by site name, not UUID)
+    const content = await graphService.getContent(site.name, args.post_id);
+
+    console.log(`[get_graph_content] GraphService.getContent returned: ${content ? 'CONTENT' : 'NULL'}`);
     return success(content);
   },
 };
@@ -115,18 +128,30 @@ export const listGraphContentTool: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
+    console.log(`[list_graph_content] Called with site="${args.site}"`);
+    console.log(`[list_graph_content] services keys: ${Object.keys(services).join(', ')}`);
+
     const graphService = (services as any).graphService;
+    console.log(`[list_graph_content] graphService: ${graphService ? 'EXISTS' : 'NULL'}`);
     if (!graphService) {
+      console.log('[list_graph_content] ERROR: Graph service not initialized');
       return error('Graph service not initialized');
     }
 
-    const site = services.siteData.getSite(args.site as string);
+    const site = resolveSite(args.site as string, services.siteData);
     if (!site) {
+      console.log(`[list_graph_content] ERROR: Site not found: ${args.site}`);
       return error(`Site not found: ${args.site}`);
     }
 
+    console.log(`[list_graph_content] Resolved site: id="${site.id}", name="${site.name}"`);
+
     const options = args.post_type ? { post_type: args.post_type } : undefined;
-    const content = await graphService.listContent(site.id, options);
+    // Use site.name for GraphService queries (events are stored by site name, not UUID)
+    console.log(`[list_graph_content] Calling graphService.listContent("${site.name}", ${JSON.stringify(options)})`);
+    const content = await graphService.listContent(site.name, options);
+
+    console.log(`[list_graph_content] GraphService.listContent returned: ${content.length} items`);
     return success(content);
   },
 };
@@ -157,12 +182,12 @@ export const getGraphPluginTool: McpToolHandler = {
       return error('Graph service not initialized');
     }
 
-    const site = services.siteData.getSite(args.site as string);
+    const site = resolveSite(args.site as string, services.siteData);
     if (!site) {
       return error(`Site not found: ${args.site}`);
     }
 
-    const plugin = await graphService.getPlugin(site.id, args.slug);
+    const plugin = await graphService.getPlugin(site.name, args.slug);
     return success(plugin);
   },
 };
@@ -193,13 +218,13 @@ export const listGraphPluginsTool: McpToolHandler = {
       return error('Graph service not initialized');
     }
 
-    const site = services.siteData.getSite(args.site as string);
+    const site = resolveSite(args.site as string, services.siteData);
     if (!site) {
       return error(`Site not found: ${args.site}`);
     }
 
     const options = args.active_only ? { active_only: true } : undefined;
-    const plugins = await graphService.listPlugins(site.id, options);
+    const plugins = await graphService.listPlugins(site.name, options);
     return success(plugins);
   },
 };
@@ -226,12 +251,12 @@ export const getGraphStatsTool: McpToolHandler = {
     }
 
     if (args.site as string) {
-      const site = services.siteData.getSite(args.site as string);
+      const site = resolveSite(args.site as string, services.siteData);
       if (!site) {
         return error(`Site not found: ${args.site}`);
       }
 
-      const stats = await graphService.getSiteStats(site.id);
+      const stats = await graphService.getSiteStats(site.name);
       return success(stats);
     }
 

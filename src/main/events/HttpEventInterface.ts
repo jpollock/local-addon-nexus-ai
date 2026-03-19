@@ -258,6 +258,29 @@ export class HttpEventInterface {
       return { valid: false, error: 'Missing required field: payload' };
     }
 
+    // Validate payload contents based on event type
+    if (event.event_type.startsWith('post_')) {
+      if (!event.payload.post_id) {
+        return { valid: false, error: 'Missing required payload field: post_id' };
+      }
+      if (event.event_type === 'post_created' || event.event_type === 'post_updated') {
+        if (!event.payload.title) {
+          return { valid: false, error: 'Missing required payload field: title' };
+        }
+      }
+    }
+
+    if (event.event_type.startsWith('plugin_')) {
+      if (!event.payload.slug) {
+        return { valid: false, error: 'Missing required payload field: slug' };
+      }
+      if (event.event_type === 'plugin_activated' || event.event_type === 'plugin_deactivated' || event.event_type === 'plugin_updated') {
+        if (!event.payload.name) {
+          return { valid: false, error: 'Missing required payload field: name' };
+        }
+      }
+    }
+
     if (typeof event.timestamp !== 'number') {
       event.timestamp = Date.now(); // Auto-set if missing
     }

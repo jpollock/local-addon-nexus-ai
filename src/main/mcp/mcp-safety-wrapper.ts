@@ -31,6 +31,7 @@ export class McpSafetyWrapper {
     args: Record<string, unknown>,
     services: NexusServices,
   ): Promise<McpToolResult> {
+    console.log(`[McpSafetyWrapper] callWithSafety: name="${name}", args=${JSON.stringify(args)}`);
     const safety = getToolSafety(name);
     const startTime = Date.now();
 
@@ -77,15 +78,21 @@ export class McpSafetyWrapper {
     delete handlerArgs._confirmationToken;
 
     // Call tool registry (which calls the handler)
-    try {
-      const result = await this.registry.call(name, handlerArgs, services);
-      this.auditLog(services, name, safety.tier, args, safety.tier === 3 ? true : null, 'success', undefined, Date.now() - startTime);
-      return result;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.auditLog(services, name, safety.tier, args, safety.tier === 3 ? true : null, 'error', message, Date.now() - startTime);
-      throw err; // Re-throw so registry can handle it
+    const result = await this.registry.call(name, handlerArgs, services);
+
+    // Only audit log if tool executed (not unknown/unavailable)
+    const errorMessage = result.content[0]?.text || '';
+    const isUnknownOrUnavailable = errorMessage.startsWith('Unknown tool:') || errorMessage.startsWith('Tool "') && errorMessage.includes('not currently available');
+
+    if (!isUnknownOrUnavailable) {
+      if (result.isError) {
+        this.auditLog(services, name, safety.tier, args, safety.tier === 3 ? true : null, 'error', errorMessage, Date.now() - startTime);
+      } else {
+        this.auditLog(services, name, safety.tier, args, safety.tier === 3 ? true : null, 'success', undefined, Date.now() - startTime);
+      }
     }
+
+    return result;
   }
 
   private auditLog(

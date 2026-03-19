@@ -53,8 +53,10 @@ export class ToolRegistry {
     args: Record<string, unknown>,
     services: NexusServices,
   ): Promise<McpToolResult> {
+    console.log(`[ToolRegistry] call: name="${name}", args=${JSON.stringify(args)}`);
     const handler = this.handlers.get(name);
     if (!handler) {
+      console.log(`[ToolRegistry] ERROR: Unknown tool "${name}"`);
       return {
         content: [{ type: 'text', text: `Unknown tool: "${name}"` }],
         isError: true,
@@ -63,6 +65,7 @@ export class ToolRegistry {
 
     const { isAvailable } = handler.definition;
     if (isAvailable && !isAvailable(services)) {
+      console.log(`[ToolRegistry] ERROR: Tool "${name}" prerequisites not met`);
       return {
         content: [{ type: 'text', text: `Tool "${name}" is not currently available (prerequisites not met)` }],
         isError: true,
@@ -71,10 +74,13 @@ export class ToolRegistry {
 
     // Execute handler directly (no safety checks)
     try {
+      console.log(`[ToolRegistry] Executing handler for "${name}"`);
       const result = await handler.execute(args, services);
+      console.log(`[ToolRegistry] Handler "${name}" completed: isError=${result.isError}`);
       return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      console.log(`[ToolRegistry] ERROR in handler "${name}": ${message}`);
       return {
         content: [{ type: 'text', text: `Tool error: ${message}` }],
         isError: true,

@@ -335,10 +335,12 @@ export class GraphService {
   async getContent(siteId: string, postId: number): Promise<Content | null> {
     if (!this.db) throw new Error('Database not initialized');
 
+    this.logger.info(`[GraphService] getContent: siteId="${siteId}", postId=${postId}`);
     const row = this.db
       .prepare('SELECT * FROM content WHERE site_id = ? AND post_id = ?')
       .get(siteId, postId) as any;
 
+    this.logger.info(`[GraphService] getContent result: ${row ? 'FOUND' : 'NULL'}`);
     if (!row) return null;
 
     return {
@@ -357,6 +359,7 @@ export class GraphService {
   async listContent(siteId: string, options?: { post_type?: string }): Promise<Content[]> {
     if (!this.db) throw new Error('Database not initialized');
 
+    this.logger.info(`[GraphService] listContent: siteId="${siteId}", options=${JSON.stringify(options)}`);
     let query = 'SELECT * FROM content WHERE site_id = ?';
     const params: any[] = [siteId];
 
@@ -368,6 +371,7 @@ export class GraphService {
     query += ' ORDER BY updated_at DESC';
 
     const rows = this.db.prepare(query).all(...params) as any[];
+    this.logger.info(`[GraphService] listContent result: ${rows.length} rows`);
 
     return rows.map(row => ({
       id: row.id,

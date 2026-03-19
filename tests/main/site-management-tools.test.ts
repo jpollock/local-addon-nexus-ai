@@ -74,9 +74,9 @@ describe('Site Management Tools', () => {
     registerSiteManagementTools(registry);
   });
 
-  test('registers 11 tools', () => {
+  test('registers 17 tools', () => {
     const names = registry.allToolNames();
-    expect(names).toHaveLength(11);
+    expect(names).toHaveLength(17);
     expect(names).toContain('local_list_sites');
     expect(names).toContain('local_get_site');
     expect(names).toContain('local_start_site');
@@ -88,11 +88,17 @@ describe('Site Management Tools', () => {
     expect(names).toContain('local_export_site');
     expect(names).toContain('local_change_php_version');
     expect(names).toContain('local_trust_ssl');
+    expect(names).toContain('local_toggle_xdebug');
+    expect(names).toContain('local_rename_site');
+    expect(names).toContain('local_import_site');
+    expect(names).toContain('local_list_blueprints');
+    expect(names).toContain('local_save_blueprint');
+    expect(names).toContain('local_get_site_logs');
   });
 
   test('all tools are available when localServices present', () => {
     const tools = registry.list(services);
-    expect(tools).toHaveLength(11);
+    expect(tools).toHaveLength(17);
   });
 
   test('no tools available without localServices', () => {
