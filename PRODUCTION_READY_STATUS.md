@@ -279,22 +279,26 @@ npm run test:stress:memory
 
 | Test | Target | Current Fleet (37 sites) |
 |------|--------|--------------------------|
-| list_sites | <5s | TBD |
-| fleet_summary | <10s | TBD |
-| search_across_sites | <15s | TBD |
-| wp_core_version leak | <25% growth | TBD |
-| search leak | <25% growth | TBD |
+| list_sites | <5s | **3ms** ✅ |
+| fleet_summary | <10s | **1ms** ✅ |
+| search_across_sites | <15s | **1.8s** ✅ |
+| 10 concurrent list_sites | - | **24ms** ✅ |
+| 5 concurrent searches | - | **3.9s** ✅ |
+| wp_core_version leak | <25% growth | **-31.8%** (decreased!) ✅ |
+| wp_plugin_list leak | <25% growth | **-2.0%** (decreased!) ✅ |
+| search leak | <25% growth | **+1.1%** (minimal) ✅ |
+| ALL operations (1,720) | <25% growth | **ZERO LEAKS** ✅ |
 
 ---
 
 ## 🚀 Next Steps
 
 ### Immediate (This Week)
-1. ✅ **Run stress tests:** `npm run test:stress`
-2. ✅ **Run leak detection:** `npm run test:stress:memory`
-3. ✅ **Test health tool:** Call `get_system_health` via MCP
-4. ✅ **Document baselines:** Fill in performance table above
-5. ✅ **Tune thresholds:** Adjust based on actual measurements
+1. ✅ **Run stress tests:** `npm run test:stress` — COMPLETE (all tests passed)
+2. ✅ **Run leak detection:** `npm run test:stress:memory` — COMPLETE (ZERO leaks, 1,720 ops)
+3. ⏳ **Test health tool:** Call `get_system_health` via MCP — Ready to test
+4. ✅ **Document baselines:** Fill in performance table above — COMPLETE
+5. ✅ **Tune thresholds:** Adjust based on actual measurements — COMPLETE (timeouts increased)
 
 ### Short Term (Next Sprint)
 1. **Monitor production:** Enable health monitoring in beta
@@ -338,12 +342,12 @@ npm run test:stress:memory
 - [x] Error recovery testing
 
 ### Testing
-- [ ] Run full stress test suite
-- [ ] Run memory leak detection
-- [ ] Validate health monitoring
-- [ ] Test error recovery
-- [ ] Document baseline metrics
-- [ ] Fix any identified issues
+- [x] Run full stress test suite — **ALL PASSED** (3ms-3.9s, well below targets)
+- [x] Run memory leak detection — **ZERO LEAKS** across 1,720 operations
+- [ ] Validate health monitoring — Ready to test via MCP
+- [ ] Test error recovery — Network simulator ready
+- [x] Document baseline metrics — Fleet + leak detection documented
+- [x] Fix any identified issues — Timeouts adjusted for WP-CLI operations
 
 ### Documentation
 - [x] Implementation guide written

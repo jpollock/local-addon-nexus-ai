@@ -42,7 +42,7 @@ describe('Memory Leak Detection', () => {
 
       // Growth should be less than 25% (moderate leak threshold)
       expect(report.memory_growth_percent).toBeLessThan(25);
-    }, 300000); // 5 minutes
+    }, 600000); // 10 minutes (wp-cli is slow)
 
     it('should not leak memory on repeated plugin list calls', async () => {
       const report = await detector.detectLeaks(
@@ -58,7 +58,7 @@ describe('Memory Leak Detection', () => {
 
       expect(report.leak_severity).not.toBe('severe');
       expect(report.memory_growth_percent).toBeLessThan(25);
-    }, 300000);
+    }, 600000); // 10 minutes (wp-cli is slow)
   });
 
   describe('Search Operations', () => {
