@@ -105,7 +105,7 @@ export const wpePushHandler: McpToolHandler = {
         }, null, 2),
       );
     } catch (err: any) {
-      return error(`Failed to start push: ${err.message}`);
+      return error(`Failed to start push: ${err.message || err}`);
     }
   },
 };

@@ -53,28 +53,23 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   wpe_create_backup: 2,
   wpe_purge_cache: 2,
   local_wpe_pull: 2,
+  local_wpe_push: 2, // CLI handles database confirmation
   wp_setup_ai: 2,
   wp_sync_ai_credentials: 2,
   wp_run_ability: 2,
 
   // Tier 3 — Destructive
   local_delete_site: 3,
-  local_wpe_push: 3,
 };
 
 export const CONFIRMATION_MESSAGES: Record<string, string> = {
   local_delete_site: 'This will permanently delete the site and all its files.',
-  local_wpe_push: 'This will overwrite the remote WP Engine environment with local site data.',
 };
 
 export const PRE_CHECKS: Record<string, string[]> = {
   local_delete_site: [
     'Verify the site is not connected to a production environment',
     'Confirm you have a backup if needed',
-  ],
-  local_wpe_push: [
-    'Verify the target environment is correct',
-    'Confirm the remote environment has a recent backup',
   ],
 };
 

@@ -778,6 +778,16 @@ export function createResolvers(context: ResolverContext) {
 
           const result = await registry.call('local_wpe_push', pushArgs, services);
 
+          // Check if MCP tool returned an error
+          if (result.isError) {
+            return {
+              success: false,
+              error: result.content[0].text,
+              linkCreated: false,
+              installCreated: false,
+            };
+          }
+
           // Parse JSON response from MCP tool
           let pushResult: any;
           try {
@@ -795,7 +805,7 @@ export function createResolvers(context: ResolverContext) {
           if (pushResult.status !== 'queued') {
             return {
               success: false,
-              error: pushResult.message || 'Push failed',
+              error: pushResult.message || pushResult.error || 'Push failed',
               linkCreated: false,
               installCreated: false,
             };
