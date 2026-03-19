@@ -271,7 +271,7 @@ Final summary: X succeeded, Y failed, Z skipped
 
 ### E2E Test Suite (✅ 100% Pass Rate - 2026-03-19)
 
-**19 test suites, 160 tests** covering all major workflows:
+**20 test suites, 173 tests** covering all major workflows:
 
 | Area | Tests | Coverage |
 |------|-------|----------|
@@ -284,6 +284,7 @@ Final summary: X succeeded, Y failed, Z skipped
 | WP Engine integration | 21 | CAPI, backups, cache, pull/push, remote WP-CLI via SSH |
 | AI & event processing | 51 | Ollama, setup-ai, event flow, graph queries, real-time updates |
 | **Graph deletion & data integrity** | **8** | **Post/plugin/user deletion, vector cleanup, idempotency** |
+| **WPE CAPI management** | **13** | **Account/install discovery, cache/backup ops, error handling** |
 
 **Test Infrastructure:**
 - Global setup ensures Local running, test site available
@@ -397,15 +398,15 @@ Final summary: X succeeded, Y failed, Z skipped
 | # | Task | Status | Tests | Time |
 |---|------|--------|-------|------|
 | 1 | Graph deletion events (post_deleted, plugin_deleted, user_deleted) | ✅ DONE | 8/8 passing | 0.5 days |
-| 2 | WPE management tests (account/install creation, domain mgmt, SSL) | 🔄 NEXT | - | 2 days |
-| 3 | Negative test expansion (from 20% to 40%) | Pending | - | 1.5 days |
+| 2 | WPE management tests (account/install discovery, cache/backup ops) | ✅ DONE | 13/13 passing | 0.5 days |
+| 3 | Negative test expansion (from 20% to 40%) | 🔄 NEXT | - | 1.5 days |
 | 4 | Edge case coverage (multisite, non-MySQL, concurrent ops) | Pending | - | 2 days |
 | 5 | Performance tests (large fleet, bulk ops, search at scale) | Pending | - | 1 day |
 
-**Progress:** 1/5 tasks complete (20%)
-**Tests added:** 8 (now 160/160 passing = 100%)
-**Time spent:** 0.5 days
-**Remaining:** 6.5 days
+**Progress:** 2/5 tasks complete (40%)
+**Tests added:** 21 (now 173/173 passing = 100%)
+**Time spent:** 1 day
+**Remaining:** 6 days
 
 ### Option 2: Production Hardening (~3-5 days)
 
