@@ -403,11 +403,13 @@ Final summary: X succeeded, Y failed, Z skipped
 | 3 | Negative test expansion (invalid inputs, concurrent ops, edge cases) | ✅ DONE | 34/34 passing | 0.5 days |
 | 4 | Edge case coverage (multisite, non-MySQL, stress tests) | 🔄 NEXT | - | 2 days |
 | 5 | Performance tests (large fleet, bulk ops, search at scale) | Pending | - | 1 day |
+| 6 | CLI e2e tests (sites, wp, sync commands with real execution) | Pending | - | 1.5 days |
 
-**Progress:** 3/5 tasks complete (60%)
+**Progress:** 3/6 tasks complete (50%)
 **Tests added:** 55 (now 207/207 passing = 100%)
 **Time spent:** 1.5 days
-**Remaining:** 3 days
+**Remaining:** 6.5 days
+**Total estimated:** 8 days
 
 ### Option 2: Production Hardening (~3-5 days)
 
