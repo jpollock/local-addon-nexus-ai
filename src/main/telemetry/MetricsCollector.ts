@@ -3,9 +3,12 @@
  *
  * Lightweight, in-memory metrics collection for production monitoring.
  * Collects counters, gauges, and histograms with minimal overhead.
+ *
+ * Integrated with CloudflareTransmitter for anonymous usage analytics.
  */
 
 import { Counter, Gauge, Histogram, MetricSnapshot, ToolMetrics } from './types';
+import { CloudflareTransmitter } from './CloudflareTransmitter';
 
 export class MetricsCollector {
   private static instance: MetricsCollector;
@@ -87,6 +90,9 @@ export class MetricsCollector {
     if (isError) {
       this.increment('mcp_tool_errors_total', { tool: toolName });
     }
+
+    // Transmit to Cloudflare for anonymous analytics (fire-and-forget)
+    CloudflareTransmitter.recordToolCall(toolName, duration_ms, !isError);
   }
 
   /**

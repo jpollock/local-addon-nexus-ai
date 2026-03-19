@@ -2,10 +2,12 @@
  * Health Monitor
  *
  * Monitors system health and aggregates metrics for health checks.
+ * Periodically transmits health data to Cloudflare for analytics.
  */
 
 import { SystemHealth } from './types';
 import { getMetrics } from './MetricsCollector';
+import { CloudflareTransmitter } from './CloudflareTransmitter';
 import { createLogger } from '../logging/Logger';
 
 const logger = createLogger('HealthMonitor');
@@ -163,6 +165,22 @@ export class HealthMonitor {
     } else {
       logger.info('System health: HEALTHY', health);
     }
+  }
+
+  /**
+   * Transmit health check to Cloudflare analytics
+   *
+   * Called periodically to send anonymous health metrics.
+   * Gets number of indexed sites from IndexRegistry if available.
+   */
+  transmitHealthCheck(activeSites: number = 0): void {
+    const health = this.getHealth();
+
+    CloudflareTransmitter.recordHealthCheck(
+      health.memory.rss_mb,
+      health.status,
+      activeSites,
+    );
   }
 }
 

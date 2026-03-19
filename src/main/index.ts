@@ -21,6 +21,7 @@ import { registerCompositeTools } from './mcp/modules/composite/index';
 import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
 import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence/index';
 import { registerTelemetryTools } from './mcp/modules/telemetry-tools';
+import { registerTelemetryControlTools } from './mcp/modules/telemetry-control-tools';
 import { saveConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
 import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
@@ -185,6 +186,7 @@ export default function main(context: any): void {
   registerWpConnectorTools(registry);
   registerFleetIntelligenceTools(registry);
   registerTelemetryTools(registry);
+  registerTelemetryControlTools(registry);
 
   // Phase 3a: Register GraphQL schema for Nexus CLI
   if (graphql) {
@@ -275,6 +277,19 @@ export default function main(context: any): void {
       // Start Ollama availability polling
       refreshOllamaStatus();
       setInterval(() => refreshOllamaStatus(), OLLAMA_POLL_INTERVAL_MS);
+
+      // Start periodic health check transmission (every hour)
+      // Transmits anonymous health metrics to Cloudflare for analytics
+      const { getHealthMonitor } = require('./telemetry/HealthMonitor');
+      setInterval(() => {
+        try {
+          const healthMonitor = getHealthMonitor();
+          const activeSites = indexRegistry.listAll().length;
+          healthMonitor.transmitHealthCheck(activeSites);
+        } catch {
+          // Ignore telemetry errors
+        }
+      }, 3600000); // 1 hour
     } catch (err) {
       rejectReady!(err as Error);
       localLogger.error('[NexusAI] Failed to start:', (err as Error).message, (err as Error).stack);
