@@ -1,6 +1,9 @@
 import { ToolRegistry } from './tool-registry';
 import { McpToolResult, NexusServices } from './types';
 import { getToolSafety, ConfirmationManager } from './safety';
+import { createLogger } from '../logging/Logger';
+
+const logger = createLogger('McpSafetyWrapper');
 
 /**
  * MCP Safety Wrapper
@@ -31,7 +34,7 @@ export class McpSafetyWrapper {
     args: Record<string, unknown>,
     services: NexusServices,
   ): Promise<McpToolResult> {
-    console.log(`[McpSafetyWrapper] callWithSafety: name="${name}", args=${JSON.stringify(args)}`);
+    logger.debug(`callWithSafety: name="${name}"`, { args });
     const safety = getToolSafety(name);
     const startTime = Date.now();
 

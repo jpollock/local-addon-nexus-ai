@@ -3,6 +3,9 @@
  */
 import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
 import { resolveSite } from '../../site-resolver';
+import { createLogger } from '../../../logging/Logger';
+
+const logger = createLogger('EventTools');
 
 function success(data: any): McpToolResult {
   return {
@@ -80,29 +83,26 @@ export const getGraphContentTool: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    console.log(`[get_graph_content] Called with site="${args.site}", post_id=${args.post_id}`);
-    console.log(`[get_graph_content] services keys: ${Object.keys(services).join(', ')}`);
+    logger.debug('get_graph_content called', { site: args.site, post_id: args.post_id });
 
     const graphService = (services as any).graphService;
-    console.log(`[get_graph_content] graphService: ${graphService ? 'EXISTS' : 'NULL'}`);
     if (!graphService) {
-      console.log('[get_graph_content] ERROR: Graph service not initialized');
+      logger.error('get_graph_content: Graph service not initialized');
       return error('Graph service not initialized');
     }
 
     const site = resolveSite(args.site as string, services.siteData);
     if (!site) {
-      console.log(`[get_graph_content] ERROR: Site not found: ${args.site}`);
+      logger.warn('get_graph_content: Site not found', { site: args.site });
       return error(`Site not found: ${args.site}`);
     }
 
-    console.log(`[get_graph_content] Resolved site: id="${site.id}", name="${site.name}"`);
-    console.log(`[get_graph_content] Querying with site.name="${site.name}", post_id=${args.post_id}`);
+    logger.debug('get_graph_content: Resolved site', { siteId: site.id, siteName: site.name, post_id: args.post_id });
 
     // Use site.name for GraphService queries (events are stored by site name, not UUID)
     const content = await graphService.getContent(site.name, args.post_id);
 
-    console.log(`[get_graph_content] GraphService.getContent returned: ${content ? 'CONTENT' : 'NULL'}`);
+    logger.debug('get_graph_content: Query complete', { hasContent: !!content });
     return success(content);
   },
 };
@@ -128,30 +128,27 @@ export const listGraphContentTool: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    console.log(`[list_graph_content] Called with site="${args.site}"`);
-    console.log(`[list_graph_content] services keys: ${Object.keys(services).join(', ')}`);
+    logger.debug('list_graph_content called', { site: args.site, post_type: args.post_type });
 
     const graphService = (services as any).graphService;
-    console.log(`[list_graph_content] graphService: ${graphService ? 'EXISTS' : 'NULL'}`);
     if (!graphService) {
-      console.log('[list_graph_content] ERROR: Graph service not initialized');
+      logger.error('list_graph_content: Graph service not initialized');
       return error('Graph service not initialized');
     }
 
     const site = resolveSite(args.site as string, services.siteData);
     if (!site) {
-      console.log(`[list_graph_content] ERROR: Site not found: ${args.site}`);
+      logger.warn('list_graph_content: Site not found', { site: args.site });
       return error(`Site not found: ${args.site}`);
     }
 
-    console.log(`[list_graph_content] Resolved site: id="${site.id}", name="${site.name}"`);
+    logger.debug('list_graph_content: Resolved site', { siteId: site.id, siteName: site.name });
 
     const options = args.post_type ? { post_type: args.post_type } : undefined;
     // Use site.name for GraphService queries (events are stored by site name, not UUID)
-    console.log(`[list_graph_content] Calling graphService.listContent("${site.name}", ${JSON.stringify(options)})`);
     const content = await graphService.listContent(site.name, options);
 
-    console.log(`[list_graph_content] GraphService.listContent returned: ${content.length} items`);
+    logger.debug('list_graph_content: Query complete', { count: content.length });
     return success(content);
   },
 };

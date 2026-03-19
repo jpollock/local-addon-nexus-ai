@@ -20,6 +20,7 @@ import { registerWpeTools } from './mcp/modules/wpe/index';
 import { registerCompositeTools } from './mcp/modules/composite/index';
 import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
 import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence/index';
+import { registerTelemetryTools } from './mcp/modules/telemetry-tools';
 import { saveConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
 import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
@@ -183,6 +184,7 @@ export default function main(context: any): void {
   registerCompositeTools(registry);
   registerWpConnectorTools(registry);
   registerFleetIntelligenceTools(registry);
+  registerTelemetryTools(registry);
 
   // Phase 3a: Register GraphQL schema for Nexus CLI
   if (graphql) {
