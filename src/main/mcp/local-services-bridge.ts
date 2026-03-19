@@ -67,6 +67,29 @@ export interface LocalServicesBridge {
   deleteSite(siteId: string, trashFiles: boolean): Promise<void>;
   cloneSite(siteId: string, newName: string): Promise<{ id: string; name: string }>;
   exportSite(siteId: string, outputPath: string): Promise<string>;
+  updateSite(siteId: string, updates: Record<string, any>): void;
+  importSite(zipPath: string, siteName?: string): Promise<{ id: string; name: string }>;
+
+  // Blueprints
+  getBlueprints?(): Promise<Array<{ id: string; name: string; description?: string; createdAt?: string }>>;
+  saveBlueprint?(siteId: string, opts: { name: string; description?: string }): Promise<{ id: string }>;
+
+  // WPE Connect
+  listModifications?(args: {
+    localSiteId: string;
+    wpengineInstallName: string;
+    wpengineInstallId: string;
+    wpengineSiteId: string;
+    wpenginePrimaryDomain: string;
+    direction: 'push' | 'pull';
+  }): Promise<Array<{ path: string; instruction: string }>>;
+  getSyncHistory?(siteId: string): Promise<Array<{
+    direction: 'push' | 'pull';
+    remoteInstallName?: string;
+    environment?: string;
+    status?: string;
+    timestamp: number;
+  }>>;
 
   // WP-CLI
   wpCliRun(siteId: string, args: string[], opts?: WpCliRunOpts): Promise<WpCliResult>;
@@ -248,6 +271,85 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         return await exportService.exportSite({ site, outputPath });
       }
       throw new Error('Export service not available');
+    },
+
+    updateSite(siteId: string, updates: Record<string, any>): void {
+      const siteData = svc('siteData');
+      if (!siteData?.updateSite) {
+        throw new Error('Site update service not available');
+      }
+      siteData.updateSite(siteId, updates);
+    },
+
+    async importSite(zipPath: string, siteName?: string): Promise<{ id: string; name: string }> {
+      const importService = svc('importSite');
+      if (!importService?.run) {
+        throw new Error('Import site service not available');
+      }
+
+      const derivedName = siteName || path.basename(zipPath, '.zip').replace(/[^a-zA-Z0-9-_]/g, '-');
+
+      const importSettings = {
+        importType: 'localExport',
+        zipPath: zipPath,
+        siteName: derivedName,
+      };
+
+      const result = await importService.run(importSettings);
+      return { id: result.id || '', name: result.name || derivedName };
+    },
+
+    // --- Blueprints ---
+
+    getBlueprints() {
+      const blueprints = svc('blueprints');
+      if (!blueprints?.getBlueprints) {
+        return Promise.resolve(undefined);
+      }
+      return blueprints.getBlueprints();
+    },
+
+    saveBlueprint(siteId: string, opts: { name: string; description?: string }) {
+      const site = requireSite(siteId);
+      const blueprints = svc('blueprints');
+      if (!blueprints?.saveBlueprint) {
+        return Promise.resolve(undefined);
+      }
+      return blueprints.saveBlueprint(site, opts);
+    },
+
+    // --- WPE Connect ---
+
+    listModifications(args: {
+      localSiteId: string;
+      wpengineInstallName: string;
+      wpengineInstallId: string;
+      wpengineSiteId: string;
+      wpenginePrimaryDomain: string;
+      direction: 'push' | 'pull';
+    }) {
+      const wpeConnectBase = svc('wpeConnectBase');
+      if (!wpeConnectBase?.listModifications) {
+        return Promise.resolve(undefined);
+      }
+      return wpeConnectBase.listModifications({
+        connectArgs: {
+          wpengineInstallName: args.wpengineInstallName,
+          wpengineInstallId: args.wpengineInstallId,
+          wpengineSiteId: args.wpengineSiteId,
+          wpenginePrimaryDomain: args.wpenginePrimaryDomain,
+          localSiteId: args.localSiteId,
+        },
+        direction: args.direction,
+      });
+    },
+
+    getSyncHistory(siteId: string) {
+      const connectHistory = svc('connectHistory');
+      if (!connectHistory?.getEvents) {
+        return Promise.resolve(undefined);
+      }
+      return connectHistory.getEvents(siteId);
     },
 
     // --- WP-CLI ---

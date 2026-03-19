@@ -10,6 +10,12 @@ import { cloneSiteHandler } from './clone-site';
 import { exportSiteHandler } from './export-site';
 import { changePhpVersionHandler } from './change-php-version';
 import { trustSslHandler } from './trust-ssl';
+import { toggleXdebugHandler } from './toggle-xdebug';
+import { renameSiteHandler } from './rename-site';
+import { importSiteHandler } from './import-site';
+import { listBlueprintsHandler } from './list-blueprints';
+import { saveBlueprintHandler } from './save-blueprint';
+import { getSiteLogsHandler } from './get-site-logs';
 
 /**
  * Site management module — lifecycle tools for local WordPress sites.
@@ -27,4 +33,10 @@ export function registerSiteManagementTools(registry: ToolRegistry): void {
   registry.register(exportSiteHandler);
   registry.register(changePhpVersionHandler);
   registry.register(trustSslHandler);
+  registry.register(toggleXdebugHandler);
+  registry.register(renameSiteHandler);
+  registry.register(importSiteHandler);
+  registry.register(listBlueprintsHandler);
+  registry.register(saveBlueprintHandler);
+  registry.register(getSiteLogsHandler);
 }

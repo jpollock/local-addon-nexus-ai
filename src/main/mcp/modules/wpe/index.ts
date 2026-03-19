@@ -8,6 +8,8 @@ import { wpeLinkHandler } from './wpe-link';
 import { wpePullHandler } from './wpe-pull';
 import { wpePushHandler } from './wpe-push';
 import { nexusListSitesHandler } from './nexus-list-sites';
+import { getSiteChangesHandler } from './get-site-changes';
+import { getSyncHistoryHandler } from './get-sync-history';
 
 /**
  * WPE integration module — tools for WP Engine account/install management
@@ -26,4 +28,6 @@ export function registerWpeTools(registry: ToolRegistry): void {
   registry.register(wpePullHandler);
   registry.register(wpePushHandler);
   registry.register(nexusListSitesHandler);
+  registry.register(getSiteChangesHandler);
+  registry.register(getSyncHistoryHandler);
 }
