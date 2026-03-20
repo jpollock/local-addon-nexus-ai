@@ -509,6 +509,191 @@ export function createResolvers(context: ResolverContext) {
       },
 
       /**
+       * Change PHP version
+       */
+      nexusSitesConfigPhp: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(input.target);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Only local sites support PHP configuration. Use target format: mysite@local',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site "${parsed.siteName}" not found`,
+            };
+          }
+
+          const oldVersion = site.phpVersion || 'unknown';
+          await services.localServices.changePhpVersion(site.id, input.version);
+
+          return {
+            success: true,
+            oldVersion,
+            newVersion: input.version,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Trust SSL certificate
+       */
+      nexusSitesConfigSsl: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(input.target);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Only local sites support SSL trust. Use target format: mysite@local',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site "${parsed.siteName}" not found`,
+            };
+          }
+
+          await services.localServices.trustSsl(site.id);
+
+          return {
+            success: true,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Toggle Xdebug
+       */
+      nexusSitesConfigXdebug: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(input.target);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Only local sites support Xdebug. Use target format: mysite@local',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site "${parsed.siteName}" not found`,
+            };
+          }
+
+          const result = await services.localServices.toggleXdebug(site.id, input.enable);
+
+          return {
+            success: true,
+            enabled: result.enabled,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            enabled: false,
+          };
+        }
+      },
+
+      /**
+       * List blueprints
+       */
+      nexusBlueprintsList: async () => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available', blueprints: [] };
+          }
+
+          const blueprints = await services.localServices.listBlueprints();
+
+          return {
+            success: true,
+            blueprints: blueprints.map((bp: any) => ({
+              name: bp.name,
+              description: bp.description || null,
+            })),
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            blueprints: [],
+          };
+        }
+      },
+
+      /**
+       * Save site as blueprint
+       */
+      nexusBlueprintsSave: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(input.target);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Only local sites can be saved as blueprints. Use target format: mysite@local',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site "${parsed.siteName}" not found`,
+            };
+          }
+
+          await services.localServices.saveBlueprint(site.id, input.blueprintName);
+
+          return {
+            success: true,
+            blueprintName: input.blueprintName,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
        * Create a new local site
        */
       nexusSitesCreate: async (_parent: any, { input }: { input: any }) => {

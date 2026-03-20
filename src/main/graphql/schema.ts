@@ -205,6 +205,84 @@ export const typeDefs = gql`
     logs: String
   }
 
+  input NexusConfigPhpInput {
+    "Site target (e.g., 'mysite@local')"
+    target: String!
+    "PHP version (e.g., '8.2', '8.1', '7.4')"
+    version: String!
+  }
+
+  type NexusConfigPhpResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Old PHP version"
+    oldVersion: String
+    "New PHP version"
+    newVersion: String
+  }
+
+  input NexusConfigSslInput {
+    "Site target (e.g., 'mysite@local')"
+    target: String!
+  }
+
+  type NexusConfigSslResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+  }
+
+  input NexusConfigXdebugInput {
+    "Site target (e.g., 'mysite@local')"
+    target: String!
+    "Enable or disable Xdebug"
+    enable: Boolean!
+  }
+
+  type NexusConfigXdebugResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Xdebug enabled status"
+    enabled: Boolean!
+  }
+
+  type Blueprint {
+    "Blueprint name"
+    name: String!
+    "Blueprint description"
+    description: String
+  }
+
+  type NexusBlueprintsListResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Available blueprints"
+    blueprints: [Blueprint!]
+  }
+
+  input NexusBlueprintsSaveInput {
+    "Site target (e.g., 'mysite@local')"
+    target: String!
+    "Name for the blueprint"
+    blueprintName: String!
+  }
+
+  type NexusBlueprintsSaveResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Created blueprint name"
+    blueprintName: String
+  }
+
   input NexusCreateSiteInput {
     "Site name"
     name: String!
@@ -370,6 +448,21 @@ export const typeDefs = gql`
 
     "Get site logs"
     nexusSitesLogs(input: NexusGetLogsInput!): NexusGetLogsResult!
+
+    "Change PHP version"
+    nexusSitesConfigPhp(input: NexusConfigPhpInput!): NexusConfigPhpResult!
+
+    "Trust SSL certificate"
+    nexusSitesConfigSsl(input: NexusConfigSslInput!): NexusConfigSslResult!
+
+    "Toggle Xdebug"
+    nexusSitesConfigXdebug(input: NexusConfigXdebugInput!): NexusConfigXdebugResult!
+
+    "List blueprints"
+    nexusBlueprintsList: NexusBlueprintsListResult!
+
+    "Save site as blueprint"
+    nexusBlueprintsSave(input: NexusBlueprintsSaveInput!): NexusBlueprintsSaveResult!
 
     "Create a new local site"
     nexusSitesCreate(input: NexusCreateSiteInput!): NexusCreateSiteResult!

@@ -10,6 +10,7 @@ import { Command } from 'commander';
 import { sitesCommand } from './commands/sites';
 import { wpCommand } from './commands/wp';
 import { syncCommand } from './commands/sync';
+import { blueprintsCommand } from './commands/blueprints';
 import { updateCommand } from './commands/update';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
@@ -26,6 +27,7 @@ program
 program.addCommand(sitesCommand);
 program.addCommand(wpCommand);
 program.addCommand(syncCommand);
+program.addCommand(blueprintsCommand);
 program.addCommand(updateCommand);
 
 // Global error handler

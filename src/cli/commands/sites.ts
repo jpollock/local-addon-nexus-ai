@@ -689,4 +689,158 @@ sitesCommand
     }
   });
 
+/**
+ * nexus sites config php
+ */
+sitesCommand
+  .command('config-php <target> <version>')
+  .description('Change PHP version')
+  .action(async (target, version, options) => {
+    try {
+      if (!target.endsWith('@local')) {
+        console.error('\n❌ Target site must be local.');
+        console.error(`   Use: nexus sites config-php ${target}@local ${version}`);
+        process.exit(1);
+      }
+
+      const client = getClient();
+
+      console.log(`\nChanging PHP version for ${target}...`);
+
+      const result = await client.mutate<{ nexusSitesConfigPhp: any }>(`
+        mutation($input: NexusConfigPhpInput!) {
+          nexusSitesConfigPhp(input: $input) {
+            success
+            error
+            oldVersion
+            newVersion
+          }
+        }
+      `, {
+        input: {
+          target,
+          version,
+        },
+      });
+
+      const { success, error, oldVersion, newVersion } = result.nexusSitesConfigPhp;
+
+      if (!success) {
+        console.error(`\n❌ Failed to change PHP version: ${error}`);
+        process.exit(1);
+      }
+
+      console.log(`\n✅ PHP version changed`);
+      console.log(`   ${oldVersion} → ${newVersion}`);
+      console.log(`\n⚠️  Site restart required for changes to take effect`);
+      console.log(`   nexus sites restart ${target}`);
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
+ * nexus sites config ssl
+ */
+sitesCommand
+  .command('config-ssl <target>')
+  .description('Trust SSL certificate')
+  .action(async (target, options) => {
+    try {
+      if (!target.endsWith('@local')) {
+        console.error('\n❌ Target site must be local.');
+        console.error(`   Use: nexus sites config-ssl ${target}@local`);
+        process.exit(1);
+      }
+
+      const client = getClient();
+
+      console.log(`\nTrusting SSL certificate for ${target}...`);
+
+      const result = await client.mutate<{ nexusSitesConfigSsl: any }>(`
+        mutation($input: NexusConfigSslInput!) {
+          nexusSitesConfigSsl(input: $input) {
+            success
+            error
+          }
+        }
+      `, {
+        input: {
+          target,
+        },
+      });
+
+      const { success, error } = result.nexusSitesConfigSsl;
+
+      if (!success) {
+        console.error(`\n❌ Failed to trust SSL: ${error}`);
+        process.exit(1);
+      }
+
+      console.log(`\n✅ SSL certificate trusted`);
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
+ * nexus sites config xdebug
+ */
+sitesCommand
+  .command('config-xdebug <target>')
+  .description('Toggle Xdebug')
+  .option('--enable', 'Enable Xdebug')
+  .option('--disable', 'Disable Xdebug')
+  .action(async (target, options) => {
+    try {
+      if (!target.endsWith('@local')) {
+        console.error('\n❌ Target site must be local.');
+        console.error(`   Use: nexus sites config-xdebug ${target}@local --enable|--disable`);
+        process.exit(1);
+      }
+
+      if (!options.enable && !options.disable) {
+        console.error('\n❌ Must specify --enable or --disable');
+        process.exit(1);
+      }
+
+      const enable = !!options.enable;
+      const client = getClient();
+
+      console.log(`\n${enable ? 'Enabling' : 'Disabling'} Xdebug for ${target}...`);
+
+      const result = await client.mutate<{ nexusSitesConfigXdebug: any }>(`
+        mutation($input: NexusConfigXdebugInput!) {
+          nexusSitesConfigXdebug(input: $input) {
+            success
+            error
+            enabled
+          }
+        }
+      `, {
+        input: {
+          target,
+          enable,
+        },
+      });
+
+      const { success, error, enabled } = result.nexusSitesConfigXdebug;
+
+      if (!success) {
+        console.error(`\n❌ Failed to toggle Xdebug: ${error}`);
+        process.exit(1);
+      }
+
+      console.log(`\n✅ Xdebug ${enabled ? 'enabled' : 'disabled'}`);
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
 export { sitesCommand };
