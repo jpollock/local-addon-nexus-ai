@@ -54,7 +54,51 @@ graph TB
 
 ## Components
 
-### 1. MCP Server
+### 1. Bootstrap System
+
+Ensures the CLI is ready to execute commands by automatically handling all setup.
+
+**Location:** `src/cli/bootstrap/`
+
+**Responsibilities:**
+
+- Detect if Local is installed
+- Start Local if not running
+- Install Nexus AI addon if missing
+- Activate addon in enabled-addons.json
+- Wait for GraphQL server to be ready
+- Provide connection info to commands
+
+**Modules:**
+
+- `index.ts` - Main bootstrap orchestration
+- `process.ts` - Process detection and lifecycle (start/stop/restart Local)
+- `paths.ts` - Platform-specific paths (macOS/Windows/Linux)
+- `addon.ts` - Addon installation and activation
+- `graphql.ts` - GraphQL readiness polling
+
+**Flow:**
+
+```mermaid
+graph TD
+    A[CLI Start] --> B{Local Installed?}
+    B -->|No| C[Error: Download Local]
+    B -->|Yes| D{Addon Installed?}
+    D -->|No| E[Install Addon]
+    E --> F{Addon Activated?}
+    D -->|Yes| F
+    F -->|No| G[Activate Addon]
+    F -->|Yes| H{Local Running?}
+    G --> I[Restart Local]
+    H -->|No| J[Start Local]
+    H -->|Yes| K[Wait for GraphQL]
+    I --> K
+    J --> K
+    K -->|Timeout| L[Error: GraphQL Not Ready]
+    K -->|Ready| M[Execute Command]
+```
+
+### 2. MCP Server
 
 The Model Context Protocol server is the main entry point for AI assistants.
 

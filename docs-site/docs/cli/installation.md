@@ -12,7 +12,9 @@ Install the Nexus AI CLI for command-line access and MCP server functionality.
 
 - **[Local](https://localwp.com)** must be installed
 - **Node.js 18 or higher**
-- Local must be running for site operations
+
+!!! success "Auto-Start Feature"
+    The CLI automatically starts Local if it's not running. No manual setup required!
 
 ### Verify Prerequisites
 
@@ -21,17 +23,20 @@ Install the Nexus AI CLI for command-line access and MCP server functionality.
 node --version
 # ✓ v22.16.0
 
-# Check Local is installed
+# Check Local is installed (optional - CLI will prompt if missing)
 ls -la /Applications/Local.app  # macOS
-# or check in Applications folder
-
-# Start Local if not running
-open -a Local  # macOS
 ```
 
-!!! warning "Local Required"
-    The CLI requires Local to be installed. The addon will be auto-installed on first run.
-    Download Local from [localwp.com](https://localwp.com) if needed.
+!!! info "What Happens on First Run"
+    The CLI automatically:
+
+    - Detects if Local is installed (prompts to download if not)
+    - Starts Local if it's not running
+    - Installs the Nexus AI addon
+    - Activates the addon
+    - Waits for GraphQL server to be ready
+
+    Just install the CLI and run commands - everything else is automatic!
 
 ## Installation
 
@@ -43,25 +48,32 @@ After installation, the `nexus` command is available globally.
 
 ### First Run
 
-On first run, the CLI will:
+On first run, the CLI automatically handles all setup:
 
-1. Check if Local is installed
-2. Install the Nexus AI addon into Local if needed
-3. Activate the addon in Local
-4. Restart Local if necessary
+```bash
+$ nexus sites list
 
-You'll see output like:
+🔧 Connecting to Local...
+🔧 Starting Local...
+🔧 Addon not installed. Installing...
+🔧 Activating addon...
+🔧 Waiting for GraphQL...
+🔧 GraphQL server ready.
 
-```
-✓ Local detected at /Applications/Local.app
-✓ Installing Nexus AI addon...
-✓ Addon installed successfully
-⚠ Local restart required
-  Restarting Local...
-✓ Nexus AI is ready!
+Local Sites:
+  (no sites yet)
 ```
 
-After this, both the CLI and UI addon are fully configured.
+**What just happened:**
+
+1. ✅ Detected Local is installed
+2. ✅ Started Local automatically
+3. ✅ Installed Nexus AI addon
+4. ✅ Activated the addon
+5. ✅ Waited for GraphQL server
+6. ✅ Executed your command
+
+Subsequent runs are instant - no bootstrap overhead.
 
 ## Verify Installation
 

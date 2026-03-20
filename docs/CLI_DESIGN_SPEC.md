@@ -1,16 +1,20 @@
 # Nexus CLI - Complete Design Specification
 
-**Date:** 2026-03-18 (Updated post-POC)
-**Branch:** `mvp-v1`
+**Date:** 2026-03-20 (Updated post-Bootstrap Implementation)
+**Branch:** `grouped-tree-view`
 **CLI Name:** `nexus`
 
-**Status:** ✅ POC Complete - See `CLI_POC_RESULTS.md` for implementation details
+**Status:** ✅ Bootstrap System Implemented - Production-Ready CLI
 
-**Post-POC Updates:**
+**Recent Updates:**
+- ✅ Bootstrap system with auto-start Local (Phase 1-3 complete)
+- ✅ Version checking and self-update command
+- ✅ Cross-platform support (macOS/Windows/Linux)
+- ✅ Auto-addon installation and activation
 - Added `@env` requirement everywhere (no exceptions)
 - Simplified link management (using hostConnections)
 - Services-based resolvers (not MCP tools)
-- See `CLI_FEATURE_ROADMAP.md` for implementation plan
+- See `CLI_BOOTSTRAP_SYSTEM.md` for bootstrap documentation
 
 ---
 

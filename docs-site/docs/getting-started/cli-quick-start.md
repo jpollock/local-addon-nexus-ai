@@ -14,7 +14,15 @@ Before you begin, make sure you have:
 
 - **Local by Flywheel** installed ([download](https://localwp.com))
 - **Node.js 18+** installed ([download](https://nodejs.org))
-- At least one WordPress site in Local
+- At least one WordPress site in Local (optional for first run)
+
+!!! tip "Zero Configuration"
+    The CLI handles everything automatically:
+
+    - ✅ Auto-starts Local if not running
+    - ✅ Auto-installs addon if missing
+    - ✅ Auto-activates addon
+    - ✅ No manual setup required!
 
 ## Installation
 
@@ -24,7 +32,7 @@ Install Nexus AI globally via npm:
 npm install -g @local-labs-jpollock/local-addon-nexus-ai
 ```
 
-This installs the `nexus` CLI command and automatically installs the Nexus AI addon into Local.
+This installs the `nexus` CLI command. The addon is auto-installed on first run.
 
 **Verify installation:**
 
@@ -32,7 +40,7 @@ This installs the `nexus` CLI command and automatically installs the Nexus AI ad
 nexus --version
 ```
 
-You should see the version number (e.g., `1.0.0`).
+You should see the version number (e.g., `0.1.0`).
 
 ## First Steps
 
