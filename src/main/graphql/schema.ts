@@ -656,5 +656,256 @@ export const typeDefs = gql`
 
     "Push from local to WPE"
     nexusSyncPush(input: NexusSyncPushInput!): NexusSyncPushResult!
+
+    # Fleet Intelligence
+    "Fleet health summary"
+    nexusFleetHealth: NexusFleetHealthResult!
+
+    "Individual site health"
+    nexusFleetSiteHealth(target: String!): NexusFleetSiteHealthResult!
+
+    "Search across all sites"
+    nexusFleetSearch(query: String!, limit: Int): NexusFleetSearchResult!
+
+    "Filter sites by criteria"
+    nexusFleetFilter(filter: NexusFleetFilterInput!): NexusFleetFilterResult!
+
+    "List site groups"
+    nexusFleetGroupsList: NexusFleetGroupsListResult!
+
+    "Create site group"
+    nexusFleetGroupsCreate(name: String!, description: String): NexusFleetGroupsCreateResult!
+
+    "Add sites to group"
+    nexusFleetGroupsAdd(group: String!, sites: [String!]!): NexusFleetGroupsAddResult!
+
+    "Remove sites from group"
+    nexusFleetGroupsRemove(group: String!, sites: [String!]!): NexusFleetGroupsRemoveResult!
+
+    "Delete site group"
+    nexusFleetGroupsDelete(group: String!): NexusFleetGroupsDeleteResult!
+
+    "Bulk reindex sites"
+    nexusFleetBulkReindex(targets: [String!]!): NexusFleetBulkReindexResult!
+
+    "Bulk plugin update"
+    nexusFleetBulkPluginUpdate(input: NexusFleetBulkPluginUpdateInput!): NexusFleetBulkPluginUpdateResult!
+
+    "Bulk health check"
+    nexusFleetBulkHealthCheck(targets: [String!]!): NexusFleetBulkHealthCheckResult!
+
+    "Compare two sites"
+    nexusFleetCompare(target1: String!, target2: String!): NexusFleetCompareResult!
+  }
+
+  # ============================================================================
+  # Fleet Intelligence Types
+  # ============================================================================
+
+  type FleetHealthSummary {
+    totalSites: Int!
+    runningSites: Int!
+    haltedSites: Int!
+    healthyCount: Int!
+    warningCount: Int!
+    criticalCount: Int!
+    totalPlugins: Int!
+    outdatedPlugins: Int!
+    totalThemes: Int!
+    outdatedThemes: Int!
+  }
+
+  type NexusFleetHealthResult {
+    success: Boolean!
+    error: String
+    summary: FleetHealthSummary
+  }
+
+  type HealthIssue {
+    severity: String!
+    message: String!
+    category: String!
+  }
+
+  type PluginHealth {
+    total: Int!
+    active: Int!
+    outdated: Int!
+  }
+
+  type ThemeHealth {
+    total: Int!
+    active: Int!
+    outdated: Int!
+  }
+
+  type WordPressHealth {
+    version: String!
+    updateAvailable: Boolean!
+  }
+
+  type SiteHealth {
+    status: String!
+    score: Int!
+    issues: [HealthIssue!]!
+    plugins: PluginHealth!
+    themes: ThemeHealth!
+    wordpress: WordPressHealth!
+  }
+
+  type NexusFleetSiteHealthResult {
+    success: Boolean!
+    error: String
+    health: SiteHealth
+  }
+
+  type SearchResult {
+    target: String!
+    siteName: String!
+    type: String!
+    score: Float!
+    snippet: String!
+  }
+
+  type NexusFleetSearchResult {
+    success: Boolean!
+    error: String
+    results: [SearchResult!]!
+  }
+
+  input NexusFleetFilterInput {
+    status: String
+    plugin: String
+    wpVersion: String
+    linkedOnly: Boolean
+  }
+
+  type FilteredSite {
+    target: String!
+    name: String!
+    status: String!
+    wpVersion: String
+    linkedTo: String
+  }
+
+  type NexusFleetFilterResult {
+    success: Boolean!
+    error: String
+    sites: [FilteredSite!]!
+  }
+
+  type SiteGroup {
+    id: String!
+    name: String!
+    description: String
+    siteCount: Int!
+    createdAt: String!
+  }
+
+  type NexusFleetGroupsListResult {
+    success: Boolean!
+    error: String
+    groups: [SiteGroup!]!
+  }
+
+  type NexusFleetGroupsCreateResult {
+    success: Boolean!
+    error: String
+    groupId: String
+  }
+
+  type NexusFleetGroupsAddResult {
+    success: Boolean!
+    error: String
+    addedCount: Int!
+  }
+
+  type NexusFleetGroupsRemoveResult {
+    success: Boolean!
+    error: String
+    removedCount: Int!
+  }
+
+  type NexusFleetGroupsDeleteResult {
+    success: Boolean!
+    error: String
+  }
+
+  type ReindexResult {
+    target: String!
+    success: Boolean!
+    error: String
+    documentCount: Int
+  }
+
+  type NexusFleetBulkReindexResult {
+    success: Boolean!
+    error: String
+    results: [ReindexResult!]!
+  }
+
+  input NexusFleetBulkPluginUpdateInput {
+    targets: [String!]!
+    plugin: String
+    all: Boolean!
+    dryRun: Boolean!
+  }
+
+  type UpdatedPlugin {
+    slug: String!
+    oldVersion: String!
+    newVersion: String!
+  }
+
+  type PluginUpdateResult {
+    target: String!
+    success: Boolean!
+    error: String
+    updatedPlugins: [UpdatedPlugin!]!
+  }
+
+  type NexusFleetBulkPluginUpdateResult {
+    success: Boolean!
+    error: String
+    results: [PluginUpdateResult!]!
+  }
+
+  type HealthCheckResult {
+    target: String!
+    status: String!
+    score: Int!
+    issueCount: Int!
+  }
+
+  type NexusFleetBulkHealthCheckResult {
+    success: Boolean!
+    error: String
+    results: [HealthCheckResult!]!
+  }
+
+  type SiteInfo {
+    target: String!
+    wpVersion: String!
+    pluginCount: Int!
+    themeCount: Int!
+  }
+
+  type SiteDifference {
+    category: String!
+    item: String!
+    site1Value: String!
+    site2Value: String!
+  }
+
+  type SiteComparison {
+    site1: SiteInfo!
+    site2: SiteInfo!
+    differences: [SiteDifference!]!
+  }
+
+  type NexusFleetCompareResult {
+    success: Boolean!
+    error: String
+    comparison: SiteComparison
   }
 `;

@@ -1675,6 +1675,525 @@ export function createResolvers(context: ResolverContext) {
           };
         }
       },
+
+      // ========================================================================
+      // Fleet Intelligence Resolvers
+      // ========================================================================
+
+      nexusFleetHealth: async () => {
+        try {
+          if (!services.healthCalculator) {
+            return {
+              success: false,
+              error: 'Health scoring is not available',
+              summary: null,
+            };
+          }
+
+          const allSites = services.siteData.getSites();
+          const siteIds = Object.keys(allSites);
+
+          let runningSites = 0;
+          let haltedSites = 0;
+          let totalPlugins = 0;
+          let outdatedPlugins = 0;
+          let totalThemes = 0;
+          let outdatedThemes = 0;
+
+          // Count sites by status
+          for (const id of siteIds) {
+            const status = services.localServices?.getSiteStatus?.(id) || 'unknown';
+            if (status === 'running') runningSites++;
+            else haltedSites++;
+          }
+
+          // Get indexed sites for health scoring
+          const entries = services.indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
+          const siteInfoMap: Record<string, any> = {};
+
+          for (const entry of entries) {
+            const site = allSites[entry.siteId];
+            siteInfoMap[entry.siteId] = {
+              domain: site?.domain || '',
+              phpVersion: (site as any)?.phpVersion || '8.0',
+            };
+          }
+
+          const indexedSiteIds = entries.map((e: any) => e.siteId);
+          const scores = await services.healthCalculator.calculateAllScores(indexedSiteIds, siteInfoMap);
+
+          let healthyCount = 0;
+          let warningCount = 0;
+          let criticalCount = 0;
+
+          for (const id of indexedSiteIds) {
+            const score = scores[id] || 0;
+            if (score >= 80) healthyCount++;
+            else if (score >= 50) warningCount++;
+            else criticalCount++;
+          }
+
+          return {
+            success: true,
+            summary: {
+              totalSites: siteIds.length,
+              runningSites,
+              haltedSites,
+              healthyCount,
+              warningCount,
+              criticalCount,
+              totalPlugins,
+              outdatedPlugins,
+              totalThemes,
+              outdatedThemes,
+            },
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            summary: null,
+          };
+        }
+      },
+
+      nexusFleetSiteHealth: async (_parent: any, { target }: { target: string }) => {
+        try {
+          const parsed = parseTarget(target);
+
+          if (!services.healthCalculator) {
+            return {
+              success: false,
+              error: 'Health scoring is not available',
+              health: null,
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${parsed.siteName}`,
+              health: null,
+            };
+          }
+
+          const siteInfo = {
+            domain: site.domain || '',
+            phpVersion: (site as any)?.phpVersion || '8.0',
+          };
+
+          const scores = await services.healthCalculator.calculateAllScores([site.id], { [site.id]: siteInfo });
+          const score = scores[site.id] || 0;
+
+          const status = score >= 80 ? 'healthy' : score >= 50 ? 'warning' : 'critical';
+
+          return {
+            success: true,
+            health: {
+              status,
+              score,
+              issues: [],
+              plugins: {
+                total: 0,
+                active: 0,
+                outdated: 0,
+              },
+              themes: {
+                total: 0,
+                active: 0,
+                outdated: 0,
+              },
+              wordpress: {
+                version: 'unknown',
+                updateAvailable: false,
+              },
+            },
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            health: null,
+          };
+        }
+      },
+
+      nexusFleetSearch: async (_parent: any, { query, limit }: { query: string; limit?: number }) => {
+        try {
+          if (!services.vectorStore) {
+            return {
+              success: false,
+              error: 'Vector store not available',
+              results: [],
+            };
+          }
+
+          const searchResults = await services.vectorStore.search(query, limit || 20);
+
+          return {
+            success: true,
+            results: searchResults.map((r: any) => ({
+              target: `${r.siteName}@local`,
+              siteName: r.siteName || 'unknown',
+              type: r.type || 'content',
+              score: r.score || 0,
+              snippet: r.text?.substring(0, 200) || '',
+            })),
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            results: [],
+          };
+        }
+      },
+
+      nexusFleetFilter: async (_parent: any, { filter }: { filter: any }) => {
+        try {
+          const allSites = services.siteData.getSites();
+          const siteIds = Object.keys(allSites);
+          const results = [];
+
+          for (const id of siteIds) {
+            const site = allSites[id];
+            const status = services.localServices?.getSiteStatus?.(id) || 'unknown';
+
+            // Apply filters
+            if (filter.status && status !== filter.status) continue;
+            if (filter.linkedOnly) {
+              const rawSite = services.localServices?.resolveSiteObject?.(id);
+              const hasWpeConnection = rawSite?.hostConnections &&
+                Object.values(rawSite.hostConnections).some((c: any) => c.hostId === 'wpe' || c.accountId);
+              if (!hasWpeConnection) continue;
+            }
+
+            const rawSite = services.localServices?.resolveSiteObject?.(id);
+            const wpeConnection = rawSite?.hostConnections
+              ? Object.values(rawSite.hostConnections).find((c: any) => c.hostId === 'wpe' || c.accountId)
+              : null;
+
+            results.push({
+              target: `${site.name}@local`,
+              name: site.name,
+              status,
+              wpVersion: (site as any)?.wpVersion || null,
+              linkedTo: wpeConnection
+                ? `wpe:${(wpeConnection as any).accountId}/${(wpeConnection as any).installId}@${(wpeConnection as any).environment}`
+                : null,
+            });
+          }
+
+          return {
+            success: true,
+            sites: results,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            sites: [],
+          };
+        }
+      },
+
+      nexusFleetGroupsList: async () => {
+        try {
+          const result = await registry.call('list_site_groups', {}, services, 'cli');
+
+          if (result.isError) {
+            return {
+              success: false,
+              error: result.content[0]?.text || 'Failed to list groups',
+              groups: [],
+            };
+          }
+
+          const data = JSON.parse(result.content[0]?.text || '[]');
+          return {
+            success: true,
+            groups: data,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            groups: [],
+          };
+        }
+      },
+
+      nexusFleetGroupsCreate: async (_parent: any, { name, description }: { name: string; description?: string }) => {
+        try {
+          const result = await registry.call('manage_site_group', {
+            action: 'create',
+            groupName: name,
+            description: description || null,
+          }, services, 'cli');
+
+          if (result.isError) {
+            return {
+              success: false,
+              error: result.content[0]?.text || 'Failed to create group',
+              groupId: null,
+            };
+          }
+
+          const data = JSON.parse(result.content[0]?.text || '{}');
+          return {
+            success: true,
+            groupId: data.groupId,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            groupId: null,
+          };
+        }
+      },
+
+      nexusFleetGroupsAdd: async (_parent: any, { group, sites }: { group: string; sites: string[] }) => {
+        try {
+          const result = await registry.call('manage_site_group', {
+            action: 'add',
+            groupName: group,
+            sites,
+          }, services, 'cli');
+
+          if (result.isError) {
+            return {
+              success: false,
+              error: result.content[0]?.text || 'Failed to add sites to group',
+              addedCount: 0,
+            };
+          }
+
+          const data = JSON.parse(result.content[0]?.text || '{}');
+          return {
+            success: true,
+            addedCount: data.addedCount || sites.length,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            addedCount: 0,
+          };
+        }
+      },
+
+      nexusFleetGroupsRemove: async (_parent: any, { group, sites }: { group: string; sites: string[] }) => {
+        try {
+          const result = await registry.call('manage_site_group', {
+            action: 'remove',
+            groupName: group,
+            sites,
+          }, services, 'cli');
+
+          if (result.isError) {
+            return {
+              success: false,
+              error: result.content[0]?.text || 'Failed to remove sites from group',
+              removedCount: 0,
+            };
+          }
+
+          const data = JSON.parse(result.content[0]?.text || '{}');
+          return {
+            success: true,
+            removedCount: data.removedCount || sites.length,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            removedCount: 0,
+          };
+        }
+      },
+
+      nexusFleetGroupsDelete: async (_parent: any, { group }: { group: string }) => {
+        try {
+          const result = await registry.call('manage_site_group', {
+            action: 'delete',
+            groupName: group,
+          }, services, 'cli');
+
+          if (result.isError) {
+            return {
+              success: false,
+              error: result.content[0]?.text || 'Failed to delete group',
+            };
+          }
+
+          return { success: true };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      nexusFleetBulkReindex: async (_parent: any, { targets }: { targets: string[] }) => {
+        try {
+          const result = await registry.call('bulk_reindex', { targets }, services, 'cli');
+
+          if (result.isError) {
+            return {
+              success: false,
+              error: result.content[0]?.text || 'Bulk reindex failed',
+              results: [],
+            };
+          }
+
+          const data = JSON.parse(result.content[0]?.text || '[]');
+          return {
+            success: true,
+            results: data,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            results: [],
+          };
+        }
+      },
+
+      nexusFleetBulkPluginUpdate: async (_parent: any, { input }: { input: any }) => {
+        try {
+          const result = await registry.call('bulk_plugin_update', input, services, 'cli');
+
+          if (result.isError) {
+            return {
+              success: false,
+              error: result.content[0]?.text || 'Bulk plugin update failed',
+              results: [],
+            };
+          }
+
+          const data = JSON.parse(result.content[0]?.text || '[]');
+          return {
+            success: true,
+            results: data,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            results: [],
+          };
+        }
+      },
+
+      nexusFleetBulkHealthCheck: async (_parent: any, { targets }: { targets: string[] }) => {
+        try {
+          // For bulk health check, call get_site_health for each target
+          const results = [];
+
+          for (const target of targets) {
+            try {
+              const result = await registry.call('get_site_health', { target }, services, 'cli');
+
+              if (result.isError) {
+                results.push({
+                  target,
+                  status: 'error',
+                  score: 0,
+                  issueCount: 0,
+                });
+              } else {
+                const data = JSON.parse(result.content[0]?.text || '{}');
+                results.push({
+                  target,
+                  status: data.status || 'unknown',
+                  score: data.score || 0,
+                  issueCount: data.issues?.length || 0,
+                });
+              }
+            } catch {
+              results.push({
+                target,
+                status: 'error',
+                score: 0,
+                issueCount: 0,
+              });
+            }
+          }
+
+          return {
+            success: true,
+            results,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            results: [],
+          };
+        }
+      },
+
+      nexusFleetCompare: async (_parent: any, { target1, target2 }: { target1: string; target2: string }) => {
+        try {
+          // Get plugin lists for both sites
+          const [result1, result2] = await Promise.all([
+            registry.call('get_site_health', { target: target1 }, services, 'cli'),
+            registry.call('get_site_health', { target: target2 }, services, 'cli'),
+          ]);
+
+          if (result1.isError || result2.isError) {
+            return {
+              success: false,
+              error: 'Failed to get site information for comparison',
+              comparison: null,
+            };
+          }
+
+          const data1 = JSON.parse(result1.content[0]?.text || '{}');
+          const data2 = JSON.parse(result2.content[0]?.text || '{}');
+
+          // Build comparison
+          const differences = [];
+
+          if (data1.wordpress?.version !== data2.wordpress?.version) {
+            differences.push({
+              category: 'WordPress',
+              item: 'Version',
+              site1Value: data1.wordpress?.version || 'unknown',
+              site2Value: data2.wordpress?.version || 'unknown',
+            });
+          }
+
+          return {
+            success: true,
+            comparison: {
+              site1: {
+                target: target1,
+                wpVersion: data1.wordpress?.version || 'unknown',
+                pluginCount: data1.plugins?.total || 0,
+                themeCount: data1.themes?.total || 0,
+              },
+              site2: {
+                target: target2,
+                wpVersion: data2.wordpress?.version || 'unknown',
+                pluginCount: data2.plugins?.total || 0,
+                themeCount: data2.themes?.total || 0,
+              },
+              differences,
+            },
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            comparison: null,
+          };
+        }
+      },
     },
   };
 }
