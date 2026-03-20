@@ -45,9 +45,12 @@ async function main() {
   checkForUpdates().catch(() => {});
 
   // Bootstrap the CLI (ensure Local is running, addon is installed)
-  // Skip bootstrap for version and update commands (don't need Local running)
+  // Skip bootstrap for version, help, and update commands (don't need Local running)
   const skipBootstrap = process.argv.includes('--version') ||
                          process.argv.includes('-V') ||
+                         process.argv.includes('--help') ||
+                         process.argv.includes('-h') ||
+                         process.argv.includes('help') ||
                          process.argv.includes('update');
 
   if (!skipBootstrap) {
