@@ -4,16 +4,10 @@
  * Connects to Local's GraphQL server and executes queries/mutations.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { readConnectionInfo } from '../bootstrap/graphql';
+import type { ConnectionInfo } from '../bootstrap/graphql';
 
-export interface ConnectionInfo {
-  url: string;
-  subscriptionUrl: string;
-  port: number;
-  authToken: string;
-}
+export { ConnectionInfo } from '../bootstrap/graphql';
 
 export class GraphQLClientError extends Error {
   constructor(
@@ -38,28 +32,14 @@ export class GraphQLClient {
    * Load connection info from Local's userData
    */
   private loadConnectionInfo(): ConnectionInfo {
-    const userDataPath =
-      process.env.LOCAL_USER_DATA_PATH ||
-      path.join(os.homedir(), 'Library', 'Application Support', 'Local');
-
-    const connectionInfoPath = path.join(userDataPath, 'graphql-connection-info.json');
-
-    if (!fs.existsSync(connectionInfoPath)) {
+    const info = readConnectionInfo();
+    if (!info) {
       throw new Error(
-        'Local is not running. Please start Local first.\n\n' +
-          `Expected connection info at: ${connectionInfoPath}`
+        'Local is not running or GraphQL server is not ready.\n\n' +
+          'Please start Local first, or run with DEBUG=true for more info.'
       );
     }
-
-    try {
-      const data = fs.readFileSync(connectionInfoPath, 'utf8');
-      return JSON.parse(data);
-    } catch (error: any) {
-      throw new Error(
-        `Failed to read Local connection info: ${error.message}\n\n` +
-          `Path: ${connectionInfoPath}`
-      );
-    }
+    return info;
   }
 
   /**
@@ -130,5 +110,13 @@ export class GraphQLClient {
  * Get a GraphQL client instance
  */
 export function getClient(options?: { timeout?: number }): GraphQLClient {
-  return new GraphQLClient(undefined, options);
+  // Try to use connection info from bootstrap context if available
+  try {
+    const { getConnectionInfo } = require('./context');
+    const connectionInfo = getConnectionInfo();
+    return new GraphQLClient(connectionInfo, options);
+  } catch {
+    // Fallback to loading from file system (for commands that skip bootstrap)
+    return new GraphQLClient(undefined, options);
+  }
 }

@@ -1,0 +1,268 @@
+/**
+ * Addon installation and activation management
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { getLocalPaths, ADDON_PACKAGE_NAME, ADDON_DIR_NAME } from './paths';
+import { isLocalRunning, stopLocal } from './process';
+
+/**
+ * Get the addon installation path
+ */
+export function getAddonPath(): string {
+  const paths = getLocalPaths();
+  return path.join(paths.addonsDir, ADDON_DIR_NAME);
+}
+
+/**
+ * Check if the addon is installed in Local's addons directory
+ */
+export function isAddonInstalled(): boolean {
+  const addonPath = getAddonPath();
+
+  // Check for directory or symlink
+  try {
+    const stat = fs.lstatSync(addonPath);
+    return stat.isDirectory() || stat.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if the addon is activated in enabled-addons.json
+ */
+export function isAddonActivated(): boolean {
+  const paths = getLocalPaths();
+
+  try {
+    if (!fs.existsSync(paths.enabledAddonsFile)) {
+      return false;
+    }
+
+    const content = fs.readFileSync(paths.enabledAddonsFile, 'utf-8');
+    const enabledAddons: Record<string, boolean> = JSON.parse(content);
+
+    return enabledAddons[ADDON_PACKAGE_NAME] === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Activate the addon by modifying enabled-addons.json
+ * Returns true if restart is needed (addon was just activated)
+ */
+export function activateAddon(): boolean {
+  const paths = getLocalPaths();
+
+  try {
+    let enabledAddons: Record<string, boolean> = {};
+
+    if (fs.existsSync(paths.enabledAddonsFile)) {
+      const content = fs.readFileSync(paths.enabledAddonsFile, 'utf-8');
+      enabledAddons = JSON.parse(content);
+    }
+
+    // Check if already activated
+    if (enabledAddons[ADDON_PACKAGE_NAME] === true) {
+      return false; // Already active, no restart needed
+    }
+
+    // Activate the addon
+    enabledAddons[ADDON_PACKAGE_NAME] = true;
+    fs.writeFileSync(paths.enabledAddonsFile, JSON.stringify(enabledAddons, null, 2));
+
+    // Verify write succeeded
+    const verifyContent = fs.readFileSync(paths.enabledAddonsFile, 'utf-8');
+    const verified = JSON.parse(verifyContent);
+    if (verified[ADDON_PACKAGE_NAME] !== true) {
+      console.error('Warning: Failed to persist addon activation');
+      return false;
+    }
+
+    return true; // Restart needed
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Failed to activate addon: ${message}`);
+    console.error(`File: ${paths.enabledAddonsFile}`);
+    return false;
+  }
+}
+
+/**
+ * Copy a directory recursively
+ */
+function copyDirSync(src: string, dest: string): void {
+  fs.mkdirSync(dest, { recursive: true });
+
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDirSync(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+/**
+ * Find the bundled addon path (included in npm package)
+ * Located at addon-dist/ relative to the CLI package root
+ */
+function findBundledAddonPath(): string | null {
+  // From lib/cli/bootstrap/ -> addon-dist/
+  const bundledPath = path.resolve(__dirname, '..', '..', '..', 'addon-dist');
+
+  if (fs.existsSync(path.join(bundledPath, 'package.json'))) {
+    return bundledPath;
+  }
+
+  return null;
+}
+
+/**
+ * Find the local development addon path (for dev mode)
+ * Looks for the addon relative to the CLI package in monorepo
+ */
+function findDevAddonPath(): string | null {
+  // Check if we're in the monorepo structure
+  // Works from both lib/cli/bootstrap (compiled) and src/cli/bootstrap (ts-node)
+  const cliDir = __dirname;
+  const addonPath = path.resolve(cliDir, '..', '..', '..', 'src', 'main');
+
+  if (fs.existsSync(path.join(addonPath, 'index.ts'))) {
+    // Development mode - use the parent directory as addon root
+    return path.resolve(addonPath, '..');
+  }
+
+  return null;
+}
+
+/**
+ * Install the addon from bundled package or create dev symlink
+ */
+export async function installAddon(
+  options: {
+    onStatus?: (status: string) => void;
+  } = {}
+): Promise<{ success: boolean; error?: string; needsRestart: boolean }> {
+  const log = options.onStatus || (() => {});
+  const paths = getLocalPaths();
+  const addonPath = getAddonPath();
+
+  try {
+    // Ensure addons directory exists
+    if (!fs.existsSync(paths.addonsDir)) {
+      fs.mkdirSync(paths.addonsDir, { recursive: true });
+    }
+
+    // Try bundled addon first (production - included in npm package)
+    const bundledAddonPath = findBundledAddonPath();
+
+    if (bundledAddonPath) {
+      log('Installing bundled addon...');
+
+      // Copy bundled addon to Local's addons directory
+      // Dependencies are pre-installed in addon-dist, no npm install needed
+      copyDirSync(bundledAddonPath, addonPath);
+
+      log('Addon installed successfully.');
+    } else {
+      // Try development mode - create symlink to local addon in monorepo
+      const devAddonPath = findDevAddonPath();
+
+      if (devAddonPath) {
+        log('Using development addon (symlink)...');
+
+        fs.symlinkSync(devAddonPath, addonPath);
+        log(`Created symlink: ${addonPath} -> ${devAddonPath}`);
+      } else {
+        throw new Error(
+          'Addon not found. Please reinstall the CLI package: npm install -g @local/nexus-cli'
+        );
+      }
+    }
+
+    // Activate the addon
+    const needsRestart = activateAddon();
+
+    return { success: true, needsRestart };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to install addon',
+      needsRestart: false,
+    };
+  }
+}
+
+/**
+ * Ensure addon is installed and activated
+ */
+export async function ensureAddon(
+  options: {
+    onStatus?: (status: string) => void;
+  } = {}
+): Promise<{ success: boolean; error?: string; needsRestart: boolean }> {
+  const log = options.onStatus || (() => {});
+
+  // Check if addon is installed
+  if (!isAddonInstalled()) {
+    log('Addon not installed. Installing...');
+    const result = await installAddon(options);
+    if (!result.success) {
+      return result;
+    }
+    return { success: true, needsRestart: true };
+  }
+
+  // Check if addon is activated
+  if (!isAddonActivated()) {
+    const running = await isLocalRunning();
+
+    if (running) {
+      // Local is running - it controls enabled-addons.json
+      // We can't activate by modifying the file while Local runs
+      // Try stopping Local first, then activating, then starting
+      if (process.platform === 'linux' && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) {
+        // SSH session - can't restart Local
+        console.error('');
+        console.error('The CLI addon is installed but needs to be activated.');
+        console.error('');
+        console.error('Please activate from Local desktop app:');
+        console.error('  1. Open Local');
+        console.error('  2. Go to Addons');
+        console.error(`  3. Enable "${ADDON_PACKAGE_NAME}"`);
+        console.error('');
+        console.error('Or restart Local from the desktop to auto-activate.');
+        console.error('');
+        // Try to continue anyway - maybe it works
+        return { success: true, needsRestart: false };
+      }
+
+      log('Stopping Local to activate addon...');
+      await stopLocal();
+
+      // Wait a moment for Local to fully stop
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      log('Activating addon...');
+      activateAddon();
+
+      return { success: true, needsRestart: true };
+    } else {
+      // Local not running - safe to modify enabled-addons.json
+      log('Activating addon...');
+      const needsRestart = activateAddon();
+      return { success: true, needsRestart };
+    }
+  }
+
+  return { success: true, needsRestart: false };
+}
