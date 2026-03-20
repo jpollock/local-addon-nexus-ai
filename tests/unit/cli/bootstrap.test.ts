@@ -154,7 +154,7 @@ describe('Bootstrap System', () => {
 
   describe('isAddonActivated', () => {
     const mockEnabledAddons = {
-      '@local/nexus-ai': true,
+      'local-addon-nexus-ai': true,
       'other-addon': false,
     };
 

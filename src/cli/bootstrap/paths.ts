@@ -190,7 +190,7 @@ export function getLocalPaths(): LocalPaths {
 /**
  * Get the addon package name (used in enabled-addons.json)
  */
-export const ADDON_PACKAGE_NAME = '@local/nexus-ai';
+export const ADDON_PACKAGE_NAME = 'local-addon-nexus-ai';
 
 /**
  * Get the addon directory name (used in addons/ folder)
