@@ -2,28 +2,27 @@
  * Bootstrap System Tests
  */
 
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
-// Mock child_process before importing modules
+// Mock fs module
+jest.mock('fs');
 jest.mock('child_process');
-const mockExec = jest.fn();
-const mockExecSync = jest.fn();
-jest.requireMock('child_process').exec = mockExec;
-jest.requireMock('child_process').execSync = mockExecSync;
 
+import * as fs from 'fs';
 import { getLocalPaths } from '../../../src/cli/bootstrap/paths';
-import { isLocalInstalled, isLocalRunning } from '../../../src/cli/bootstrap/process';
+import { isLocalInstalled } from '../../../src/cli/bootstrap/process';
 import { readConnectionInfo } from '../../../src/cli/bootstrap/graphql';
 import { isAddonInstalled, isAddonActivated } from '../../../src/cli/bootstrap/addon';
 
 describe('Bootstrap System', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe('getLocalPaths', () => {
     it('should return paths for macOS', () => {
       const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
 
       const paths = getLocalPaths();
 
@@ -34,12 +33,12 @@ describe('Bootstrap System', () => {
       expect(paths.enabledAddonsFile).toContain('enabled-addons.json');
       expect(paths.graphqlConnectionInfoFile).toContain('graphql-connection-info.json');
 
-      Object.defineProperty(process, 'platform', { value: originalPlatform });
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     });
 
     it('should return paths for Windows', () => {
       const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'win32' });
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
 
       const paths = getLocalPaths();
 
@@ -47,37 +46,37 @@ describe('Bootstrap System', () => {
       expect(paths.appExecutable).toMatch(/Local\.exe$/);
       expect(paths.appName).toBe('Local.exe');
 
-      Object.defineProperty(process, 'platform', { value: originalPlatform });
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     });
 
     it('should return paths for Linux', () => {
       const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'linux' });
+      Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
 
       const paths = getLocalPaths();
 
       expect(paths.dataDir).toContain('.config/Local');
       expect(paths.appName).toBe('local');
 
-      Object.defineProperty(process, 'platform', { value: originalPlatform });
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     });
   });
 
   describe('isLocalInstalled', () => {
     it('should return true if Local.app exists on macOS', () => {
       const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
 
-      jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
 
       const result = isLocalInstalled();
       expect(result).toBe(true);
 
-      Object.defineProperty(process, 'platform', { value: originalPlatform });
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     });
 
     it('should return false if Local.app does not exist', () => {
-      jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+      (fs.existsSync as jest.Mock).mockReturnValue(false);
 
       const result = isLocalInstalled();
       expect(result).toBe(false);
@@ -92,13 +91,9 @@ describe('Bootstrap System', () => {
       authToken: 'test-token-123',
     };
 
-    beforeEach(() => {
-      jest.clearAllMocks();
-    });
-
     it('should read connection info from file', () => {
-      jest.spyOn(fs, 'existsSync').mockReturnValue(true);
-      jest.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify(mockConnectionInfo));
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(mockConnectionInfo));
 
       const result = readConnectionInfo();
 
@@ -106,7 +101,7 @@ describe('Bootstrap System', () => {
     });
 
     it('should return null if file does not exist', () => {
-      jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+      (fs.existsSync as jest.Mock).mockReturnValue(false);
 
       const result = readConnectionInfo();
 
@@ -114,8 +109,8 @@ describe('Bootstrap System', () => {
     });
 
     it('should return null if file is invalid JSON', () => {
-      jest.spyOn(fs, 'existsSync').mockReturnValue(true);
-      jest.spyOn(fs, 'readFileSync').mockReturnValue('invalid json');
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.readFileSync as jest.Mock).mockReturnValue('invalid json');
 
       const result = readConnectionInfo();
 
@@ -125,10 +120,10 @@ describe('Bootstrap System', () => {
 
   describe('isAddonInstalled', () => {
     it('should return true if addon directory exists', () => {
-      jest.spyOn(fs, 'lstatSync').mockReturnValue({
+      (fs.lstatSync as jest.Mock).mockReturnValue({
         isDirectory: () => true,
         isSymbolicLink: () => false,
-      } as any);
+      });
 
       const result = isAddonInstalled();
 
@@ -136,10 +131,10 @@ describe('Bootstrap System', () => {
     });
 
     it('should return true if addon symlink exists', () => {
-      jest.spyOn(fs, 'lstatSync').mockReturnValue({
+      (fs.lstatSync as jest.Mock).mockReturnValue({
         isDirectory: () => false,
         isSymbolicLink: () => true,
-      } as any);
+      });
 
       const result = isAddonInstalled();
 
@@ -147,7 +142,7 @@ describe('Bootstrap System', () => {
     });
 
     it('should return false if addon does not exist', () => {
-      jest.spyOn(fs, 'lstatSync').mockImplementation(() => {
+      (fs.lstatSync as jest.Mock).mockImplementation(() => {
         throw new Error('ENOENT');
       });
 
@@ -164,8 +159,8 @@ describe('Bootstrap System', () => {
     };
 
     it('should return true if addon is enabled', () => {
-      jest.spyOn(fs, 'existsSync').mockReturnValue(true);
-      jest.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify(mockEnabledAddons));
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(mockEnabledAddons));
 
       const result = isAddonActivated();
 
@@ -173,8 +168,8 @@ describe('Bootstrap System', () => {
     });
 
     it('should return false if addon is not in enabled-addons.json', () => {
-      jest.spyOn(fs, 'existsSync').mockReturnValue(true);
-      jest.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify({ 'other-addon': true }));
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify({ 'other-addon': true }));
 
       const result = isAddonActivated();
 
@@ -182,7 +177,7 @@ describe('Bootstrap System', () => {
     });
 
     it('should return false if enabled-addons.json does not exist', () => {
-      jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+      (fs.existsSync as jest.Mock).mockReturnValue(false);
 
       const result = isAddonActivated();
 
@@ -190,8 +185,8 @@ describe('Bootstrap System', () => {
     });
 
     it('should return false if enabled-addons.json is invalid', () => {
-      jest.spyOn(fs, 'existsSync').mockReturnValue(true);
-      jest.spyOn(fs, 'readFileSync').mockReturnValue('invalid json');
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.readFileSync as jest.Mock).mockReturnValue('invalid json');
 
       const result = isAddonActivated();
 
