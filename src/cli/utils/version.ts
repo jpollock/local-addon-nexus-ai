@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-const PACKAGE_NAME = '@local/nexus-cli';
+const PACKAGE_NAME = 'local-addon-nexus-ai';
 const UPDATE_CHECK_FILE = path.join(os.homedir(), '.nexus-update-check');
 const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 

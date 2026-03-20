@@ -184,7 +184,7 @@ export async function installAddon(
         log(`Created symlink: ${addonPath} -> ${devAddonPath}`);
       } else {
         throw new Error(
-          'Addon not found. Please reinstall the CLI package: npm install -g @local/nexus-cli'
+          'Addon not found. Please reinstall the CLI package: npm install -g local-addon-nexus-ai'
         );
       }
     }

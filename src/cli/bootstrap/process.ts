@@ -128,19 +128,21 @@ function delay(ms: number): Promise<void> {
  */
 export function isLocalInstalled(): boolean {
   const paths = getLocalPaths();
+  const fs = require('fs');
+  const { execSync } = require('child_process');
 
   try {
     if (process.platform === 'darwin') {
-      return require('fs').existsSync(paths.appExecutable);
+      return fs.existsSync(paths.appExecutable);
     } else if (process.platform === 'win32') {
-      return require('fs').existsSync(paths.appExecutable);
+      return fs.existsSync(paths.appExecutable);
     } else {
       // Linux - check if 'local' is in PATH or at expected location
       try {
-        require('child_process').execSync('which local', { stdio: 'ignore' });
+        execSync('which local', { stdio: 'ignore' });
         return true;
       } catch {
-        return require('fs').existsSync(paths.appExecutable);
+        return fs.existsSync(paths.appExecutable);
       }
     }
   } catch {

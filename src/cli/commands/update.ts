@@ -34,7 +34,7 @@ export const updateCommand = new Command('update')
 
     try {
       // Run npm update
-      execSync(`npm update -g @local/nexus-cli`, { stdio: 'inherit' });
+      execSync(`npm update -g local-addon-nexus-ai`, { stdio: 'inherit' });
       console.log('✅ CLI updated successfully');
 
       // Check new version
@@ -45,7 +45,7 @@ export const updateCommand = new Command('update')
     } catch (error: any) {
       console.error('❌ Update failed');
       console.error('\nTry running manually:');
-      console.error('  npm update -g @local/nexus-cli');
+      console.error('  npm update -g local-addon-nexus-ai');
       process.exit(1);
     }
   });
