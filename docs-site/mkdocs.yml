@@ -1,0 +1,221 @@
+site_name: Nexus AI Documentation
+site_description: AI-powered WordPress site intelligence for Local and WP Engine
+site_author: Jeremy Pollock
+site_url: https://jpollock.github.io/local-addon-nexus-ai/
+
+repo_name: jpollock/local-addon-nexus-ai
+repo_url: https://github.com/jpollock/local-addon-nexus-ai
+edit_uri: edit/main/docs-site/docs/
+
+theme:
+  name: material
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+  features:
+    - navigation.instant      # Instant loading
+    - navigation.tracking     # Anchor tracking
+    - navigation.tabs         # Top-level tabs
+    - navigation.sections     # Section navigation
+    - navigation.expand       # Expand sections
+    - navigation.top          # Back to top button
+    - search.suggest          # Search suggestions
+    - search.highlight        # Highlight search results
+    - content.code.copy       # Copy code button
+    - content.code.annotate   # Code annotations
+    - content.tabs.link       # Link content tabs
+
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+
+plugins:
+  - search:
+      lang: en
+
+markdown_extensions:
+  # Code highlighting
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+
+  # Admonitions
+  - admonition
+  - pymdownx.details
+
+  # Tabs
+  - pymdownx.tabbed:
+      alternate_style: true
+
+  # Task lists
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+  # Tables
+  - tables
+
+  # Footnotes
+  - footnotes
+
+  # Metadata
+  - meta
+
+  # Attributes (required for grid cards and icons)
+  - attr_list
+  - md_in_html
+
+  # Emoji (for Material icons)
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+  # Table of contents
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/wpengine/local-addon-nexus-ai
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/wpengine
+
+  version:
+    provider: mike
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+
+  - Getting Started:
+    - Overview: getting-started/index.md
+    - Choose Your Interface: getting-started/choose-interface.md
+    - UI Quick Start: getting-started/ui-quick-start.md
+    - CLI Quick Start: getting-started/cli-quick-start.md
+    - First Scan: getting-started/first-scan.md
+    - First AI Query: getting-started/first-ai-query.md
+    - Next Steps: getting-started/next-steps.md
+
+  - CLI/MCP Server:
+    - Overview: cli/index.md
+    - Installation: cli/installation.md
+    - MCP Setup: cli/mcp-setup.md
+    - Authentication: cli/authentication.md
+    - Commands: cli/commands.md
+    - Examples: cli/examples.md
+    - Local Sites: cli/local-sites.md
+    - WPE Sites: cli/wpe-sites.md
+    - WP-CLI Integration: cli/wp-cli.md
+    - Bulk Operations: cli/bulk-operations.md
+    - Error Handling: cli/error-handling.md
+    - Performance: cli/performance.md
+    - Troubleshooting: cli/troubleshooting.md
+
+  - MCP Tools Reference:
+    - Overview: mcp-tools/index.md
+    - Local Sites: mcp-tools/local-sites.md
+    - WPE Sites: mcp-tools/wpe-sites.md
+    - WordPress: mcp-tools/wordpress.md
+    - Search: mcp-tools/search.md
+    - Fleet: mcp-tools/fleet.md
+    - Telemetry: mcp-tools/telemetry.md
+    - Tool Schemas: mcp-tools/tool-schemas.md
+    - Capability Matrix: mcp-tools/tool-matrix.md
+
+  - UI Addon:
+    - Overview: ui-addon/index.md
+    - Installation: ui-addon/installation.md
+    - Fleet Overview: ui-addon/fleet-overview.md
+    - Site Finder: ui-addon/site-finder.md
+    - AI Chat: ui-addon/ai-chat.md
+    - WPE Management: ui-addon/wpe-management.md
+    - Bulk Operations: ui-addon/bulk-operations.md
+    - Smart Filters: ui-addon/smart-filters.md
+    - Preferences: ui-addon/preferences.md
+    - Keyboard Shortcuts: ui-addon/keyboard-shortcuts.md
+
+  - Architecture:
+    - Overview: architecture/overview.md
+    - CLI Architecture: architecture/cli-architecture.md
+    - UI Architecture: architecture/ui-architecture.md
+    - Data Flow: architecture/data-flow.md
+    - MCP Protocol: architecture/mcp-protocol.md
+    - Tool Registry: architecture/tool-registry.md
+    - Vector Database: architecture/vector-database.md
+    - AI Proxy: architecture/ai-proxy.md
+    - WPE Integration: architecture/wpe-integration.md
+    - Telemetry: architecture/telemetry.md
+    - Shared Core: architecture/shared-core.md
+
+  - Developer Guide:
+    - Setup: developer/setup.md
+    - Project Structure: developer/project-structure.md
+    - Building CLI: developer/building-cli.md
+    - Building Addon: developer/building-addon.md
+    - Testing CLI: developer/testing-cli.md
+    - Testing Addon: developer/testing-addon.md
+    - Debugging: developer/debugging.md
+    - Adding Tools: developer/adding-tools.md
+    - Contributing: developer/contributing.md
+    - Release Process: developer/release-process.md
+
+  - API Reference:
+    - MCP Tools: api/mcp-tools.md
+    - GraphQL: api/graphql.md
+    - IPC Handlers: api/ipc.md
+    - Database Schema: api/database-schema.md
+    - WPE CAPI: api/wpe-capi.md
+    - CLI Patterns: api/cli-patterns.md
+
+  - Integrations:
+    - Claude Desktop: integrations/claude-desktop.md
+    - Cursor IDE: integrations/cursor.md
+    - Other MCP Clients: integrations/other-mcp-clients.md
+    - Ollama: integrations/ollama.md
+    - WPE Account: integrations/wpe-account.md
+    - Custom AI Providers: integrations/custom-ai-providers.md
+
+  - Features:
+    - Semantic Search: features/semantic-search.md
+    - Content Extraction: features/content-extraction.md
+    - WooCommerce: features/woocommerce.md
+    - ACF: features/acf.md
+    - WP-CLI Integration: features/wp-cli-integration.md
+    - SSH ControlMaster: features/ssh-control-master.md
+    - Safety System: features/safety-system.md
+    - Telemetry: features/telemetry.md
+
+  - Reference:
+    - CLI Commands: reference/cli-command-reference.md
+    - Tool Reference: reference/tool-reference.md
+    - Error Codes: reference/error-codes.md
+    - Changelog: reference/changelog.md
+    - Roadmap: reference/roadmap.md
+    - FAQ: reference/faq.md
+    - Glossary: reference/glossary.md
+    - Performance: reference/performance-benchmarks.md
