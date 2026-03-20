@@ -74,6 +74,49 @@ export const typeDefs = gql`
     wpe: [WpeSite!]!
   }
 
+  type SiteDetails {
+    "Site ID"
+    id: String!
+    "Site name"
+    name: String!
+    "Site domain"
+    domain: String
+    "Site path on disk"
+    path: String!
+    "Site status (running, halted)"
+    status: String!
+    "WordPress version"
+    wpVersion: String
+    "PHP version"
+    phpVersion: String
+    "Is site indexed"
+    indexed: Boolean!
+    "Last indexed timestamp"
+    indexedAt: String
+    "Number of indexed documents"
+    documentCount: Int!
+    "Number of indexed chunks"
+    chunkCount: Int!
+    "WPE link info"
+    linkedTo: SiteLinkInfo
+  }
+
+  type SiteLinkInfo {
+    "WPE install ID"
+    installId: String!
+    "WPE environment"
+    environment: String!
+  }
+
+  type NexusSitesGetResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Site details"
+    site: SiteDetails
+  }
+
   input NexusCreateSiteInput {
     "Site name"
     name: String!
@@ -221,6 +264,9 @@ export const typeDefs = gql`
   extend type Mutation {
     "List all sites (local + WPE)"
     nexusSitesList: NexusSitesListResult!
+
+    "Get detailed information about a site"
+    nexusSitesGet(target: String!): NexusSitesGetResult!
 
     "Create a new local site"
     nexusSitesCreate(input: NexusCreateSiteInput!): NexusCreateSiteResult!

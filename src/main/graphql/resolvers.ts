@@ -204,6 +204,76 @@ export function createResolvers(context: ResolverContext) {
       },
 
       /**
+       * Get detailed information about a site
+       */
+      nexusSitesGet: async (_parent: any, { target }: { target: string }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(target);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Only local sites are supported. Use target format: mysite@local',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site "${parsed.siteName}" not found`,
+            };
+          }
+
+          const status = services.localServices.getSiteStatus(site.id);
+          const indexEntry = services.indexRegistry.get(site.id);
+
+          // Get link info if available
+          let linkedTo = null;
+          const rawSite = services.localServices?.resolveSiteObject?.(site.id) as any;
+          const wpeConnection = rawSite?.hostConnections
+            ? Object.values(rawSite.hostConnections).find((c: any) => c.hostId === 'wpe' || c.accountId)
+            : null;
+
+          if (wpeConnection) {
+            const remoteSiteId = (wpeConnection as any).remoteSiteId;
+            const remoteSiteEnv = (wpeConnection as any).remoteSiteEnv;
+
+            linkedTo = {
+              installId: remoteSiteId || 'unknown',
+              environment: remoteSiteEnv?.environment || 'unknown',
+            };
+          }
+
+          return {
+            success: true,
+            site: {
+              id: site.id,
+              name: site.name,
+              domain: site.domain,
+              path: site.path,
+              status,
+              wpVersion: site.wpVersion || null,
+              phpVersion: site.phpVersion || null,
+              indexed: !!indexEntry,
+              indexedAt: indexEntry?.lastIndexed || null,
+              documentCount: indexEntry?.documentCount || 0,
+              chunkCount: indexEntry?.chunkCount || 0,
+              linkedTo,
+            },
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
        * Create a new local site
        */
       nexusSitesCreate: async (_parent: any, { input }: { input: any }) => {

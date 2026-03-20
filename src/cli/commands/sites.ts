@@ -11,6 +11,91 @@ import { parseTarget } from '../utils/target';
 const sitesCommand = new Command('sites').description('Manage Local and WPE sites');
 
 /**
+ * nexus sites get
+ */
+sitesCommand
+  .command('get <target>')
+  .description('Get detailed information about a site')
+  .option('--json', 'Output as JSON')
+  .action(async (target, options) => {
+    try {
+      const client = getClient();
+
+      const result = await client.mutate<{ nexusSitesGet: any }>(`
+        mutation($target: String!) {
+          nexusSitesGet(target: $target) {
+            success
+            error
+            site {
+              id
+              name
+              domain
+              path
+              status
+              wpVersion
+              phpVersion
+              indexed
+              indexedAt
+              documentCount
+              chunkCount
+              linkedTo {
+                installId
+                environment
+              }
+            }
+          }
+        }
+      `, { target });
+
+      const { success, error, site } = result.nexusSitesGet;
+
+      if (!success) {
+        console.error(`\n❌ ${error}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(site, null, 2));
+        return;
+      }
+
+      // Human-readable output
+      console.log(`\n${site.name}`);
+      console.log('─'.repeat(Math.max(site.name.length, 40)));
+      console.log(`Status:       ${site.status === 'running' ? '🟢 Running' : '⚫ Halted'}`);
+      console.log(`Domain:       ${site.domain || 'N/A'}`);
+      console.log(`Path:         ${site.path}`);
+
+      if (site.wpVersion) {
+        console.log(`WordPress:    ${site.wpVersion}`);
+      }
+
+      if (site.phpVersion) {
+        console.log(`PHP:          ${site.phpVersion}`);
+      }
+
+      if (site.indexed) {
+        console.log(`Indexed:      ✅ Yes (${site.documentCount} docs, ${site.chunkCount} chunks)`);
+        if (site.indexedAt) {
+          const date = new Date(parseInt(site.indexedAt, 10));
+          console.log(`Last indexed: ${date.toLocaleString()}`);
+        }
+      } else {
+        console.log(`Indexed:      ⚫ No`);
+      }
+
+      if (site.linkedTo) {
+        console.log(`WPE Link:     ${site.linkedTo.installId}@${site.linkedTo.environment}`);
+      }
+
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
  * nexus sites list
  */
 sitesCommand
