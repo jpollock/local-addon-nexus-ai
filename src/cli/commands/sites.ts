@@ -96,6 +96,60 @@ sitesCommand
   });
 
 /**
+ * nexus sites clone
+ */
+sitesCommand
+  .command('clone <source> <newName>')
+  .description('Clone an existing site')
+  .action(async (source, newName, options) => {
+    try {
+      // Enforce @local syntax for source
+      if (!source.endsWith('@local')) {
+        console.error('\n❌ Source site must be local.');
+        console.error(`   Use: nexus sites clone ${source}@local ${newName}`);
+        process.exit(1);
+      }
+
+      const client = getClient({ timeout: 300000 }); // 5 min for clone
+
+      console.log(`\nCloning ${source} → ${newName}...`);
+
+      const result = await client.mutate<{ nexusSitesClone: any }>(`
+        mutation($input: NexusCloneSiteInput!) {
+          nexusSitesClone(input: $input) {
+            success
+            error
+            siteName
+            siteId
+          }
+        }
+      `, {
+        input: {
+          source,
+          newName,
+        },
+      });
+
+      const { success, error, siteName, siteId } = result.nexusSitesClone;
+
+      if (!success) {
+        console.error(`\n❌ Failed to clone site: ${error}`);
+        process.exit(1);
+      }
+
+      console.log(`\n✅ Site cloned successfully`);
+      console.log(`   Name: ${siteName}`);
+      console.log(`   ID:   ${siteId}`);
+      console.log(`\nStart the cloned site:`);
+      console.log(`   nexus sites start ${siteName}@local`);
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
  * nexus sites list
  */
 sitesCommand

@@ -274,6 +274,70 @@ export function createResolvers(context: ResolverContext) {
       },
 
       /**
+       * Clone an existing site
+       */
+      nexusSitesClone: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(input.source);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Only local sites can be cloned. Use target format: mysite@local',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Source site "${parsed.siteName}" not found`,
+            };
+          }
+
+          if (!input.newName || !input.newName.trim()) {
+            return {
+              success: false,
+              error: 'New site name is required',
+            };
+          }
+
+          // Check if new name already exists
+          const existingSite = resolveSite(input.newName, services.siteData);
+          if (existingSite) {
+            return {
+              success: false,
+              error: `Site "${input.newName}" already exists`,
+            };
+          }
+
+          const result = await services.localServices.cloneSite(site.id, input.newName.trim());
+
+          if (!result) {
+            return {
+              success: false,
+              error: 'Clone operation returned no result',
+            };
+          }
+
+          return {
+            success: true,
+            siteName: result.name,
+            siteId: result.id,
+          };
+        } catch (error: any) {
+          console.error('[nexusSitesClone] Error:', error);
+          return {
+            success: false,
+            error: error.message || 'Unknown error during clone',
+          };
+        }
+      },
+
+      /**
        * Create a new local site
        */
       nexusSitesCreate: async (_parent: any, { input }: { input: any }) => {

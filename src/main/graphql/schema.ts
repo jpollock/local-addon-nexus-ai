@@ -117,6 +117,24 @@ export const typeDefs = gql`
     site: SiteDetails
   }
 
+  input NexusCloneSiteInput {
+    "Source site name (e.g., 'mysite@local')"
+    source: String!
+    "New site name"
+    newName: String!
+  }
+
+  type NexusCloneSiteResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Cloned site name"
+    siteName: String
+    "Cloned site ID"
+    siteId: String
+  }
+
   input NexusCreateSiteInput {
     "Site name"
     name: String!
@@ -267,6 +285,9 @@ export const typeDefs = gql`
 
     "Get detailed information about a site"
     nexusSitesGet(target: String!): NexusSitesGetResult!
+
+    "Clone an existing site"
+    nexusSitesClone(input: NexusCloneSiteInput!): NexusCloneSiteResult!
 
     "Create a new local site"
     nexusSitesCreate(input: NexusCreateSiteInput!): NexusCreateSiteResult!
