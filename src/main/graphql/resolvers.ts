@@ -1321,6 +1321,360 @@ export function createResolvers(context: ResolverContext) {
           };
         }
       },
+
+      /**
+       * List WP Engine accounts
+       */
+      nexusWpeAccounts: async () => {
+        try {
+          if (!services.localServices?.isCAPIAvailable()) {
+            return {
+              success: false,
+              error: 'WP Engine API not available. Please authenticate in Local.',
+              accounts: [],
+            };
+          }
+
+          const accounts = await services.localServices.capiGetAccounts();
+
+          return {
+            success: true,
+            accounts: accounts.map((acc: any) => ({
+              id: acc.id,
+              name: acc.name,
+            })),
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            accounts: [],
+          };
+        }
+      },
+
+      /**
+       * List WPE installs
+       */
+      nexusWpeInstalls: async (_parent: any, { account }: { account?: string }) => {
+        try {
+          if (!services.localServices?.isCAPIAvailable()) {
+            return {
+              success: false,
+              error: 'WP Engine API not available. Please authenticate in Local.',
+              installs: [],
+            };
+          }
+
+          const installs = await services.localServices.capiGetInstalls();
+          const accounts = await services.localServices.capiGetAccounts();
+
+          // Build account name map
+          const accountMap = new Map();
+          accounts.forEach((acc: any) => {
+            accountMap.set(acc.id, acc.name);
+          });
+
+          // Filter by account if specified
+          let filtered = installs;
+          if (account) {
+            filtered = installs.filter((inst: any) => {
+              const accId = typeof inst.account === 'object' ? inst.account.id : inst.account;
+              return accId === account || accountMap.get(accId) === account;
+            });
+          }
+
+          return {
+            success: true,
+            installs: filtered.map((inst: any) => {
+              const accId = typeof inst.account === 'object' ? inst.account.id : inst.account;
+              return {
+                id: inst.id,
+                name: inst.name,
+                account: accId,
+                accountName: accountMap.get(accId) || null,
+                environment: inst.environment,
+                domain: inst.primaryDomain || inst.cname || `${inst.name}.wpengine.com`,
+                phpVersion: inst.phpVersion || null,
+                wpVersion: inst.wpVersion || null,
+              };
+            }),
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            installs: [],
+          };
+        }
+      },
+
+      /**
+       * Get WPE install details
+       */
+      nexusWpeInstall: async (_parent: any, { installId }: { installId: string }) => {
+        try {
+          if (!services.localServices?.isCAPIAvailable()) {
+            return {
+              success: false,
+              error: 'WP Engine API not available. Please authenticate in Local.',
+            };
+          }
+
+          const install = await services.localServices.capiGetInstall(installId);
+          if (!install) {
+            return {
+              success: false,
+              error: `Install "${installId}" not found`,
+            };
+          }
+
+          const accounts = await services.localServices.capiGetAccounts();
+          const accountMap = new Map();
+          accounts.forEach((acc: any) => {
+            accountMap.set(acc.id, acc.name);
+          });
+
+          const accId = typeof install.account === 'object' ? install.account.id : install.account;
+
+          return {
+            success: true,
+            install: {
+              id: install.id,
+              name: install.name,
+              account: accId,
+              accountName: accountMap.get(accId) || null,
+              environment: install.environment,
+              domain: install.primaryDomain || install.cname || `${install.name}.wpengine.com`,
+              phpVersion: install.phpVersion || null,
+              wpVersion: install.wpVersion || null,
+            },
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Create WPE backup
+       */
+      nexusWpeBackup: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices?.isCAPIAvailable()) {
+            return {
+              success: false,
+              error: 'WP Engine API not available. Please authenticate in Local.',
+            };
+          }
+
+          const parsed = parseTarget(input.target);
+          if (parsed.type !== 'wpe') {
+            return {
+              success: false,
+              error: 'Target must be a WPE install. Use format: wpe:account/install@environment',
+            };
+          }
+
+          // For now, return not implemented - would need CAPI backup endpoint
+          return {
+            success: false,
+            error: 'Backup creation via CLI not yet implemented. Use WP Engine portal.',
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Purge WPE cache
+       */
+      nexusWpeCache: async (_parent: any, { target }: { target: string }) => {
+        try {
+          if (!services.localServices?.isCAPIAvailable()) {
+            return {
+              success: false,
+              error: 'WP Engine API not available. Please authenticate in Local.',
+            };
+          }
+
+          const parsed = parseTarget(target);
+          if (parsed.type !== 'wpe') {
+            return {
+              success: false,
+              error: 'Target must be a WPE install. Use format: wpe:account/install@environment',
+            };
+          }
+
+          await services.localServices.capiPurgeCache(parsed.installName!);
+
+          return {
+            success: true,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Link local site to WPE
+       */
+      nexusWpeLink: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices) {
+            return {
+              success: false,
+              error: 'Local services not available',
+            };
+          }
+
+          const localParsed = parseTarget(input.localSite);
+          if (localParsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Local site must use format: mysite@local',
+            };
+          }
+
+          const wpeParsed = parseTarget(input.wpeTarget);
+          if (wpeParsed.type !== 'wpe') {
+            return {
+              success: false,
+              error: 'WPE target must use format: wpe:account/install@environment',
+            };
+          }
+
+          const site = resolveSite(localParsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site "${localParsed.siteName}" not found`,
+            };
+          }
+
+          // Link via local services (this will call the wpe-link MCP tool)
+          await services.localServices.linkToWpe(site.id, wpeParsed.installName!, wpeParsed.environment!);
+
+          return {
+            success: true,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Get changes between local and WPE
+       */
+      nexusWpeChanges: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices) {
+            return {
+              success: false,
+              error: 'Local services not available',
+              changes: [],
+            };
+          }
+
+          const parsed = parseTarget(input.localSite);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Local site must use format: mysite@local',
+              changes: [],
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site "${parsed.siteName}" not found`,
+              changes: [],
+            };
+          }
+
+          const changes = await services.localServices.getSiteChanges(site.id, input.since);
+
+          return {
+            success: true,
+            changes: changes.map((c: any) => ({
+              type: c.type,
+              path: c.path,
+              status: c.status || null,
+            })),
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            changes: [],
+          };
+        }
+      },
+
+      /**
+       * Get sync history
+       */
+      nexusSyncHistory: async (_parent: any, { localSite }: { localSite: string }) => {
+        try {
+          if (!services.localServices) {
+            return {
+              success: false,
+              error: 'Local services not available',
+              history: [],
+            };
+          }
+
+          const parsed = parseTarget(localSite);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Local site must use format: mysite@local',
+              history: [],
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site "${parsed.siteName}" not found`,
+              history: [],
+            };
+          }
+
+          const history = await services.localServices.getSyncHistory(site.id);
+
+          return {
+            success: true,
+            history: history.map((entry: any) => ({
+              timestamp: entry.timestamp,
+              direction: entry.direction,
+              success: entry.success,
+              filesTransferred: entry.filesTransferred || null,
+              databaseIncluded: entry.databaseIncluded || false,
+            })),
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            history: [],
+          };
+        }
+      },
     },
   };
 }

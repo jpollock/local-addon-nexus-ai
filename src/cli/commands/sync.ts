@@ -189,4 +189,73 @@ syncCommand
     }
   });
 
+/**
+ * nexus sync history
+ */
+syncCommand
+  .command('history <localSite>')
+  .description('View sync history for a site')
+  .option('--json', 'Output as JSON')
+  .action(async (localSite, options) => {
+    try {
+      if (!localSite.endsWith('@local')) {
+        console.error('\n❌ Local site must use @local format.');
+        console.error(`   Use: nexus sync history ${localSite}@local`);
+        process.exit(1);
+      }
+
+      const client = getClient();
+
+      const result = await client.mutate<{ nexusSyncHistory: any }>(`
+        mutation($localSite: String!) {
+          nexusSyncHistory(localSite: $localSite) {
+            success
+            error
+            history {
+              timestamp
+              direction
+              success
+              filesTransferred
+              databaseIncluded
+            }
+          }
+        }
+      `, { localSite });
+
+      const { success, error, history } = result.nexusSyncHistory;
+
+      if (!success) {
+        console.error(`\n❌ Failed to get sync history: ${error}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(history, null, 2));
+        return;
+      }
+
+      console.log(`\nSync History for ${localSite}:`);
+      if (history.length === 0) {
+        console.log('  (no sync history)');
+      } else {
+        for (const entry of history) {
+          const date = new Date(entry.timestamp);
+          const arrow = entry.direction === 'pull' ? '←' : '→';
+          const status = entry.success ? '✅' : '❌';
+          console.log(`  ${status} ${date.toLocaleString()} ${arrow} ${entry.direction}`);
+          if (entry.filesTransferred) {
+            console.log(`     Files: ${entry.filesTransferred}`);
+          }
+          if (entry.databaseIncluded) {
+            console.log(`     Database: included`);
+          }
+        }
+      }
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
 export { syncCommand };

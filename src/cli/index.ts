@@ -10,6 +10,7 @@ import { Command } from 'commander';
 import { sitesCommand } from './commands/sites';
 import { wpCommand } from './commands/wp';
 import { syncCommand } from './commands/sync';
+import { wpeCommand } from './commands/wpe';
 import { blueprintsCommand } from './commands/blueprints';
 import { updateCommand } from './commands/update';
 import { bootstrap } from './bootstrap';
@@ -27,6 +28,7 @@ program
 program.addCommand(sitesCommand);
 program.addCommand(wpCommand);
 program.addCommand(syncCommand);
+program.addCommand(wpeCommand);
 program.addCommand(blueprintsCommand);
 program.addCommand(updateCommand);
 

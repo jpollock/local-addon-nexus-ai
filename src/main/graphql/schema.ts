@@ -283,6 +283,147 @@ export const typeDefs = gql`
     blueprintName: String
   }
 
+  # ============================================================================
+  # WPE Integration Types
+  # ============================================================================
+
+  type WpeAccount {
+    "Account ID"
+    id: String!
+    "Account name"
+    name: String!
+  }
+
+  type NexusWpeAccountsResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "WPE accounts"
+    accounts: [WpeAccount!]!
+  }
+
+  type WpeInstall {
+    "Install ID"
+    id: String!
+    "Install name"
+    name: String!
+    "Account ID"
+    account: String!
+    "Account name"
+    accountName: String
+    "Environment"
+    environment: String!
+    "Primary domain"
+    domain: String
+    "PHP version"
+    phpVersion: String
+    "WordPress version"
+    wpVersion: String
+  }
+
+  type NexusWpeInstallsResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "WPE installs"
+    installs: [WpeInstall!]!
+  }
+
+  type NexusWpeInstallResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Install details"
+    install: WpeInstall
+  }
+
+  input NexusWpeBackupInput {
+    "WPE target (e.g., 'wpe:account/install@production')"
+    target: String!
+    "Backup description"
+    description: String
+  }
+
+  type NexusWpeBackupResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Backup ID"
+    backupId: String
+  }
+
+  type NexusWpeCacheResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+  }
+
+  input NexusWpeLinkInput {
+    "Local site (e.g., 'mysite@local')"
+    localSite: String!
+    "WPE target (e.g., 'wpe:account/install@production')"
+    wpeTarget: String!
+  }
+
+  type NexusWpeLinkResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+  }
+
+  input NexusWpeChangesInput {
+    "Local site (e.g., 'mysite@local')"
+    localSite: String!
+    "Show changes since date"
+    since: String
+  }
+
+  type WpeChange {
+    "Change type (added, modified, deleted)"
+    type: String!
+    "File path"
+    path: String!
+    "Change status"
+    status: String
+  }
+
+  type NexusWpeChangesResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "List of changes"
+    changes: [WpeChange!]!
+  }
+
+  type NexusSyncHistoryEntry {
+    "Sync timestamp"
+    timestamp: String!
+    "Sync direction (pull or push)"
+    direction: String!
+    "Success flag"
+    success: Boolean!
+    "Files transferred"
+    filesTransferred: Int
+    "Database included"
+    databaseIncluded: Boolean
+  }
+
+  type NexusSyncHistoryResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Sync history"
+    history: [NexusSyncHistoryEntry!]!
+  }
+
   input NexusCreateSiteInput {
     "Site name"
     name: String!
@@ -463,6 +604,31 @@ export const typeDefs = gql`
 
     "Save site as blueprint"
     nexusBlueprintsSave(input: NexusBlueprintsSaveInput!): NexusBlueprintsSaveResult!
+
+    # WPE Integration
+    "List WP Engine accounts"
+    nexusWpeAccounts: NexusWpeAccountsResult!
+
+    "List WPE installs"
+    nexusWpeInstalls(account: String): NexusWpeInstallsResult!
+
+    "Get WPE install details"
+    nexusWpeInstall(installId: String!): NexusWpeInstallResult!
+
+    "Create WPE backup"
+    nexusWpeBackup(input: NexusWpeBackupInput!): NexusWpeBackupResult!
+
+    "Purge WPE cache"
+    nexusWpeCache(target: String!): NexusWpeCacheResult!
+
+    "Link local site to WPE"
+    nexusWpeLink(input: NexusWpeLinkInput!): NexusWpeLinkResult!
+
+    "Get changes between local and WPE"
+    nexusWpeChanges(input: NexusWpeChangesInput!): NexusWpeChangesResult!
+
+    "Get sync history"
+    nexusSyncHistory(localSite: String!): NexusSyncHistoryResult!
 
     "Create a new local site"
     nexusSitesCreate(input: NexusCreateSiteInput!): NexusCreateSiteResult!
