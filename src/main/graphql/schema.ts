@@ -153,6 +153,58 @@ export const typeDefs = gql`
     newName: String
   }
 
+  input NexusExportSiteInput {
+    "Site target (e.g., 'mysite@local')"
+    target: String!
+    "Output path for archive (optional)"
+    outputPath: String
+  }
+
+  type NexusExportSiteResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Path to exported archive"
+    outputPath: String
+  }
+
+  input NexusImportSiteInput {
+    "Path to archive file"
+    archivePath: String!
+    "Name for imported site (optional)"
+    name: String
+  }
+
+  type NexusImportSiteResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Imported site name"
+    siteName: String
+    "Imported site ID"
+    siteId: String
+  }
+
+  input NexusGetLogsInput {
+    "Site target (e.g., 'mysite@local')"
+    target: String!
+    "Number of lines to tail"
+    tail: Int
+    "Follow logs (stream)"
+    follow: Boolean
+  }
+
+  type NexusGetLogsResult {
+    "Success flag"
+    success: Boolean!
+    "Error message if failed"
+    error: String
+    "Log content"
+    logs: String
+  }
+
   input NexusCreateSiteInput {
     "Site name"
     name: String!
@@ -309,6 +361,15 @@ export const typeDefs = gql`
 
     "Rename a site"
     nexusSitesRename(input: NexusRenameSiteInput!): NexusRenameSiteResult!
+
+    "Export a site to archive"
+    nexusSitesExport(input: NexusExportSiteInput!): NexusExportSiteResult!
+
+    "Import a site from archive"
+    nexusSitesImport(input: NexusImportSiteInput!): NexusImportSiteResult!
+
+    "Get site logs"
+    nexusSitesLogs(input: NexusGetLogsInput!): NexusGetLogsResult!
 
     "Create a new local site"
     nexusSitesCreate(input: NexusCreateSiteInput!): NexusCreateSiteResult!

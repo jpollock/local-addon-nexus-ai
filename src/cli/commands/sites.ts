@@ -201,6 +201,151 @@ sitesCommand
   });
 
 /**
+ * nexus sites export
+ */
+sitesCommand
+  .command('export <target> [outputPath]')
+  .description('Export a site to archive')
+  .action(async (target, outputPath, options) => {
+    try {
+      if (!target.endsWith('@local')) {
+        console.error('\n❌ Target site must be local.');
+        console.error(`   Use: nexus sites export ${target}@local`);
+        process.exit(1);
+      }
+
+      const client = getClient({ timeout: 600000 }); // 10 min for export
+
+      console.log(`\nExporting ${target}...`);
+
+      const result = await client.mutate<{ nexusSitesExport: any }>(`
+        mutation($input: NexusExportSiteInput!) {
+          nexusSitesExport(input: $input) {
+            success
+            error
+            outputPath
+          }
+        }
+      `, {
+        input: {
+          target,
+          outputPath,
+        },
+      });
+
+      const { success, error, outputPath: exportPath } = result.nexusSitesExport;
+
+      if (!success) {
+        console.error(`\n❌ Failed to export site: ${error}`);
+        process.exit(1);
+      }
+
+      console.log(`\n✅ Site exported successfully`);
+      console.log(`   Archive: ${exportPath}`);
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
+ * nexus sites import
+ */
+sitesCommand
+  .command('import <archivePath>')
+  .description('Import a site from archive')
+  .option('--name <name>', 'Name for the imported site')
+  .action(async (archivePath, options) => {
+    try {
+      const client = getClient({ timeout: 600000 }); // 10 min for import
+
+      console.log(`\nImporting ${archivePath}...`);
+
+      const result = await client.mutate<{ nexusSitesImport: any }>(`
+        mutation($input: NexusImportSiteInput!) {
+          nexusSitesImport(input: $input) {
+            success
+            error
+            siteName
+            siteId
+          }
+        }
+      `, {
+        input: {
+          archivePath,
+          name: options.name,
+        },
+      });
+
+      const { success, error, siteName, siteId } = result.nexusSitesImport;
+
+      if (!success) {
+        console.error(`\n❌ Failed to import site: ${error}`);
+        process.exit(1);
+      }
+
+      console.log(`\n✅ Site imported successfully`);
+      console.log(`   Name: ${siteName}`);
+      console.log(`   ID:   ${siteId}`);
+      console.log(`\nStart the site:`);
+      console.log(`   nexus sites start ${siteName}@local`);
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
+ * nexus sites logs
+ */
+sitesCommand
+  .command('logs <target>')
+  .description('View site logs')
+  .option('--tail <lines>', 'Number of lines to show', '100')
+  .option('--follow', 'Follow log output')
+  .action(async (target, options) => {
+    try {
+      if (!target.endsWith('@local')) {
+        console.error('\n❌ Target site must be local.');
+        console.error(`   Use: nexus sites logs ${target}@local`);
+        process.exit(1);
+      }
+
+      const client = getClient({ timeout: options.follow ? 0 : 30000 });
+
+      const result = await client.mutate<{ nexusSitesLogs: any }>(`
+        mutation($input: NexusGetLogsInput!) {
+          nexusSitesLogs(input: $input) {
+            success
+            error
+            logs
+          }
+        }
+      `, {
+        input: {
+          target,
+          tail: parseInt(options.tail, 10),
+          follow: options.follow || false,
+        },
+      });
+
+      const { success, error, logs } = result.nexusSitesLogs;
+
+      if (!success) {
+        console.error(`\n❌ Failed to get logs: ${error}`);
+        process.exit(1);
+      }
+
+      console.log(logs);
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
  * nexus sites list
  */
 sitesCommand

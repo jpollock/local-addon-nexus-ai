@@ -396,6 +396,119 @@ export function createResolvers(context: ResolverContext) {
       },
 
       /**
+       * Export a site to archive
+       */
+      nexusSitesExport: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(input.target);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Only local sites can be exported. Use target format: mysite@local',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site "${parsed.siteName}" not found`,
+            };
+          }
+
+          const outputPath = input.outputPath || `${site.name}-export.zip`;
+          const resultPath = await services.localServices.exportSite(site.id, outputPath);
+
+          return {
+            success: true,
+            outputPath: resultPath,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Import a site from archive
+       */
+      nexusSitesImport: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          if (!input.archivePath) {
+            return {
+              success: false,
+              error: 'Archive path is required',
+            };
+          }
+
+          const result = await services.localServices.importSite(input.archivePath, input.name);
+
+          return {
+            success: true,
+            siteName: result.name,
+            siteId: result.id,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
+       * Get site logs
+       */
+      nexusSitesLogs: async (_parent: any, { input }: { input: any }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const parsed = parseTarget(input.target);
+          if (parsed.type !== 'local') {
+            return {
+              success: false,
+              error: 'Only local sites support logs. Use target format: mysite@local',
+            };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return {
+              success: false,
+              error: `Site "${parsed.siteName}" not found`,
+            };
+          }
+
+          const logs = await services.localServices.getSiteLogs(site.id, {
+            tail: input.tail || 100,
+            follow: input.follow || false,
+          });
+
+          return {
+            success: true,
+            logs,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+          };
+        }
+      },
+
+      /**
        * Create a new local site
        */
       nexusSitesCreate: async (_parent: any, { input }: { input: any }) => {
