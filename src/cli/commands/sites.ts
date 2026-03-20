@@ -150,6 +150,57 @@ sitesCommand
   });
 
 /**
+ * nexus sites rename
+ */
+sitesCommand
+  .command('rename <target> <newName>')
+  .description('Rename a site')
+  .action(async (target, newName, options) => {
+    try {
+      // Enforce @local syntax
+      if (!target.endsWith('@local')) {
+        console.error('\n❌ Target site must be local.');
+        console.error(`   Use: nexus sites rename ${target}@local ${newName}`);
+        process.exit(1);
+      }
+
+      const client = getClient();
+
+      console.log(`\nRenaming ${target} → ${newName}...`);
+
+      const result = await client.mutate<{ nexusSitesRename: any }>(`
+        mutation($input: NexusRenameSiteInput!) {
+          nexusSitesRename(input: $input) {
+            success
+            error
+            oldName
+            newName
+          }
+        }
+      `, {
+        input: {
+          target,
+          newName,
+        },
+      });
+
+      const { success, error, oldName, newName: renamedName } = result.nexusSitesRename;
+
+      if (!success) {
+        console.error(`\n❌ Failed to rename site: ${error}`);
+        process.exit(1);
+      }
+
+      console.log(`\n✅ Site renamed successfully`);
+      console.log(`   ${oldName} → ${renamedName}`);
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
  * nexus sites list
  */
 sitesCommand
