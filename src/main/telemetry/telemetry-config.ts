@@ -74,7 +74,7 @@ export function getEventsPath(): string {
 }
 
 export function getAnalyticsEndpoint(): string {
-  const base = ENV_ENDPOINT || 'https://nexus-analytics.dev';
+  const base = ENV_ENDPOINT || 'https://nexus-analytics.jeremy7746.workers.dev';
   return base.replace(/\/$/, '') + '/v1/events';
 }
 
