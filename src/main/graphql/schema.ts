@@ -715,6 +715,28 @@ export const typeDefs = gql`
 
     "Reindex a site"
     nexusContentReindex(target: String!): NexusContentReindexResult!
+
+    # AI & Connector
+    "List Ollama models"
+    nexusAiModels: NexusAiModelsResult!
+
+    "Ask Ollama a question"
+    nexusAiAsk(query: String!, model: String): NexusAiAskResult!
+
+    "Setup AI on WordPress site"
+    nexusAiSetup(target: String!, force: Boolean): NexusAiSetupResult!
+
+    "Sync AI credentials to site"
+    nexusAiSyncCredentials(target: String!): NexusAiSyncCredentialsResult!
+
+    "List AI abilities on site"
+    nexusAiAbilities(target: String!): NexusAiAbilitiesResult!
+
+    "Run an AI ability"
+    nexusAiRun(target: String!, ability: String!, params: String): NexusAiRunResult!
+
+    "Get AI connector status"
+    nexusAiStatus(target: String!): NexusAiStatusResult!
   }
 
   # ============================================================================
@@ -1015,5 +1037,96 @@ export const typeDefs = gql`
     error: String
     documentCount: Int
     chunkCount: Int
+  }
+
+  # ============================================================================
+  # AI & Connector Types
+  # ============================================================================
+
+  type OllamaModel {
+    name: String!
+    size: Float!
+    modified: String!
+  }
+
+  type NexusAiModelsResult {
+    success: Boolean!
+    error: String
+    models: [OllamaModel!]!
+  }
+
+  type NexusAiAskResult {
+    success: Boolean!
+    error: String
+    response: String
+  }
+
+  type InstalledPlugin {
+    plugin: String!
+    version: String!
+  }
+
+  type AiConfiguration {
+    experiments: [String!]!
+    providers: [String!]!
+    credentials: Boolean!
+  }
+
+  type NexusAiSetupResult {
+    success: Boolean!
+    error: String
+    installed: [InstalledPlugin!]!
+    configured: AiConfiguration
+  }
+
+  type SyncedCredential {
+    provider: String!
+    credentialCount: Int!
+  }
+
+  type NexusAiSyncCredentialsResult {
+    success: Boolean!
+    error: String
+    synced: [SyncedCredential!]!
+  }
+
+  type AbilityParameter {
+    name: String!
+    type: String!
+    required: Boolean!
+    description: String
+  }
+
+  type AiAbility {
+    name: String!
+    description: String!
+    parameters: [AbilityParameter!]!
+  }
+
+  type NexusAiAbilitiesResult {
+    success: Boolean!
+    error: String
+    abilities: [AiAbility!]!
+  }
+
+  type NexusAiRunResult {
+    success: Boolean!
+    error: String
+    result: String
+  }
+
+  type AiConnectorStatus {
+    connectorInstalled: Boolean!
+    connectorVersion: String
+    experimentsEnabled: Boolean!
+    providersConfigured: Int!
+    credentialsSynced: Boolean!
+    abilitiesAvailable: Int!
+  }
+
+  type NexusAiStatusResult {
+    success: Boolean!
+    error: String
+    status: AiConnectorStatus
   }
 `;

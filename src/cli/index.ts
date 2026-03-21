@@ -15,6 +15,7 @@ import { blueprintsCommand } from './commands/blueprints';
 import { updateCommand } from './commands/update';
 import { fleetCommand } from './commands/fleet';
 import { contentCommand } from './commands/content';
+import { aiCommand } from './commands/ai';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
 import { setBootstrapResult } from './utils/context';
@@ -35,6 +36,7 @@ program.addCommand(blueprintsCommand);
 program.addCommand(updateCommand);
 program.addCommand(fleetCommand);
 program.addCommand(contentCommand);
+program.addCommand(aiCommand);
 
 // Global error handler
 process.on('unhandledRejection', (error: any) => {
