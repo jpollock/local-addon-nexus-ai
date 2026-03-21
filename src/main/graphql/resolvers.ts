@@ -8,6 +8,9 @@
 
 import type { ToolRegistry } from '../mcp/tool-registry';
 import * as ollamaClient from '../helpers/ollama-client';
+import { setupSiteForAI } from '../mcp/modules/wp-connector/setup-ai';
+import { buildCredentialSyncPhp, SUPPORTED_PROVIDERS, PROVIDER_TO_WP_OPTION } from '../mcp/modules/wp-connector/credential-helpers';
+import { STORAGE_KEYS } from '../../common/constants';
 
 interface ResolverContext {
   registry: ToolRegistry;
@@ -2677,21 +2680,33 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const result = await registry.call('setup_ai', {
-            site: site.id,
-            force: force || false,
-          }, services, 'cli');
-
-          if (result.isError) {
+          if (!services.localServices || !services.registryStorage) {
             return {
               success: false,
-              error: result.content[0]?.text || 'AI setup failed',
+              error: 'Local services not available',
               installed: [],
               configured: null,
             };
           }
 
-          // Parse setup result
+          // Call setupSiteForAI directly
+          const result = await setupSiteForAI(
+            site.id,
+            services.localServices,
+            services.registryStorage,
+            services.logger,
+            { enableOllama: true }
+          );
+
+          if (!result.success) {
+            return {
+              success: false,
+              error: result.message,
+              installed: [],
+              configured: null,
+            };
+          }
+
           return {
             success: true,
             installed: [
@@ -2727,23 +2742,54 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const result = await registry.call('sync_credentials', {
-            site: site.id,
-          }, services, 'cli');
-
-          if (result.isError) {
+          if (!services.localServices || !services.registryStorage) {
             return {
               success: false,
-              error: result.content[0]?.text || 'Credential sync failed',
+              error: 'Local services not available',
               synced: [],
             };
           }
 
+          // Get stored API keys from registry
+          const storedKeys = (services.registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+          const providersToSync = SUPPORTED_PROVIDERS.filter(p => storedKeys[p]);
+
+          if (providersToSync.length === 0) {
+            return {
+              success: false,
+              error: 'No AI provider API keys configured',
+              synced: [],
+            };
+          }
+
+          // Build credential entries for all providers
+          const credentialEntries = providersToSync.map(provider => ({
+            provider,
+            key: storedKeys[provider]!,
+            optionName: PROVIDER_TO_WP_OPTION[provider],
+          }));
+
+          // Execute credential sync PHP
+          const phpCode = buildCredentialSyncPhp(credentialEntries);
+          const result = await services.localServices.wpCliRun(site.id, ['eval', phpCode]);
+
+          if (!result.success) {
+            return {
+              success: false,
+              error: `Failed to sync credentials: ${result.stderr}`,
+              synced: [],
+            };
+          }
+
+          // Parse result to get synced providers
+          const synced = providersToSync.map(provider => ({
+            provider,
+            credentialCount: 1,
+          }));
+
           return {
             success: true,
-            synced: [
-              { provider: 'ollama', credentialCount: 1 },
-            ],
+            synced,
           };
         } catch (error: any) {
           return {
@@ -2767,39 +2813,71 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const result = await registry.call('list_abilities', {
-            site: site.id,
-          }, services, 'cli');
-
-          if (result.isError) {
+          if (!services.localServices) {
             return {
               success: false,
-              error: result.content[0]?.text || 'Failed to list abilities',
+              error: 'Local services not available',
               abilities: [],
             };
           }
 
-          // Parse abilities from markdown response
-          const text = result.content[0]?.text || '';
-          const abilities: any[] = [];
+          // PHP code to list abilities via wp_get_abilities()
+          const phpCode = [
+            `if (!function_exists('wp_get_abilities')) { echo json_encode([]); exit; }`,
+            `$abilities = wp_get_abilities();`,
+            `$result = [];`,
+            `foreach ($abilities as $a) {`,
+            `  $result[] = [`,
+            `    'name' => $a->get_name(),`,
+            `    'description' => $a->get_description() ?: $a->get_label(),`,
+            `    'input_schema' => $a->get_input_schema(),`,
+            `  ];`,
+            `}`,
+            `echo json_encode($result);`,
+          ].join(' ');
 
-          // Simple parsing - in real implementation, would parse structured data
-          const lines = text.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('###')) {
-              const name = line.replace('###', '').trim();
-              abilities.push({
-                name,
-                description: 'AI ability',
-                parameters: [],
-              });
-            }
+          const wpResult = await services.localServices.wpCliRun(site.id, ['eval', phpCode]);
+
+          if (!wpResult.success) {
+            return {
+              success: false,
+              error: 'Failed to query abilities',
+              abilities: [],
+            };
           }
 
-          return {
-            success: true,
-            abilities,
-          };
+          try {
+            const abilitiesData = JSON.parse(wpResult.stdout || '[]');
+            const abilities = abilitiesData.map((a: any) => {
+              const params = [];
+              if (a.input_schema?.properties) {
+                for (const [name, schema] of Object.entries(a.input_schema.properties)) {
+                  params.push({
+                    name,
+                    type: (schema as any).type || 'string',
+                    required: a.input_schema.required?.includes(name) || false,
+                    description: (schema as any).description || '',
+                  });
+                }
+              }
+
+              return {
+                name: a.name,
+                description: a.description || '',
+                parameters: params,
+              };
+            });
+
+            return {
+              success: true,
+              abilities,
+            };
+          } catch {
+            return {
+              success: true,
+              abilities: [],
+            };
+          }
         } catch (error: any) {
           return {
             success: false,
@@ -2822,6 +2900,14 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
+          if (!services.localServices) {
+            return {
+              success: false,
+              error: 'Local services not available',
+              result: null,
+            };
+          }
+
           let parsedParams = {};
           if (params) {
             try {
@@ -2835,24 +2921,56 @@ export function createResolvers(context: ResolverContext) {
             }
           }
 
-          const result = await registry.call('run_ability', {
-            site: site.id,
-            ability,
-            params: parsedParams,
-          }, services, 'cli');
+          // Build PHP code to run the ability
+          const escapedName = ability.replace(/'/g, "\\'");
+          const inputJson = JSON.stringify(parsedParams).replace(/'/g, "\\'");
+          const hasInput = Object.keys(parsedParams).length > 0;
 
-          if (result.isError) {
+          const phpCode = [
+            `if (!function_exists('wp_get_ability')) { echo json_encode(['error' => 'Abilities API not available']); exit; }`,
+            `$ability = wp_get_ability('${escapedName}');`,
+            `if (!$ability) { echo json_encode(['error' => 'Ability not found']); exit; }`,
+            hasInput
+              ? `$input = json_decode('${inputJson}', true);`
+              : `$schema = $ability->get_input_schema(); $input = (empty($schema) || (isset($schema['type']) && $schema['type'] === 'null')) ? null : [];`,
+            `$perm = $ability->check_permissions($input);`,
+            `if (is_wp_error($perm)) { echo json_encode(['error' => $perm->get_error_message()]); exit; }`,
+            `$result = $ability->execute($input);`,
+            `if (is_wp_error($result)) { echo json_encode(['error' => $result->get_error_message()]); exit; }`,
+            `echo json_encode(['result' => $result]);`,
+          ].join(' ');
+
+          const wpResult = await services.localServices.wpCliRun(site.id, ['eval', phpCode]);
+
+          if (!wpResult.success) {
             return {
               success: false,
-              error: result.content[0]?.text || 'Ability execution failed',
+              error: 'Failed to execute ability',
               result: null,
             };
           }
 
-          return {
-            success: true,
-            result: result.content[0]?.text || '',
-          };
+          try {
+            const data = JSON.parse(wpResult.stdout || '{}');
+            if (data.error) {
+              return {
+                success: false,
+                error: data.error,
+                result: null,
+              };
+            }
+
+            return {
+              success: true,
+              result: JSON.stringify(data.result),
+            };
+          } catch {
+            return {
+              success: false,
+              error: 'Invalid response from ability',
+              result: null,
+            };
+          }
         } catch (error: any) {
           return {
             success: false,
@@ -2941,22 +3059,19 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          // Call the composite MCP tool
-          const result = await registry.call('nexus_site_audit', { site: site.id }, services, 'cli');
-
-          if (result.isError) {
+          if (!services.localServices) {
             return {
               success: false,
-              error: result.content[0]?.text || 'Site audit failed',
+              error: 'Local services not available',
               audit: null,
             };
           }
 
-          // Get structured data from services
-          const wpVersion = await services.localServices?.getWpVersion(site.id) || 'unknown';
+          // Get structured data from services directly (no MCP tool call)
+          const wpVersion = await services.localServices.getWpVersion(site.id) || 'unknown';
           const phpVersion = (site as any)?.phpVersion || 'unknown';
-          const pluginResult = await services.localServices?.wpCliRun(site.id, ['plugin', 'list', '--format=json']);
-          const themeResult = await services.localServices?.wpCliRun(site.id, ['theme', 'list', '--format=json']);
+          const pluginResult = await services.localServices.wpCliRun(site.id, ['plugin', 'list', '--format=json']);
+          const themeResult = await services.localServices.wpCliRun(site.id, ['theme', 'list', '--format=json']);
 
           let plugins: any[] = [];
           let themes: any[] = [];
@@ -3025,17 +3140,6 @@ export function createResolvers(context: ResolverContext) {
 
       nexusAuditPlugins: async () => {
         try {
-          // Call the composite MCP tool
-          const result = await registry.call('nexus_plugin_audit', {}, services, 'cli');
-
-          if (result.isError) {
-            return {
-              success: false,
-              error: result.content[0]?.text || 'Plugin audit failed',
-              report: null,
-            };
-          }
-
           // Get all sites
           const allSites = services.siteData.getSites();
           const siteIds = Object.keys(allSites);
