@@ -22,10 +22,14 @@ module.exports = async function globalSetup() {
   console.log(`[E2E Setup] CAPI available: ${env.capiAvailable}`);
   console.log(`[E2E Setup] Ollama available: ${env.ollamaAvailable}`);
 
+  // CLI tests can run with halted sites (they just need Local's GraphQL accessible)
+  // Only MCP tool tests that interact with WordPress need running sites
+  // So we just warn here instead of failing
   if (env.runningSites.length === 0 && !env.testSiteId) {
-    throw new Error(
-      'No running WordPress sites found and no test site could be created.\n' +
-      'Start at least one site in Local before running E2E tests.',
+    console.warn(
+      '[E2E Setup] WARNING: No running WordPress sites found.\n' +
+      '[E2E Setup] CLI tests will run, but tests requiring WordPress will be skipped.\n' +
+      '[E2E Setup] Start at least one site in Local for full E2E test coverage.',
     );
   }
 

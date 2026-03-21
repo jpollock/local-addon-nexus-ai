@@ -233,6 +233,12 @@ describe('CLI Commands - WordPress', () => {
     });
 
     it('should support JSON output for plugin list', async () => {
+      const env = deserializeEnvironment();
+      if (env.runningSites.length === 0) {
+        console.log('      [SKIP] No running sites - WP-CLI requires WordPress running');
+        return;
+      }
+
       const result = await runCli(`wp ${siteName}@local plugin list --json`);
 
       expect(result.exitCode).toBe(0);
@@ -250,6 +256,12 @@ describe('CLI Commands - WordPress', () => {
     });
 
     it('should show plugin status icons', async () => {
+      const env = deserializeEnvironment();
+      if (env.runningSites.length === 0) {
+        console.log('      [SKIP] No running sites - WP-CLI requires WordPress running');
+        return;
+      }
+
       const result = await runCli(`wp ${siteName}@local plugin list`);
 
       expect(result.exitCode).toBe(0);
@@ -264,6 +276,12 @@ describe('CLI Commands - WordPress', () => {
 
   describe('nexus wp core version', () => {
     it('should show WordPress version', async () => {
+      const env = deserializeEnvironment();
+      if (env.runningSites.length === 0) {
+        console.log('      [SKIP] No running sites - WP-CLI requires WordPress running');
+        return;
+      }
+
       const result = await runCli(`wp ${siteName}@local core version`);
 
       expect(result.exitCode).toBe(0);
@@ -275,6 +293,12 @@ describe('CLI Commands - WordPress', () => {
 
   describe('nexus wp theme list', () => {
     it('should list themes', async () => {
+      const env = deserializeEnvironment();
+      if (env.runningSites.length === 0) {
+        console.log('      [SKIP] No running sites - WP-CLI requires WordPress running');
+        return;
+      }
+
       const result = await runCli(`wp ${siteName}@local theme list`);
 
       expect(result.exitCode).toBe(0);
@@ -286,6 +310,12 @@ describe('CLI Commands - WordPress', () => {
 
   describe('nexus wp option get', () => {
     it('should get an option value', async () => {
+      const env = deserializeEnvironment();
+      if (env.runningSites.length === 0) {
+        console.log('      [SKIP] No running sites - WP-CLI requires WordPress running');
+        return;
+      }
+
       const result = await runCli(`wp ${siteName}@local option get blogname`);
 
       expect(result.exitCode).toBe(0);

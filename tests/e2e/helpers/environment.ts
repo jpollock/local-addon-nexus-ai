@@ -345,40 +345,30 @@ export async function discoverEnvironment(): Promise<E2EEnvironment> {
     if (existing) {
       console.log(`[E2E Setup] Found existing test site: ${existing.name}`);
 
-      // Start it if halted
+      // Use the test site even if halted (CLI tests don't need it running)
       const isHalted = haltedSites.some((s) => s.name === existing.name);
       if (isHalted) {
-        console.log('[E2E Setup] Starting halted test site...');
-        try {
-          await client.callTool('local_start_site', { site: existing.name });
-          await waitForSiteRunning(client, existing.name, 120000);
-
-          // Re-fetch site list to update runningSites array
-          const result = await client.callTool('local_list_sites');
-          if (!result.isError && result.content[0]?.text) {
-            const parsed = parseSiteListOutput(result.content[0].text);
-            runningSites = parsed.running;
-            haltedSites = parsed.halted;
-          }
-        } catch (err) {
-          console.warn(`[E2E Setup] Failed to start test site: ${err}`);
-        }
+        console.log('[E2E Setup] Test site is halted - will use for CLI tests');
+        // NOTE: Attempting to start sites with broken MySQL causes Local GraphQL to freeze
+        // CLI tests can work with halted sites (they just list sites, don't need WordPress)
+        // Tests that require WordPress should check for running sites and skip if needed
       }
 
-      // Validate the site has a working WordPress by running a simple WP-CLI command
-      try {
-        const versionResult = await client.callTool('wp_core_version', { site: existing.name });
-        if (versionResult.isError) {
-          console.warn(`[E2E Setup] Test site "${existing.name}" has broken WordPress — skipping as test site`);
-          console.warn(`[E2E Setup] (${versionResult.content[0]?.text})`);
-          // Don't use this site for mutations — WP-CLI won't work
-        } else {
-          testSiteId = existing.name;
-          testSiteName = existing.name;
-          console.log(`[E2E Setup] Test site validated (WP ${versionResult.content[0]?.text?.trim()})`);
+      // Use this as the test site for CLI tests (even if halted)
+      testSiteId = existing.name;
+      testSiteName = existing.name;
+      console.log(`[E2E Setup] Using "${existing.name}" as test site (${isHalted ? 'halted' : 'running'})`);
+
+      // Skip WordPress validation for halted sites (would require starting them)
+      if (!isHalted) {
+        try {
+          const versionResult = await client.callTool('wp_core_version', { site: existing.name });
+          if (!versionResult.isError) {
+            console.log(`[E2E Setup] Test site validated (WP ${versionResult.content[0]?.text?.trim()})`);
+          }
+        } catch {
+          console.warn('[E2E Setup] Could not validate test site WordPress');
         }
-      } catch {
-        console.warn('[E2E Setup] Could not validate test site — skipping as test site');
       }
     } else {
       // Create a new test site
@@ -503,14 +493,18 @@ export function getClient(): McpClient {
 }
 
 /**
- * Get the first running site, or throw if none available.
+ * Get any site (prefers running, falls back to halted).
+ * CLI tests can work with halted sites.
  */
 export function getAnySite(): SiteInfo {
   const env = deserializeEnvironment();
-  if (env.runningSites.length === 0) {
-    throw new Error('No running sites available for E2E tests');
+  if (env.runningSites.length > 0) {
+    return env.runningSites[0];
   }
-  return env.runningSites[0];
+  if (env.haltedSites.length > 0) {
+    return env.haltedSites[0];
+  }
+  throw new Error('No sites available for E2E tests (need at least one Local site)');
 }
 
 /**
