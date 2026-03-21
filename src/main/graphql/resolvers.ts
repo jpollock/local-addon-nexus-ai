@@ -2194,6 +2194,275 @@ export function createResolvers(context: ResolverContext) {
           };
         }
       },
+
+      // ========================================================================
+      // Content & Context Resolvers
+      // ========================================================================
+
+      nexusContentSearch: async (_parent: any, { target, query, limit }: { target: string; query: string; limit?: number }) => {
+        try {
+          const parsed = parseTarget(target);
+          const site = resolveSite(parsed.siteName!, services.siteData);
+
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${parsed.siteName}`,
+              results: [],
+            };
+          }
+
+          if (!services.vectorStore) {
+            return {
+              success: false,
+              error: 'Vector store not available',
+              results: [],
+            };
+          }
+
+          const searchResults = await services.vectorStore.search(query, limit || 10, {
+            siteId: site.id,
+          });
+
+          return {
+            success: true,
+            results: searchResults.map((r: any) => ({
+              path: r.metadata?.filePath || r.metadata?.path || 'unknown',
+              type: r.metadata?.type || 'content',
+              score: r.score || 0,
+              snippet: r.text?.substring(0, 200) || '',
+              lineNumber: r.metadata?.lineNumber || null,
+            })),
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            results: [],
+          };
+        }
+      },
+
+      nexusContentSearchAll: async (_parent: any, { query, limit }: { query: string; limit?: number }) => {
+        try {
+          if (!services.vectorStore) {
+            return {
+              success: false,
+              error: 'Vector store not available',
+              results: [],
+            };
+          }
+
+          const searchResults = await services.vectorStore.search(query, limit || 20);
+
+          return {
+            success: true,
+            results: searchResults.map((r: any) => ({
+              target: `${r.metadata?.siteName || 'unknown'}@local`,
+              siteName: r.metadata?.siteName || 'unknown',
+              path: r.metadata?.filePath || r.metadata?.path || 'unknown',
+              type: r.metadata?.type || 'content',
+              score: r.score || 0,
+              snippet: r.text?.substring(0, 200) || '',
+            })),
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            results: [],
+          };
+        }
+      },
+
+      nexusContentStructure: async (_parent: any, { target, depth }: { target: string; depth?: number }) => {
+        try {
+          const parsed = parseTarget(target);
+          const site = resolveSite(parsed.siteName!, services.siteData);
+
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${parsed.siteName}`,
+              structure: null,
+            };
+          }
+
+          // Use fileScanner to get directory structure
+          if (!services.fileScanner) {
+            return {
+              success: false,
+              error: 'File scanner not available',
+              structure: null,
+            };
+          }
+
+          const fs = require('fs');
+          const path = require('path');
+
+          const sitePath = site.path;
+          const wpContentPath = path.join(sitePath, 'app', 'public', 'wp-content');
+
+          // Check if wp-content exists
+          if (!fs.existsSync(wpContentPath)) {
+            return {
+              success: false,
+              error: 'wp-content directory not found',
+              structure: null,
+            };
+          }
+
+          // Read directory contents
+          const children = fs.readdirSync(wpContentPath).map((name: string) => {
+            const fullPath = path.join(wpContentPath, name);
+            const stats = fs.statSync(fullPath);
+            return {
+              path: name,
+              type: stats.isDirectory() ? 'directory' : 'file',
+              size: stats.isFile() ? stats.size : null,
+            };
+          });
+
+          return {
+            success: true,
+            structure: {
+              path: 'wp-content',
+              type: 'directory',
+              fileCount: children.filter((c: any) => c.type === 'file').length,
+              children,
+            },
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            structure: null,
+          };
+        }
+      },
+
+      nexusContentIndexStatus: async (_parent: any, { target }: { target: string }) => {
+        try {
+          const parsed = parseTarget(target);
+          const site = resolveSite(parsed.siteName!, services.siteData);
+
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${parsed.siteName}`,
+              status: null,
+            };
+          }
+
+          const indexEntry = services.indexRegistry.get(site.id);
+
+          if (!indexEntry) {
+            return {
+              success: true,
+              status: {
+                state: 'not-indexed',
+                documentCount: 0,
+                chunkCount: 0,
+                lastIndexed: null,
+                indexedAt: null,
+                errorMessage: null,
+              },
+            };
+          }
+
+          return {
+            success: true,
+            status: {
+              state: indexEntry.state,
+              documentCount: indexEntry.documentCount || 0,
+              chunkCount: indexEntry.chunkCount || 0,
+              lastIndexed: indexEntry.indexedAt || null,
+              indexedAt: indexEntry.indexedAt || null,
+              errorMessage: indexEntry.error || null,
+            },
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            status: null,
+          };
+        }
+      },
+
+      nexusContentListIndexed: async () => {
+        try {
+          const entries = services.indexRegistry.listAll();
+          const allSites = services.siteData.getSites();
+
+          const sites = entries.map((entry: any) => {
+            const site = allSites[entry.siteId];
+            return {
+              target: `${entry.siteName || site?.name || 'unknown'}@local`,
+              siteName: entry.siteName || site?.name || 'unknown',
+              state: entry.state,
+              documentCount: entry.documentCount || 0,
+              chunkCount: entry.chunkCount || 0,
+              lastIndexed: entry.indexedAt || null,
+            };
+          });
+
+          return {
+            success: true,
+            sites,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            sites: [],
+          };
+        }
+      },
+
+      nexusContentReindex: async (_parent: any, { target }: { target: string }) => {
+        try {
+          const parsed = parseTarget(target);
+          const site = resolveSite(parsed.siteName!, services.siteData);
+
+          if (!site) {
+            return {
+              success: false,
+              error: `Site not found: ${parsed.siteName}`,
+              documentCount: 0,
+              chunkCount: 0,
+            };
+          }
+
+          // Call the reindex_site MCP tool
+          const result = await registry.call('reindex_site', { site: site.id }, services, 'cli');
+
+          if (result.isError) {
+            return {
+              success: false,
+              error: result.content[0]?.text || 'Reindex failed',
+              documentCount: 0,
+              chunkCount: 0,
+            };
+          }
+
+          // Get updated index status
+          const indexEntry = services.indexRegistry.get(site.id);
+
+          return {
+            success: true,
+            documentCount: indexEntry?.documentCount || 0,
+            chunkCount: indexEntry?.chunkCount || 0,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message,
+            documentCount: 0,
+            chunkCount: 0,
+          };
+        }
+      },
     },
   };
 }

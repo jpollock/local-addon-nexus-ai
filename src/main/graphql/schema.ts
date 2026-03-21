@@ -696,6 +696,25 @@ export const typeDefs = gql`
 
     "Compare two sites"
     nexusFleetCompare(target1: String!, target2: String!): NexusFleetCompareResult!
+
+    # Content & Context
+    "Search content within a site"
+    nexusContentSearch(target: String!, query: String!, limit: Int): NexusContentSearchResult!
+
+    "Search content across all sites"
+    nexusContentSearchAll(query: String!, limit: Int): NexusContentSearchAllResult!
+
+    "Get site file structure"
+    nexusContentStructure(target: String!, depth: Int): NexusContentStructureResult!
+
+    "Get indexing status"
+    nexusContentIndexStatus(target: String!): NexusContentIndexStatusResult!
+
+    "List indexed sites"
+    nexusContentListIndexed: NexusContentListIndexedResult!
+
+    "Reindex a site"
+    nexusContentReindex(target: String!): NexusContentReindexResult!
   }
 
   # ============================================================================
@@ -907,5 +926,94 @@ export const typeDefs = gql`
     success: Boolean!
     error: String
     comparison: SiteComparison
+  }
+
+  # ============================================================================
+  # Content & Context Types
+  # ============================================================================
+
+  type ContentSearchResult {
+    path: String!
+    type: String!
+    score: Float!
+    snippet: String!
+    lineNumber: Int
+  }
+
+  type NexusContentSearchResult {
+    success: Boolean!
+    error: String
+    results: [ContentSearchResult!]!
+  }
+
+  type CrossSiteSearchResult {
+    target: String!
+    siteName: String!
+    path: String!
+    type: String!
+    score: Float!
+    snippet: String!
+  }
+
+  type NexusContentSearchAllResult {
+    success: Boolean!
+    error: String
+    results: [CrossSiteSearchResult!]!
+  }
+
+  type StructureChild {
+    path: String!
+    type: String!
+    size: Int
+  }
+
+  type SiteStructure {
+    path: String!
+    type: String!
+    fileCount: Int!
+    children: [StructureChild!]
+  }
+
+  type NexusContentStructureResult {
+    success: Boolean!
+    error: String
+    structure: SiteStructure
+  }
+
+  type IndexStatus {
+    state: String!
+    documentCount: Int!
+    chunkCount: Int!
+    lastIndexed: String
+    indexedAt: String
+    errorMessage: String
+  }
+
+  type NexusContentIndexStatusResult {
+    success: Boolean!
+    error: String
+    status: IndexStatus
+  }
+
+  type IndexedSite {
+    target: String!
+    siteName: String!
+    state: String!
+    documentCount: Int!
+    chunkCount: Int!
+    lastIndexed: String
+  }
+
+  type NexusContentListIndexedResult {
+    success: Boolean!
+    error: String
+    sites: [IndexedSite!]!
+  }
+
+  type NexusContentReindexResult {
+    success: Boolean!
+    error: String
+    documentCount: Int
+    chunkCount: Int
   }
 `;

@@ -14,6 +14,7 @@ import { wpeCommand } from './commands/wpe';
 import { blueprintsCommand } from './commands/blueprints';
 import { updateCommand } from './commands/update';
 import { fleetCommand } from './commands/fleet';
+import { contentCommand } from './commands/content';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
 import { setBootstrapResult } from './utils/context';
@@ -33,6 +34,7 @@ program.addCommand(wpeCommand);
 program.addCommand(blueprintsCommand);
 program.addCommand(updateCommand);
 program.addCommand(fleetCommand);
+program.addCommand(contentCommand);
 
 // Global error handler
 process.on('unhandledRejection', (error: any) => {
