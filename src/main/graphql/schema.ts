@@ -842,7 +842,7 @@ export const typeDefs = gql`
     sites: [FilteredSite!]!
   }
 
-  type SiteGroup {
+  type NexusSiteGroup {
     id: ID!
     name: String!
     description: String
@@ -853,7 +853,7 @@ export const typeDefs = gql`
   type NexusFleetGroupsListResult {
     success: Boolean!
     error: String
-    groups: [SiteGroup!]!
+    groups: [NexusSiteGroup!]!
   }
 
   type NexusFleetGroupsCreateResult {
