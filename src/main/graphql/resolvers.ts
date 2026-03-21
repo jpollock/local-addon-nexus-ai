@@ -2,10 +2,12 @@
  * GraphQL Resolvers for Nexus CLI
  *
  * Resolvers call services directly for most operations.
- * POC: 5 commands (sites list/create, wp plugin list, sync pull/push)
+ * MCP tools are NOT called - they return markdown for chat interfaces.
+ * CLI needs structured JSON data.
  */
 
 import type { ToolRegistry } from '../mcp/tool-registry';
+import * as ollamaClient from '../helpers/ollama-client';
 
 interface ResolverContext {
   registry: ToolRegistry;
@@ -1900,20 +1902,25 @@ export function createResolvers(context: ResolverContext) {
 
       nexusFleetGroupsList: async () => {
         try {
-          const result = await registry.call('list_site_groups', {}, services, 'cli');
-
-          if (result.isError) {
+          if (!services.localServices?.getSiteGroups) {
             return {
               success: false,
-              error: result.content[0]?.text || 'Failed to list groups',
+              error: 'Site groups are not available',
               groups: [],
             };
           }
 
-          const data = JSON.parse(result.content[0]?.text || '[]');
+          const groups = services.localServices.getSiteGroups();
+
           return {
             success: true,
-            groups: data,
+            groups: groups.map((g: any) => ({
+              id: g.id,
+              name: g.name,
+              description: g.description || null,
+              siteCount: g.siteIds?.length || 0,
+              createdAt: g.createdAt || new Date().toISOString(),
+            })),
           };
         } catch (error: any) {
           return {
@@ -1926,24 +1933,19 @@ export function createResolvers(context: ResolverContext) {
 
       nexusFleetGroupsCreate: async (_parent: any, { name, description }: { name: string; description?: string }) => {
         try {
-          const result = await registry.call('manage_site_group', {
-            action: 'create',
-            groupName: name,
-            description: description || null,
-          }, services, 'cli');
-
-          if (result.isError) {
+          if (!services.localServices?.createSiteGroup) {
             return {
               success: false,
-              error: result.content[0]?.text || 'Failed to create group',
+              error: 'Site groups are not available',
               groupId: null,
             };
           }
 
-          const data = JSON.parse(result.content[0]?.text || '{}');
+          const group = services.localServices.createSiteGroup(name);
+
           return {
             success: true,
-            groupId: data.groupId,
+            groupId: group.id,
           };
         } catch (error: any) {
           return {
@@ -1956,24 +1958,46 @@ export function createResolvers(context: ResolverContext) {
 
       nexusFleetGroupsAdd: async (_parent: any, { group, sites }: { group: string; sites: string[] }) => {
         try {
-          const result = await registry.call('manage_site_group', {
-            action: 'add',
-            groupName: group,
-            sites,
-          }, services, 'cli');
-
-          if (result.isError) {
+          if (!services.localServices?.getSiteGroups || !services.localServices?.moveSitesToGroup) {
             return {
               success: false,
-              error: result.content[0]?.text || 'Failed to add sites to group',
+              error: 'Site groups are not available',
               addedCount: 0,
             };
           }
 
-          const data = JSON.parse(result.content[0]?.text || '{}');
+          // Find group by name
+          const groups = services.localServices.getSiteGroups();
+          const targetGroup = groups.find((g: any) => g.name === group);
+
+          if (!targetGroup) {
+            return {
+              success: false,
+              error: `Group "${group}" not found`,
+              addedCount: 0,
+            };
+          }
+
+          // Parse site targets to get site IDs
+          const siteIds = sites.map(target => {
+            const parsed = parseTarget(target);
+            const site = resolveSite(parsed.siteName!, services.siteData);
+            return site?.id;
+          }).filter(Boolean);
+
+          if (siteIds.length === 0) {
+            return {
+              success: false,
+              error: 'No valid sites found',
+              addedCount: 0,
+            };
+          }
+
+          services.localServices.moveSitesToGroup(siteIds, targetGroup.id);
+
           return {
             success: true,
-            addedCount: data.addedCount || sites.length,
+            addedCount: siteIds.length,
           };
         } catch (error: any) {
           return {
@@ -1986,24 +2010,34 @@ export function createResolvers(context: ResolverContext) {
 
       nexusFleetGroupsRemove: async (_parent: any, { group, sites }: { group: string; sites: string[] }) => {
         try {
-          const result = await registry.call('manage_site_group', {
-            action: 'remove',
-            groupName: group,
-            sites,
-          }, services, 'cli');
-
-          if (result.isError) {
+          if (!services.localServices?.removeSitesFromGroups) {
             return {
               success: false,
-              error: result.content[0]?.text || 'Failed to remove sites from group',
+              error: 'Site groups are not available',
               removedCount: 0,
             };
           }
 
-          const data = JSON.parse(result.content[0]?.text || '{}');
+          // Parse site targets to get site IDs
+          const siteIds = sites.map(target => {
+            const parsed = parseTarget(target);
+            const site = resolveSite(parsed.siteName!, services.siteData);
+            return site?.id;
+          }).filter(Boolean);
+
+          if (siteIds.length === 0) {
+            return {
+              success: false,
+              error: 'No valid sites found',
+              removedCount: 0,
+            };
+          }
+
+          services.localServices.removeSitesFromGroups(siteIds);
+
           return {
             success: true,
-            removedCount: data.removedCount || sites.length,
+            removedCount: siteIds.length,
           };
         } catch (error: any) {
           return {
@@ -2016,17 +2050,25 @@ export function createResolvers(context: ResolverContext) {
 
       nexusFleetGroupsDelete: async (_parent: any, { group }: { group: string }) => {
         try {
-          const result = await registry.call('manage_site_group', {
-            action: 'delete',
-            groupName: group,
-          }, services, 'cli');
-
-          if (result.isError) {
+          if (!services.localServices?.getSiteGroups || !services.localServices?.deleteSiteGroup) {
             return {
               success: false,
-              error: result.content[0]?.text || 'Failed to delete group',
+              error: 'Site groups are not available',
             };
           }
+
+          // Find group by name
+          const groups = services.localServices.getSiteGroups();
+          const targetGroup = groups.find((g: any) => g.name === group);
+
+          if (!targetGroup) {
+            return {
+              success: false,
+              error: `Group "${group}" not found`,
+            };
+          }
+
+          services.localServices.deleteSiteGroup(targetGroup.id);
 
           return { success: true };
         } catch (error: any) {
@@ -2434,25 +2476,19 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          // Call the reindex_site MCP tool
-          const result = await registry.call('reindex_site', { site: site.id }, services, 'cli');
+          // Call contentPipeline directly (don't use MCP tool)
+          const siteInfo = {
+            siteId: site.id,
+            siteName: site.name,
+            sitePath: site.path,
+          };
 
-          if (result.isError) {
-            return {
-              success: false,
-              error: result.content[0]?.text || 'Reindex failed',
-              documentCount: 0,
-              chunkCount: 0,
-            };
-          }
-
-          // Get updated index status
-          const indexEntry = services.indexRegistry.get(site.id);
+          const result = await services.contentPipeline.reindexSite(siteInfo);
 
           return {
             success: true,
-            documentCount: indexEntry?.documentCount || 0,
-            chunkCount: indexEntry?.chunkCount || 0,
+            documentCount: result.documentsIndexed || 0,
+            chunkCount: result.chunksIndexed || 0,
           };
         } catch (error: any) {
           return {
@@ -2470,38 +2506,16 @@ export function createResolvers(context: ResolverContext) {
 
       nexusAiModels: async () => {
         try {
-          const result = await registry.call('list_ollama_models', {}, services, 'cli');
-
-          if (result.isError) {
-            return {
-              success: false,
-              error: result.content[0]?.text || 'Failed to list Ollama models',
-              models: [],
-            };
-          }
-
-          // Parse markdown response
-          const text = result.content[0]?.text || '';
-          const models: any[] = [];
-
-          // Extract model info from markdown format
-          const lines = text.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('- **')) {
-              const match = line.match(/\*\*(.+?)\*\*/);
-              if (match) {
-                models.push({
-                  name: match[1],
-                  size: 0,
-                  modified: new Date().toISOString(),
-                });
-              }
-            }
-          }
+          // Call Ollama API directly for structured data
+          const models = await ollamaClient.listModels();
 
           return {
             success: true,
-            models,
+            models: models.map(m => ({
+              name: m.name,
+              size: m.size,
+              modified: m.modified,
+            })),
           };
         } catch (error: any) {
           return {
@@ -2514,22 +2528,15 @@ export function createResolvers(context: ResolverContext) {
 
       nexusAiAsk: async (_parent: any, { query, model }: { query: string; model?: string }) => {
         try {
-          const result = await registry.call('ask_ollama', {
-            prompt: query,
+          // Call Ollama API directly for structured data
+          const response = await ollamaClient.generate({
             model: model || 'llama3.2',
-          }, services, 'cli');
-
-          if (result.isError) {
-            return {
-              success: false,
-              error: result.content[0]?.text || 'Failed to get response from Ollama',
-              response: null,
-            };
-          }
+            prompt: query,
+          });
 
           return {
             success: true,
-            response: result.content[0]?.text || '',
+            response,
           };
         } catch (error: any) {
           return {
