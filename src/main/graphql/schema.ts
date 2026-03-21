@@ -737,6 +737,13 @@ export const typeDefs = gql`
 
     "Get AI connector status"
     nexusAiStatus(target: String!): NexusAiStatusResult!
+
+    # Composite Audits
+    "Comprehensive site audit"
+    nexusAuditSite(target: String!): NexusAuditSiteResult!
+
+    "Fleet-wide plugin audit"
+    nexusAuditPlugins: NexusAuditPluginsResult!
   }
 
   # ============================================================================
@@ -1128,5 +1135,80 @@ export const typeDefs = gql`
     success: Boolean!
     error: String
     status: AiConnectorStatus
+  }
+
+  # ============================================================================
+  # Composite Audit Types
+  # ============================================================================
+
+  type AuditPlugin {
+    name: String!
+    version: String!
+    status: String!
+    updateAvailable: Boolean!
+    updateVersion: String
+  }
+
+  type AuditTheme {
+    name: String!
+    version: String!
+    status: String!
+    updateAvailable: Boolean!
+  }
+
+  type AuditHealthIssue {
+    severity: String!
+    message: String!
+  }
+
+  type AuditHealth {
+    status: String!
+    score: Int!
+    issues: [AuditHealthIssue!]!
+  }
+
+  type AuditSecurity {
+    outdatedPlugins: Int!
+    outdatedThemes: Int!
+    coreUpToDate: Boolean!
+    phpUpToDate: Boolean!
+  }
+
+  type SiteAudit {
+    siteName: String!
+    wpVersion: String!
+    phpVersion: String!
+    plugins: [AuditPlugin!]!
+    themes: [AuditTheme!]!
+    health: AuditHealth!
+    security: AuditSecurity!
+  }
+
+  type NexusAuditSiteResult {
+    success: Boolean!
+    error: String
+    audit: SiteAudit
+  }
+
+  type SitePluginReport {
+    siteName: String!
+    pluginCount: Int!
+    activePlugins: Int!
+    outdatedCount: Int!
+    plugins: [AuditPlugin!]!
+  }
+
+  type PluginAuditReport {
+    totalSites: Int!
+    sitesAudited: Int!
+    totalPlugins: Int!
+    outdatedPlugins: Int!
+    sites: [SitePluginReport!]!
+  }
+
+  type NexusAuditPluginsResult {
+    success: Boolean!
+    error: String
+    report: PluginAuditReport
   }
 `;
