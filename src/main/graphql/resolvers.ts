@@ -2081,20 +2081,52 @@ export function createResolvers(context: ResolverContext) {
 
       nexusFleetBulkReindex: async (_parent: any, { targets }: { targets: string[] }) => {
         try {
-          const result = await registry.call('bulk_reindex', { targets }, services, 'cli');
+          const results = [];
 
-          if (result.isError) {
-            return {
-              success: false,
-              error: result.content[0]?.text || 'Bulk reindex failed',
-              results: [],
-            };
-          }
+          // Reindex each target in parallel
+          const reindexPromises = targets.map(async (target) => {
+            try {
+              const parsed = parseTarget(target);
+              const site = resolveSite(parsed.siteName!, services.siteData);
 
-          const data = JSON.parse(result.content[0]?.text || '[]');
+              if (!site) {
+                return {
+                  target,
+                  success: false,
+                  error: `Site not found: ${parsed.siteName}`,
+                  documentCount: 0,
+                };
+              }
+
+              const siteInfo = {
+                siteId: site.id,
+                siteName: site.name,
+                sitePath: site.path,
+              };
+
+              const result = await services.contentPipeline.reindexSite(siteInfo);
+
+              return {
+                target,
+                success: true,
+                error: null,
+                documentCount: result.documentsIndexed || 0,
+              };
+            } catch (error: any) {
+              return {
+                target,
+                success: false,
+                error: error.message,
+                documentCount: 0,
+              };
+            }
+          });
+
+          const reindexResults = await Promise.all(reindexPromises);
+
           return {
             success: true,
-            results: data,
+            results: reindexResults,
           };
         } catch (error: any) {
           return {
@@ -2107,20 +2139,84 @@ export function createResolvers(context: ResolverContext) {
 
       nexusFleetBulkPluginUpdate: async (_parent: any, { input }: { input: any }) => {
         try {
-          const result = await registry.call('bulk_plugin_update', input, services, 'cli');
+          const { targets, plugin, all, dryRun } = input;
+          const results = [];
 
-          if (result.isError) {
-            return {
-              success: false,
-              error: result.content[0]?.text || 'Bulk plugin update failed',
-              results: [],
-            };
-          }
+          // Update plugins on each target in parallel
+          const updatePromises = targets.map(async (target: string) => {
+            try {
+              const parsed = parseTarget(target);
+              const site = resolveSite(parsed.siteName!, services.siteData);
 
-          const data = JSON.parse(result.content[0]?.text || '[]');
+              if (!site) {
+                return {
+                  target,
+                  success: false,
+                  error: `Site not found: ${parsed.siteName}`,
+                  updatedPlugins: [],
+                };
+              }
+
+              // Build wp-cli command
+              const cmd = ['plugin', 'update'];
+              if (plugin) {
+                cmd.push(plugin);
+              } else if (all) {
+                cmd.push('--all');
+              }
+              if (dryRun) {
+                cmd.push('--dry-run');
+              }
+              cmd.push('--format=json');
+
+              const wpResult = await services.localServices?.wpCliRun(site.id, cmd);
+
+              if (!wpResult?.success) {
+                return {
+                  target,
+                  success: false,
+                  error: wpResult?.stderr || 'Plugin update failed',
+                  updatedPlugins: [],
+                };
+              }
+
+              try {
+                const updateData = JSON.parse(wpResult.stdout || '[]');
+                const updatedPlugins = Array.isArray(updateData) ? updateData.map((p: any) => ({
+                  slug: p.name || p.plugin,
+                  oldVersion: p.version || p.old_version,
+                  newVersion: p.update_version || p.new_version,
+                })) : [];
+
+                return {
+                  target,
+                  success: true,
+                  error: null,
+                  updatedPlugins,
+                };
+              } catch {
+                return {
+                  target,
+                  success: true,
+                  error: null,
+                  updatedPlugins: [],
+                };
+              }
+            } catch (error: any) {
+              return {
+                target,
+                success: false,
+                error: error.message,
+                updatedPlugins: [],
+              };
+            }
+          });
+
+          const updateResults = await Promise.all(updatePromises);
+
           return {
             success: true,
-            results: data,
+            results: updateResults,
           };
         } catch (error: any) {
           return {
@@ -2133,42 +2229,62 @@ export function createResolvers(context: ResolverContext) {
 
       nexusFleetBulkHealthCheck: async (_parent: any, { targets }: { targets: string[] }) => {
         try {
-          // For bulk health check, call get_site_health for each target
+          if (!services.healthCalculator) {
+            return {
+              success: false,
+              error: 'Health calculator not available',
+              results: [],
+            };
+          }
+
           const results = [];
+          const allSites = services.siteData.getSites();
 
-          for (const target of targets) {
+          // Check health for each target in parallel
+          const healthPromises = targets.map(async (target) => {
             try {
-              const result = await registry.call('get_site_health', { target }, services, 'cli');
+              const parsed = parseTarget(target);
+              const site = resolveSite(parsed.siteName!, services.siteData);
 
-              if (result.isError) {
-                results.push({
+              if (!site) {
+                return {
                   target,
                   status: 'error',
                   score: 0,
                   issueCount: 0,
-                });
-              } else {
-                const data = JSON.parse(result.content[0]?.text || '{}');
-                results.push({
-                  target,
-                  status: data.status || 'unknown',
-                  score: data.score || 0,
-                  issueCount: data.issues?.length || 0,
-                });
+                };
               }
-            } catch {
-              results.push({
+
+              const siteInfo = {
+                domain: site.domain || '',
+                phpVersion: (allSites[site.id] as any)?.phpVersion || '8.0',
+              };
+
+              const scores = await services.healthCalculator.calculateAllScores([site.id], { [site.id]: siteInfo });
+              const score = scores[site.id] || 0;
+              const status = score >= 80 ? 'healthy' : score >= 50 ? 'warning' : 'critical';
+
+              return {
+                target,
+                status,
+                score,
+                issueCount: 0,
+              };
+            } catch (error: any) {
+              return {
                 target,
                 status: 'error',
                 score: 0,
                 issueCount: 0,
-              });
+              };
             }
-          }
+          });
+
+          const healthResults = await Promise.all(healthPromises);
 
           return {
             success: true,
-            results,
+            results: healthResults,
           };
         } catch (error: any) {
           return {
