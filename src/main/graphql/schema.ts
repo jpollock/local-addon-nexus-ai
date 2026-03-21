@@ -22,7 +22,7 @@ export const typeDefs = gql`
     "Site domain"
     domain: String!
     "Site ID"
-    id: String!
+    id: ID!
     "PHP version"
     phpVersion: String
     "Linked WPE environment"
@@ -76,7 +76,7 @@ export const typeDefs = gql`
 
   type SiteDetails {
     "Site ID"
-    id: String!
+    id: ID!
     "Site name"
     name: String!
     "Site domain"
@@ -289,7 +289,7 @@ export const typeDefs = gql`
 
   type WpeAccount {
     "Account ID"
-    id: String!
+    id: ID!
     "Account name"
     name: String!
   }
@@ -305,7 +305,7 @@ export const typeDefs = gql`
 
   type WpeInstall {
     "Install ID"
-    id: String!
+    id: ID!
     "Install name"
     name: String!
     "Account ID"
@@ -843,7 +843,7 @@ export const typeDefs = gql`
   }
 
   type SiteGroup {
-    id: String!
+    id: ID!
     name: String!
     description: String
     siteCount: Int!
