@@ -9,7 +9,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   // Test directory
   testDir: '.',
-  testMatch: '**/29-wordpress-browser.e2e.test.ts',
+  testMatch: ['**/29-wordpress-browser.e2e.test.ts', '**/30-ai-experiments-browser.e2e.test.ts'],
 
   // Test timeout
   timeout: 60000, // 60 seconds per test

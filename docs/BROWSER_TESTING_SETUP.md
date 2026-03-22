@@ -17,6 +17,7 @@ npm run test:e2e:browser
 
 Browser tests verify the **complete user journey** through WordPress:
 
+### Event Flow (Test 29)
 ```
 User clicks "Publish" in WP Admin
     ↓
@@ -29,30 +30,76 @@ Content indexed + embedded
 Searchable via semantic search
 ```
 
+### AI Experiments (Test 30)
+```
+Local syncs credentials → WordPress
+    ↓
+User enables AI Experiments
+    ↓
+User creates post with content
+    ↓
+User clicks "Generate Title"
+    ↓
+AI API call (Anthropic/OpenAI/Google)
+    ↓
+AI-generated titles appear
+    ↓
+User selects and inserts title
+```
+
 ## Test Scenarios
 
-### 1. Plugin Configuration
+### Event Flow Tests (29-wordpress-browser.e2e.test.ts)
+
+#### 1. Plugin Configuration
 - ✅ Verify plugin installed and active
 - ✅ Check webhook URL configured
 - ✅ Validate site ID in MU plugin
 
-### 2. Content Creation
+#### 2. Content Creation
 - ✅ Create post in block editor
 - ✅ Verify event sent to Local
 - ✅ Confirm content in graph database
 - ✅ Test semantic search works
 
-### 3. Content Updates
+#### 3. Content Updates
 - ✅ Edit existing post
 - ✅ Verify update event sent
 - ✅ Confirm content re-indexed
 
-### 4. Frontend Health
+#### 4. Frontend Health
 - ✅ Site loads without errors
 - ✅ REST API accessible
 
-### 5. Error Handling
+#### 5. Error Handling
 - ✅ Network interruption graceful degradation
+
+### AI Experiments Tests (30-ai-experiments-browser.e2e.test.ts)
+
+#### 6. Credential Sync
+- ✅ Verify API keys synced from Local
+- ✅ Check Anthropic, OpenAI, Google credentials
+- ✅ Validate via browser UI and wp-cli
+
+#### 7. Experiments Setup
+- ✅ AI plugin active
+- ✅ Enable experiments globally
+- ✅ Enable individual experiments
+
+#### 8. Title Generation
+- ✅ UI appears in block editor
+- ✅ Generate button works
+- ✅ 3 AI-generated options appear
+- ✅ Selected title inserts correctly
+
+#### 9. Excerpt Generation
+- ✅ Generate button in excerpt panel
+- ✅ AI generates concise summary
+- ✅ Excerpt inserted in post meta
+
+#### 10. Error Handling
+- ✅ Graceful API error handling
+- ✅ UI hidden when experiments disabled
 
 ## File Structure
 

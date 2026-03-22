@@ -7,6 +7,7 @@ Browser-based E2E tests that verify the complete user journey:
 2. Nexus AI Connector plugin sends events to Local
 3. Local processes events and indexes content
 4. Content becomes searchable via MCP tools
+5. AI Experiments work with synced credentials
 
 ## Setup
 
@@ -61,8 +62,9 @@ npx playwright test --config tests/e2e/playwright.config.ts --debug
 
 ## Test Structure
 
-### Test File: `29-wordpress-browser.e2e.test.ts`
+### Test Files
 
+**`29-wordpress-browser.e2e.test.ts`** - Nexus AI Connector event flow
 ```typescript
 test.describe('Plugin Installation', () => {
   test('should have plugin active', async ({ admin, page }) => {
@@ -70,6 +72,17 @@ test.describe('Plugin Installation', () => {
   });
 });
 ```
+
+**`30-ai-experiments-browser.e2e.test.ts`** - AI Experiments functionality
+```typescript
+test.describe('Title Generation Experiment', () => {
+  test('should generate titles using AI', async ({ admin, editor, page }) => {
+    // Tests AI functionality with synced credentials
+  });
+});
+```
+
+See [AI_EXPERIMENTS_TESTING.md](./AI_EXPERIMENTS_TESTING.md) for detailed AI testing docs.
 
 ### Available Fixtures
 
