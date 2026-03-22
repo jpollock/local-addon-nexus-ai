@@ -99,8 +99,8 @@ export const getGraphContentTool: McpToolHandler = {
 
     logger.debug('get_graph_content: Resolved site', { siteId: site.id, siteName: site.name, post_id: args.post_id });
 
-    // Use site.name for GraphService queries (events are stored by site name, not UUID)
-    const content = await graphService.getContent(site.name, args.post_id);
+    // Use site.id for GraphService queries (events are stored by UUID)
+    const content = await graphService.getContent(site.id, args.post_id);
 
     logger.debug('get_graph_content: Query complete', { hasContent: !!content });
     return success(content);
@@ -145,8 +145,8 @@ export const listGraphContentTool: McpToolHandler = {
     logger.debug('list_graph_content: Resolved site', { siteId: site.id, siteName: site.name });
 
     const options = args.post_type ? { post_type: args.post_type } : undefined;
-    // Use site.name for GraphService queries (events are stored by site name, not UUID)
-    const content = await graphService.listContent(site.name, options);
+    // Use site.id for GraphService queries (events are stored by UUID)
+    const content = await graphService.listContent(site.id, options);
 
     logger.debug('list_graph_content: Query complete', { count: content.length });
     return success(content);
@@ -184,7 +184,7 @@ export const getGraphPluginTool: McpToolHandler = {
       return error(`Site not found: ${args.site}`);
     }
 
-    const plugin = await graphService.getPlugin(site.name, args.slug);
+    const plugin = await graphService.getPlugin(site.id, args.slug);
     return success(plugin);
   },
 };
@@ -221,7 +221,7 @@ export const listGraphPluginsTool: McpToolHandler = {
     }
 
     const options = args.active_only ? { active_only: true } : undefined;
-    const plugins = await graphService.listPlugins(site.name, options);
+    const plugins = await graphService.listPlugins(site.id, options);
     return success(plugins);
   },
 };
@@ -253,7 +253,7 @@ export const getGraphStatsTool: McpToolHandler = {
         return error(`Site not found: ${args.site}`);
       }
 
-      const stats = await graphService.getSiteStats(site.name);
+      const stats = await graphService.getSiteStats(site.id);
       return success(stats);
     }
 

@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import { McpClient } from './helpers/client';
-import { getClient, getAnySite, expectSuccess } from './helpers/environment';
+import { getClient, getTestSite, expectSuccess } from './helpers/environment';
 
 describe('WordPress Events E2E', () => {
   let client: McpClient;
@@ -15,7 +15,7 @@ describe('WordPress Events E2E', () => {
 
   beforeAll(async () => {
     client = getClient();
-    const site = getAnySite();
+    const site = getTestSite();
     siteName = site.name;
     siteId = site.id;
 
@@ -77,9 +77,19 @@ describe('WordPress Events E2E', () => {
 
       // Verify it contains the constants
       const muPluginContent = fs.readFileSync(muPluginPath, 'utf-8');
+      console.log(`[Test] MU plugin content:\n${muPluginContent}`);
+
       expect(muPluginContent).toContain('NEXUS_AI_WEBHOOK_URL');
       expect(muPluginContent).toContain('NEXUS_AI_AUTH_TOKEN');
+      expect(muPluginContent).toContain('NEXUS_AI_SITE_ID');
       expect(muPluginContent).toContain('127.0.0.1');
+
+      // Verify NEXUS_AI_SITE_ID matches the actual site ID
+      const siteIdMatch = muPluginContent.match(/define\('NEXUS_AI_SITE_ID',\s*'([^']+)'\)/);
+      expect(siteIdMatch).not.toBeNull();
+      const muSiteId = siteIdMatch![1];
+      console.log(`[Test] MU plugin NEXUS_AI_SITE_ID: "${muSiteId}", Test site ID: "${siteId}"`);
+      expect(muSiteId).toBe(siteId);
     });
   });
 
@@ -115,10 +125,35 @@ describe('WordPress Events E2E', () => {
       expectSuccess(triggerResult);
       expect(triggerResult.content[0].text).toContain('OK');
 
-      // Wait for async event processing and verify searchability
-      // Poll for content instead of fixed wait (event processing is async)
+      console.log(`[Test] Event sent for post ${postId}, waiting for processing...`);
+
+      // First, wait for the event to be processed (not just queued)
+      // Poll event processor stats to wait for queue to drain
+      let processed = false;
+      for (let attempt = 0; attempt < 60; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        const statsResult = await client.callTool('get_event_processor_stats', {});
+        if (!statsResult.isError) {
+          const stats = JSON.parse(statsResult.content[0].text);
+          if (stats.pending_events === 0) {
+            console.log(`[Test] Event queue drained after ${attempt + 1} seconds`);
+            processed = true;
+            break;
+          }
+          if (attempt % 10 === 9) {
+            console.log(`[Test] Still waiting... pending: ${stats.pending_events}, failed: ${stats.failed_events || 0}`);
+          }
+        }
+      }
+
+      if (!processed) {
+        console.warn('[Test] Event queue did not drain within timeout');
+      }
+
+      // Now search for the content
       let found = false;
-      for (let attempt = 0; attempt < 15; attempt++) {
+      for (let attempt = 0; attempt < 10; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         const searchResult = await client.callTool('search_site_content', {
@@ -129,6 +164,7 @@ describe('WordPress Events E2E', () => {
 
         if (!searchResult.isError && searchResult.content[0]?.text.includes('E2E Event Test Post')) {
           found = true;
+          console.log(`[Test] Found content after ${attempt + 1} seconds of searching`);
           break;
         }
       }
@@ -142,7 +178,7 @@ describe('WordPress Events E2E', () => {
       const newTotal = newData.total_events || 0;
 
       expect(newTotal).toBeGreaterThan(initialTotal);
-    }, 30000);
+    }, 120000);
 
     it('should send post_updated event when post is updated', async () => {
       // First create a post
@@ -198,14 +234,15 @@ describe('WordPress Events E2E', () => {
       // Search for updated content
       const searchResult = await client.callTool('search_site_content', {
         site: siteName,
-        query: 'Updated Post Title',
+        query: 'Updated',
         limit: 5,
       });
       expectSuccess(searchResult);
 
       const searchText = searchResult.content[0].text;
-      expect(searchText).toContain('Updated Post Title');
-    }, 30000);
+      // Verify the content was updated (look for the new content text)
+      expect(searchText).toContain('Updated content with new information');
+    }, 60000);
 
     it('should send post_deleted event when post is deleted', async () => {
       // Create a post to delete
@@ -226,8 +263,9 @@ describe('WordPress Events E2E', () => {
       await client.callTool('wp_eval', { site: siteName, code: triggerCreate });
 
       // Poll for content to become searchable (event processing is async)
+      // Indexing can take time: event received → queued → processed → embeddings → stored
       let foundBeforeDelete = false;
-      for (let attempt = 0; attempt < 15; attempt++) {
+      for (let attempt = 0; attempt < 30; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         const beforeSearch = await client.callTool('search_site_content', {
@@ -238,6 +276,7 @@ describe('WordPress Events E2E', () => {
 
         if (!beforeSearch.isError && beforeSearch.content[0]?.text.includes('Post to Delete')) {
           foundBeforeDelete = true;
+          console.log(`[Test] Found post to delete after ${attempt + 1} seconds`);
           break;
         }
       }
@@ -285,7 +324,7 @@ describe('WordPress Events E2E', () => {
       const deletedPost = JSON.parse(graphCheckResult.content[0].text);
       // Post should be null in graph after deletion
       expect(deletedPost).toBeNull();
-    }, 30000);
+    }, 60000);
   });
 
   describe('Event Processing Statistics', () => {

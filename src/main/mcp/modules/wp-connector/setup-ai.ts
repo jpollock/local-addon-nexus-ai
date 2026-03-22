@@ -66,6 +66,7 @@ function validatePluginPath(pluginDir: string, siteWebRoot: string): void {
 export interface SetupAIResult {
   success: boolean;
   aiPlugin: 'installed' | 'activated' | 'already_active' | 'failed';
+  connectorPlugin: 'installed' | 'already_active' | 'skipped' | 'failed';
   providerPlugins: 'installed' | 'already_active' | 'skipped' | 'failed';
   ollamaProvider: 'installed' | 'activated' | 'already_active' | 'skipped' | 'failed';
   aiFeatures: 'enabled' | 'already_enabled' | 'skipped' | 'failed';
@@ -171,6 +172,7 @@ export async function setupSiteForAI(
     return {
       success: false,
       aiPlugin: 'failed',
+      connectorPlugin: 'failed',
       providerPlugins: 'failed',
       ollamaProvider: 'failed',
       aiFeatures: 'failed',
@@ -186,12 +188,45 @@ export async function setupSiteForAI(
 
   try {
     if (!existingAi) {
-      // Not installed — install and activate
-      logger.info(`${tag} Installing AI Experiments plugin on site ${siteId}`);
-      const result = await localServices.wpCliRun(siteId, ['plugin', 'install', 'ai', '--activate']);
-      if (!result.success) {
-        throw new Error(result.stdout ?? 'Unknown error');
+      // Not installed — copy from bundled source and activate
+      const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
+      if (!sitePluginsDir) {
+        throw new Error('Could not determine site plugins directory');
       }
+
+      // Security: Validate plugin path before file operations
+      const site = localServices.resolveSiteObject(siteId) as any;
+      validatePluginPath(sitePluginsDir, site.paths.webRoot);
+
+      const pluginDest = path.join(sitePluginsDir, 'ai');
+      const pluginSource = path.join(WP_PLUGINS_ROOT, 'ai');
+
+      if (!fs.existsSync(pluginSource)) {
+        throw new Error(`AI Experiments plugin source not found at ${pluginSource}`);
+      }
+
+      logger.info(`${tag} Copying AI Experiments plugin to site ${siteId}`);
+      fs.cpSync(pluginSource, pluginDest, { recursive: true });
+
+      logger.info(`${tag} Activating AI Experiments plugin on site ${siteId}`);
+      const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai']);
+      if (!result.success) {
+        throw new Error(result.stdout ?? 'Failed to activate');
+      }
+
+      // Health check: verify the plugin doesn't crash WordPress
+      const healthCheck = await localServices.wpCliRun(
+        siteId,
+        ['eval', "echo 'healthy';"],
+        { skipPlugins: false },
+      );
+
+      if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+        logger.error(`${tag} AI plugin crashes WordPress — deactivating`);
+        await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'ai']);
+        throw new Error('AI plugin failed health check');
+      }
+
       aiPlugin = 'installed';
     } else if (existingAi.status !== 'active') {
       // Installed but inactive — activate
@@ -209,6 +244,190 @@ export async function setupSiteForAI(
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`${tag} AI plugin step failed: ${msg}`);
     aiPlugin = 'failed';
+  }
+
+  // Step 1b: Install Nexus AI Connector plugin (event webhooks)
+  let connectorPlugin: 'installed' | 'already_active' | 'skipped' | 'failed' = 'skipped';
+
+  if (aiPlugin !== 'failed') {
+    // Refresh plugin list
+    try {
+      plugins = await localServices.getPlugins(siteId);
+    } catch {
+      // Continue with stale list
+    }
+
+    const existingConnector = findPlugin(plugins, 'nexus-ai-connector');
+
+    if (!existingConnector) {
+      try {
+        const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
+        if (sitePluginsDir) {
+          // Security: Validate plugin path
+          const site = localServices.resolveSiteObject(siteId) as any;
+          validatePluginPath(sitePluginsDir, site.paths.webRoot);
+
+          const pluginDest = path.join(sitePluginsDir, 'nexus-ai-connector');
+          const pluginSource = path.join(WP_PLUGINS_ROOT, 'nexus-ai-connector');
+
+          if (fs.existsSync(pluginSource)) {
+            logger.info(`${tag} Installing Nexus AI Connector plugin on site ${siteId}`);
+            fs.cpSync(pluginSource, pluginDest, { recursive: true });
+
+            const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'nexus-ai-connector']);
+            if (!result.success) {
+              throw new Error(result.stdout ?? 'Failed to activate');
+            }
+
+            // Health check
+            const healthCheck = await localServices.wpCliRun(
+              siteId,
+              ['eval', "echo 'healthy';"],
+              { skipPlugins: false },
+            );
+
+            if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+              logger.error(`${tag} Nexus AI Connector crashes WordPress — deactivating`);
+              await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'nexus-ai-connector']);
+              throw new Error('Nexus AI Connector failed health check');
+            }
+
+            connectorPlugin = 'installed';
+            logger.info(`${tag} Nexus AI Connector installed on site ${siteId}`);
+
+            // Configure connector plugin via MU plugin (defines webhook constants)
+            try {
+              const webhookInfo = registryStorage.get('http_webhook_info') as any;
+              if (webhookInfo && webhookInfo.url && webhookInfo.authToken) {
+                logger.info(`${tag} Configuring Nexus AI Connector via MU plugin`);
+
+                const site = localServices.resolveSiteObject(siteId) as any;
+                const muPluginsDir = path.join(site.paths.webRoot, 'wp-content', 'mu-plugins');
+
+                // Create mu-plugins directory if needed
+                if (!fs.existsSync(muPluginsDir)) {
+                  fs.mkdirSync(muPluginsDir, { recursive: true });
+                }
+
+                const muPluginPath = path.join(muPluginsDir, 'nexus-ai-connector-config.php');
+                const muPluginContent = `<?php
+/**
+ * Nexus AI Connector Configuration
+ *
+ * Auto-generated by wp_setup_ai - defines webhook URL, auth token, and site ID
+ * as constants so the Nexus AI Connector plugin can communicate with Local.
+ */
+
+define('NEXUS_AI_WEBHOOK_URL', '${webhookInfo.url}');
+define('NEXUS_AI_AUTH_TOKEN', '${webhookInfo.authToken}');
+define('NEXUS_AI_SITE_ID', '${siteId}');
+
+// Enable WordPress debugging for Nexus AI event logging
+if (!defined('WP_DEBUG')) {
+    define('WP_DEBUG', true);
+}
+if (!defined('WP_DEBUG_LOG')) {
+    define('WP_DEBUG_LOG', true);
+}
+if (!defined('WP_DEBUG_DISPLAY')) {
+    define('WP_DEBUG_DISPLAY', false);
+}
+`;
+
+                fs.writeFileSync(muPluginPath, muPluginContent);
+                logger.info(`${tag} Nexus AI Connector configured with webhook ${webhookInfo.url}/wp-events`);
+              } else {
+                logger.info(`${tag} HTTP webhook info not available, connector will need manual configuration`);
+              }
+            } catch (err) {
+              logger.error(`${tag} Connector configuration failed: ${err}`);
+              // Non-fatal - plugin is installed and can be configured manually
+            }
+
+            // Refresh plugins for next steps
+            try {
+              plugins = await localServices.getPlugins(siteId);
+            } catch {
+              // Continue
+            }
+          } else {
+            logger.info(`${tag} Nexus AI Connector not bundled at ${pluginSource}, skipping`);
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`${tag} Nexus AI Connector installation failed: ${redactCredentials(msg)}`);
+        connectorPlugin = 'failed';
+      }
+    } else if (existingConnector.status === 'active') {
+      connectorPlugin = 'already_active';
+
+      // Make sure connector is configured even if already active
+      try {
+        const webhookInfo = registryStorage.get('http_webhook_info') as any;
+        if (webhookInfo && webhookInfo.url && webhookInfo.authToken) {
+          const site = localServices.resolveSiteObject(siteId) as any;
+          const muPluginPath = path.join(site.paths.webRoot, 'wp-content', 'mu-plugins', 'nexus-ai-connector-config.php');
+
+          // Only write if it doesn't exist or is outdated
+          if (!fs.existsSync(muPluginPath)) {
+            logger.info(`${tag} Configuring existing Nexus AI Connector via MU plugin`);
+
+            const muPluginsDir = path.join(site.paths.webRoot, 'wp-content', 'mu-plugins');
+            if (!fs.existsSync(muPluginsDir)) {
+              fs.mkdirSync(muPluginsDir, { recursive: true });
+            }
+
+            const muPluginContent = `<?php
+/**
+ * Nexus AI Connector Configuration
+ *
+ * Auto-generated by wp_setup_ai - defines webhook URL, auth token, and site ID
+ * as constants so the Nexus AI Connector plugin can communicate with Local.
+ */
+
+define('NEXUS_AI_WEBHOOK_URL', '${webhookInfo.url}');
+define('NEXUS_AI_AUTH_TOKEN', '${webhookInfo.authToken}');
+define('NEXUS_AI_SITE_ID', '${siteId}');
+
+// Enable WordPress debugging for Nexus AI event logging
+if (!defined('WP_DEBUG')) {
+    define('WP_DEBUG', true);
+}
+if (!defined('WP_DEBUG_LOG')) {
+    define('WP_DEBUG_LOG', true);
+}
+if (!defined('WP_DEBUG_DISPLAY')) {
+    define('WP_DEBUG_DISPLAY', false);
+}
+`;
+
+            fs.writeFileSync(muPluginPath, muPluginContent);
+            logger.info(`${tag} Nexus AI Connector configured`);
+          }
+        }
+      } catch (err) {
+        logger.error(`${tag} Connector configuration failed: ${err}`);
+      }
+    } else {
+      // Installed but not active - activate it
+      try {
+        logger.info(`${tag} Activating Nexus AI Connector on site ${siteId}`);
+        const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'nexus-ai-connector']);
+        if (result.success) {
+          connectorPlugin = 'already_active';
+          // Refresh plugins
+          try {
+            plugins = await localServices.getPlugins(siteId);
+          } catch {
+            // Continue
+          }
+        }
+      } catch (err) {
+        logger.error(`${tag} Failed to activate Nexus AI Connector: ${err}`);
+        connectorPlugin = 'failed';
+      }
+    }
   }
 
   const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
@@ -463,6 +682,84 @@ export async function setupSiteForAI(
     }
   }
 
+  // Step 4b: Install ACF PRO if not present (enables abilities in Step 5)
+  if (aiPlugin !== 'failed') {
+    // Refresh plugin list to check for ACF PRO
+    try {
+      plugins = await localServices.getPlugins(siteId);
+    } catch {
+      // Continue with stale plugin list
+    }
+
+    const existingAcf = findPlugin(plugins, 'advanced-custom-fields-pro');
+
+    if (!existingAcf) {
+      try {
+        const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
+        if (sitePluginsDir) {
+          // Security: Validate plugin path
+          const site = localServices.resolveSiteObject(siteId) as any;
+          validatePluginPath(sitePluginsDir, site.paths.webRoot);
+
+          const pluginDest = path.join(sitePluginsDir, 'advanced-custom-fields-pro');
+          const pluginSource = path.join(WP_PLUGINS_ROOT, 'advanced-custom-fields-pro');
+
+          if (fs.existsSync(pluginSource)) {
+            logger.info(`${tag} Installing ACF PRO on site ${siteId}`);
+            fs.cpSync(pluginSource, pluginDest, { recursive: true });
+
+            const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'advanced-custom-fields-pro']);
+            if (!result.success) {
+              throw new Error(result.stdout ?? 'Failed to activate');
+            }
+
+            // Health check
+            const healthCheck = await localServices.wpCliRun(
+              siteId,
+              ['eval', "echo 'healthy';"],
+              { skipPlugins: false },
+            );
+
+            if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+              logger.error(`${tag} ACF PRO crashes WordPress — deactivating`);
+              await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'advanced-custom-fields-pro']);
+            } else {
+              logger.info(`${tag} ACF PRO installed on site ${siteId}`);
+              // Refresh plugins list for Step 5
+              try {
+                plugins = await localServices.getPlugins(siteId);
+              } catch {
+                // Continue with stale list
+              }
+            }
+          } else {
+            logger.info(`${tag} ACF PRO not bundled at ${pluginSource}, skipping`);
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`${tag} ACF PRO installation failed: ${redactCredentials(msg)}`);
+        // Non-fatal - continue with setup
+      }
+    } else if (existingAcf.status !== 'active') {
+      // Installed but not active - activate it
+      try {
+        logger.info(`${tag} Activating ACF PRO on site ${siteId}`);
+        const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'advanced-custom-fields-pro']);
+        if (result.success) {
+          // Refresh plugins list for Step 5
+          try {
+            plugins = await localServices.getPlugins(siteId);
+          } catch {
+            // Continue
+          }
+        }
+      } catch (err) {
+        logger.error(`${tag} Failed to activate ACF PRO: ${err}`);
+      }
+    }
+  }
+
   // Step 5: Handle ACF abilities mu-plugin
   let acfAbilities: SetupAIResult['acfAbilities'] = 'skipped';
   const acfPlugin = findPlugin(plugins, 'advanced-custom-fields-pro');
@@ -513,6 +810,13 @@ export async function setupSiteForAI(
     case 'failed': parts.push('AI Experiments plugin setup failed'); break;
   }
 
+  switch (connectorPlugin) {
+    case 'installed': parts.push('Nexus AI Connector plugin installed'); break;
+    case 'already_active': parts.push('Nexus AI Connector plugin already active'); break;
+    case 'skipped': break;
+    case 'failed': parts.push('Nexus AI Connector plugin failed'); break;
+  }
+
   switch (providerPlugins) {
     case 'installed': parts.push('AI provider plugin(s) installed'); break;
     case 'already_active': parts.push('AI provider plugin(s) already active'); break;
@@ -553,6 +857,7 @@ export async function setupSiteForAI(
   return {
     success,
     aiPlugin,
+    connectorPlugin,
     providerPlugins,
     ollamaProvider,
     aiFeatures,

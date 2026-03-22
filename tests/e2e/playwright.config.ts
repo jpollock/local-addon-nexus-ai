@@ -5,6 +5,11 @@
  * Uses @wordpress/e2e-test-utils-playwright for WordPress-specific helpers.
  */
 import { defineConfig, devices } from '@playwright/test';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load WordPress credentials from .env file created by global setup
+dotenv.config({ path: path.join(__dirname, '.env.playwright') });
 
 export default defineConfig({
   // Test directory
@@ -24,6 +29,10 @@ export default defineConfig({
   // Retries
   retries: process.env.CI ? 2 : 0,
 
+  // Global setup/teardown
+  globalSetup: require.resolve('./playwright-setup'),
+  globalTeardown: require.resolve('./playwright-teardown'),
+
   // Reporter
   reporter: [
     ['html', { outputFolder: 'playwright-report' }],
@@ -32,8 +41,9 @@ export default defineConfig({
 
   // Shared settings
   use: {
-    // Base URL will be set dynamically per test (each site has different URL)
-    // baseURL: 'http://nexus-e2e-test.local',
+    // Base URL for WordPress E2E utils
+    // TODO: Make this dynamic - hardcoded for POC
+    baseURL: 'http://localhost:10048', // nexus-e2e-test site
 
     // Collect trace on failure
     trace: 'on-first-retry',
@@ -48,8 +58,10 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
     ignoreHTTPSErrors: true,
 
-    // WordPress admin credentials (set by test setup)
-    storageState: undefined, // Will be set after login
+    // WordPress admin session (created by global setup, if available)
+    storageState: require('fs').existsSync(path.join(__dirname, '.auth', 'wordpress-admin.json'))
+      ? path.join(__dirname, '.auth', 'wordpress-admin.json')
+      : undefined,
   },
 
   // Projects (browsers to test)

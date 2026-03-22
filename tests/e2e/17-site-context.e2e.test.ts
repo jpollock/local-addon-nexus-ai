@@ -124,12 +124,14 @@ describe('Site Context E2E', () => {
 
       const text = result.content[0].text;
 
-      // If WooCommerce or ACF are installed, should show custom tables
-      if (text.includes('WooCommerce: Installed') || text.includes('ACF: Installed')) {
+      // Only WooCommerce reliably creates custom tables
+      // ACF uses wp_postmeta by default (custom tables are opt-in)
+      if (text.includes('WooCommerce: Installed')) {
         expect(text).toContain('### Custom Tables');
         expect(text).toMatch(/~\d+ rows/); // Should show row counts
       } else {
-        // No custom plugins, so no custom tables expected
+        // No WooCommerce, so custom tables may or may not exist
+        // Just verify the structure is valid
         expect(text).toContain('### Key Integrations');
       }
     });

@@ -39,7 +39,7 @@ export const listSitesHandler: McpToolHandler = {
       lines.push('');
       lines.push('### Running');
       for (const s of running) {
-        lines.push(`- **${s.name}** (${s.domain}) [indexed: ${s.indexed ? 'yes' : 'no'}]`);
+        lines.push(`- **${s.name}** (${s.domain}) [id: ${s.id}, indexed: ${s.indexed ? 'yes' : 'no'}]`);
       }
     }
 
@@ -47,7 +47,7 @@ export const listSitesHandler: McpToolHandler = {
       lines.push('');
       lines.push('### Halted');
       for (const s of other) {
-        lines.push(`- ${s.name} (${s.domain}) [${s.status}]`);
+        lines.push(`- ${s.name} (${s.domain}) [id: ${s.id}, ${s.status}]`);
       }
     }
 

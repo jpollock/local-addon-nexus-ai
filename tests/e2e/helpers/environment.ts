@@ -73,9 +73,9 @@ export function loadConnectionInfo(): ConnectionInfo | null {
  * Actual output format from the tool:
  *   ## Local Sites (2 total, 1 running)
  *   ### Running
- *   - **SiteName** (domain.local) [indexed: yes]
+ *   - **SiteName** (domain.local) [id: abc123, indexed: yes]
  *   ### Halted
- *   - SiteName (domain.local) [halted]
+ *   - SiteName (domain.local) [id: def456, halted]
  *
  * Note: local_list_sites does NOT include site IDs — only names and domains.
  * We use names as identifiers since all tools accept site names.
@@ -100,7 +100,7 @@ function parseSiteListOutput(text: string): { running: SiteInfo[]; halted: SiteI
       continue;
     }
 
-    // Parse site lines: "- **Name** (domain) [...]" or "- Name (domain) [...]"
+    // Parse site lines: "- **Name** (domain) [id: abc123, ...]" or "- Name (domain) [id: abc123, ...]"
     const boldMatch = trimmed.match(/^-\s+\*\*(.+?)\*\*\s+\(([^)]+)\)/);
     const plainMatch = !boldMatch ? trimmed.match(/^-\s+(.+?)\s+\(([^)]+)\)/) : null;
     const match = boldMatch || plainMatch;
@@ -108,8 +108,12 @@ function parseSiteListOutput(text: string): { running: SiteInfo[]; halted: SiteI
 
     const name = match[1].trim();
     const domain = match[2].trim();
-    // Use name as ID since local_list_sites doesn't include IDs
-    const site: SiteInfo = { id: name, name, domain };
+
+    // Extract ID from the [...] section
+    const idMatch = trimmed.match(/\[id:\s*(\S+)/);
+    const id = idMatch ? idMatch[1].replace(/,$/, '') : name; // Remove trailing comma if present
+
+    const site: SiteInfo = { id, name, domain };
 
     if (currentSection === 'running') {
       running.push(site);
@@ -355,7 +359,7 @@ export async function discoverEnvironment(): Promise<E2EEnvironment> {
       }
 
       // Use this as the test site for CLI tests (even if halted)
-      testSiteId = existing.name;
+      testSiteId = existing.id;
       testSiteName = existing.name;
       console.log(`[E2E Setup] Using "${existing.name}" as test site (${isHalted ? 'halted' : 'running'})`);
 

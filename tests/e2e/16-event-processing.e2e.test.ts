@@ -97,16 +97,26 @@ describe('Event Processing E2E', () => {
       expect(content.post_id).toBe(9001);
 
       // Step 4: Verify embedding was created and searchable
-      const searchResult = await client.callTool('search_site_content', {
-        site: siteName,
-        query: 'verify event processing',
-        limit: 20,
-      });
-      expectSuccess(searchResult);
+      // Poll for search results (embeddings may take a moment to index)
+      let searchFound = false;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const searchText = searchResult.content[0].text;
-      expect(searchText).toContain('Found');
-      expect(searchText).toMatch(/Post ID:/); // Verify search returns posts
+        const searchResult = await client.callTool('search_site_content', {
+          site: siteName,
+          query: 'verify event processing',
+          limit: 20,
+        });
+
+        if (!searchResult.isError && searchResult.content[0]?.text.includes('Found')) {
+          searchFound = true;
+          const searchText = searchResult.content[0].text;
+          expect(searchText).toMatch(/Post ID:/); // Verify search returns posts
+          break;
+        }
+      }
+
+      expect(searchFound).toBe(true);
     }, 30000);
 
     it('should receive and process post_updated event', async () => {

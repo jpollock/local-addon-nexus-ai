@@ -13,7 +13,7 @@ import { test, expect } from '@wordpress/e2e-test-utils-playwright';
 import { McpClient } from './helpers/client';
 import { getClient, getTestSite, expectSuccess, waitFor } from './helpers/environment';
 
-describe('WordPress Browser E2E', () => {
+test.describe('WordPress Browser E2E', () => {
   let client: McpClient;
   let siteName: string;
   let siteId: string;
