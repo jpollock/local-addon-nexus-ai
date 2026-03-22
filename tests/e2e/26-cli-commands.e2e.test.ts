@@ -117,6 +117,12 @@ describe('CLI Commands - Sites', () => {
     it('should show domain information for sites', async () => {
       const result = await runCli('sites list');
 
+      if (result.exitCode !== 0) {
+        console.log('[CLI Test] Command failed with exit code:', result.exitCode);
+        console.log('[CLI Test] stdout:', result.stdout);
+        console.log('[CLI Test] stderr:', result.stderr);
+      }
+
       expect(result.exitCode).toBe(0);
 
       // Should show at least some site information
@@ -221,7 +227,7 @@ describe('CLI Commands - WordPress', () => {
 
   describe('nexus wp plugin list', () => {
     it('should list plugins with formatted output', async () => {
-      const result = await runCli(`wp ${siteName}@local plugin list`);
+      const result = await runCli(`wp plugin list ${siteName}@local`);
 
       // Command should execute (may fail if site not running, but should attempt)
       const output = result.stdout + result.stderr;
@@ -239,7 +245,7 @@ describe('CLI Commands - WordPress', () => {
         return;
       }
 
-      const result = await runCli(`wp ${siteName}@local plugin list --json`);
+      const result = await runCli(`wp plugin list ${siteName}@local --json`);
 
       expect(result.exitCode).toBe(0);
 
@@ -262,12 +268,12 @@ describe('CLI Commands - WordPress', () => {
         return;
       }
 
-      const result = await runCli(`wp ${siteName}@local plugin list`);
+      const result = await runCli(`wp plugin list ${siteName}@local`);
 
       expect(result.exitCode).toBe(0);
 
       // Should show status icons (if plugins exist)
-      if (!result.stdout.includes('(no plugins installed)')) {
+      if (!result.stdout.includes('(no plugins)')) {
         const hasStatusIcon = result.stdout.match(/✅|⚫|📦/);
         expect(hasStatusIcon).toBeTruthy();
       }
@@ -282,7 +288,7 @@ describe('CLI Commands - WordPress', () => {
         return;
       }
 
-      const result = await runCli(`wp ${siteName}@local core version`);
+      const result = await runCli(`wp core version ${siteName}@local`);
 
       expect(result.exitCode).toBe(0);
 
@@ -299,7 +305,7 @@ describe('CLI Commands - WordPress', () => {
         return;
       }
 
-      const result = await runCli(`wp ${siteName}@local theme list`);
+      const result = await runCli(`wp theme list ${siteName}@local`);
 
       expect(result.exitCode).toBe(0);
 
@@ -316,7 +322,7 @@ describe('CLI Commands - WordPress', () => {
         return;
       }
 
-      const result = await runCli(`wp ${siteName}@local option get blogname`);
+      const result = await runCli(`wp option-get ${siteName}@local blogname`);
 
       expect(result.exitCode).toBe(0);
 
@@ -325,7 +331,7 @@ describe('CLI Commands - WordPress', () => {
     });
 
     it('should show error for invalid option', async () => {
-      const result = await runCli(`wp ${siteName}@local option get nonexistent_option_xyz`);
+      const result = await runCli(`wp option-get ${siteName}@local nonexistent_option_xyz`);
 
       expect(result.exitCode).not.toBe(0);
     });
@@ -639,7 +645,7 @@ describe('CLI Target Parsing', () => {
 
     it('should accept site@local format', async () => {
       const siteName = getAnySite().name;
-      const result = await runCli(`wp ${siteName}@local core version`);
+      const result = await runCli(`wp core version ${siteName}@local`);
 
       // Should attempt to execute
       expect(result.stderr || result.stdout).toBeTruthy();
