@@ -16,4 +16,11 @@ module.exports = {
   // Sequential execution — test 04 stops/starts sites, which breaks
   // concurrent tests that need a running site for WP-CLI operations
   maxWorkers: 1,
+  // Exclude Playwright browser tests — they run via `npm run test:e2e:browser`
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '29-wordpress-browser',
+    '30-ai-experiments-browser',
+    '31-nexus-connector-comprehensive',
+  ],
 };

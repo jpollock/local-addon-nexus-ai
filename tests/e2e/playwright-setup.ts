@@ -107,23 +107,9 @@ async function globalSetup() {
       });
 
       if (!setupResult.isError) {
-        console.log('[Playwright Setup] AI setup complete');
+        console.log('[Playwright Setup] AI setup complete (credentials auto-synced)');
       } else {
         console.warn('[Playwright Setup] AI setup failed:', setupResult.content[0].text);
-      }
-
-      // Sync credentials to WordPress
-      if (Object.keys(apiKeys).length > 0) {
-        console.log('[Playwright Setup] Syncing credentials to WordPress...');
-        const syncResult = await client.callTool('sync_credentials', {
-          site: env.testSiteName,
-        });
-
-        if (!syncResult.isError) {
-          console.log('[Playwright Setup] Credentials synced');
-        } else {
-          console.warn('[Playwright Setup] Credential sync failed:', syncResult.content[0].text);
-        }
       }
     } catch (err) {
       console.warn('[Playwright Setup] Could not set up AI:', (err as Error).message);
@@ -135,6 +121,22 @@ async function globalSetup() {
   // TODO: Make port detection fully dynamic - hardcoded for POC
   const siteUrl = 'http://localhost:10048'; // nexus-e2e-test site port
   console.log(`[Playwright Setup] Using WordPress URL: ${siteUrl}`);
+
+  // Force WordPress to reinitialize with newly activated provider plugins
+  // Provider plugins register on 'init' hook but need admin context to activate properly
+  // Loading wp-admin ensures init hooks run with providers fully registered
+  if (env.capiAvailable) {
+    console.log('[Playwright Setup] Initializing AI provider plugins...');
+    try {
+      const initResponse = await fetch(`${siteUrl}/wp-admin/`);
+      await initResponse.text(); // Wait for full response
+      // Give WordPress time to complete all init hooks and register providers
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('[Playwright Setup] Provider plugins initialized');
+    } catch (err) {
+      console.warn('[Playwright Setup] Could not initialize providers:', (err as Error).message);
+    }
+  }
 
   // Write .env file for test workers to read
   // Playwright workers don't inherit process.env from globalSetup

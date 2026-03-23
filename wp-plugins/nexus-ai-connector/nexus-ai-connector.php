@@ -47,6 +47,8 @@ function nexus_ai_register_hooks() {
     // Content events
     add_action('save_post', 'nexus_ai_handle_post_save', 10, 3);
     add_action('delete_post', 'nexus_ai_handle_post_delete', 10, 1);
+    add_action('wp_trash_post', 'nexus_ai_handle_post_trash', 10, 1);
+    add_action('untrashed_post', 'nexus_ai_handle_post_untrash', 10, 1);
 
     // Plugin events
     add_action('activated_plugin', 'nexus_ai_handle_plugin_activated', 10, 2);
@@ -140,6 +142,56 @@ function nexus_ai_handle_post_delete($post_id) {
     $event = Nexus_AI_Event_Builder::build_post_deleted_event($post);
 
     error_log('[Nexus AI] Sending post_deleted event for post #' . $post_id);
+
+    // Send to Local
+    Nexus_AI_HTTP_Client::send_event($event);
+}
+
+/**
+ * Handle post trash
+ *
+ * @param int $post_id Post ID
+ */
+function nexus_ai_handle_post_trash($post_id) {
+    error_log('[Nexus AI] wp_trash_post hook fired for post #' . $post_id);
+
+    // Get post data
+    $post = get_post($post_id);
+
+    if (!$post) {
+        error_log('[Nexus AI] Post #' . $post_id . ' not found, skipping');
+        return;
+    }
+
+    // Build event
+    $event = Nexus_AI_Event_Builder::build_post_event('post_trashed', $post);
+
+    error_log('[Nexus AI] Sending post_trashed event for post #' . $post_id);
+
+    // Send to Local
+    Nexus_AI_HTTP_Client::send_event($event);
+}
+
+/**
+ * Handle post untrash (restore from trash)
+ *
+ * @param int $post_id Post ID
+ */
+function nexus_ai_handle_post_untrash($post_id) {
+    error_log('[Nexus AI] untrashed_post hook fired for post #' . $post_id);
+
+    // Get post data
+    $post = get_post($post_id);
+
+    if (!$post) {
+        error_log('[Nexus AI] Post #' . $post_id . ' not found, skipping');
+        return;
+    }
+
+    // Build event
+    $event = Nexus_AI_Event_Builder::build_post_event('post_untrashed', $post);
+
+    error_log('[Nexus AI] Sending post_untrashed event for post #' . $post_id);
 
     // Send to Local
     Nexus_AI_HTTP_Client::send_event($event);

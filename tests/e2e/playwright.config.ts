@@ -14,7 +14,11 @@ dotenv.config({ path: path.join(__dirname, '.env.playwright') });
 export default defineConfig({
   // Test directory
   testDir: '.',
-  testMatch: ['**/29-wordpress-browser.e2e.test.ts', '**/30-ai-experiments-browser.e2e.test.ts'],
+  testMatch: [
+    '**/29-wordpress-browser.e2e.test.ts',
+    '**/30-ai-experiments-browser.e2e.test.ts',
+    '**/31-nexus-connector-comprehensive.e2e.test.ts',
+  ],
 
   // Test timeout
   timeout: 60000, // 60 seconds per test

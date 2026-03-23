@@ -156,6 +156,8 @@ export class EventProcessor {
     switch (event.event_type) {
       case 'post_created':
       case 'post_updated':
+      case 'post_trashed':
+      case 'post_untrashed':
         await this.processPostEvent(event.site_id, payload as PostEventPayload, event.event_type);
         this.sitesToOptimize.add(event.site_id);
         break;

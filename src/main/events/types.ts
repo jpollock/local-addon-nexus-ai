@@ -6,6 +6,8 @@ export type EventType =
   | 'post_created'
   | 'post_updated'
   | 'post_deleted'
+  | 'post_trashed'
+  | 'post_untrashed'
   | 'plugin_activated'
   | 'plugin_deactivated'
   | 'plugin_updated'

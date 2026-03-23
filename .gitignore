@@ -14,3 +14,6 @@ wp-plugins/advanced-custom-fields-pro
 tests/unit/events/test-graph-*.db*
 .env.e2e.local
 tests/e2e/.auth/
+test-results/
+tests/e2e/playwright-report/
+tests/e2e/.auth/
