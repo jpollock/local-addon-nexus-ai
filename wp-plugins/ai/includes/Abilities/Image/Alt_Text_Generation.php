@@ -11,7 +11,6 @@ namespace WordPress\AI\Abilities\Image;
 
 use WP_Error;
 use WordPress\AI\Abstracts\Abstract_Ability;
-use WordPress\AiClient\AiClient;
 
 use function WordPress\AI\get_preferred_vision_models;
 use function WordPress\AI\normalize_content;
@@ -189,12 +188,12 @@ class Alt_Text_Generation extends Abstract_Ability {
 	 * @return string|\WP_Error The generated alt text or WP_Error on failure.
 	 */
 	protected function generate_alt_text( array $image_reference, string $context = '' ) {
-		$result = AiClient::prompt( $this->build_prompt( $context ) )
-			->withFile( $image_reference['reference'] )
-			->usingSystemInstruction( $this->get_system_instruction( 'alt-text-system-instruction.php' ) )
-			->usingTemperature( 0.3 )
-			->usingModelPreference( ...get_preferred_vision_models() )
-			->generateText();
+		$result = wp_ai_client_prompt( $this->build_prompt( $context ) )
+			->with_file( $image_reference['reference'] )
+			->using_system_instruction( $this->get_system_instruction( 'alt-text-system-instruction.php' ) )
+			->using_temperature( 0.3 )
+			->using_model_preference( ...get_preferred_vision_models() )
+			->generate_text();
 
 		if ( is_wp_error( $result ) ) {
 			return $result;

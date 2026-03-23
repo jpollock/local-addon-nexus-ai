@@ -11,7 +11,6 @@ namespace WordPress\AI\Abilities\Summarization;
 
 use WP_Error;
 use WordPress\AI\Abstracts\Abstract_Ability;
-use WordPress\AiClient\AiClient;
 
 use function WordPress\AI\get_post_context;
 use function WordPress\AI\get_preferred_models_for_text_generation;
@@ -243,10 +242,10 @@ class Summarization extends Abstract_Ability {
 		}
 
 		// Generate the summary using the AI client.
-		return AiClient::prompt( $content )
-			->usingSystemInstruction( $this->get_system_instruction( 'system-instruction.php', array( 'length' => $length ) ) )
-			->usingTemperature( 0.9 )
-			->usingModelPreference( ...get_preferred_models_for_text_generation() )
-			->generateText();
+		return wp_ai_client_prompt( $content )
+			->using_system_instruction( $this->get_system_instruction( 'system-instruction.php', array( 'length' => $length ) ) )
+			->using_temperature( 0.9 )
+			->using_model_preference( ...get_preferred_models_for_text_generation() )
+			->generate_text();
 	}
 }

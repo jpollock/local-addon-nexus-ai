@@ -11,7 +11,6 @@ namespace WordPress\AI;
 
 use Throwable;
 use WordPress\AI\Services\AI_Service;
-use WordPress\AiClient\AiClient;
 
 /**
  * Purposely using return instead of exit here.
@@ -43,7 +42,7 @@ function normalize_content( string $content ): string {
 	 *
 	 * @return string The filtered Post content.
 	 */
-	$content = (string) apply_filters( 'ai_experiments_pre_normalize_content', $content );
+	$content = (string) apply_filters( 'wpai_pre_normalize_content', $content );
 
 	// Strip HTML entities.
 	$content = preg_replace( '/&#?[a-z0-9]{2,8};/i', '', $content ) ?? $content;
@@ -69,7 +68,7 @@ function normalize_content( string $content ): string {
 	 *
 	 * @return string The filtered normalized content.
 	 */
-	$content = (string) apply_filters( 'ai_experiments_normalize_content', (string) $content );
+	$content = (string) apply_filters( 'wpai_normalize_content', (string) $content );
 
 	return trim( $content );
 }
@@ -168,7 +167,7 @@ function get_preferred_models_for_text_generation(): array {
 	 * @param array<int, array{string, string}> $preferred_models The preferred models for text generation.
 	 * @return array<int, array{string, string}> The filtered preferred models.
 	 */
-	return (array) apply_filters( 'ai_experiments_preferred_models_for_text_generation', $preferred_models );
+	return (array) apply_filters( 'wpai_preferred_text_models', $preferred_models );
 }
 
 /**
@@ -182,7 +181,7 @@ function get_preferred_models_for_text_generation(): array {
  *
  * // Check if text generation is supported before generating
  * $builder = $service->create_textgen_prompt( 'Summarize this article...' );
- * if ( ! $builder->isSupportedForTextGeneration() ) {
+ * if ( ! $builder->is_supported_for_text_generation() ) {
  *     return new WP_Error( 'ai_unsupported', 'No AI provider supports text generation.' );
  * }
  * $text = $builder->generate_text();
@@ -195,7 +194,7 @@ function get_preferred_models_for_text_generation(): array {
  *
  * // Chain additional SDK methods
  * $titles = $service->create_textgen_prompt( 'Generate titles for: My blog post' )
- *     ->usingCandidateCount( 5 )
+ *     ->using_candidate_count( 5 )
  *     ->generate_texts();
  * ```
  *
@@ -258,7 +257,7 @@ function get_preferred_image_models(): array {
 	 * @param array<int, array{string, string}> $preferred_models The preferred image models.
 	 * @return array<int, array{string, string}> The filtered preferred image models.
 	 */
-	return (array) apply_filters( 'ai_experiments_preferred_image_models', $preferred_models );
+	return (array) apply_filters( 'wpai_preferred_image_models', $preferred_models );
 }
 
 /**
@@ -292,7 +291,7 @@ function get_preferred_vision_models(): array {
 	 * @param array<int, array{string, string}> $preferred_models The preferred vision models.
 	 * @return array<int, array{string, string}> The filtered preferred vision models.
 	 */
-	return (array) apply_filters( 'ai_experiments_preferred_vision_models', $preferred_models );
+	return (array) apply_filters( 'wpai_preferred_vision_models', $preferred_models );
 }
 
 /**
@@ -303,22 +302,28 @@ function get_preferred_vision_models(): array {
  * @return bool True if we have AI credentials, false otherwise.
  */
 function has_ai_credentials(): bool {
-	$credentials = get_option( 'wp_ai_client_provider_credentials', array() );
-
-	// If there are no credentials, return false.
-	if ( ! is_array( $credentials ) || empty( $credentials ) ) {
+	if ( ! function_exists( 'wp_get_connectors' ) ) {
 		return false;
 	}
 
-	// If all of the AI keys are empty, return false; otherwise, return true.
-	return ! empty(
-		array_filter(
-			$credentials,
-			static function ( $api_key ): bool {
-				return is_string( $api_key ) && '' !== $api_key;
-			}
-		)
-	);
+	foreach ( wp_get_connectors() as $connector_data ) {
+		if ( 'ai_provider' !== $connector_data['type'] ) {
+			continue;
+		}
+
+		$auth = $connector_data['authentication'];
+		if ( 'api_key' !== $auth['method'] || empty( $auth['setting_name'] ) ) {
+			continue;
+		}
+
+		if ( '' === get_option( $auth['setting_name'], '' ) ) {
+			continue;
+		}
+
+		return true;
+	}
+
+	return false;
 }
 
 /**
@@ -344,14 +349,14 @@ function has_valid_ai_credentials(): bool {
 	 * @param bool|null $has_valid_credentials Whether valid credentials are available. Return null to use default check.
 	 * @return bool|null True if valid credentials are available, false otherwise, or null to use default check.
 	 */
-	$valid = apply_filters( 'ai_experiments_pre_has_valid_credentials_check', null );
+	$valid = apply_filters( 'wpai_pre_has_valid_credentials_check', null );
 	if ( null !== $valid ) {
 		return (bool) $valid;
 	}
 
 	// See if we have credentials that give us access to generate text.
 	try {
-		return AiClient::prompt( 'Test' )->isSupportedForTextGeneration();
+		return wp_ai_client_prompt( 'Test' )->is_supported_for_text_generation();
 	} catch ( Throwable $t ) {
 		return false;
 	}

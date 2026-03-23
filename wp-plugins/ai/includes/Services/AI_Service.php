@@ -11,8 +11,6 @@ declare( strict_types=1 );
 
 namespace WordPress\AI\Services;
 
-use WordPress\AiClient\AiClient;
-use WordPress\AiClient\Builders\PromptBuilder;
 use WordPress\AiClient\Providers\Models\DTO\ModelConfig;
 
 use function WordPress\AI\get_preferred_models_for_text_generation;
@@ -21,7 +19,7 @@ use function WordPress\AI\get_preferred_models_for_text_generation;
  * AI Service class.
  *
  * Manages AI provider configuration and provides a consistent interface
- * for experimental features to communicate with AI providers.
+ * for features to communicate with AI providers.
  *
  * @since 0.2.1
  */
@@ -121,15 +119,15 @@ class AI_Service {
 	 *     @type bool         $logprobs           Whether to return log probabilities.
 	 *     @type int          $top_logprobs       Top log probabilities to return.
 	 * }
-	 * @return \WordPress\AiClient\Builders\PromptBuilder The prompt builder instance.
+	 * @return \WP_AI_Client_Prompt_Builder The prompt builder instance.
 	 */
-	public function create_textgen_prompt( ?string $prompt = null, array $options = array() ): PromptBuilder {
-		$builder = AiClient::prompt( $prompt );
+	public function create_textgen_prompt( ?string $prompt = null, array $options = array() ) {
+		$builder = wp_ai_client_prompt( $prompt );
 
 		// Apply default model preferences.
 		$models = get_preferred_models_for_text_generation();
 		if ( ! empty( $models ) ) {
-			$builder = $builder->usingModelPreference( ...$models );
+			$builder = $builder->using_model_preference( ...$models );
 		}
 
 		// Apply options via ModelConfig if any are provided.
@@ -137,7 +135,7 @@ class AI_Service {
 			$config_array = $this->map_options_to_config( $options );
 			if ( ! empty( $config_array ) ) {
 				$config  = ModelConfig::fromArray( $config_array );
-				$builder = $builder->usingModelConfig( $config );
+				$builder = $builder->using_model_config( $config );
 			}
 		}
 
