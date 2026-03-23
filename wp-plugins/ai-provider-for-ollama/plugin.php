@@ -60,10 +60,16 @@ function register_provider(): void
             }
 
             // Set dummy API key credentials (Ollama doesn't need authentication, but framework requires it)
+            // WordPress 7.0 uses Connectors API, older versions use wp_ai_client_provider_credentials
             $credentials = get_option('wp_ai_client_provider_credentials', []);
             if (!isset($credentials['ollama'])) {
                 $credentials['ollama'] = 'ollama-local';
                 update_option('wp_ai_client_provider_credentials', $credentials);
+            }
+
+            // WordPress 7.0+ Connectors API location
+            if (!get_option('connectors_ai_ollama_api_key')) {
+                update_option('connectors_ai_ollama_api_key', 'ollama-local-no-auth-needed');
             }
 
             error_log('Ollama provider registered with registry ' . spl_object_hash($registry));
