@@ -8,6 +8,7 @@ import { MySQLExtractor } from '../../../src/main/content/MySQLExtractor';
 import { FileScanner } from '../../../src/main/content/FileScanner';
 import { IndexRegistry, RegistryStorage } from '../../../src/main/content/IndexRegistry';
 import { ToolRegistry } from '../../../src/main/mcp/tool-registry';
+import { McpSafetyWrapper } from '../../../src/main/mcp/mcp-safety-wrapper';
 import { McpServer } from '../../../src/main/mcp/McpServer';
 import { createAuditLogger } from '../../../src/main/mcp/audit';
 import { registerContentTools } from '../../../src/main/mcp/modules/content/index';
@@ -17,6 +18,7 @@ import { registerFleetTools } from '../../../src/main/mcp/modules/fleet/index';
 import { registerSiteManagementTools } from '../../../src/main/mcp/modules/site-management/index';
 import { registerWpCliTools } from '../../../src/main/mcp/modules/wp-cli/index';
 import { registerWpeTools } from '../../../src/main/mcp/modules/wpe/index';
+import { registerWpConnectorTools } from '../../../src/main/mcp/modules/wp-connector/index';
 import type { NexusServices, McpToolResult, ConnectionInfo, JsonRpcResponse, SiteDataAccessor, LocalSiteInfo } from '../../../src/main/mcp/types';
 import type { ExtractedPost, IndexResult } from '../../../src/common/types';
 import { createStubBridge, StubBridgeConfig } from './stub-bridge';
@@ -59,6 +61,7 @@ export class TestHarness {
   contentPipeline!: ContentPipeline;
   indexRegistry!: IndexRegistry;
   registry!: ToolRegistry;
+  safetyWrapper!: McpSafetyWrapper;
   services!: NexusServices;
   server: McpServer | null = null;
   connectionInfo: ConnectionInfo | null = null;
@@ -149,6 +152,10 @@ export class TestHarness {
     registerSiteManagementTools(this.registry);
     registerWpCliTools(this.registry);
     registerWpeTools(this.registry);
+    registerWpConnectorTools(this.registry);
+
+    // Create safety wrapper for tier 3 confirmation flow
+    this.safetyWrapper = new McpSafetyWrapper(this.registry);
 
     // Optionally start MCP server
     if (!opts.skipServer) {
@@ -257,13 +264,14 @@ export class TestHarness {
   }
 
   /**
-   * Call a tool through the ToolRegistry (no HTTP, direct dispatch).
+   * Call a tool through the McpSafetyWrapper (includes tier 3 confirmation flow).
+   * For tests that don't need safety enforcement, use registry.call() directly.
    */
   async callTool(
     name: string,
     args: Record<string, unknown>,
   ): Promise<McpToolResult> {
-    return this.registry.call(name, args, this.services);
+    return this.safetyWrapper.callWithSafety(name, args, this.services);
   }
 
   /**

@@ -360,11 +360,11 @@ describe('Event Tracking IPC Handlers (Sprint 1)', () => {
 
       expect(result.success).toBe(true);
       expect(result.health).toBeDefined();
-      expect(result.health.graph_db).toBeDefined();
-      expect(result.health.vector_db).toBeDefined();
-      expect(typeof result.health.graph_db.size_bytes).toBe('number');
-      expect(typeof result.health.pending_events).toBe('number');
-      expect(typeof result.health.failed_events).toBe('number');
+      expect(result.health.graphDb).toBeDefined();
+      expect(result.health.vectorDb).toBeDefined();
+      expect(typeof result.health.graphDb.sizeBytes).toBe('number');
+      expect(typeof result.health.pendingEvents).toBe('number');
+      expect(typeof result.health.failedEvents).toBe('number');
     });
   });
 
