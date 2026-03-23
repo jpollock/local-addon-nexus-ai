@@ -19,9 +19,14 @@ const MODELS_DIR = path.join(PROJECT_ROOT, 'models', 'all-MiniLM-L6-v2-quantized
  */
 class MockIpcMain {
   private handlers: Map<string, Function> = new Map();
+  private syncHandlers: Map<string, Function> = new Map();
 
   handle(channel: string, handler: Function) {
     this.handlers.set(channel, handler);
+  }
+
+  on(channel: string, handler: Function) {
+    this.syncHandlers.set(channel, handler);
   }
 
   async invokeHandler(channel: string, ...args: any[]): Promise<any> {
@@ -31,7 +36,7 @@ class MockIpcMain {
   }
 
   hasHandler(channel: string): boolean {
-    return this.handlers.has(channel);
+    return this.handlers.has(channel) || this.syncHandlers.has(channel);
   }
 }
 
