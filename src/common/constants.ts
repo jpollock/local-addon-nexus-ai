@@ -108,6 +108,10 @@ export const IPC_CHANNELS = {
   // Graph Sync
   SYNC_GRAPH_ALL: `${ADDON_PREFIX}:sync-graph-all`,
 
+  // Digital Twin (Site Metadata Cache)
+  GET_SITE_METADATA: `${ADDON_PREFIX}:metadata:get`,
+  REFRESH_SITE_METADATA: `${ADDON_PREFIX}:metadata:refresh`,
+
   // WPE Site Sync (Phase 1)
   WPE_SYNC_ALL: `${ADDON_PREFIX}:wpe:sync-all`,
   WPE_SYNC_STATUS: `${ADDON_PREFIX}:wpe:sync-status`,
@@ -166,6 +170,7 @@ export const STORAGE_KEYS = {
   API_KEYS: `${ADDON_PREFIX}_api_keys`,
   API_KEY_STATUS: `${ADDON_PREFIX}_api_key_status`,
   AI_SETUP_STATE: `${ADDON_PREFIX}_ai_setup_state`, // Track which sites have AI setup complete
+  SITE_METADATA: `${ADDON_PREFIX}_site_metadata`, // Digital twin: cached site state (WP version, plugins, themes)
 } as const;
 
 // ---------------------------------------------------------------------------

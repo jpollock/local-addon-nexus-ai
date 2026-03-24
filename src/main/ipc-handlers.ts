@@ -26,6 +26,7 @@ import { BulkOperationManager } from './bulk/BulkOperationManager';
 import { HealthTrendTracker } from './health/HealthTrendTracker';
 import { WPESyncService } from './events/WPESyncService';
 import { WpeAutoPullService } from './wpe-auto-pull';
+import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -67,6 +68,8 @@ export interface IpcHandlerDeps {
   nexusServices?: any;
   /** WPE site sync service (Phase 1) */
   wpeSyncService?: WPESyncService;
+  /** Site metadata cache (Digital Twin) */
+  metadataCache?: SiteMetadataCache;
 }
 
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
@@ -90,7 +93,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   const {
     siteData, localServicesBridge, indexRegistry, embeddingService,
     contentPipeline, vectorStore, registryStorage, localLogger, getMcpServer,
-    graphService, eventProcessor, vectorDbPath, serviceContainer,
+    graphService, eventProcessor, vectorDbPath, serviceContainer, metadataCache,
   } = deps;
   console.log('[NexusAI] 🟢 registerIpcHandlers() - deps destructured successfully');
 
@@ -2022,6 +2025,83 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   console.log('[NexusAI] ✓ Registered capi:get-accounts IPC handler');
+
+  // ---------------------------------------------------------------------------
+  // Digital Twin: Site Metadata Cache
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.GET_SITE_METADATA, async (_event: any, siteId: string) => {
+    if (!metadataCache) {
+      return { success: false, error: 'Metadata cache not available' };
+    }
+
+    try {
+      const metadata = metadataCache.getWithAge(siteId);
+      return {
+        success: true,
+        metadata,
+        ageString: metadata ? metadataCache.getAgeString(siteId) : null,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-site-metadata failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.REFRESH_SITE_METADATA, async (_event: any, siteId: string) => {
+    if (!metadataCache) {
+      return { success: false, error: 'Metadata cache not available' };
+    }
+
+    try {
+      // Ensure site is running
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      const siteStatus = statuses[siteId] ?? 'unknown';
+
+      if (siteStatus !== 'running') {
+        return { success: false, error: `Site must be running to refresh metadata (current status: ${siteStatus})` };
+      }
+
+      // Fetch fresh metadata via WP-CLI
+      const [wpVersion, plugins, themes] = await Promise.all([
+        localServicesBridge.getWpVersion(siteId),
+        localServicesBridge.getPlugins(siteId),
+        localServicesBridge.getThemes(siteId),
+      ]);
+
+      // Store in cache
+      metadataCache.set(siteId, {
+        wpVersion: wpVersion ?? 'unknown',
+        plugins: plugins.map(p => ({
+          name: p.name,
+          title: p.title,
+          version: p.version,
+          status: p.status as 'active' | 'inactive',
+          file: p.file,
+        })),
+        themes: themes.map(t => ({
+          name: t.name,
+          title: t.title,
+          version: t.version,
+          status: t.status as 'active' | 'inactive',
+        })),
+        activeTheme: themes.find(t => t.status === 'active')?.name,
+        updateSource: 'manual',
+      });
+
+      const metadata = metadataCache.getWithAge(siteId);
+      localLogger.info(`[NexusAI] Refreshed metadata for ${siteId}`);
+
+      return {
+        success: true,
+        metadata,
+        ageString: metadataCache.getAgeString(siteId),
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] refresh-site-metadata failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
 
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
 }

@@ -41,6 +41,7 @@ import { RemoteContentExtractor } from './content/RemoteContentExtractor';
 import { AiProxyServer } from './ai-proxy/AiProxyServer';
 import { typeDefs } from './graphql/schema';
 import { createResolvers } from './graphql/resolvers';
+import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -299,6 +300,10 @@ export default function main(context: any): void {
   })();
 
   console.log('[NexusAI] 🟢 About to call registerIpcHandlers()');
+
+  // Digital Twin: Site metadata cache
+  const metadataCache = new SiteMetadataCache(registryStorage);
+
   // Phase 4: IPC handlers
   registerIpcHandlers({
     siteData,
@@ -316,6 +321,7 @@ export default function main(context: any): void {
     serviceContainer,
     nexusServices,
     wpeSyncService,
+    metadataCache,
   });
 
   // Sprint 4: Credential sync broadcaster
