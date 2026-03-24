@@ -162,6 +162,42 @@ export async function setupSiteForAI(
 ): Promise<SetupAIResult> {
   const tag = '[NexusAI:setup-ai]';
 
+  // Step 0: Check WordPress version (AI plugin requires WP 7.0+)
+  let wpVersion: string | null;
+  try {
+    wpVersion = await localServices.getWpVersion(siteId);
+  } catch (err) {
+    const msg = `Failed to get WordPress version: ${err instanceof Error ? err.message : String(err)}`;
+    logger.error(`${tag} ${msg}`);
+    return {
+      success: false,
+      aiPlugin: 'failed',
+      connectorPlugin: 'failed',
+      providerPlugins: 'failed',
+      ollamaProvider: 'failed',
+      aiFeatures: 'failed',
+      credentials: 'failed',
+      acfAbilities: 'failed',
+      message: msg,
+    };
+  }
+
+  if (!isWp7OrLater(wpVersion || '')) {
+    const msg = `WordPress ${wpVersion || 'unknown'} is not supported. AI Experiments plugin requires WordPress 7.0 or later. Please upgrade WordPress first.`;
+    logger.error(`${tag} ${msg}`);
+    return {
+      success: false,
+      aiPlugin: 'failed',
+      connectorPlugin: 'skipped',
+      providerPlugins: 'skipped',
+      ollamaProvider: 'skipped',
+      aiFeatures: 'skipped',
+      credentials: 'skipped',
+      acfAbilities: 'skipped',
+      message: msg,
+    };
+  }
+
   // Step 1: Get current plugin list
   let plugins: WpPlugin[];
   try {

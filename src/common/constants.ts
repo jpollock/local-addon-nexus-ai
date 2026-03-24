@@ -21,6 +21,8 @@ export const IPC_CHANNELS = {
 
   // AI Setup
   SETUP_AI: `${ADDON_PREFIX}:setup-ai`,
+  GET_WP_VERSION: `${ADDON_PREFIX}:get-wp-version`,
+  UPGRADE_WP: `${ADDON_PREFIX}:upgrade-wp`,
 
   // Chat
   CHAT_SEND: `${ADDON_PREFIX}:chat-send`,

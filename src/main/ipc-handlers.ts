@@ -369,6 +369,64 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {
+    try {
+      const version = await localServicesBridge.getWpVersion(siteId);
+      return { success: true, version };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-wp-version failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.UPGRADE_WP, async (_event: any, siteId: string) => {
+    try {
+      localLogger.info(`[NexusAI] Starting WordPress upgrade for site ${siteId}`);
+
+      // Check if site is running
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      const siteStatus = statuses[siteId];
+      if (siteStatus !== 'running') {
+        const msg = `Site must be running to upgrade WordPress. Current status: ${siteStatus || 'unknown'}`;
+        localLogger.error(`[NexusAI] upgrade-wp: ${msg}`);
+        return { success: false, error: msg };
+      }
+
+      // Get current version
+      const currentVersion = await localServicesBridge.getWpVersion(siteId);
+      localLogger.info(`[NexusAI] Current WordPress version: ${currentVersion}`);
+
+      // Run wp core update to upgrade to WP 7.0-beta6
+      // Using --force to allow downgrade if on a dev version
+      const targetVersion = '7.0-beta6';
+
+      localLogger.info(`[NexusAI] Running wp core update --version=${targetVersion} --force for site ${siteId}`);
+      const updateResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update', `--version=${targetVersion}`, '--force']);
+      localLogger.info(`[NexusAI] wp core update result:`, updateResult);
+
+      // Check if update succeeded
+      if (!updateResult.success) {
+        const errorMsg = updateResult.stdout || 'WordPress core update failed';
+        localLogger.error(`[NexusAI] WordPress core update failed for site ${siteId}:`, errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      // Update database if needed
+      localLogger.info(`[NexusAI] Running wp core update-db for site ${siteId}`);
+      const dbResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update-db']);
+      localLogger.info(`[NexusAI] wp core update-db result:`, dbResult);
+
+      // Get the new version
+      const newVersion = await localServicesBridge.getWpVersion(siteId);
+      localLogger.info(`[NexusAI] WordPress upgrade complete. New version: ${newVersion}`);
+
+      return { success: true, version: newVersion };
+    } catch (err) {
+      localLogger.error('[NexusAI] upgrade-wp failed:', (err as Error).message, err);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
     try {
       // Check if user has selected Ollama as their chat provider

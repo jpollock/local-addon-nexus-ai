@@ -40,6 +40,8 @@ interface SiteNexusSectionState {
   settingUpAI: boolean;
   setupResult: { success: boolean; message: string } | null;
   syncingCreds: boolean;
+  wpVersion: string | null;
+  upgradingWp: boolean;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -52,6 +54,14 @@ function formatTimeAgo(timestamp: number): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function isWp7OrLater(version: string | null): boolean {
+  if (!version) return false;
+  const match = version.match(/^(\d+)\.(\d+)/);
+  if (!match) return false;
+  const major = parseInt(match[1], 10);
+  return major >= 7;
 }
 
 const dotStyle = (color: string): React.CSSProperties => ({
@@ -94,6 +104,8 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     settingUpAI: false,
     setupResult: null,
     syncingCreds: false,
+    wpVersion: null,
+    upgradingWp: false,
   };
 
   componentDidMount(): void {
@@ -132,6 +144,17 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       this.setState({ aiStatus: aiResult?.sites?.[this.props.site.id] ?? null });
     } catch {
       // AI status unavailable — non-fatal
+    }
+
+    // Fetch WordPress version separately
+    try {
+      const versionResult = await ipc.invoke(IPC_CHANNELS.GET_WP_VERSION, this.props.site.id);
+      if (!this.mounted) return;
+      if (versionResult?.success) {
+        this.setState({ wpVersion: versionResult.version });
+      }
+    } catch {
+      // WP version unavailable — non-fatal
     }
   };
 
@@ -175,6 +198,32 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     } catch {
       if (!this.mounted) return;
       this.setState({ syncingCreds: false });
+    }
+  };
+
+  handleUpgradeWordPress = async (): Promise<void> => {
+    this.setState({ upgradingWp: true, setupResult: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.UPGRADE_WP, this.props.site.id,
+      );
+      if (!this.mounted) return;
+      if (result.success) {
+        this.setState({
+          upgradingWp: false,
+          wpVersion: result.version,
+          setupResult: { success: true, message: `WordPress upgraded to ${result.version}` },
+        });
+      } else {
+        this.setState({
+          upgradingWp: false,
+          setupResult: { success: false, message: `Upgrade failed: ${result.error}` },
+        });
+      }
+      this.fetchData();
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ upgradingWp: false, setupResult: { success: false, message: 'Upgrade failed' } });
     }
   };
 
@@ -241,7 +290,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   }
 
   render(): React.ReactNode {
-    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds } = this.state;
+    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds, wpVersion, upgradingWp } = this.state;
 
     if (loading) {
       return React.createElement('ul', { className: 'TableList' },
@@ -297,15 +346,35 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
 
     // AI rows (only render if AI status is loaded)
     if (aiStatus) {
+      // WordPress Version (show if we have it)
+      if (wpVersion !== null) {
+        const needsUpgrade = !isWp7OrLater(wpVersion);
+
+        rows.push(row('WordPress',
+          React.createElement('span', { style: dotStyle(needsUpgrade ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING) }),
+          wpVersion,
+          needsUpgrade
+            ? this.createActionButton({
+                onClick: upgradingWp ? undefined : this.handleUpgradeWordPress,
+                disabled: upgradingWp,
+                children: upgradingWp ? 'Upgrading...' : 'Upgrade to WP 7.0',
+              })
+            : null,
+        ));
+      }
+
       // AI Plugin
+      const canSetupAI = wpVersion === null || isWp7OrLater(wpVersion);
       rows.push(row('AI plugin',
         React.createElement('span', { style: dotStyle(pluginColor(aiStatus.aiPlugin)) }),
         pluginLabel(aiStatus.aiPlugin),
         aiStatus.aiPlugin !== 'active'
           ? this.createActionButton({
-              onClick: settingUpAI ? undefined : this.handleSetupAI,
-              disabled: settingUpAI,
-              children: settingUpAI ? 'Setting up...' : 'Setup AI',
+              onClick: (settingUpAI || !canSetupAI) ? undefined : this.handleSetupAI,
+              disabled: settingUpAI || !canSetupAI,
+              children: settingUpAI ? 'Setting up...'
+                : !canSetupAI ? 'Requires WP 7.0+'
+                : 'Setup AI',
             })
           : null,
       ));
