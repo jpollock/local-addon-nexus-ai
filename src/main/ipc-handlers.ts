@@ -493,6 +493,47 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         registryStorage.set(STORAGE_KEYS.AI_SETUP_STATE, setupState);
       }
 
+      // Digital Twin: Refresh metadata cache after successful setup
+      // This ensures the plugin list reflects newly installed plugins (AI, Ollama provider, etc.)
+      if (result.success && metadataCache) {
+        try {
+          const statuses = localServicesBridge.getAllSiteStatuses();
+          const siteStatus = statuses[siteId] ?? 'unknown';
+
+          if (siteStatus === 'running') {
+            const [wpVersion, plugins, themes] = await Promise.all([
+              localServicesBridge.getWpVersion(siteId),
+              localServicesBridge.getPlugins(siteId),
+              localServicesBridge.getThemes(siteId),
+            ]);
+
+            metadataCache.set(siteId, {
+              wpVersion: wpVersion ?? 'unknown',
+              plugins: plugins.map(p => ({
+                name: p.name,
+                title: p.title,
+                version: p.version,
+                status: p.status as 'active' | 'inactive',
+                file: p.file,
+              })),
+              themes: themes.map(t => ({
+                name: t.name,
+                title: t.title,
+                version: t.version,
+                status: t.status as 'active' | 'inactive',
+              })),
+              activeTheme: themes.find(t => t.status === 'active')?.name,
+              updateSource: 'setup-ai',
+            });
+
+            localLogger.info(`[NexusAI] Refreshed metadata cache after setup-ai for site ${siteId}`);
+          }
+        } catch (err) {
+          // Non-fatal — setup succeeded, cache refresh is nice-to-have
+          localLogger.error(`[NexusAI] Metadata refresh after setup-ai failed for ${siteId}:`, (err as Error).message);
+        }
+      }
+
       return result;
     } catch (err) {
       return {
@@ -799,7 +840,49 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     setupSiteForAI: async (siteId: string, options?: any) => {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const enableOllama = options?.enableOllama ?? (settings?.chatProvider === 'ollama');
-      return setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, { enableOllama });
+      const result = await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, { enableOllama });
+
+      // Digital Twin: Refresh metadata cache after successful setup (bulk operations)
+      if (result.success && metadataCache) {
+        try {
+          const statuses = localServicesBridge.getAllSiteStatuses();
+          const siteStatus = statuses[siteId] ?? 'unknown';
+
+          if (siteStatus === 'running') {
+            const [wpVersion, plugins, themes] = await Promise.all([
+              localServicesBridge.getWpVersion(siteId),
+              localServicesBridge.getPlugins(siteId),
+              localServicesBridge.getThemes(siteId),
+            ]);
+
+            metadataCache.set(siteId, {
+              wpVersion: wpVersion ?? 'unknown',
+              plugins: plugins.map(p => ({
+                name: p.name,
+                title: p.title,
+                version: p.version,
+                status: p.status as 'active' | 'inactive',
+                file: p.file,
+              })),
+              themes: themes.map(t => ({
+                name: t.name,
+                title: t.title,
+                version: t.version,
+                status: t.status as 'active' | 'inactive',
+              })),
+              activeTheme: themes.find(t => t.status === 'active')?.name,
+              updateSource: 'setup-ai',
+            });
+
+            localLogger.info(`[NexusAI] Refreshed metadata cache after bulk setup-ai for site ${siteId}`);
+          }
+        } catch (err) {
+          // Non-fatal — setup succeeded, cache refresh is nice-to-have
+          localLogger.error(`[NexusAI] Bulk metadata refresh after setup-ai failed for ${siteId}:`, (err as Error).message);
+        }
+      }
+
+      return result;
     },
     onProgress: (opId, status) => {
       try {
