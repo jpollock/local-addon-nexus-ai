@@ -120,6 +120,12 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   }
 
   componentDidUpdate(prevProps: SiteNexusSectionProps): void {
+    // Re-fetch when switching to a different site
+    if (prevProps.site.id !== this.props.site.id) {
+      this.fetchData();
+      return;
+    }
+
     // Re-fetch AI status when site transitions to running
     // This ensures we show correct status after Local restarts
     if (prevProps.site.status !== 'running' && this.props.site.status === 'running') {
