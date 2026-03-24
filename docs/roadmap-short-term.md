@@ -193,36 +193,42 @@ Add an HTTP proxy server in the Local addon that:
 │ WordPress Site (localhost:10000)                                │
 │                                                                  │
 │  wp_ai_generate_text([                                          │
-│    'model' => 'gpt-4',                                           │
+│    'model' => 'claude-haiku-4-5-20251001',                      │
 │    'prompt' => 'Write a post about...'                          │
 │  ])                                                              │
 │                                                                  │
-│  ↓ (uses AI plugin's OpenAI provider)                          │
+│  ↓ (AI plugin's ProviderRegistry)                               │
 │                                                                  │
-│  POST http://localhost:10000/wp-ai-proxy/v1/chat/completions    │
+│  LocalGatewayProvider->generate_text()                          │
+│    reads: NEXUS_AI_GATEWAY_URL, NEXUS_AI_GATEWAY_TOKEN          │
+│                                                                  │
+│  POST http://localhost:52847/ai-gateway/v1/chat/completions     │
 │  Headers:                                                        │
-│    X-Site-ID: nexus-test-site                                   │
-│    X-Auth-Token: <per-site token from mu-plugin>                │
+│    X-Auth-Token: <per-site UUID from mu-plugin>                 │
+│  Body: { model: "claude-haiku-4-5", messages: [...] }           │
+│        (OpenAI Chat Completions format)                         │
 │                                                                  │
 └──────────────────────────────┬──────────────────────────────────┘
                                │
-                               │ (Local network, no internet yet)
+                               │ (localhost, no network)
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ Local AI Gateway (localhost:52847 or dedicated port)            │
+│ Local AI Gateway (webhook server on localhost:52847)            │
+│  Route: /ai-gateway/v1/chat/completions                         │
 │                                                                  │
-│  1. Verify X-Auth-Token (prevent unauthorized access)           │
-│  2. Lookup site's selected provider (from settings)             │
-│  3. Lookup API key (from addon config, NOT from WordPress DB)   │
-│  4. Log request (site ID, model, token count estimate)          │
-│  5. Forward to provider API:                                    │
-│                                                                  │
-│     POST https://api.openai.com/v1/chat/completions             │
-│     Authorization: Bearer sk-proj-...                           │
-│                                                                  │
-│  6. Log response (actual token usage from API)                  │
-│  7. Return response to WordPress                                │
+│  1. Verify X-Auth-Token (lookup site ID from token)             │
+│  2. Load site settings (model, rate limit) from addon storage   │
+│  3. Check rate limit (100 req/hr per site)                      │
+│  4. Translate OpenAI format → Anthropic Messages API:           │
+│     { model: "claude-haiku", messages: [...] }                  │
+│  5. Lookup Anthropic API key (from addon config)                │
+│  6. Call Anthropic API:                                         │
+│     POST https://api.anthropic.com/v1/messages                  │
+│     x-api-key: sk-ant-...                                       │
+│  7. Translate Anthropic response → OpenAI format                │
+│  8. Log usage to graph DB (site, model, tokens, cost)           │
+│  9. Return response to WordPress                                │
 │                                                                  │
 └──────────────────────────────┬──────────────────────────────────┘
                                │
@@ -230,9 +236,8 @@ Add an HTTP proxy server in the Local addon that:
                                │
                                ▼
                     ┌──────────────────────┐
-                    │ OpenAI API           │
                     │ Anthropic API        │
-                    │ Google Gemini API    │
+                    │ (Claude Haiku 4.5)   │
                     └──────────────────────┘
 ```
 
@@ -292,69 +297,125 @@ Add an HTTP proxy server in the Local addon that:
 
 #### Implementation Plan (Draft, pending requirements discussion)
 
-**Phase 2.1: Gateway Server (Week 1)**
-- [ ] Create `src/main/ai-gateway/GatewayServer.ts`
-- [ ] HTTP server on dedicated port (e.g., 52848)
-- [ ] Routes: `/v1/chat/completions`, `/v1/embeddings`
-- [ ] Authentication middleware (verify site tokens)
-- [ ] Provider routing (OpenAI, Anthropic, Google)
+**Phase 2.1: Provider Plugin (Day 1-2)**
+- [ ] Create `wp-plugins/ai-provider-for-local-gateway/`
+- [ ] Plugin header, register with `ProviderRegistry`
+- [ ] Read `NEXUS_AI_GATEWAY_TOKEN` constant
+- [ ] Implement `generate_text()` method (calls gateway)
+- [ ] OpenAI Chat Completions format for requests
+- [ ] Handle responses, map to WordPress AI plugin format
+- [ ] Unit tests (mock gateway responses)
 
-**Phase 2.2: WordPress Integration (Week 1)**
-- [ ] Create mu-plugin `ai-gateway-connector.php`
-- [ ] Filter `pre_http_request` to intercept AI plugin HTTP calls
-- [ ] Rewrite OpenAI URLs → gateway URLs
-- [ ] Add `X-Site-ID` and `X-Auth-Token` headers
+**Phase 2.2: Gateway Server Core (Day 3-4)**
+- [ ] Add routes to webhook server: `/ai-gateway/v1/chat/completions`
+- [ ] Authentication middleware (validate `X-Auth-Token` header)
+- [ ] Extract site ID from token lookup
+- [ ] Load site settings (provider, model) from storage
+- [ ] Translate OpenAI format → Anthropic Messages API
+- [ ] Call Anthropic API with stored credentials
+- [ ] Return response in OpenAI format
 
-**Phase 2.3: Usage Tracking (Week 2)**
-- [ ] Log requests to graph DB (or dedicated SQLite)
-- [ ] Track: site ID, timestamp, model, prompt tokens, completion tokens, cost
-- [ ] IPC handler `GET_AI_USAGE` (site-level, fleet-level)
-- [ ] UI panel: "AI Usage" (top sites, top models, cost this month)
+**Phase 2.3: Usage & Cost Tracking (Day 5)**
+- [ ] Create `ai_gateway_usage` table in graph DB
+- [ ] Log each request: site ID, model, timestamp, tokens (prompt + completion)
+- [ ] Calculate cost (Anthropic pricing: $0.80/1M input, $4/1M output for Haiku)
+- [ ] IPC handler `GET_AI_GATEWAY_USAGE` (site-level, fleet-level, date range)
+- [ ] IPC handler `GET_AI_GATEWAY_COST` (per site, total)
 
-**Phase 2.4: Testing & Polish (Week 2)**
-- [ ] E2E test: WordPress calls AI → gateway routes → mock provider
-- [ ] E2E test: invalid token → 401 error
-- [ ] E2E test: provider fails → WordPress sees error
+**Phase 2.4: Rate Limiting (Day 6)**
+- [ ] Add `AI_RATE_LIMITS` storage key (per-site limits)
+- [ ] Check request count in rolling window (last hour, last day)
+- [ ] Return 429 if over limit
+- [ ] IPC handler `UPDATE_AI_RATE_LIMIT` (set per-site limit)
+- [ ] Default: 100 requests/hour per site
+
+**Phase 2.5: Dashboard Integration (Day 7-8)**
+- [ ] Add "AI Gateway" section to Nexus Overview dashboard
+- [ ] Show: total requests today, total cost today, top 5 sites by usage
+- [ ] Show: rate limit status (X of Y requests used)
+- [ ] Chart: requests over time (last 7 days)
+- [ ] Chart: cost over time (last 30 days)
+
+**Phase 2.6: Setup AI Integration (Day 9)**
+- [ ] Install `ai-provider-for-local-gateway` plugin during Setup AI
+- [ ] Generate per-site auth token (UUID)
+- [ ] Write mu-plugin with constants:
+  ```php
+  define('NEXUS_AI_GATEWAY_TOKEN', '<uuid>');
+  define('NEXUS_AI_GATEWAY_URL', 'http://localhost:52847/ai-gateway/v1');
+  define('NEXUS_AI_PROVIDER', 'local-gateway');
+  define('NEXUS_AI_MODEL', 'claude-haiku-4-5-20251001');
+  ```
+- [ ] Activate provider plugin
+- [ ] Set as default provider in WordPress AI settings
+
+**Phase 2.7: UI for Model Selection (Day 10, Optional)**
+- [ ] Add dropdown in Nexus Site Info: "AI Model"
+- [ ] Options: claude-haiku-4-5, claude-sonnet-4-5, gpt-4, gpt-4o
+- [ ] Update mu-plugin constants when changed
+- [ ] Gateway reads model from constants, routes accordingly
+
+**Phase 2.8: Testing & Polish (Day 11-12)**
+- [ ] E2E test: Setup AI → provider installed → WordPress calls AI → gateway routes → mock Anthropic
+- [ ] E2E test: Invalid token → 401 error
+- [ ] E2E test: Rate limit exceeded → 429 error
+- [ ] E2E test: Usage tracked correctly
+- [ ] E2E test: Cost calculated correctly
+- [ ] Mock mode (return fake responses without real API calls)
 - [ ] Documentation in `docs/ai-gateway.md`
 
-**Phase 2.5: Advanced Features (Future)**
-- [ ] Rate limiting (per-site, per-fleet)
-- [ ] Cost alerts (email when > $50/day)
-- [ ] Model aliasing ("smart" → gpt-4 or claude based on settings)
-- [ ] Fallback providers (OpenAI fails → try Anthropic)
-- [ ] Replay mode for testing (record/replay responses)
+**Phase 2.9: Advanced Features (Future, not in scope)**
+- [ ] Model aliasing (`local-smart` → claude-sonnet, `local-fast` → claude-haiku)
+- [ ] Fallback providers (Anthropic fails → try OpenAI)
+- [ ] Cost alerts (email when > $X/day)
+- [ ] Replay mode for testing (record/replay real API responses)
+- [ ] Multi-provider support (OpenAI, Google, in addition to Anthropic)
 
-#### Open Questions (To Discuss)
+#### Requirements (Decided)
 
-1. **Port allocation:**
-   - Reuse webhook server port (52847) with `/ai-proxy/*` routes?
-   - Dedicated port (52848) for cleaner separation?
-   - Dynamic port with mDNS discovery?
+1. **Provider Name:** "Local AI Gateway"
 
-2. **Token management:**
-   - Generate per-site tokens on first Setup AI?
-   - Rotate tokens periodically?
-   - Revoke tokens when site deleted?
+2. **Default Model:** Anthropic Claude Haiku 4.5 (`claude-haiku-4-5-20251001`)
+   - Fastest, cheapest Claude model
+   - Great for content generation, summarization, alt text
+   - Pricing: $0.80/1M input tokens, $4/1M output tokens
+   - User can override in Local UI (Phase 2)
 
-3. **Cost attribution:**
-   - Track cost per site (requires token → USD conversion)
-   - Track cost per model (OpenAI pricing, Anthropic pricing)
-   - Show in UI? (budget alerts, top spenders)
+3. **Settings Source of Truth:** Local UI (Nexus Site Info section)
+   - User selects provider/model in Local
+   - Setup AI writes constants to WordPress mu-plugin
+   - WordPress reads `NEXUS_AI_PROVIDER`, `NEXUS_AI_MODEL` constants
+   - No bi-directional sync (too complex for Phase 1)
 
-4. **Provider fallback:**
-   - If OpenAI fails, should gateway auto-retry with Anthropic?
-   - Or fail fast and let WordPress handle it?
-   - Configurable per-site?
+4. **Gateway Port:** Reuse webhook server (52847)
+   - Add routes: `/ai-gateway/v1/chat/completions`
+   - Simpler than dedicated port, fewer moving parts
 
-5. **Testing strategy:**
-   - Mock mode for E2E tests? (no real API calls)
-   - Record/replay mode? (record real API responses, replay in CI)
-   - Cost tracking in tests? (how much did this test suite cost?)
+5. **Phase 1 Features:**
+   - ✅ Routing + credential lookup (from addon config)
+   - ✅ Usage tracking (site ID, model, tokens, timestamp)
+   - ✅ Cost tracking (token count → USD via provider pricing)
+   - ✅ Rate limiting (per-site, configurable in Local UI)
+   - ✅ API format translation (OpenAI Chat Completions → Anthropic Messages API)
+   - ✅ Dashboard integration (usage stats, cost, top sites, rate limit status)
 
-6. **WordPress AI plugin compatibility:**
-   - Does the AI plugin support custom API endpoints?
-   - Do we need to modify the plugin?
-   - Or filter HTTP requests before they leave WordPress?
+6. **WordPress Integration:** Provider plugin approach
+   - Create `ai-provider-for-local-gateway` (bundled in addon)
+   - Registers with WordPress AI plugin's `ProviderRegistry`
+   - Reads provider/model from mu-plugin constants
+   - Makes API calls to `http://localhost:52847/ai-gateway/v1/chat/completions`
+   - Gateway handles translation + routing
+
+7. **Token Management:**
+   - Generate per-site token on first Setup AI
+   - Store in mu-plugin constants (`NEXUS_AI_GATEWAY_TOKEN`)
+   - Provider plugin sends as `X-Auth-Token` header
+   - Gateway validates before proxying
+
+8. **Testing Strategy:**
+   - Mock mode (return fake responses without hitting Anthropic API)
+   - Usage tracking in tests (verify gateway logs correctly)
+   - Rate limiting tests (verify 429 errors when limit exceeded)
 
 ---
 
