@@ -374,8 +374,44 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {
     try {
-      const version = await localServicesBridge.getWpVersion(siteId);
-      return { success: true, version };
+      let version: string | null = null;
+      let fromCache = false;
+      let metadataAge: string | null = null;
+
+      // Digital Twin: Check cache first (instant)
+      const cachedMetadata = metadataCache?.getWithAge(siteId);
+      if (cachedMetadata) {
+        version = cachedMetadata.wpVersion;
+        fromCache = true;
+        metadataAge = metadataCache?.getAgeString(siteId) ?? null;
+      }
+
+      // If cache is stale or doesn't exist, try live WP-CLI (slower)
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      const siteStatus = statuses[siteId] ?? 'unknown';
+
+      if (siteStatus === 'running' && (!cachedMetadata || cachedMetadata.isStale)) {
+        try {
+          const liveVersion = await localServicesBridge.getWpVersion(siteId);
+          if (liveVersion) {
+            version = liveVersion;
+            fromCache = false;
+            metadataAge = null; // Fresh data, no age
+          }
+        } catch (err) {
+          // WP-CLI failed - keep using cached version if we have it
+          if (!version) {
+            throw err; // No cache, propagate error
+          }
+        }
+      }
+
+      return {
+        success: true,
+        version,
+        fromCache,
+        metadataAge,
+      };
     } catch (err) {
       localLogger.error('[NexusAI] get-wp-version failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
@@ -984,41 +1020,59 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         let ollamaProvider: 'active' | 'inactive' | 'not_installed' = 'not_installed';
         let credentialsSynced = false;
         const providers: string[] = [];
+        let metadataAge: string | null = null;
 
-        // Check cached setup state first (persists across restarts)
-        const cached = setupState[id];
-        if (cached) {
-          // Use cached state - if setup completed successfully, plugin should be active
-          aiPlugin = cached.aiPlugin === 'already_active' || cached.aiPlugin === 'installed' || cached.aiPlugin === 'activated'
-            ? 'active'
-            : cached.aiPlugin === 'inactive'
-            ? 'inactive'
-            : 'not_installed';
+        // Digital Twin: Check cached metadata first (much faster than WP-CLI)
+        const cachedMetadata = metadataCache?.getWithAge(id);
+        if (cachedMetadata) {
+          // Use cached plugin data
+          const aiPluginData = cachedMetadata.plugins.find(p => p.name === 'ai');
+          if (aiPluginData) {
+            aiPlugin = aiPluginData.status;
+          }
 
-          ollamaProvider = cached.ollamaProvider === 'already_active' || cached.ollamaProvider === 'installed' || cached.ollamaProvider === 'activated'
-            ? 'active'
-            : cached.ollamaProvider === 'inactive'
-            ? 'inactive'
-            : 'not_installed';
+          const ollamaPluginData = cachedMetadata.plugins.find(p => p.name === 'ai-provider-for-ollama');
+          if (ollamaPluginData) {
+            ollamaProvider = ollamaPluginData.status;
+          }
+
+          metadataAge = metadataCache?.getAgeString(id) ?? null;
+        } else {
+          // No cache - fall back to AI setup state cache
+          const cached = setupState[id];
+          if (cached) {
+            // Use cached state - if setup completed successfully, plugin should be active
+            aiPlugin = cached.aiPlugin === 'already_active' || cached.aiPlugin === 'installed' || cached.aiPlugin === 'activated'
+              ? 'active'
+              : cached.aiPlugin === 'inactive'
+              ? 'inactive'
+              : 'not_installed';
+
+            ollamaProvider = cached.ollamaProvider === 'already_active' || cached.ollamaProvider === 'installed' || cached.ollamaProvider === 'activated'
+              ? 'active'
+              : cached.ollamaProvider === 'inactive'
+              ? 'inactive'
+              : 'not_installed';
+          }
         }
 
-        // Try to verify with live plugin data if site is running
-        // This updates the cached state if plugins were deactivated manually
-        if (siteStatus === 'running') {
+        // If cache is stale or doesn't exist, and site is running, verify with live WP-CLI
+        // This keeps the cache accurate if plugins were manually deactivated
+        if (siteStatus === 'running' && (!cachedMetadata || cachedMetadata.isStale)) {
           try {
             const plugins = await localServicesBridge.getPlugins(id);
             const ai = plugins.find((p: any) => p.name === 'ai');
             if (ai) {
               aiPlugin = ai.status === 'active' ? 'active' : 'inactive';
-            } else if (!cached) {
-              // Only mark as not_installed if we don't have cached state
+            } else if (!cachedMetadata && !setupState[id]) {
+              // Only mark as not_installed if we don't have any cached state
               aiPlugin = 'not_installed';
             }
 
             const ollama = plugins.find((p: any) => p.name === 'ai-provider-for-ollama');
             if (ollama) {
               ollamaProvider = ollama.status === 'active' ? 'active' : 'inactive';
-            } else if (!cached) {
+            } else if (!cachedMetadata && !setupState[id]) {
               ollamaProvider = 'not_installed';
             }
           } catch {
@@ -1041,6 +1095,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           ollamaProvider,
           credentialsSynced,
           providers,
+          metadataAge, // NEW: Age of cached metadata ("Just now", "5m ago", etc.)
+          metadataIsStale: cachedMetadata?.isStale ?? false, // NEW: True if > 24 hours old
         };
       }
 

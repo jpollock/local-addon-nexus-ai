@@ -29,6 +29,8 @@ interface SiteAiStatus {
   ollamaProvider: 'active' | 'inactive' | 'not_installed';
   credentialsSynced: boolean;
   providers: string[];
+  metadataAge?: string | null; // NEW: "Just now", "5m ago", etc.
+  metadataIsStale?: boolean; // NEW: true if > 24 hours old
 }
 
 interface SiteNexusSectionState {
@@ -41,7 +43,9 @@ interface SiteNexusSectionState {
   setupResult: { success: boolean; message: string } | null;
   syncingCreds: boolean;
   wpVersion: string | null;
+  wpVersionAge: string | null; // NEW: Age of WP version cache
   upgradingWp: boolean;
+  refreshingMetadata: boolean; // NEW: True while refreshing cache
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -105,7 +109,9 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     setupResult: null,
     syncingCreds: false,
     wpVersion: null,
+    wpVersionAge: null,
     upgradingWp: false,
+    refreshingMetadata: false,
   };
 
   componentDidMount(): void {
@@ -159,7 +165,10 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       const versionResult = await ipc.invoke(IPC_CHANNELS.GET_WP_VERSION, this.props.site.id);
       if (!this.mounted) return;
       if (versionResult?.success) {
-        this.setState({ wpVersion: versionResult.version });
+        this.setState({
+          wpVersion: versionResult.version,
+          wpVersionAge: versionResult.metadataAge ?? null,
+        });
       }
     } catch {
       // WP version unavailable — non-fatal
@@ -252,6 +261,39 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     }
   };
 
+  handleRefreshMetadata = async (): Promise<void> => {
+    this.setState({ refreshingMetadata: true, setupResult: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.REFRESH_SITE_METADATA,
+        this.props.site.id,
+      );
+      if (!this.mounted) return;
+
+      if (result.success) {
+        // Update state with fresh data
+        this.setState({
+          refreshingMetadata: false,
+          wpVersionAge: result.metadataAge,
+          setupResult: { success: true, message: 'Metadata refreshed successfully' },
+        });
+        // Re-fetch AI status to update plugin states
+        this.fetchData();
+      } else {
+        this.setState({
+          refreshingMetadata: false,
+          setupResult: { success: false, message: result.error || 'Refresh failed' },
+        });
+      }
+    } catch {
+      if (!this.mounted) return;
+      this.setState({
+        refreshingMetadata: false,
+        setupResult: { success: false, message: 'Refresh failed' },
+      });
+    }
+  };
+
   /** Helper to create action button using Local's TextButton if available */
   createActionButton(props: {
     onClick?: () => void;
@@ -298,7 +340,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   }
 
   render(): React.ReactNode {
-    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds, wpVersion, upgradingWp } = this.state;
+    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds, wpVersion, wpVersionAge, upgradingWp, refreshingMetadata } = this.state;
 
     if (loading) {
       return React.createElement('ul', { className: 'TableList' },
@@ -351,6 +393,27 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       }),
       !excluded ? 'On' : 'Off',
     ));
+
+    // Metadata refresh button (shown at top if metadata exists)
+    const hasMetadata = wpVersion !== null || (aiStatus && (aiStatus.metadataAge || wpVersionAge));
+    const metadataAge = aiStatus?.metadataAge || wpVersionAge;
+    const isStale = aiStatus?.metadataIsStale ?? false;
+
+    if (hasMetadata) {
+      const ageDisplay = metadataAge
+        ? ` (${metadataAge}${isStale ? ', stale' : ''})`
+        : '';
+
+      rows.push(row('Metadata',
+        React.createElement('span', { style: dotStyle(isStale ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING) }),
+        `Cached${ageDisplay}`,
+        this.createActionButton({
+          onClick: refreshingMetadata ? undefined : this.handleRefreshMetadata,
+          disabled: refreshingMetadata,
+          children: refreshingMetadata ? 'Refreshing...' : 'Refresh',
+        }),
+      ));
+    }
 
     // AI rows (only render if AI status is loaded)
     if (aiStatus) {
