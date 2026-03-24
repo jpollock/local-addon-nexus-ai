@@ -641,7 +641,7 @@ if (!defined('WP_DEBUG_DISPLAY')) {
             }
 
             // Generate or retrieve site token for gateway authentication
-            const { getOrCreateSiteToken } = require('../../../../ai-gateway/token-manager');
+            const { getOrCreateSiteToken } = require('../../../ai-gateway/token-manager');
             const gatewayToken = getOrCreateSiteToken(registryStorage, siteId, site.name || siteId);
 
             const muPluginPath = path.join(muPluginsDir, 'nexus-ai-gateway-config.php');
