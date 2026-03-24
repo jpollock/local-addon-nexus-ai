@@ -2242,5 +2242,171 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // AI Gateway (Phase 2.3)
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_USAGE, async (_event: any, options?: {
+    siteId?: string;
+    startDate?: number;
+    endDate?: number;
+    limit?: number;
+  }) => {
+    try {
+      const USAGE_KEY = 'nexus_ai_gateway_usage';
+      const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
+
+      let filtered = allRecords;
+
+      // Filter by site ID if provided
+      if (options?.siteId) {
+        filtered = filtered.filter(r => r.siteId === options.siteId);
+      }
+
+      // Filter by date range if provided
+      if (options?.startDate !== undefined) {
+        filtered = filtered.filter(r => r.timestamp >= options.startDate!);
+      }
+      if (options?.endDate !== undefined) {
+        filtered = filtered.filter(r => r.timestamp <= options.endDate!);
+      }
+
+      // Apply limit (most recent first)
+      if (options?.limit) {
+        filtered = filtered.slice(-options.limit);
+      }
+
+      return { success: true, records: filtered };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-get-usage failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_COST, async (_event: any, options?: {
+    siteId?: string;
+    startDate?: number;
+    endDate?: number;
+  }) => {
+    try {
+      const USAGE_KEY = 'nexus_ai_gateway_usage';
+      const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
+
+      let filtered = allRecords;
+
+      // Filter by site ID if provided
+      if (options?.siteId) {
+        filtered = filtered.filter(r => r.siteId === options.siteId);
+      }
+
+      // Filter by date range if provided
+      if (options?.startDate !== undefined) {
+        filtered = filtered.filter(r => r.timestamp >= options.startDate!);
+      }
+      if (options?.endDate !== undefined) {
+        filtered = filtered.filter(r => r.timestamp <= options.endDate!);
+      }
+
+      // Calculate totals
+      const totalCost = filtered.reduce((sum, r) => sum + (r.costUsd || 0), 0);
+      const totalRequests = filtered.length;
+      const totalTokens = filtered.reduce((sum, r) => sum + (r.totalTokens || 0), 0);
+      const totalPromptTokens = filtered.reduce((sum, r) => sum + (r.promptTokens || 0), 0);
+      const totalCompletionTokens = filtered.reduce((sum, r) => sum + (r.completionTokens || 0), 0);
+
+      // Group by model
+      const byModel: Record<string, { requests: number; cost: number; tokens: number }> = {};
+      for (const record of filtered) {
+        if (!byModel[record.model]) {
+          byModel[record.model] = { requests: 0, cost: 0, tokens: 0 };
+        }
+        byModel[record.model].requests++;
+        byModel[record.model].cost += record.costUsd || 0;
+        byModel[record.model].tokens += record.totalTokens || 0;
+      }
+
+      return {
+        success: true,
+        totalCost,
+        totalRequests,
+        totalTokens,
+        totalPromptTokens,
+        totalCompletionTokens,
+        byModel,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-get-cost failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_STATS, async (_event: any) => {
+    try {
+      const USAGE_KEY = 'nexus_ai_gateway_usage';
+      const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
+
+      const now = Date.now();
+      const oneHourAgo = now - (60 * 60 * 1000);
+      const oneDayAgo = now - (24 * 60 * 60 * 1000);
+      const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
+
+      const lastHour = allRecords.filter(r => r.timestamp >= oneHourAgo);
+      const lastDay = allRecords.filter(r => r.timestamp >= oneDayAgo);
+      const lastWeek = allRecords.filter(r => r.timestamp >= oneWeekAgo);
+
+      // Get unique sites
+      const uniqueSites = new Set(allRecords.map(r => r.siteId));
+
+      // Get most active site (last 24 hours)
+      const siteActivity: Record<string, number> = {};
+      for (const record of lastDay) {
+        siteActivity[record.siteId] = (siteActivity[record.siteId] || 0) + 1;
+      }
+      const mostActiveSite = Object.entries(siteActivity)
+        .sort(([, a], [, b]) => b - a)[0];
+
+      return {
+        success: true,
+        stats: {
+          totalRequests: allRecords.length,
+          totalCost: allRecords.reduce((sum, r) => sum + (r.costUsd || 0), 0),
+          totalTokens: allRecords.reduce((sum, r) => sum + (r.totalTokens || 0), 0),
+          lastHour: {
+            requests: lastHour.length,
+            cost: lastHour.reduce((sum, r) => sum + (r.costUsd || 0), 0),
+          },
+          lastDay: {
+            requests: lastDay.length,
+            cost: lastDay.reduce((sum, r) => sum + (r.costUsd || 0), 0),
+          },
+          lastWeek: {
+            requests: lastWeek.length,
+            cost: lastWeek.reduce((sum, r) => sum + (r.costUsd || 0), 0),
+          },
+          uniqueSites: uniqueSites.size,
+          mostActiveSite: mostActiveSite ? {
+            siteId: mostActiveSite[0],
+            requests: mostActiveSite[1],
+          } : null,
+        },
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-get-stats failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_CLEAR_USAGE, async (_event: any) => {
+    try {
+      const USAGE_KEY = 'nexus_ai_gateway_usage';
+      registryStorage.set(USAGE_KEY, []);
+      localLogger.info('[NexusAI] Cleared AI Gateway usage records');
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-clear-usage failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
 }

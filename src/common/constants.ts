@@ -112,6 +112,12 @@ export const IPC_CHANNELS = {
   GET_SITE_METADATA: `${ADDON_PREFIX}:metadata:get`,
   REFRESH_SITE_METADATA: `${ADDON_PREFIX}:metadata:refresh`,
 
+  // AI Gateway (Centralized AI Routing)
+  AI_GATEWAY_GET_USAGE: `${ADDON_PREFIX}:ai-gateway:get-usage`,
+  AI_GATEWAY_GET_COST: `${ADDON_PREFIX}:ai-gateway:get-cost`,
+  AI_GATEWAY_GET_STATS: `${ADDON_PREFIX}:ai-gateway:get-stats`,
+  AI_GATEWAY_CLEAR_USAGE: `${ADDON_PREFIX}:ai-gateway:clear-usage`,
+
   // WPE Site Sync (Phase 1)
   WPE_SYNC_ALL: `${ADDON_PREFIX}:wpe:sync-all`,
   WPE_SYNC_STATUS: `${ADDON_PREFIX}:wpe:sync-status`,
