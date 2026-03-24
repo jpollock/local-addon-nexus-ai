@@ -168,33 +168,25 @@ add_filter('ai_experiments_pre_has_valid_credentials_check', function ($valid) {
 });
 
 /**
- * Add Local icon to the provider display.
+ * Override the Local Gateway connector registration to add the logo.
  *
- * This filter allows us to customize how the Local Gateway provider
- * appears in the WordPress admin UI by adding an icon.
+ * The WordPress Connectors API auto-discovers providers from the AI Client registry,
+ * but doesn't yet support logo_path from ProviderMetadata. We manually override
+ * the connector to inject the logo_url.
  *
  * @since 1.0.0
  */
-add_filter('ai_provider_icon_url', function ($icon_url, $provider_id) {
-    if ($provider_id === 'local-gateway') {
-        return plugins_url('assets/local-icon.svg', __FILE__);
+add_action('wp_connectors_init', function ($registry) {
+    if (!$registry->is_registered('local-gateway')) {
+        return;
     }
-    return $icon_url;
-}, 10, 2);
 
-/**
- * Add Local icon via inline SVG data URI.
- * Fallback approach if icon_url filter doesn't exist.
- *
- * @since 1.0.0
- */
-add_filter('ai_provider_icon', function ($icon, $provider_id) {
-    if ($provider_id === 'local-gateway') {
-        $svg_path = plugin_dir_path(__FILE__) . 'assets/local-icon.svg';
-        if (file_exists($svg_path)) {
-            $svg_content = file_get_contents($svg_path);
-            return 'data:image/svg+xml;base64,' . base64_encode($svg_content);
-        }
+    // Unregister, add logo_url, re-register
+    $connector = $registry->unregister('local-gateway');
+    if ($connector) {
+        $connector['logo_url'] = plugins_url('assets/local-icon.svg', __FILE__);
+        $connector['description'] = __('Routes AI requests through Local for centralized credential management, usage tracking, and cost monitoring.', 'ai-provider-for-local-gateway');
+        $registry->register('local-gateway', $connector);
+        error_log('Local Gateway connector re-registered with logo: ' . $connector['logo_url']);
     }
-    return $icon;
-}, 10, 2);
+}, 100); // Late priority to ensure it runs after auto-discovery
