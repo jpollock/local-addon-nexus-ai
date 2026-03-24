@@ -113,6 +113,14 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     this.fetchData();
   }
 
+  componentDidUpdate(prevProps: SiteNexusSectionProps): void {
+    // Re-fetch AI status when site transitions to running
+    // This ensures we show correct status after Local restarts
+    if (prevProps.site.status !== 'running' && this.props.site.status === 'running') {
+      this.fetchData();
+    }
+  }
+
   componentWillUnmount(): void {
     this.mounted = false;
   }

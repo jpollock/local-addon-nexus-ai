@@ -165,6 +165,7 @@ export const STORAGE_KEYS = {
   MCP_TOKEN: `${ADDON_PREFIX}_mcp_token`,
   API_KEYS: `${ADDON_PREFIX}_api_keys`,
   API_KEY_STATUS: `${ADDON_PREFIX}_api_key_status`,
+  AI_SETUP_STATE: `${ADDON_PREFIX}_ai_setup_state`, // Track which sites have AI setup complete
 } as const;
 
 // ---------------------------------------------------------------------------

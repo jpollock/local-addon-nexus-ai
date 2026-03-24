@@ -433,13 +433,33 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const enableOllama = settings?.chatProvider === 'ollama';
 
-      return await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, {
+      const result = await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, {
         enableOllama,
       });
+
+      // Cache setup state if AI plugin was successfully installed/activated
+      if (result.success && (result.aiPlugin === 'installed' || result.aiPlugin === 'activated' || result.aiPlugin === 'already_active')) {
+        const setupState = (registryStorage.get(STORAGE_KEYS.AI_SETUP_STATE) ?? {}) as Record<string, {
+          aiPlugin: string;
+          ollamaProvider: string;
+          timestamp: number;
+        }>;
+
+        setupState[siteId] = {
+          aiPlugin: result.aiPlugin,
+          ollamaProvider: result.ollamaProvider,
+          timestamp: Date.now(),
+        };
+
+        registryStorage.set(STORAGE_KEYS.AI_SETUP_STATE, setupState);
+      }
+
+      return result;
     } catch (err) {
       return {
         success: false,
         aiPlugin: 'failed' as const,
+        connectorPlugin: 'failed' as const,
         providerPlugins: 'failed' as const,
         ollamaProvider: 'failed' as const,
         aiFeatures: 'failed' as const,
@@ -944,6 +964,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const statuses = localServicesBridge.getAllSiteStatuses();
       const targetIds = siteId ? [siteId] : Object.keys(allSites);
 
+      // Load cached setup state
+      const setupState = (registryStorage.get(STORAGE_KEYS.AI_SETUP_STATE) ?? {}) as Record<string, {
+        aiPlugin: string;
+        ollamaProvider: string;
+        timestamp: number;
+      }>;
+
       const results: Record<string, any> = {};
       for (const id of targetIds) {
         const site = allSites[id];
@@ -955,27 +982,53 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         let credentialsSynced = false;
         const providers: string[] = [];
 
-        // Always try to get plugin data — WP-CLI will fail naturally if site isn't running
-        try {
-          const plugins = await localServicesBridge.getPlugins(id);
-          const ai = plugins.find((p: any) => p.name === 'ai');
-          if (ai) {
-            aiPlugin = ai.status === 'active' ? 'active' : 'inactive';
-          }
-          const ollama = plugins.find((p: any) => p.name === 'ai-provider-for-ollama');
-          if (ollama) {
-            ollamaProvider = ollama.status === 'active' ? 'active' : 'inactive';
-          }
+        // Check cached setup state first (persists across restarts)
+        const cached = setupState[id];
+        if (cached) {
+          // Use cached state - if setup completed successfully, plugin should be active
+          aiPlugin = cached.aiPlugin === 'already_active' || cached.aiPlugin === 'installed' || cached.aiPlugin === 'activated'
+            ? 'active'
+            : cached.aiPlugin === 'inactive'
+            ? 'inactive'
+            : 'not_installed';
 
-          // Check if credentials are synced by looking at stored keys
-          const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-          for (const [provider, key] of Object.entries(storedKeys)) {
-            if (key) providers.push(provider);
-          }
-          credentialsSynced = providers.length > 0;
-        } catch {
-          // Site may not be accessible — defaults remain
+          ollamaProvider = cached.ollamaProvider === 'already_active' || cached.ollamaProvider === 'installed' || cached.ollamaProvider === 'activated'
+            ? 'active'
+            : cached.ollamaProvider === 'inactive'
+            ? 'inactive'
+            : 'not_installed';
         }
+
+        // Try to verify with live plugin data if site is running
+        // This updates the cached state if plugins were deactivated manually
+        if (siteStatus === 'running') {
+          try {
+            const plugins = await localServicesBridge.getPlugins(id);
+            const ai = plugins.find((p: any) => p.name === 'ai');
+            if (ai) {
+              aiPlugin = ai.status === 'active' ? 'active' : 'inactive';
+            } else if (!cached) {
+              // Only mark as not_installed if we don't have cached state
+              aiPlugin = 'not_installed';
+            }
+
+            const ollama = plugins.find((p: any) => p.name === 'ai-provider-for-ollama');
+            if (ollama) {
+              ollamaProvider = ollama.status === 'active' ? 'active' : 'inactive';
+            } else if (!cached) {
+              ollamaProvider = 'not_installed';
+            }
+          } catch {
+            // WP-CLI failed — keep using cached state (if available)
+          }
+        }
+
+        // Check if credentials are synced by looking at stored keys
+        const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+        for (const [provider, key] of Object.entries(storedKeys)) {
+          if (key) providers.push(provider);
+        }
+        credentialsSynced = providers.length > 0;
 
         results[id] = {
           siteId: id,
