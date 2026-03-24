@@ -72,6 +72,44 @@ export interface IpcHandlerDeps {
   metadataCache?: SiteMetadataCache;
 }
 
+/**
+ * Wait for database to be ready by polling with a simple WP-CLI command.
+ * Required after starting sites - web server starts quickly but DB takes longer.
+ */
+async function waitForDatabaseReady(
+  siteId: string,
+  localServices: LocalServicesBridge,
+  logger: any,
+  timeoutMs: number = 30000,
+): Promise<void> {
+  const startTime = Date.now();
+  const pollInterval = 1000; // Check every 1 second
+
+  logger.info(`[NexusAI] Waiting for database to be ready for site ${siteId}...`);
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      // Simple DB-dependent command to test readiness
+      const result = await localServices.wpCliRun(siteId, [
+        'eval',
+        "echo 'ready';",
+      ]);
+
+      if (result.success && result.stdout?.trim() === 'ready') {
+        logger.info(`[NexusAI] Database ready for site ${siteId} after ${Date.now() - startTime}ms`);
+        return; // Database is ready!
+      }
+    } catch {
+      // Database not ready yet, continue polling
+    }
+
+    // Wait before next attempt
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  }
+
+  throw new Error(`Database did not become ready within ${timeoutMs}ms`);
+}
+
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() CALLED - starting execution');
 
@@ -467,7 +505,23 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
+    let wasAutoStarted = false;
+
     try {
+      // Check if site is running
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      const wasRunning = statuses[siteId] === 'running';
+
+      // Auto-start if not running
+      if (!wasRunning) {
+        localLogger.info(`[NexusAI] Site ${siteId} not running - auto-starting for Setup AI`);
+        await localServicesBridge.startSite(siteId);
+        wasAutoStarted = true;
+
+        // Wait for database to be ready
+        await waitForDatabaseReady(siteId, localServicesBridge, localLogger, 30000);
+      }
+
       // Check if user has selected Ollama as their chat provider
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const enableOllama = settings?.chatProvider === 'ollama';
@@ -497,50 +551,62 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // This ensures the plugin list reflects newly installed plugins (AI, Ollama provider, etc.)
       if (result.success && metadataCache) {
         try {
-          const statuses = localServicesBridge.getAllSiteStatuses();
-          const siteStatus = statuses[siteId] ?? 'unknown';
+          const [wpVersion, plugins, themes] = await Promise.all([
+            localServicesBridge.getWpVersion(siteId),
+            localServicesBridge.getPlugins(siteId),
+            localServicesBridge.getThemes(siteId),
+          ]);
 
-          if (siteStatus === 'running') {
-            const [wpVersion, plugins, themes] = await Promise.all([
-              localServicesBridge.getWpVersion(siteId),
-              localServicesBridge.getPlugins(siteId),
-              localServicesBridge.getThemes(siteId),
-            ]);
+          metadataCache.set(siteId, {
+            wpVersion: wpVersion ?? 'unknown',
+            plugins: plugins.map(p => ({
+              name: p.name,
+              title: p.title,
+              version: p.version,
+              status: p.status as 'active' | 'inactive',
+              file: p.file,
+            })),
+            themes: themes.map(t => ({
+              name: t.name,
+              title: t.title,
+              version: t.version,
+              status: t.status as 'active' | 'inactive',
+            })),
+            activeTheme: themes.find(t => t.status === 'active')?.name,
+            updateSource: 'setup-ai',
+          });
 
-            metadataCache.set(siteId, {
-              wpVersion: wpVersion ?? 'unknown',
-              plugins: plugins.map(p => ({
-                name: p.name,
-                title: p.title,
-                version: p.version,
-                status: p.status as 'active' | 'inactive',
-                file: p.file,
-              })),
-              themes: themes.map(t => ({
-                name: t.name,
-                title: t.title,
-                version: t.version,
-                status: t.status as 'active' | 'inactive',
-              })),
-              activeTheme: themes.find(t => t.status === 'active')?.name,
-              updateSource: 'setup-ai',
-            });
-
-            localLogger.info(`[NexusAI] Refreshed metadata cache after setup-ai for site ${siteId}`);
-          }
+          localLogger.info(`[NexusAI] Refreshed metadata cache after setup-ai for site ${siteId}`);
         } catch (err) {
           // Non-fatal — setup succeeded, cache refresh is nice-to-have
           localLogger.error(`[NexusAI] Metadata refresh after setup-ai failed for ${siteId}:`, (err as Error).message);
         }
       }
 
+      // Auto-stop if we started it
+      if (wasAutoStarted) {
+        localLogger.info(`[NexusAI] Setup AI complete - auto-stopping site ${siteId}`);
+        await localServicesBridge.stopSite(siteId);
+      }
+
       return result;
     } catch (err) {
+      // Auto-stop if we started it (even on error)
+      if (wasAutoStarted) {
+        try {
+          localLogger.info(`[NexusAI] Setup AI failed - auto-stopping site ${siteId}`);
+          await localServicesBridge.stopSite(siteId);
+        } catch (stopErr) {
+          localLogger.error(`[NexusAI] Failed to stop site ${siteId}:`, (stopErr as Error).message);
+        }
+      }
+
       return {
         success: false,
         aiPlugin: 'failed' as const,
         connectorPlugin: 'failed' as const,
         providerPlugins: 'failed' as const,
+        gatewayProvider: 'failed' as const,
         ollamaProvider: 'failed' as const,
         aiFeatures: 'failed' as const,
         credentials: 'failed' as const,
