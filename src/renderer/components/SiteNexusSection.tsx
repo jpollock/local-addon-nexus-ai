@@ -27,6 +27,7 @@ interface IndexEntry {
 interface SiteAiStatus {
   aiPlugin: 'active' | 'inactive' | 'not_installed';
   ollamaProvider: 'active' | 'inactive' | 'not_installed';
+  gatewayProvider?: 'active' | 'inactive' | 'not_installed'; // NEW: Local Gateway provider
   credentialsSynced: boolean;
   providers: string[];
   metadataAge?: string | null; // NEW: "Just now", "5m ago", etc.
@@ -442,19 +443,41 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
 
       // AI Plugin
       const canSetupAI = wpVersion === null || isWp7OrLater(wpVersion);
+
+      // Detect if AI is set up but missing gateway provider (needs update)
+      const needsGatewayUpdate =
+        aiStatus.aiPlugin === 'active' &&
+        (!aiStatus.gatewayProvider || aiStatus.gatewayProvider === 'not_installed');
+
+      const setupButtonText = settingUpAI ? 'Setting up...'
+        : !canSetupAI ? 'Requires WP 7.0+'
+        : needsGatewayUpdate ? 'Update AI Setup'
+        : 'Setup AI';
+
       rows.push(row('AI plugin',
         React.createElement('span', { style: dotStyle(pluginColor(aiStatus.aiPlugin)) }),
         pluginLabel(aiStatus.aiPlugin),
-        aiStatus.aiPlugin !== 'active'
+        aiStatus.aiPlugin !== 'active' || needsGatewayUpdate
           ? this.createActionButton({
               onClick: (settingUpAI || !canSetupAI) ? undefined : this.handleSetupAI,
               disabled: settingUpAI || !canSetupAI,
-              children: settingUpAI ? 'Setting up...'
-                : !canSetupAI ? 'Requires WP 7.0+'
-                : 'Setup AI',
+              children: setupButtonText,
             })
           : null,
       ));
+
+      // Local Gateway Provider (show status if active, or hint if needs update)
+      if (aiStatus.gatewayProvider === 'active') {
+        rows.push(row('Local Gateway',
+          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
+          'Active (centralized AI routing)',
+        ));
+      } else if (needsGatewayUpdate) {
+        rows.push(row('Local Gateway',
+          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_WARNING) }),
+          'Available update: centralized AI routing',
+        ));
+      }
 
       // Ollama Provider
       rows.push(row('Ollama provider',

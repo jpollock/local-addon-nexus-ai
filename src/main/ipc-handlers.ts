@@ -1090,6 +1090,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const setupState = (registryStorage.get(STORAGE_KEYS.AI_SETUP_STATE) ?? {}) as Record<string, {
         aiPlugin: string;
         ollamaProvider: string;
+        gatewayProvider?: string; // Optional: added in later version
         timestamp: number;
       }>;
 
@@ -1101,6 +1102,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         const siteStatus = statuses[id] ?? 'unknown';
         let aiPlugin: 'active' | 'inactive' | 'not_installed' = 'not_installed';
         let ollamaProvider: 'active' | 'inactive' | 'not_installed' = 'not_installed';
+        let gatewayProvider: 'active' | 'inactive' | 'not_installed' = 'not_installed';
         let credentialsSynced = false;
         const providers: string[] = [];
         let metadataAge: string | null = null;
@@ -1117,6 +1119,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           const ollamaPluginData = cachedMetadata.plugins.find(p => p.name === 'ai-provider-for-ollama');
           if (ollamaPluginData) {
             ollamaProvider = ollamaPluginData.status;
+          }
+
+          const gatewayPluginData = cachedMetadata.plugins.find(p => p.name === 'ai-provider-for-local-gateway');
+          if (gatewayPluginData) {
+            gatewayProvider = gatewayPluginData.status;
           }
 
           metadataAge = metadataCache?.getAgeString(id) ?? null;
@@ -1136,6 +1143,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
               : cached.ollamaProvider === 'inactive'
               ? 'inactive'
               : 'not_installed';
+
+            if (cached.gatewayProvider) {
+              gatewayProvider = cached.gatewayProvider === 'already_active' || cached.gatewayProvider === 'installed' || cached.gatewayProvider === 'activated'
+                ? 'active'
+                : cached.gatewayProvider === 'inactive'
+                ? 'inactive'
+                : 'not_installed';
+            }
           }
         }
 
@@ -1158,6 +1173,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
             } else if (!cachedMetadata && !setupState[id]) {
               ollamaProvider = 'not_installed';
             }
+
+            const gateway = plugins.find((p: any) => p.name === 'ai-provider-for-local-gateway');
+            if (gateway) {
+              gatewayProvider = gateway.status === 'active' ? 'active' : 'inactive';
+            } else if (!cachedMetadata && !setupState[id]) {
+              gatewayProvider = 'not_installed';
+            }
           } catch {
             // WP-CLI failed — keep using cached state (if available)
           }
@@ -1176,6 +1198,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           isRunning: siteStatus === 'running',
           aiPlugin,
           ollamaProvider,
+          gatewayProvider,
           credentialsSynced,
           providers,
           metadataAge, // NEW: Age of cached metadata ("Just now", "5m ago", etc.)
