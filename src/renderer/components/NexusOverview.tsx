@@ -14,6 +14,7 @@ import { StorageHealthPanel } from './StorageHealthPanel';
 import { TopIssuesPanel } from './TopIssuesPanel';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
+import { AIGatewayUsagePanel } from './AIGatewayUsagePanel';
 
 interface NexusOverviewProps {
   NavLink: any;
@@ -1092,6 +1093,9 @@ renderTabBar(): React.ReactNode {
 
       // Bulk Operations Panel
       React.createElement(BulkOperationsPanel, { electron: this.props.electron }),
+
+      // AI Gateway Usage Panel
+      React.createElement(AIGatewayUsagePanel, { electron: this.props.electron }),
     );
   }
 
