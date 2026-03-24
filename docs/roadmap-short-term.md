@@ -114,30 +114,32 @@ AI plugin: Active (last seen 3 hours ago, site is halted)
 
 #### Implementation Plan
 
-**Phase 1.1: Core Infrastructure (Day 1-2)**
-- [ ] Add `SITE_METADATA` storage key to constants
-- [ ] Create `SiteMetadataCache` class in `src/main/metadata/SiteMetadataCache.ts`
+**Phase 1.1: Core Infrastructure (Day 1-2)** ✅ COMPLETE
+- [x] Add `SITE_METADATA` storage key to constants
+- [x] Create `SiteMetadataCache` class in `src/main/metadata/SiteMetadataCache.ts`
   - Methods: `get()`, `set()`, `refresh()`, `invalidate()`
   - Age calculation, staleness detection
-- [ ] Add IPC handler `GET_SITE_METADATA`
-- [ ] Unit tests for cache logic
+- [x] Add IPC handler `GET_SITE_METADATA` and `REFRESH_SITE_METADATA`
+- [x] Unit tests for cache logic (20 tests, all passing)
 
-**Phase 1.2: Lifecycle Integration (Day 3)**
-- [ ] Hook into `siteStarted` lifecycle event
-- [ ] Call `wpCli.getVersion()`, `wpCli.getPlugins()`, `wpCli.getThemes()`
-- [ ] Store in cache with `updateSource: 'lifecycle'`
-- [ ] Integration test: site start → cache updated
+**Phase 1.2: Lifecycle Integration (Day 3)** ✅ COMPLETE
+- [x] Hook into `siteStarted` lifecycle event
+- [x] Call `wpCli.getVersion()`, `wpCli.getPlugins()`, `wpCli.getThemes()`
+- [x] Store in cache with `updateSource: 'lifecycle'`
+- [x] Integration test: site start → cache updated (6 tests, all passing)
+- [x] Added cache invalidation on `siteRemoved` event
 
-**Phase 1.3: UI Integration (Day 4-5)**
-- [ ] Update `GET_AI_STATUS` to use cached plugin list as fallback
-- [ ] Update `GET_WP_VERSION` to use cached version as fallback
-- [ ] Add "last updated" timestamp to UI components
-- [ ] Show staleness indicator (yellow dot if > 1 hour old)
-- [ ] Add "Refresh" button to force cache update
+**Phase 1.3: UI Integration (Day 4-5)** ✅ COMPLETE
+- [x] Update `GET_AI_STATUS` to use cached plugin list as fallback
+- [x] Update `GET_WP_VERSION` to use cached version as fallback
+- [x] Add "last updated" timestamp to UI components
+- [x] Show staleness indicator (yellow dot if > 24 hours old)
+- [x] Add "Refresh" button to force cache update
 
-**Phase 1.4: Setup AI Integration (Day 5)**
-- [ ] Refresh cache after `setupSiteForAI()` completes
-- [ ] Ensures plugin list reflects new installations
+**Phase 1.4: Setup AI Integration (Day 5)** ✅ COMPLETE
+- [x] Refresh cache after `setupSiteForAI()` completes (both single and bulk)
+- [x] Ensures plugin list reflects new installations
+- [x] Non-fatal error handling (setup succeeds even if cache refresh fails)
 
 **Phase 1.5: Testing & Polish (Day 6)**
 - [ ] E2E test: setup AI → restart Local → verify status persists
