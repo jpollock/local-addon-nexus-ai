@@ -11,6 +11,7 @@
  * License: GPL-2.0-or-later
  * License URI: https://spdx.org/licenses/GPL-2.0-or-later.html
  * Text Domain: ai-provider-for-local-gateway
+ * Icon: assets/local-icon.svg
  *
  * @package WordPress\LocalGatewayAiProvider
  */
@@ -165,3 +166,35 @@ add_filter('ai_experiments_pre_has_valid_credentials_check', function ($valid) {
 
     return $valid;
 });
+
+/**
+ * Add Local icon to the provider display.
+ *
+ * This filter allows us to customize how the Local Gateway provider
+ * appears in the WordPress admin UI by adding an icon.
+ *
+ * @since 1.0.0
+ */
+add_filter('ai_provider_icon_url', function ($icon_url, $provider_id) {
+    if ($provider_id === 'local-gateway') {
+        return plugins_url('assets/local-icon.svg', __FILE__);
+    }
+    return $icon_url;
+}, 10, 2);
+
+/**
+ * Add Local icon via inline SVG data URI.
+ * Fallback approach if icon_url filter doesn't exist.
+ *
+ * @since 1.0.0
+ */
+add_filter('ai_provider_icon', function ($icon, $provider_id) {
+    if ($provider_id === 'local-gateway') {
+        $svg_path = plugin_dir_path(__FILE__) . 'assets/local-icon.svg';
+        if (file_exists($svg_path)) {
+            $svg_content = file_get_contents($svg_path);
+            return 'data:image/svg+xml;base64,' . base64_encode($svg_content);
+        }
+    }
+    return $icon;
+}, 10, 2);
