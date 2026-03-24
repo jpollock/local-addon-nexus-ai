@@ -5,6 +5,7 @@ import { STORAGE_KEYS } from '../../common/constants';
 import type { NexusSettings } from '../../common/types';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
+import type { SiteMetadataCache } from '../metadata/SiteMetadataCache';
 
 export interface LifecycleContext {
   hooks: {
@@ -29,6 +30,7 @@ export interface Logger {
  * @param readyPromise — resolves when VectorStore + EmbeddingService are initialized.
  *   Hooks wait on this before indexing so sites that start before init completes
  *   don't hit "EmbeddingService not initialized" errors.
+ * @param metadataCache — Digital twin cache for WordPress metadata (version, plugins, themes)
  */
 export function registerLifecycleHooks(
   context: LifecycleContext,
@@ -38,6 +40,7 @@ export function registerLifecycleHooks(
   readyPromise?: Promise<void>,
   settingsStorage?: RegistryStorage,
   localServices?: LocalServicesBridge,
+  metadataCache?: SiteMetadataCache,
 ): void {
   context.hooks.addAction('siteStarted', async (site: LocalSiteRef) => {
     logger.info(`[NexusAI] Site started: ${site.name}, triggering index`);
@@ -69,6 +72,43 @@ export function registerLifecycleHooks(
       }
     }
 
+    // Digital Twin: Refresh metadata cache (WP version, plugins, themes)
+    // Run in parallel with indexing since both query WordPress
+    const metadataRefreshPromise = (async () => {
+      if (metadataCache && localServices) {
+        try {
+          const [wpVersion, plugins, themes] = await Promise.all([
+            localServices.getWpVersion(site.id),
+            localServices.getPlugins(site.id),
+            localServices.getThemes(site.id),
+          ]);
+
+          metadataCache.set(site.id, {
+            wpVersion: wpVersion ?? 'unknown',
+            plugins: plugins.map(p => ({
+              name: p.name,
+              title: p.title,
+              version: p.version,
+              status: p.status as 'active' | 'inactive',
+              file: p.file,
+            })),
+            themes: themes.map(t => ({
+              name: t.name,
+              title: t.title,
+              version: t.version,
+              status: t.status as 'active' | 'inactive',
+            })),
+            activeTheme: themes.find(t => t.status === 'active')?.name,
+            updateSource: 'lifecycle',
+          });
+
+          logger.info(`[NexusAI] Refreshed metadata cache for ${site.name} (${wpVersion})`);
+        } catch (err) {
+          logger.error(`[NexusAI] Metadata refresh failed for ${site.name}:`, err);
+        }
+      }
+    })();
+
     const info: SiteConnectionInfo = {
       siteId: site.id,
       siteName: site.name,
@@ -86,6 +126,9 @@ export function registerLifecycleHooks(
     } catch (error) {
       logger.error(`[NexusAI] Indexing failed for ${site.name}:`, error);
     }
+
+    // Wait for metadata refresh to complete before continuing
+    await metadataRefreshPromise;
 
     // Auto-sync AI credentials to WP 7.0+ sites
     if (localServices && settingsStorage) {
@@ -117,6 +160,16 @@ export function registerLifecycleHooks(
       await pipeline.removeSite(site.id);
     } catch (error) {
       logger.error(`[NexusAI] Cleanup failed for ${site.name}:`, error);
+    }
+
+    // Digital Twin: Invalidate metadata cache
+    if (metadataCache) {
+      try {
+        metadataCache.invalidate(site.id);
+        logger.info(`[NexusAI] Invalidated metadata cache for ${site.name}`);
+      } catch (error) {
+        logger.error(`[NexusAI] Metadata invalidation failed for ${site.name}:`, error);
+      }
     }
   });
 }

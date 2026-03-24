@@ -63,6 +63,9 @@ export default function main(context: any): void {
     set: (key: string, value: any) => userData.set(key, value),
   };
 
+  // Digital Twin: Site metadata cache (created early for lifecycle hooks)
+  const metadataCache = new SiteMetadataCache(registryStorage);
+
   // Build SiteDataAccessor from Local's siteData service
   const siteDataAccessor: SiteDataAccessor = {
     getSite: (id: string): LocalSiteInfo | null => {
@@ -125,7 +128,7 @@ export default function main(context: any): void {
 
   // Phase 2: Register lifecycle hooks (pass readyPromise so they wait for init)
   const localServicesBridge = createLocalServicesBridge(serviceContainer);
-  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge);
+  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge, metadataCache);
 
   // Phase 3: Boot MCP server (async — does not block addon load)
   const auditLogger = createAuditLogger(
@@ -300,9 +303,6 @@ export default function main(context: any): void {
   })();
 
   console.log('[NexusAI] 🟢 About to call registerIpcHandlers()');
-
-  // Digital Twin: Site metadata cache
-  const metadataCache = new SiteMetadataCache(registryStorage);
 
   // Phase 4: IPC handlers
   registerIpcHandlers({
