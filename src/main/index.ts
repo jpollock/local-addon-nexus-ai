@@ -147,6 +147,7 @@ export default function main(context: any): void {
   const httpEventInterface = new HttpEventInterface({
     eventProcessor,
     logger: localLogger,
+    storage: registryStorage,
   });
 
   // Initialize WPE sync service (Phase 1-2)

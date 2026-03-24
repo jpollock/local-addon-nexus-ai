@@ -5,6 +5,8 @@ import * as http from 'http';
 import * as crypto from 'crypto';
 import { EventProcessor } from './EventProcessor';
 import { WordPressEvent, EventType } from './types';
+import { AIGatewayRoutes } from '../ai-gateway/AIGatewayRoutes';
+import type { RegistryStorage } from '../content/IndexRegistry';
 
 const EVENT_TYPES: EventType[] = [
   'post_created',
@@ -28,6 +30,7 @@ export interface HttpEventInterfaceOptions {
     warn: (msg: string) => void;
     debug: (msg: string) => void;
   };
+  storage: RegistryStorage;
   port?: number;
   authToken?: string;
 }
@@ -45,12 +48,19 @@ export class HttpEventInterface {
   private port: number;
   private authToken: string;
   private running = false;
+  private aiGatewayRoutes: AIGatewayRoutes;
 
   constructor(options: HttpEventInterfaceOptions) {
     this.eventProcessor = options.eventProcessor;
     this.logger = options.logger;
     this.port = options.port ?? 0;
     this.authToken = options.authToken ?? this.generateToken();
+
+    // Initialize AI Gateway routes
+    this.aiGatewayRoutes = new AIGatewayRoutes({
+      storage: options.storage,
+      logger: options.logger,
+    });
   }
 
   private generateToken(): string {
@@ -138,7 +148,7 @@ export class HttpEventInterface {
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-Token');
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204);
@@ -154,7 +164,13 @@ export class HttpEventInterface {
       return;
     }
 
-    // All other endpoints require auth
+    // AI Gateway routes - use X-Auth-Token authentication
+    if (url.startsWith('/ai-gateway/v1/')) {
+      this.handleAIGatewayRoute(url, req, res);
+      return;
+    }
+
+    // WordPress event routes - use Bearer token authentication
     if (!this.validateAuth(req)) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Unauthorized' }));
@@ -165,6 +181,21 @@ export class HttpEventInterface {
       this.handleEventPost(req, res);
     } else if (url === '/wp-events/stats' && req.method === 'GET') {
       this.handleStatsGet(req, res);
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found' }));
+    }
+  }
+
+  private handleAIGatewayRoute(url: string, req: http.IncomingMessage, res: http.ServerResponse): void {
+    if (url === '/ai-gateway/v1/chat/completions' && req.method === 'POST') {
+      this.aiGatewayRoutes.handleChatCompletions(req, res).catch((err) => {
+        this.logger.error('[HttpEventInterface] AI Gateway error:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'Internal server error' } }));
+      });
+    } else if (url === '/ai-gateway/v1/models' && req.method === 'GET') {
+      this.aiGatewayRoutes.handleModels(req, res);
     } else {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not found' }));
