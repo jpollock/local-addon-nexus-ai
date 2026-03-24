@@ -68,6 +68,7 @@ export interface SetupAIResult {
   aiPlugin: 'installed' | 'activated' | 'already_active' | 'failed';
   connectorPlugin: 'installed' | 'already_active' | 'skipped' | 'failed';
   providerPlugins: 'installed' | 'already_active' | 'skipped' | 'failed';
+  gatewayProvider: 'installed' | 'activated' | 'already_active' | 'skipped' | 'failed';
   ollamaProvider: 'installed' | 'activated' | 'already_active' | 'skipped' | 'failed';
   aiFeatures: 'enabled' | 'already_enabled' | 'skipped' | 'failed';
   credentials: 'synced' | 'skipped' | 'failed';
@@ -174,6 +175,7 @@ export async function setupSiteForAI(
       aiPlugin: 'failed',
       connectorPlugin: 'failed',
       providerPlugins: 'failed',
+      gatewayProvider: 'failed',
       ollamaProvider: 'failed',
       aiFeatures: 'failed',
       credentials: 'failed',
@@ -190,6 +192,7 @@ export async function setupSiteForAI(
       aiPlugin: 'failed',
       connectorPlugin: 'skipped',
       providerPlugins: 'skipped',
+      gatewayProvider: 'skipped',
       ollamaProvider: 'skipped',
       aiFeatures: 'skipped',
       credentials: 'skipped',
@@ -210,6 +213,7 @@ export async function setupSiteForAI(
       aiPlugin: 'failed',
       connectorPlugin: 'failed',
       providerPlugins: 'failed',
+      gatewayProvider: 'failed',
       ollamaProvider: 'failed',
       aiFeatures: 'failed',
       credentials: 'failed',
@@ -551,7 +555,129 @@ if (!defined('WP_DEBUG_DISPLAY')) {
     }
   }
 
-  // Step 2c: Install Ollama provider plugin (only when explicitly requested)
+  // Step 2c: Install Local Gateway provider plugin (centralized AI routing)
+  let gatewayProvider: 'installed' | 'activated' | 'already_active' | 'skipped' | 'failed' = 'skipped';
+
+  if (aiPlugin !== 'failed') {
+    try {
+      // Refresh plugin list
+      const currentPlugins = await localServices.getPlugins(siteId);
+      const existingGateway = findPlugin(currentPlugins, 'ai-provider-for-local-gateway');
+
+      if (existingGateway && existingGateway.status === 'active') {
+        gatewayProvider = 'already_active';
+      } else if (existingGateway) {
+        // Installed but inactive — activate
+        const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-local-gateway']);
+        if (result.success) {
+          gatewayProvider = 'activated';
+        } else {
+          throw new Error(result.stdout ?? 'Failed to activate');
+        }
+      } else {
+        // Not installed — copy from bundled source and activate
+        const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
+        if (!sitePluginsDir) {
+          logger.error(`${tag} Could not determine site plugins directory`);
+          gatewayProvider = 'failed';
+        } else {
+          // Security: Validate plugin path before file operations
+          const site = localServices.resolveSiteObject(siteId) as any;
+          validatePluginPath(sitePluginsDir, site.paths.webRoot);
+
+          const pluginDest = path.join(sitePluginsDir, 'ai-provider-for-local-gateway');
+          const pluginSource = path.join(WP_PLUGINS_ROOT, 'ai-provider-for-local-gateway');
+
+          if (!fs.existsSync(pluginSource)) {
+            logger.info(`${tag} Local Gateway provider plugin not bundled at ${pluginSource}, skipping`);
+            gatewayProvider = 'skipped';
+          } else {
+            try {
+              fs.cpSync(pluginSource, pluginDest, { recursive: true });
+
+              const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-local-gateway']);
+              if (!result.success) {
+                throw new Error(result.stdout ?? 'Failed to activate');
+              }
+
+              // Health check: verify the plugin doesn't crash WordPress
+              const healthCheck = await localServices.wpCliRun(
+                siteId,
+                ['eval', "echo 'healthy';"],
+                { skipPlugins: false },
+              );
+
+              if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+                logger.error(`${tag} Local Gateway provider plugin crashes WordPress — deactivating`);
+                await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'ai-provider-for-local-gateway']);
+                gatewayProvider = 'failed';
+              } else {
+                gatewayProvider = 'installed';
+                logger.info(`${tag} Local Gateway provider plugin installed on site ${siteId}`);
+              }
+            } catch (copyErr) {
+              const msg = copyErr instanceof Error ? copyErr.message : String(copyErr);
+              logger.error(`${tag} Failed to install Local Gateway provider plugin: ${redactCredentials(msg)}`);
+              gatewayProvider = 'failed';
+            }
+          }
+        }
+      }
+
+      // Configure gateway provider via MU plugin (if successfully installed/activated)
+      if (gatewayProvider === 'installed' || gatewayProvider === 'activated' || gatewayProvider === 'already_active') {
+        try {
+          const webhookInfo = registryStorage.get('http_webhook_info') as any;
+          if (webhookInfo && webhookInfo.url) {
+            logger.info(`${tag} Configuring Local Gateway provider via MU plugin`);
+
+            const site = localServices.resolveSiteObject(siteId) as any;
+            const muPluginsDir = path.join(site.paths.webRoot, 'wp-content', 'mu-plugins');
+
+            // Create mu-plugins directory if needed
+            if (!fs.existsSync(muPluginsDir)) {
+              fs.mkdirSync(muPluginsDir, { recursive: true });
+            }
+
+            // Generate or retrieve site token for gateway authentication
+            const { getOrCreateSiteToken } = require('../../ai-gateway/token-manager');
+            const gatewayToken = getOrCreateSiteToken(registryStorage, siteId, site.name || siteId);
+
+            const muPluginPath = path.join(muPluginsDir, 'nexus-ai-gateway-config.php');
+            const muPluginContent = `<?php
+/**
+ * Nexus AI Gateway Configuration
+ *
+ * Auto-generated by Setup AI - defines gateway URL and auth token
+ * for the Local Gateway AI provider.
+ */
+
+define('NEXUS_AI_GATEWAY_URL', '${webhookInfo.url}/ai-gateway/v1');
+define('NEXUS_AI_GATEWAY_TOKEN', '${gatewayToken}');
+`;
+
+            fs.writeFileSync(muPluginPath, muPluginContent);
+            logger.info(`${tag} Local Gateway provider configured with URL ${webhookInfo.url}/ai-gateway/v1`);
+          } else {
+            logger.info(`${tag} HTTP webhook info not available, Local Gateway will need manual configuration`);
+          }
+        } catch (err) {
+          logger.error(`${tag} Local Gateway configuration failed: ${err}`);
+          // Non-fatal - plugin is installed and can be configured manually
+        }
+      }
+
+      if (gatewayProvider === 'installed' || gatewayProvider === 'activated') {
+        logger.info(`${tag} Local Gateway provider plugin ${gatewayProvider} on site ${siteId}`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`${tag} Local Gateway provider step failed: ${redactCredentials(msg)}`);
+      gatewayProvider = 'failed';
+    }
+  }
+
+  // Step 2d: Install Ollama provider plugin (only when explicitly requested)
   let ollamaProvider: SetupAIResult['ollamaProvider'] = 'skipped';
 
   if (options.enableOllama && aiPlugin !== 'failed') {
@@ -860,6 +986,14 @@ if (!defined('WP_DEBUG_DISPLAY')) {
     case 'failed': parts.push('AI provider plugin installation failed'); break;
   }
 
+  switch (gatewayProvider) {
+    case 'installed': parts.push('Local Gateway provider installed'); break;
+    case 'activated': parts.push('Local Gateway provider activated'); break;
+    case 'already_active': parts.push('Local Gateway provider already active'); break;
+    case 'skipped': break;
+    case 'failed': parts.push('Local Gateway provider failed'); break;
+  }
+
   switch (ollamaProvider) {
     case 'installed': parts.push('Ollama provider plugin installed'); break;
     case 'activated': parts.push('Ollama provider plugin activated'); break;
@@ -895,6 +1029,7 @@ if (!defined('WP_DEBUG_DISPLAY')) {
     aiPlugin,
     connectorPlugin,
     providerPlugins,
+    gatewayProvider,
     ollamaProvider,
     aiFeatures,
     credentials,
