@@ -115,15 +115,16 @@ function findPlugin(plugins: WpPlugin[], slug: string): WpPlugin | undefined {
 
 /**
  * Returns the absolute path to the site's wp-content/plugins directory.
+ * Uses direct path access (doesn't require site to be running).
  */
-async function getSitePluginsDir(
+function getSitePluginsDir(
   siteId: string,
   localServices: LocalServicesBridge,
-): Promise<string | null> {
+): string | null {
   try {
-    const result = await localServices.wpCliRun(siteId, ['eval', "echo WP_PLUGIN_DIR;"]);
-    if (result.success && result.stdout?.trim()) {
-      return result.stdout.trim();
+    const site = localServices.resolveSiteObject(siteId) as any;
+    if (site?.paths?.webRoot) {
+      return path.join(site.paths.webRoot, 'wp-content', 'plugins');
     }
   } catch {
     // Fall through
@@ -229,7 +230,7 @@ export async function setupSiteForAI(
   try {
     if (!existingAi) {
       // Not installed — copy from bundled source and activate
-      const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
+      const sitePluginsDir = getSitePluginsDir(siteId, localServices);
       if (!sitePluginsDir) {
         throw new Error('Could not determine site plugins directory');
       }
@@ -301,7 +302,7 @@ export async function setupSiteForAI(
 
     if (!existingConnector) {
       try {
-        const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
+        const sitePluginsDir = getSitePluginsDir(siteId, localServices);
         if (sitePluginsDir) {
           // Security: Validate plugin path
           const site = localServices.resolveSiteObject(siteId) as any;
@@ -576,7 +577,7 @@ if (!defined('WP_DEBUG_DISPLAY')) {
         }
       } else {
         // Not installed — copy from bundled source and activate
-        const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
+        const sitePluginsDir = getSitePluginsDir(siteId, localServices);
         if (!sitePluginsDir) {
           logger.error(`${tag} Could not determine site plugins directory`);
           gatewayProvider = 'failed';
@@ -703,7 +704,7 @@ define('NEXUS_AI_GATEWAY_TOKEN', '${gatewayToken}');
           }
         } else {
           // Not installed — copy from bundled source and activate
-          const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
+          const sitePluginsDir = getSitePluginsDir(siteId, localServices);
           if (!sitePluginsDir) {
             logger.error(`${tag} Could not determine site plugins directory`);
             ollamaProvider = 'failed';
@@ -857,7 +858,7 @@ define('NEXUS_AI_GATEWAY_TOKEN', '${gatewayToken}');
 
     if (!existingAcf) {
       try {
-        const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
+        const sitePluginsDir = getSitePluginsDir(siteId, localServices);
         if (sitePluginsDir) {
           // Security: Validate plugin path
           const site = localServices.resolveSiteObject(siteId) as any;
