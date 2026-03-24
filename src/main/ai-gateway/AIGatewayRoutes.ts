@@ -11,6 +11,7 @@ import { STORAGE_KEYS } from '../../common/constants';
 import { getSiteIdFromToken } from './token-manager';
 import { translateToAnthropic, translateFromAnthropic } from './format-translator';
 import { callAnthropicAPI, calculateAnthropicCost } from './anthropic-client';
+import { checkRateLimit } from './rate-limiter';
 import {
   OpenAIChatCompletionRequest,
   OpenAIChatCompletionResponse,
@@ -79,7 +80,17 @@ export class AIGatewayRoutes {
       `[AIGateway] Request from site ${siteId}: model=${openAIRequest.model}, messages=${openAIRequest.messages.length}`,
     );
 
-    // 4. Get Anthropic API key from storage
+    // 4. Check rate limits
+    const rateLimitStatus = checkRateLimit(this.storage, siteId);
+    if (!rateLimitStatus.allowed) {
+      this.logger.warn(
+        `[AIGateway] Rate limit exceeded for site ${siteId}: ${rateLimitStatus.reason}`,
+      );
+      this.sendError(res, 429, rateLimitStatus.reason || 'Rate limit exceeded');
+      return;
+    }
+
+    // 5. Get Anthropic API key from storage
     const apiKeys = (this.storage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<
       string,
       string
@@ -91,10 +102,10 @@ export class AIGatewayRoutes {
       return;
     }
 
-    // 5. Translate OpenAI request to Anthropic format
+    // 6. Translate OpenAI request to Anthropic format
     const anthropicRequest = translateToAnthropic(openAIRequest);
 
-    // 6. Call Anthropic API
+    // 7. Call Anthropic API
     const startTime = Date.now();
     let anthropicResponse;
     try {
@@ -113,17 +124,17 @@ export class AIGatewayRoutes {
     }
     const durationMs = Date.now() - startTime;
 
-    // 7. Translate response back to OpenAI format
+    // 8. Translate response back to OpenAI format
     const openAIResponse = translateFromAnthropic(anthropicResponse);
 
-    // 8. Calculate cost
+    // 9. Calculate cost
     const costUsd = calculateAnthropicCost(
       openAIRequest.model,
       anthropicResponse.usage.input_tokens,
       anthropicResponse.usage.output_tokens,
     );
 
-    // 9. Log usage
+    // 10. Log usage
     const usageRecord: GatewayUsageRecord = {
       id: anthropicResponse.id,
       siteId,
@@ -153,7 +164,7 @@ export class AIGatewayRoutes {
       this.onUsageRecorded(usageRecord);
     }
 
-    // 10. Return response
+    // 11. Return response
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(openAIResponse));
   }

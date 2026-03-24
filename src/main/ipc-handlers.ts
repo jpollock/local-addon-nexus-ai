@@ -2408,5 +2408,40 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  // Rate limiting (Phase 2.4)
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_RATE_LIMIT, async (_event: any, siteId: string) => {
+    try {
+      const { getRateLimit } = require('./ai-gateway/rate-limiter');
+      const config = getRateLimit(registryStorage, siteId);
+      return { success: true, config };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-get-rate-limit failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_SET_RATE_LIMIT, async (_event: any, siteId: string, config: any) => {
+    try {
+      const { setRateLimit } = require('./ai-gateway/rate-limiter');
+      setRateLimit(registryStorage, siteId, config);
+      localLogger.info(`[NexusAI] Updated rate limit for site ${siteId}`);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-set-rate-limit failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_CHECK_RATE_LIMIT, async (_event: any, siteId: string) => {
+    try {
+      const { checkRateLimit } = require('./ai-gateway/rate-limiter');
+      const status = checkRateLimit(registryStorage, siteId);
+      return { success: true, status };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-check-rate-limit failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
 }

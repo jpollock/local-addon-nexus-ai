@@ -117,6 +117,9 @@ export const IPC_CHANNELS = {
   AI_GATEWAY_GET_COST: `${ADDON_PREFIX}:ai-gateway:get-cost`,
   AI_GATEWAY_GET_STATS: `${ADDON_PREFIX}:ai-gateway:get-stats`,
   AI_GATEWAY_CLEAR_USAGE: `${ADDON_PREFIX}:ai-gateway:clear-usage`,
+  AI_GATEWAY_GET_RATE_LIMIT: `${ADDON_PREFIX}:ai-gateway:get-rate-limit`,
+  AI_GATEWAY_SET_RATE_LIMIT: `${ADDON_PREFIX}:ai-gateway:set-rate-limit`,
+  AI_GATEWAY_CHECK_RATE_LIMIT: `${ADDON_PREFIX}:ai-gateway:check-rate-limit`,
 
   // WPE Site Sync (Phase 1)
   WPE_SYNC_ALL: `${ADDON_PREFIX}:wpe:sync-all`,
