@@ -105,7 +105,7 @@ interface NexusOverviewState {
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'operations';
+  activeTab: 'overview' | 'activity' | 'operations';
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -933,6 +933,9 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     return React.createElement(React.Fragment, null,
       this.renderSetupBanner(stats),
 
+      // Connect AI Tools (moved to top)
+      this.renderMcpPanel(),
+
       this.renderSectionLabel('Sites'),
       React.createElement('div', { style: cardContainerStyle },
         this.renderLocalSitesCard(stats),
@@ -948,13 +951,17 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         this.renderAiProxyCard(),
       ),
 
-      this.renderMcpPanel(),
+      // AI Gateway Usage (moved from Operations tab)
+      React.createElement(AIGatewayUsagePanel, { electron: this.props.electron }),
+    );
+  }
 
-      
-      // Visibility: Events and Timeline
-      this.renderSectionLabel('Activity'),
+  renderActivityTab(): React.ReactNode {
+    return React.createElement('div', null,
+      // Event Stats Cards
       React.createElement(EventStatsCards, { electron: this.props.electron }),
 
+      // Timeline + Side Panels
       React.createElement('div', {
         style: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '24px' },
       },
@@ -973,6 +980,7 @@ renderTabBar(): React.ReactNode {
     const { activeTab } = this.state;
     const tabs: { key: NexusOverviewState['activeTab']; label: string }[] = [
       { key: 'overview', label: 'Overview' },
+      { key: 'activity', label: 'Activity' },
       { key: 'operations', label: 'Operations' },
     ];
 
@@ -1093,15 +1101,13 @@ renderTabBar(): React.ReactNode {
 
       // Bulk Operations Panel
       React.createElement(BulkOperationsPanel, { electron: this.props.electron }),
-
-      // AI Gateway Usage Panel
-      React.createElement(AIGatewayUsagePanel, { electron: this.props.electron }),
     );
   }
 
   renderActiveTab(): React.ReactNode {
     switch (this.state.activeTab) {
       case 'overview': return this.renderOverviewTab();
+      case 'activity': return this.renderActivityTab();
       case 'operations': return this.renderOperationsTab();
       default: return this.renderOverviewTab();
     }
