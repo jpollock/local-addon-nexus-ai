@@ -171,15 +171,43 @@ async function isMcpServerReachable(): Promise<boolean> {
 }
 
 /**
+ * Kill any running Local.app processes to ensure clean E2E environment.
+ */
+function killExistingLocal(): void {
+  try {
+    const { execSync } = require('child_process');
+    // Kill any Local.app processes (production or dev)
+    execSync('pkill -f "Local.app" || true', { stdio: 'ignore' });
+    execSync('pkill -f "local-lightning" || true', { stdio: 'ignore' });
+    console.log('[E2E Local] Killed existing Local processes');
+    // Wait for processes to fully terminate
+    const start = Date.now();
+    while (Date.now() - start < 5000) {
+      try {
+        execSync('pgrep -f "Local.app"', { stdio: 'ignore' });
+        // Still running, wait a bit more
+        require('child_process').execSync('sleep 0.5');
+      } catch {
+        // Process gone
+        break;
+      }
+    }
+  } catch {
+    // No processes to kill or already dead
+  }
+}
+
+/**
  * Start the Local Electron app and wait for the MCP server to become reachable.
  * Returns the child process, or null if Local was already running.
  */
 export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | null> {
-  // If MCP server is already up, Local is running — nothing to do
-  if (await isMcpServerReachable()) {
-    console.log('[E2E Local] MCP server already reachable — Local is running');
-    return null;
-  }
+  // Kill any existing Local instances to ensure clean startup
+  killExistingLocal();
+
+  // Delete stale connection info and database files
+  const connInfoPath = getConnectionInfoPath();
+  try { fs.unlinkSync(connInfoPath); } catch { /* file may not exist */ }
 
   const localPath = resolveLocalRepoPath();
   if (!localPath) {
@@ -200,10 +228,6 @@ export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | nul
   }
 
   console.log(`[E2E Local] Starting Local from ${localPath}...`);
-
-  // Delete stale connection info so we can detect fresh startup
-  const connInfoPath = getConnectionInfoPath();
-  try { fs.unlinkSync(connInfoPath); } catch { /* file may not exist */ }
 
   const child = spawn(electronBin, ['--remote-debugging-port=9223', buildDir], {
     cwd: localPath,

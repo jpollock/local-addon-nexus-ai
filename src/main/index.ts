@@ -298,8 +298,19 @@ export default function main(context: any): void {
         }
       }, 3600000); // 1 hour
     } catch (err) {
+      const error = err as any;
       rejectReady!(err as Error);
-      localLogger.error('[NexusAI] Failed to start:', (err as Error).message, (err as Error).stack);
+
+      // Log detailed error info for debugging
+      const errorDetails = {
+        message: error?.message || 'Unknown error',
+        code: error?.code || 'NO_CODE',
+        stack: error?.stack || 'No stack trace',
+        name: error?.name || 'Unknown',
+      };
+
+      localLogger.error('[NexusAI] Failed to start:', errorDetails);
+      console.error('[NexusAI] Startup error details:', errorDetails);
     }
   })();
 

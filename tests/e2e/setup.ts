@@ -11,9 +11,20 @@ module.exports = async function globalSetup() {
 
   // Rebuild better-sqlite3 for Electron before starting Local
   // Unit tests compile it for system Node, but Local needs Electron Node binary
-  console.log('[E2E Setup] Rebuilding better-sqlite3 for Electron...');
+  console.log('[E2E Setup] Cleaning and rebuilding better-sqlite3 for Electron...');
   try {
-    execSync('npm run rebuild', { cwd: path.join(__dirname, '..', '..'), stdio: 'inherit' });
+    const addonRoot = path.join(__dirname, '..', '..');
+
+    // Clean any stale build artifacts
+    const sqlitePath = path.join(addonRoot, 'node_modules', 'better-sqlite3');
+    const buildPath = path.join(sqlitePath, 'build');
+    if (require('fs').existsSync(buildPath)) {
+      console.log('[E2E Setup] Removing stale better-sqlite3 build artifacts...');
+      execSync(`rm -rf "${buildPath}"`, { cwd: addonRoot, stdio: 'inherit' });
+    }
+
+    // Force rebuild for Electron
+    execSync('npm run rebuild', { cwd: addonRoot, stdio: 'inherit' });
     console.log('[E2E Setup] Rebuild complete');
   } catch (err) {
     console.error('[E2E Setup] Failed to rebuild better-sqlite3:', err);
