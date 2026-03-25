@@ -3,8 +3,10 @@
  *
  * Displays usage statistics, recent requests, and cost tracking for the AI Gateway.
  * Class-based — Local uses older React, no hooks allowed.
+ * Uses react-window for virtual scrolling of large datasets.
  */
 import * as React from 'react';
+import { FixedSizeList as List } from 'react-window';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 
 interface AIGatewayUsagePanelProps {
@@ -410,7 +412,7 @@ export class AIGatewayUsagePanel extends React.Component<
         ),
       ),
 
-      // Recent requests table
+      // Recent requests table with virtual scrolling
       records.length === 0
         ? React.createElement(
             'div',
@@ -419,7 +421,8 @@ export class AIGatewayUsagePanel extends React.Component<
           )
         : React.createElement(
             'div',
-            { style: { maxHeight: '400px', overflowY: 'auto' } },
+            null,
+            // Table header
             React.createElement(
               'table',
               { style: tableStyle },
@@ -429,69 +432,83 @@ export class AIGatewayUsagePanel extends React.Component<
                 React.createElement(
                   'tr',
                   null,
-                  React.createElement('th', { style: thStyle }, 'Time'),
-                  React.createElement('th', { style: thStyle }, 'Site'),
-                  React.createElement('th', { style: thStyle }, 'Caller'),
-                  React.createElement('th', { style: thStyle }, 'Model'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right' } }, 'Tokens'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right' } }, 'Cost'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right' } }, 'Duration'),
-                ),
-              ),
-              React.createElement(
-                'tbody',
-                null,
-                records.slice(0, 100).map((record) =>
-                  React.createElement(
-                    'tr',
-                    { key: record.id },
-                    React.createElement(
-                      'td',
-                      { style: tdStyle },
-                      this.formatTimestamp(record.timestamp),
-                    ),
-                    React.createElement(
-                      'td',
-                      { style: tdStyle },
-                      record.siteName || record.siteId,
-                    ),
-                    React.createElement(
-                      'td',
-                      {
-                        style: {
-                          ...tdStyle,
-                          fontSize: '12px',
-                          color: record.callerPlugin || record.callerTheme || record.callerSource
-                            ? 'var(--primaryTextColor)'
-                            : 'var(--secondaryTextColor)',
-                        },
-                      },
-                      this.formatCaller(record),
-                    ),
-                    React.createElement(
-                      'td',
-                      { style: tdStyle },
-                      this.formatModel(record.model),
-                    ),
-                    React.createElement(
-                      'td',
-                      { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace' } },
-                      `${record.totalTokens.toLocaleString()} (${record.promptTokens}+${record.completionTokens})`,
-                    ),
-                    React.createElement(
-                      'td',
-                      { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace' } },
-                      `$${record.costUsd.toFixed(4)}`,
-                    ),
-                    React.createElement(
-                      'td',
-                      { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace' } },
-                      `${(record.durationMs / 1000).toFixed(2)}s`,
-                    ),
-                  ),
+                  React.createElement('th', { style: { ...thStyle, width: '100px' } }, 'Time'),
+                  React.createElement('th', { style: { ...thStyle, width: '120px' } }, 'Site'),
+                  React.createElement('th', { style: { ...thStyle, width: '150px' } }, 'Caller'),
+                  React.createElement('th', { style: { ...thStyle, width: '80px' } }, 'Model'),
+                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '140px' } }, 'Tokens'),
+                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '80px' } }, 'Cost'),
+                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '80px' } }, 'Duration'),
                 ),
               ),
             ),
+            // Virtual scrolling list - render function in children prop
+            React.createElement(List, {
+              height: 400,
+              itemCount: records.length,
+              itemSize: 40,
+              width: '100%',
+              itemData: { records, formatTimestamp: this.formatTimestamp, formatCaller: this.formatCaller, formatModel: this.formatModel, tdStyle },
+              children: ({ index, style, data }: any) => {
+                const record = data.records[index];
+                return React.createElement(
+                  'table',
+                  { style: { ...tableStyle, marginTop: 0 } },
+                  React.createElement(
+                    'tbody',
+                    null,
+                    React.createElement(
+                      'tr',
+                      { style },
+                      React.createElement(
+                        'td',
+                        { style: { ...tdStyle, width: '100px' } },
+                        data.formatTimestamp(record.timestamp),
+                      ),
+                      React.createElement(
+                        'td',
+                        { style: { ...tdStyle, width: '120px' } },
+                        record.siteName || record.siteId,
+                      ),
+                      React.createElement(
+                        'td',
+                        {
+                          style: {
+                            ...tdStyle,
+                            width: '150px',
+                            fontSize: '12px',
+                            color: record.callerPlugin || record.callerTheme || record.callerSource
+                              ? 'var(--primaryTextColor)'
+                              : 'var(--secondaryTextColor)',
+                          },
+                        },
+                        data.formatCaller(record),
+                      ),
+                      React.createElement(
+                        'td',
+                        { style: { ...tdStyle, width: '80px' } },
+                        data.formatModel(record.model),
+                      ),
+                      React.createElement(
+                        'td',
+                        { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace', width: '140px' } },
+                        `${record.totalTokens.toLocaleString()} (${record.promptTokens}+${record.completionTokens})`,
+                      ),
+                      React.createElement(
+                        'td',
+                        { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace', width: '80px' } },
+                        `$${record.costUsd.toFixed(4)}`,
+                      ),
+                      React.createElement(
+                        'td',
+                        { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace', width: '80px' } },
+                        `${(record.durationMs / 1000).toFixed(2)}s`,
+                      ),
+                    ),
+                  ),
+                );
+              }
+            }),
           ),
     );
   }
