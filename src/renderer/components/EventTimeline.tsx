@@ -8,10 +8,12 @@
  * - Status indicators (✓ Processed, ⏱ Pending, ✗ Failed)
  * - Relative timestamps
  * - Expandable details
+ * - Virtual scrolling for large event lists
  *
  * Class-based — Local uses older React, no hooks allowed.
  */
 import * as React from 'react';
+import { FixedSizeList as List } from 'react-window';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 import type { EventTimelineEntry } from '../../common/types';
 
@@ -64,12 +66,8 @@ const filterSelectStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const eventListStyle: React.CSSProperties = {
-  maxHeight: '400px',
-  overflowY: 'auto',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '8px',
+const eventListContainerStyle: React.CSSProperties = {
+  // Virtual scrolling container - no maxHeight needed
 };
 
 const eventEntryStyle: React.CSSProperties = {
@@ -143,6 +141,8 @@ const detailsStyle: React.CSSProperties = {
   fontSize: '12px',
   color: 'var(--nxai-card-text)',
   fontFamily: 'monospace',
+  maxHeight: '120px',
+  overflowY: 'auto',
 };
 
 const emptyStateStyle: React.CSSProperties = {
@@ -309,57 +309,8 @@ export class EventTimeline extends React.Component<EventTimelineProps, EventTime
     );
   }
 
-  renderEventEntry(event: EventTimelineEntry): React.ReactNode {
-    const { expandedId } = this.state;
-    const isExpanded = expandedId === event.id;
-
-    return React.createElement(
-      'div',
-      {
-        key: event.id,
-        style: {
-          ...eventEntryStyle,
-          backgroundColor: isExpanded ? 'var(--nxai-card-sub, #f9fafb)' : 'transparent',
-        },
-        onClick: () => this.handleEventClick(event.id),
-      },
-      // Event header
-      React.createElement(
-        'div',
-        { style: eventHeaderStyle },
-        React.createElement(
-          'span',
-          { style: { fontSize: '16px' } },
-          this.getStatusIcon(event.status),
-        ),
-        React.createElement('div', { style: { flex: 1 } },
-          React.createElement('div', { style: eventSummaryStyle }, event.summary),
-          React.createElement(
-            'div',
-            { style: eventMetaStyle },
-            React.createElement('span', null, event.siteName),
-            React.createElement('span', null, '•'),
-            React.createElement('span', null, this.formatRelativeTime(event.timestamp)),
-            React.createElement(
-              'span',
-              { style: statusBadgeStyle(event.status) },
-              React.createElement('span', null, this.getStatusIcon(event.status)),
-              React.createElement('span', null, this.getStatusLabel(event.status)),
-            ),
-          ),
-        ),
-      ),
-      // Expanded details
-      isExpanded && event.details && React.createElement(
-        'div',
-        { style: detailsStyle },
-        React.createElement('pre', null, JSON.stringify(event.details, null, 2)),
-      ),
-    );
-  }
-
   renderEventList(): React.ReactNode {
-    const { events } = this.state;
+    const { events, expandedId } = this.state;
 
     if (events.length === 0) {
       return React.createElement(
@@ -371,8 +322,77 @@ export class EventTimeline extends React.Component<EventTimelineProps, EventTime
 
     return React.createElement(
       'div',
-      { style: eventListStyle },
-      events.map(event => this.renderEventEntry(event)),
+      { style: eventListContainerStyle },
+      React.createElement(List, {
+        height: 400,
+        itemCount: events.length,
+        itemSize: 90,
+        width: '100%',
+        itemData: {
+          events,
+          expandedId,
+          handleEventClick: this.handleEventClick,
+          getStatusIcon: this.getStatusIcon,
+          getStatusLabel: this.getStatusLabel,
+          formatRelativeTime: this.formatRelativeTime,
+        },
+        children: ({ index, style, data }: any) => {
+          const event = data.events[index];
+          const isExpanded = data.expandedId === event.id;
+
+          return React.createElement(
+            'div',
+            {
+              style: {
+                ...style,
+                paddingBottom: '8px',
+              },
+            },
+            React.createElement(
+              'div',
+              {
+                style: {
+                  ...eventEntryStyle,
+                  backgroundColor: isExpanded ? 'var(--nxai-card-sub, #f9fafb)' : 'transparent',
+                },
+                onClick: () => data.handleEventClick(event.id),
+              },
+              // Event header
+              React.createElement(
+                'div',
+                { style: eventHeaderStyle },
+                React.createElement(
+                  'span',
+                  { style: { fontSize: '16px' } },
+                  data.getStatusIcon(event.status),
+                ),
+                React.createElement('div', { style: { flex: 1 } },
+                  React.createElement('div', { style: eventSummaryStyle }, event.summary),
+                  React.createElement(
+                    'div',
+                    { style: eventMetaStyle },
+                    React.createElement('span', null, event.siteName),
+                    React.createElement('span', null, '•'),
+                    React.createElement('span', null, data.formatRelativeTime(event.timestamp)),
+                    React.createElement(
+                      'span',
+                      { style: statusBadgeStyle(event.status) },
+                      React.createElement('span', null, data.getStatusIcon(event.status)),
+                      React.createElement('span', null, data.getStatusLabel(event.status)),
+                    ),
+                  ),
+                ),
+              ),
+              // Expanded details
+              isExpanded && event.details && React.createElement(
+                'div',
+                { style: detailsStyle },
+                React.createElement('pre', null, JSON.stringify(event.details, null, 2)),
+              ),
+            ),
+          );
+        },
+      }),
     );
   }
 
