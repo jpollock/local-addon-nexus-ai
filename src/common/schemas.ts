@@ -180,6 +180,8 @@ export const QueryUpdateSchema = z.object({
   }),
 });
 
+export const QueryIdSchema = z.string().min(1, 'Query ID required');
+
 // ============================================================================
 // AI Gateway
 // ============================================================================
@@ -262,6 +264,12 @@ export const WpePullToLocalSchema = z.object({
 export const WpeSyncSingleSchema = z.object({
   installId: z.string().min(1, 'Install ID required'),
 });
+
+export const WpeSyncAllSchema = z.object({
+  limit: z.number().int().positive().max(500).optional(),
+}).optional();
+
+export const WpeInstallIdSchema = z.string().min(1, 'Install ID required');
 
 // ============================================================================
 // Bulk Operations (Extended)

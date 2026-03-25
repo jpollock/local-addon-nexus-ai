@@ -40,11 +40,14 @@ import {
   WpeRemoveSiteSchema,
   WpePullToLocalSchema,
   WpeSyncSingleSchema,
+  WpeSyncAllSchema,
+  WpeInstallIdSchema,
   HealthGetScoreSchema,
   HealthGetTrendSchema,
   HealthGetFleetTrendSchema,
   QuerySchema,
   QueryUpdateSchema,
+  QueryIdSchema,
   AIGatewayUsageOptionsSchema,
   AIGatewayRateLimitSchema,
 } from '../common/schemas';
@@ -472,25 +475,28 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
       let version: string | null = null;
       let fromCache = false;
       let metadataAge: string | null = null;
 
       // Digital Twin: Check cache first (instant)
-      const cachedMetadata = metadataCache?.getWithAge(siteId);
+      const cachedMetadata = metadataCache?.getWithAge(validated);
       if (cachedMetadata) {
         version = cachedMetadata.wpVersion;
         fromCache = true;
-        metadataAge = metadataCache?.getAgeString(siteId) ?? null;
+        metadataAge = metadataCache?.getAgeString(validated) ?? null;
       }
 
       // If cache is stale or doesn't exist, try live WP-CLI (slower)
       const statuses = localServicesBridge.getAllSiteStatuses();
-      const siteStatus = statuses[siteId] ?? 'unknown';
+      const siteStatus = statuses[validated] ?? 'unknown';
 
       if (siteStatus === 'running' && (!cachedMetadata || cachedMetadata.isStale)) {
         try {
-          const liveVersion = await localServicesBridge.getWpVersion(siteId);
+          const liveVersion = await localServicesBridge.getWpVersion(validated);
           if (liveVersion) {
             version = liveVersion;
             fromCache = false;
@@ -517,49 +523,78 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   safeHandle(IPC_CHANNELS.UPGRADE_WP, async (_event: any, siteId: string) => {
+    const startTime = Date.now();
     try {
-      localLogger.info(`[NexusAI] Starting WordPress upgrade for site ${siteId}`);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      localLogger.info(`[NexusAI] Starting WordPress upgrade for site ${validated}`);
 
       // Check if site is running
       const statuses = localServicesBridge.getAllSiteStatuses();
-      const siteStatus = statuses[siteId];
+      const siteStatus = statuses[validated];
       if (siteStatus !== 'running') {
         const msg = `Site must be running to upgrade WordPress. Current status: ${siteStatus || 'unknown'}`;
         localLogger.error(`[NexusAI] upgrade-wp: ${msg}`);
+        auditLogger.logFailure(
+          'upgrade_wp',
+          validated,
+          'local_site',
+          msg,
+          {},
+          Date.now() - startTime,
+        );
         return { success: false, error: msg };
       }
 
       // Get current version
-      const currentVersion = await localServicesBridge.getWpVersion(siteId);
+      const currentVersion = await localServicesBridge.getWpVersion(validated);
       localLogger.info(`[NexusAI] Current WordPress version: ${currentVersion}`);
 
       // Run wp core update to upgrade to WP 7.0-beta6
       // Using --force to allow downgrade if on a dev version
       const targetVersion = '7.0-beta6';
 
-      localLogger.info(`[NexusAI] Running wp core update --version=${targetVersion} --force for site ${siteId}`);
-      const updateResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update', `--version=${targetVersion}`, '--force']);
+      localLogger.info(`[NexusAI] Running wp core update --version=${targetVersion} --force for site ${validated}`);
+      const updateResult = await localServicesBridge.wpCliRun(validated, ['core', 'update', `--version=${targetVersion}`, '--force']);
       localLogger.info(`[NexusAI] wp core update result:`, updateResult);
 
       // Check if update succeeded
       if (!updateResult.success) {
         const errorMsg = updateResult.stdout || 'WordPress core update failed';
-        localLogger.error(`[NexusAI] WordPress core update failed for site ${siteId}:`, errorMsg);
+        localLogger.error(`[NexusAI] WordPress core update failed for site ${validated}:`, errorMsg);
         throw new Error(errorMsg);
       }
 
       // Update database if needed
-      localLogger.info(`[NexusAI] Running wp core update-db for site ${siteId}`);
-      const dbResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update-db']);
+      localLogger.info(`[NexusAI] Running wp core update-db for site ${validated}`);
+      const dbResult = await localServicesBridge.wpCliRun(validated, ['core', 'update-db']);
       localLogger.info(`[NexusAI] wp core update-db result:`, dbResult);
 
       // Get the new version
-      const newVersion = await localServicesBridge.getWpVersion(siteId);
+      const newVersion = await localServicesBridge.getWpVersion(validated);
       localLogger.info(`[NexusAI] WordPress upgrade complete. New version: ${newVersion}`);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'upgrade_wp',
+        validated,
+        'local_site',
+        { fromVersion: currentVersion, toVersion: newVersion, targetVersion },
+        Date.now() - startTime,
+      );
 
       return { success: true, version: newVersion };
     } catch (err) {
       localLogger.error('[NexusAI] upgrade-wp failed:', (err as Error).message, err);
+      auditLogger.logFailure(
+        'upgrade_wp',
+        siteId || 'unknown',
+        'local_site',
+        (err as Error).message,
+        {},
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -962,7 +997,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.QUERIES_DELETE, async (_event: any, id: string) => {
     try {
-      await queryStorage.delete(id);
+      // Validate input
+      const validated = validateInput(QueryIdSchema, id);
+
+      await queryStorage.delete(validated);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] queries:delete failed:', (err as Error).message);
@@ -972,7 +1010,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.QUERIES_RUN, async (_event: any, id: string) => {
     try {
-      const query = queryStorage.get(id);
+      // Validate input
+      const validated = validateInput(QueryIdSchema, id);
+
+      const query = queryStorage.get(validated);
       if (!query) {
         return { success: false, error: 'Query not found' };
       }
@@ -2065,21 +2106,44 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * Sync all WPE sites from wp-nexus MCP
    */
   safeHandle(IPC_CHANNELS.WPE_SYNC_ALL, async (_event: any, options?: { limit?: number }) => {
+    const startTime = Date.now();
+
     if (!deps.wpeSyncService) {
       localLogger.warn('[NexusAI] WPE sync service not initialized');
       return { success: false, error: 'WPE sync service not available' };
     }
 
     try {
-      const limit = options?.limit;
+      // Validate input
+      const validated = validateInput(WpeSyncAllSchema, options);
+
+      const limit = validated?.limit;
       localLogger.info(`[NexusAI] Starting WPE site sync${limit ? ` (limit: ${limit})` : ''}...`);
       const result = await deps.wpeSyncService.syncAllWPESites(limit);
       localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.failed} failed`);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'wpe_sync_all',
+        'all_installs',
+        'wpe_install',
+        { synced: result.synced, failed: result.failed, limit },
+        Date.now() - startTime,
+      );
+
       return result;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const errorStack = err instanceof Error ? err.stack : undefined;
       localLogger.error('[NexusAI] WPE sync failed:', errorMsg, errorStack);
+      auditLogger.logFailure(
+        'wpe_sync_all',
+        'all_installs',
+        'wpe_install',
+        errorMsg,
+        options || {},
+        Date.now() - startTime,
+      );
       return { success: false, error: errorMsg };
     }
   });
@@ -2143,26 +2207,25 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       return { success: false, error: 'WPE sync service not available' };
     }
 
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
       const sites = await deps.wpeSyncService.getSyncedWPESites();
       // installId could be:
       // - Full ID: "wpe-myinstprod"
       // - Stripped ID: "myinstprod"
       // - Install ID: "myinstprod"
       const site = sites.find((s: any) =>
-        s.id === installId ||
-        s.id === `wpe-${installId}` ||
-        s.remote_install_id === installId ||
-        s.install_id === installId
+        s.id === validated ||
+        s.id === `wpe-${validated}` ||
+        s.remote_install_id === validated ||
+        s.install_id === validated
       );
 
       if (!site) {
-        localLogger.warn(`[NexusAI] WPE site not found: ${installId}. Available sites:`, sites.map((s: any) => s.id));
-        return { success: false, error: `Site not found: ${installId}` };
+        localLogger.warn(`[NexusAI] WPE site not found: ${validated}. Available sites:`, sites.map((s: any) => s.id));
+        return { success: false, error: `Site not found: ${validated}` };
       }
 
       return { success: true, site };
@@ -2220,11 +2283,10 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * Uses wp-nexus MCP tools to gather detailed site information
    */
   safeHandle(IPC_CHANNELS.WPE_DIAGNOSE_SITE, async (_event: any, installId: string) => {
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
       // TODO: Call wpe_diagnose_site MCP tool when available
       // For now, return placeholder diagnostics
       const diagnostics = {
