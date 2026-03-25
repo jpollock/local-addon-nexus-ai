@@ -2474,11 +2474,14 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
 
     try {
-      const metadata = metadataCache.getWithAge(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      const metadata = metadataCache.getWithAge(validated);
       return {
         success: true,
         metadata,
-        ageString: metadata ? metadataCache.getAgeString(siteId) : null,
+        ageString: metadata ? metadataCache.getAgeString(validated) : null,
       };
     } catch (err) {
       localLogger.error('[NexusAI] get-site-metadata failed:', (err as Error).message);
@@ -2487,14 +2490,19 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   safeHandle(IPC_CHANNELS.REFRESH_SITE_METADATA, async (_event: any, siteId: string) => {
+    const startTime = Date.now();
+
     if (!metadataCache) {
       return { success: false, error: 'Metadata cache not available' };
     }
 
     try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
       // Ensure site is running
       const statuses = localServicesBridge.getAllSiteStatuses();
-      const siteStatus = statuses[siteId] ?? 'unknown';
+      const siteStatus = statuses[validated] ?? 'unknown';
 
       if (siteStatus !== 'running') {
         return { success: false, error: `Site must be running to refresh metadata (current status: ${siteStatus})` };
@@ -2502,13 +2510,13 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
       // Fetch fresh metadata via WP-CLI
       const [wpVersion, plugins, themes] = await Promise.all([
-        localServicesBridge.getWpVersion(siteId),
-        localServicesBridge.getPlugins(siteId),
-        localServicesBridge.getThemes(siteId),
+        localServicesBridge.getWpVersion(validated),
+        localServicesBridge.getPlugins(validated),
+        localServicesBridge.getThemes(validated),
       ]);
 
       // Store in cache
-      metadataCache.set(siteId, {
+      metadataCache.set(validated, {
         wpVersion: wpVersion ?? 'unknown',
         plugins: plugins.map(p => ({
           name: p.name,
@@ -2527,16 +2535,34 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
         updateSource: 'manual',
       });
 
-      const metadata = metadataCache.getWithAge(siteId);
-      localLogger.info(`[NexusAI] Refreshed metadata for ${siteId}`);
+      const metadata = metadataCache.getWithAge(validated);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'refresh_site_metadata',
+        validated,
+        'local_site',
+        { pluginCount: plugins.length, themeCount: themes.length },
+        Date.now() - startTime,
+      );
+
+      localLogger.info(`[NexusAI] Refreshed metadata for ${validated}`);
 
       return {
         success: true,
         metadata,
-        ageString: metadataCache.getAgeString(siteId),
+        ageString: metadataCache.getAgeString(validated),
       };
     } catch (err) {
       localLogger.error('[NexusAI] refresh-site-metadata failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'refresh_site_metadata',
+        siteId || 'unknown',
+        'local_site',
+        (err as Error).message,
+        { siteId },
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -2757,13 +2783,16 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
   safeHandle(IPC_CHANNELS.AI_CONTEXT_GENERATE, async (_event: any, siteId: string) => {
     try {
-      const site = siteData.getSite(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      const site = siteData.getSite(validated);
       if (!site) {
-        return { success: false, error: `Site ${siteId} not found` };
+        return { success: false, error: `Site ${validated} not found` };
       }
 
       // Get site metadata
-      const metadata = metadataCache?.getWithAge(siteId);
+      const metadata = metadataCache?.getWithAge(validated);
 
       // Get AI Gateway info
       const proxyInfo = registryStorage.get('ai_proxy_info') as any;
