@@ -49,6 +49,7 @@ import {
   QueryUpdateSchema,
   QueryIdSchema,
   AIGatewayUsageOptionsSchema,
+  AIGatewayCostOptionsSchema,
   AIGatewayRateLimitSchema,
   EventTimelineOptionsSchema,
   StorageCleanupOptionsSchema,
@@ -60,6 +61,7 @@ import {
   SidebarFilterSchema,
   SidebarBulkActionSchema,
   SearchContentSchema,
+  SiteFinderAIParseSchema,
 } from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1360,9 +1362,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GET_AI_STATUS, async (_event: any, siteId?: string) => {
     try {
+      // Validate input if siteId provided
+      const validatedSiteId = siteId ? validateInput(SiteIdSchema, siteId) : undefined;
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
-      const targetIds = siteId ? [siteId] : Object.keys(allSites);
+      const targetIds = validatedSiteId ? [validatedSiteId] : Object.keys(allSites);
 
       // Load cached setup state
       const setupState = (registryStorage.get(STORAGE_KEYS.AI_SETUP_STATE) ?? {}) as Record<string, {
@@ -1891,6 +1896,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SITE_FINDER_AI_PARSE, async (_event: any, payload: { conversation: Array<{ role: string; content: string }> }) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteFinderAIParseSchema, payload);
+
       const { getProvider } = require('./chat/providers/index');
 
       // Get settings to determine which provider to use
@@ -1962,7 +1970,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       // Build messages array
       const messages = [
         { role: 'system' as const, content: systemPrompt },
-        ...payload.conversation.map(msg => ({
+        ...validated.conversation.map(msg => ({
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
         })),
@@ -2716,22 +2724,25 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     endDate?: number;
   }) => {
     try {
+      // Validate input
+      const validated = validateInput(AIGatewayCostOptionsSchema, options);
+
       const USAGE_KEY = 'nexus_ai_gateway_usage';
       const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
 
       let filtered = allRecords;
 
       // Filter by site ID if provided
-      if (options?.siteId) {
-        filtered = filtered.filter(r => r.siteId === options.siteId);
+      if (validated?.siteId) {
+        filtered = filtered.filter(r => r.siteId === validated.siteId);
       }
 
       // Filter by date range if provided
-      if (options?.startDate !== undefined) {
-        filtered = filtered.filter(r => r.timestamp >= options.startDate!);
+      if (validated?.startDate !== undefined) {
+        filtered = filtered.filter(r => r.timestamp >= validated.startDate!);
       }
-      if (options?.endDate !== undefined) {
-        filtered = filtered.filter(r => r.timestamp <= options.endDate!);
+      if (validated?.endDate !== undefined) {
+        filtered = filtered.filter(r => r.timestamp <= validated.endDate!);
       }
 
       // Calculate totals
@@ -2838,8 +2849,11 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // Rate limiting (Phase 2.4)
   safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_RATE_LIMIT, async (_event: any, siteId: string) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
       const { getRateLimit } = require('./ai-gateway/rate-limiter');
-      const config = getRateLimit(registryStorage, siteId);
+      const config = getRateLimit(registryStorage, validated);
       return { success: true, config };
     } catch (err) {
       localLogger.error('[NexusAI] ai-gateway-get-rate-limit failed:', (err as Error).message);

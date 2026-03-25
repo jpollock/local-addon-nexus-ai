@@ -204,6 +204,12 @@ export const AIGatewayUsageOptionsSchema = z.object({
   limit: z.number().int().positive().max(1000).optional(),
 }).optional();
 
+export const AIGatewayCostOptionsSchema = z.object({
+  siteId: SiteIdSchema.optional(),
+  startDate: z.number().int().positive().optional(),
+  endDate: z.number().int().positive().optional(),
+}).optional();
+
 export const AIGatewayRateLimitSchema = z.object({
   siteId: SiteIdSchema,
   config: z.record(z.unknown()).optional(),
@@ -331,6 +337,17 @@ export const SidebarFilterSchema = z.object({
 export const SidebarBulkActionSchema = z.object({
   action: z.enum(['start', 'stop', 'setup-ai']),
   siteIds: z.array(SiteIdSchema).min(1, 'At least one site required'),
+});
+
+// ============================================================================
+// Site Finder
+// ============================================================================
+
+export const SiteFinderAIParseSchema = z.object({
+  conversation: z.array(z.object({
+    role: z.enum(['user', 'assistant', 'system']),
+    content: z.string().min(1),
+  })).min(1, 'At least one message required'),
 });
 
 // ============================================================================
