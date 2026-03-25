@@ -10,8 +10,8 @@ import type { RegistryStorage } from '../content/IndexRegistry';
 export interface AuditLog {
   timestamp: number;
   operation: string;
-  target: string; // site ID, install ID, or install name
-  targetType: 'local_site' | 'wpe_install' | 'wpe_site' | 'wpe_account' | 'bulk_operation';
+  target: string; // site ID, install ID, install name, or resource identifier
+  targetType: 'local_site' | 'wpe_install' | 'wpe_site' | 'wpe_account' | 'bulk_operation' | 'database' | 'registry';
   params: Record<string, any>;
   result: 'success' | 'failure' | 'started' | 'in_progress';
   error?: string;
