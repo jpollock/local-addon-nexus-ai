@@ -177,11 +177,42 @@ Core documentation complete. Additional guides are polish.
 
 | Component | Status | Coverage |
 |-----------|--------|----------|
-| IPC Handlers | ⏳ Partial | 1/50+ validated |
-| Audit Logging | ⏳ Partial | Setup AI only |
+| IPC Handlers | ⏳ In Progress | 22/50+ validated (44%) |
+| Audit Logging | ⏳ In Progress | 11 handlers audited |
 | Bulk Operations | ✅ Applied | Concurrency improved |
 | Virtual Scrolling | ❌ Not Started | 0/3 components |
 | React Memoization | ❌ Not Started | 0/3 components |
+
+### Validated Handlers (22 total)
+
+**Content Operations (2):**
+- INDEX_SITE, SEARCH_UNIFIED
+
+**Site Operations (5):**
+- START_SITE, STOP_SITE, SETUP_AI, GET_SITE_METADATA, REFRESH_SITE_METADATA
+
+**Bulk Operations (3):**
+- BULK_EXECUTE, SETUP_AI_FLEET, INDEX_ALL_FLEET
+
+**WPE Operations (3):**
+- WPE_REMOVE_SITE, WPE_PULL_TO_LOCAL, WPE_SYNC_SINGLE
+
+**Health Operations (3):**
+- HEALTH_GET_SCORE, HEALTH_GET_TREND, HEALTH_GET_FLEET_TREND
+
+**Query Operations (2):**
+- QUERIES_CREATE, QUERIES_UPDATE
+
+**AI Gateway (3):**
+- AI_GATEWAY_GET_USAGE, AI_GATEWAY_SET_RATE_LIMIT, AI_GATEWAY_CHECK_RATE_LIMIT
+
+**AI Context (1):**
+- AI_CONTEXT_GENERATE
+
+### Handlers with Audit Logging (11 total)
+
+- SETUP_AI, INDEX_SITE, BULK_EXECUTE, WPE_REMOVE_SITE, WPE_PULL_TO_LOCAL,
+  WPE_SYNC_SINGLE, REFRESH_SITE_METADATA
 
 ### Test Coverage
 
@@ -318,7 +349,16 @@ Security and performance foundations are solid.
 - [ ] Virtual scrolling implemented
 - [ ] Basic integration tests passing
 
-**MVP Status:** 60% complete
+**MVP Status:** 75% complete
+
+### Recent Progress (Current Session)
+
+Completed 3 commits applying validation and audit logging:
+1. Applied to 8 critical handlers (bulk, WPE, fleet ops)
+2. Applied to 9 search/health/query/AI Gateway handlers
+3. Applied to 3 metadata/AI context handlers
+
+**Total:** 22 handlers now validated, 11 with full audit logging
 
 ### Full Production Ready
 
