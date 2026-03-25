@@ -276,6 +276,14 @@ export class BulkOperationManager {
       throw new Error('setupSiteForAI not configured');
     }
 
+    // Check if site is running (unless auto-start will handle it)
+    if (!options.autoStartStop) {
+      const currentStatus = this.deps.siteDataBridge.getSiteStatus(siteId);
+      if (currentStatus !== 'running') {
+        throw new Error(`Site must be running to setup AI. Current status: ${currentStatus}`);
+      }
+    }
+
     // If auto-started, wait for database to be ready
     // (auto-start logic already ensured site is running)
     if (options.autoStartStop) {

@@ -321,6 +321,19 @@ export const StorageCleanupOptionsSchema = z.object({
 export const FilterIdSchema = z.string().min(1, 'Filter ID required');
 
 // ============================================================================
+// Sidebar Operations
+// ============================================================================
+
+export const SidebarFilterSchema = z.object({
+  siteIds: z.array(SiteIdSchema),
+});
+
+export const SidebarBulkActionSchema = z.object({
+  action: z.enum(['start', 'stop', 'setup-ai']),
+  siteIds: z.array(SiteIdSchema).min(1, 'At least one site required'),
+});
+
+// ============================================================================
 // Helper: Validate Input
 // ============================================================================
 

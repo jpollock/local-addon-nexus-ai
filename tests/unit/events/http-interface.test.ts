@@ -41,6 +41,11 @@ describe('HttpEventInterface', () => {
         warn: jest.fn(),
         debug: jest.fn(),
       } as any,
+      storage: {
+        get: jest.fn(),
+        set: jest.fn(),
+        delete: jest.fn(),
+      } as any,
     });
 
     const info = await httpInterface.start();

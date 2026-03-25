@@ -57,6 +57,9 @@ import {
   GroupCreateSchema,
   GroupUpdateSchema,
   GroupAddRemoveSiteSchema,
+  SidebarFilterSchema,
+  SidebarBulkActionSchema,
+  SearchContentSchema,
 } from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -2059,10 +2062,12 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
   safeHandle(IPC_CHANNELS.SIDEBAR_FILTER, async (event: any, payload: { siteIds: string[] }) => {
     try {
-      sidebarFilteredSiteIds = payload.siteIds || [];
+      // Validate input
+      const validated = validateInput(SidebarFilterSchema, payload);
+      sidebarFilteredSiteIds = validated.siteIds || [];
 
       // Broadcast filter to renderer via CSS injection
-      const siteIds = payload.siteIds || [];
+      const siteIds = validated.siteIds || [];
       if (siteIds.length > 0) {
         event.sender.send('nexus:apply-sidebar-filter', siteIds);
       } else {
@@ -2080,11 +2085,9 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
   safeHandle(IPC_CHANNELS.SIDEBAR_BULK_ACTION, async (_event: any, payload: { action: string; siteIds: string[] }) => {
     try {
-      const { action, siteIds } = payload;
-
-      if (!siteIds || siteIds.length === 0) {
-        return { success: false, error: 'No sites selected' };
-      }
+      // Validate input
+      const validated = validateInput(SidebarBulkActionSchema, payload);
+      const { action, siteIds } = validated;
 
       const bulkMgr = deps.nexusServices?.bulkOperationManager;
       if (!bulkMgr) {
