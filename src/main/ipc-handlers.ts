@@ -372,14 +372,17 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SEARCH, async (_event: any, query: string, siteId?: string, limit?: number) => {
     try {
-      const maxResults = limit ?? 10;
-      const [queryVector] = await embeddingService.embedBatch([query]);
+      // Validate input
+      const validated = validateInput(SearchContentSchema, { query, siteIds: siteId ? [siteId] : undefined, limit });
+      const maxResults = validated.limit ?? 10;
+      const [queryVector] = await embeddingService.embedBatch([validated.query]);
+      const targetSiteId = validated.siteIds?.[0];
 
-      if (siteId) {
-        const results = await vectorStore.search(siteId, queryVector, { limit: maxResults });
-        const site = siteData.getSite(siteId);
+      if (targetSiteId) {
+        const results = await vectorStore.search(targetSiteId, queryVector, { limit: maxResults });
+        const site = siteData.getSite(targetSiteId);
         return {
-          results: results.map((r: any) => ({ ...r, siteId, siteName: site?.name ?? siteId })),
+          results: results.map((r: any) => ({ ...r, siteId: targetSiteId, siteName: site?.name ?? targetSiteId })),
         };
       }
 
@@ -2945,9 +2948,12 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
   safeHandle(IPC_CHANNELS.AI_CONTEXT_GET_STATUS, async (_event: any, siteId: string) => {
     try {
-      const site = siteData.getSite(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      const site = siteData.getSite(validated);
       if (!site) {
-        return { success: false, error: `Site ${siteId} not found` };
+        return { success: false, error: `Site ${validated} not found` };
       }
 
       const fs = require('fs').promises;

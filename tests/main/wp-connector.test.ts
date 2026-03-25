@@ -758,7 +758,7 @@ describe('wp_setup_ai', () => {
     (services.localServices as any).getPlugins = jest.fn(async () => [
       { name: 'ai', status: 'active', version: '1.0.0', title: 'AI' },
     ]);
-    (services.localServices as any).getWpVersion = jest.fn(async () => '6.7');
+    (services.localServices as any).getWpVersion = jest.fn(async () => '7.0');
     (services.localServices as any).wpCliRun = jest.fn(async (_siteId: string, args: string[]) => {
       const phpCode = args[1] ?? '';
       if (args[0] === 'eval' && phpCode.includes('ai_experiments_enabled')) {
