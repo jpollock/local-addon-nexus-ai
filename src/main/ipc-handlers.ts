@@ -51,6 +51,12 @@ import {
   AIGatewayUsageOptionsSchema,
   AIGatewayRateLimitSchema,
   EventTimelineOptionsSchema,
+  StorageCleanupOptionsSchema,
+  FilterIdSchema,
+  GroupIdSchema,
+  GroupCreateSchema,
+  GroupUpdateSchema,
+  GroupAddRemoveSiteSchema,
 } from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -847,7 +853,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     retentionDays?: number;
   }) => {
     try {
-      const retentionDays = options?.retentionDays ?? 30;
+      // Validate input
+      const validated = validateInput(StorageCleanupOptionsSchema, options);
+
+      const retentionDays = validated?.retentionDays ?? 30;
       const deleted = await graphService.cleanupOldData(retentionDays);
 
       localLogger.info(`[NexusAI] Cleaned up ${deleted} old events (retention: ${retentionDays} days)`);
@@ -912,7 +921,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.FILTERS_APPLY, async (_event: any, filterId: string) => {
     try {
-      const siteIds = await filterEngine.applyFilter(filterId);
+      // Validate input
+      const validated = validateInput(FilterIdSchema, filterId);
+
+      const siteIds = await filterEngine.applyFilter(validated);
       return { success: true, siteIds };
     } catch (err) {
       localLogger.error('[NexusAI] filters:apply failed:', (err as Error).message);
@@ -1193,7 +1205,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GROUPS_CREATE, async (_event: any, args: { name: string }) => {
     try {
-      const group = localServicesBridge.createSiteGroup(args.name);
+      // Validate input
+      const validated = validateInput(GroupCreateSchema, args);
+
+      const group = localServicesBridge.createSiteGroup(validated.name);
       notifyGroupsChanged();
       return { success: true, group };
     } catch (err) {
@@ -1201,10 +1216,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: any, id: string, changes: { name?: string }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: any, params: { id: string; changes: { name?: string } }) => {
     try {
-      if (changes.name) {
-        const group = localServicesBridge.renameSiteGroup(id, changes.name);
+      // Validate input
+      const validated = validateInput(GroupUpdateSchema, params);
+
+      if (validated.changes.name) {
+        const group = localServicesBridge.renameSiteGroup(validated.id, validated.changes.name);
         notifyGroupsChanged();
         return { success: true, group };
       }
@@ -1216,7 +1234,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GROUPS_DELETE, async (_event: any, id: string) => {
     try {
-      localServicesBridge.deleteSiteGroup(id);
+      // Validate input
+      const validated = validateInput(GroupIdSchema, id);
+
+      localServicesBridge.deleteSiteGroup(validated);
       notifyGroupsChanged();
       return { success: true };
     } catch (err) {
@@ -1224,9 +1245,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: any, groupId: string, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: any, params: { groupId: string; siteId: string }) => {
     try {
-      localServicesBridge.moveSitesToGroup([siteId], groupId);
+      // Validate input
+      const validated = validateInput(GroupAddRemoveSiteSchema, params);
+
+      localServicesBridge.moveSitesToGroup([validated.siteId], validated.groupId);
       notifyGroupsChanged();
       return { success: true };
     } catch (err) {
@@ -1234,9 +1258,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: any, groupId: string, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: any, params: { groupId: string; siteId: string }) => {
     try {
-      localServicesBridge.removeSitesFromGroups([siteId]);
+      // Validate input
+      const validated = validateInput(GroupAddRemoveSiteSchema, params);
+
+      localServicesBridge.removeSitesFromGroups([validated.siteId]);
       notifyGroupsChanged();
       return { success: true };
     } catch (err) {

@@ -247,6 +247,24 @@ export const UpdateSiteGroupSchema = z.object({
   filters: z.record(z.unknown()).optional(),
 });
 
+export const GroupIdSchema = z.string().min(1, 'Group ID required');
+
+export const GroupCreateSchema = z.object({
+  name: z.string().min(1).max(100),
+});
+
+export const GroupUpdateSchema = z.object({
+  id: GroupIdSchema,
+  changes: z.object({
+    name: z.string().min(1).max(100).optional(),
+  }),
+});
+
+export const GroupAddRemoveSiteSchema = z.object({
+  groupId: GroupIdSchema,
+  siteId: SiteIdSchema,
+});
+
 // ============================================================================
 // WPE Operations (Remote)
 // ============================================================================
@@ -295,6 +313,12 @@ export const EventTimelineOptionsSchema = z.object({
   status: z.enum(['pending', 'processed', 'failed']).optional(),
   siteId: SiteIdSchema.optional(),
 }).optional();
+
+export const StorageCleanupOptionsSchema = z.object({
+  retentionDays: z.number().int().positive().min(1).max(365).optional(),
+}).optional();
+
+export const FilterIdSchema = z.string().min(1, 'Filter ID required');
 
 // ============================================================================
 // Helper: Validate Input
