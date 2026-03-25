@@ -37,6 +37,7 @@ import {
   IndexSiteSchema,
   SearchUnifiedSchema,
   BulkOperationRequestSchema,
+  BulkOperationIdSchema,
   FleetOperationOptionsSchema,
   WpeRemoveSiteSchema,
   WpePullToLocalSchema,
@@ -1192,12 +1193,24 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   safeHandle(IPC_CHANNELS.BULK_STATUS, async (_event: any, opId: string) => {
-    const status = bulkOpManager.getStatus(opId);
-    return status ? { success: true, ...status } : { success: false, error: 'Operation not found' };
+    try {
+      // Validate input
+      const validated = validateInput(BulkOperationIdSchema, opId);
+      const status = bulkOpManager.getStatus(validated);
+      return status ? { success: true, ...status } : { success: false, error: 'Operation not found' };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
   });
 
   safeHandle(IPC_CHANNELS.BULK_CANCEL, async (_event: any, opId: string) => {
-    return { success: bulkOpManager.cancel(opId) };
+    try {
+      // Validate input
+      const validated = validateInput(BulkOperationIdSchema, opId);
+      return { success: bulkOpManager.cancel(validated) };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
   });
 
   safeHandle(IPC_CHANNELS.BULK_LIST, async () => {

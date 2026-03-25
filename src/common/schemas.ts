@@ -316,6 +316,8 @@ export const BulkOperationRequestSchema = z.object({
   options: z.record(z.unknown()).optional(),
 });
 
+export const BulkOperationIdSchema = z.string().regex(/^bulk-\d+-[a-z0-9]+$/, 'Invalid bulk operation ID format');
+
 export const FleetOperationOptionsSchema = z.object({
   siteIds: z.array(SiteIdSchema).optional(),
 }).optional();
