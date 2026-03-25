@@ -64,6 +64,7 @@ import {
   SidebarBulkActionSchema,
   SearchContentSchema,
   SiteFinderAIParseSchema,
+  SiteFinderFiltersSchema,
 } from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -1720,6 +1721,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SITE_FINDER_APPLY, async (_event: any, filters: any) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteFinderFiltersSchema, filters);
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
       const db = graphService.getDb();
@@ -1727,12 +1731,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       // Pre-filter by content if contentQuery is provided (semantic search)
       let contentMatchingSiteIds: Set<string> | null = null;
-      if (filters.contentQuery && filters.contentQuery.trim()) {
+      if (validated?.contentQuery && validated.contentQuery.trim()) {
         try {
-          localLogger.info('[NexusAI] Running content search for:', filters.contentQuery);
+          localLogger.info('[NexusAI] Running content search for:', validated.contentQuery);
 
           // Convert query text to embedding vector
-          const queryVector = await embeddingService.embed(filters.contentQuery);
+          const queryVector = await embeddingService.embed(validated.contentQuery);
 
           // Search across all indexed sites (local + WPE)
           contentMatchingSiteIds = new Set<string>();
@@ -1788,8 +1792,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Text search (name or domain)
-        if (filters.searchText && filters.searchText.trim()) {
-          const searchLower = filters.searchText.toLowerCase();
+        if (validated?.searchText && validated.searchText.trim()) {
+          const searchLower = validated.searchText.toLowerCase();
           const nameMatch = (site as any).name?.toLowerCase().includes(searchLower);
           const domainMatch = (site as any).domain?.toLowerCase().includes(searchLower);
           if (!nameMatch && !domainMatch) {
@@ -1798,19 +1802,19 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // PHP version filter (available even when stopped) - OR logic within array
-        if (matches && filters.phpVersions && filters.phpVersions.length > 0) {
+        if (matches && validated?.phpVersions && validated.phpVersions.length > 0) {
           const phpVersion = (site as any).phpVersion;
-          if (!filters.phpVersions.includes(phpVersion)) {
+          if (!validated.phpVersions.includes(phpVersion)) {
             matches = false;
           }
         }
 
         // Plugin filter (use graph - works on all sites) - OR logic within array
-        if (matches && filters.plugins && filters.plugins.length > 0) {
+        if (matches && validated?.plugins && validated.plugins.length > 0) {
           if (db) {
-            const placeholders = filters.plugins.map(() => '?').join(',');
+            const placeholders = validated.plugins.map(() => '?').join(',');
             const pluginRow = db.prepare(`SELECT 1 FROM plugins WHERE site_id = ? AND slug IN (${placeholders}) LIMIT 1`)
-              .get(siteId, ...filters.plugins);
+              .get(siteId, ...validated.plugins);
             if (!pluginRow) matches = false;
           } else {
             matches = false;
@@ -1818,11 +1822,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // WP version filter (use graph - works on all sites) - OR logic within array
-        if (matches && filters.wpVersions && filters.wpVersions.length > 0) {
+        if (matches && validated?.wpVersions && validated.wpVersions.length > 0) {
           if (db) {
             const siteRow = db.prepare('SELECT wp_version FROM sites WHERE id = ? LIMIT 1')
               .get(siteId) as any;
-            if (!siteRow || !filters.wpVersions.includes(siteRow.wp_version)) {
+            if (!siteRow || !validated.wpVersions.includes(siteRow.wp_version)) {
               matches = false;
             }
           } else {
@@ -1831,13 +1835,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Theme filter (requires WP-CLI - running sites only) - OR logic within array
-        if (matches && filters.themes && filters.themes.length > 0) {
+        if (matches && validated?.themes && validated.themes.length > 0) {
           if (!isRunning) {
             matches = false;
           } else {
             try {
               const themes = await localServicesBridge.getThemes(siteId);
-              const hasAnyTheme = themes.some((t: any) => filters.themes.includes(t.name));
+              const hasAnyTheme = themes.some((t: any) => validated.themes!.includes(t.name));
               if (!hasAnyTheme) matches = false;
             } catch {
               matches = false;
@@ -1864,8 +1868,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Text search (name or domain)
-        if (filters.searchText && filters.searchText.trim()) {
-          const searchLower = filters.searchText.toLowerCase();
+        if (validated?.searchText && validated.searchText.trim()) {
+          const searchLower = validated.searchText.toLowerCase();
           const nameMatch = wpeSite.name?.toLowerCase().includes(searchLower);
           const domainMatch = wpeSite.domain?.toLowerCase().includes(searchLower);
           if (!nameMatch && !domainMatch) {
@@ -1874,11 +1878,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Plugin filter (use graph)
-        if (matches && filters.plugins && filters.plugins.length > 0) {
+        if (matches && validated?.plugins && validated.plugins.length > 0) {
           if (db) {
-            const placeholders = filters.plugins.map(() => '?').join(',');
+            const placeholders = validated.plugins.map(() => '?').join(',');
             const pluginRow = db.prepare(`SELECT 1 FROM plugins WHERE site_id = ? AND slug IN (${placeholders}) LIMIT 1`)
-              .get(wpeSite.id, ...filters.plugins);
+              .get(wpeSite.id, ...validated.plugins);
             if (!pluginRow) matches = false;
           } else {
             matches = false;
@@ -1886,14 +1890,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // WP version filter (use graph)
-        if (matches && filters.wpVersions && filters.wpVersions.length > 0) {
-          if (!filters.wpVersions.includes(wpeSite.wp_version)) {
+        if (matches && validated?.wpVersions && validated.wpVersions.length > 0) {
+          if (!wpeSite.wp_version || !validated.wpVersions.includes(wpeSite.wp_version)) {
             matches = false;
           }
         }
 
         // Skip theme filter for WPE sites (requires WP-CLI on running sites)
-        if (matches && filters.themes && filters.themes.length > 0) {
+        if (matches && validated?.themes && validated.themes.length > 0) {
           matches = false; // WPE sites don't support theme filtering yet
         }
 

@@ -363,6 +363,15 @@ export const SiteFinderAIParseSchema = z.object({
   })).min(1, 'At least one message required'),
 });
 
+export const SiteFinderFiltersSchema = z.object({
+  plugins: z.array(PluginSlugSchema).optional(),
+  themes: z.array(ThemeSlugSchema).optional(),
+  phpVersions: z.array(z.string()).optional(),
+  wpVersions: z.array(z.string()).optional(),
+  contentQuery: z.string().max(500).optional(),
+  searchText: z.string().max(200).optional(),
+}).optional();
+
 // ============================================================================
 // Helper: Validate Input
 // ============================================================================
