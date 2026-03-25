@@ -9,7 +9,9 @@ import { z } from 'zod';
 // Basic Types
 // ============================================================================
 
-export const SiteIdSchema = z.string().uuid('Invalid site ID format');
+// Site IDs can be UUIDs or slugs (e.g., "my-site", "wordpress-test")
+// Local doesn't enforce UUID format, so we accept any non-empty string
+export const SiteIdSchema = z.string().min(1, 'Site ID cannot be empty');
 
 // ============================================================================
 // Settings

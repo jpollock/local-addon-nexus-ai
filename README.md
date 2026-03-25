@@ -16,10 +16,12 @@ Nexus AI indexes your WordPress sites into a vector database and exposes them th
 
 - **AI Chat** — Built-in chat interface with streaming responses and tool calling
 - **WP Engine Remote Management** — Sync and manage WPE sites alongside local sites (see below)
+- **Production-Ready Security** — Input validation, audit logging, credential redaction
+- **High-Performance UI** — Virtual scrolling for 500+ sites without lag
 - Semantic search across all site content with relevance scoring
 - WooCommerce product extraction (price, SKU, stock, attributes, categories)
 - ACF custom field enrichment (text, repeater, group, flexible content)
-- Fleet-wide operations across multiple Local sites
+- Fleet-wide operations across multiple Local sites with progress tracking
 - WP-CLI execution on both local and remote WP Engine installs via SSH
 - Ollama integration with automatic site context injection
 - 3-tier safety system with confirmation tokens for destructive operations
@@ -105,12 +107,13 @@ npm install                    # Install dependencies
 npm run download-model         # Download ONNX model (~30 MB)
 npm run build                  # Compile TypeScript + create entry points
 npm run watch                  # Watch mode for development
-npm test                       # Run unit tests (618+)
+npm test                       # Run unit tests (1,226 tests)
 npm run test:eval              # Run eval tests (52, LLM evals need Ollama)
-npm run test:integration       # Run integration tests (82+)
+npm run test:integration       # Run integration tests (187 tests)
 npm run test:e2e               # Run E2E tests (90+, requires Local running)
 npm run test:all               # Run all test suites
 npm run package:mac-arm        # Package for macOS Apple Silicon
+npm run rebuild                # Rebuild native modules for Electron (after npm install)
 ```
 
 ## MCP Connection
@@ -200,9 +203,9 @@ Four-tier test pyramid. See [tests/TESTING-STRATEGY.md](tests/TESTING-STRATEGY.m
 
 | Tier | Command | What it tests |
 |------|---------|---------------|
-| Unit | `npm test` | Code logic with mocked deps (618+ tests) |
+| Unit | `npm test` | Code logic with mocked deps (1,226 tests) |
 | Eval | `npm run test:eval` | Content quality + LLM tool routing (52 tests) |
-| Integration | `npm run test:integration` | Real ONNX, LanceDB, MCP (82+ tests) |
+| Integration | `npm run test:integration` | Real ONNX, LanceDB, MCP (187 tests) |
 | E2E | `npm run test:e2e` | Full addon in running Local (90+ tests) |
 
 LLM evals call Ollama directly to verify the model routes to the correct tools and doesn't hallucinate. They skip automatically when Ollama is not available.
