@@ -34,11 +34,19 @@ import {
   validateInput,
   SiteIdSchema,
   IndexSiteSchema,
+  SearchUnifiedSchema,
   BulkOperationRequestSchema,
   FleetOperationOptionsSchema,
   WpeRemoveSiteSchema,
   WpePullToLocalSchema,
   WpeSyncSingleSchema,
+  HealthGetScoreSchema,
+  HealthGetTrendSchema,
+  HealthGetFleetTrendSchema,
+  QuerySchema,
+  QueryUpdateSchema,
+  AIGatewayUsageOptionsSchema,
+  AIGatewayRateLimitSchema,
 } from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -837,10 +845,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   queryStorage.load().catch(err => localLogger.error('[NexusAI] Failed to load saved queries:', err.message));
 
   // Unified search
-  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, query: string, filters?: any, options?: any) => {
+  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, params: { query: string; filters?: any; options?: any }) => {
     try {
-      localLogger.info('[NexusAI] Search request:', { query, filters, options });
-      const results = await searchService.searchFleet(query, filters, options);
+      // Validate input
+      const validated = validateInput(SearchUnifiedSchema, params);
+
+      localLogger.info('[NexusAI] Search request:', { query: validated.query, filters: validated.filters, options: validated.options });
+      const results = await searchService.searchFleet(validated.query, validated.filters, validated.options);
       localLogger.info('[NexusAI] Search results:', { total: results.total, resultCount: results.results.length });
       return { success: true, ...results };
     } catch (err) {
@@ -871,8 +882,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Health scores
-  safeHandle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: any, params: { siteId: string }) => {
     try {
+      // Validate input
+      const validated = validateInput(HealthGetScoreSchema, params);
+      const siteId = validated.siteId;
+
       const site = siteData.getSite(siteId);
       const breakdown = await healthCalculator.calculateScore(siteId, {
         phpVersion: site?.phpVersion,
@@ -915,7 +930,16 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.QUERIES_CREATE, async (_event: any, query: any) => {
     try {
-      const saved = await queryStorage.save(query);
+      // Validate input
+      const validated = validateInput(QuerySchema, query);
+
+      // Ensure pinned has a default value
+      const queryToSave = {
+        ...validated,
+        pinned: validated.pinned ?? false,
+      };
+
+      const saved = await queryStorage.save(queryToSave);
       return { success: true, query: saved };
     } catch (err) {
       localLogger.error('[NexusAI] queries:create failed:', (err as Error).message);
@@ -923,9 +947,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: any, id: string, changes: any) => {
+  safeHandle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: any, params: { id: string; changes: any }) => {
     try {
-      const updated = await queryStorage.update(id, changes);
+      // Validate input
+      const validated = validateInput(QueryUpdateSchema, params);
+
+      const updated = await queryStorage.update(validated.id, validated.changes);
       return { success: true, query: updated };
     } catch (err) {
       localLogger.error('[NexusAI] queries:update failed:', (err as Error).message);
@@ -1174,14 +1201,22 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // --- Health Trends ---
 
-  safeHandle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: any, siteId: string, days?: number) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: any, params: { siteId: string; days?: number }) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
-    return { success: true, trend: healthTrendTracker.getSiteTrend(siteId, days || 30) };
+
+    // Validate input
+    const validated = validateInput(HealthGetTrendSchema, params);
+
+    return { success: true, trend: healthTrendTracker.getSiteTrend(validated.siteId, validated.days || 30) };
   });
 
-  safeHandle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: any, days?: number) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: any, params?: { days?: number }) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
-    return { success: true, trend: healthTrendTracker.getFleetTrend(days || 30) };
+
+    // Validate input
+    const validated = validateInput(HealthGetFleetTrendSchema, params);
+
+    return { success: true, trend: healthTrendTracker.getFleetTrend(validated?.days || 30) };
   });
 
   // --- Dashboard v2 ---
@@ -2512,32 +2547,35 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
   safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_USAGE, async (_event: any, options?: {
     siteId?: string;
-    startDate?: number;
-    endDate?: number;
+    since?: number;
+    until?: number;
     limit?: number;
   }) => {
     try {
+      // Validate input
+      const validated = validateInput(AIGatewayUsageOptionsSchema, options);
+
       const USAGE_KEY = 'nexus_ai_gateway_usage';
       const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
 
       let filtered = allRecords;
 
       // Filter by site ID if provided
-      if (options?.siteId) {
-        filtered = filtered.filter(r => r.siteId === options.siteId);
+      if (validated?.siteId) {
+        filtered = filtered.filter(r => r.siteId === validated.siteId);
       }
 
       // Filter by date range if provided
-      if (options?.startDate !== undefined) {
-        filtered = filtered.filter(r => r.timestamp >= options.startDate!);
+      if (validated?.since !== undefined) {
+        filtered = filtered.filter(r => r.timestamp >= validated.since!);
       }
-      if (options?.endDate !== undefined) {
-        filtered = filtered.filter(r => r.timestamp <= options.endDate!);
+      if (validated?.until !== undefined) {
+        filtered = filtered.filter(r => r.timestamp <= validated.until!);
       }
 
       // Apply limit (most recent first)
-      if (options?.limit) {
-        filtered = filtered.slice(-options.limit);
+      if (validated?.limit) {
+        filtered = filtered.slice(-validated.limit);
       }
 
       return { success: true, records: filtered };
@@ -2684,11 +2722,14 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_SET_RATE_LIMIT, async (_event: any, siteId: string, config: any) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_SET_RATE_LIMIT, async (_event: any, params: { siteId: string; config?: any }) => {
     try {
+      // Validate input
+      const validated = validateInput(AIGatewayRateLimitSchema, params);
+
       const { setRateLimit } = require('./ai-gateway/rate-limiter');
-      setRateLimit(registryStorage, siteId, config);
-      localLogger.info(`[NexusAI] Updated rate limit for site ${siteId}`);
+      setRateLimit(registryStorage, validated.siteId, validated.config);
+      localLogger.info(`[NexusAI] Updated rate limit for site ${validated.siteId}`);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] ai-gateway-set-rate-limit failed:', (err as Error).message);
@@ -2696,10 +2737,13 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_CHECK_RATE_LIMIT, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_CHECK_RATE_LIMIT, async (_event: any, params: { siteId: string }) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, params.siteId);
+
       const { checkRateLimit } = require('./ai-gateway/rate-limiter');
-      const status = checkRateLimit(registryStorage, siteId);
+      const status = checkRateLimit(registryStorage, validated);
       return { success: true, status };
     } catch (err) {
       localLogger.error('[NexusAI] ai-gateway-check-rate-limit failed:', (err as Error).message);

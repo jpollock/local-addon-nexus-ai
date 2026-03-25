@@ -137,6 +137,50 @@ export const WpeCopyInstallSchema = z.object({
 });
 
 // ============================================================================
+// Health & Monitoring
+// ============================================================================
+
+export const HealthGetScoreSchema = z.object({
+  siteId: SiteIdSchema,
+});
+
+export const HealthGetTrendSchema = z.object({
+  siteId: SiteIdSchema,
+  days: z.number().int().positive().max(365).optional(),
+});
+
+export const HealthGetFleetTrendSchema = z.object({
+  days: z.number().int().positive().max(365).optional(),
+}).optional();
+
+// ============================================================================
+// Query Management
+// ============================================================================
+
+export const QueryFiltersSchema = z.object({
+  contentTypes: z.array(z.string()).optional(),
+  siteIds: z.array(SiteIdSchema).optional(),
+  searchText: z.string().optional(),
+});
+
+export const QuerySchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  filters: QueryFiltersSchema,
+  pinned: z.boolean().default(false),
+});
+
+export const QueryUpdateSchema = z.object({
+  id: z.string().min(1),
+  changes: z.object({
+    name: z.string().min(1).max(100).optional(),
+    description: z.string().max(500).optional(),
+    filters: QueryFiltersSchema.optional(),
+    pinned: z.boolean().optional(),
+  }),
+});
+
+// ============================================================================
 // AI Gateway
 // ============================================================================
 
@@ -149,6 +193,18 @@ export const AIGatewayConfigSchema = z.object({
       costPerDayUsd: z.number().positive().optional(),
     })
     .optional(),
+});
+
+export const AIGatewayUsageOptionsSchema = z.object({
+  siteId: SiteIdSchema.optional(),
+  since: z.number().int().positive().optional(),
+  until: z.number().int().positive().optional(),
+  limit: z.number().int().positive().max(1000).optional(),
+}).optional();
+
+export const AIGatewayRateLimitSchema = z.object({
+  siteId: SiteIdSchema,
+  config: z.record(z.unknown()).optional(),
 });
 
 // ============================================================================
@@ -164,6 +220,12 @@ export const SearchContentSchema = z.object({
   query: z.string().min(1),
   siteIds: z.array(SiteIdSchema).optional(),
   limit: z.number().int().positive().max(100).optional(),
+});
+
+export const SearchUnifiedSchema = z.object({
+  query: z.string().min(1).max(500),
+  filters: z.record(z.unknown()).optional(),
+  options: z.record(z.unknown()).optional(),
 });
 
 // ============================================================================
