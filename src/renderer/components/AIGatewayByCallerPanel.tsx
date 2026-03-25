@@ -1,13 +1,14 @@
 /**
- * AI Gateway Usage Panel
+ * AI Gateway By Caller Panel
  *
- * Displays usage statistics, recent requests, and cost tracking for the AI Gateway.
+ * Aggregated view of AI usage grouped by caller (plugin/theme/core feature).
+ * Shows which parts of WordPress are consuming the most AI tokens/cost.
  * Class-based — Local uses older React, no hooks allowed.
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 
-interface AIGatewayUsagePanelProps {
+interface AIGatewayByCallerPanelProps {
   electron: any;
 }
 
@@ -32,29 +33,33 @@ interface UsageRecord {
   callerUserRole?: string;
 }
 
-interface AIGatewayUsagePanelState {
-  records: UsageRecord[];
-  totalCost: number;
-  totalRequests: number;
+interface CallerStats {
+  callerKey: string;        // Unique key for grouping
+  callerDisplay: string;    // Display name
+  callerType: 'plugin' | 'theme' | 'core' | 'unknown';
+  requests: number;
   totalTokens: number;
+  costUsd: number;
+  features: Set<string>;    // Unique features used
+}
+
+interface AIGatewayByCallerPanelState {
+  records: UsageRecord[];
+  callerStats: CallerStats[];
   loading: boolean;
-  clearing: boolean;
   timeFilter: '1h' | '24h' | '7d' | 'all';
 }
 
-export class AIGatewayUsagePanel extends React.Component<
-  AIGatewayUsagePanelProps,
-  AIGatewayUsagePanelState
+export class AIGatewayByCallerPanel extends React.Component<
+  AIGatewayByCallerPanelProps,
+  AIGatewayByCallerPanelState
 > {
   private mounted = false;
 
-  state: AIGatewayUsagePanelState = {
+  state: AIGatewayByCallerPanelState = {
     records: [],
-    totalCost: 0,
-    totalRequests: 0,
-    totalTokens: 0,
+    callerStats: [],
     loading: true,
-    clearing: false,
     timeFilter: '24h',
   };
 
@@ -78,14 +83,11 @@ export class AIGatewayUsagePanel extends React.Component<
 
       if (result?.success && result?.records) {
         const filtered = this.filterRecordsByTime(result.records);
-        const totalCost = filtered.reduce((sum, r) => sum + r.costUsd, 0);
-        const totalTokens = filtered.reduce((sum, r) => sum + r.totalTokens, 0);
+        const callerStats = this.aggregateByCaller(filtered);
 
         this.setState({
           records: filtered,
-          totalCost,
-          totalRequests: filtered.length,
-          totalTokens,
+          callerStats,
           loading: false,
         });
       } else {
@@ -121,94 +123,82 @@ export class AIGatewayUsagePanel extends React.Component<
     return records.filter((r) => r.timestamp >= cutoff);
   };
 
-  handleClearUsage = async (): Promise<void> => {
-    if (!confirm('Clear all AI Gateway usage data? This cannot be undone.')) {
-      return;
+  aggregateByCaller = (records: UsageRecord[]): CallerStats[] => {
+    const statsMap = new Map<string, CallerStats>();
+
+    for (const record of records) {
+      const { callerKey, callerDisplay, callerType } = this.getCallerInfo(record);
+
+      if (!statsMap.has(callerKey)) {
+        statsMap.set(callerKey, {
+          callerKey,
+          callerDisplay,
+          callerType,
+          requests: 0,
+          totalTokens: 0,
+          costUsd: 0,
+          features: new Set(),
+        });
+      }
+
+      const stats = statsMap.get(callerKey)!;
+      stats.requests += 1;
+      stats.totalTokens += record.totalTokens;
+      stats.costUsd += record.costUsd;
+
+      if (record.callerFeature) {
+        stats.features.add(record.callerFeature);
+      }
     }
 
-    this.setState({ clearing: true });
-    try {
-      await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.AI_GATEWAY_CLEAR_USAGE,
-      );
-      if (!this.mounted) return;
-      await this.fetchUsage();
-    } catch (err) {
-      // Error handled
+    // Convert to array and sort by cost (descending)
+    return Array.from(statsMap.values()).sort((a, b) => b.costUsd - a.costUsd);
+  };
+
+  getCallerInfo = (
+    record: UsageRecord,
+  ): { callerKey: string; callerDisplay: string; callerType: CallerStats['callerType'] } => {
+    // Plugin
+    if (record.callerPlugin) {
+      return {
+        callerKey: `plugin:${record.callerPlugin}`,
+        callerDisplay: record.callerPlugin,
+        callerType: 'plugin',
+      };
     }
-    if (this.mounted) {
-      this.setState({ clearing: false });
+
+    // Theme
+    if (record.callerTheme) {
+      return {
+        callerKey: `theme:${record.callerTheme}`,
+        callerDisplay: `${record.callerTheme} (theme)`,
+        callerType: 'theme',
+      };
     }
+
+    // WordPress Core
+    if (record.callerSource === 'core') {
+      return {
+        callerKey: 'core',
+        callerDisplay: 'WordPress Core',
+        callerType: 'core',
+      };
+    }
+
+    // Unknown/legacy records
+    return {
+      callerKey: 'unknown',
+      callerDisplay: 'Unknown',
+      callerType: 'unknown',
+    };
   };
 
   handleTimeFilterChange = (timeFilter: '1h' | '24h' | '7d' | 'all'): void => {
     this.setState({ timeFilter }, () => this.fetchUsage());
   };
 
-  formatTimestamp = (timestamp: number): string => {
-    const date = new Date(timestamp);
-    const now = new Date();
-
-    // If today, show time only
-    if (date.toDateString() === now.toDateString()) {
-      return date.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-    }
-
-    // Otherwise show date + time
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  };
-
-  formatModel = (model: string): string => {
-    if (model.includes('haiku')) return 'Haiku';
-    if (model.includes('sonnet')) return 'Sonnet';
-    if (model.includes('opus')) return 'Opus';
-    return model;
-  };
-
-  formatCaller = (record: UsageRecord): string => {
-    // Plugin with feature
-    if (record.callerPlugin) {
-      if (record.callerFeature) {
-        return `${record.callerPlugin}/${record.callerFeature}`;
-      }
-      return record.callerPlugin;
-    }
-
-    // Theme
-    if (record.callerTheme) {
-      return `${record.callerTheme} (theme)`;
-    }
-
-    // WordPress core
-    if (record.callerSource === 'core') {
-      if (record.callerFeature) {
-        return `WP Core: ${record.callerFeature}`;
-      }
-      return 'WordPress Core';
-    }
-
-    // Unknown/legacy records
-    return '—';
-  };
-
   render(): React.ReactNode {
-    const {
-      records,
-      totalCost,
-      totalRequests,
-      totalTokens,
-      loading,
-      clearing,
-      timeFilter,
-    } = this.state;
+    const { callerStats, loading, timeFilter } = this.state;
 
     const containerStyle: React.CSSProperties = {
       backgroundColor: 'var(--containerBackgroundColor)',
@@ -247,34 +237,6 @@ export class AIGatewayUsagePanel extends React.Component<
       cursor: 'pointer',
     });
 
-    const statsRowStyle: React.CSSProperties = {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(3, 1fr)',
-      gap: '16px',
-      marginBottom: '16px',
-    };
-
-    const statCardStyle: React.CSSProperties = {
-      padding: '12px',
-      backgroundColor: 'var(--inputBackgroundColor)',
-      borderRadius: '4px',
-      border: '1px solid var(--dividerColor)',
-    };
-
-    const statLabelStyle: React.CSSProperties = {
-      fontSize: '11px',
-      color: 'var(--secondaryTextColor)',
-      marginBottom: '4px',
-      textTransform: 'uppercase',
-      letterSpacing: '0.5px',
-    };
-
-    const statValueStyle: React.CSSProperties = {
-      fontSize: '20px',
-      fontWeight: 600,
-      color: 'var(--primaryTextColor)',
-    };
-
     const tableStyle: React.CSSProperties = {
       width: '100%',
       borderCollapse: 'collapse',
@@ -297,21 +259,45 @@ export class AIGatewayUsagePanel extends React.Component<
       color: 'var(--primaryTextColor)',
     };
 
-    const buttonStyle: React.CSSProperties = {
-      padding: '6px 12px',
-      fontSize: '13px',
-      border: '1px solid var(--dividerColor)',
-      borderRadius: '4px',
-      backgroundColor: 'transparent',
-      color: 'var(--primaryTextColor)',
-      cursor: 'pointer',
-    };
-
     const emptyStyle: React.CSSProperties = {
       textAlign: 'center',
       padding: '32px',
       color: 'var(--secondaryTextColor)',
       fontSize: '14px',
+    };
+
+    const badgeStyle = (type: CallerStats['callerType']): React.CSSProperties => {
+      let bgColor: string;
+      let textColor: string;
+
+      switch (type) {
+        case 'plugin':
+          bgColor = 'rgba(81, 195, 86, 0.15)';
+          textColor = UI_COLORS.STATUS_RUNNING;
+          break;
+        case 'theme':
+          bgColor = 'rgba(14, 202, 212, 0.15)';
+          textColor = UI_COLORS.WPE_BRAND;
+          break;
+        case 'core':
+          bgColor = 'rgba(245, 158, 11, 0.15)';
+          textColor = UI_COLORS.STATUS_WARNING;
+          break;
+        default:
+          bgColor = 'rgba(153, 153, 153, 0.15)';
+          textColor = UI_COLORS.STATUS_HALTED;
+      }
+
+      return {
+        display: 'inline-block',
+        padding: '2px 8px',
+        fontSize: '11px',
+        borderRadius: '3px',
+        backgroundColor: bgColor,
+        color: textColor,
+        fontWeight: 500,
+        marginRight: '8px',
+      };
     };
 
     if (loading) {
@@ -330,7 +316,7 @@ export class AIGatewayUsagePanel extends React.Component<
       React.createElement(
         'div',
         { style: headerStyle },
-        React.createElement('div', { style: titleStyle }, 'AI Gateway Usage'),
+        React.createElement('div', { style: titleStyle }, 'AI Usage by Caller'),
         React.createElement(
           'div',
           { style: filterBarStyle },
@@ -366,52 +352,11 @@ export class AIGatewayUsagePanel extends React.Component<
             },
             'All Time',
           ),
-          React.createElement(
-            'button',
-            {
-              style: { ...buttonStyle, marginLeft: '16px' },
-              onClick: this.handleClearUsage,
-              disabled: clearing || records.length === 0,
-            },
-            clearing ? 'Clearing...' : 'Clear All',
-          ),
         ),
       ),
 
-      // Stats cards
-      React.createElement(
-        'div',
-        { style: statsRowStyle },
-        React.createElement(
-          'div',
-          { style: statCardStyle },
-          React.createElement('div', { style: statLabelStyle }, 'Total Requests'),
-          React.createElement('div', { style: statValueStyle }, totalRequests.toLocaleString()),
-        ),
-        React.createElement(
-          'div',
-          { style: statCardStyle },
-          React.createElement('div', { style: statLabelStyle }, 'Total Tokens'),
-          React.createElement(
-            'div',
-            { style: statValueStyle },
-            totalTokens.toLocaleString(),
-          ),
-        ),
-        React.createElement(
-          'div',
-          { style: statCardStyle },
-          React.createElement('div', { style: statLabelStyle }, 'Total Cost'),
-          React.createElement(
-            'div',
-            { style: { ...statValueStyle, color: UI_COLORS.WPE_BRAND } },
-            `$${totalCost.toFixed(4)}`,
-          ),
-        ),
-      ),
-
-      // Recent requests table
-      records.length === 0
+      // Caller stats table
+      callerStats.length === 0
         ? React.createElement(
             'div',
             { style: emptyStyle },
@@ -419,7 +364,7 @@ export class AIGatewayUsagePanel extends React.Component<
           )
         : React.createElement(
             'div',
-            { style: { maxHeight: '400px', overflowY: 'auto' } },
+            { style: { maxHeight: '500px', overflowY: 'auto' } },
             React.createElement(
               'table',
               { style: tableStyle },
@@ -429,64 +374,60 @@ export class AIGatewayUsagePanel extends React.Component<
                 React.createElement(
                   'tr',
                   null,
-                  React.createElement('th', { style: thStyle }, 'Time'),
-                  React.createElement('th', { style: thStyle }, 'Site'),
                   React.createElement('th', { style: thStyle }, 'Caller'),
-                  React.createElement('th', { style: thStyle }, 'Model'),
+                  React.createElement('th', { style: { ...thStyle, textAlign: 'right' } }, 'Requests'),
                   React.createElement('th', { style: { ...thStyle, textAlign: 'right' } }, 'Tokens'),
                   React.createElement('th', { style: { ...thStyle, textAlign: 'right' } }, 'Cost'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right' } }, 'Duration'),
+                  React.createElement('th', { style: thStyle }, 'Features'),
                 ),
               ),
               React.createElement(
                 'tbody',
                 null,
-                records.slice(0, 100).map((record) =>
+                callerStats.map((stats) =>
                   React.createElement(
                     'tr',
-                    { key: record.id },
+                    { key: stats.callerKey },
                     React.createElement(
                       'td',
                       { style: tdStyle },
-                      this.formatTimestamp(record.timestamp),
+                      React.createElement(
+                        'span',
+                        { style: badgeStyle(stats.callerType) },
+                        stats.callerType.toUpperCase(),
+                      ),
+                      stats.callerDisplay,
                     ),
                     React.createElement(
                       'td',
-                      { style: tdStyle },
-                      record.siteName || record.siteId,
+                      { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace' } },
+                      stats.requests.toLocaleString(),
+                    ),
+                    React.createElement(
+                      'td',
+                      { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace' } },
+                      stats.totalTokens.toLocaleString(),
                     ),
                     React.createElement(
                       'td',
                       {
                         style: {
                           ...tdStyle,
-                          fontSize: '12px',
-                          color: record.callerPlugin || record.callerTheme || record.callerSource
-                            ? 'var(--primaryTextColor)'
-                            : 'var(--secondaryTextColor)',
+                          textAlign: 'right',
+                          fontFamily: 'monospace',
+                          fontWeight: 600,
+                          color: UI_COLORS.WPE_BRAND,
                         },
                       },
-                      this.formatCaller(record),
+                      `$${stats.costUsd.toFixed(4)}`,
                     ),
                     React.createElement(
                       'td',
-                      { style: tdStyle },
-                      this.formatModel(record.model),
-                    ),
-                    React.createElement(
-                      'td',
-                      { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace' } },
-                      `${record.totalTokens.toLocaleString()} (${record.promptTokens}+${record.completionTokens})`,
-                    ),
-                    React.createElement(
-                      'td',
-                      { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace' } },
-                      `$${record.costUsd.toFixed(4)}`,
-                    ),
-                    React.createElement(
-                      'td',
-                      { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace' } },
-                      `${(record.durationMs / 1000).toFixed(2)}s`,
+                      { style: { ...tdStyle, fontSize: '12px', color: 'var(--secondaryTextColor)' } },
+                      stats.features.size > 0
+                        ? Array.from(stats.features).slice(0, 3).join(', ') +
+                          (stats.features.size > 3 ? ` +${stats.features.size - 3}` : '')
+                        : '—',
                     ),
                   ),
                 ),

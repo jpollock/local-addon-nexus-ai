@@ -110,6 +110,14 @@ export interface GatewayUsageRecord {
   totalTokens: number;
   costUsd: number;
   durationMs: number;
+
+  // Caller tracking (Phase 4.1)
+  callerPlugin?: string;      // Plugin slug that made the request
+  callerTheme?: string;        // Theme name that made the request
+  callerFeature?: string;      // Feature/experiment name
+  callerSource?: string;       // 'core' | 'plugin' | 'theme' | 'ajax' | 'frontend' | 'cli'
+  callerUserId?: number;       // WordPress user ID
+  callerUserRole?: string;     // WordPress user role
 }
 
 /**

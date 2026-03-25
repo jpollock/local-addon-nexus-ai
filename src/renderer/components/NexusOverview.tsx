@@ -15,6 +15,7 @@ import { TopIssuesPanel } from './TopIssuesPanel';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
 import { AIGatewayUsagePanel } from './AIGatewayUsagePanel';
+import { AIGatewayByCallerPanel } from './AIGatewayByCallerPanel';
 
 interface NexusOverviewProps {
   NavLink: any;
@@ -953,6 +954,9 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
 
       // AI Gateway Usage (moved from Operations tab)
       React.createElement(AIGatewayUsagePanel, { electron: this.props.electron }),
+
+      // AI Gateway By Caller (aggregated view)
+      React.createElement(AIGatewayByCallerPanel, { electron: this.props.electron }),
     );
   }
 

@@ -134,7 +134,15 @@ export class AIGatewayRoutes {
       anthropicResponse.usage.output_tokens,
     );
 
-    // 10. Log usage
+    // 10. Extract caller information from headers
+    const callerPlugin = req.headers['x-wp-caller-plugin'] as string | undefined;
+    const callerTheme = req.headers['x-wp-caller-theme'] as string | undefined;
+    const callerFeature = req.headers['x-wp-caller-feature'] as string | undefined;
+    const callerSource = req.headers['x-wp-caller-source'] as string | undefined;
+    const callerUserId = req.headers['x-wp-user-id'] as string | undefined;
+    const callerUserRole = req.headers['x-wp-user-role'] as string | undefined;
+
+    // 11. Log usage
     const usageRecord: GatewayUsageRecord = {
       id: anthropicResponse.id,
       siteId,
@@ -148,15 +156,31 @@ export class AIGatewayRoutes {
         anthropicResponse.usage.input_tokens + anthropicResponse.usage.output_tokens,
       costUsd,
       durationMs,
+      // Caller tracking
+      callerPlugin,
+      callerTheme,
+      callerFeature,
+      callerSource,
+      callerUserId: callerUserId ? parseInt(callerUserId, 10) : undefined,
+      callerUserRole,
     };
 
+    // Build caller description for logging
+    const callerDesc = callerPlugin
+      ? `plugin:${callerPlugin}${callerFeature ? `/${callerFeature}` : ''}`
+      : callerTheme
+      ? `theme:${callerTheme}`
+      : callerSource
+      ? `core:${callerFeature || callerSource}`
+      : 'unknown';
+
     this.logger.info(
-      `[AIGateway] Success: site=${siteId}, model=${openAIRequest.model}, ` +
+      `[AIGateway] Success: site=${siteId}, caller=${callerDesc}, model=${openAIRequest.model}, ` +
         `tokens=${usageRecord.totalTokens} (${usageRecord.promptTokens}+${usageRecord.completionTokens}), ` +
         `cost=$${costUsd.toFixed(4)}, duration=${durationMs}ms`,
     );
 
-    // Store usage record
+    // 12. Store usage record
     this.storeUsageRecord(usageRecord);
 
     // Notify listeners
@@ -164,7 +188,7 @@ export class AIGatewayRoutes {
       this.onUsageRecorded(usageRecord);
     }
 
-    // 11. Return response
+    // 13. Return response
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(openAIResponse));
   }

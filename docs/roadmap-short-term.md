@@ -3,8 +3,8 @@
 **Status:** In Progress (March 2026)
 **Target:** Next 2-4 weeks
 
-**Completed:** Digital Twin (March 20-22), AI Gateway (March 22-24)
-**In Progress:** AI Context File Generation, AI Call Source Tracking
+**Completed:** Digital Twin (March 20-22), AI Gateway (March 22-24), AI Call Source Tracking (March 24)
+**In Progress:** AI Context File Generation
 
 ---
 
@@ -649,6 +649,9 @@ What should NOT be included?
 
 ## 4. AI Call Source Tracking in Gateway
 
+**Status:** Phase 4.1-4.2 Complete (March 24, 2026)
+**Next:** Blocking & Security (Phase 4.3)
+
 ### Problem Statement
 
 **Current state:**
@@ -800,21 +803,80 @@ interface UsageRecord {
 - Add ~50 bytes per usage record (plugin name + feature name)
 - Minimal impact (1000 requests = 50 KB)
 
-#### Implementation Plan
+#### Implementation Summary
 
-**Phase 4.1: WordPress Provider Changes (Day 1)**
-- [ ] Add backtrace detection in `LocalGatewayProvider`
-- [ ] Extract plugin slug, theme name, feature name from backtrace
-- [ ] Add custom headers to gateway requests
-- [ ] Add user ID and role headers
-- [ ] Add tests (mock backtrace, verify headers sent)
+**Phase 4.1: MU Plugin Caller Detection** ✅ COMPLETE (March 24, 2026)
 
-**Phase 4.2: Gateway Server Changes (Day 1)**
-- [ ] Read caller headers in gateway request handler
-- [ ] Add caller fields to `UsageRecord` schema
-- [ ] Store caller data in usage database
-- [ ] Update IPC handlers to return caller data
-- [ ] Add tests (verify caller data stored correctly)
+Implemented automatic caller detection via Nexus AI Connector MU plugin instead of WordPress provider:
+
+**Key decision:** Use MU plugin for caller detection (NOT LocalGatewayProvider)
+- ✅ **Centralized** — All sites get caller detection automatically
+- ✅ **WordPress core support** — Detects core features (block-editor, post-editor) via context
+- ✅ **Plugin detection** — Automatic via backtrace (path-based)
+- ✅ **Theme detection** — Automatic via backtrace (path-based)
+- ✅ **HTTP filter** — Hooks `pre_http_request` to inject caller headers
+- ✅ **Zero config** — Auto-deploys on site startup and Setup AI
+- ✅ **Hybrid approach** — Backtrace fallback + manual caller parameter support
+
+**What we built:**
+
+1. **MU Plugin Template** (`src/main/ai-gateway/mu-plugin-template.ts`)
+   - `nexus_ai_detect_caller()` — Backtrace-based plugin/theme detection
+   - `nexus_ai_detect_core_feature()` — Context-based WordPress core feature detection
+   - `pre_http_request` filter — Injects caller headers before gateway requests
+   - Headers: `X-WP-Caller-Plugin`, `X-WP-Caller-Theme`, `X-WP-Caller-Feature`, `X-WP-Caller-Source`, `X-WP-User-ID`, `X-WP-User-Role`
+
+2. **Updated MU Plugin Deployment** (3 locations)
+   - `src/main/content/lifecycle-hooks.ts` — Site startup
+   - `src/main/mcp/modules/wp-connector/setup-ai.ts` — Setup AI (2 locations)
+   - All use shared template generator with AI Gateway config
+
+3. **Gateway Server Updates** (`src/main/ai-gateway/AIGatewayRoutes.ts`)
+   - Reads caller headers from WordPress requests
+   - Stores in `GatewayUsageRecord` (6 new optional fields)
+   - Logs caller in format: `plugin:ai/title_generation` or `core:block-editor-alt-text`
+
+4. **Type Updates** (`src/main/ai-gateway/types.ts`)
+   - Added caller fields to `GatewayUsageRecord` interface
+   - All fields optional (backward compatible with existing usage records)
+
+**Example detection:**
+
+```
+WordPress Core Features:
+- Block Editor alt text → caller: { source: 'core', feature: 'block-editor-alt-text' }
+- Post editor → caller: { source: 'core', feature: 'post-editor' }
+- WP-CLI → caller: { source: 'core', feature: 'wp-cli' }
+
+Plugins:
+- AI plugin → caller: { plugin: 'ai', source: 'plugin' }
+- Custom plugin → caller: { plugin: 'my-custom-plugin', source: 'plugin' }
+
+Themes:
+- Theme call → caller: { theme: 'twentytwentyfour', source: 'theme' }
+```
+
+**Phase 4.2: UI Display & Analytics** ✅ COMPLETE (March 24, 2026)
+- [x] Add "Caller" column to AI Gateway Usage table
+- [x] Add "By Caller" aggregated view panel
+- [x] "AI Usage by Plugin" analytics panel with aggregated stats
+- [x] Sort by cost (highest first), show requests/tokens/cost per caller
+- [x] Color-coded badges (PLUGIN, THEME, CORE, UNKNOWN)
+- [x] Time filters (1h, 24h, 7d, All) in both panels
+
+**Implementation:**
+- Modified `AIGatewayUsagePanel.tsx` to add Caller column with formatted display
+- Created `AIGatewayByCallerPanel.tsx` for aggregated analytics view
+- Integrated both panels into `NexusOverview.tsx` Overview tab
+- Caller format shows: `plugin-slug/feature`, `theme-name (theme)`, `WP Core: feature`
+- Aggregation groups by caller key, sums requests/tokens/cost, lists unique features
+- Supports legacy records (all caller fields optional)
+
+**Phase 4.3: Blocking & Security (Future)**
+- [ ] Block plugin button in UI
+- [ ] Gateway checks blocklist before proxying
+- [ ] Return 403 Forbidden if blocked
+- [ ] Audit log of blocked attempts
 
 **Phase 4.3: UI Integration (Day 2)**
 - [ ] Add "Caller" column to AI Gateway Usage Panel

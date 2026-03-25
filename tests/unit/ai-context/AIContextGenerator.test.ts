@@ -126,7 +126,7 @@ describe('AIContextGenerator', () => {
       expect(result).toContain('## AI Configuration');
       expect(result).toContain('http://127.0.0.1:13000/ai-gateway/v1');
       expect(result).toContain('Claude Haiku 4.5, Claude Sonnet 4.5');
-      expect(result).toContain('nexus-ai-gateway-config.php');
+      expect(result).toContain('nexus-ai-connector-config.php');
       expect(result).toContain('Local AI Gateway for tracking');
     });
 

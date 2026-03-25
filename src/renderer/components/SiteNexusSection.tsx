@@ -47,6 +47,8 @@ interface SiteNexusSectionState {
   wpVersionAge: string | null; // NEW: Age of WP version cache
   upgradingWp: boolean;
   refreshingMetadata: boolean; // NEW: True while refreshing cache
+  aiContextStatus: { exists: boolean; ageString?: string; filePath?: string } | null;
+  generatingContext: boolean;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -113,6 +115,8 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     wpVersionAge: null,
     upgradingWp: false,
     refreshingMetadata: false,
+    aiContextStatus: null,
+    generatingContext: false,
   };
 
   componentDidMount(): void {
@@ -179,6 +183,23 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       }
     } catch {
       // WP version unavailable — non-fatal
+    }
+
+    // Fetch AI context file status separately
+    try {
+      const contextResult = await ipc.invoke(IPC_CHANNELS.AI_CONTEXT_GET_STATUS, this.props.site.id);
+      if (!this.mounted) return;
+      if (contextResult?.success) {
+        this.setState({
+          aiContextStatus: {
+            exists: contextResult.exists,
+            ageString: contextResult.ageString,
+            filePath: contextResult.filePath,
+          },
+        });
+      }
+    } catch {
+      // AI context status unavailable — non-fatal
     }
   };
 
@@ -298,6 +319,48 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
         refreshingMetadata: false,
         setupResult: { success: false, message: 'Refresh failed' },
       });
+    }
+  };
+
+  handleGenerateContext = async (): Promise<void> => {
+    this.setState({ generatingContext: true, setupResult: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.AI_CONTEXT_GENERATE,
+        this.props.site.id,
+      );
+      if (!this.mounted) return;
+
+      if (result.success) {
+        this.setState({
+          generatingContext: false,
+          setupResult: { success: true, message: `AI context generated: ${result.filePath}` },
+        });
+        // Refresh to show new file status
+        this.fetchData();
+      } else {
+        this.setState({
+          generatingContext: false,
+          setupResult: { success: false, message: result.error || 'Generation failed' },
+        });
+      }
+    } catch {
+      if (!this.mounted) return;
+      this.setState({
+        generatingContext: false,
+        setupResult: { success: false, message: 'Generation failed' },
+      });
+    }
+  };
+
+  handleShowInFinder = (): void => {
+    const { aiContextStatus } = this.state;
+    if (!aiContextStatus?.filePath) return;
+
+    // Use Electron's shell API to show file in Finder/Explorer
+    const { shell } = this.props.electron;
+    if (shell && shell.showItemInFolder) {
+      shell.showItemInFolder(aiContextStatus.filePath);
     }
   };
 
@@ -495,6 +558,42 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
           disabled: syncingCreds,
           children: syncingCreds ? 'Syncing...' : 'Sync Keys',
         }),
+      ));
+    }
+
+    // AI Context File (show for all sites)
+    const { aiContextStatus, generatingContext } = this.state;
+    if (aiContextStatus) {
+      const contextExists = aiContextStatus.exists;
+      const contextAge = aiContextStatus.ageString;
+
+      const statusText = contextExists
+        ? `Generated ${contextAge}`
+        : 'Not generated';
+
+      const statusColor = contextExists ? UI_COLORS.STATUS_RUNNING : '#888';
+
+      const actions = [];
+
+      // Generate/Regenerate button
+      actions.push(this.createActionButton({
+        onClick: generatingContext ? undefined : this.handleGenerateContext,
+        disabled: generatingContext,
+        children: generatingContext ? 'Generating...' : (contextExists ? 'Regenerate' : 'Generate'),
+      }));
+
+      // Show in Finder button (only if exists)
+      if (contextExists && aiContextStatus.filePath) {
+        actions.push(this.createActionButton({
+          onClick: this.handleShowInFinder,
+          children: 'Show in Finder',
+        }));
+      }
+
+      rows.push(row('AI Context File',
+        React.createElement('span', { style: dotStyle(statusColor) }),
+        statusText,
+        ...actions,
       ));
     }
 

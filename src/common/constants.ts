@@ -121,6 +121,10 @@ export const IPC_CHANNELS = {
   AI_GATEWAY_SET_RATE_LIMIT: `${ADDON_PREFIX}:ai-gateway:set-rate-limit`,
   AI_GATEWAY_CHECK_RATE_LIMIT: `${ADDON_PREFIX}:ai-gateway:check-rate-limit`,
 
+  // AI Context File Generation
+  AI_CONTEXT_GENERATE: `${ADDON_PREFIX}:ai-context:generate`,
+  AI_CONTEXT_GET_STATUS: `${ADDON_PREFIX}:ai-context:get-status`,
+
   // WPE Site Sync (Phase 1)
   WPE_SYNC_ALL: `${ADDON_PREFIX}:wpe:sync-all`,
   WPE_SYNC_STATUS: `${ADDON_PREFIX}:wpe:sync-status`,

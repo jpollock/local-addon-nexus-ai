@@ -27,6 +27,8 @@ import { HealthTrendTracker } from './health/HealthTrendTracker';
 import { WPESyncService } from './events/WPESyncService';
 import { WpeAutoPullService } from './wpe-auto-pull';
 import { SiteMetadataCache } from './metadata/SiteMetadataCache';
+import { AIContextGenerator } from './ai-context/AIContextGenerator';
+import type { AIContextData } from './ai-context/AIContextGenerator';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -2528,6 +2530,122 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       return { success: true, status };
     } catch (err) {
       localLogger.error('[NexusAI] ai-gateway-check-rate-limit failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // AI Context File Generation
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.AI_CONTEXT_GENERATE, async (_event: any, siteId: string) => {
+    try {
+      const site = siteData.getSite(siteId);
+      if (!site) {
+        return { success: false, error: `Site ${siteId} not found` };
+      }
+
+      // Get site metadata
+      const metadata = metadataCache?.getWithAge(siteId);
+
+      // Get AI Gateway info
+      const proxyInfo = registryStorage.get('ai_proxy_info') as any;
+
+      // Find active theme from metadata
+      let activeTheme: AIContextData['theme'];
+      if (metadata?.activeTheme && metadata?.themes) {
+        const themeData = metadata.themes.find(t => t.name === metadata.activeTheme);
+        if (themeData) {
+          activeTheme = {
+            name: themeData.name,
+            title: themeData.title,
+            version: themeData.version,
+          };
+        }
+      }
+
+      // Build AI context data
+      const contextData: AIContextData = {
+        siteName: site.name,
+        siteUrl: site.url || `http://${site.domain}`,
+        sitePath: site.path,
+        wpVersion: metadata?.wpVersion,
+        phpVersion: site.phpVersion,
+        mysqlPort: site.mysqlPort,
+        plugins: metadata?.plugins,
+        theme: activeTheme,
+        generatedAt: Date.now(),
+      };
+
+      // Add AI Gateway config if available
+      if (proxyInfo?.url && proxyInfo?.authToken) {
+        contextData.aiGateway = {
+          url: proxyInfo.url,
+          token: proxyInfo.authToken,
+          models: proxyInfo.models ?? [],
+        };
+      }
+
+      // Generate context markdown
+      const generator = new AIContextGenerator();
+      const markdown = generator.generateContext(contextData);
+
+      // Write to site root
+      const fs = require('fs').promises;
+      const path = require('path');
+      const filePath = path.join(site.path, 'app', 'public', 'AI-CONTEXT.md');
+      await fs.writeFile(filePath, markdown, 'utf-8');
+
+      localLogger.info(`[NexusAI] Generated AI context file: ${filePath}`);
+      return { success: true, filePath };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-context-generate failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_CONTEXT_GET_STATUS, async (_event: any, siteId: string) => {
+    try {
+      const site = siteData.getSite(siteId);
+      if (!site) {
+        return { success: false, error: `Site ${siteId} not found` };
+      }
+
+      const fs = require('fs').promises;
+      const path = require('path');
+      const filePath = path.join(site.path, 'app', 'public', 'AI-CONTEXT.md');
+
+      try {
+        const stats = await fs.stat(filePath);
+        const ageMs = Date.now() - stats.mtimeMs;
+        const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+        const ageHours = Math.floor((ageMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+        let ageString;
+        if (ageDays > 0) {
+          ageString = `${ageDays}d ${ageHours}h ago`;
+        } else if (ageHours > 0) {
+          ageString = `${ageHours}h ago`;
+        } else {
+          const ageMinutes = Math.floor((ageMs % (1000 * 60 * 60)) / (1000 * 60));
+          ageString = `${ageMinutes}m ago`;
+        }
+
+        return {
+          success: true,
+          exists: true,
+          filePath,
+          lastModified: stats.mtimeMs,
+          ageString,
+        };
+      } catch (statErr: any) {
+        if (statErr.code === 'ENOENT') {
+          return { success: true, exists: false, filePath };
+        }
+        throw statErr;
+      }
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-context-get-status failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
     }
   });
