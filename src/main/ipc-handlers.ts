@@ -29,6 +29,9 @@ import { WpeAutoPullService } from './wpe-auto-pull';
 import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 import { AIContextGenerator } from './ai-context/AIContextGenerator';
 import type { AIContextData } from './ai-context/AIContextGenerator';
+import { AuditLogger, AUDITED_OPERATIONS } from './audit/AuditLogger';
+import { validateInput } from '../common/schemas';
+import { SiteIdSchema } from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -136,6 +139,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     graphService, eventProcessor, vectorDbPath, serviceContainer, metadataCache,
   } = deps;
   console.log('[NexusAI] 🟢 registerIpcHandlers() - deps destructured successfully');
+
+  // Initialize audit logger for tracking remote operations
+  const auditLogger = new AuditLogger(registryStorage);
 
   /**
    * Notify Local's main UI to refresh site groups after a mutation.
@@ -507,9 +513,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
+    const startTime = Date.now();
     let wasAutoStarted = false;
 
     try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+      siteId = validated; // Use validated value
+
       // Check if site is running
       const statuses = localServicesBridge.getAllSiteStatuses();
       const wasRunning = statuses[siteId] === 'running';
@@ -591,6 +602,15 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         await localServicesBridge.stopSite(siteId);
       }
 
+      // Audit log successful setup
+      auditLogger.logSuccess(
+        'setup_ai',
+        siteId,
+        'local_site',
+        { enableOllama: settings?.chatProvider === 'ollama' },
+        Date.now() - startTime
+      );
+
       return result;
     } catch (err) {
       // Auto-stop if we started it (even on error)
@@ -602,6 +622,16 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           localLogger.error(`[NexusAI] Failed to stop site ${siteId}:`, (stopErr as Error).message);
         }
       }
+
+      // Audit log failure
+      auditLogger.logFailure(
+        'setup_ai',
+        siteId,
+        'local_site',
+        (err as Error).message,
+        {},
+        Date.now() - startTime
+      );
 
       return {
         success: false,

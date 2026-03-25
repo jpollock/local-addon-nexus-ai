@@ -34,7 +34,7 @@ export interface BulkOpDeps {
   setupSiteForAI?: (siteId: string, options?: any) => Promise<any>;
 }
 
-const MAX_CONCURRENCY = 3;
+const MAX_CONCURRENCY = 5; // Increased from 3 for better performance (50 sites: ~10 min vs ~17 min)
 const MAX_HISTORY = 20;
 
 export class BulkOperationManager {
