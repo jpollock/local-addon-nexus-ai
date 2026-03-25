@@ -50,6 +50,7 @@ import {
   QueryIdSchema,
   AIGatewayUsageOptionsSchema,
   AIGatewayRateLimitSchema,
+  EventTimelineOptionsSchema,
 } from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -746,7 +747,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     siteId?: string;
   }) => {
     try {
-      const events = await graphService.getRecentEvents(options as any);
+      // Validate input
+      const validated = validateInput(EventTimelineOptionsSchema, options);
+
+      const events = await graphService.getRecentEvents(validated as any);
 
       // Transform to renderer-safe format with site names
       const timeline: EventTimelineEntry[] = events.map(e => {

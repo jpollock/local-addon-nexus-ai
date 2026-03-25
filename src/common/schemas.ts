@@ -286,6 +286,17 @@ export const FleetOperationOptionsSchema = z.object({
 }).optional();
 
 // ============================================================================
+// Events & Storage
+// ============================================================================
+
+export const EventTimelineOptionsSchema = z.object({
+  limit: z.number().int().positive().max(1000).optional(),
+  filter: z.string().optional(),
+  status: z.enum(['pending', 'processed', 'failed']).optional(),
+  siteId: SiteIdSchema.optional(),
+}).optional();
+
+// ============================================================================
 // Helper: Validate Input
 // ============================================================================
 
