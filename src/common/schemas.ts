@@ -184,6 +184,38 @@ export const UpdateSiteGroupSchema = z.object({
 });
 
 // ============================================================================
+// WPE Operations (Remote)
+// ============================================================================
+
+export const WpeRemoveSiteSchema = z.object({
+  installId: z.string().min(1, 'Install ID required'),
+});
+
+export const WpePullToLocalSchema = z.object({
+  wpeSiteId: z.string().min(1),
+  installName: z.string().min(1),
+  installId: z.string().min(1),
+});
+
+export const WpeSyncSingleSchema = z.object({
+  installId: z.string().min(1, 'Install ID required'),
+});
+
+// ============================================================================
+// Bulk Operations (Extended)
+// ============================================================================
+
+export const BulkOperationRequestSchema = z.object({
+  type: z.enum(['reindex', 'plugin-update', 'start', 'stop', 'health-refresh', 'setup-ai', 'sync-graph']),
+  siteIds: z.array(SiteIdSchema).min(1, 'At least one site ID required'),
+  options: z.record(z.unknown()).optional(),
+});
+
+export const FleetOperationOptionsSchema = z.object({
+  siteIds: z.array(SiteIdSchema).optional(),
+}).optional();
+
+// ============================================================================
 // Helper: Validate Input
 // ============================================================================
 

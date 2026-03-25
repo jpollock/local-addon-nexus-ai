@@ -11,11 +11,12 @@ export interface AuditLog {
   timestamp: number;
   operation: string;
   target: string; // site ID, install ID, or install name
-  targetType: 'local_site' | 'wpe_install' | 'wpe_site' | 'wpe_account';
+  targetType: 'local_site' | 'wpe_install' | 'wpe_site' | 'wpe_account' | 'bulk_operation';
   params: Record<string, any>;
-  result: 'success' | 'failure';
+  result: 'success' | 'failure' | 'started' | 'in_progress';
   error?: string;
   duration?: number; // milliseconds
+  durationMs?: number; // alias for duration (milliseconds)
 }
 
 export interface AuditLogFilters {

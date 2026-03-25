@@ -30,8 +30,16 @@ import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 import { AIContextGenerator } from './ai-context/AIContextGenerator';
 import type { AIContextData } from './ai-context/AIContextGenerator';
 import { AuditLogger, AUDITED_OPERATIONS } from './audit/AuditLogger';
-import { validateInput } from '../common/schemas';
-import { SiteIdSchema } from '../common/schemas';
+import {
+  validateInput,
+  SiteIdSchema,
+  IndexSiteSchema,
+  BulkOperationRequestSchema,
+  FleetOperationOptionsSchema,
+  WpeRemoveSiteSchema,
+  WpePullToLocalSchema,
+  WpeSyncSingleSchema,
+} from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -322,7 +330,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.START_SITE, async (_event: any, siteId: string) => {
     try {
-      await localServicesBridge.startSite(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+      await localServicesBridge.startSite(validated);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] start-site failed:', (err as Error).message);
@@ -332,7 +342,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.STOP_SITE, async (_event: any, siteId: string) => {
     try {
-      await localServicesBridge.stopSite(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+      await localServicesBridge.stopSite(validated);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] stop-site failed:', (err as Error).message);
@@ -372,17 +384,41 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: any, params: { siteId: string }) => {
+    const startTime = Date.now();
     try {
+      // Validate input
+      const validated = validateInput(IndexSiteSchema, params);
+      const siteId = validated.siteId;
+
       const site = siteData.getSite(siteId);
       if (!site) {
+        auditLogger.logFailure(
+          'index_site',
+          siteId,
+          'local_site',
+          'Site not found',
+          params,
+          Date.now() - startTime,
+        );
         return { success: false, error: `Site ${siteId} not found` };
       }
+
       const result = await contentPipeline.indexSite({
         siteId: site.id,
         siteName: site.name,
         sitePath: site.path,
       });
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'index_site',
+        siteId,
+        'local_site',
+        { documentsIndexed: result.documentsIndexed, chunksIndexed: result.chunksIndexed },
+        Date.now() - startTime,
+      );
+
       return {
         success: true,
         documentsIndexed: result.documentsIndexed,
@@ -392,6 +428,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       };
     } catch (err) {
       localLogger.error('[NexusAI] index-site failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'index_site',
+        params?.siteId || 'unknown',
+        'local_site',
+        (err as Error).message,
+        params,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -1019,11 +1063,34 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // --- Bulk Operations ---
 
   safeHandle(IPC_CHANNELS.BULK_EXECUTE, async (_event: any, request: any) => {
+    const startTime = Date.now();
     try {
-      const opId = await bulkOpManager.execute(request);
+      // Validate input
+      const validated = validateInput(BulkOperationRequestSchema, request);
+
+      // Audit log bulk operation start
+      auditLogger.log({
+        operation: `bulk_${validated.type}`,
+        target: `${validated.siteIds.length} sites`,
+        targetType: 'bulk_operation',
+        result: 'started',
+        params: { type: validated.type, siteCount: validated.siteIds.length },
+        durationMs: 0,
+      });
+
+      const opId = await bulkOpManager.execute(validated);
+
       return { success: true, opId };
     } catch (err) {
       localLogger.error('[NexusAI] bulk:execute failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'bulk_execute',
+        'multiple',
+        'bulk_operation',
+        (err as Error).message,
+        request,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -1332,11 +1399,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SETUP_AI_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
     try {
+      // Validate input
+      const validated = validateInput(FleetOperationOptionsSchema, options);
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
 
       // Use provided siteIds or all running sites
-      const targetIds = options?.siteIds
+      const targetIds = validated?.siteIds
         ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
 
       if (targetIds.length === 0) {
@@ -1361,11 +1431,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.INDEX_ALL_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
     try {
+      // Validate input
+      const validated = validateInput(FleetOperationOptionsSchema, options);
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
 
       // Use provided siteIds or all running sites
-      const targetIds = options?.siteIds
+      const targetIds = validated?.siteIds
         ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
 
       if (targetIds.length === 0) {
@@ -2067,21 +2140,41 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Re-sync a single WPE site
    */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: any, params: { installId: string }) => {
+    const startTime = Date.now();
+
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
 
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeSyncSingleSchema, params);
+      const installId = validated.installId;
+
       await deps.wpeSyncService.syncSingleSite(installId);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'wpe_sync_single',
+        installId,
+        'wpe_install',
+        {},
+        Date.now() - startTime,
+      );
+
       localLogger.info(`[NexusAI] Re-synced WPE site: ${installId}`);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] Failed to re-sync WPE site:', (err as Error).message);
+      auditLogger.logFailure(
+        'wpe_sync_single',
+        params?.installId || 'unknown',
+        'wpe_install',
+        (err as Error).message,
+        params,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -2118,21 +2211,41 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Remove a WPE site from the graph
    */
-  safeHandle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, params: { installId: string }) => {
+    const startTime = Date.now();
+
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
 
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeRemoveSiteSchema, params);
+      const installId = validated.installId;
+
       await deps.wpeSyncService.removeWPESite(installId);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'wpe_remove_site',
+        installId,
+        'wpe_install',
+        {},
+        Date.now() - startTime,
+      );
+
       localLogger.info(`[NexusAI] Removed WPE site: ${installId}`);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] Failed to remove WPE site:', (err as Error).message);
+      auditLogger.logFailure(
+        'wpe_remove_site',
+        params?.installId || 'unknown',
+        'wpe_install',
+        (err as Error).message,
+        params,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -2147,40 +2260,59 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * - Links to WPE environment
    * - Triggers pull operation (database + files)
    */
-  safeHandle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, { wpeSiteId, installName, installId }: { wpeSiteId: string; installName: string; installId?: string }) => {
+  safeHandle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, params: { wpeSiteId: string; installName: string; installId: string }) => {
+    const startTime = Date.now();
     try {
-      if (!installId) {
-        return { success: false, errorCode: 'INVALID_ARGS', error: 'WPE install ID is required' };
-      }
+      // Validate input
+      const validated = validateInput(WpePullToLocalSchema, params);
 
       if (!serviceContainer) {
         return { success: false, errorCode: 'SERVICE_UNAVAILABLE', error: 'Service container not initialized' };
       }
 
-      localLogger.info(`[WpeAutoPull] Starting pull for ${installName} (${installId})`);
+      localLogger.info(`[WpeAutoPull] Starting pull for ${validated.installName} (${validated.installId})`);
 
       // Initialize WpeAutoPullService with Local's service container
       const autoPullService = new WpeAutoPullService(serviceContainer);
 
       // Execute the pull with full automation
       const result = await autoPullService.pullToLocal({
-        installId,
-        installName,
+        installId: validated.installId,
+        installName: validated.installName,
         includeSql: true,
         environment: 'production',
       });
 
       if (result.success) {
+        // Audit log success
+        auditLogger.logSuccess(
+          'wpe_pull_to_local',
+          validated.installId,
+          'wpe_install',
+          { siteId: result.siteId, siteName: result.siteName },
+          Date.now() - startTime,
+        );
+
         localLogger.info(`[WpeAutoPull] SUCCESS: ${result.message}`);
         return {
           success: true,
           siteId: result.siteId,
           siteName: result.siteName,
-          installName,
-          installId,
+          installName: validated.installName,
+          installId: validated.installId,
           message: result.message,
         };
       } else {
+        // Audit log failure
+        auditLogger.logFailure(
+          'wpe_pull_to_local',
+          validated.installId,
+          'wpe_install',
+          result.message || 'Pull to local failed',
+          params,
+          Date.now() - startTime,
+        );
+
         localLogger.error(`[WpeAutoPull] FAILED: ${result.message} (${result.errorCode})`);
         return {
           success: false,
@@ -2192,6 +2324,17 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const errorStack = err instanceof Error ? err.stack : undefined;
+
+      // Audit log failure
+      auditLogger.logFailure(
+        'wpe_pull_to_local',
+        params?.installId || 'unknown',
+        'wpe_install',
+        errorMsg,
+        params,
+        Date.now() - startTime,
+      );
+
       localLogger.error('[WpeAutoPull] Unexpected error:', errorMsg, errorStack);
 
       return {
