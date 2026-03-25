@@ -33,6 +33,7 @@ import { AuditLogger, AUDITED_OPERATIONS } from './audit/AuditLogger';
 import {
   validateInput,
   SiteIdSchema,
+  UpdateSettingsSchema,
   IndexSiteSchema,
   SearchUnifiedSchema,
   BulkOperationRequestSchema,
@@ -477,9 +478,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, (_event: any, partial: Partial<NexusSettings>) => {
     try {
+      // Validate input
+      const validated = validateInput(UpdateSettingsSchema, partial);
+
       const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
       const current: NexusSettings = raw ?? DEFAULT_SETTINGS;
-      const updated = { ...current, ...partial };
+      const updated = { ...current, ...validated };
       registryStorage.set(STORAGE_KEYS.SETTINGS, updated as any);
       return updated;
     } catch (err) {

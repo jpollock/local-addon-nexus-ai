@@ -11,6 +11,17 @@ import { z } from 'zod';
 
 export const SiteIdSchema = z.string().uuid('Invalid site ID format');
 
+// ============================================================================
+// Settings
+// ============================================================================
+
+export const UpdateSettingsSchema = z.object({
+  autoIndex: z.boolean().optional(),
+  excludedSiteIds: z.array(SiteIdSchema).optional(),
+  chatProvider: z.enum(['anthropic', 'openai', 'ollama']).optional(),
+  chatModel: z.string().optional(),
+}).strict(); // Prevent unknown properties
+
 export const PluginSlugSchema = z
   .string()
   .regex(/^[a-z0-9-]+$/, 'Plugin slug must contain only lowercase letters, numbers, and hyphens')
