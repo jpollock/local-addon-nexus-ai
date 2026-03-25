@@ -866,6 +866,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   safeHandle(IPC_CHANNELS.STORAGE_CLEANUP, async (_event: any, options?: {
     retentionDays?: number;
   }) => {
+    const startTime = Date.now();
     try {
       // Validate input
       const validated = validateInput(StorageCleanupOptionsSchema, options);
@@ -873,10 +874,27 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const retentionDays = validated?.retentionDays ?? 30;
       const deleted = await graphService.cleanupOldData(retentionDays);
 
+      // Audit log success
+      auditLogger.logSuccess(
+        'storage_cleanup',
+        'all',
+        'database',
+        { retentionDays, eventsDeleted: deleted.events },
+        Date.now() - startTime,
+      );
+
       localLogger.info(`[NexusAI] Cleaned up ${deleted} old events (retention: ${retentionDays} days)`);
       return { success: true, deletedCount: deleted.events };
     } catch (err) {
       localLogger.error('[NexusAI] storage:cleanup failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'storage_cleanup',
+        'all',
+        'database',
+        (err as Error).message,
+        options || {},
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -2517,7 +2535,10 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
 
     try {
-      const site = await graphService.getSite(installId);
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
+      const site = await graphService.getSite(validated);
 
       if (!site) {
         return { success: false, error: 'Site not found' };
@@ -2539,8 +2560,11 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
 
     try {
-      await deps.wpeSyncService.syncSingleSite(installId);
-      localLogger.info(`[NexusAI] Re-synced WPE site: ${installId}`);
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
+      await deps.wpeSyncService.syncSingleSite(validated);
+      localLogger.info(`[NexusAI] Re-synced WPE site: ${validated}`);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] Failed to re-sync WPE site:', (err as Error).message);
@@ -2856,13 +2880,35 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   safeHandle(IPC_CHANNELS.AI_GATEWAY_CLEAR_USAGE, async (_event: any) => {
+    const startTime = Date.now();
     try {
       const USAGE_KEY = 'nexus_ai_gateway_usage';
+      const existingRecords = registryStorage.get(USAGE_KEY) || [];
+      const recordCount = Array.isArray(existingRecords) ? existingRecords.length : 0;
+
       registryStorage.set(USAGE_KEY, []);
-      localLogger.info('[NexusAI] Cleared AI Gateway usage records');
-      return { success: true };
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'ai_gateway_clear_usage',
+        'all',
+        'registry',
+        { recordsCleared: recordCount },
+        Date.now() - startTime,
+      );
+
+      localLogger.info(`[NexusAI] Cleared ${recordCount} AI Gateway usage records`);
+      return { success: true, recordsCleared: recordCount };
     } catch (err) {
       localLogger.error('[NexusAI] ai-gateway-clear-usage failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'ai_gateway_clear_usage',
+        'all',
+        'registry',
+        (err as Error).message,
+        {},
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
