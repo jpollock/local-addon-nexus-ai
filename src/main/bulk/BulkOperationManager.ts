@@ -34,7 +34,7 @@ export interface BulkOpDeps {
   setupSiteForAI?: (siteId: string, options?: any) => Promise<any>;
 }
 
-const MAX_CONCURRENCY = 3;
+const MAX_CONCURRENCY = 5; // Increased from 3 for better performance (50 sites: ~10 min vs ~17 min)
 const MAX_HISTORY = 20;
 
 export class BulkOperationManager {
@@ -274,6 +274,14 @@ export class BulkOperationManager {
   private async executeSetupAI(siteId: string, options: Record<string, any>): Promise<void> {
     if (!this.deps.setupSiteForAI) {
       throw new Error('setupSiteForAI not configured');
+    }
+
+    // Check if site is running (unless auto-start will handle it)
+    if (!options.autoStartStop) {
+      const currentStatus = this.deps.siteDataBridge.getSiteStatus(siteId);
+      if (currentStatus !== 'running') {
+        throw new Error(`Site must be running to setup AI. Current status: ${currentStatus}`);
+      }
     }
 
     // If auto-started, wait for database to be ready

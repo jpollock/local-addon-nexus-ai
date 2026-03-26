@@ -4,8 +4,10 @@
  * Aggregated view of AI usage grouped by caller (plugin/theme/core feature).
  * Shows which parts of WordPress are consuming the most AI tokens/cost.
  * Class-based — Local uses older React, no hooks allowed.
+ * Uses react-window for virtual scrolling of large datasets.
  */
 import * as React from 'react';
+import { FixedSizeList as List } from 'react-window';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 
 interface AIGatewayByCallerPanelProps {
@@ -355,7 +357,7 @@ export class AIGatewayByCallerPanel extends React.Component<
         ),
       ),
 
-      // Caller stats table
+      // Caller stats table with virtual scrolling
       callerStats.length === 0
         ? React.createElement(
             'div',
@@ -364,7 +366,8 @@ export class AIGatewayByCallerPanel extends React.Component<
           )
         : React.createElement(
             'div',
-            { style: { maxHeight: '500px', overflowY: 'auto' } },
+            null,
+            // Table header
             React.createElement(
               'table',
               { style: tableStyle },
@@ -374,65 +377,79 @@ export class AIGatewayByCallerPanel extends React.Component<
                 React.createElement(
                   'tr',
                   null,
-                  React.createElement('th', { style: thStyle }, 'Caller'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right' } }, 'Requests'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right' } }, 'Tokens'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right' } }, 'Cost'),
-                  React.createElement('th', { style: thStyle }, 'Features'),
-                ),
-              ),
-              React.createElement(
-                'tbody',
-                null,
-                callerStats.map((stats) =>
-                  React.createElement(
-                    'tr',
-                    { key: stats.callerKey },
-                    React.createElement(
-                      'td',
-                      { style: tdStyle },
-                      React.createElement(
-                        'span',
-                        { style: badgeStyle(stats.callerType) },
-                        stats.callerType.toUpperCase(),
-                      ),
-                      stats.callerDisplay,
-                    ),
-                    React.createElement(
-                      'td',
-                      { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace' } },
-                      stats.requests.toLocaleString(),
-                    ),
-                    React.createElement(
-                      'td',
-                      { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace' } },
-                      stats.totalTokens.toLocaleString(),
-                    ),
-                    React.createElement(
-                      'td',
-                      {
-                        style: {
-                          ...tdStyle,
-                          textAlign: 'right',
-                          fontFamily: 'monospace',
-                          fontWeight: 600,
-                          color: UI_COLORS.WPE_BRAND,
-                        },
-                      },
-                      `$${stats.costUsd.toFixed(4)}`,
-                    ),
-                    React.createElement(
-                      'td',
-                      { style: { ...tdStyle, fontSize: '12px', color: 'var(--secondaryTextColor)' } },
-                      stats.features.size > 0
-                        ? Array.from(stats.features).slice(0, 3).join(', ') +
-                          (stats.features.size > 3 ? ` +${stats.features.size - 3}` : '')
-                        : '—',
-                    ),
-                  ),
+                  React.createElement('th', { style: { ...thStyle, width: '280px' } }, 'Caller'),
+                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '100px' } }, 'Requests'),
+                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '120px' } }, 'Tokens'),
+                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '100px' } }, 'Cost'),
+                  React.createElement('th', { style: { ...thStyle, width: '200px' } }, 'Features'),
                 ),
               ),
             ),
+            // Virtual scrolling list
+            React.createElement(List, {
+              height: 500,
+              itemCount: callerStats.length,
+              itemSize: 45,
+              width: '100%',
+              itemData: { callerStats, badgeStyle, tdStyle, UI_COLORS },
+              children: ({ index, style, data }: any) => {
+                const stats = data.callerStats[index];
+                return React.createElement(
+                  'table',
+                  { style: { ...tableStyle, marginTop: 0 } },
+                  React.createElement(
+                    'tbody',
+                    null,
+                    React.createElement(
+                      'tr',
+                      { style },
+                      React.createElement(
+                        'td',
+                        { style: { ...data.tdStyle, width: '280px' } },
+                        React.createElement(
+                          'span',
+                          { style: data.badgeStyle(stats.callerType) },
+                          stats.callerType.toUpperCase(),
+                        ),
+                        stats.callerDisplay,
+                      ),
+                      React.createElement(
+                        'td',
+                        { style: { ...data.tdStyle, textAlign: 'right', fontFamily: 'monospace', width: '100px' } },
+                        stats.requests.toLocaleString(),
+                      ),
+                      React.createElement(
+                        'td',
+                        { style: { ...data.tdStyle, textAlign: 'right', fontFamily: 'monospace', width: '120px' } },
+                        stats.totalTokens.toLocaleString(),
+                      ),
+                      React.createElement(
+                        'td',
+                        {
+                          style: {
+                            ...data.tdStyle,
+                            textAlign: 'right',
+                            fontFamily: 'monospace',
+                            fontWeight: 600,
+                            color: data.UI_COLORS.WPE_BRAND,
+                            width: '100px',
+                          },
+                        },
+                        `$${stats.costUsd.toFixed(4)}`,
+                      ),
+                      React.createElement(
+                        'td',
+                        { style: { ...data.tdStyle, fontSize: '12px', color: 'var(--secondaryTextColor)', width: '200px' } },
+                        stats.features.size > 0
+                          ? Array.from(stats.features).slice(0, 3).join(', ') +
+                            (stats.features.size > 3 ? ` +${stats.features.size - 3}` : '')
+                          : '—',
+                      ),
+                    ),
+                  ),
+                );
+              }
+            }),
           ),
     );
   }

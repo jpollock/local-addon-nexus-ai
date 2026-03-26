@@ -166,8 +166,14 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     try {
       const aiResult = await ipc.invoke(IPC_CHANNELS.GET_AI_STATUS, this.props.site.id);
       if (!this.mounted) return;
-      this.setState({ aiStatus: aiResult?.sites?.[this.props.site.id] ?? null });
-    } catch {
+
+      if (aiResult?.success) {
+        this.setState({ aiStatus: aiResult.sites?.[this.props.site.id] ?? null });
+      } else {
+        console.warn('[NexusAI] get-ai-status returned error:', aiResult?.error || 'Unknown error');
+      }
+    } catch (err: any) {
+      console.error('[NexusAI] get-ai-status failed:', err?.message || err?.toString() || 'Unknown error', err);
       // AI status unavailable — non-fatal
     }
 
@@ -181,7 +187,8 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
           wpVersionAge: versionResult.metadataAge ?? null,
         });
       }
-    } catch {
+    } catch (err: any) {
+      console.error('[NexusAI] get-wp-version failed:', err?.message || err?.toString() || 'Unknown error', err);
       // WP version unavailable — non-fatal
     }
 
@@ -198,7 +205,8 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
           },
         });
       }
-    } catch {
+    } catch (err: any) {
+      console.error('[NexusAI] ai-context-get-status failed:', err?.message || err?.toString() || 'Unknown error', err);
       // AI context status unavailable — non-fatal
     }
   };

@@ -154,12 +154,17 @@ export class McpClient {
   private httpGet(path: string): Promise<{ status: number; body: string }> {
     return new Promise((resolve, reject) => {
       const url = new URL(path, this.url);
-      http.get(url.toString(), (res) => {
+      const req = http.get(url.toString(), { timeout: 300000 }, (res) => {
         let body = '';
         res.on('data', (chunk) => (body += chunk));
         res.on('end', () => resolve({ status: res.statusCode ?? 0, body }));
         res.on('error', reject);
-      }).on('error', reject);
+      });
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Request timeout after 5 minutes'));
+      });
     });
   }
 
@@ -178,6 +183,8 @@ export class McpClient {
             ...headers,
             'Content-Length': Buffer.byteLength(body).toString(),
           },
+          // 5 minute timeout for long operations (site start, bulk operations)
+          timeout: 300000,
         },
         (res) => {
           let resBody = '';
@@ -187,6 +194,10 @@ export class McpClient {
         },
       );
       req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Request timeout after 5 minutes'));
+      });
       req.write(body);
       req.end();
     });

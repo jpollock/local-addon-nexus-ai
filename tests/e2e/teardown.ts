@@ -1,5 +1,7 @@
 import { loadConnectionInfo, stopLocal } from './helpers/environment';
 import { McpClient } from './helpers/client';
+import { execSync } from 'child_process';
+import * as path from 'path';
 
 module.exports = async function globalTeardown() {
   // Clean up temporary test site (before stopping Local)
@@ -47,5 +49,18 @@ module.exports = async function globalTeardown() {
   if (process.env.NEXUS_E2E_STARTED_LOCAL === 'true') {
     stopLocal();
     delete process.env.NEXUS_E2E_STARTED_LOCAL;
+  }
+
+  // Rebuild better-sqlite3 back for system Node (for subsequent npm test runs)
+  console.log('\n[E2E Teardown] Rebuilding better-sqlite3 for system Node...');
+  try {
+    execSync('npm rebuild better-sqlite3 --silent', {
+      cwd: path.join(__dirname, '..', '..'),
+      stdio: 'inherit'
+    });
+    console.log('[E2E Teardown] Rebuild complete - ready for unit tests');
+  } catch (err) {
+    console.warn('[E2E Teardown] Failed to rebuild better-sqlite3:', err);
+    // Non-fatal - just means next test run will rebuild it
   }
 };

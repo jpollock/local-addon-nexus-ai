@@ -21,7 +21,14 @@ describe('11 — Ollama Tools', () => {
   it('list_ollama_models returns available models', async () => {
     if (!ollamaAvailable) return;
 
-    const result = await client.callTool('list_ollama_models');
+    // Wait for Ollama tool to become available (async init can take a few seconds)
+    let result = await client.callTool('list_ollama_models');
+    let attempts = 0;
+    while (attempts < 10 && result.isError && resultText(result).includes('not currently available')) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
+      result = await client.callTool('list_ollama_models');
+    }
     expectSuccess(result);
 
     const text = resultText(result);

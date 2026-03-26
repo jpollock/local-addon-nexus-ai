@@ -29,6 +29,43 @@ import { WpeAutoPullService } from './wpe-auto-pull';
 import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 import { AIContextGenerator } from './ai-context/AIContextGenerator';
 import type { AIContextData } from './ai-context/AIContextGenerator';
+import { AuditLogger, AUDITED_OPERATIONS } from './audit/AuditLogger';
+import {
+  validateInput,
+  SiteIdSchema,
+  UpdateSettingsSchema,
+  IndexSiteSchema,
+  SearchUnifiedSchema,
+  BulkOperationRequestSchema,
+  BulkOperationIdSchema,
+  FleetOperationOptionsSchema,
+  WpeRemoveSiteSchema,
+  WpePullToLocalSchema,
+  WpeSyncSingleSchema,
+  WpeSyncAllSchema,
+  WpeInstallIdSchema,
+  HealthGetScoreSchema,
+  HealthGetTrendSchema,
+  HealthGetFleetTrendSchema,
+  QuerySchema,
+  QueryUpdateSchema,
+  QueryIdSchema,
+  AIGatewayUsageOptionsSchema,
+  AIGatewayCostOptionsSchema,
+  AIGatewayRateLimitSchema,
+  EventTimelineOptionsSchema,
+  StorageCleanupOptionsSchema,
+  FilterIdSchema,
+  GroupIdSchema,
+  GroupCreateSchema,
+  GroupUpdateSchema,
+  GroupAddRemoveSiteSchema,
+  SidebarFilterSchema,
+  SidebarBulkActionSchema,
+  SearchContentSchema,
+  SiteFinderAIParseSchema,
+  SiteFinderFiltersSchema,
+} from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -136,6 +173,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     graphService, eventProcessor, vectorDbPath, serviceContainer, metadataCache,
   } = deps;
   console.log('[NexusAI] 🟢 registerIpcHandlers() - deps destructured successfully');
+
+  // Initialize audit logger for tracking remote operations
+  const auditLogger = new AuditLogger(registryStorage);
 
   /**
    * Notify Local's main UI to refresh site groups after a mutation.
@@ -316,7 +356,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.START_SITE, async (_event: any, siteId: string) => {
     try {
-      await localServicesBridge.startSite(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+      await localServicesBridge.startSite(validated);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] start-site failed:', (err as Error).message);
@@ -326,7 +368,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.STOP_SITE, async (_event: any, siteId: string) => {
     try {
-      await localServicesBridge.stopSite(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+      await localServicesBridge.stopSite(validated);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] stop-site failed:', (err as Error).message);
@@ -336,14 +380,17 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SEARCH, async (_event: any, query: string, siteId?: string, limit?: number) => {
     try {
-      const maxResults = limit ?? 10;
-      const [queryVector] = await embeddingService.embedBatch([query]);
+      // Validate input
+      const validated = validateInput(SearchContentSchema, { query, siteIds: siteId ? [siteId] : undefined, limit });
+      const maxResults = validated.limit ?? 10;
+      const [queryVector] = await embeddingService.embedBatch([validated.query]);
+      const targetSiteId = validated.siteIds?.[0];
 
-      if (siteId) {
-        const results = await vectorStore.search(siteId, queryVector, { limit: maxResults });
-        const site = siteData.getSite(siteId);
+      if (targetSiteId) {
+        const results = await vectorStore.search(targetSiteId, queryVector, { limit: maxResults });
+        const site = siteData.getSite(targetSiteId);
         return {
-          results: results.map((r: any) => ({ ...r, siteId, siteName: site?.name ?? siteId })),
+          results: results.map((r: any) => ({ ...r, siteId: targetSiteId, siteName: site?.name ?? targetSiteId })),
         };
       }
 
@@ -366,17 +413,41 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: any, params: { siteId: string }) => {
+    const startTime = Date.now();
     try {
+      // Validate input
+      const validated = validateInput(IndexSiteSchema, params);
+      const siteId = validated.siteId;
+
       const site = siteData.getSite(siteId);
       if (!site) {
+        auditLogger.logFailure(
+          'index_site',
+          siteId,
+          'local_site',
+          'Site not found',
+          params,
+          Date.now() - startTime,
+        );
         return { success: false, error: `Site ${siteId} not found` };
       }
+
       const result = await contentPipeline.indexSite({
         siteId: site.id,
         siteName: site.name,
         sitePath: site.path,
       });
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'index_site',
+        siteId,
+        'local_site',
+        { documentsIndexed: result.documentsIndexed, chunksIndexed: result.chunksIndexed },
+        Date.now() - startTime,
+      );
+
       return {
         success: true,
         documentsIndexed: result.documentsIndexed,
@@ -386,6 +457,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       };
     } catch (err) {
       localLogger.error('[NexusAI] index-site failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'index_site',
+        params?.siteId || 'unknown',
+        'local_site',
+        (err as Error).message,
+        params,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -401,9 +480,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, (_event: any, partial: Partial<NexusSettings>) => {
     try {
+      // Validate input
+      const validated = validateInput(UpdateSettingsSchema, partial);
+
       const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
       const current: NexusSettings = raw ?? DEFAULT_SETTINGS;
-      const updated = { ...current, ...partial };
+      const updated = { ...current, ...validated };
       registryStorage.set(STORAGE_KEYS.SETTINGS, updated as any);
       return updated;
     } catch (err) {
@@ -414,25 +496,28 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
       let version: string | null = null;
       let fromCache = false;
       let metadataAge: string | null = null;
 
       // Digital Twin: Check cache first (instant)
-      const cachedMetadata = metadataCache?.getWithAge(siteId);
+      const cachedMetadata = metadataCache?.getWithAge(validated);
       if (cachedMetadata) {
         version = cachedMetadata.wpVersion;
         fromCache = true;
-        metadataAge = metadataCache?.getAgeString(siteId) ?? null;
+        metadataAge = metadataCache?.getAgeString(validated) ?? null;
       }
 
       // If cache is stale or doesn't exist, try live WP-CLI (slower)
       const statuses = localServicesBridge.getAllSiteStatuses();
-      const siteStatus = statuses[siteId] ?? 'unknown';
+      const siteStatus = statuses[validated] ?? 'unknown';
 
       if (siteStatus === 'running' && (!cachedMetadata || cachedMetadata.isStale)) {
         try {
-          const liveVersion = await localServicesBridge.getWpVersion(siteId);
+          const liveVersion = await localServicesBridge.getWpVersion(validated);
           if (liveVersion) {
             version = liveVersion;
             fromCache = false;
@@ -459,57 +544,91 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   safeHandle(IPC_CHANNELS.UPGRADE_WP, async (_event: any, siteId: string) => {
+    const startTime = Date.now();
     try {
-      localLogger.info(`[NexusAI] Starting WordPress upgrade for site ${siteId}`);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      localLogger.info(`[NexusAI] Starting WordPress upgrade for site ${validated}`);
 
       // Check if site is running
       const statuses = localServicesBridge.getAllSiteStatuses();
-      const siteStatus = statuses[siteId];
+      const siteStatus = statuses[validated];
       if (siteStatus !== 'running') {
         const msg = `Site must be running to upgrade WordPress. Current status: ${siteStatus || 'unknown'}`;
         localLogger.error(`[NexusAI] upgrade-wp: ${msg}`);
+        auditLogger.logFailure(
+          'upgrade_wp',
+          validated,
+          'local_site',
+          msg,
+          {},
+          Date.now() - startTime,
+        );
         return { success: false, error: msg };
       }
 
       // Get current version
-      const currentVersion = await localServicesBridge.getWpVersion(siteId);
+      const currentVersion = await localServicesBridge.getWpVersion(validated);
       localLogger.info(`[NexusAI] Current WordPress version: ${currentVersion}`);
 
       // Run wp core update to upgrade to WP 7.0-beta6
       // Using --force to allow downgrade if on a dev version
       const targetVersion = '7.0-beta6';
 
-      localLogger.info(`[NexusAI] Running wp core update --version=${targetVersion} --force for site ${siteId}`);
-      const updateResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update', `--version=${targetVersion}`, '--force']);
+      localLogger.info(`[NexusAI] Running wp core update --version=${targetVersion} --force for site ${validated}`);
+      const updateResult = await localServicesBridge.wpCliRun(validated, ['core', 'update', `--version=${targetVersion}`, '--force']);
       localLogger.info(`[NexusAI] wp core update result:`, updateResult);
 
       // Check if update succeeded
       if (!updateResult.success) {
         const errorMsg = updateResult.stdout || 'WordPress core update failed';
-        localLogger.error(`[NexusAI] WordPress core update failed for site ${siteId}:`, errorMsg);
+        localLogger.error(`[NexusAI] WordPress core update failed for site ${validated}:`, errorMsg);
         throw new Error(errorMsg);
       }
 
       // Update database if needed
-      localLogger.info(`[NexusAI] Running wp core update-db for site ${siteId}`);
-      const dbResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update-db']);
+      localLogger.info(`[NexusAI] Running wp core update-db for site ${validated}`);
+      const dbResult = await localServicesBridge.wpCliRun(validated, ['core', 'update-db']);
       localLogger.info(`[NexusAI] wp core update-db result:`, dbResult);
 
       // Get the new version
-      const newVersion = await localServicesBridge.getWpVersion(siteId);
+      const newVersion = await localServicesBridge.getWpVersion(validated);
       localLogger.info(`[NexusAI] WordPress upgrade complete. New version: ${newVersion}`);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'upgrade_wp',
+        validated,
+        'local_site',
+        { fromVersion: currentVersion, toVersion: newVersion, targetVersion },
+        Date.now() - startTime,
+      );
 
       return { success: true, version: newVersion };
     } catch (err) {
       localLogger.error('[NexusAI] upgrade-wp failed:', (err as Error).message, err);
+      auditLogger.logFailure(
+        'upgrade_wp',
+        siteId || 'unknown',
+        'local_site',
+        (err as Error).message,
+        {},
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
 
   safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
+    const startTime = Date.now();
     let wasAutoStarted = false;
 
     try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+      siteId = validated; // Use validated value
+
       // Check if site is running
       const statuses = localServicesBridge.getAllSiteStatuses();
       const wasRunning = statuses[siteId] === 'running';
@@ -591,6 +710,15 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         await localServicesBridge.stopSite(siteId);
       }
 
+      // Audit log successful setup
+      auditLogger.logSuccess(
+        'setup_ai',
+        siteId,
+        'local_site',
+        { enableOllama: settings?.chatProvider === 'ollama' },
+        Date.now() - startTime
+      );
+
       return result;
     } catch (err) {
       // Auto-stop if we started it (even on error)
@@ -602,6 +730,16 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           localLogger.error(`[NexusAI] Failed to stop site ${siteId}:`, (stopErr as Error).message);
         }
       }
+
+      // Audit log failure
+      auditLogger.logFailure(
+        'setup_ai',
+        siteId,
+        'local_site',
+        (err as Error).message,
+        {},
+        Date.now() - startTime
+      );
 
       return {
         success: false,
@@ -629,7 +767,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     siteId?: string;
   }) => {
     try {
-      const events = await graphService.getRecentEvents(options as any);
+      // Validate input
+      const validated = validateInput(EventTimelineOptionsSchema, options);
+
+      const events = await graphService.getRecentEvents(validated as any);
 
       // Transform to renderer-safe format with site names
       const timeline: EventTimelineEntry[] = events.map(e => {
@@ -725,14 +866,35 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   safeHandle(IPC_CHANNELS.STORAGE_CLEANUP, async (_event: any, options?: {
     retentionDays?: number;
   }) => {
+    const startTime = Date.now();
     try {
-      const retentionDays = options?.retentionDays ?? 30;
+      // Validate input
+      const validated = validateInput(StorageCleanupOptionsSchema, options);
+
+      const retentionDays = validated?.retentionDays ?? 30;
       const deleted = await graphService.cleanupOldData(retentionDays);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'storage_cleanup',
+        'all',
+        'database',
+        { retentionDays, eventsDeleted: deleted.events },
+        Date.now() - startTime,
+      );
 
       localLogger.info(`[NexusAI] Cleaned up ${deleted} old events (retention: ${retentionDays} days)`);
       return { success: true, deletedCount: deleted.events };
     } catch (err) {
       localLogger.error('[NexusAI] storage:cleanup failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'storage_cleanup',
+        'all',
+        'database',
+        (err as Error).message,
+        options || {},
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -763,10 +925,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   queryStorage.load().catch(err => localLogger.error('[NexusAI] Failed to load saved queries:', err.message));
 
   // Unified search
-  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, query: string, filters?: any, options?: any) => {
+  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, params: { query: string; filters?: any; options?: any }) => {
     try {
-      localLogger.info('[NexusAI] Search request:', { query, filters, options });
-      const results = await searchService.searchFleet(query, filters, options);
+      // Validate input
+      const validated = validateInput(SearchUnifiedSchema, params);
+
+      localLogger.info('[NexusAI] Search request:', { query: validated.query, filters: validated.filters, options: validated.options });
+      const results = await searchService.searchFleet(validated.query, validated.filters, validated.options);
       localLogger.info('[NexusAI] Search results:', { total: results.total, resultCount: results.results.length });
       return { success: true, ...results };
     } catch (err) {
@@ -788,7 +953,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.FILTERS_APPLY, async (_event: any, filterId: string) => {
     try {
-      const siteIds = await filterEngine.applyFilter(filterId);
+      // Validate input
+      const validated = validateInput(FilterIdSchema, filterId);
+
+      const siteIds = await filterEngine.applyFilter(validated);
       return { success: true, siteIds };
     } catch (err) {
       localLogger.error('[NexusAI] filters:apply failed:', (err as Error).message);
@@ -797,8 +965,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Health scores
-  safeHandle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: any, params: { siteId: string }) => {
     try {
+      // Validate input
+      const validated = validateInput(HealthGetScoreSchema, params);
+      const siteId = validated.siteId;
+
       const site = siteData.getSite(siteId);
       const breakdown = await healthCalculator.calculateScore(siteId, {
         phpVersion: site?.phpVersion,
@@ -841,7 +1013,16 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.QUERIES_CREATE, async (_event: any, query: any) => {
     try {
-      const saved = await queryStorage.save(query);
+      // Validate input
+      const validated = validateInput(QuerySchema, query);
+
+      // Ensure pinned has a default value
+      const queryToSave = {
+        ...validated,
+        pinned: validated.pinned ?? false,
+      };
+
+      const saved = await queryStorage.save(queryToSave);
       return { success: true, query: saved };
     } catch (err) {
       localLogger.error('[NexusAI] queries:create failed:', (err as Error).message);
@@ -849,9 +1030,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: any, id: string, changes: any) => {
+  safeHandle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: any, params: { id: string; changes: any }) => {
     try {
-      const updated = await queryStorage.update(id, changes);
+      // Validate input
+      const validated = validateInput(QueryUpdateSchema, params);
+
+      const updated = await queryStorage.update(validated.id, validated.changes);
       return { success: true, query: updated };
     } catch (err) {
       localLogger.error('[NexusAI] queries:update failed:', (err as Error).message);
@@ -861,7 +1045,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.QUERIES_DELETE, async (_event: any, id: string) => {
     try {
-      await queryStorage.delete(id);
+      // Validate input
+      const validated = validateInput(QueryIdSchema, id);
+
+      await queryStorage.delete(validated);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] queries:delete failed:', (err as Error).message);
@@ -871,7 +1058,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.QUERIES_RUN, async (_event: any, id: string) => {
     try {
-      const query = queryStorage.get(id);
+      // Validate input
+      const validated = validateInput(QueryIdSchema, id);
+
+      const query = queryStorage.get(validated);
       if (!query) {
         return { success: false, error: 'Query not found' };
       }
@@ -989,22 +1179,57 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // --- Bulk Operations ---
 
   safeHandle(IPC_CHANNELS.BULK_EXECUTE, async (_event: any, request: any) => {
+    const startTime = Date.now();
     try {
-      const opId = await bulkOpManager.execute(request);
+      // Validate input
+      const validated = validateInput(BulkOperationRequestSchema, request);
+
+      // Audit log bulk operation start
+      auditLogger.log({
+        operation: `bulk_${validated.type}`,
+        target: `${validated.siteIds.length} sites`,
+        targetType: 'bulk_operation',
+        result: 'started',
+        params: { type: validated.type, siteCount: validated.siteIds.length },
+        durationMs: 0,
+      });
+
+      const opId = await bulkOpManager.execute(validated);
+
       return { success: true, opId };
     } catch (err) {
       localLogger.error('[NexusAI] bulk:execute failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'bulk_execute',
+        'multiple',
+        'bulk_operation',
+        (err as Error).message,
+        request,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
 
   safeHandle(IPC_CHANNELS.BULK_STATUS, async (_event: any, opId: string) => {
-    const status = bulkOpManager.getStatus(opId);
-    return status ? { success: true, ...status } : { success: false, error: 'Operation not found' };
+    try {
+      // Validate input
+      const validated = validateInput(BulkOperationIdSchema, opId);
+      const status = bulkOpManager.getStatus(validated);
+      return status ? { success: true, ...status } : { success: false, error: 'Operation not found' };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
   });
 
   safeHandle(IPC_CHANNELS.BULK_CANCEL, async (_event: any, opId: string) => {
-    return { success: bulkOpManager.cancel(opId) };
+    try {
+      // Validate input
+      const validated = validateInput(BulkOperationIdSchema, opId);
+      return { success: bulkOpManager.cancel(validated) };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
   });
 
   safeHandle(IPC_CHANNELS.BULK_LIST, async () => {
@@ -1024,7 +1249,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GROUPS_CREATE, async (_event: any, args: { name: string }) => {
     try {
-      const group = localServicesBridge.createSiteGroup(args.name);
+      // Validate input
+      const validated = validateInput(GroupCreateSchema, args);
+
+      const group = localServicesBridge.createSiteGroup(validated.name);
       notifyGroupsChanged();
       return { success: true, group };
     } catch (err) {
@@ -1032,10 +1260,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: any, id: string, changes: { name?: string }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: any, params: { id: string; changes: { name?: string } }) => {
     try {
-      if (changes.name) {
-        const group = localServicesBridge.renameSiteGroup(id, changes.name);
+      // Validate input
+      const validated = validateInput(GroupUpdateSchema, params);
+
+      if (validated.changes.name) {
+        const group = localServicesBridge.renameSiteGroup(validated.id, validated.changes.name);
         notifyGroupsChanged();
         return { success: true, group };
       }
@@ -1047,7 +1278,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GROUPS_DELETE, async (_event: any, id: string) => {
     try {
-      localServicesBridge.deleteSiteGroup(id);
+      // Validate input
+      const validated = validateInput(GroupIdSchema, id);
+
+      localServicesBridge.deleteSiteGroup(validated);
       notifyGroupsChanged();
       return { success: true };
     } catch (err) {
@@ -1055,9 +1289,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: any, groupId: string, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: any, params: { groupId: string; siteId: string }) => {
     try {
-      localServicesBridge.moveSitesToGroup([siteId], groupId);
+      // Validate input
+      const validated = validateInput(GroupAddRemoveSiteSchema, params);
+
+      localServicesBridge.moveSitesToGroup([validated.siteId], validated.groupId);
       notifyGroupsChanged();
       return { success: true };
     } catch (err) {
@@ -1065,9 +1302,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: any, groupId: string, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: any, params: { groupId: string; siteId: string }) => {
     try {
-      localServicesBridge.removeSitesFromGroups([siteId]);
+      // Validate input
+      const validated = validateInput(GroupAddRemoveSiteSchema, params);
+
+      localServicesBridge.removeSitesFromGroups([validated.siteId]);
       notifyGroupsChanged();
       return { success: true };
     } catch (err) {
@@ -1077,14 +1317,22 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // --- Health Trends ---
 
-  safeHandle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: any, siteId: string, days?: number) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: any, params: { siteId: string; days?: number }) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
-    return { success: true, trend: healthTrendTracker.getSiteTrend(siteId, days || 30) };
+
+    // Validate input
+    const validated = validateInput(HealthGetTrendSchema, params);
+
+    return { success: true, trend: healthTrendTracker.getSiteTrend(validated.siteId, validated.days || 30) };
   });
 
-  safeHandle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: any, days?: number) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: any, params?: { days?: number }) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
-    return { success: true, trend: healthTrendTracker.getFleetTrend(days || 30) };
+
+    // Validate input
+    const validated = validateInput(HealthGetFleetTrendSchema, params);
+
+    return { success: true, trend: healthTrendTracker.getFleetTrend(validated?.days || 30) };
   });
 
   // --- Dashboard v2 ---
@@ -1150,9 +1398,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GET_AI_STATUS, async (_event: any, siteId?: string) => {
     try {
+      // Validate input if siteId provided
+      const validatedSiteId = siteId ? validateInput(SiteIdSchema, siteId) : undefined;
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
-      const targetIds = siteId ? [siteId] : Object.keys(allSites);
+      const targetIds = validatedSiteId ? [validatedSiteId] : Object.keys(allSites);
 
       // Load cached setup state
       const setupState = (registryStorage.get(STORAGE_KEYS.AI_SETUP_STATE) ?? {}) as Record<string, {
@@ -1302,11 +1553,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SETUP_AI_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
     try {
+      // Validate input
+      const validated = validateInput(FleetOperationOptionsSchema, options);
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
 
       // Use provided siteIds or all running sites
-      const targetIds = options?.siteIds
+      const targetIds = validated?.siteIds
         ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
 
       if (targetIds.length === 0) {
@@ -1331,11 +1585,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.INDEX_ALL_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
     try {
+      // Validate input
+      const validated = validateInput(FleetOperationOptionsSchema, options);
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
 
       // Use provided siteIds or all running sites
-      const targetIds = options?.siteIds
+      const targetIds = validated?.siteIds
         ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
 
       if (targetIds.length === 0) {
@@ -1482,6 +1739,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SITE_FINDER_APPLY, async (_event: any, filters: any) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteFinderFiltersSchema, filters);
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
       const db = graphService.getDb();
@@ -1489,12 +1749,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       // Pre-filter by content if contentQuery is provided (semantic search)
       let contentMatchingSiteIds: Set<string> | null = null;
-      if (filters.contentQuery && filters.contentQuery.trim()) {
+      if (validated?.contentQuery && validated.contentQuery.trim()) {
         try {
-          localLogger.info('[NexusAI] Running content search for:', filters.contentQuery);
+          localLogger.info('[NexusAI] Running content search for:', validated.contentQuery);
 
           // Convert query text to embedding vector
-          const queryVector = await embeddingService.embed(filters.contentQuery);
+          const queryVector = await embeddingService.embed(validated.contentQuery);
 
           // Search across all indexed sites (local + WPE)
           contentMatchingSiteIds = new Set<string>();
@@ -1550,8 +1810,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Text search (name or domain)
-        if (filters.searchText && filters.searchText.trim()) {
-          const searchLower = filters.searchText.toLowerCase();
+        if (validated?.searchText && validated.searchText.trim()) {
+          const searchLower = validated.searchText.toLowerCase();
           const nameMatch = (site as any).name?.toLowerCase().includes(searchLower);
           const domainMatch = (site as any).domain?.toLowerCase().includes(searchLower);
           if (!nameMatch && !domainMatch) {
@@ -1560,19 +1820,19 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // PHP version filter (available even when stopped) - OR logic within array
-        if (matches && filters.phpVersions && filters.phpVersions.length > 0) {
+        if (matches && validated?.phpVersions && validated.phpVersions.length > 0) {
           const phpVersion = (site as any).phpVersion;
-          if (!filters.phpVersions.includes(phpVersion)) {
+          if (!validated.phpVersions.includes(phpVersion)) {
             matches = false;
           }
         }
 
         // Plugin filter (use graph - works on all sites) - OR logic within array
-        if (matches && filters.plugins && filters.plugins.length > 0) {
+        if (matches && validated?.plugins && validated.plugins.length > 0) {
           if (db) {
-            const placeholders = filters.plugins.map(() => '?').join(',');
+            const placeholders = validated.plugins.map(() => '?').join(',');
             const pluginRow = db.prepare(`SELECT 1 FROM plugins WHERE site_id = ? AND slug IN (${placeholders}) LIMIT 1`)
-              .get(siteId, ...filters.plugins);
+              .get(siteId, ...validated.plugins);
             if (!pluginRow) matches = false;
           } else {
             matches = false;
@@ -1580,11 +1840,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // WP version filter (use graph - works on all sites) - OR logic within array
-        if (matches && filters.wpVersions && filters.wpVersions.length > 0) {
+        if (matches && validated?.wpVersions && validated.wpVersions.length > 0) {
           if (db) {
             const siteRow = db.prepare('SELECT wp_version FROM sites WHERE id = ? LIMIT 1')
               .get(siteId) as any;
-            if (!siteRow || !filters.wpVersions.includes(siteRow.wp_version)) {
+            if (!siteRow || !validated.wpVersions.includes(siteRow.wp_version)) {
               matches = false;
             }
           } else {
@@ -1593,13 +1853,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Theme filter (requires WP-CLI - running sites only) - OR logic within array
-        if (matches && filters.themes && filters.themes.length > 0) {
+        if (matches && validated?.themes && validated.themes.length > 0) {
           if (!isRunning) {
             matches = false;
           } else {
             try {
               const themes = await localServicesBridge.getThemes(siteId);
-              const hasAnyTheme = themes.some((t: any) => filters.themes.includes(t.name));
+              const hasAnyTheme = themes.some((t: any) => validated.themes!.includes(t.name));
               if (!hasAnyTheme) matches = false;
             } catch {
               matches = false;
@@ -1626,8 +1886,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Text search (name or domain)
-        if (filters.searchText && filters.searchText.trim()) {
-          const searchLower = filters.searchText.toLowerCase();
+        if (validated?.searchText && validated.searchText.trim()) {
+          const searchLower = validated.searchText.toLowerCase();
           const nameMatch = wpeSite.name?.toLowerCase().includes(searchLower);
           const domainMatch = wpeSite.domain?.toLowerCase().includes(searchLower);
           if (!nameMatch && !domainMatch) {
@@ -1636,11 +1896,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Plugin filter (use graph)
-        if (matches && filters.plugins && filters.plugins.length > 0) {
+        if (matches && validated?.plugins && validated.plugins.length > 0) {
           if (db) {
-            const placeholders = filters.plugins.map(() => '?').join(',');
+            const placeholders = validated.plugins.map(() => '?').join(',');
             const pluginRow = db.prepare(`SELECT 1 FROM plugins WHERE site_id = ? AND slug IN (${placeholders}) LIMIT 1`)
-              .get(wpeSite.id, ...filters.plugins);
+              .get(wpeSite.id, ...validated.plugins);
             if (!pluginRow) matches = false;
           } else {
             matches = false;
@@ -1648,14 +1908,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // WP version filter (use graph)
-        if (matches && filters.wpVersions && filters.wpVersions.length > 0) {
-          if (!filters.wpVersions.includes(wpeSite.wp_version)) {
+        if (matches && validated?.wpVersions && validated.wpVersions.length > 0) {
+          if (!wpeSite.wp_version || !validated.wpVersions.includes(wpeSite.wp_version)) {
             matches = false;
           }
         }
 
         // Skip theme filter for WPE sites (requires WP-CLI on running sites)
-        if (matches && filters.themes && filters.themes.length > 0) {
+        if (matches && validated?.themes && validated.themes.length > 0) {
           matches = false; // WPE sites don't support theme filtering yet
         }
 
@@ -1675,6 +1935,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SITE_FINDER_AI_PARSE, async (_event: any, payload: { conversation: Array<{ role: string; content: string }> }) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteFinderAIParseSchema, payload);
+
       const { getProvider } = require('./chat/providers/index');
 
       // Get settings to determine which provider to use
@@ -1746,7 +2009,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       // Build messages array
       const messages = [
         { role: 'system' as const, content: systemPrompt },
-        ...payload.conversation.map(msg => ({
+        ...validated.conversation.map(msg => ({
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
         })),
@@ -1846,10 +2109,12 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
   safeHandle(IPC_CHANNELS.SIDEBAR_FILTER, async (event: any, payload: { siteIds: string[] }) => {
     try {
-      sidebarFilteredSiteIds = payload.siteIds || [];
+      // Validate input
+      const validated = validateInput(SidebarFilterSchema, payload);
+      sidebarFilteredSiteIds = validated.siteIds || [];
 
       // Broadcast filter to renderer via CSS injection
-      const siteIds = payload.siteIds || [];
+      const siteIds = validated.siteIds || [];
       if (siteIds.length > 0) {
         event.sender.send('nexus:apply-sidebar-filter', siteIds);
       } else {
@@ -1867,11 +2132,9 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
   safeHandle(IPC_CHANNELS.SIDEBAR_BULK_ACTION, async (_event: any, payload: { action: string; siteIds: string[] }) => {
     try {
-      const { action, siteIds } = payload;
-
-      if (!siteIds || siteIds.length === 0) {
-        return { success: false, error: 'No sites selected' };
-      }
+      // Validate input
+      const validated = validateInput(SidebarBulkActionSchema, payload);
+      const { action, siteIds } = validated;
 
       const bulkMgr = deps.nexusServices?.bulkOperationManager;
       if (!bulkMgr) {
@@ -1927,21 +2190,44 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * Sync all WPE sites from wp-nexus MCP
    */
   safeHandle(IPC_CHANNELS.WPE_SYNC_ALL, async (_event: any, options?: { limit?: number }) => {
+    const startTime = Date.now();
+
     if (!deps.wpeSyncService) {
       localLogger.warn('[NexusAI] WPE sync service not initialized');
       return { success: false, error: 'WPE sync service not available' };
     }
 
     try {
-      const limit = options?.limit;
+      // Validate input
+      const validated = validateInput(WpeSyncAllSchema, options);
+
+      const limit = validated?.limit;
       localLogger.info(`[NexusAI] Starting WPE site sync${limit ? ` (limit: ${limit})` : ''}...`);
       const result = await deps.wpeSyncService.syncAllWPESites(limit);
       localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.failed} failed`);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'wpe_sync_all',
+        'all_installs',
+        'wpe_install',
+        { synced: result.synced, failed: result.failed, limit },
+        Date.now() - startTime,
+      );
+
       return result;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const errorStack = err instanceof Error ? err.stack : undefined;
       localLogger.error('[NexusAI] WPE sync failed:', errorMsg, errorStack);
+      auditLogger.logFailure(
+        'wpe_sync_all',
+        'all_installs',
+        'wpe_install',
+        errorMsg,
+        options || {},
+        Date.now() - startTime,
+      );
       return { success: false, error: errorMsg };
     }
   });
@@ -2005,26 +2291,25 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       return { success: false, error: 'WPE sync service not available' };
     }
 
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
       const sites = await deps.wpeSyncService.getSyncedWPESites();
       // installId could be:
       // - Full ID: "wpe-myinstprod"
       // - Stripped ID: "myinstprod"
       // - Install ID: "myinstprod"
       const site = sites.find((s: any) =>
-        s.id === installId ||
-        s.id === `wpe-${installId}` ||
-        s.remote_install_id === installId ||
-        s.install_id === installId
+        s.id === validated ||
+        s.id === `wpe-${validated}` ||
+        s.remote_install_id === validated ||
+        s.install_id === validated
       );
 
       if (!site) {
-        localLogger.warn(`[NexusAI] WPE site not found: ${installId}. Available sites:`, sites.map((s: any) => s.id));
-        return { success: false, error: `Site not found: ${installId}` };
+        localLogger.warn(`[NexusAI] WPE site not found: ${validated}. Available sites:`, sites.map((s: any) => s.id));
+        return { success: false, error: `Site not found: ${validated}` };
       }
 
       return { success: true, site };
@@ -2037,21 +2322,41 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Re-sync a single WPE site
    */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: any, params: { installId: string }) => {
+    const startTime = Date.now();
+
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
 
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeSyncSingleSchema, params);
+      const installId = validated.installId;
+
       await deps.wpeSyncService.syncSingleSite(installId);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'wpe_sync_single',
+        installId,
+        'wpe_install',
+        {},
+        Date.now() - startTime,
+      );
+
       localLogger.info(`[NexusAI] Re-synced WPE site: ${installId}`);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] Failed to re-sync WPE site:', (err as Error).message);
+      auditLogger.logFailure(
+        'wpe_sync_single',
+        params?.installId || 'unknown',
+        'wpe_install',
+        (err as Error).message,
+        params,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -2062,11 +2367,10 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * Uses wp-nexus MCP tools to gather detailed site information
    */
   safeHandle(IPC_CHANNELS.WPE_DIAGNOSE_SITE, async (_event: any, installId: string) => {
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
       // TODO: Call wpe_diagnose_site MCP tool when available
       // For now, return placeholder diagnostics
       const diagnostics = {
@@ -2088,21 +2392,41 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Remove a WPE site from the graph
    */
-  safeHandle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, params: { installId: string }) => {
+    const startTime = Date.now();
+
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
 
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeRemoveSiteSchema, params);
+      const installId = validated.installId;
+
       await deps.wpeSyncService.removeWPESite(installId);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'wpe_remove_site',
+        installId,
+        'wpe_install',
+        {},
+        Date.now() - startTime,
+      );
+
       localLogger.info(`[NexusAI] Removed WPE site: ${installId}`);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] Failed to remove WPE site:', (err as Error).message);
+      auditLogger.logFailure(
+        'wpe_remove_site',
+        params?.installId || 'unknown',
+        'wpe_install',
+        (err as Error).message,
+        params,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -2117,40 +2441,59 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * - Links to WPE environment
    * - Triggers pull operation (database + files)
    */
-  safeHandle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, { wpeSiteId, installName, installId }: { wpeSiteId: string; installName: string; installId?: string }) => {
+  safeHandle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, params: { wpeSiteId: string; installName: string; installId: string }) => {
+    const startTime = Date.now();
     try {
-      if (!installId) {
-        return { success: false, errorCode: 'INVALID_ARGS', error: 'WPE install ID is required' };
-      }
+      // Validate input
+      const validated = validateInput(WpePullToLocalSchema, params);
 
       if (!serviceContainer) {
         return { success: false, errorCode: 'SERVICE_UNAVAILABLE', error: 'Service container not initialized' };
       }
 
-      localLogger.info(`[WpeAutoPull] Starting pull for ${installName} (${installId})`);
+      localLogger.info(`[WpeAutoPull] Starting pull for ${validated.installName} (${validated.installId})`);
 
       // Initialize WpeAutoPullService with Local's service container
       const autoPullService = new WpeAutoPullService(serviceContainer);
 
       // Execute the pull with full automation
       const result = await autoPullService.pullToLocal({
-        installId,
-        installName,
+        installId: validated.installId,
+        installName: validated.installName,
         includeSql: true,
         environment: 'production',
       });
 
       if (result.success) {
+        // Audit log success
+        auditLogger.logSuccess(
+          'wpe_pull_to_local',
+          validated.installId,
+          'wpe_install',
+          { siteId: result.siteId, siteName: result.siteName },
+          Date.now() - startTime,
+        );
+
         localLogger.info(`[WpeAutoPull] SUCCESS: ${result.message}`);
         return {
           success: true,
           siteId: result.siteId,
           siteName: result.siteName,
-          installName,
-          installId,
+          installName: validated.installName,
+          installId: validated.installId,
           message: result.message,
         };
       } else {
+        // Audit log failure
+        auditLogger.logFailure(
+          'wpe_pull_to_local',
+          validated.installId,
+          'wpe_install',
+          result.message || 'Pull to local failed',
+          params,
+          Date.now() - startTime,
+        );
+
         localLogger.error(`[WpeAutoPull] FAILED: ${result.message} (${result.errorCode})`);
         return {
           success: false,
@@ -2162,6 +2505,17 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const errorStack = err instanceof Error ? err.stack : undefined;
+
+      // Audit log failure
+      auditLogger.logFailure(
+        'wpe_pull_to_local',
+        params?.installId || 'unknown',
+        'wpe_install',
+        errorMsg,
+        params,
+        Date.now() - startTime,
+      );
+
       localLogger.error('[WpeAutoPull] Unexpected error:', errorMsg, errorStack);
 
       return {
@@ -2181,7 +2535,10 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
 
     try {
-      const site = await graphService.getSite(installId);
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
+      const site = await graphService.getSite(validated);
 
       if (!site) {
         return { success: false, error: 'Site not found' };
@@ -2203,8 +2560,11 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
 
     try {
-      await deps.wpeSyncService.syncSingleSite(installId);
-      localLogger.info(`[NexusAI] Re-synced WPE site: ${installId}`);
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
+      await deps.wpeSyncService.syncSingleSite(validated);
+      localLogger.info(`[NexusAI] Re-synced WPE site: ${validated}`);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] Failed to re-sync WPE site:', (err as Error).message);
@@ -2266,11 +2626,14 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
 
     try {
-      const metadata = metadataCache.getWithAge(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      const metadata = metadataCache.getWithAge(validated);
       return {
         success: true,
         metadata,
-        ageString: metadata ? metadataCache.getAgeString(siteId) : null,
+        ageString: metadata ? metadataCache.getAgeString(validated) : null,
       };
     } catch (err) {
       localLogger.error('[NexusAI] get-site-metadata failed:', (err as Error).message);
@@ -2279,14 +2642,19 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   safeHandle(IPC_CHANNELS.REFRESH_SITE_METADATA, async (_event: any, siteId: string) => {
+    const startTime = Date.now();
+
     if (!metadataCache) {
       return { success: false, error: 'Metadata cache not available' };
     }
 
     try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
       // Ensure site is running
       const statuses = localServicesBridge.getAllSiteStatuses();
-      const siteStatus = statuses[siteId] ?? 'unknown';
+      const siteStatus = statuses[validated] ?? 'unknown';
 
       if (siteStatus !== 'running') {
         return { success: false, error: `Site must be running to refresh metadata (current status: ${siteStatus})` };
@@ -2294,13 +2662,13 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
       // Fetch fresh metadata via WP-CLI
       const [wpVersion, plugins, themes] = await Promise.all([
-        localServicesBridge.getWpVersion(siteId),
-        localServicesBridge.getPlugins(siteId),
-        localServicesBridge.getThemes(siteId),
+        localServicesBridge.getWpVersion(validated),
+        localServicesBridge.getPlugins(validated),
+        localServicesBridge.getThemes(validated),
       ]);
 
       // Store in cache
-      metadataCache.set(siteId, {
+      metadataCache.set(validated, {
         wpVersion: wpVersion ?? 'unknown',
         plugins: plugins.map(p => ({
           name: p.name,
@@ -2319,16 +2687,34 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
         updateSource: 'manual',
       });
 
-      const metadata = metadataCache.getWithAge(siteId);
-      localLogger.info(`[NexusAI] Refreshed metadata for ${siteId}`);
+      const metadata = metadataCache.getWithAge(validated);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'refresh_site_metadata',
+        validated,
+        'local_site',
+        { pluginCount: plugins.length, themeCount: themes.length },
+        Date.now() - startTime,
+      );
+
+      localLogger.info(`[NexusAI] Refreshed metadata for ${validated}`);
 
       return {
         success: true,
         metadata,
-        ageString: metadataCache.getAgeString(siteId),
+        ageString: metadataCache.getAgeString(validated),
       };
     } catch (err) {
       localLogger.error('[NexusAI] refresh-site-metadata failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'refresh_site_metadata',
+        siteId || 'unknown',
+        'local_site',
+        (err as Error).message,
+        { siteId },
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -2339,32 +2725,35 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
   safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_USAGE, async (_event: any, options?: {
     siteId?: string;
-    startDate?: number;
-    endDate?: number;
+    since?: number;
+    until?: number;
     limit?: number;
   }) => {
     try {
+      // Validate input
+      const validated = validateInput(AIGatewayUsageOptionsSchema, options);
+
       const USAGE_KEY = 'nexus_ai_gateway_usage';
       const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
 
       let filtered = allRecords;
 
       // Filter by site ID if provided
-      if (options?.siteId) {
-        filtered = filtered.filter(r => r.siteId === options.siteId);
+      if (validated?.siteId) {
+        filtered = filtered.filter(r => r.siteId === validated.siteId);
       }
 
       // Filter by date range if provided
-      if (options?.startDate !== undefined) {
-        filtered = filtered.filter(r => r.timestamp >= options.startDate!);
+      if (validated?.since !== undefined) {
+        filtered = filtered.filter(r => r.timestamp >= validated.since!);
       }
-      if (options?.endDate !== undefined) {
-        filtered = filtered.filter(r => r.timestamp <= options.endDate!);
+      if (validated?.until !== undefined) {
+        filtered = filtered.filter(r => r.timestamp <= validated.until!);
       }
 
       // Apply limit (most recent first)
-      if (options?.limit) {
-        filtered = filtered.slice(-options.limit);
+      if (validated?.limit) {
+        filtered = filtered.slice(-validated.limit);
       }
 
       return { success: true, records: filtered };
@@ -2380,22 +2769,25 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     endDate?: number;
   }) => {
     try {
+      // Validate input
+      const validated = validateInput(AIGatewayCostOptionsSchema, options);
+
       const USAGE_KEY = 'nexus_ai_gateway_usage';
       const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
 
       let filtered = allRecords;
 
       // Filter by site ID if provided
-      if (options?.siteId) {
-        filtered = filtered.filter(r => r.siteId === options.siteId);
+      if (validated?.siteId) {
+        filtered = filtered.filter(r => r.siteId === validated.siteId);
       }
 
       // Filter by date range if provided
-      if (options?.startDate !== undefined) {
-        filtered = filtered.filter(r => r.timestamp >= options.startDate!);
+      if (validated?.startDate !== undefined) {
+        filtered = filtered.filter(r => r.timestamp >= validated.startDate!);
       }
-      if (options?.endDate !== undefined) {
-        filtered = filtered.filter(r => r.timestamp <= options.endDate!);
+      if (validated?.endDate !== undefined) {
+        filtered = filtered.filter(r => r.timestamp <= validated.endDate!);
       }
 
       // Calculate totals
@@ -2488,13 +2880,35 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   safeHandle(IPC_CHANNELS.AI_GATEWAY_CLEAR_USAGE, async (_event: any) => {
+    const startTime = Date.now();
     try {
       const USAGE_KEY = 'nexus_ai_gateway_usage';
+      const existingRecords = registryStorage.get(USAGE_KEY) || [];
+      const recordCount = Array.isArray(existingRecords) ? existingRecords.length : 0;
+
       registryStorage.set(USAGE_KEY, []);
-      localLogger.info('[NexusAI] Cleared AI Gateway usage records');
-      return { success: true };
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'ai_gateway_clear_usage',
+        'all',
+        'registry',
+        { recordsCleared: recordCount },
+        Date.now() - startTime,
+      );
+
+      localLogger.info(`[NexusAI] Cleared ${recordCount} AI Gateway usage records`);
+      return { success: true, recordsCleared: recordCount };
     } catch (err) {
       localLogger.error('[NexusAI] ai-gateway-clear-usage failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'ai_gateway_clear_usage',
+        'all',
+        'registry',
+        (err as Error).message,
+        {},
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -2502,8 +2916,11 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // Rate limiting (Phase 2.4)
   safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_RATE_LIMIT, async (_event: any, siteId: string) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
       const { getRateLimit } = require('./ai-gateway/rate-limiter');
-      const config = getRateLimit(registryStorage, siteId);
+      const config = getRateLimit(registryStorage, validated);
       return { success: true, config };
     } catch (err) {
       localLogger.error('[NexusAI] ai-gateway-get-rate-limit failed:', (err as Error).message);
@@ -2511,11 +2928,14 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_SET_RATE_LIMIT, async (_event: any, siteId: string, config: any) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_SET_RATE_LIMIT, async (_event: any, params: { siteId: string; config?: any }) => {
     try {
+      // Validate input
+      const validated = validateInput(AIGatewayRateLimitSchema, params);
+
       const { setRateLimit } = require('./ai-gateway/rate-limiter');
-      setRateLimit(registryStorage, siteId, config);
-      localLogger.info(`[NexusAI] Updated rate limit for site ${siteId}`);
+      setRateLimit(registryStorage, validated.siteId, validated.config);
+      localLogger.info(`[NexusAI] Updated rate limit for site ${validated.siteId}`);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] ai-gateway-set-rate-limit failed:', (err as Error).message);
@@ -2523,10 +2943,13 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_CHECK_RATE_LIMIT, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_CHECK_RATE_LIMIT, async (_event: any, params: { siteId: string }) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, params.siteId);
+
       const { checkRateLimit } = require('./ai-gateway/rate-limiter');
-      const status = checkRateLimit(registryStorage, siteId);
+      const status = checkRateLimit(registryStorage, validated);
       return { success: true, status };
     } catch (err) {
       localLogger.error('[NexusAI] ai-gateway-check-rate-limit failed:', (err as Error).message);
@@ -2540,13 +2963,16 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
   safeHandle(IPC_CHANNELS.AI_CONTEXT_GENERATE, async (_event: any, siteId: string) => {
     try {
-      const site = siteData.getSite(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      const site = siteData.getSite(validated);
       if (!site) {
-        return { success: false, error: `Site ${siteId} not found` };
+        return { success: false, error: `Site ${validated} not found` };
       }
 
       // Get site metadata
-      const metadata = metadataCache?.getWithAge(siteId);
+      const metadata = metadataCache?.getWithAge(validated);
 
       // Get AI Gateway info
       const proxyInfo = registryStorage.get('ai_proxy_info') as any;
@@ -2606,9 +3032,12 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
   safeHandle(IPC_CHANNELS.AI_CONTEXT_GET_STATUS, async (_event: any, siteId: string) => {
     try {
-      const site = siteData.getSite(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      const site = siteData.getSite(validated);
       if (!site) {
-        return { success: false, error: `Site ${siteId} not found` };
+        return { success: false, error: `Site ${validated} not found` };
       }
 
       const fs = require('fs').promises;

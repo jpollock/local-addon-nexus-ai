@@ -270,23 +270,31 @@ export default function renderer(context: any): void {
   };
 
   // Listen for filter updates from search panel
-  electron.ipcRenderer.on('nexus:apply-sidebar-filter', (_event: any, siteIds: string[]) => {
+  const applyFilterHandler = (_event: any, siteIds: string[]) => {
     applySiteFilter(siteIds);
     // Trigger badge re-injection after filter is applied
     setTimeout(() => {
       const event = new CustomEvent('nexus:badges-refresh');
       document.dispatchEvent(event);
     }, 100);
-  });
+  };
 
-  // Clear filter when search closes
-  electron.ipcRenderer.on('nexus:clear-sidebar-filter', () => {
+  const clearFilterHandler = () => {
     applySiteFilter([]);
     // Trigger badge re-injection after filter is cleared
     setTimeout(() => {
       const event = new CustomEvent('nexus:badges-refresh');
       document.dispatchEvent(event);
     }, 100);
+  };
+
+  electron.ipcRenderer.on('nexus:apply-sidebar-filter', applyFilterHandler);
+  electron.ipcRenderer.on('nexus:clear-sidebar-filter', clearFilterHandler);
+
+  // Cleanup listeners on unload
+  window.addEventListener('beforeunload', () => {
+    electron.ipcRenderer.removeListener('nexus:apply-sidebar-filter', applyFilterHandler);
+    electron.ipcRenderer.removeListener('nexus:clear-sidebar-filter', clearFilterHandler);
   });
 
 }

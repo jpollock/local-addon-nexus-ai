@@ -83,7 +83,7 @@ describe('WordPress Version IPC Handlers', () => {
 
     // Create mock bridge with wpCli methods
     mockBridge = {
-      getAllSiteStatuses: jest.fn(() => ({ 'test-site': 'running' })),
+      getAllSiteStatuses: jest.fn(() => ({ '550e8400-e29b-41d4-a716-446655440000': 'running' })),
       isCAPIAvailable: () => false,
       startSite: async () => {},
       stopSite: async () => {},
@@ -144,17 +144,17 @@ describe('WordPress Version IPC Handlers', () => {
     test('should return WordPress version when available', async () => {
       mockBridge.getWpVersion.mockResolvedValue('7.0.1');
 
-      const result = await mockIpc.invokeHandler(IPC_CHANNELS.GET_WP_VERSION, 'test-site');
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.GET_WP_VERSION, '550e8400-e29b-41d4-a716-446655440000');
 
       expect(result.success).toBe(true);
       expect(result.version).toBe('7.0.1');
-      expect(mockBridge.getWpVersion).toHaveBeenCalledWith('test-site');
+      expect(mockBridge.getWpVersion).toHaveBeenCalledWith('550e8400-e29b-41d4-a716-446655440000');
     });
 
     test('should return null version when not available', async () => {
       mockBridge.getWpVersion.mockResolvedValue(null);
 
-      const result = await mockIpc.invokeHandler(IPC_CHANNELS.GET_WP_VERSION, 'test-site');
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.GET_WP_VERSION, '550e8400-e29b-41d4-a716-446655440000');
 
       expect(result.success).toBe(true);
       expect(result.version).toBe(null);
@@ -163,7 +163,7 @@ describe('WordPress Version IPC Handlers', () => {
     test('should return error when getWpVersion fails', async () => {
       mockBridge.getWpVersion.mockRejectedValue(new Error('WP-CLI failed'));
 
-      const result = await mockIpc.invokeHandler(IPC_CHANNELS.GET_WP_VERSION, 'test-site');
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.GET_WP_VERSION, '550e8400-e29b-41d4-a716-446655440000');
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('WP-CLI failed');
@@ -172,7 +172,7 @@ describe('WordPress Version IPC Handlers', () => {
     test('should handle WordPress 6.9.4 version', async () => {
       mockBridge.getWpVersion.mockResolvedValue('6.9.4');
 
-      const result = await mockIpc.invokeHandler(IPC_CHANNELS.GET_WP_VERSION, 'test-site');
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.GET_WP_VERSION, '550e8400-e29b-41d4-a716-446655440000');
 
       expect(result.success).toBe(true);
       expect(result.version).toBe('6.9.4');
@@ -188,16 +188,16 @@ describe('WordPress Version IPC Handlers', () => {
         .mockResolvedValueOnce('6.9.4') // Current version
         .mockResolvedValueOnce('7.0.1'); // New version after upgrade
 
-      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, 'test-site');
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, '550e8400-e29b-41d4-a716-446655440000');
 
       expect(result.success).toBe(true);
       expect(result.version).toBe('7.0.1');
 
       // Should call core update with version 7.0-beta6
-      expect(mockBridge.wpCliRun).toHaveBeenCalledWith('test-site', ['core', 'update', '--version=7.0-beta6', '--force']);
+      expect(mockBridge.wpCliRun).toHaveBeenCalledWith('550e8400-e29b-41d4-a716-446655440000', ['core', 'update', '--version=7.0-beta6', '--force']);
 
       // Should call update-db
-      expect(mockBridge.wpCliRun).toHaveBeenCalledWith('test-site', ['core', 'update-db']);
+      expect(mockBridge.wpCliRun).toHaveBeenCalledWith('550e8400-e29b-41d4-a716-446655440000', ['core', 'update-db']);
 
       // Should get version twice (before and after)
       expect(mockBridge.getWpVersion).toHaveBeenCalledTimes(2);
@@ -207,7 +207,7 @@ describe('WordPress Version IPC Handlers', () => {
       mockBridge.getWpVersion.mockResolvedValueOnce('6.9.4'); // Current version check
       mockBridge.wpCliRun.mockRejectedValue(new Error('Update failed'));
 
-      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, 'test-site');
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, '550e8400-e29b-41d4-a716-446655440000');
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Update failed');
@@ -220,7 +220,7 @@ describe('WordPress Version IPC Handlers', () => {
         success: false
       });
 
-      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, 'test-site');
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, '550e8400-e29b-41d4-a716-446655440000');
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Download failed');
@@ -238,12 +238,12 @@ describe('WordPress Version IPC Handlers', () => {
         .mockResolvedValueOnce('6.9.4')
         .mockResolvedValueOnce('7.0.1');
 
-      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, 'test-site');
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, '550e8400-e29b-41d4-a716-446655440000');
 
       expect(result.success).toBe(true);
       expect(result.version).toBe('7.0.1');
       expect(mockBridge.wpCliRun).toHaveBeenCalledTimes(2);
-      expect(mockBridge.wpCliRun).toHaveBeenCalledWith('test-site', ['core', 'update', '--version=7.0-beta6', '--force']);
+      expect(mockBridge.wpCliRun).toHaveBeenCalledWith('550e8400-e29b-41d4-a716-446655440000', ['core', 'update', '--version=7.0-beta6', '--force']);
     });
 
     test('should handle update-db failure after core update succeeds', async () => {
@@ -254,7 +254,7 @@ describe('WordPress Version IPC Handlers', () => {
 
       mockBridge.getWpVersion.mockResolvedValueOnce('6.9.4'); // Current version check
 
-      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, 'test-site');
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, '550e8400-e29b-41d4-a716-446655440000');
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('DB update failed');
@@ -262,9 +262,9 @@ describe('WordPress Version IPC Handlers', () => {
 
     test('should return error when site is not running', async () => {
       // Mock site as halted
-      mockBridge.getAllSiteStatuses.mockReturnValueOnce({ 'test-site': 'halted' });
+      mockBridge.getAllSiteStatuses.mockReturnValueOnce({ '550e8400-e29b-41d4-a716-446655440000': 'halted' });
 
-      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, 'test-site');
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, '550e8400-e29b-41d4-a716-446655440000');
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('must be running');
@@ -278,7 +278,7 @@ describe('WordPress Version IPC Handlers', () => {
       // Mock site status as undefined
       mockBridge.getAllSiteStatuses.mockReturnValueOnce({});
 
-      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, 'unknown-site');
+      const result = await mockIpc.invokeHandler(IPC_CHANNELS.UPGRADE_WP, '660e8400-e29b-41d4-a716-446655440001');
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('must be running');

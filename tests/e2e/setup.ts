@@ -1,5 +1,6 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { discoverEnvironment, serializeEnvironment, startLocal, loadConnectionInfo } from './helpers/environment';
 import { McpClient } from './helpers/client';
 
@@ -7,6 +8,38 @@ module.exports = async function globalSetup() {
   // Load environment variables from .env.e2e.local (if exists)
   const envPath = path.join(__dirname, '..', '..', '.env.e2e.local');
   dotenv.config({ path: envPath });
+
+  // Rebuild better-sqlite3 for Electron before starting Local
+  // Unit tests compile it for system Node, but Local needs Electron Node binary
+  console.log('[E2E Setup] Cleaning and rebuilding better-sqlite3 for Electron...');
+  try {
+    const addonRoot = path.join(__dirname, '..', '..');
+
+    // Clean any stale build artifacts
+    const sqlitePath = path.join(addonRoot, 'node_modules', 'better-sqlite3');
+    const buildPath = path.join(sqlitePath, 'build');
+    if (require('fs').existsSync(buildPath)) {
+      console.log('[E2E Setup] Removing stale better-sqlite3 build artifacts...');
+      execSync(`rm -rf "${buildPath}"`, { cwd: addonRoot, stdio: 'inherit' });
+    }
+
+    // Force rebuild for Electron
+    execSync('npm run rebuild', { cwd: addonRoot, stdio: 'inherit' });
+    console.log('[E2E Setup] Rebuild complete');
+  } catch (err) {
+    console.error('[E2E Setup] Failed to rebuild better-sqlite3:', err);
+    throw new Error('Cannot run E2E tests: better-sqlite3 rebuild failed');
+  }
+
+  // Also rebuild the addon itself to ensure lib/ has fresh code that imports the Electron binary
+  console.log('[E2E Setup] Rebuilding addon for Electron...');
+  try {
+    execSync('npm run build', { cwd: path.join(__dirname, '..', '..'), stdio: 'inherit' });
+    console.log('[E2E Setup] Addon rebuild complete');
+  } catch (err) {
+    console.error('[E2E Setup] Failed to rebuild addon:', err);
+    throw new Error('Cannot run E2E tests: addon rebuild failed');
+  }
 
   // Start Local if it's not already running
   console.log('\n[E2E Setup] Ensuring Local is running...');
@@ -137,6 +170,18 @@ module.exports = async function globalSetup() {
         if (!indexResult.isError) {
           console.log('[E2E Setup] Site indexing started');
         }
+      }
+
+      // CRITICAL: Update the environment to mark the test site as running
+      // Tests use getAnySite() which prefers running sites, but env was serialized
+      // before we started the site. Move the test site from halted to running.
+      const testSiteIndex = env.haltedSites.findIndex((s) => s.id === env.testSiteId);
+      if (testSiteIndex >= 0) {
+        const [testSite] = env.haltedSites.splice(testSiteIndex, 1);
+        env.runningSites.push(testSite);
+        console.log('[E2E Setup] Marked test site as running in environment');
+        // Re-serialize with updated state
+        serializeEnvironment(env);
       }
     } catch (err) {
       console.warn('[E2E Setup] Could not set up AI on test site:', (err as Error).message);
