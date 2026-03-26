@@ -71,7 +71,6 @@ npm install -g @local-labs-jpollock/local-addon-nexus-ai
 - 🔄 **WPE Sync** for remote sites
 - ⚙️ **Bulk Operations** panel
 
-[Get Started with UI →](ui-addon/index.md){ .md-button }
 
 ## How It Works
 
@@ -278,7 +277,7 @@ graph TB
 | **Bulk operations** | 10x parallel execution |
 | **Remote WP-CLI** | SSH ControlMaster pooling |
 
-[Benchmarks →](reference/performance-benchmarks.md)
+*Performance benchmarks coming soon*
 
 ## Next Steps
 
@@ -334,13 +333,12 @@ Nexus AI collects **anonymous usage analytics** to improve the product.
 - WordPress content
 - Command arguments
 
-[Telemetry Details →](features/telemetry.md)
+*Telemetry documentation coming soon*
 
 ## Support & Contributing
 
 - **Issues:** [GitHub Issues](https://github.com/jpollock/local-addon-nexus-ai/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/jpollock/local-addon-nexus-ai/discussions)
-- **Contributing:** [Developer Guide](developer/contributing.md)
 
 ---
 

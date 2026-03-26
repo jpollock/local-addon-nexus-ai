@@ -991,4 +991,4 @@ Always:
 - **[Bulk Operations](bulk-operations.md)** - Multi-site management
 - **[WP-CLI Integration](../features/wp-cli-integration.md)** - Remote command execution
 - **[Safety System](../features/safety-system.md)** - Understanding operation safety
-- **[WPE Integration Architecture](../architecture/wpe-integration.md)** - Technical details
+- **[WPE Integration Architecture]** - Technical details

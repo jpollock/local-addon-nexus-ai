@@ -1464,4 +1464,4 @@ echo "Health check complete"
 - [CLI Examples](../cli/examples.md) - Real-world usage patterns
 - [MCP Setup](../cli/mcp-setup.md) - Connect to AI assistants
 - [Tool Reference](../mcp-tools/index.md) - All 90+ MCP tools
-- [Error Codes](error-codes.md) - Troubleshooting guide
+- Error Codes - Troubleshooting guide

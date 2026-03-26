@@ -758,5 +758,5 @@ export class SiteManager {
 - **[CLI Architecture](cli-architecture.md)** - CLI implementation
 - **[UI Architecture](ui-architecture.md)** - Addon implementation
 - **[Data Flow](data-flow.md)** - System data flow
-- **[Developer Setup](../developer/setup.md)** - Development environment
-- **[Testing Addon](../developer/testing-addon.md)** - Testing strategies
+- **`.claude/project/DEVELOPMENT.md`** - Development environment
+- **`.claude/project/TESTING.md`** - Testing strategies

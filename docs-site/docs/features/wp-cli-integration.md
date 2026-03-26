@@ -784,5 +784,5 @@ ping wpengine.com
 
 - [Safety System](safety-system.md) - Understanding command safety tiers
 - [CLI Examples](../cli/examples.md) - Real-world WP-CLI usage patterns
-- [WPE Integration](../architecture/wpe-integration.md) - SSH and CAPI details
+- WPE Integration - SSH and CAPI details
 - [Bulk Operations](../cli/bulk-operations.md) - Fleet-wide operations

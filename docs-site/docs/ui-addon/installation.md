@@ -148,7 +148,7 @@ ln -s "$(pwd)" ~/Library/Application\ Support/Local/addons/local-addon-nexus-ai
 # 8. Restart Local
 ```
 
-See [Developer Setup](../developer/setup.md) for full development workflow.
+See `.claude/project/DEVELOPMENT.md` for development workflow.
 
 ## Verify Installation
 

@@ -737,6 +737,6 @@ Benefits:
 
 - **[WPE Management UI](../ui-addon/wpe-management.md)** - Visual management panel
 - **[Remote WP-CLI](../features/wp-cli-integration.md)** - Run commands remotely
-- **[WPE Integration Architecture](../architecture/wpe-integration.md)** - Technical details
-- **[SSH ControlMaster](../features/ssh-control-master.md)** - Connection pooling
+- **WPE Integration Architecture** - Technical details
+- **SSH ControlMaster** - Connection pooling
 - **[Fleet Overview](../ui-addon/fleet-overview.md)** - Dashboard for all sites

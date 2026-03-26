@@ -729,4 +729,4 @@ ollama prune
 - **[Semantic Search](../features/semantic-search.md)** - How embeddings work
 - **[Vector Database](../architecture/vector-database.md)** - Technical deep dive
 - **[Preferences](../ui-addon/preferences.md)** - Configure Ollama settings
-- **[Custom AI Providers](custom-ai-providers.md)** - Use other embedding models
+- **Custom AI Providers** - Use other embedding models

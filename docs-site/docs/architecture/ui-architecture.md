@@ -768,4 +768,4 @@ test('scan site handler', async () => {
 - **[IPC Communication](mcp-protocol.md)** - IPC patterns in detail
 - **[Shared Core](shared-core.md)** - Code shared with CLI
 - **[CLI Architecture](cli-architecture.md)** - CLI implementation
-- **[Developer Setup](../developer/setup.md)** - Development environment
+- **`.claude/project/DEVELOPMENT.md`** - Development environment

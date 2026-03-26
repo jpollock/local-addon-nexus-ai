@@ -456,7 +456,7 @@ graph LR
 
 **Privacy:** No user identities, site names, or WordPress content.
 
-[Telemetry Details →](telemetry.md)
+[Telemetry Details →]
 
 ## Next Steps
 
@@ -464,4 +464,4 @@ graph LR
 - [UI Architecture](ui-architecture.md) - Addon components
 - [Data Flow](data-flow.md) - Detailed indexing pipeline
 - [MCP Protocol](mcp-protocol.md) - Protocol implementation
-- [Tool Registry](tool-registry.md) - How tools are registered
+- Tool Registry - How tools are registered

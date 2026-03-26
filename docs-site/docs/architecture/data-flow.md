@@ -897,4 +897,4 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 - **[MCP Protocol](mcp-protocol.md)** - MCP implementation details
 - **[Shared Core](shared-core.md)** - Reusable business logic
 - **[UI Architecture](ui-architecture.md)** - Component structure
-- **[Performance Benchmarks](../reference/performance-benchmarks.md)** - Detailed metrics
+- **Performance Benchmarks** - Detailed metrics

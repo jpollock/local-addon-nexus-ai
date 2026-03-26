@@ -776,4 +776,4 @@ For developers and power users:
 
 - **[Vector Database](../architecture/vector-database.md)** - LanceDB internals
 - **[Data Flow](../architecture/data-flow.md)** - Scanning pipeline
-- **[Performance](../reference/performance-benchmarks.md)** - Benchmarks and optimization
+- **[Performance]** - Benchmarks and optimization

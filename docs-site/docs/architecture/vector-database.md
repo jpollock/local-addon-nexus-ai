@@ -676,6 +676,6 @@ await table.add(newData);  // Creates version 6
 
 - **[Data Flow](data-flow.md)** - Indexing pipeline details
 - **[Semantic Search](../features/semantic-search.md)** - User-facing features
-- **[Performance Benchmarks](../reference/performance-benchmarks.md)** - Detailed metrics
+- **Performance Benchmarks** - Detailed metrics
 - **[Ollama Setup](../integrations/ollama.md)** - Embedding generation
 - **[First Scan](../getting-started/first-scan.md)** - Indexing guide

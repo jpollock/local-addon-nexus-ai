@@ -723,4 +723,4 @@ export NEXUS_LOG_LEVEL=info
 - **[Cursor](cursor.md)** - Detailed Cursor integration
 - **[MCP Protocol](../architecture/mcp-protocol.md)** - Technical deep dive
 - **[Tool Reference](../reference/tool-reference.md)** - Complete tool catalog
-- **[Custom AI Providers](custom-ai-providers.md)** - Build custom integrations
+- **Custom AI Providers** - Build custom integrations

@@ -1164,4 +1164,4 @@ Configuration is stored in `~/.nexus/config.json`:
 - [Data Flow](data-flow.md) - End-to-end data flow
 - [MCP Protocol](mcp-protocol.md) - Protocol details
 - [Vector Database](vector-database.md) - LanceDB internals
-- [WPE Integration](wpe-integration.md) - WP Engine integration
+- WPE Integration - WP Engine integration

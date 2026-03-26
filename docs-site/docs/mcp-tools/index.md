@@ -342,7 +342,7 @@ interface ToolResult {
 }
 ```
 
-[Error Codes Reference →](../reference/error-codes.md)
+[Error Codes Reference →]
 
 ## Tool Discovery
 

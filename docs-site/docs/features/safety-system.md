@@ -670,5 +670,5 @@ nexus wp mysite plugin verify-checksums --all
 
 - [WP-CLI Integration](wp-cli-integration.md) - Remote command execution
 - [CLI Examples](../cli/examples.md) - Safe operation patterns
-- [Error Codes](../reference/error-codes.md) - Error handling
+- Error Codes - Error handling
 - [Troubleshooting](../cli/troubleshooting.md) - Common issues
