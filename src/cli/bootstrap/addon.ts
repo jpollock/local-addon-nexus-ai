@@ -4,8 +4,13 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import * as readline from 'readline';
 import { getLocalPaths, ADDON_PACKAGE_NAME, ADDON_DIR_NAME } from './paths';
 import { isLocalRunning, stopLocal } from './process';
+import { detectPlatform, getPlatformDisplayName } from './platform';
+import { downloadFromGitHub, formatBytes } from './downloader';
+import { extractTarball, verifyExtractedAddon } from './extractor';
 
 /**
  * Get the addon installation path
@@ -145,6 +150,129 @@ function findDevAddonPath(): string | null {
 }
 
 /**
+ * Prompt user for auto-download confirmation
+ */
+async function promptAutoDownload(platformName: string): Promise<boolean> {
+  console.log('');
+  console.log('Nexus AI addon not found.');
+  console.log(`Detected platform: ${platformName}`);
+  console.log('');
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise<boolean>((resolve) => {
+    rl.question('Download and install addon from GitHub? (Y/n) ', (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() !== 'n');
+    });
+  });
+}
+
+/**
+ * Auto-download addon from GitHub Releases
+ */
+async function autoDownloadAddon(
+  options: {
+    onStatus?: (status: string) => void;
+  } = {}
+): Promise<{ success: boolean; error?: string }> {
+  const log = options.onStatus || (() => {});
+
+  try {
+    // Detect platform
+    const platform = detectPlatform();
+    const platformName = getPlatformDisplayName(platform);
+
+    // Prompt user for confirmation
+    const confirmed = await promptAutoDownload(platformName);
+
+    if (!confirmed) {
+      console.log('');
+      console.log('Skipping auto-install. To install manually:');
+      console.log('1. Download the addon for your platform from:');
+      console.log('   https://github.com/jpollock/local-addon-nexus-ai/releases');
+      console.log(`2. Look for: ${platform.assetName}`);
+      console.log('3. Extract to your Local addons directory');
+      console.log('4. Restart Local');
+      console.log('');
+
+      return { success: false, error: 'User cancelled auto-install' };
+    }
+
+    // Download to temp directory
+    const tmpPath = path.join(os.tmpdir(), 'nexus-ai-addon.tgz');
+    log(`Downloading ${platform.assetName}...`);
+
+    let lastPercent = 0;
+    await downloadFromGitHub({
+      owner: 'jpollock',
+      repo: 'local-addon-nexus-ai',
+      assetName: platform.assetName,
+      destPath: tmpPath,
+      onProgress: (percent, downloaded, total) => {
+        // Show progress every 10%
+        if (percent >= lastPercent + 10 || percent === 100) {
+          log(`Downloading... ${percent}% (${formatBytes(downloaded)} / ${formatBytes(total)})`);
+          lastPercent = percent;
+        }
+      }
+    });
+
+    log('Download complete. Installing...');
+
+    // Extract to addon directory
+    const addonPath = getAddonPath();
+    await extractTarball({
+      tarPath: tmpPath,
+      destDir: addonPath,
+      stripComponents: 1
+    });
+
+    // Verify installation
+    if (!verifyExtractedAddon(addonPath)) {
+      fs.rmSync(addonPath, { recursive: true, force: true });
+      throw new Error('Extracted addon is invalid. Installation failed.');
+    }
+
+    // Clean up temp file
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch {
+      // Non-fatal: temp file cleanup failure
+    }
+
+    log('✓ Addon installed successfully!');
+    console.log('');
+    console.log('Please restart Local for the addon to appear.');
+    console.log('');
+
+    return { success: true };
+  } catch (error: any) {
+    // Clean up on error
+    const addonPath = getAddonPath();
+    try {
+      if (fs.existsSync(addonPath)) {
+        fs.rmSync(addonPath, { recursive: true, force: true });
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+
+    console.error('');
+    console.error('Auto-install failed:', error.message);
+    console.error('');
+    console.error('Please install manually:');
+    console.error('https://github.com/jpollock/local-addon-nexus-ai/releases');
+    console.error('');
+
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Install the addon from bundled package or create dev symlink
  */
 export async function installAddon(
@@ -183,9 +311,16 @@ export async function installAddon(
         fs.symlinkSync(devAddonPath, addonPath);
         log(`Created symlink: ${addonPath} -> ${devAddonPath}`);
       } else {
-        throw new Error(
-          'Addon not found. Please reinstall the CLI package: npm install -g local-addon-nexus-ai'
-        );
+        // Try auto-download from GitHub Releases
+        log('Bundled addon not found. Attempting auto-download...');
+
+        const downloadResult = await autoDownloadAddon({ onStatus: log });
+
+        if (!downloadResult.success) {
+          throw new Error(
+            downloadResult.error || 'Addon not found. Please reinstall the CLI package: npm install -g local-addon-nexus-ai'
+          );
+        }
       }
     }
 
