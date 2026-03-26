@@ -228,7 +228,7 @@ async function autoDownloadAddon(
     await extractTarball({
       tarPath: tmpPath,
       destDir: addonPath,
-      stripComponents: 1
+      stripComponents: 0  // Tarball contents are at root level
     });
 
     // Verify installation

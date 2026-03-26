@@ -32,7 +32,8 @@ for (let i = 0; i < args.length; i++) {
 const projectRoot = path.join(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
 const version = pkg.version;
-const archiveName = `local-addon-nexus-ai-${version}-${platform}-${arch}.tar.gz`;
+// Format matches auto-install expectation: nexus-ai-darwin-arm64-0.1.0.tgz
+const archiveName = `nexus-ai-${platform}-${arch}-${version}.tgz`;
 
 console.log(`\nPackaging ${pkg.name} v${version} for ${platform}-${arch}\n`);
 
@@ -115,8 +116,9 @@ if (fs.existsSync(stripScript)) {
 const archivePath = path.join(distDir, archiveName);
 console.log(`\nCreating ${archiveName}...`);
 
+// Create tarball with contents at root level (not nested in a directory)
 execSync(
-  `tar -czf "${archivePath}" -C "${path.dirname(stagingDir)}" "${path.basename(stagingDir)}"`,
+  `tar -czf "${archivePath}" -C "${stagingDir}" .`,
   { stdio: 'inherit' },
 );
 
