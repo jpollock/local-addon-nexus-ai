@@ -36,6 +36,15 @@ cleanup() {
     fi
     mv "$BACKUP_DIR" "$ADDON_DIR"
     echo "Restored addon from backup"
+
+    # Re-activate the real addon if it was active
+    node -e "
+    const { isAddonActivated, activateAddon } = require('$PROJECT_ROOT/lib/cli/bootstrap/addon');
+    if (!isAddonActivated()) {
+      console.log('Re-activating real addon...');
+      activateAddon();
+    }
+    " 2>/dev/null || true
   fi
 
   # Remove test directory
@@ -135,37 +144,54 @@ echo "Step 6: Testing download (skipped - requires mock GitHub server)"
 echo "  In production, this downloads from GitHub Releases"
 echo "  For local testing, we use direct tarball extraction"
 
-# Step 7: Test full auto-install flow
+# Step 7: Test full auto-install flow including activation
 echo ""
 echo "Step 7: Testing full auto-install flow..."
-echo ""
-echo "This would normally:"
-echo "  1. Detect addon missing"
-echo "  2. Prompt for download"
-echo "  3. Download from GitHub"
-echo "  4. Extract to addon directory"
-echo "  5. Prompt to restart Local"
-echo ""
-echo "We'll manually extract the tarball to simulate this:"
 
 # Extract mock tarball to addon directory
 mkdir -p "$ADDON_DIR"
 cd "$TEST_DIR"
 tar -xzf nexus-ai-darwin-arm64-0.1.0.tgz -C "$ADDON_DIR"
 
-if [ -f "$ADDON_DIR/package.json" ]; then
-  echo "✓ Mock addon installed to: $ADDON_DIR"
-
-  # Verify with CLI
-  node -e "
-  const { isAddonInstalled } = require('$PROJECT_ROOT/lib/cli/bootstrap/addon');
-  const installed = isAddonInstalled();
-  console.log('✓ CLI detects addon:', installed);
-  "
-else
+if [ ! -f "$ADDON_DIR/package.json" ]; then
   echo "✗ Installation failed"
   exit 1
 fi
+
+echo "✓ Mock addon extracted to: $ADDON_DIR"
+
+# Test addon detection
+node -e "
+const { isAddonInstalled, isAddonActivated } = require('$PROJECT_ROOT/lib/cli/bootstrap/addon');
+const installed = isAddonInstalled();
+const activated = isAddonActivated();
+console.log('✓ CLI detects addon installed:', installed);
+console.log('  Activated in enabled-addons.json:', activated);
+if (!installed) {
+  console.error('✗ Addon not detected as installed');
+  process.exit(1);
+}
+"
+
+echo ""
+echo "Step 8: Testing activation..."
+
+# Test activation (writes to enabled-addons.json)
+node -e "
+const { activateAddon, isAddonActivated } = require('$PROJECT_ROOT/lib/cli/bootstrap/addon');
+
+console.log('Activating addon...');
+const needsRestart = activateAddon();
+console.log('  needsRestart:', needsRestart);
+
+const activated = isAddonActivated();
+console.log('✓ Addon activated:', activated);
+
+if (!activated) {
+  console.error('✗ Activation failed');
+  process.exit(1);
+}
+"
 
 echo ""
 echo "=== All Tests Passed ==="
@@ -174,7 +200,11 @@ echo "Summary:"
 echo "  ✓ Platform detection working"
 echo "  ✓ Tarball extraction working"
 echo "  ✓ Addon verification working"
+echo "  ✓ Addon activation working"
 echo "  ✓ Mock installation successful"
+echo ""
+echo "Note: Addon is now activated in enabled-addons.json"
+echo "      Restart Local to load the mock addon (or run cleanup)"
 echo ""
 echo "The auto-install logic is ready for real GitHub releases!"
 echo ""
