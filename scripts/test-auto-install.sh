@@ -63,26 +63,75 @@ cd "$PROJECT_ROOT"
 npm run build > /dev/null 2>&1
 echo "✓ CLI built"
 
-# Step 2: Create mock addon tarball
+# Step 2: Create mock addon tarball from real built addon
 echo ""
-echo "Step 2: Creating mock addon tarball..."
-mkdir -p "$TEST_DIR/mock-addon"
+echo "Step 2: Creating mock addon tarball from built addon..."
 
-# Create minimal package.json
-cat > "$TEST_DIR/mock-addon/package.json" <<EOF
+# Check if addon is built
+if [ ! -d "$PROJECT_ROOT/lib/main" ] || [ ! -d "$PROJECT_ROOT/lib/renderer" ]; then
+  echo "Error: Addon not built. The lib/ directory is missing."
+  echo "This is expected - we'll create a minimal valid mock instead."
+  echo ""
+
+  # Create minimal valid addon
+  mkdir -p "$TEST_DIR/mock-addon/lib"
+
+  # Minimal main.js that exports a function
+  cat > "$TEST_DIR/mock-addon/lib/main.js" <<'MAINJS'
+// Minimal valid Local addon main entry point
+module.exports = function(context) {
+  // Addon initialization - does nothing but satisfies Local's requirements
+  const { localLogger } = context;
+  if (localLogger) {
+    localLogger.info('[Nexus AI Test] Mock addon loaded');
+  }
+};
+MAINJS
+
+  # Minimal renderer.js
+  cat > "$TEST_DIR/mock-addon/lib/renderer.js" <<'RENDERERJS'
+// Minimal valid Local addon renderer entry point
+module.exports = function(context) {
+  // Renderer initialization - does nothing
+  return null;
+};
+RENDERERJS
+
+  # Copy package.json
+  cat > "$TEST_DIR/mock-addon/package.json" <<EOF
 {
   "name": "local-addon-nexus-ai",
   "productName": "Nexus AI",
   "version": "0.1.0",
   "main": "lib/main.js",
-  "renderer": "lib/renderer.js"
+  "renderer": "lib/renderer.js",
+  "localAddon": {
+    "type": "addon",
+    "category": "developer-tools"
+  }
 }
 EOF
 
-# Create dummy files
-mkdir -p "$TEST_DIR/mock-addon/lib"
-echo "// Mock main" > "$TEST_DIR/mock-addon/lib/main.js"
-echo "// Mock renderer" > "$TEST_DIR/mock-addon/lib/renderer.js"
+else
+  # Copy real built addon (best for testing)
+  echo "Using real built addon from lib/"
+  mkdir -p "$TEST_DIR/mock-addon"
+
+  # Copy lib/
+  cp -R "$PROJECT_ROOT/lib" "$TEST_DIR/mock-addon/"
+
+  # Copy package.json (stripped for production)
+  node -e "
+  const fs = require('fs');
+  const pkg = JSON.parse(fs.readFileSync('$PROJECT_ROOT/package.json', 'utf8'));
+  delete pkg.devDependencies;
+  delete pkg.scripts;
+  fs.writeFileSync(
+    '$TEST_DIR/mock-addon/package.json',
+    JSON.stringify(pkg, null, 2) + '\n'
+  );
+  "
+fi
 
 # Create tarball
 cd "$TEST_DIR"
