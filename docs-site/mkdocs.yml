@@ -152,10 +152,8 @@ nav:
     - Installation: ui-addon/installation.md
     - Fleet Overview: ui-addon/fleet-overview.md
     - Site Finder: ui-addon/site-finder.md
-    - AI Chat: ui-addon/ai-chat.md
     - WPE Management: ui-addon/wpe-management.md
     - Bulk Operations: ui-addon/bulk-operations.md
-    - Smart Filters: ui-addon/smart-filters.md
     - Preferences: ui-addon/preferences.md
     - Keyboard Shortcuts: ui-addon/keyboard-shortcuts.md
 
@@ -209,6 +207,12 @@ nav:
     - SSH ControlMaster: features/ssh-control-master.md
     - Safety System: features/safety-system.md
     - Telemetry: features/telemetry.md
+
+  - AI Context:
+    - Overview: ai-context/index.md
+    - Verified Features: ai-context/features.md
+    - Common Tasks: ai-context/common-tasks.md
+    - Troubleshooting: ai-context/troubleshooting.md
 
   - Reference:
     - CLI Commands: reference/cli-command-reference.md
