@@ -434,56 +434,56 @@ await callTool("nexus_bulk_operation", {
 
 ### Local Site Tools
 
-- [local_list_sites](local-sites.md#local_list_sites)
-- [local_create_site](local-sites.md#local_create_site)
-- [local_start_site](local-sites.md#local_start_site)
-- [local_stop_site](local-sites.md#local_stop_site)
-- [local_wpe_pull](local-sites.md#local_wpe_pull)
-- [local_wpe_push](local-sites.md#local_wpe_push)
-- [local_get_site](local-sites.md#local_get_site)
-- [local_delete_site](local-sites.md#local_delete_site)
+- [local_list_sites](local-sites.md)
+- [local_create_site](local-sites.md)
+- [local_start_site](local-sites.md)
+- [local_stop_site](local-sites.md)
+- [local_wpe_pull](local-sites.md)
+- [local_wpe_push](local-sites.md)
+- [local_get_site](local-sites.md)
+- [local_delete_site](local-sites.md)
 
 ### WP Engine Tools
 
-- [wpe_get_installs](wpe-sites.md#wpe_get_installs)
-- [wpe_get_accounts](wpe-sites.md#wpe_get_accounts)
-- [wpe_diagnose_site](wpe-sites.md#wpe_diagnose_site)
-- [wpe_environment_diff](wpe-sites.md#wpe_environment_diff)
-- [wpe_promote_to_production](wpe-sites.md#wpe_promote_to_production)
-- [wpe_create_backup](wpe-sites.md#wpe_create_backup)
+- [wpe_get_installs](wpe-sites.md)
+- [wpe_get_accounts](wpe-sites.md)
+- [wpe_diagnose_site](wpe-sites.md)
+- [wpe_environment_diff](wpe-sites.md)
+- [wpe_promote_to_production](wpe-sites.md)
+- [wpe_create_backup](wpe-sites.md)
 - [40+ more...](wpe-sites.md)
 
 ### WordPress Tools
 
-- [wp_plugin_list](wordpress.md#wp_plugin_list)
-- [wp_plugin_activate](wordpress.md#wp_plugin_activate)
-- [wp_plugin_deactivate](wordpress.md#wp_plugin_deactivate)
-- [wp_plugin_update](wordpress.md#wp_plugin_update)
-- [wp_core_version](wordpress.md#wp_core_version)
-- [wp_user_list](wordpress.md#wp_user_list)
-- [wp_site_health](wordpress.md#wp_site_health)
-- [wp_theme_list](wordpress.md#wp_theme_list)
+- [wp_plugin_list](wordpress.md)
+- [wp_plugin_activate](wordpress.md)
+- [wp_plugin_deactivate](wordpress.md)
+- [wp_plugin_update](wordpress.md)
+- [wp_core_version](wordpress.md)
+- [wp_user_list](wordpress.md)
+- [wp_site_health](wordpress.md)
+- [wp_theme_list](wordpress.md)
 
 ### Search Tools
 
-- [search_site_content](search.md#search_site_content)
-- [search_posts](search.md#search_posts)
-- [search_products](search.md#search_products)
-- [semantic_search](search.md#semantic_search)
+- [search_site_content](search.md)
+- [search_posts](search.md)
+- [search_products](search.md)
+- [semantic_search](search.md)
 
 ### Fleet Tools
 
-- [nexus_list_sites](fleet.md#nexus_list_sites)
-- [nexus_get_site_info](fleet.md#nexus_get_site_info)
-- [nexus_fleet_health](fleet.md#nexus_fleet_health)
-- [nexus_bulk_operation](fleet.md#nexus_bulk_operation)
+- [nexus_list_sites](fleet.md)
+- [nexus_get_site_info](fleet.md)
+- [nexus_fleet_health](fleet.md)
+- [nexus_bulk_operation](fleet.md)
 
 ### Telemetry Tools
 
-- [get_telemetry_status](telemetry.md#get_telemetry_status)
-- [set_telemetry_enabled](telemetry.md#set_telemetry_enabled)
-- [clear_telemetry_events](telemetry.md#clear_telemetry_events)
-- [reset_telemetry](telemetry.md#reset_telemetry)
+- [get_telemetry_status](telemetry.md)
+- [set_telemetry_enabled](telemetry.md)
+- [clear_telemetry_events](telemetry.md)
+- [reset_telemetry](telemetry.md)
 
 ## Complete Schemas
 
