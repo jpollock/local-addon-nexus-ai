@@ -120,6 +120,14 @@ else
   # Copy lib/
   cp -R "$PROJECT_ROOT/lib" "$TEST_DIR/mock-addon/"
 
+  # Copy models/ (ONNX model files)
+  if [ -d "$PROJECT_ROOT/models" ]; then
+    cp -R "$PROJECT_ROOT/models" "$TEST_DIR/mock-addon/"
+    echo "✓ Copied models/"
+  else
+    echo "⚠ Warning: models/ directory not found"
+  fi
+
   # Copy package.json (stripped for production)
   node -e "
   const fs = require('fs');
