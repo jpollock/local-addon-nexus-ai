@@ -11,6 +11,7 @@ import { isLocalRunning, stopLocal } from './process';
 import { detectPlatform, getPlatformDisplayName } from './platform';
 import { downloadFromGitHub, formatBytes } from './downloader';
 import { extractTarball, verifyExtractedAddon } from './extractor';
+import { getCurrentVersion } from '../utils/version';
 
 /**
  * Get the addon installation path
@@ -30,6 +31,40 @@ export function isAddonInstalled(): boolean {
   try {
     const stat = fs.lstatSync(addonPath);
     return stat.isDirectory() || stat.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get installed addon version from package.json
+ * Returns null if addon not installed or version can't be read
+ */
+export function getInstalledAddonVersion(): string | null {
+  const addonPath = getAddonPath();
+  const packageJsonPath = path.join(addonPath, 'package.json');
+
+  try {
+    if (!fs.existsSync(packageJsonPath)) {
+      return null;
+    }
+
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    return pkg.version || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if installed addon is a development symlink
+ */
+export function isDevAddon(): boolean {
+  const addonPath = getAddonPath();
+
+  try {
+    const stat = fs.lstatSync(addonPath);
+    return stat.isSymbolicLink();
   } catch {
     return false;
   }
@@ -338,6 +373,84 @@ export async function installAddon(
 }
 
 /**
+ * Prompt user for addon update confirmation
+ */
+async function promptAddonUpdate(cliVersion: string, addonVersion: string): Promise<boolean> {
+  console.log('');
+  console.log(`\x1b[33mAddon version mismatch detected:\x1b[0m`);
+  console.log(`  CLI:   ${cliVersion}`);
+  console.log(`  Addon: ${addonVersion}`);
+  console.log('');
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise<boolean>((resolve) => {
+    rl.question('Download updated addon to match CLI version? (Y/n) ', (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() !== 'n');
+    });
+  });
+}
+
+/**
+ * Update addon to match CLI version
+ */
+async function updateAddon(
+  options: {
+    onStatus?: (status: string) => void;
+  } = {}
+): Promise<{ success: boolean; error?: string }> {
+  const log = options.onStatus || (() => {});
+  const addonPath = getAddonPath();
+
+  try {
+    // Backup existing addon
+    const backupPath = `${addonPath}.backup-${Date.now()}`;
+    log(`Backing up current addon to ${path.basename(backupPath)}...`);
+
+    try {
+      fs.renameSync(addonPath, backupPath);
+    } catch (error: any) {
+      throw new Error(`Failed to backup addon: ${error.message}`);
+    }
+
+    // Download new version
+    const downloadResult = await autoDownloadAddon({ onStatus: log });
+
+    if (!downloadResult.success) {
+      // Restore backup on failure
+      log('Download failed. Restoring backup...');
+      try {
+        if (fs.existsSync(addonPath)) {
+          fs.rmSync(addonPath, { recursive: true, force: true });
+        }
+        fs.renameSync(backupPath, addonPath);
+      } catch {
+        console.error('\nFailed to restore backup. Your addon may be in an inconsistent state.');
+        console.error(`Backup location: ${backupPath}`);
+      }
+
+      return { success: false, error: downloadResult.error };
+    }
+
+    // Success - remove backup
+    try {
+      fs.rmSync(backupPath, { recursive: true, force: true });
+    } catch {
+      // Non-fatal: backup cleanup failure
+      console.log(`\nNote: Backup left at ${backupPath} (can be removed manually)`);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Ensure addon is installed and activated
  */
 export async function ensureAddon(
@@ -355,6 +468,35 @@ export async function ensureAddon(
       return result;
     }
     return { success: true, needsRestart: true };
+  }
+
+  // Check for version mismatch (skip for dev symlinks)
+  if (!isDevAddon()) {
+    const cliVersion = getCurrentVersion();
+    const addonVersion = getInstalledAddonVersion();
+
+    if (addonVersion && addonVersion !== cliVersion) {
+      // Prompt user for update
+      const shouldUpdate = await promptAddonUpdate(cliVersion, addonVersion);
+
+      if (shouldUpdate) {
+        const updateResult = await updateAddon(options);
+
+        if (!updateResult.success) {
+          console.error(`\nAddon update failed: ${updateResult.error}`);
+          console.error('Continuing with existing addon version...\n');
+          // Don't fail - continue with old version
+        } else {
+          console.log('');
+          console.log('\x1b[32m✓ Addon updated successfully!\x1b[0m');
+          console.log('Please restart Local for changes to take effect.');
+          console.log('');
+          return { success: true, needsRestart: true };
+        }
+      } else {
+        console.log('\nSkipping addon update. Continuing with current version...\n');
+      }
+    }
   }
 
   // Check if addon is activated
