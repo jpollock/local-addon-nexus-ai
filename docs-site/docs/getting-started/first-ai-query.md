@@ -21,8 +21,8 @@ Before your first AI query, make sure you've:
 Nexus AI provides three ways to query your content:
 
 1. **CLI Search** — Direct command-line semantic search
-2. **UI Site Finder** — Visual search interface
-3. **AI Chat** — Natural language conversation (requires MCP)
+2. **UI Site Finder** — Visual search interface in Local addon
+3. **AI Assistant (MCP)** — Natural language queries via Claude Desktop, Cursor, etc.
 
 Let's try each method.
 
@@ -215,24 +215,7 @@ Site Matches (2)
 🌐 test (mentions "WooCommerce" in description)
 ```
 
-### Save Queries
-
-For frequently used searches:
-
-1. Type query in Site Finder
-2. Click **Save Query** button
-3. Give it a name (e.g., "WooCommerce Sites")
-4. Recall later from dropdown
-
-**Built-in saved queries:**
-
-- All WordPress sites
-- WooCommerce sites
-- Sites needing updates
-- Production sites only
-- Staging sites only
-
-## Method 3: AI Chat (MCP)
+## Method 3: AI Assistant (MCP)
 
 ### Connect to Claude Desktop
 
@@ -372,7 +355,7 @@ Claude: Updating sites...
 Both sites successfully updated!
 ```
 
-### Best Practices for AI Chat
+### Best Practices for AI Assistants
 
 **Be specific:**
 
@@ -394,6 +377,9 @@ Both sites successfully updated!
 
 - ✅ "Show me the current plugin versions before updating"
 - ✅ "What's the WordPress version on production?"
+
+!!! note "This is not a UI panel"
+    Method 3 uses external AI assistants (Claude Desktop, Cursor) connected via MCP. Nexus AI does not have a built-in chat interface in the Local addon UI.
 
 ## Semantic Search vs Keyword Search
 
@@ -792,7 +778,7 @@ Now that you can search your content:
 
 - **[WP Engine Management](../cli/wpe-sites.md)** - Remote site management
 - **[Bulk Operations](../ui-addon/bulk-operations.md)** - Fleet operations
-- **[Smart Filters](../ui-addon/smart-filters.md)** - Site organization
+- **[Fleet Overview](../ui-addon/fleet-overview.md)** - Dashboard and analytics
 
 ---
 

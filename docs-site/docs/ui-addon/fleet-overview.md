@@ -586,8 +586,6 @@ Example groups:
 - E-commerce Sites
 ```
 
-[Site Groups →](site-groups.md)
-
 ### 5. Use Smart Filters
 
 Save frequently used filters:
@@ -599,8 +597,6 @@ Useful saved filters:
 - "Sites Needing Attention"
 - "Development Environments"
 ```
-
-[Smart Filters →](smart-filters.md)
 
 ## Troubleshooting
 
@@ -685,10 +681,4 @@ Useful saved filters:
 
 - **[Site Finder](site-finder.md)** - AI-powered site search
 - **[Bulk Operations](bulk-operations.md)** - Fleet-wide operations
-- **[Smart Filters](smart-filters.md)** - Advanced filtering
-- **[Site Groups](site-groups.md)** - Organize your fleet
 - **[WPE Management](wpe-management.md)** - WP Engine integration
-
----
-
-**Pro tip:** Set up groups and smart filters to organize your fleet, then use bulk operations to manage multiple sites at once!

@@ -50,10 +50,8 @@ The addon will be automatically installed into Local on first run.
 
    - **Fleet Overview** - Dashboard of all sites
    - **Site Finder** - AI-powered site search
-   - **AI Chat** - Chat with AI about your sites
    - **WPE Management** - Manage WP Engine sites
    - **Bulk Operations** - Perform operations on multiple sites
-   - **Smart Filters** - Filter and group sites
    - **Preferences** - Configure settings
 
 ## First Steps
@@ -121,44 +119,7 @@ Use natural language to find sites.
 - `staging` - Staging environments
 - `halted` - Stopped sites
 
-### 4. Chat with AI
-
-Ask questions about your WordPress fleet.
-
-1. Click **AI Chat** panel
-2. Type a question:
-   - "Which sites need WordPress updates?"
-   - "List all plugins installed on mysite"
-   - "Find posts about SEO across all sites"
-   - "What's the total number of posts in my fleet?"
-3. Get AI-powered answers with streaming responses
-
-![AI Chat](../assets/ai-chat.png)
-
-**Example conversation:**
-
-```
-You: Which sites are running old WordPress versions?
-
-AI: Found 3 sites with outdated WordPress:
-
-1. shop (6.3.1) - Update to 6.4.3 available
-2. test (6.2.2) - Update to 6.4.3 available
-3. legacy (6.1.1) - Update to 6.4.3 available
-
-Would you like me to update them?
-
-You: Update shop to latest
-
-AI: Updating shop to WordPress 6.4.3...
-✓ Backup created
-✓ Updated successfully
-✓ Site is healthy
-
-WordPress 6.4.3 is now running on shop.
-```
-
-### 5. Connect WP Engine Sites
+### 4. Connect WP Engine Sites
 
 Link your WP Engine sites to Local for unified management.
 
@@ -178,7 +139,7 @@ Link your WP Engine sites to Local for unified management.
 - Promote staging to production
 - Run diagnostics
 
-### 6. Bulk Operations
+### 5. Bulk Operations
 
 Perform operations on multiple sites at once.
 
@@ -210,69 +171,6 @@ Perform operations on multiple sites at once.
    Completed 3 sites in 45 seconds
    ```
 
-## Key Features
-
-### Smart Filters
-
-Create custom filters to group and organize sites.
-
-![Smart Filters](../assets/smart-filters.png)
-
-**Built-in filters:**
-
-- **By WordPress Version** - Group sites by WP version
-- **By Status** - Running, halted, provisioning
-- **By Plugin** - Sites with specific plugins
-- **By Host** - WP Engine, Flywheel, unlinked
-- **By PHP Version** - Group by PHP version
-- **Needs Updates** - Sites with available updates
-
-**Custom filters:**
-
-1. Click **Smart Filters** panel
-2. Click **Create Filter**
-3. Set conditions:
-   - WordPress version is/is not
-   - Has/doesn't have plugin
-   - Status is/is not
-   - Host is/is not
-4. Save with a name
-5. Use in Fleet Overview and Bulk Operations
-
-### Saved Queries
-
-Save frequently used search queries.
-
-1. In **Site Finder**, type a query
-2. Click **Save Query** button
-3. Give it a name (e.g., "WooCommerce Sites")
-4. Recall instantly from dropdown
-
-**Popular saved queries:**
-
-- E-commerce sites
-- Staging environments
-- Sites needing attention
-- Production sites only
-- Recently updated sites
-
-### Site Groups
-
-Organize sites into custom groups.
-
-1. Click **Site Groups** panel
-2. Click **Create Group**
-3. Name the group (e.g., "Client Sites")
-4. Drag sites into the group
-5. Use group as target for bulk operations
-
-**Use cases:**
-
-- Client portfolios
-- Project stages (dev, staging, prod)
-- Site type (blog, shop, landing page)
-- Maintenance schedules
-
 ## Common Workflows
 
 ### Daily Morning Check
@@ -285,10 +183,10 @@ Organize sites into custom groups.
 
 ### Before Client Meeting
 
-1. Open **Smart Filters**
-2. Select "Client Name" filter
-3. View all client sites at once
-4. Run **Bulk Operations → Site Health Check**
+1. Open **Fleet Overview**
+2. Use **Site Finder** to search for client sites
+3. View all matching sites at once
+4. Run **Bulk Operations → Site Health Check** on selected sites
 5. Take screenshots for report
 
 ### Weekly Maintenance
@@ -374,7 +272,6 @@ Speed up your workflow with keyboard shortcuts.
 |----------|--------|
 | `Cmd/Ctrl + K` | Open Site Finder |
 | `Cmd/Ctrl + Shift + F` | Toggle Fleet Overview |
-| `Cmd/Ctrl + Shift + C` | Open AI Chat |
 | `Cmd/Ctrl + Shift + S` | Scan all sites |
 | `Cmd/Ctrl + Shift + B` | Open Bulk Operations |
 | `Escape` | Close sidebar |
@@ -478,7 +375,7 @@ If WP Engine sites don't appear:
    - WPE requires internet access
    - Test: `ping wpengineapi.com`
 
-[Full Troubleshooting Guide →](../ui-addon/troubleshooting.md)
+[Troubleshooting Guide →](../cli/troubleshooting.md)
 
 ## Tips and Tricks
 
@@ -497,17 +394,12 @@ If WP Engine sites don't appear:
 - **Scan after changes:** Manual scan after bulk operations
 - **Skip unchanged:** Recent scans are skipped automatically
 
-### AI Chat Best Practices
+### Bulk Operations Best Practices
 
-- **Be specific:** "Update Akismet on mysite" vs "Update plugin"
-- **Ask for confirmation:** "Should I update all plugins?" before bulk operations
-- **Use natural language:** No need for exact syntax
-
-### Fleet Organization
-
-- **Use groups** for logical organization (clients, projects, environments)
-- **Use filters** for temporary views (needs updates, WooCommerce sites)
-- **Color code** sites by importance (coming soon)
+- **Start small:** Test on 1-2 sites before running fleet-wide
+- **Check status first:** Ensure sites are running before bulk updates
+- **Monitor progress:** Watch the real-time progress panel
+- **Review results:** Check per-site results for any failures
 
 ## Next Steps
 
@@ -515,9 +407,9 @@ If WP Engine sites don't appear:
 
 - **[Fleet Overview](../ui-addon/fleet-overview.md)** - Detailed fleet dashboard guide
 - **[Site Finder](../ui-addon/site-finder.md)** - Advanced search patterns
-- **[AI Chat](../ui-addon/ai-chat.md)** - Chat features and capabilities
 - **[WPE Management](../ui-addon/wpe-management.md)** - WP Engine integration
 - **[Bulk Operations](../ui-addon/bulk-operations.md)** - Fleet management
+- **[Preferences](../ui-addon/preferences.md)** - Customize your workflow
 
 ### Combine with CLI
 
@@ -547,10 +439,10 @@ npm install -g @local-labs-jpollock/local-addon-nexus-ai
 
 ### Advanced Features
 
-- **[Smart Filters](../ui-addon/smart-filters.md)** - Advanced filtering and grouping
-- **[Saved Queries](../ui-addon/saved-queries.md)** - Query management
-- **[Site Groups](../ui-addon/site-groups.md)** - Site organization
+- **[Semantic Search](../features/semantic-search.md)** - How vector search works
+- **[Safety System](../features/safety-system.md)** - Understanding safety tiers
 - **[Keyboard Shortcuts](../ui-addon/keyboard-shortcuts.md)** - Efficiency tips
+- **[MCP Tools](../mcp-tools/index.md)** - Use with AI assistants
 
 ## Help and Support
 

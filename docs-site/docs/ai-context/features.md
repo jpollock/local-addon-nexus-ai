@@ -401,7 +401,7 @@ Setup AI on 10 sites:
 
 ## Next Steps
 
-- **See all tools:** [MCP Tools](mcp-tools.md)
-- **CLI usage:** [CLI Commands](cli-commands.md)
+- **See all tools:** [MCP Tools](../mcp-tools/index.md)
+- **CLI usage:** [CLI Commands](../cli/commands.md)
 - **Common workflows:** [Common Tasks](common-tasks.md)
 - **Issues:** [Troubleshooting](troubleshooting.md)

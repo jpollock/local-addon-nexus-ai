@@ -208,8 +208,10 @@
 
 | File | Changes | Status |
 |------|---------|--------|
-| **README.md** | Test counts, tool counts, features, architecture | ✅ |
+| **README.md** | Test counts, tool counts, features, architecture, value proposition | ✅ |
 | **mkdocs.yml** | Removed 3 pages, added AI Context section | ✅ |
+| **docs-site/docs/index.md** | Value proposition with problem-solution-result structure | ✅ |
+| **docs-site/docs/snippets/value-proposition.md** | Reusable value proposition snippet | ✅ |
 
 ---
 
@@ -222,6 +224,7 @@
 5. **Removed incorrect docs** - 3 feature docs for non-existent UI (2,583 lines)
 6. **Cleaned up repo** - 59 obsolete files deleted (30,063 lines)
 7. **Updated README** - Accurate feature list, test counts, tool counts
+8. **Value proposition** - Problem-solution-result messaging in README and docs-site
 
 ---
 
@@ -346,6 +349,36 @@
 - [x] README architecture section updated
 - [x] Ground truth audit documented
 - [x] Obsolete docs deleted (59 files, 30,063 lines)
+- [x] Value proposition applied (README + docs-site, reusable snippet created)
+
+---
+
+### ✅ Phase 7: Value Proposition (COMPLETE)
+
+**Goal:** Create standard, reusable value proposition statement
+
+**Actions:**
+- Updated README.md with problem-solution-result structure
+- Updated docs-site/docs/index.md with same value proposition
+- Created reusable snippet at `docs-site/docs/snippets/value-proposition.md`
+
+**Changes:**
+1. **Problem-first messaging:**
+   - Starts with real developer pain: "Check each site manually"
+   - Lists concrete questions developers ask daily
+   - Shows the manual/guess trap
+
+2. **Clear solution:**
+   - 4 numbered benefits (semantic search, real control, unified view, safety)
+   - Concrete result example
+   - No marketing fluff
+
+3. **Reusable snippet:**
+   - Created `docs-site/docs/snippets/value-proposition.md`
+   - Can be included in other docs via `--8<-- "snippets/value-proposition.md"`
+   - Ensures consistent messaging across all documentation
+
+**Result:** README and docs-site now clearly communicate value and problems solved
 
 ---
 

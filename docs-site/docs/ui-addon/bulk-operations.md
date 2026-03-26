@@ -373,8 +373,6 @@ Select from Groups:
 Total Selected: 7 sites
 ```
 
-[Site Groups →](site-groups.md)
-
 ### Advanced Selection
 
 **Complex queries:**
@@ -834,11 +832,5 @@ After each operation:
 ## Next Steps
 
 - **[Fleet Overview](fleet-overview.md)** - Select sites for bulk operations
-- **[Smart Filters](smart-filters.md)** - Advanced site filtering
-- **[Site Groups](site-groups.md)** - Organize sites for bulk ops
 - **[Safety System](../features/safety-system.md)** - Understanding safety tiers
 - **[CLI Examples](../cli/examples.md)** - Bulk operations via CLI
-
----
-
-**Pro tip:** Create site groups for common bulk operation targets (e.g., "Production Sites", "Client A Sites") to speed up your workflow!

@@ -550,7 +550,7 @@ nexus config set ai.provider ollama
 nexus config set ai.model nomic-embed-text
 ```
 
-[Configuration Reference →](../cli/configuration.md)
+[Command Reference →](../cli/commands.md)
 
 ## Next Steps
 

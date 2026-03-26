@@ -736,7 +736,7 @@ Benefits:
 ## Next Steps
 
 - **[WPE Management UI](../ui-addon/wpe-management.md)** - Visual management panel
-- **[Pull/Push Guide](../getting-started/wpe-sync.md)** - Sync workflows
 - **[Remote WP-CLI](../features/wp-cli-integration.md)** - Run commands remotely
 - **[WPE Integration Architecture](../architecture/wpe-integration.md)** - Technical details
-- **[SSH ControlMaster](../features/ssh-controlmaster.md)** - Connection pooling
+- **[SSH ControlMaster](../features/ssh-control-master.md)** - Connection pooling
+- **[Fleet Overview](../ui-addon/fleet-overview.md)** - Dashboard for all sites

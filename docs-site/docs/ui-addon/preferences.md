@@ -921,5 +921,5 @@ Health Check:
 
 - **[Keyboard Shortcuts](keyboard-shortcuts.md)** - Complete shortcut reference
 - **[Safety System](../features/safety-system.md)** - Understanding operation safety
-- **[Privacy](../getting-started/privacy.md)** - Data handling details
-- **[Troubleshooting](../getting-started/troubleshooting.md)** - Common issues
+- **[Telemetry](../features/telemetry.md)** - Data collection and privacy
+- **[CLI Troubleshooting](../cli/troubleshooting.md)** - Common issues

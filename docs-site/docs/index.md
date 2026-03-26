@@ -4,15 +4,31 @@ description: AI-powered WordPress site intelligence for Local and WP Engine
 keywords: [wordpress, ai, mcp, local, wpe, vector search, semantic search]
 ---
 
-# Nexus AI
+# Nexus AI — Your WordPress Fleet, AI-Searchable and AI-Controllable
 
-**AI-powered WordPress site intelligence for Local and WP Engine.**
+**For developers managing multiple WordPress sites:** Stop checking each site manually. Nexus AI indexes your entire portfolio (local + WP Engine) and gives AI assistants real tools to search, audit, and manage your fleet.
 
-One unified system, two interfaces: a CLI/MCP server for AI assistants, and a UI addon for Local.
+## The Problem
 
-## What is Nexus AI?
+You manage 20, 50, 100+ WordPress sites. Every day you ask questions like:
 
-Nexus AI indexes your WordPress sites (local and WP Engine) into a vector database and exposes them through the **Model Context Protocol (MCP)**, enabling AI assistants like Claude to understand and work with your entire WordPress portfolio.
+- "Which sites have the Stripe plugin?"
+- "Where did I write that SMTP setup guide?"
+- "Do all my WooCommerce sites use the same shipping plugin?"
+- "Which sites are running WordPress < 6.0?"
+
+The answer? Check each site manually. Open 50 admin panels. Run the same WP-CLI command 50 times. Or worse — guess.
+
+## The Solution
+
+One MCP connection for your entire WordPress fleet:
+
+1. **Semantic search** — AI assistants search ALL your sites at once, understanding meaning (not just keywords)
+2. **Real control** — Execute WP-CLI commands on local or remote sites, bulk updates, health checks
+3. **Local + WPE unified** — Sync WP Engine production sites alongside local dev sites
+4. **Safety guardrails** — 3-tier confirmation system prevents accidental destruction
+
+**Result:** Ask Claude "which of my sites need WooCommerce updates?" → Real answer from your actual sites, not generic advice.
 
 ```mermaid
 graph LR

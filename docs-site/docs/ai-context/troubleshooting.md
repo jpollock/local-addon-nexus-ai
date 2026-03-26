@@ -475,5 +475,5 @@ Look for `[NexusAI]` entries
 ## Next Steps
 
 - **Features:** [Verified Features](features.md)
-- **Tools:** [MCP Tools](mcp-tools.md)
+- **Tools:** [MCP Tools](../mcp-tools/index.md)
 - **Common tasks:** [Common Tasks](common-tasks.md)

@@ -759,4 +759,4 @@ export class SiteManager {
 - **[UI Architecture](ui-architecture.md)** - Addon implementation
 - **[Data Flow](data-flow.md)** - System data flow
 - **[Developer Setup](../developer/setup.md)** - Development environment
-- **[Testing Guide](../developer/testing.md)** - Testing strategies
+- **[Testing Addon](../developer/testing-addon.md)** - Testing strategies

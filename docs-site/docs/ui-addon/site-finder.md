@@ -891,8 +891,8 @@ nexus search "WooCommerce with Stripe" \
 
 ## Next Steps
 
-- **[AI Chat](ai-chat.md)** - Conversational interface for site management
-- **[Smart Filters](smart-filters.md)** - Advanced filtering and site grouping
 - **[Semantic Search](../features/semantic-search.md)** - Technical deep dive
 - **[Content Extraction](../features/content-extraction.md)** - What gets indexed and how
 - **[CLI Search](../cli/examples.md)** - Command-line search interface
+- **[Fleet Overview](fleet-overview.md)** - Browse all indexed sites
+- **[Bulk Operations](bulk-operations.md)** - Act on search results

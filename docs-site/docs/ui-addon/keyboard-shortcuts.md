@@ -609,4 +609,4 @@ Any customizations will be lost.
 - **[Preferences](preferences.md)** - Customize shortcuts
 - **[Fleet Overview](fleet-overview.md)** - Learn the UI
 - **[CLI Quick Start](../getting-started/cli-quick-start.md)** - Command-line shortcuts
-- **[Accessibility](../getting-started/accessibility.md)** - Screen reader support
+- **[Bulk Operations](bulk-operations.md)** - Fleet management

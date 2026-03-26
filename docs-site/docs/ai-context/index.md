@@ -15,8 +15,8 @@ This section provides structured context for AI assistants (Claude, ChatGPT, etc
 | Document | Purpose | For |
 |----------|---------|-----|
 | **[Features](features.md)** | Complete list of verified features | Understanding capabilities |
-| **[MCP Tools](mcp-tools.md)** | All 111 tools with examples | Tool selection and usage |
-| **[CLI Commands](cli-commands.md)** | All CLI commands with examples | Command-line workflows |
+| **[MCP Tools](../mcp-tools/index.md)** | All 111 tools with examples | Tool selection and usage |
+| **[CLI Commands](../cli/commands.md)** | All CLI commands with examples | Command-line workflows |
 | **[Common Tasks](common-tasks.md)** | Task-based workflows | Step-by-step guidance |
 | **[Troubleshooting](troubleshooting.md)** | Common issues and solutions | Problem resolution |
 
@@ -74,7 +74,7 @@ Start with **[Features](features.md)** to understand what Nexus AI can and canno
 
 ### For Tool Selection
 
-Check **[MCP Tools](mcp-tools.md)** to find the right tool for your task:
+Check **[MCP Tools](../mcp-tools/index.md)** to find the right tool for your task:
 - Search content → `search_site_content` or `search_across_sites`
 - Manage sites → `local_list_sites`, `local_create_site`, etc.
 - WP-CLI → `wp_plugin_list`, `wp_core_version`, etc.
@@ -136,7 +136,7 @@ Check **[Troubleshooting](troubleshooting.md)** for:
 ## Next Steps
 
 - **New to Nexus AI?** Start with [Features](features.md)
-- **Using MCP tools?** See [MCP Tools](mcp-tools.md)
-- **Using CLI?** See [CLI Commands](cli-commands.md)
+- **Using MCP tools?** See [MCP Tools](../mcp-tools/index.md)
+- **Using CLI?** See [CLI Commands](../cli/commands.md)
 - **Specific task?** Check [Common Tasks](common-tasks.md)
 - **Having issues?** Try [Troubleshooting](troubleshooting.md)
