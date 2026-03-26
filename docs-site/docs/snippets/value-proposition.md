@@ -1,6 +1,6 @@
-# Nexus AI — Your WordPress Fleet, AI-Searchable and AI-Controllable
+# Nexus AI for Local — WordPress and AI Development, Effortlessly Local
 
-**For developers managing multiple WordPress sites:** Stop checking each site manually. Nexus AI indexes your entire portfolio (local + WP Engine) and gives AI assistants real tools to search, audit, and manage your fleet.
+**For developers managing multiple WordPress sites:** Stop checking each site manually. Nexus AI for Local indexes your entire portfolio (running in Local and/or WP Engine) and gives AI assistants real tools to search, audit, and manage your fleet.
 
 ## The Problem
 
