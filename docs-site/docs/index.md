@@ -30,6 +30,43 @@ One MCP connection for your entire WordPress fleet:
 
 **Result:** Ask Claude "which of my sites need WooCommerce updates?" → Real answer from your actual sites, not generic advice.
 
+## Built for AI-First WordPress Development
+
+Nexus AI brings enterprise-grade AI capabilities to local WordPress development, with production-ready tooling for both Local and WP Engine environments.
+
+### Ship-Ready AI Stack
+
+- **MCP Server** — 111 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
+- **CLI** — Terminal commands for local and WPE site management (hosting + WordPress)
+- **Open Source AI** — Ships with LanceDB (vector database), ONNX embeddings, and Ollama integration
+- **Local AI Gateway** — Centralized credential proxy, usage tracking, and cost monitoring for your entire fleet
+
+### Secure Enterprise Connections
+
+Leverages Local's secure channels to WP Engine:
+
+- **CAPI OAuth2** — Authenticated account and install management
+- **SSH ControlMaster** — Persistent, encrypted connections for remote WP-CLI
+
+### AI-Powered Workflows
+
+- **Semantic Search** — Search across all sites simultaneously, understanding meaning (not just keywords)
+- **Content Analysis** — Extract insights from WooCommerce products, ACF fields, and custom post types
+- **Local LLM Support** — Built-in Ollama integration with automatic site context injection
+- **Fleet Intelligence** — Drift detection, health monitoring, plugin usage analytics
+
+### Flexible AI Integration
+
+- **Bring Your Own Key (BYOK)** — Support for Anthropic, OpenAI, and Google LLM APIs
+- **Future-Ready** — Designed for WPE AI API Gateway integration
+- **One-Click Setup** — Automated WordPress site configuration for AI use (keys, features, plugins)
+
+### Developer Experience
+
+- **Zero Configuration** — Auto-downloads platform-specific addon, auto-activates, just works
+- **Cross-Platform** — macOS (ARM64/Intel), Windows, Linux
+- **Production Security** — Input validation, audit logging, credential redaction, 3-tier safety system
+
 ```mermaid
 graph LR
     A[AI Assistant] -->|MCP Protocol| B[Nexus AI]
