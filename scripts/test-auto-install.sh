@@ -146,6 +146,14 @@ else
   cd "$TEST_DIR/mock-addon"
   npm install --omit=dev --legacy-peer-deps > /dev/null 2>&1
   echo "✓ Dependencies installed"
+
+  # CRITICAL: Rebuild native modules for Electron
+  # better-sqlite3 must be compiled for Electron's Node (MODULE_VERSION 136)
+  # Use electron-rebuild from project root (it's a devDependency)
+  echo "Rebuilding native modules for Electron..."
+  cd "$PROJECT_ROOT"
+  npx electron-rebuild -v 37.8.0 -f -w better-sqlite3 --module-dir "$TEST_DIR/mock-addon" > /dev/null 2>&1
+  echo "✓ Native modules rebuilt for Electron"
 fi
 
 # Create tarball

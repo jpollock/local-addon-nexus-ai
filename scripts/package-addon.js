@@ -98,6 +98,18 @@ console.log('Installing production dependencies...');
 execSync('npm install --omit=dev', { cwd: stagingDir, stdio: 'inherit' });
 
 // ---------------------------------------------------------------------------
+// Step 4.5: Rebuild native modules for Electron
+// ---------------------------------------------------------------------------
+
+console.log('Rebuilding native modules for Electron...');
+// Run from project root (where electron-rebuild is installed as devDep)
+// but target the staging directory
+execSync(
+  `npx electron-rebuild -v 37.8.0 -f -w better-sqlite3 --module-dir "${stagingDir}"`,
+  { cwd: projectRoot, stdio: 'inherit' }
+);
+
+// ---------------------------------------------------------------------------
 // Step 5: Strip non-target platform binaries
 // ---------------------------------------------------------------------------
 
