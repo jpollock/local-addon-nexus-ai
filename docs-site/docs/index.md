@@ -219,40 +219,45 @@ Sync and manage WP Engine sites alongside local sites.
 
 ## Quick Start
 
-=== "CLI/MCP"
+### Installation (One Command)
 
-    ```bash
-    # 1. Install
-    npm install -g @local-labs-jpollock/local-addon-nexus-ai
+Install the CLI, which automatically downloads and installs the Local addon for your platform:
 
-    # 2. Add to Claude Desktop config
-    # ~/.config/Claude/claude_desktop_config.json
-    {
-      "mcpServers": {
-        "nexus-ai": {
-          "command": "nexus",
-          "args": ["mcp"]
-        }
-      }
+```bash
+# Install CLI globally
+npm install -g @local-labs-jpollock/local-addon-nexus-ai
+
+# Run any command to trigger auto-install
+nexus sites list
+```
+
+**What you get:**
+- ✅ **CLI** — Terminal commands for all operations
+- ✅ **MCP Server** — 111 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
+- ✅ **UI Addon** — Visual dashboards built into Local app
+
+**Supported platforms:** macOS (Apple Silicon/Intel), Windows, Linux
+
+[Full Installation Guide →](ui-addon/installation.md)
+
+### Connect to AI Assistants (Optional)
+
+Add to Claude Desktop config (`~/.config/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "nexus-ai": {
+      "command": "nexus",
+      "args": ["mcp"]
     }
+  }
+}
+```
 
-    # 3. Restart Claude Desktop
-    # Tools will appear in Claude's tool list
-    ```
+Restart Claude Desktop and the tools will appear in Claude's tool list.
 
-    [Full CLI Setup →](cli/installation.md)
-
-=== "UI Addon"
-
-    ```bash
-    # 1. Download addon from releases
-    # 2. Open Local → Preferences → Addons
-    # 3. Install addon ZIP
-    # 4. Restart Local
-    # 5. Click "Nexus AI" in toolbar
-    ```
-
-    [Full UI Setup →](ui-addon/installation.md)
+[MCP Setup Guide →](cli/mcp-setup.md)
 
 ## Use Cases
 
