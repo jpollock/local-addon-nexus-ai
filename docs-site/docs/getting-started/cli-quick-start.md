@@ -20,9 +20,11 @@ Before you begin, make sure you have:
     The CLI handles everything automatically:
 
     - ✅ Auto-starts Local if not running
-    - ✅ Auto-installs addon if missing
-    - ✅ Auto-activates addon
+    - ✅ Auto-downloads platform-specific addon from GitHub Releases (~300 MB)
+    - ✅ Auto-installs and activates addon
     - ✅ No manual setup required!
+
+    **Supported:** macOS (Apple Silicon/Intel), Windows, Linux
 
 ## Installation
 
@@ -32,7 +34,17 @@ Install Nexus AI globally via npm:
 npm install -g @local-labs-jpollock/local-addon-nexus-ai
 ```
 
-This installs the `nexus` CLI command. The addon is auto-installed on first run.
+This installs the `nexus` CLI command. The addon is auto-downloaded from GitHub Releases on first run.
+
+!!! info "Auto-Install on First Run"
+    When you run your first command, the CLI:
+
+    1. Detects your platform (macOS ARM64/x64, Windows, or Linux)
+    2. Prompts: "Download and install addon from GitHub? (Y/n)"
+    3. Downloads the platform-specific tarball (~300 MB with all dependencies)
+    4. Extracts to Local's addon directory
+    5. Activates the addon automatically
+    6. Prompts you to restart Local
 
 **Verify installation:**
 

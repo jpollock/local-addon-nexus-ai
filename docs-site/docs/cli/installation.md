@@ -32,11 +32,14 @@ ls -la /Applications/Local.app  # macOS
 
     - Detects if Local is installed (prompts to download if not)
     - Starts Local if it's not running
-    - Installs the Nexus AI addon
+    - Downloads the addon for your platform from GitHub Releases (~300 MB)
+    - Extracts and installs the Nexus AI addon
     - Activates the addon
     - Waits for GraphQL server to be ready
 
     Just install the CLI and run commands - everything else is automatic!
+
+    **Supported platforms:** macOS (Apple Silicon/Intel), Windows, Linux
 
 ## Installation
 
@@ -53,25 +56,34 @@ On first run, the CLI automatically handles all setup:
 ```bash
 $ nexus sites list
 
-🔧 Connecting to Local...
-🔧 Starting Local...
-🔧 Addon not installed. Installing...
-🔧 Activating addon...
-🔧 Waiting for GraphQL...
-🔧 GraphQL server ready.
+Nexus AI addon not found.
+Detected platform: macOS (Apple Silicon)
 
-Local Sites:
-  (no sites yet)
+Download and install addon from GitHub? (Y/n) Y
+
+Downloading nexus-ai-darwin-arm64-0.1.0.tgz...
+Downloading... 100% (287 MB / 287 MB)
+Download complete. Installing...
+✓ Addon installed successfully!
+
+Please restart Local for the addon to appear.
+
+(After restarting Local)
+
+$ nexus sites list
+
+Local Sites (0 running, 0 halted):
+  No local sites found. Create one in Local or: nexus local create <name>
 ```
 
 **What just happened:**
 
-1. ✅ Detected Local is installed
-2. ✅ Started Local automatically
-3. ✅ Installed Nexus AI addon
-4. ✅ Activated the addon
-5. ✅ Waited for GraphQL server
-6. ✅ Executed your command
+1. ✅ Detected missing addon
+2. ✅ Prompted for confirmation
+3. ✅ Downloaded platform-specific tarball from GitHub Releases (~300 MB)
+4. ✅ Extracted to Local's addon directory
+5. ✅ Activated the addon
+6. ✅ Prompted you to restart Local
 
 Subsequent runs are instant - no bootstrap overhead.
 
