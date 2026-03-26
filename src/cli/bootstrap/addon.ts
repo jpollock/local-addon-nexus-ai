@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
 import { getLocalPaths, ADDON_PACKAGE_NAME, ADDON_DIR_NAME } from './paths';
-import { isLocalRunning, stopLocal } from './process';
+import { isLocalRunning, stopLocal, restartLocal } from './process';
 import { detectPlatform, getPlatformDisplayName } from './platform';
 import { downloadFromGitHub, formatBytes } from './downloader';
 import { extractTarball, verifyExtractedAddon } from './extractor';
@@ -281,7 +281,16 @@ async function autoDownloadAddon(
 
     log('✓ Addon installed successfully!');
     console.log('');
-    console.log('Please restart Local for the addon to appear.');
+
+    // Auto-restart Local if running, otherwise prompt to start
+    const running = await isLocalRunning();
+    if (running) {
+      console.log('Restarting Local to load addon...');
+      await restartLocal();
+      console.log('\x1b[32m✓ Local restarted\x1b[0m');
+    } else {
+      console.log('Start Local to use the addon.');
+    }
     console.log('');
 
     return { success: true };
@@ -489,9 +498,19 @@ export async function ensureAddon(
         } else {
           console.log('');
           console.log('\x1b[32m✓ Addon updated successfully!\x1b[0m');
-          console.log('Please restart Local for changes to take effect.');
+
+          // Auto-restart Local if running
+          const running = await isLocalRunning();
+          if (running) {
+            console.log('Restarting Local to load new addon version...');
+            await restartLocal();
+            console.log('\x1b[32m✓ Local restarted\x1b[0m');
+          } else {
+            console.log('Local is not running. Start Local to use the updated addon.');
+          }
+
           console.log('');
-          return { success: true, needsRestart: true };
+          return { success: true, needsRestart: false }; // Already restarted
         }
       } else {
         console.log('\nSkipping addon update. Continuing with current version...\n');
