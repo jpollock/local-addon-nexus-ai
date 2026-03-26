@@ -62,9 +62,19 @@ Enable in **Preferences → General**:
 - ☑️ Open Fleet Overview on Local startup
 - ☑️ Auto-refresh every 5 minutes
 
-## Dashboard Sections
+## Dashboard Tabs
 
-### 1. Statistics Panel
+The Fleet Overview includes multiple tabs for organizing different types of operations:
+
+- **Overview** - Statistics, health summary, and site list (default)
+- **Operations** - Credential sync and WPE site synchronization
+- **Analytics** - Charts and usage reports (if enabled)
+
+### Overview Tab
+
+The default view showing real-time fleet statistics and site management.
+
+#### 1. Statistics Panel
 
 **Real-time metrics:**
 
@@ -222,6 +232,93 @@ Top Plugins
 - **Scan Site** - Re-index content
 - **View Details** - Open site info panel
 - **Start/Stop** - Toggle site status
+
+### Operations Tab
+
+**Fleet-wide operations and synchronization:**
+
+Access via the **Operations** tab in Fleet Overview.
+
+#### Credential Sync
+
+Synchronize AI credentials (API keys, provider settings) across all running WordPress sites.
+
+```
+┌─────────────────────────────────────────┐
+│ AI Credential Sync                      │
+│                                         │
+│ Sync credentials to running sites for:  │
+│ • AI-powered features                   │
+│ • Ollama integration                    │
+│ • OpenAI/Anthropic API access           │
+│                                         │
+│ Last sync: 2 hours ago                  │
+│ Status: ✓ 18/18 sites synced            │
+│                                         │
+│ [Sync All Running Sites]                │
+└─────────────────────────────────────────┘
+```
+
+**What it syncs:**
+- AI provider credentials (Ollama, OpenAI, Anthropic)
+- Model selections
+- API endpoint configurations
+- WordPress AI options
+
+**Progress tracking:**
+- Real-time sync status with loading indicators
+- Per-site success/failure reporting
+- Toast notifications for completion
+- Automatic retry on transient failures
+
+**Click "Sync All Running Sites":**
+1. Loading spinner appears
+2. Sites are synced sequentially
+3. Progress shown per-site
+4. Success toast: "Successfully synced credentials to X sites"
+5. Error toast if any sites fail with details
+
+#### WP Engine Site Sync
+
+Sync WP Engine remote sites into the local fleet view for unified search and management.
+
+```
+┌─────────────────────────────────────────┐
+│ WP Engine Sites                         │
+│                                         │
+│ Sync remote WPE sites into fleet:       │
+│ • Full content indexing                 │
+│ • Plugin/theme metadata extraction      │
+│ • Unified search with local sites       │
+│                                         │
+│ Last sync: 1 day ago                    │
+│ Status: ✓ 251 sites indexed             │
+│ Time: ~25 minutes for full sync         │
+│                                         │
+│ [Sync Now]                              │
+└─────────────────────────────────────────┘
+```
+
+**What gets synced:**
+- Site metadata (WordPress version, URL, status)
+- Plugin and theme lists with versions
+- User accounts and roles
+- Content for semantic search (via SSH WP-CLI)
+- Site health indicators
+
+**Performance:**
+- ~6 seconds per site (SSH ControlMaster + 10× concurrency)
+- Live progress in Fleet Overview header
+- Background indexing after metadata sync
+- Re-sync anytime to refresh data
+
+**After sync completes:**
+- WPE sites appear in Site Finder search results
+- Can view site details and metadata
+- One-click "Pull to Local" for development
+- Automatic link detection between local and WPE sites
+
+See [WPE Remote Management User Guide](../integrations/wpe-management.md) for full documentation.
 
 ### 7. WP Engine Sites
 

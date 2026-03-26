@@ -288,7 +288,6 @@ Nexus AI works with any MCP-compatible client:
 
 - **Zed Editor** - [Setup guide](../cli/mcp-setup.md#zed-editor)
 - **Continue.dev** - [Setup guide](../cli/mcp-setup.md#continuedev)
-- **Cline** - [Setup guide](../cli/mcp-setup.md#cline)
 
 ## Common Tasks
 

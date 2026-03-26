@@ -3,6 +3,7 @@ import { NexusOverview } from './components/NexusOverview';
 import { NexusPreferences } from './components/NexusPreferences';
 import { SiteNexusSection } from './components/SiteNexusSection';
 import { SidebarSearchPanel } from './components/SidebarSearchPanel';
+import { ToastManager } from './components/ToastManager';
 import { IPC_CHANNELS } from '../common/constants';
 
 export default function renderer(context: any): void {
@@ -117,6 +118,12 @@ export default function renderer(context: any): void {
   const ReactDOM = require('react-dom');
   ReactDOM.render(React.createElement(SidebarSearchContainer), container);
 
+  // Mount toast manager for global notifications
+  const toastContainer = document.createElement('div');
+  toastContainer.id = 'nexus-toast-manager';
+  document.body.appendChild(toastContainer);
+  ReactDOM.render(React.createElement(ToastManager), toastContainer);
+
   // Inject search button into Local's sidebar toolbar
   const injectSearchButton = () => {
     console.log('[Nexus AI] Attempting to inject search button...');
@@ -166,7 +173,8 @@ export default function renderer(context: any): void {
     `;
 
     searchButton.addEventListener('mouseenter', () => {
-      searchButton.style.color = '#fff';
+      // Use theme-aware hover color
+      searchButton.style.color = 'var(--color-text-primary, #111827)';
     });
 
     // Store reference to button for state checks
@@ -198,14 +206,20 @@ export default function renderer(context: any): void {
     return true;
   };
 
-  // Use MutationObserver to wait for sidebar to load
+  // Use MutationObserver to keep search button injected (don't disconnect)
+  // Button can disappear when navigating away from Sites and back
   const observer = new MutationObserver(() => {
-    if (injectSearchButton()) {
-      observer.disconnect();
+    // Check if button exists
+    const button = document.querySelector('#nexus-search-btn');
+    const toolbar = document.querySelector('[class*="SitesSidebar_Toolbar"]');
+
+    // Re-inject if toolbar exists but button is missing
+    if (toolbar && !button) {
+      injectSearchButton();
     }
   });
 
-  // Start observing
+  // Start observing (never disconnect)
   observer.observe(document.body, {
     childList: true,
     subtree: true,
@@ -231,14 +245,44 @@ export default function renderer(context: any): void {
 
     // Store filter state globally for button click handler
     (window as any).nexusFilterActive = filterActive;
+    (window as any).nexusFilterCount = siteIds.length;
 
-    // Update search button color to indicate filter state
+    // Update search button color and badge to indicate filter state
     const searchBtn = document.querySelector('#nexus-search-btn') as HTMLElement;
     if (searchBtn) {
       searchBtn.style.color = filterActive ? '#51BB7B' : '#7e7e7e';
       searchBtn.title = filterActive
-        ? 'Clear filter (show all sites)'
+        ? `Filter active: ${siteIds.length} site${siteIds.length === 1 ? '' : 's'} (click to clear)`
         : 'AI Site Finder (Cmd+K / Ctrl+K)';
+
+      // Add/update count badge
+      let badge = searchBtn.querySelector('.nexus-filter-badge') as HTMLElement;
+      if (filterActive) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'nexus-filter-badge';
+          badge.style.cssText = `
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #51BB7B;
+            color: #fff;
+            font-size: 9px;
+            font-weight: 600;
+            padding: 2px 4px;
+            border-radius: 8px;
+            min-width: 14px;
+            text-align: center;
+            line-height: 1;
+            pointer-events: none;
+          `;
+          searchBtn.style.position = 'relative';
+          searchBtn.appendChild(badge);
+        }
+        badge.textContent = siteIds.length > 99 ? '99+' : String(siteIds.length);
+      } else if (badge) {
+        badge.remove();
+      }
     }
 
     if (filterActive) {
@@ -281,6 +325,10 @@ export default function renderer(context: any): void {
 
   const clearFilterHandler = () => {
     applySiteFilter([]);
+
+    // Show toast notification
+    (window as any).showToast?.('Filter cleared - showing all sites', 'info', 2000);
+
     // Trigger badge re-injection after filter is cleared
     setTimeout(() => {
       const event = new CustomEvent('nexus:badges-refresh');

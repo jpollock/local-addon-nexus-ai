@@ -8,6 +8,7 @@ import {
   Site,
   Content,
   Plugin,
+  Theme,
   User,
   Relationship,
   GraphStats,
@@ -78,6 +79,20 @@ CREATE TABLE IF NOT EXISTS plugins (
   UNIQUE(site_id, slug)
 );
 CREATE INDEX IF NOT EXISTS idx_plugins_site_active ON plugins(site_id, is_active);
+
+CREATE TABLE IF NOT EXISTS themes (
+  id INTEGER PRIMARY KEY,
+  site_id TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  name TEXT NOT NULL,
+  version TEXT,
+  is_active INTEGER DEFAULT 0,
+  author TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(site_id, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_themes_site_active ON themes(site_id, is_active);
 
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY,
@@ -487,6 +502,81 @@ export class GraphService {
 
     this.db
       .prepare('DELETE FROM plugins WHERE site_id = ?')
+      .run(siteId);
+  }
+
+  // ===== Theme Operations =====
+
+  async upsertTheme(theme: Omit<Theme, 'id'>): Promise<number> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const stmt = this.db.prepare(`
+      INSERT INTO themes (site_id, slug, name, version, is_active, author, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(site_id, slug) DO UPDATE SET
+        name = excluded.name,
+        version = excluded.version,
+        is_active = excluded.is_active,
+        author = excluded.author,
+        updated_at = excluded.updated_at
+      RETURNING id
+    `);
+
+    const result = stmt.get(
+      theme.site_id,
+      theme.slug,
+      theme.name,
+      theme.version ?? null,
+      theme.is_active ? 1 : 0,
+      theme.author ?? null,
+      theme.created_at,
+      theme.updated_at
+    ) as { id: number };
+
+    return result.id;
+  }
+
+  async getThemes(siteId: string): Promise<Theme[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const rows = this.db
+      .prepare('SELECT * FROM themes WHERE site_id = ?')
+      .all(siteId) as Theme[];
+
+    return rows.map((row) => ({
+      ...row,
+      is_active: Boolean(row.is_active),
+    }));
+  }
+
+  async getTheme(siteId: string, slug: string): Promise<Theme | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const row = this.db
+      .prepare('SELECT * FROM themes WHERE site_id = ? AND slug = ?')
+      .get(siteId, slug) as Theme | undefined;
+
+    if (!row) return null;
+
+    return {
+      ...row,
+      is_active: Boolean(row.is_active),
+    };
+  }
+
+  async deleteTheme(siteId: string, slug: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    this.db
+      .prepare('DELETE FROM themes WHERE site_id = ? AND slug = ?')
+      .run(siteId, slug);
+  }
+
+  async deleteThemes(siteId: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    this.db
+      .prepare('DELETE FROM themes WHERE site_id = ?')
       .run(siteId);
   }
 

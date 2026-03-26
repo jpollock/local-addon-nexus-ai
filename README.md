@@ -96,9 +96,9 @@ Nexus AI can sync your **WP Engine sites** into the same fleet view as your loca
 **Quick Start:**
 
 1. Connect Local to your WP Engine account (Local → Connect → WP Engine)
-2. Open Nexus AI → Preferences
+2. Open Nexus AI Dashboard → **Operations** tab
 3. Click **"Sync Now"** under "WP Engine Sites"
-4. View synced sites in Fleet Overview
+4. View synced sites in Dashboard and Site Finder
 
 **Performance:**
 
@@ -122,6 +122,18 @@ Nexus AI indexes your WordPress sites into a local vector database for semantic 
 - Passwords, API keys, user emails, session data (security-first)
 
 **Technical details:** All-MiniLM-L6-v2 model (384-dimensional vectors), sentence-boundary chunking, cosine distance search, post-level deduplication.
+
+## Keyboard Shortcuts
+
+**AI Site Finder:**
+- `Cmd+K` (Mac) / `Ctrl+K` (Windows/Linux) — Open Site Finder search panel
+- `Cmd+Enter` / `Ctrl+Enter` — Submit search query
+- `Esc` — Close search panel
+
+**Dashboard:**
+- Visual feedback with toast notifications for all operations
+- Real-time loading indicators for sync and search operations
+- Filter count badges show active search results
 
 ## Your Choice For AI Integration
 

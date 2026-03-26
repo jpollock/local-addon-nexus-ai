@@ -38,9 +38,20 @@ graph LR
 
 ## Opening Site Finder
 
-**Three ways to access:**
+**Four ways to access:**
 
-### 1. Sidebar Button
+### 1. Keyboard Shortcut (Recommended)
+
+Press `Cmd+K` (macOS) or `Ctrl+K` (Windows/Linux) to open the search panel from anywhere.
+
+**Quick workflow:**
+```
+Cmd+K → Type query → Cmd+Enter → Results appear
+```
+
+The search panel floats over the current view and can be dismissed with `Esc`.
+
+### 2. Sidebar Button
 
 Click the **Site Finder** tab in the left sidebar.
 
@@ -53,19 +64,65 @@ Click the **Site Finder** tab in the left sidebar.
 └─────────────────┘
 ```
 
-### 2. Keyboard Shortcut
+### 3. Search Icon (Sites Sidebar)
 
-Press `Cmd+F` (macOS) or `Ctrl+F` (Windows/Linux).
+Click the **search icon (🔍)** in the Sites list toolbar. This icon persists across navigation.
 
-### 3. Fleet Overview Link
+### 4. Fleet Overview Link
 
 Click **"Search Sites"** from the Fleet Overview dashboard.
+
+## User Feedback
+
+Site Finder provides visual feedback for all operations:
+
+**Toast Notifications:**
+
+All search operations display toast notifications for success, errors, or warnings:
+
+```
+┌─────────────────────────────────────────┐
+│ ✓ Search completed - 12 sites found     │
+│                          [Dismiss] [×]  │
+└─────────────────────────────────────────┘
+```
+
+Toast types:
+- **Success** (green) - Search completed, sites synced
+- **Error** (red) - Search failed, connection issues
+- **Warning** (yellow) - Partial results, slow response
+- **Info** (blue) - Status updates, background operations
+
+Toasts auto-dismiss after 4 seconds or can be manually closed.
+
+**Loading Indicators:**
+
+During searches and operations, loading spinners appear:
+- Search input shows spinner during query execution
+- Site cards show spinners during re-indexing
+- Operations tab shows progress for sync operations
+
+**Filter Count Badges:**
+
+When filters are active, a badge shows the count of active sites matching filters:
+
+```
+🔍 Site Finder                    (12)
+     ▲
+     └─── Active filter count
+```
+
+**Clear Buttons:**
+
+- Search query has a clear (×) button to reset
+- Filters have individual clear buttons
+- "Clear All Filters" button resets all active filters
 
 ## How to Search
 
 ### Basic Search
 
-Type your query and press Enter:
+Type your query and press Enter (or `Cmd/Ctrl+Enter`):
 
 ```
 ┌─────────────────────────────────────────┐
@@ -757,18 +814,22 @@ Site Details → Advanced → Re-index Site
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|----------|--------|
-| `Cmd/Ctrl+F` | Open Site Finder |
-| `Cmd/Ctrl+K` | Focus search input |
-| `↓` / `↑` | Navigate results |
-| `Enter` | Open selected site |
-| `Cmd/Ctrl+Enter` | View site details |
-| `Cmd/Ctrl+S` | Save current query |
-| `Cmd/Ctrl+H` | View search history |
-| `Esc` | Clear search / Close panel |
-| `Cmd/Ctrl+A` | Select all results |
-| `Cmd/Ctrl+Shift+F` | Advanced search |
+| Shortcut | Action | Context |
+|----------|--------|---------|
+| `Cmd/Ctrl+K` | Open Site Finder search panel | Anywhere in Local |
+| `Cmd/Ctrl+Enter` | Submit search query | Search input focused |
+| `Esc` | Close search panel / Clear input | Search panel open |
+| `↓` / `↑` | Navigate results | Results list |
+| `Enter` | Open selected site | Result selected |
+| `Cmd/Ctrl+S` | Save current query | After search |
+| `Cmd/Ctrl+H` | View search history | Site Finder |
+| `Cmd/Ctrl+A` | Select all results | Results visible |
+| `Cmd/Ctrl+Shift+F` | Advanced search | Site Finder |
+
+**New in v1.5:**
+- `Cmd/Ctrl+K` now opens a floating search panel (previously opened sidebar)
+- `Cmd/Ctrl+Enter` executes search without mouse (previously required clicking)
+- `Esc` closes the search panel and returns focus to previous view
 
 ## Best Practices
 

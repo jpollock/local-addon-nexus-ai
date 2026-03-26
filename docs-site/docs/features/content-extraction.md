@@ -584,6 +584,149 @@ function isPII(key: string): boolean {
 
 **Note:** Metadata (alt text, captions) IS indexed.
 
+## Real-Time Event Tracking
+
+Nexus AI tracks WordPress events in real-time to keep the index up-to-date without manual rescans.
+
+### WordPress Connector Plugin
+
+The **Nexus AI Connector** WordPress plugin (bundled) hooks into WordPress actions and sends events to Local:
+
+**Tracked Events:**
+
+| Event Category | Events | Triggers |
+|----------------|--------|----------|
+| **Content** | `post_created`, `post_updated`, `post_deleted`, `post_trashed`, `post_untrashed` | WordPress post lifecycle |
+| **Plugins** | `plugin_installed`, `plugin_activated`, `plugin_deactivated`, `plugin_updated`, `plugin_deleted` | Plugin management |
+| **Themes** | `theme_installed`, `theme_activated`, `theme_deleted` | Theme management |
+| **Users** | `user_created`, `user_updated`, `user_deleted` | User management |
+
+### Theme Event Tracking
+
+**New in v1.5:** Complete theme lifecycle tracking.
+
+**WordPress Hooks:**
+
+```php
+// Theme activated (switched)
+add_action('switch_theme', 'nexus_ai_handle_theme_activated', 10, 3);
+
+// Theme deleted
+add_action('deleted_theme', 'nexus_ai_handle_theme_deleted', 10, 2);
+
+// Theme installed (via upgrader)
+add_action('upgrader_process_complete', 'nexus_ai_handle_upgrader_complete', 10, 2);
+```
+
+**Event Payloads:**
+
+```json
+{
+  "event_type": "theme_activated",
+  "site_id": "mysite",
+  "timestamp": 1679847234000,
+  "payload": {
+    "slug": "twentytwentyfour",
+    "name": "Twenty Twenty-Four",
+    "version": "1.0",
+    "is_active": true,
+    "author": "the WordPress team",
+    "description": "..."
+  }
+}
+```
+
+**Database Storage:**
+
+Themes are stored in the `themes` table with:
+- Site association
+- Version tracking
+- Active status
+- Installation and update timestamps
+
+**Benefits:**
+
+- Immediate awareness of theme changes
+- Track theme proliferation across sites
+- Detect inactive/orphaned themes
+- Audit theme versions for security
+
+### Plugin Event Tracking
+
+**WordPress Hooks:**
+
+```php
+// Plugin activation/deactivation
+add_action('activated_plugin', 'nexus_ai_handle_plugin_activated', 10, 2);
+add_action('deactivated_plugin', 'nexus_ai_handle_plugin_deactivated', 10, 2);
+
+// Plugin install/update/delete
+add_action('upgrader_process_complete', 'nexus_ai_handle_upgrader_complete', 10, 2);
+add_action('deleted_plugin', 'nexus_ai_handle_plugin_deleted', 10, 2);
+```
+
+**Event Payloads:**
+
+```json
+{
+  "event_type": "plugin_activated",
+  "site_id": "mysite",
+  "timestamp": 1679847123000,
+  "payload": {
+    "slug": "akismet",
+    "name": "Akismet Anti-Spam",
+    "version": "5.3.1",
+    "is_active": true,
+    "author": "Automattic",
+    "description": "..."
+  }
+}
+```
+
+### Event Processing
+
+**Workflow:**
+
+1. WordPress action fires (e.g., theme activation)
+2. Connector plugin builds event payload
+3. HTTP POST to Local's event endpoint (`http://127.0.0.1:13000/wp-events`)
+4. Event processor validates and enqueues
+5. Background processing updates database
+6. Fleet Overview updates immediately
+
+**Acknowledge-Before-Process Pattern:**
+
+```typescript
+// 1. Accept event immediately (no blocking)
+res.writeHead(200, { 'Content-Type': 'application/json' });
+res.end(JSON.stringify({ success: true, event_id: eventId }));
+
+// 2. Process in background
+setImmediate(() => {
+  this.eventProcessor.processAll().catch(err => {
+    this.logger.error('Background processing error:', err);
+  });
+});
+```
+
+This ensures WordPress doesn't wait for indexing—themes and plugins install/activate instantly from the user's perspective.
+
+### Event Authentication
+
+**Bearer Token:**
+
+```php
+// WordPress sends
+Authorization: Bearer <random-64-char-token>
+
+// Local validates
+if (token !== this.authToken) {
+  return 401 Unauthorized;
+}
+```
+
+Token is randomly generated on Local startup and written to `wp-config.php` by the Connector plugin installer.
+
 ## Performance Optimization
 
 ### Selective Indexing
