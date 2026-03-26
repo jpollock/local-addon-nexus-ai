@@ -353,7 +353,7 @@ src/
 
 ## Testing
 
-Four-tier test pyramid. See [tests/TESTING-STRATEGY.md](tests/TESTING-STRATEGY.md) for full details.
+Five-tier test pyramid. See [tests/TESTING-STRATEGY.md](tests/TESTING-STRATEGY.md) for full details.
 
 | Tier | Command | What it tests |
 |------|---------|---------------|
@@ -361,8 +361,11 @@ Four-tier test pyramid. See [tests/TESTING-STRATEGY.md](tests/TESTING-STRATEGY.m
 | Eval | `npm run test:eval` | Content quality + LLM tool routing (52 tests) |
 | Integration | `npm run test:integration` | Real ONNX, LanceDB, MCP (187 tests) |
 | E2E | `npm run test:e2e` | Full addon in running Local (347 tests) |
+| Browser | `npm run test:e2e:browser` | WordPress UI via Playwright (2 tests) |
 
 LLM evals call Ollama directly to verify the model routes to the correct tools and doesn't hallucinate. They skip automatically when Ollama is not available.
+
+Browser tests verify the complete user journey: create content in WP Admin → plugin sends event → Local indexes → content searchable via MCP.
 
 ## License
 
