@@ -180,24 +180,52 @@ Nexus AI exposes **111 MCP tools** for AI assistants to manage WordPress sites. 
 
 ## Installation
 
-### Quick Install (Addon + CLI)
+### Automatic Install (Recommended)
+
+Install the CLI, which automatically downloads and installs the addon for your platform:
 
 ```bash
+# Install CLI globally
 npm install -g @local-labs-jpollock/local-addon-nexus-ai
+
+# Run any command to trigger auto-install
+nexus sites list
 ```
 
-This installs the `nexus` CLI globally. To install the Local addon:
+**What happens:**
+1. CLI detects the addon is missing
+2. Prompts: "Download and install addon for macOS (Apple Silicon)? (Y/n)"
+3. Downloads the correct platform-specific addon from GitHub Releases
+4. Extracts to Local's addon directory
+5. Activates the addon automatically
+6. Prompts you to restart Local
 
-1. Download the addon tarball from [Releases](../../releases)
-2. Extract to `~/Library/Application Support/Local/addons/local-addon-nexus-ai/`
-3. Restart Local
+**Supported platforms:**
+- macOS (Apple Silicon) - `darwin-arm64`
+- macOS (Intel) - `darwin-x64`
+- Windows (64-bit) - `win32-x64`
+- Linux (64-bit) - `linux-x64`
 
-### Manual Install (Addon Only)
+The addon includes all dependencies and native modules pre-compiled for your platform (~300 MB compressed).
 
-1. Download the tarball for your platform from the [Releases](../../releases) page
+### Manual Install (Alternative)
+
+If auto-install fails or you prefer manual installation:
+
+1. Download the tarball for your platform from [Releases](../../releases):
+   - macOS (Apple Silicon): `nexus-ai-darwin-arm64-{version}.tgz`
+   - macOS (Intel): `nexus-ai-darwin-x64-{version}.tgz`
+   - Windows: `nexus-ai-win32-x64-{version}.tgz`
+   - Linux: `nexus-ai-linux-x64-{version}.tgz`
+
 2. Extract to Local's addon directory:
-   ```
-   ~/Library/Application Support/Local/addons/local-addon-nexus-ai/
+   ```bash
+   # macOS/Linux
+   tar -xzf nexus-ai-darwin-arm64-{version}.tgz \
+     -C ~/Library/Application\ Support/Local/addons/local-addon-nexus-ai/
+
+   # Windows (PowerShell)
+   # Extract to %APPDATA%\Local\addons\local-addon-nexus-ai\
    ```
 3. Restart Local
 
