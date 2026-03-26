@@ -1,6 +1,6 @@
-# Nexus AI — Your WordPress Fleet, AI-Searchable and AI-Controllable
+# Nexus AI for Local — WordPress and AI Development, Effortlessly Local
 
-**For developers managing multiple WordPress sites:** Stop checking each site manually. Nexus AI indexes your entire portfolio (local + WP Engine) and gives AI assistants real tools to search, audit, and manage your fleet.
+**For developers managing multiple WordPress sites:** Stop checking each site manually. Nexus AI for Local indexes your entire portfolio (running in Local and/or WP Engine) and gives AI assistants real tools to search, audit, and manage your fleet.
 
 ## The Problem
 
@@ -15,7 +15,9 @@ The answer? Check each site manually. Open 50 admin panels. Run the same WP-CLI 
 
 ## The Solution
 
-One MCP connection for your entire WordPress fleet:
+### Nexus AI for Local
+
+Install the addon once. Get unified access to every site (local + WPE) through AI tools, CLI commands, or visual dashboards.
 
 1. **Semantic search** — AI assistants search ALL your sites at once, understanding meaning (not just keywords)
 2. **Real control** — Execute WP-CLI commands on local or remote sites, bulk updates, health checks
@@ -24,18 +26,45 @@ One MCP connection for your entire WordPress fleet:
 
 **Result:** Ask Claude "which of my sites need WooCommerce updates?" → Real answer from your actual sites, not generic advice.
 
-## How It Works
+## Built for AI-First WordPress Development
 
-Nexus AI indexes your WordPress sites into a vector database and exposes them through the Model Context Protocol (MCP), enabling AI assistants to understand and work with your sites.
+Nexus AI brings enterprise-grade AI capabilities to local WordPress development, with production-ready tooling for both Local and WP Engine environments.
 
-1. **Scan** — Reads site structure from the filesystem (themes, plugins, PHP version)
-2. **Extract** — Pulls content from MySQL (posts, pages, products, ACF fields, media)
-3. **Chunk** — Splits long content at sentence boundaries for optimal retrieval
-4. **Embed** — Generates 384-dimensional vectors using all-MiniLM-L6-v2 (ONNX, runs locally)
-5. **Index** — Stores vectors in LanceDB with cosine distance search and post-level dedup
+### Ship-Ready AI Stack
+
+- **MCP Server** — 111 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
+- **CLI** — Terminal commands for local and WPE site management (hosting + WordPress)
+- **Open Source AI** — Ships with LanceDB (vector database), ONNX embeddings, and Ollama integration
+- **Local AI Gateway** — Centralized credential proxy, usage tracking, and cost monitoring for your entire fleet
+
+### Secure Enterprise Connections
+
+Leverages Local's secure channels to WP Engine:
+- **CAPI OAuth2** — Authenticated account and install management
+- **SSH ControlMaster** — Persistent, encrypted connections for remote WP-CLI
+
+### AI-Powered Workflows
+
+- **Semantic Search** — Search across all sites simultaneously, understanding meaning (not just keywords)
+- **Content Analysis** — Extract insights from WooCommerce products, ACF fields, and custom post types
+- **Local LLM Support** — Built-in Ollama integration with automatic site context injection
+- **Fleet Intelligence** — Drift detection, health monitoring, plugin usage analytics
+
+### Flexible AI Integration
+
+- **Bring Your Own Key (BYOK)** — Support for Anthropic, OpenAI, and Google LLM APIs
+- **Future-Ready** — Designed for WPE AI API Gateway integration
+- **One-Click Setup** — Automated WordPress site configuration for AI use (keys, features, plugins)
+
+### Developer Experience
+
+- **Zero Configuration** — Auto-downloads platform-specific addon, auto-activates, just works
+- **Cross-Platform** — macOS (ARM64/Intel), Windows, Linux
+- **Production Security** — Input validation, audit logging, credential redaction, 3-tier safety system
 
 ## Features
 
+- **CLI** — Terminal commands for all operations. Works with any AI that can write shell commands. No MCP setup required. Scriptable, automatable, transparent.
 - **MCP Server** — 111 tools for AI assistants (Claude Desktop, Cursor, etc.)
 - **WP Engine Remote Management** — Sync and manage WPE sites alongside local sites (see below)
 - **Production-Ready Security** — Input validation, audit logging, credential redaction
@@ -57,6 +86,7 @@ Nexus AI indexes your WordPress sites into a vector database and exposes them th
 Nexus AI can sync your **WP Engine sites** into the same fleet view as your local sites, giving you unified search and management across your entire WordPress portfolio.
 
 **Key Capabilities:**
+
 - 🔍 **Unified Search** — Search content across local + WPE sites in Site Finder
 - ⚡ **Fast Sync** — 251 sites in ~25 minutes with full content indexing
 - 📊 **Full Metadata** — WordPress version, plugins, users extracted via remote WP-CLI
@@ -64,23 +94,105 @@ Nexus AI can sync your **WP Engine sites** into the same fleet view as your loca
 - ⬇️ **Pull to Local** — One-click creation of local copies for development/testing
 
 **Quick Start:**
+
 1. Connect Local to your WP Engine account (Local → Connect → WP Engine)
 2. Open Nexus AI → Preferences
 3. Click **"Sync Now"** under "WP Engine Sites"
 4. View synced sites in Fleet Overview
 
 **Performance:**
+
 - ~6 seconds per site (SSH ControlMaster + 10x concurrency)
 - Live progress indicator in Fleet Overview header
 - Re-sync anytime to refresh data
 
 **See:** [WPE Remote Management User Guide](docs/WPE_REMOTE_MANAGEMENT_USER_GUIDE.md) for full documentation
 
-## MCP Integration
+## How It Works
+
+Nexus AI indexes your WordPress sites into a local vector database for semantic search. Uses ONNX for embeddings (runs locally, no cloud dependencies) and LanceDB for fast vector search.
+
+**What gets indexed:**
+- Posts, pages, products (WooCommerce), custom post types
+- ACF custom fields (text, repeater, group, flexible content)
+- Site metadata (WordPress version, plugins, themes, users)
+- Media (attachments with alt text and captions)
+
+**What doesn't get indexed:**
+- Passwords, API keys, user emails, session data (security-first)
+
+**Technical details:** All-MiniLM-L6-v2 model (384-dimensional vectors), sentence-boundary chunking, cosine distance search, post-level deduplication.
+
+## Your Choice For AI Integration
+
+Nexus AI for Local enables two paths for users to take for integrating with their favorite AI application. The Model Context Protocol (MCP) is a common way to hook into AI but Command Line Interfaces (CLI) are equally useful, and often preferred, given that you can interact with the capabilities just like the AI does and use them to do things like create batch scripts, automations, etc.
+
+### CLI
+
+The `nexus` command-line tool gives you direct terminal access to all WordPress fleet operations. Perfect for users who prefer to see exactly what executes, want scriptable automation, or use AI assistants that work through shell commands rather than MCP.
+
+**Why CLI?**
+
+- **Visibility** — See exactly what runs. No AI black box.
+- **Universal AI compatibility** — Works with ANY AI that can write shell commands (Claude Code, Aider, ChatGPT, Copilot, etc.)
+- **Scriptable** — Use in bash scripts, cron jobs, CI/CD pipelines
+- **Composable** — Pipe to `jq`, `grep`, `awk` or chain with other tools
+- **Review before execution** — AI suggests commands, you decide to run them
+
+**Quick Start:**
+
+```bash
+# List all your sites
+nexus sites list
+
+# Search content across all sites
+nexus search "WooCommerce shipping configuration"
+
+# Get plugin status on a specific site
+nexus wp plugin list --site mysite
+
+# Check which sites need WordPress updates
+nexus sites outdated
+
+# Update a plugin across multiple sites
+nexus wp plugin update woocommerce --sites "shop,store,demo"
+```
+
+**How it works with AI:**
+
+AI assistants can suggest `nexus` commands in their responses. You review and execute them:
+
+```
+You: "Which of my sites are running WordPress 6.3?"
+
+Claude Code: "I'll check that for you. Run this command:
+nexus sites list --wp-version 6.3
+
+This will show all sites running WordPress 6.3."
+
+[You run the command and see the results]
+```
+
+**When to use CLI vs MCP:**
+- **CLI** → You want control, visibility, scriptability
+- **MCP** → You want autonomous AI execution, conversational workflow
+
+**Available Commands:**
+- `nexus sites` — List, filter, and query sites
+- `nexus search` — Semantic content search
+- `nexus wp` — Execute WP-CLI on local or remote sites
+- `nexus wpe` — WP Engine account and install management
+- `nexus scan` — Index site content
+- `nexus db` — Database operations
+
+See full CLI reference: [CLI Commands](docs-site/docs/cli/commands.md)
+
+### MCP
 
 Nexus AI exposes **111 MCP tools** for AI assistants to manage WordPress sites. Use with Claude Desktop, Cursor, or any MCP-compatible client.
 
 **Tool Categories:**
+
 - **Content** (2 tools) — Semantic search within and across sites
 - **Site Context** (6 tools) — Site structure, index status, reindexing
 - **Ollama** (4 tools) — Local LLM queries with automatic site context
@@ -104,12 +216,52 @@ Nexus AI exposes **111 MCP tools** for AI assistants to manage WordPress sites. 
 
 ## Installation
 
-### From Release
+### Automatic Install (Recommended)
 
-1. Download the tarball for your platform from the [Releases](../../releases) page
+Install the CLI, which automatically downloads and installs the addon for your platform:
+
+```bash
+# Install CLI globally
+npm install -g @local-labs-jpollock/local-addon-nexus-ai
+
+# Run any command to trigger auto-install
+nexus sites list
+```
+
+**What happens:**
+1. CLI detects the addon is missing
+2. Prompts: "Download and install addon for macOS (Apple Silicon)? (Y/n)"
+3. Downloads the correct platform-specific addon from GitHub Releases
+4. Extracts to Local's addon directory
+5. Activates the addon automatically
+6. Prompts you to restart Local
+
+**Supported platforms:**
+- macOS (Apple Silicon) - `darwin-arm64`
+- macOS (Intel) - `darwin-x64`
+- Windows (64-bit) - `win32-x64`
+- Linux (64-bit) - `linux-x64`
+
+The addon includes all dependencies and native modules pre-compiled for your platform (~300 MB compressed).
+
+### Manual Install (Alternative)
+
+If auto-install fails or you prefer manual installation:
+
+1. Download the tarball for your platform from [Releases](../../releases):
+   - macOS (Apple Silicon): `nexus-ai-darwin-arm64-{version}.tgz`
+   - macOS (Intel): `nexus-ai-darwin-x64-{version}.tgz`
+   - Windows: `nexus-ai-win32-x64-{version}.tgz`
+   - Linux: `nexus-ai-linux-x64-{version}.tgz`
+
 2. Extract to Local's addon directory:
-   ```
-   ~/Library/Application Support/Local/addons/local-addon-nexus-ai/
+   ```bash
+   # macOS/Linux
+   tar -xzf nexus-ai-darwin-arm64-{version}.tgz \
+     -C ~/Library/Application\ Support/Local/addons/local-addon-nexus-ai/
+
+   # Windows (PowerShell)
+   # Extract to %APPDATA%\Local\addons\local-addon-nexus-ai\
    ```
 3. Restart Local
 
@@ -237,16 +389,19 @@ src/
 
 ## Testing
 
-Four-tier test pyramid. See [tests/TESTING-STRATEGY.md](tests/TESTING-STRATEGY.md) for full details.
+Five-tier test pyramid. See [tests/TESTING-STRATEGY.md](tests/TESTING-STRATEGY.md) for full details.
 
 | Tier | Command | What it tests |
 |------|---------|---------------|
-| Unit | `npm test` | Code logic with mocked deps (1,226 tests) |
+| Unit | `npm test` | Code logic with mocked deps (1,235 tests) |
 | Eval | `npm run test:eval` | Content quality + LLM tool routing (52 tests) |
 | Integration | `npm run test:integration` | Real ONNX, LanceDB, MCP (187 tests) |
-| E2E | `npm run test:e2e` | Full addon in running Local (90+ tests) |
+| E2E | `npm run test:e2e` | Full addon in running Local (347 tests) |
+| Browser | `npm run test:e2e:browser` | WordPress UI via Playwright (2 tests) |
 
 LLM evals call Ollama directly to verify the model routes to the correct tools and doesn't hallucinate. They skip automatically when Ollama is not available.
+
+Browser tests verify the complete user journey: create content in WP Admin → plugin sends event → Local indexes → content searchable via MCP.
 
 ## License
 
