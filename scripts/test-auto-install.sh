@@ -131,6 +131,13 @@ else
     JSON.stringify(pkg, null, 2) + '\n'
   );
   "
+
+  # CRITICAL: Install dependencies into the addon directory
+  # This is what makes the addon self-contained
+  echo "Installing production dependencies..."
+  cd "$TEST_DIR/mock-addon"
+  npm install --omit=dev --legacy-peer-deps > /dev/null 2>&1
+  echo "✓ Dependencies installed"
 fi
 
 # Create tarball
