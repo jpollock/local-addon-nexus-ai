@@ -63,6 +63,7 @@ mkdir -p "$TEST_DIR/mock-addon"
 cat > "$TEST_DIR/mock-addon/package.json" <<EOF
 {
   "name": "local-addon-nexus-ai",
+  "productName": "Nexus AI",
   "version": "0.1.0",
   "main": "lib/main.js",
   "renderer": "lib/renderer.js"
