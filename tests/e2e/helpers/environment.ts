@@ -39,18 +39,25 @@ export interface E2EEnvironment {
 // ---------------------------------------------------------------------------
 
 const MCP_CONNECTION_INFO_FILE = 'nexus-ai-mcp-connection-info.json';
+const GRAPHQL_CONNECTION_INFO_FILE = 'graphql-connection-info.json';
+
+function getLocalDataDir(): string {
+  const platform = os.platform();
+  if (platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Application Support', 'Local');
+  } else if (platform === 'win32') {
+    return path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'Local');
+  } else {
+    return path.join(os.homedir(), '.config', 'Local');
+  }
+}
 
 function getConnectionInfoPath(): string {
-  const platform = os.platform();
-  let dataDir: string;
-  if (platform === 'darwin') {
-    dataDir = path.join(os.homedir(), 'Library', 'Application Support', 'Local');
-  } else if (platform === 'win32') {
-    dataDir = path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'Local');
-  } else {
-    dataDir = path.join(os.homedir(), '.config', 'Local');
-  }
-  return path.join(dataDir, MCP_CONNECTION_INFO_FILE);
+  return path.join(getLocalDataDir(), MCP_CONNECTION_INFO_FILE);
+}
+
+function getGraphQLConnectionInfoPath(): string {
+  return path.join(getLocalDataDir(), GRAPHQL_CONNECTION_INFO_FILE);
 }
 
 export function loadConnectionInfo(): ConnectionInfo | null {
@@ -58,6 +65,19 @@ export function loadConnectionInfo(): ConnectionInfo | null {
   try {
     const data = fs.readFileSync(filePath, 'utf-8');
     return JSON.parse(data) as ConnectionInfo;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load GraphQL connection info (for CLI testing).
+ */
+export function loadGraphQLConnectionInfo(): any | null {
+  const filePath = getGraphQLConnectionInfoPath();
+  try {
+    const data = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(data);
   } catch {
     return null;
   }
@@ -171,6 +191,14 @@ async function isMcpServerReachable(): Promise<boolean> {
 }
 
 /**
+ * Check if GraphQL connection info exists (for CLI testing).
+ */
+async function isGraphQLConnectionReady(): Promise<boolean> {
+  const connectionInfo = loadGraphQLConnectionInfo();
+  return connectionInfo !== null;
+}
+
+/**
  * Kill any running Local.app processes to ensure clean E2E environment.
  */
 function killExistingLocal(): void {
@@ -205,9 +233,11 @@ export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | nul
   // Kill any existing Local instances to ensure clean startup
   killExistingLocal();
 
-  // Delete stale connection info and database files
-  const connInfoPath = getConnectionInfoPath();
-  try { fs.unlinkSync(connInfoPath); } catch { /* file may not exist */ }
+  // Delete stale connection info files
+  const mcpInfoPath = getConnectionInfoPath();
+  const graphqlInfoPath = getGraphQLConnectionInfoPath();
+  try { fs.unlinkSync(mcpInfoPath); } catch { /* file may not exist */ }
+  try { fs.unlinkSync(graphqlInfoPath); } catch { /* file may not exist */ }
 
   const localPath = resolveLocalRepoPath();
   if (!localPath) {
@@ -233,7 +263,10 @@ export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | nul
     cwd: localPath,
     stdio: 'ignore',
     detached: true,
-    env: { ...process.env },
+    env: {
+      ...process.env,
+      GRAPHQL_AUTH_TOKEN: 'local-dev', // Use known auth token for development
+    },
   });
 
   // Don't let the child keep the parent alive if something goes wrong
@@ -253,6 +286,23 @@ export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | nul
   while (Date.now() - start < timeoutMs) {
     if (await isMcpServerReachable()) {
       console.log(`[E2E Local] MCP server ready (${Math.round((Date.now() - start) / 1000)}s)`);
+
+      // Wait for Local's GraphQL service to write connection info (for CLI tests)
+      console.log('[E2E Local] Waiting for GraphQL connection info...');
+      const graphqlStart = Date.now();
+      const graphqlTimeout = 30000; // 30 second timeout for GraphQL
+
+      while (Date.now() - graphqlStart < graphqlTimeout) {
+        if (await isGraphQLConnectionReady()) {
+          const graphqlInfo = loadGraphQLConnectionInfo();
+          console.log(`[E2E Local] GraphQL ready on port ${graphqlInfo.port} (${Math.round((Date.now() - graphqlStart) / 1000)}s)`);
+          return child;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      // GraphQL didn't start in time - warn but continue (MCP tests will still work)
+      console.warn('[E2E Local] WARNING: GraphQL connection info not available. CLI tests may fail.');
       return child;
     }
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
