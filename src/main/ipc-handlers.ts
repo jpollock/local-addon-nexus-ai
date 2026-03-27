@@ -149,6 +149,85 @@ async function waitForDatabaseReady(
   throw new Error(`Database did not become ready within ${timeoutMs}ms`);
 }
 
+/**
+ * Helper function to ensure a site is running before executing an operation.
+ * Auto-starts the site if needed, executes the work function, then auto-stops if we started it.
+ *
+ * Safety: stopSite() is wrapped in try-catch because Local's database dump can fail and
+ * leave the site in a broken state. If stop fails, we log the error but don't crash.
+ *
+ * @param siteId - The site ID to ensure is running
+ * @param localServices - LocalServicesBridge instance
+ * @param logger - Logger instance
+ * @param work - Async function to execute while site is running
+ * @returns Result of the work function
+ */
+async function withSiteRunning<T>(
+  siteId: string,
+  localServices: LocalServicesBridge,
+  logger: any,
+  work: () => Promise<T>,
+): Promise<T> {
+  let wasAutoStarted = false;
+
+  try {
+    // Check if site is running
+    const statuses = localServices.getAllSiteStatuses();
+    const wasRunning = statuses[siteId] === 'running';
+
+    // Auto-start if not running
+    if (!wasRunning) {
+      logger.info(`[NexusAI] Site ${siteId} not running - auto-starting for operation`);
+      await localServices.startSite(siteId);
+      wasAutoStarted = true;
+
+      // Wait for database to be ready
+      await waitForDatabaseReady(siteId, localServices, logger, 30000);
+    }
+
+    // Execute work
+    const result = await work();
+
+    // Auto-stop if we started it
+    if (wasAutoStarted) {
+      logger.info(`[NexusAI] Operation complete - auto-stopping site ${siteId}`);
+
+      // Add small delay to let site settle after operation (prevents database dump errors)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      try {
+        await localServices.stopSite(siteId);
+        logger.info(`[NexusAI] Site ${siteId} stopped successfully`);
+      } catch (stopErr) {
+        // stopSite() can fail if Local's database dump fails. Don't crash the operation,
+        // just warn the user. The site will remain running, which is safer than a broken state.
+        logger.error(`[NexusAI] Failed to auto-stop site ${siteId}: ${(stopErr as Error).message}`);
+        logger.error(`[NexusAI] Site ${siteId} remains running. You may need to stop it manually from Local's UI.`);
+      }
+    }
+
+    return result;
+  } catch (err) {
+    // Auto-stop if we started it (even on error)
+    if (wasAutoStarted) {
+      try {
+        logger.info(`[NexusAI] Operation failed - attempting to auto-stop site ${siteId}`);
+
+        // Add small delay before stopping
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        await localServices.stopSite(siteId);
+        logger.info(`[NexusAI] Site ${siteId} stopped after operation failure`);
+      } catch (stopErr) {
+        // Non-fatal - log error but don't mask the original error
+        logger.error(`[NexusAI] Failed to auto-stop site ${siteId} after error: ${(stopErr as Error).message}`);
+        logger.error(`[NexusAI] Site ${siteId} remains running. You may need to stop it manually from Local's UI.`);
+      }
+    }
+    throw err;
+  }
+}
+
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() CALLED - starting execution');
 
@@ -548,64 +627,116 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
+      siteId = validated; // Use validated value
 
-      localLogger.info(`[NexusAI] Starting WordPress upgrade for site ${validated}`);
+      localLogger.info(`[NexusAI] Starting WordPress upgrade for site ${siteId}`);
 
-      // Check if site is running
-      const statuses = localServicesBridge.getAllSiteStatuses();
-      const siteStatus = statuses[validated];
-      if (siteStatus !== 'running') {
-        const msg = `Site must be running to upgrade WordPress. Current status: ${siteStatus || 'unknown'}`;
-        localLogger.error(`[NexusAI] upgrade-wp: ${msg}`);
-        auditLogger.logFailure(
-          'upgrade_wp',
-          validated,
-          'local_site',
-          msg,
-          {},
-          Date.now() - startTime,
-        );
-        return { success: false, error: msg };
-      }
+      // Run upgrade with auto-start/stop
+      const result = await withSiteRunning(siteId, localServicesBridge, localLogger, async () => {
+        // Get current version
+        const currentVersion = await localServicesBridge.getWpVersion(siteId);
+        localLogger.info(`[NexusAI] Current WordPress version: ${currentVersion}`);
 
-      // Get current version
-      const currentVersion = await localServicesBridge.getWpVersion(validated);
-      localLogger.info(`[NexusAI] Current WordPress version: ${currentVersion}`);
+        // Run wp core update to upgrade to WP 7.0-beta6
+        // Using --force to allow downgrade if on a dev version
+        const targetVersion = '7.0-beta6';
 
-      // Run wp core update to upgrade to WP 7.0-beta6
-      // Using --force to allow downgrade if on a dev version
-      const targetVersion = '7.0-beta6';
+        localLogger.info(`[NexusAI] Running wp core update --version=${targetVersion} --force for site ${siteId}`);
+        const updateResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update', `--version=${targetVersion}`, '--force']);
+        localLogger.info(`[NexusAI] wp core update result:`, updateResult);
 
-      localLogger.info(`[NexusAI] Running wp core update --version=${targetVersion} --force for site ${validated}`);
-      const updateResult = await localServicesBridge.wpCliRun(validated, ['core', 'update', `--version=${targetVersion}`, '--force']);
-      localLogger.info(`[NexusAI] wp core update result:`, updateResult);
+        // Check if update succeeded
+        if (!updateResult.success) {
+          const errorMsg = updateResult.stdout || 'WordPress core update failed';
+          localLogger.error(`[NexusAI] WordPress core update failed for site ${siteId}:`, errorMsg);
+          throw new Error(errorMsg);
+        }
 
-      // Check if update succeeded
-      if (!updateResult.success) {
-        const errorMsg = updateResult.stdout || 'WordPress core update failed';
-        localLogger.error(`[NexusAI] WordPress core update failed for site ${validated}:`, errorMsg);
-        throw new Error(errorMsg);
-      }
+        // Update database if needed
+        localLogger.info(`[NexusAI] Running wp core update-db for site ${siteId}`);
+        const dbResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update-db']);
+        localLogger.info(`[NexusAI] wp core update-db result:`, dbResult);
 
-      // Update database if needed
-      localLogger.info(`[NexusAI] Running wp core update-db for site ${validated}`);
-      const dbResult = await localServicesBridge.wpCliRun(validated, ['core', 'update-db']);
-      localLogger.info(`[NexusAI] wp core update-db result:`, dbResult);
+        // Get the new version
+        const newVersion = await localServicesBridge.getWpVersion(siteId);
+        localLogger.info(`[NexusAI] WordPress upgrade complete. New version: ${newVersion}`);
 
-      // Get the new version
-      const newVersion = await localServicesBridge.getWpVersion(validated);
-      localLogger.info(`[NexusAI] WordPress upgrade complete. New version: ${newVersion}`);
+        // Digital Twin: Refresh metadata cache after successful upgrade
+        // This ensures the WP version, plugin list, and theme list reflect the upgraded state
+        if (metadataCache) {
+          try {
+            const [wpVersion, plugins, themes] = await Promise.all([
+              localServicesBridge.getWpVersion(siteId),
+              localServicesBridge.getPlugins(siteId),
+              localServicesBridge.getThemes(siteId),
+            ]);
+
+            metadataCache.set(siteId, {
+              wpVersion: wpVersion ?? 'unknown',
+              plugins: plugins.map(p => ({
+                name: p.name,
+                title: p.title,
+                version: p.version,
+                status: p.status as 'active' | 'inactive',
+                file: p.file,
+              })),
+              themes: themes.map(t => ({
+                name: t.name,
+                title: t.title,
+                version: t.version,
+                status: t.status as 'active' | 'inactive',
+              })),
+              activeTheme: themes.find(t => t.status === 'active')?.name,
+              updateSource: 'upgrade-wp',
+            });
+
+            localLogger.info(`[NexusAI] Refreshed metadata cache after upgrade-wp for site ${siteId}`);
+
+            // Also update IndexRegistry structure to refresh digital twin
+            const existingEntry = indexRegistry.get(siteId);
+            if (existingEntry?.structure) {
+              indexRegistry.update(siteId, {
+                structure: {
+                  ...existingEntry.structure,
+                  wpVersion: wpVersion ?? 'unknown',
+                  plugins: plugins.map(p => ({
+                    name: p.name,
+                    slug: p.file?.split('/')[0] ?? p.name,
+                    version: p.version,
+                    isActive: p.status === 'active',
+                    description: '',
+                  })),
+                  themes: themes.map(t => ({
+                    name: t.name,
+                    slug: t.name,
+                    version: t.version,
+                    isActive: t.status === 'active',
+                    isChildTheme: false,
+                  })),
+                },
+              });
+
+              localLogger.info(`[NexusAI] Updated IndexRegistry structure after upgrade-wp for site ${siteId}`);
+            }
+          } catch (err) {
+            // Non-fatal — upgrade succeeded, cache refresh is nice-to-have
+            localLogger.error(`[NexusAI] Metadata refresh after upgrade-wp failed for ${siteId}:`, (err as Error).message);
+          }
+        }
+
+        return { success: true, version: newVersion, fromVersion: currentVersion, targetVersion };
+      });
 
       // Audit log success
       auditLogger.logSuccess(
         'upgrade_wp',
-        validated,
+        siteId,
         'local_site',
-        { fromVersion: currentVersion, toVersion: newVersion, targetVersion },
+        { fromVersion: result.fromVersion, toVersion: result.version, targetVersion: result.targetVersion },
         Date.now() - startTime,
       );
 
-      return { success: true, version: newVersion };
+      return { success: true, version: result.version };
     } catch (err) {
       localLogger.error('[NexusAI] upgrade-wp failed:', (err as Error).message, err);
       auditLogger.logFailure(
@@ -704,10 +835,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
       }
 
-      // Auto-stop if we started it
+      // Don't auto-stop after Setup AI - leave site running for user to verify
+      // Setup AI is a heavy operation (plugins, config, credentials) and auto-stop
+      // can trigger database dump errors that corrupt the site. Safer to let user
+      // stop manually when ready.
       if (wasAutoStarted) {
-        localLogger.info(`[NexusAI] Setup AI complete - auto-stopping site ${siteId}`);
-        await localServicesBridge.stopSite(siteId);
+        localLogger.info(`[NexusAI] Setup AI complete - site ${siteId} remains running`);
+        localLogger.info(`[NexusAI] You can stop the site manually when ready`);
       }
 
       // Audit log successful setup
@@ -721,14 +855,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       return result;
     } catch (err) {
-      // Auto-stop if we started it (even on error)
+      // Don't auto-stop even on error - safer to leave running for debugging
       if (wasAutoStarted) {
-        try {
-          localLogger.info(`[NexusAI] Setup AI failed - auto-stopping site ${siteId}`);
-          await localServicesBridge.stopSite(siteId);
-        } catch (stopErr) {
-          localLogger.error(`[NexusAI] Failed to stop site ${siteId}:`, (stopErr as Error).message);
-        }
+        localLogger.error(`[NexusAI] Setup AI failed - site ${siteId} remains running for debugging`);
+        localLogger.info(`[NexusAI] You can stop the site manually when ready`);
       }
 
       // Audit log failure
@@ -1926,7 +2056,41 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       localLogger.info(`[NexusAI] Site Finder results: ${matchingSiteIds.length} total (local + WPE)`);
 
-      return { success: true, siteIds: matchingSiteIds };
+      // Build detailed results for UI display
+      const localResults: Array<{ id: string; name: string; type: 'local' }> = [];
+      const wpeResults: Array<{ id: string; name: string; domain: string; installId: string; type: 'wpe' }> = [];
+
+      for (const siteId of matchingSiteIds) {
+        // Check if it's a local site
+        if (allSites[siteId]) {
+          localResults.push({
+            id: siteId,
+            name: allSites[siteId].name,
+            type: 'local',
+          });
+        } else {
+          // It's a WPE site - get details from graph
+          const wpeSite = wpeSites.find(s => s.id === siteId);
+          if (wpeSite) {
+            wpeResults.push({
+              id: wpeSite.id,
+              name: wpeSite.name,
+              domain: wpeSite.domain || wpeSite.remote_domain || 'Unknown',
+              installId: wpeSite.remote_install_id || wpeSite.id,
+              type: 'wpe',
+            });
+          }
+        }
+      }
+
+      localLogger.info(`[NexusAI] Site Finder breakdown: ${localResults.length} local, ${wpeResults.length} WPE`);
+
+      return {
+        success: true,
+        siteIds: matchingSiteIds,
+        local: localResults,
+        wpe: wpeResults,
+      };
     } catch (err) {
       localLogger.error('[NexusAI] site-finder:apply failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
@@ -2127,6 +2291,33 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     } catch (err) {
       localLogger.error('[NexusAI] sidebar:filter failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, async (_event: any, payload: { siteId: string }) => {
+    try {
+      const { siteId } = payload;
+
+      if (!serviceContainer) {
+        localLogger.error('[NexusAI] Navigate to site failed: Service container not available');
+        return { success: false, error: 'Service container not available' };
+      }
+
+      // Use Local's routing to navigate to site info page
+      const sendIPCEvent = serviceContainer.sendIPCEvent;
+      if (!sendIPCEvent || typeof sendIPCEvent !== 'function') {
+        localLogger.error('[NexusAI] Navigate to site failed: sendIPCEvent not available in service container');
+        localLogger.error('[NexusAI] Available keys:', Object.keys(serviceContainer).slice(0, 20).join(', '));
+        return { success: false, error: 'Navigation not available' };
+      }
+
+      sendIPCEvent('goToRoute', `/main/site-info/${siteId}`);
+      localLogger.info(`[NexusAI] Navigating to site ${siteId}`);
+      return { success: true };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      localLogger.error('[NexusAI] Navigate to site failed:', errorMsg);
+      return { success: false, error: errorMsg };
     }
   });
 
@@ -2505,6 +2696,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const errorStack = err instanceof Error ? err.stack : undefined;
+      const errorCode = (err as any)?.errorCode || 'UNKNOWN';
 
       // Audit log failure
       auditLogger.logFailure(
@@ -2520,8 +2712,8 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
       return {
         success: false,
-        errorCode: 'UNKNOWN',
-        error: `Unexpected error: ${errorMsg}`,
+        errorCode,
+        error: errorMsg,
       };
     }
   });
@@ -2651,59 +2843,90 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
+      siteId = validated; // Use validated value
 
-      // Ensure site is running
-      const statuses = localServicesBridge.getAllSiteStatuses();
-      const siteStatus = statuses[validated] ?? 'unknown';
+      // Fetch metadata with auto-start/stop
+      const result = await withSiteRunning(siteId, localServicesBridge, localLogger, async () => {
+        // Fetch fresh metadata via WP-CLI
+        const [wpVersion, plugins, themes] = await Promise.all([
+          localServicesBridge.getWpVersion(siteId),
+          localServicesBridge.getPlugins(siteId),
+          localServicesBridge.getThemes(siteId),
+        ]);
 
-      if (siteStatus !== 'running') {
-        return { success: false, error: `Site must be running to refresh metadata (current status: ${siteStatus})` };
-      }
+        // Store in cache
+        metadataCache.set(siteId, {
+          wpVersion: wpVersion ?? 'unknown',
+          plugins: plugins.map(p => ({
+            name: p.name,
+            title: p.title,
+            version: p.version,
+            status: p.status as 'active' | 'inactive',
+            file: p.file,
+          })),
+          themes: themes.map(t => ({
+            name: t.name,
+            title: t.title,
+            version: t.version,
+            status: t.status as 'active' | 'inactive',
+          })),
+          activeTheme: themes.find(t => t.status === 'active')?.name,
+          updateSource: 'manual',
+        });
 
-      // Fetch fresh metadata via WP-CLI
-      const [wpVersion, plugins, themes] = await Promise.all([
-        localServicesBridge.getWpVersion(validated),
-        localServicesBridge.getPlugins(validated),
-        localServicesBridge.getThemes(validated),
-      ]);
+        // Digital Twin: Also update IndexRegistry structure to refresh searchable data
+        const existingEntry = indexRegistry.get(siteId);
+        if (existingEntry?.structure) {
+          indexRegistry.update(siteId, {
+            structure: {
+              ...existingEntry.structure,
+              wpVersion: wpVersion ?? 'unknown',
+              plugins: plugins.map(p => ({
+                name: p.name,
+                slug: p.file?.split('/')[0] ?? p.name,
+                version: p.version,
+                isActive: p.status === 'active',
+                description: '',
+              })),
+              themes: themes.map(t => ({
+                name: t.name,
+                slug: t.name,
+                version: t.version,
+                isActive: t.status === 'active',
+                isChildTheme: false,
+              })),
+            },
+          });
 
-      // Store in cache
-      metadataCache.set(validated, {
-        wpVersion: wpVersion ?? 'unknown',
-        plugins: plugins.map(p => ({
-          name: p.name,
-          title: p.title,
-          version: p.version,
-          status: p.status as 'active' | 'inactive',
-          file: p.file,
-        })),
-        themes: themes.map(t => ({
-          name: t.name,
-          title: t.title,
-          version: t.version,
-          status: t.status as 'active' | 'inactive',
-        })),
-        activeTheme: themes.find(t => t.status === 'active')?.name,
-        updateSource: 'manual',
+          localLogger.info(`[NexusAI] Updated IndexRegistry structure after metadata refresh for site ${siteId}`);
+        }
+
+        const metadata = metadataCache.getWithAge(siteId);
+
+        return {
+          success: true,
+          metadata,
+          ageString: metadataCache.getAgeString(siteId),
+          pluginCount: plugins.length,
+          themeCount: themes.length,
+        };
       });
-
-      const metadata = metadataCache.getWithAge(validated);
 
       // Audit log success
       auditLogger.logSuccess(
         'refresh_site_metadata',
-        validated,
+        siteId,
         'local_site',
-        { pluginCount: plugins.length, themeCount: themes.length },
+        { pluginCount: result.pluginCount, themeCount: result.themeCount },
         Date.now() - startTime,
       );
 
-      localLogger.info(`[NexusAI] Refreshed metadata for ${validated}`);
+      localLogger.info(`[NexusAI] Refreshed metadata for ${siteId}`);
 
       return {
-        success: true,
-        metadata,
-        ageString: metadataCache.getAgeString(validated),
+        success: result.success,
+        metadata: result.metadata,
+        ageString: result.ageString,
       };
     } catch (err) {
       localLogger.error('[NexusAI] refresh-site-metadata failed:', (err as Error).message);

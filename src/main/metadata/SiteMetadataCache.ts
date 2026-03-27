@@ -40,7 +40,7 @@ export interface SiteMetadata {
   siteUrl?: string;               // "http://nexus-test-site.local"
   adminEmail?: string;            // "admin@example.com"
   lastUpdated: number;            // timestamp
-  updateSource: 'lifecycle' | 'manual' | 'setup-ai';
+  updateSource: 'lifecycle' | 'manual' | 'setup-ai' | 'upgrade-wp';
 }
 
 export interface SiteMetadataWithAge extends SiteMetadata {
