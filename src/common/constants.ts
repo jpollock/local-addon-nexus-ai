@@ -104,6 +104,7 @@ export const IPC_CHANNELS = {
   SIDEBAR_FILTER: `${ADDON_PREFIX}:sidebar:filter`,
   SIDEBAR_BULK_ACTION: `${ADDON_PREFIX}:sidebar:bulk-action`,
   SIDEBAR_SEARCH_TOGGLE: `${ADDON_PREFIX}:sidebar:search-toggle`,
+  SIDEBAR_NAVIGATE_TO_SITE: `${ADDON_PREFIX}:sidebar:navigate-to-site`,
 
   // Graph Sync
   SYNC_GRAPH_ALL: `${ADDON_PREFIX}:sync-graph-all`,

@@ -3,7 +3,6 @@ import { NexusOverview } from './components/NexusOverview';
 import { NexusPreferences } from './components/NexusPreferences';
 import { SiteNexusSection } from './components/SiteNexusSection';
 import { SidebarSearchPanel } from './components/SidebarSearchPanel';
-import { ToastManager } from './components/ToastManager';
 import { IPC_CHANNELS } from '../common/constants';
 
 export default function renderer(context: any): void {
@@ -117,12 +116,6 @@ export default function renderer(context: any): void {
   // Use old React API (Local uses React 16, not 18)
   const ReactDOM = require('react-dom');
   ReactDOM.render(React.createElement(SidebarSearchContainer), container);
-
-  // Mount toast manager for global notifications
-  const toastContainer = document.createElement('div');
-  toastContainer.id = 'nexus-toast-manager';
-  document.body.appendChild(toastContainer);
-  ReactDOM.render(React.createElement(ToastManager), toastContainer);
 
   // Inject search button into Local's sidebar toolbar
   const injectSearchButton = () => {
@@ -325,9 +318,6 @@ export default function renderer(context: any): void {
 
   const clearFilterHandler = () => {
     applySiteFilter([]);
-
-    // Show toast notification
-    (window as any).showToast?.('Filter cleared - showing all sites', 'info', 2000);
 
     // Trigger badge re-injection after filter is cleared
     setTimeout(() => {

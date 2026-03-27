@@ -45,15 +45,14 @@ interface NexusPreferencesState {
 const labelStyle: React.CSSProperties = {
   fontSize: '14px',
   fontWeight: 600,
-  color: 'var(--nxai-card-text, #111827)',
   marginBottom: '6px',
 };
 
 const descStyle: React.CSSProperties = {
   fontSize: '13px',
-  color: 'var(--nxai-card-sub, #6b7280)',
   marginBottom: '16px',
   lineHeight: 1.5,
+  opacity: 0.7,
 };
 
 const checkboxRowStyle: React.CSSProperties = {
@@ -71,9 +70,7 @@ const selectStyle: React.CSSProperties = {
   padding: '8px 12px',
   fontSize: '14px',
   borderRadius: '6px',
-  border: '1px solid var(--nxai-input-border, #d1d5db)',
-  backgroundColor: 'var(--nxai-input-bg, #fff)',
-  color: 'var(--nxai-card-text, #111827)',
+  border: '1px solid rgba(128, 128, 128, 0.3)',
   outline: 'none',
   minWidth: '200px',
   cursor: 'pointer',
@@ -84,9 +81,7 @@ const inputStyle: React.CSSProperties = {
   fontSize: '14px',
   lineHeight: '1.5',
   borderRadius: '6px',
-  border: '1px solid var(--nxai-input-border, #d1d5db)',
-  backgroundColor: 'var(--nxai-input-bg, #fff)',
-  color: 'var(--nxai-card-text, #111827)',
+  border: '1px solid rgba(128, 128, 128, 0.3)',
   outline: 'none',
   width: '350px',
   maxWidth: '100%',
@@ -97,9 +92,7 @@ const inputStyle: React.CSSProperties = {
 const btnSmallStyle: React.CSSProperties = {
   padding: '6px 12px',
   borderRadius: '6px',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  backgroundColor: 'var(--nxai-card-bg, #fff)',
-  color: 'var(--nxai-card-text, #111827)',
+  border: '1px solid',
   fontSize: '12px',
   fontWeight: 500,
   cursor: 'pointer',
@@ -335,7 +328,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     const statusColor = currentStatus === 'valid' ? UI_COLORS.STATUS_RUNNING
       : currentStatus === 'invalid' ? UI_COLORS.STATUS_ERROR
       : currentStatus === 'checking' ? UI_COLORS.WPE_BRAND
-      : 'var(--nxai-card-sub, #999)';
+      : '#999';
 
     const statusLabel = currentStatus === 'valid' ? 'Valid'
       : currentStatus === 'invalid' ? 'Invalid'
@@ -350,7 +343,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
       // Provider dropdown
       React.createElement('div', { style: rowStyle },
-        React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', color: 'var(--nxai-card-text)' } }, 'Provider'),
+        React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', /* color inherited */ } }, 'Provider'),
         React.createElement('select', {
           value: settings.chatProvider || '',
           onChange: this.handleProviderChange,
@@ -367,9 +360,9 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
       // Model selector (shown when provider selected)
       settings.chatProvider ? React.createElement('div', { style: rowStyle },
-        React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', color: 'var(--nxai-card-text)' } }, 'Model'),
+        React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', /* color inherited */ } }, 'Model'),
         loadingModels
-          ? React.createElement('span', { style: { fontSize: '13px', color: 'var(--nxai-card-sub)' } }, 'Loading models...')
+          ? React.createElement('span', { style: { fontSize: '13px', opacity: 0.7 } }, 'Loading models...')
           : React.createElement('select', {
               value: settings.chatModel || '',
               onChange: this.handleModelChange,
@@ -385,13 +378,18 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       // API Key input (shown when provider requires key)
       currentProvider?.requiresApiKey ? React.createElement('div', { style: { marginTop: '4px' } },
         React.createElement('div', { style: rowStyle },
-          React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', color: 'var(--nxai-card-text)' } }, 'API Key'),
+          React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', /* color inherited */ } }, 'API Key'),
           React.createElement('input', {
             type: 'password',
             value: keyInput,
             onChange: this.handleKeyInputChange,
             placeholder: 'Enter API key...',
-            style: { ...inputStyle, flex: 1, maxWidth: '350px' },
+            className: 'nexus-password-input',
+            style: {
+              ...inputStyle,
+              flex: 1,
+              maxWidth: '350px',
+            },
           }),
           React.createElement('button', {
             style: {
@@ -427,11 +425,16 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
     if (loading) {
       return React.createElement('div', {
-        style: { padding: '24px', color: 'var(--nxai-card-sub, #6b7280)' },
+        style: { padding: '24px', opacity: 0.7 },
       }, 'Loading preferences...');
     }
 
     return React.createElement('div', { style: { padding: '24px' } },
+      React.createElement('style', null, `
+        .nexus-password-input {
+          -webkit-text-fill-color: unset !important;
+        }
+      `),
       // AI Credentials section (moved to top)
       this.renderChatSection(),
 
@@ -439,7 +442,8 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       React.createElement('hr', {
         style: {
           border: 'none',
-          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
+          borderTop: '1px solid',
+          opacity: 0.2,
           marginBottom: '24px',
         },
       }),
@@ -458,7 +462,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
             style: { width: '16px', height: '16px', cursor: 'pointer' },
           }),
           React.createElement('span', {
-            style: { fontSize: '14px', color: 'var(--nxai-card-text, #111827)' },
+            style: { fontSize: '14px', /* color inherited */ },
           }, 'Automatically index sites when started'),
         ),
       ),
@@ -484,12 +488,13 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
                       style: { width: '16px', height: '16px', cursor: 'pointer' },
                     }),
                     React.createElement('span', {
-                      style: { fontSize: '13px', color: 'var(--nxai-card-text, #111827)' },
+                      style: { fontSize: '13px', /* color inherited */ },
                     }, site.name),
                     React.createElement('span', {
                       style: {
                         fontSize: '11px',
-                        color: site.status === 'running' ? UI_COLORS.STATUS_RUNNING : 'var(--nxai-card-sub)',
+                        color: site.status === 'running' ? UI_COLORS.STATUS_RUNNING : 'inherit',
+                        opacity: site.status === 'running' ? 1 : 0.7,
                         marginLeft: '4px',
                       },
                     }, `(${site.status})`),

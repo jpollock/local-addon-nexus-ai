@@ -727,19 +727,29 @@ export async function setupSiteForAI(
     }
   }
 
-  // Step 3: Enable all AI experiments
+  // Step 3: Enable all AI features
   let aiFeatures: SetupAIResult['aiFeatures'] = 'skipped';
 
   if (aiPlugin !== 'failed') {
     try {
       const phpLines: string[] = [];
-      // Set the global toggle
-      phpLines.push("update_option('ai_experiments_enabled', '1');");
-      // Set each experiment toggle
+      // Set the main AI features toggle (Settings → AI → Enable AI Features checkbox)
+      // This is the global master switch that enables/disables all AI features
+      phpLines.push("update_option('wpai_features_enabled', '1');");
+
+      // Set each individual feature toggle to enabled
+      // These correspond to the individual checkboxes in the AI settings page
       for (const id of AI_EXPERIMENT_IDS) {
-        phpLines.push(`update_option('ai_experiment_${id}_enabled', '1');`);
+        phpLines.push(`update_option('wpai_feature_${id}_enabled', '1');`);
       }
-      phpLines.push(`echo json_encode(['enabled' => ${AI_EXPERIMENT_IDS.length + 1}]);`);
+
+      // Verify the options were actually written by reading them back
+      phpLines.push("$verified = array();");
+      phpLines.push("$verified['global'] = get_option('wpai_features_enabled') === '1';");
+      for (const id of AI_EXPERIMENT_IDS) {
+        phpLines.push(`$verified['${id}'] = get_option('wpai_feature_${id}_enabled') === '1';`);
+      }
+      phpLines.push("echo json_encode($verified);");
 
       const phpCode = phpLines.join(' ');
       // skipPlugins defaults to true — safe because we're writing simple option values
@@ -750,17 +760,29 @@ export async function setupSiteForAI(
 
       if (result.success) {
         try {
-          const parsed = JSON.parse((result.stdout ?? '').trim());
-          aiFeatures = parsed.enabled > 0 ? 'enabled' : 'failed';
+          const verified = JSON.parse((result.stdout ?? '').trim());
+
+          // Check if all options were successfully written
+          const allEnabled = Object.values(verified).every(v => v === true);
+          const enabledCount = Object.values(verified).filter(v => v === true).length;
+
+          if (allEnabled) {
+            aiFeatures = 'enabled';
+            logger.info(`${tag} Verified: All AI features enabled (global + ${AI_EXPERIMENT_IDS.length} individual features) on site ${siteId}`);
+          } else {
+            // Partial success - some options didn't stick
+            const failed = Object.keys(verified).filter(k => verified[k] !== true);
+            logger.error(`${tag} Partial enable: ${enabledCount}/${Object.keys(verified).length} features enabled. Failed: ${failed.join(', ')}`);
+            aiFeatures = enabledCount > 0 ? 'enabled' : 'failed';
+          }
         } catch {
           // Got stdout but couldn't parse — assume success if command succeeded
+          logger.error(`${tag} Could not verify AI features - assuming success based on wp-cli exit code`);
           aiFeatures = 'enabled';
         }
       } else {
         throw new Error(result.stdout ?? 'Unknown error');
       }
-
-      logger.info(`${tag} Enabled AI experiments on site ${siteId}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(`${tag} AI features step failed: ${redactCredentials(msg)}`);
@@ -799,85 +821,13 @@ export async function setupSiteForAI(
     }
   }
 
-  // Step 4b: Install ACF PRO if not present (enables abilities in Step 5)
-  if (aiPlugin !== 'failed') {
-    // Refresh plugin list to check for ACF PRO
-    try {
-      plugins = await localServices.getPlugins(siteId);
-    } catch {
-      // Continue with stale plugin list
-    }
-
-    const existingAcf = findPlugin(plugins, 'advanced-custom-fields-pro');
-
-    if (!existingAcf) {
-      try {
-        const sitePluginsDir = getSitePluginsDir(siteId, localServices);
-        if (sitePluginsDir) {
-          // Security: Validate plugin path
-          const site = localServices.resolveSiteObject(siteId) as any;
-          validatePluginPath(sitePluginsDir, site.paths.webRoot);
-
-          const pluginDest = path.join(sitePluginsDir, 'advanced-custom-fields-pro');
-          const pluginSource = path.join(WP_PLUGINS_ROOT, 'advanced-custom-fields-pro');
-
-          if (fs.existsSync(pluginSource)) {
-            logger.info(`${tag} Installing ACF PRO on site ${siteId}`);
-            fs.cpSync(pluginSource, pluginDest, { recursive: true });
-
-            const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'advanced-custom-fields-pro']);
-            if (!result.success) {
-              throw new Error(result.stdout ?? 'Failed to activate');
-            }
-
-            // Health check
-            const healthCheck = await localServices.wpCliRun(
-              siteId,
-              ['eval', "echo 'healthy';"],
-              { skipPlugins: false },
-            );
-
-            if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
-              logger.error(`${tag} ACF PRO crashes WordPress — deactivating`);
-              await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'advanced-custom-fields-pro']);
-            } else {
-              logger.info(`${tag} ACF PRO installed on site ${siteId}`);
-              // Refresh plugins list for Step 5
-              try {
-                plugins = await localServices.getPlugins(siteId);
-              } catch {
-                // Continue with stale list
-              }
-            }
-          } else {
-            logger.info(`${tag} ACF PRO not bundled at ${pluginSource}, skipping`);
-          }
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error(`${tag} ACF PRO installation failed: ${redactCredentials(msg)}`);
-        // Non-fatal - continue with setup
-      }
-    } else if (existingAcf.status !== 'active') {
-      // Installed but not active - activate it
-      try {
-        logger.info(`${tag} Activating ACF PRO on site ${siteId}`);
-        const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'advanced-custom-fields-pro']);
-        if (result.success) {
-          // Refresh plugins list for Step 5
-          try {
-            plugins = await localServices.getPlugins(siteId);
-          } catch {
-            // Continue
-          }
-        }
-      } catch (err) {
-        logger.error(`${tag} Failed to activate ACF PRO: ${err}`);
-      }
-    }
+  // Step 5: Handle ACF abilities mu-plugin (only if ACF PRO is already installed)
+  // Refresh plugin list to check for ACF PRO
+  try {
+    plugins = await localServices.getPlugins(siteId);
+  } catch {
+    // Continue with stale plugin list
   }
-
-  // Step 5: Handle ACF abilities mu-plugin
   let acfAbilities: SetupAIResult['acfAbilities'] = 'skipped';
   const acfPlugin = findPlugin(plugins, 'advanced-custom-fields-pro');
 

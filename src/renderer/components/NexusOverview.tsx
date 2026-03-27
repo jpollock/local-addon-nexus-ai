@@ -18,6 +18,15 @@ import { AIGatewayUsagePanel } from './AIGatewayUsagePanel';
 import { AIGatewayByCallerPanel } from './AIGatewayByCallerPanel';
 import { LoadingSpinner } from './LoadingSpinner';
 
+// Local's native notification components
+let toast: any = null;
+try {
+  const localComponents = require('@getflywheel/local-components');
+  toast = localComponents.toast;
+} catch (err) {
+  console.warn('[Nexus AI] Could not load Local toast:', err);
+}
+
 interface NexusOverviewProps {
   NavLink: any;
   electron: any;
@@ -1225,12 +1234,14 @@ renderTabBar(): React.ReactNode {
       const successCount = results.filter((r: any) => r.success).length;
       const failCount = results.length - successCount;
 
-      if (failCount === 0 && successCount > 0) {
-        (window as any).showToast?.(`Successfully synced credentials to ${successCount} site${successCount === 1 ? '' : 's'}`, 'success');
-      } else if (failCount > 0 && successCount > 0) {
-        (window as any).showToast?.(`Synced ${successCount} site${successCount === 1 ? '' : 's'}, ${failCount} failed`, 'warning');
-      } else if (failCount > 0) {
-        (window as any).showToast?.(`Failed to sync credentials to ${failCount} site${failCount === 1 ? '' : 's'}`, 'error');
+      if (toast) {
+        if (failCount === 0 && successCount > 0) {
+          toast({ type: 'success', content: `Successfully synced credentials to ${successCount} site${successCount === 1 ? '' : 's'}` });
+        } else if (failCount > 0 && successCount > 0) {
+          toast({ type: 'error', content: `Synced ${successCount} site${successCount === 1 ? '' : 's'}, ${failCount} failed` });
+        } else if (failCount > 0) {
+          toast({ type: 'error', content: `Failed to sync credentials to ${failCount} site${failCount === 1 ? '' : 's'}` });
+        }
       }
 
       // Refresh sync status
@@ -1239,7 +1250,9 @@ renderTabBar(): React.ReactNode {
     } catch (err) {
       if (!this.mounted) return;
       this.setState({ syncing: false, syncResults: [] });
-      (window as any).showToast?.('Failed to sync credentials', 'error');
+      if (toast) {
+        toast({ type: 'error', content: 'Failed to sync credentials' });
+      }
     }
   };
 
@@ -1268,10 +1281,12 @@ renderTabBar(): React.ReactNode {
         });
 
         // Show success toast
-        if (syncedCount > 0) {
-          (window as any).showToast?.(`Successfully synced ${syncedCount} WP Engine site${syncedCount === 1 ? '' : 's'}`, 'success');
-        } else {
-          (window as any).showToast?.('No WP Engine sites found to sync', 'info');
+        if (toast) {
+          if (syncedCount > 0) {
+            toast({ type: 'success', content: `Successfully synced ${syncedCount} WP Engine site${syncedCount === 1 ? '' : 's'}` });
+          } else {
+            toast({ type: 'cta', content: 'No WP Engine sites found to sync' });
+          }
         }
 
         // Refresh data
@@ -1283,7 +1298,9 @@ renderTabBar(): React.ReactNode {
           wpeSyncProgress: null,
           wpeSyncError: errorMsg,
         });
-        (window as any).showToast?.(`WPE sync failed: ${errorMsg}`, 'error');
+        if (toast) {
+          toast({ type: 'error', content: `WPE sync failed: ${errorMsg}` });
+        }
         console.error('[NexusOverview] WPE sync failed:', errorMsg);
       }
     } catch (error) {
@@ -1294,7 +1311,9 @@ renderTabBar(): React.ReactNode {
         wpeSyncProgress: null,
         wpeSyncError: errorMsg,
       });
-      (window as any).showToast?.(`WPE sync error: ${errorMsg}`, 'error');
+      if (toast) {
+        toast({ type: 'error', content: `WPE sync error: ${errorMsg}` });
+      }
       console.error('[NexusOverview] WPE sync error:', error);
     }
   };

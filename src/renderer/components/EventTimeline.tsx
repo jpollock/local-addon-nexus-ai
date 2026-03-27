@@ -66,6 +66,33 @@ const filterSelectStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+const refreshButtonStyle: React.CSSProperties = {
+  padding: '6px 12px',
+  borderRadius: '6px',
+  border: '1px solid var(--nxai-card-border, #e5e7eb)',
+  fontSize: '12px',
+  fontWeight: 500,
+  backgroundColor: UI_COLORS.WPE_BRAND,
+  color: '#fff',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  transition: 'opacity 0.2s',
+};
+
+const refreshButtonDisabledStyle: React.CSSProperties = {
+  ...refreshButtonStyle,
+  opacity: 0.5,
+  cursor: 'not-allowed',
+};
+
+const headerActionsStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+};
+
 const eventListContainerStyle: React.CSSProperties = {
   // Virtual scrolling container - no maxHeight needed
 };
@@ -244,6 +271,12 @@ export class EventTimeline extends React.Component<EventTimelineProps, EventTime
     }));
   };
 
+  handleRefreshClick = (): void => {
+    this.setState({ loading: true }, () => {
+      this.fetchEvents();
+    });
+  };
+
   getStatusIcon(status: 'pending' | 'processed' | 'failed'): string {
     switch (status) {
       case 'processed':
@@ -299,6 +332,7 @@ export class EventTimeline extends React.Component<EventTimelineProps, EventTime
       React.createElement('option', { value: 'post_created' }, 'Content - Created'),
       React.createElement('option', { value: 'post_updated' }, 'Content - Updated'),
       React.createElement('option', { value: 'post_deleted' }, 'Content - Deleted'),
+      React.createElement('option', { value: 'plugin_installed' }, 'Plugins - Installed'),
       React.createElement('option', { value: 'plugin_activated' }, 'Plugins - Activated'),
       React.createElement('option', { value: 'plugin_deactivated' }, 'Plugins - Deactivated'),
       React.createElement('option', { value: 'plugin_updated' }, 'Plugins - Updated'),
@@ -428,12 +462,28 @@ export class EventTimeline extends React.Component<EventTimelineProps, EventTime
     return React.createElement(
       'div',
       { style: containerStyle },
-      // Header with title and filter
+      // Header with title and actions (refresh + filter)
       React.createElement(
         'div',
         { style: headerStyle },
         React.createElement('div', { style: titleStyle }, 'Event Timeline'),
-        this.renderFilterSelect(),
+        React.createElement(
+          'div',
+          { style: headerActionsStyle },
+          // Refresh button
+          React.createElement(
+            'button',
+            {
+              style: loading ? refreshButtonDisabledStyle : refreshButtonStyle,
+              onClick: this.handleRefreshClick,
+              disabled: loading,
+            },
+            React.createElement('span', null, '↻'),
+            React.createElement('span', null, loading ? 'Refreshing...' : 'Refresh'),
+          ),
+          // Filter dropdown
+          this.renderFilterSelect(),
+        ),
       ),
       // Content
       loading && events.length === 0

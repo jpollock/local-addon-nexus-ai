@@ -1,5 +1,5 @@
 {
-  "name": "local-addon-nexus-ai",
+  "name": "@local-labs-jpollock/local-addon-nexus-ai",
   "productName": "Nexus AI",
   "version": "0.1.0",
   "main": "lib/main.js",
