@@ -235,7 +235,7 @@ describe('Bulk Operations Integration', () => {
       const request: BulkOperationRequest = {
         type: 'setup-ai',
         siteIds: ['site-1'], // running site
-        options: { enableOllama: false },
+        options: { provider: 'anthropic' },
       };
 
       const opId = bulkOpManager.execute(request);

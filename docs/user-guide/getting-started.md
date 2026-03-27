@@ -80,6 +80,40 @@ Setup AI installs:
 4. Test AI generation
 5. View usage in **Nexus AI → Overview**
 
+## Configuring AI
+
+### Global AI Provider (Default)
+
+The global provider applies to all sites that haven't been configured individually:
+
+1. Go to **Nexus AI → Preferences → AI Provider**
+2. Select your default provider (Anthropic, OpenAI, Google, or Ollama)
+3. Ensure the corresponding API key is saved in **Settings**
+
+### Per-Site AI Provider
+
+Each site can use a different AI provider, set during Setup AI or changed later:
+
+1. Open the site card in Local's site list
+2. Under **Nexus AI**, click **Switch Provider**
+3. Choose the provider for that site
+4. Credentials are automatically synced if the site is running
+
+Alternatively, select the provider during **Setup AI**:
+- Right-click the site → **Setup AI** → choose provider from the dropdown
+
+### Local AI Gateway
+
+The Local AI Gateway routes all site AI requests through Local for centralized tracking and cost control. It is a **routing layer**, not a selectable provider:
+
+1. Enable it in **Settings → AI Gateway → Enable**
+2. All sites using the gateway will have their requests logged in the **Overview** panel
+3. Set rate limits per hour, per day, or by cost to prevent overspending
+
+The gateway is separate from the per-site provider — a site can use Anthropic via the gateway, which means Local proxies the Anthropic request and logs the usage.
+
+---
+
 ## Common Workflows
 
 ### Generate AI Content

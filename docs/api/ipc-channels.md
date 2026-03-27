@@ -273,6 +273,75 @@ Copy install to another install (overwrites destination).
 
 ---
 
+## Per-Site AI Provider
+
+### AI_GET_SITE_CONFIG
+
+Get per-site AI provider configuration.
+
+**Channel:** `'nexus-ai:ai:get-site-config'`
+
+**Parameters:**
+```typescript
+{
+  siteId: string; // Local site ID (UUID)
+}
+```
+
+**Returns:**
+```typescript
+{
+  success: boolean;
+  data?: {
+    provider: string;       // e.g., "openai", "anthropic", "ollama"
+    configuredAt: number;   // Unix timestamp (ms)
+  } | null;                 // null if no per-site config set
+}
+```
+
+**Example:**
+```typescript
+const result = await electron.ipcRenderer.invoke(
+  IPC_CHANNELS.GET_SITE_AI_CONFIG,
+  { siteId: 'abc-123' }
+);
+```
+
+---
+
+### AI_SWITCH_PROVIDER
+
+Switch the AI provider configured for a site.
+
+**Channel:** `'nexus-ai:ai:switch-provider'`
+
+**Parameters:**
+```typescript
+{
+  siteId: string;   // Local site ID (UUID)
+  provider: string; // Target provider: "openai" | "anthropic" | "google" | "ollama"
+}
+```
+
+**Returns:**
+```typescript
+{
+  success: boolean;
+  data?: {
+    siteId: string;
+    provider: string;
+    configuredAt: number;
+  };
+  error?: string;
+}
+```
+
+**Notes:**
+- Triggers credential sync to the site if it is currently running.
+- Provider must be one of the user-facing providers (local-gateway is not selectable here).
+
+---
+
 ## AI Gateway
 
 ### AI_GATEWAY_GET_USAGE

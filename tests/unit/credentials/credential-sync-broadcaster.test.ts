@@ -26,6 +26,13 @@ function createMockDeps(overrides?: any) {
         if (key === 'nexus-ai_api_keys') {
           return { openai: 'sk-test-123', anthropic: 'sk-ant-456' };
         }
+        if (key === 'nexus-ai_site_ai_config') {
+          return {
+            'site-1': { provider: 'openai', configuredAt: Date.now() },
+            'site-2': { provider: 'openai', configuredAt: Date.now() },
+            'site-3': { provider: 'anthropic', configuredAt: Date.now() },
+          };
+        }
         return null;
       }),
       set: jest.fn(),
@@ -161,5 +168,39 @@ describe('CredentialSyncBroadcaster', () => {
 
     expect(results).toHaveLength(0);
     expect(mockedAutoSync).not.toHaveBeenCalled();
+  });
+
+  it('should only sync to sites using the changed provider', async () => {
+    const deps = createMockDeps();
+    const broadcaster = new CredentialSyncBroadcaster(deps as any);
+
+    // Broadcast anthropic key change — only site-3 uses anthropic, but site-3 is halted
+    const results = await broadcaster.broadcastKeyChange('anthropic');
+    expect(results).toHaveLength(0); // site-3 is halted, no running sites use anthropic
+    expect(mockedAutoSync).not.toHaveBeenCalled();
+  });
+
+  it('should sync only to running sites using the changed provider', async () => {
+    const deps = createMockDeps({
+      registryStorage: {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'nexus-ai_api_keys') return { openai: 'sk-test', anthropic: 'sk-ant' };
+          if (key === 'nexus-ai_site_ai_config') {
+            return {
+              'site-1': { provider: 'openai', configuredAt: Date.now() },
+              'site-2': { provider: 'anthropic', configuredAt: Date.now() }, // different provider
+            };
+          }
+          return null;
+        }),
+        set: jest.fn(),
+      },
+    });
+    const broadcaster = new CredentialSyncBroadcaster(deps as any);
+
+    const results = await broadcaster.broadcastKeyChange('openai');
+    expect(results).toHaveLength(1); // only site-1 uses openai
+    expect(mockedAutoSync).toHaveBeenCalledTimes(1);
+    expect(mockedAutoSync).toHaveBeenCalledWith('site-1', 'Alpha Site', expect.anything(), expect.anything(), expect.anything());
   });
 });
