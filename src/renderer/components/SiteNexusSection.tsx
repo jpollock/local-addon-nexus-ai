@@ -27,8 +27,11 @@ interface IndexEntry {
 interface SiteAiStatus {
   aiPlugin: 'active' | 'inactive' | 'not_installed';
   ollamaProvider: 'active' | 'inactive' | 'not_installed';
+  gatewayProvider?: 'active' | 'inactive' | 'not_installed'; // NEW: Local Gateway provider
   credentialsSynced: boolean;
   providers: string[];
+  metadataAge?: string | null; // NEW: "Just now", "5m ago", etc.
+  metadataIsStale?: boolean; // NEW: true if > 24 hours old
 }
 
 interface SiteNexusSectionState {
@@ -40,6 +43,12 @@ interface SiteNexusSectionState {
   settingUpAI: boolean;
   setupResult: { success: boolean; message: string } | null;
   syncingCreds: boolean;
+  wpVersion: string | null;
+  wpVersionAge: string | null; // NEW: Age of WP version cache
+  upgradingWp: boolean;
+  refreshingMetadata: boolean; // NEW: True while refreshing cache
+  aiContextStatus: { exists: boolean; ageString?: string; filePath?: string } | null;
+  generatingContext: boolean;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -52,6 +61,14 @@ function formatTimeAgo(timestamp: number): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function isWp7OrLater(version: string | null): boolean {
+  if (!version) return false;
+  const match = version.match(/^(\d+)\.(\d+)/);
+  if (!match) return false;
+  const major = parseInt(match[1], 10);
+  return major >= 7;
 }
 
 const dotStyle = (color: string): React.CSSProperties => ({
@@ -94,11 +111,31 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     settingUpAI: false,
     setupResult: null,
     syncingCreds: false,
+    wpVersion: null,
+    wpVersionAge: null,
+    upgradingWp: false,
+    refreshingMetadata: false,
+    aiContextStatus: null,
+    generatingContext: false,
   };
 
   componentDidMount(): void {
     this.mounted = true;
     this.fetchData();
+  }
+
+  componentDidUpdate(prevProps: SiteNexusSectionProps): void {
+    // Re-fetch when switching to a different site
+    if (prevProps.site.id !== this.props.site.id) {
+      this.fetchData();
+      return;
+    }
+
+    // Re-fetch AI status when site transitions to running
+    // This ensures we show correct status after Local restarts
+    if (prevProps.site.status !== 'running' && this.props.site.status === 'running') {
+      this.fetchData();
+    }
   }
 
   componentWillUnmount(): void {
@@ -129,9 +166,48 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     try {
       const aiResult = await ipc.invoke(IPC_CHANNELS.GET_AI_STATUS, this.props.site.id);
       if (!this.mounted) return;
-      this.setState({ aiStatus: aiResult?.sites?.[this.props.site.id] ?? null });
-    } catch {
+
+      if (aiResult?.success) {
+        this.setState({ aiStatus: aiResult.sites?.[this.props.site.id] ?? null });
+      } else {
+        console.warn('[NexusAI] get-ai-status returned error:', aiResult?.error || 'Unknown error');
+      }
+    } catch (err: any) {
+      console.error('[NexusAI] get-ai-status failed:', err?.message || err?.toString() || 'Unknown error', err);
       // AI status unavailable — non-fatal
+    }
+
+    // Fetch WordPress version separately
+    try {
+      const versionResult = await ipc.invoke(IPC_CHANNELS.GET_WP_VERSION, this.props.site.id);
+      if (!this.mounted) return;
+      if (versionResult?.success) {
+        this.setState({
+          wpVersion: versionResult.version,
+          wpVersionAge: versionResult.metadataAge ?? null,
+        });
+      }
+    } catch (err: any) {
+      console.error('[NexusAI] get-wp-version failed:', err?.message || err?.toString() || 'Unknown error', err);
+      // WP version unavailable — non-fatal
+    }
+
+    // Fetch AI context file status separately
+    try {
+      const contextResult = await ipc.invoke(IPC_CHANNELS.AI_CONTEXT_GET_STATUS, this.props.site.id);
+      if (!this.mounted) return;
+      if (contextResult?.success) {
+        this.setState({
+          aiContextStatus: {
+            exists: contextResult.exists,
+            ageString: contextResult.ageString,
+            filePath: contextResult.filePath,
+          },
+        });
+      }
+    } catch (err: any) {
+      console.error('[NexusAI] ai-context-get-status failed:', err?.message || err?.toString() || 'Unknown error', err);
+      // AI context status unavailable — non-fatal
     }
   };
 
@@ -178,6 +254,32 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     }
   };
 
+  handleUpgradeWordPress = async (): Promise<void> => {
+    this.setState({ upgradingWp: true, setupResult: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.UPGRADE_WP, this.props.site.id,
+      );
+      if (!this.mounted) return;
+      if (result.success) {
+        this.setState({
+          upgradingWp: false,
+          wpVersion: result.version,
+          setupResult: { success: true, message: `WordPress upgraded to ${result.version}` },
+        });
+      } else {
+        this.setState({
+          upgradingWp: false,
+          setupResult: { success: false, message: `Upgrade failed: ${result.error}` },
+        });
+      }
+      this.fetchData();
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ upgradingWp: false, setupResult: { success: false, message: 'Upgrade failed' } });
+    }
+  };
+
   handleExclusionToggle = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
@@ -192,6 +294,81 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       if (this.mounted) this.setState({ excluded: !isExcluded });
     } catch {
       // Best-effort
+    }
+  };
+
+  handleRefreshMetadata = async (): Promise<void> => {
+    this.setState({ refreshingMetadata: true, setupResult: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.REFRESH_SITE_METADATA,
+        this.props.site.id,
+      );
+      if (!this.mounted) return;
+
+      if (result.success) {
+        // Update state with fresh data
+        this.setState({
+          refreshingMetadata: false,
+          wpVersionAge: result.metadataAge,
+          setupResult: { success: true, message: 'Metadata refreshed successfully' },
+        });
+        // Re-fetch AI status to update plugin states
+        this.fetchData();
+      } else {
+        this.setState({
+          refreshingMetadata: false,
+          setupResult: { success: false, message: result.error || 'Refresh failed' },
+        });
+      }
+    } catch {
+      if (!this.mounted) return;
+      this.setState({
+        refreshingMetadata: false,
+        setupResult: { success: false, message: 'Refresh failed' },
+      });
+    }
+  };
+
+  handleGenerateContext = async (): Promise<void> => {
+    this.setState({ generatingContext: true, setupResult: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.AI_CONTEXT_GENERATE,
+        this.props.site.id,
+      );
+      if (!this.mounted) return;
+
+      if (result.success) {
+        this.setState({
+          generatingContext: false,
+          setupResult: { success: true, message: `AI context generated: ${result.filePath}` },
+        });
+        // Refresh to show new file status
+        this.fetchData();
+      } else {
+        this.setState({
+          generatingContext: false,
+          setupResult: { success: false, message: result.error || 'Generation failed' },
+        });
+      }
+    } catch {
+      if (!this.mounted) return;
+      this.setState({
+        generatingContext: false,
+        setupResult: { success: false, message: 'Generation failed' },
+      });
+    }
+  };
+
+  handleShowInFinder = (): void => {
+    const { aiContextStatus } = this.state;
+    if (!aiContextStatus?.filePath) return;
+
+    // Use Electron's shell API to show file in Finder/Explorer
+    const { shell } = this.props.electron;
+    if (shell && shell.showItemInFolder) {
+      shell.showItemInFolder(aiContextStatus.filePath);
     }
   };
 
@@ -241,7 +418,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   }
 
   render(): React.ReactNode {
-    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds } = this.state;
+    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds, wpVersion, wpVersionAge, upgradingWp, refreshingMetadata } = this.state;
 
     if (loading) {
       return React.createElement('ul', { className: 'TableList' },
@@ -295,20 +472,83 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       !excluded ? 'On' : 'Off',
     ));
 
+    // Metadata refresh button (shown at top if metadata exists)
+    const hasMetadata = wpVersion !== null || (aiStatus && (aiStatus.metadataAge || wpVersionAge));
+    const metadataAge = aiStatus?.metadataAge || wpVersionAge;
+    const isStale = aiStatus?.metadataIsStale ?? false;
+
+    if (hasMetadata) {
+      const ageDisplay = metadataAge
+        ? ` (${metadataAge}${isStale ? ', stale' : ''})`
+        : '';
+
+      rows.push(row('Metadata',
+        React.createElement('span', { style: dotStyle(isStale ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING) }),
+        `Cached${ageDisplay}`,
+        this.createActionButton({
+          onClick: refreshingMetadata ? undefined : this.handleRefreshMetadata,
+          disabled: refreshingMetadata,
+          children: refreshingMetadata ? 'Refreshing...' : 'Refresh',
+        }),
+      ));
+    }
+
     // AI rows (only render if AI status is loaded)
     if (aiStatus) {
+      // WordPress Version (show if we have it)
+      if (wpVersion !== null) {
+        const needsUpgrade = !isWp7OrLater(wpVersion);
+
+        rows.push(row('WordPress',
+          React.createElement('span', { style: dotStyle(needsUpgrade ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING) }),
+          wpVersion,
+          needsUpgrade
+            ? this.createActionButton({
+                onClick: upgradingWp ? undefined : this.handleUpgradeWordPress,
+                disabled: upgradingWp,
+                children: upgradingWp ? 'Upgrading...' : 'Upgrade to WP 7.0',
+              })
+            : null,
+        ));
+      }
+
       // AI Plugin
+      const canSetupAI = wpVersion === null || isWp7OrLater(wpVersion);
+
+      // Detect if AI is set up but missing gateway provider (needs update)
+      const needsGatewayUpdate =
+        aiStatus.aiPlugin === 'active' &&
+        (!aiStatus.gatewayProvider || aiStatus.gatewayProvider === 'not_installed');
+
+      const setupButtonText = settingUpAI ? 'Setting up...'
+        : !canSetupAI ? 'Requires WP 7.0+'
+        : needsGatewayUpdate ? 'Update AI Setup'
+        : 'Setup AI';
+
       rows.push(row('AI plugin',
         React.createElement('span', { style: dotStyle(pluginColor(aiStatus.aiPlugin)) }),
         pluginLabel(aiStatus.aiPlugin),
-        aiStatus.aiPlugin !== 'active'
+        aiStatus.aiPlugin !== 'active' || needsGatewayUpdate
           ? this.createActionButton({
-              onClick: settingUpAI ? undefined : this.handleSetupAI,
-              disabled: settingUpAI,
-              children: settingUpAI ? 'Setting up...' : 'Setup AI',
+              onClick: (settingUpAI || !canSetupAI) ? undefined : this.handleSetupAI,
+              disabled: settingUpAI || !canSetupAI,
+              children: setupButtonText,
             })
           : null,
       ));
+
+      // Local Gateway Provider (show status if active, or hint if needs update)
+      if (aiStatus.gatewayProvider === 'active') {
+        rows.push(row('Local Gateway',
+          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
+          'Active (centralized AI routing)',
+        ));
+      } else if (needsGatewayUpdate) {
+        rows.push(row('Local Gateway',
+          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_WARNING) }),
+          'Available update: centralized AI routing',
+        ));
+      }
 
       // Ollama Provider
       rows.push(row('Ollama provider',
@@ -326,6 +566,42 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
           disabled: syncingCreds,
           children: syncingCreds ? 'Syncing...' : 'Sync Keys',
         }),
+      ));
+    }
+
+    // AI Context File (show for all sites)
+    const { aiContextStatus, generatingContext } = this.state;
+    if (aiContextStatus) {
+      const contextExists = aiContextStatus.exists;
+      const contextAge = aiContextStatus.ageString;
+
+      const statusText = contextExists
+        ? `Generated ${contextAge}`
+        : 'Not generated';
+
+      const statusColor = contextExists ? UI_COLORS.STATUS_RUNNING : '#888';
+
+      const actions = [];
+
+      // Generate/Regenerate button
+      actions.push(this.createActionButton({
+        onClick: generatingContext ? undefined : this.handleGenerateContext,
+        disabled: generatingContext,
+        children: generatingContext ? 'Generating...' : (contextExists ? 'Regenerate' : 'Generate'),
+      }));
+
+      // Show in Finder button (only if exists)
+      if (contextExists && aiContextStatus.filePath) {
+        actions.push(this.createActionButton({
+          onClick: this.handleShowInFinder,
+          children: 'Show in Finder',
+        }));
+      }
+
+      rows.push(row('AI Context File',
+        React.createElement('span', { style: dotStyle(statusColor) }),
+        statusText,
+        ...actions,
       ));
     }
 

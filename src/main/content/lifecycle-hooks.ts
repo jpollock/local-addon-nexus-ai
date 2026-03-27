@@ -5,6 +5,9 @@ import { STORAGE_KEYS } from '../../common/constants';
 import type { NexusSettings } from '../../common/types';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
+import type { SiteMetadataCache } from '../metadata/SiteMetadataCache';
+import { autoGenerateContextFile } from '../ai-context/auto-generate';
+import { generateMuPluginContent } from '../ai-gateway/mu-plugin-template';
 
 export interface LifecycleContext {
   hooks: {
@@ -29,6 +32,7 @@ export interface Logger {
  * @param readyPromise — resolves when VectorStore + EmbeddingService are initialized.
  *   Hooks wait on this before indexing so sites that start before init completes
  *   don't hit "EmbeddingService not initialized" errors.
+ * @param metadataCache — Digital twin cache for WordPress metadata (version, plugins, themes)
  */
 export function registerLifecycleHooks(
   context: LifecycleContext,
@@ -38,6 +42,7 @@ export function registerLifecycleHooks(
   readyPromise?: Promise<void>,
   settingsStorage?: RegistryStorage,
   localServices?: LocalServicesBridge,
+  metadataCache?: SiteMetadataCache,
 ): void {
   context.hooks.addAction('siteStarted', async (site: LocalSiteRef) => {
     logger.info(`[NexusAI] Site started: ${site.name}, triggering index`);
@@ -69,6 +74,43 @@ export function registerLifecycleHooks(
       }
     }
 
+    // Digital Twin: Refresh metadata cache (WP version, plugins, themes)
+    // Run in parallel with indexing since both query WordPress
+    const metadataRefreshPromise = (async () => {
+      if (metadataCache && localServices) {
+        try {
+          const [wpVersion, plugins, themes] = await Promise.all([
+            localServices.getWpVersion(site.id),
+            localServices.getPlugins(site.id),
+            localServices.getThemes(site.id),
+          ]);
+
+          metadataCache.set(site.id, {
+            wpVersion: wpVersion ?? 'unknown',
+            plugins: plugins.map(p => ({
+              name: p.name,
+              title: p.title,
+              version: p.version,
+              status: p.status as 'active' | 'inactive',
+              file: p.file,
+            })),
+            themes: themes.map(t => ({
+              name: t.name,
+              title: t.title,
+              version: t.version,
+              status: t.status as 'active' | 'inactive',
+            })),
+            activeTheme: themes.find(t => t.status === 'active')?.name,
+            updateSource: 'lifecycle',
+          });
+
+          logger.info(`[NexusAI] Refreshed metadata cache for ${site.name} (${wpVersion})`);
+        } catch (err) {
+          logger.error(`[NexusAI] Metadata refresh failed for ${site.name}:`, err);
+        }
+      }
+    })();
+
     const info: SiteConnectionInfo = {
       siteId: site.id,
       siteName: site.name,
@@ -87,6 +129,9 @@ export function registerLifecycleHooks(
       logger.error(`[NexusAI] Indexing failed for ${site.name}:`, error);
     }
 
+    // Wait for metadata refresh to complete before continuing
+    await metadataRefreshPromise;
+
     // Auto-sync AI credentials to WP 7.0+ sites
     if (localServices && settingsStorage) {
       try {
@@ -104,6 +149,15 @@ export function registerLifecycleHooks(
         logger.error(`[NexusAI] Plugin auto-install failed for ${site.name}:`, err);
       }
     }
+
+    // Auto-generate AI context file if missing
+    if (localServices && settingsStorage && metadataCache) {
+      try {
+        await autoGenerateContextFile(site, localServices, metadataCache, settingsStorage, logger);
+      } catch (err) {
+        logger.error(`[NexusAI] Auto-generate context file failed for ${site.name}:`, err);
+      }
+    }
   });
 
   context.hooks.addAction('siteStopped', async (site: LocalSiteRef) => {
@@ -117,6 +171,16 @@ export function registerLifecycleHooks(
       await pipeline.removeSite(site.id);
     } catch (error) {
       logger.error(`[NexusAI] Cleanup failed for ${site.name}:`, error);
+    }
+
+    // Digital Twin: Invalidate metadata cache
+    if (metadataCache) {
+      try {
+        metadataCache.invalidate(site.id);
+        logger.info(`[NexusAI] Invalidated metadata cache for ${site.name}`);
+      } catch (error) {
+        logger.error(`[NexusAI] Metadata invalidation failed for ${site.name}:`, error);
+      }
     }
   });
 }
@@ -176,33 +240,33 @@ async function installNexusAiConnectorPlugin(
         fs.mkdirSync(muPluginsDir, { recursive: true });
       }
 
-      // Create MU plugin file that defines the constants
+      // Get AI Gateway info if available
+      const aiProxyInfo = settingsStorage.get('ai_proxy_info') as any;
+
+      // Generate MU plugin content with caller detection
+      const muPluginContent = generateMuPluginContent({
+        webhookUrl: webhookInfo.url,
+        webhookAuthToken: webhookInfo.authToken,
+        siteId: site.id,
+        aiGatewayUrl: aiProxyInfo?.url,
+        aiGatewayToken: aiProxyInfo?.authToken,
+      });
+
+      // Clean up old MU plugin file if it exists (pre-unified template)
+      const oldMuPluginPath = path.join(muPluginsDir, 'nexus-ai-gateway-config.php');
+      if (fs.existsSync(oldMuPluginPath)) {
+        fs.unlinkSync(oldMuPluginPath);
+        logger.info(`[NexusAI] Removed obsolete nexus-ai-gateway-config.php MU plugin`);
+      }
+
+      // Create unified MU plugin file
       const muPluginPath = path.join(muPluginsDir, 'nexus-ai-connector-config.php');
-      const muPluginContent = `<?php
-/**
- * Nexus AI Connector Configuration
- *
- * Auto-generated by Local addon - defines webhook URL and auth token
- * as constants so the Nexus AI Connector plugin can communicate with Local.
- */
-
-define('NEXUS_AI_WEBHOOK_URL', '${webhookInfo.url}');
-define('NEXUS_AI_AUTH_TOKEN', '${webhookInfo.authToken}');
-
-// Enable WordPress debugging for Nexus AI event logging
-if (!defined('WP_DEBUG')) {
-    define('WP_DEBUG', true);
-}
-if (!defined('WP_DEBUG_LOG')) {
-    define('WP_DEBUG_LOG', true);
-}
-if (!defined('WP_DEBUG_DISPLAY')) {
-    define('WP_DEBUG_DISPLAY', false);
-}
-`;
-
       fs.writeFileSync(muPluginPath, muPluginContent);
+
       logger.info(`[NexusAI] Plugin configured with webhook ${webhookInfo.url}/wp-events via MU plugin`);
+      if (aiProxyInfo?.url) {
+        logger.info(`[NexusAI] AI Gateway caller detection enabled for ${site.name}`);
+      }
     } else {
       logger.info(`[NexusAI] HTTP webhook not ready yet, plugin will need manual configuration`);
     }

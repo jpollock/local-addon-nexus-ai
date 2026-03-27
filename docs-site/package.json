@@ -1,0 +1,16 @@
+{
+  "name": "nexus-ai-docs",
+  "version": "1.0.0",
+  "description": "Documentation site for Nexus AI",
+  "private": true,
+  "scripts": {
+    "serve": "mkdocs serve",
+    "build": "mkdocs build --strict",
+    "deploy": "mkdocs gh-deploy",
+    "create-placeholders": "bash scripts/create-placeholders.sh",
+    "install": "pip install -r requirements.txt"
+  },
+  "keywords": ["documentation", "mkdocs", "nexus-ai"],
+  "author": "WP Engine",
+  "license": "UNLICENSED"
+}

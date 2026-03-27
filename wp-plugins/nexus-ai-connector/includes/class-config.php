@@ -54,12 +54,19 @@ class Nexus_AI_Config {
     /**
      * Get site ID for event payloads
      *
-     * Uses the site's directory name as a stable identifier
+     * Priority:
+     * 1. NEXUS_AI_SITE_ID constant (set by Local addon)
+     * 2. Site directory name as fallback
      *
      * @return string
      */
     public static function get_site_id() {
-        // Use site path as ID (e.g., "the-curated-shelf" from "/Users/.../Local Sites/the-curated-shelf")
+        // Priority 1: Check for constant (injected by Local addon via MU plugin)
+        if (defined('NEXUS_AI_SITE_ID')) {
+            return NEXUS_AI_SITE_ID;
+        }
+
+        // Priority 2: Fallback to site path as ID (e.g., "the-curated-shelf" from "/Users/.../Local Sites/the-curated-shelf")
         $site_path = ABSPATH;
         $site_path = rtrim($site_path, '/');
 

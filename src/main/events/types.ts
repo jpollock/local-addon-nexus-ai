@@ -6,10 +6,16 @@ export type EventType =
   | 'post_created'
   | 'post_updated'
   | 'post_deleted'
+  | 'post_trashed'
+  | 'post_untrashed'
+  | 'plugin_installed'
   | 'plugin_activated'
   | 'plugin_deactivated'
   | 'plugin_updated'
   | 'plugin_deleted'
+  | 'theme_installed'
+  | 'theme_activated'
+  | 'theme_deleted'
   | 'user_created'
   | 'user_updated'
   | 'user_deleted'
@@ -27,6 +33,7 @@ export interface WordPressEvent {
 export type EventPayload =
   | PostEventPayload
   | PluginEventPayload
+  | ThemeEventPayload
   | UserEventPayload
   | SiteEventPayload;
 
@@ -43,6 +50,15 @@ export interface PostEventPayload {
 }
 
 export interface PluginEventPayload {
+  slug: string;
+  name: string;
+  version: string;
+  is_active: boolean;
+  author?: string;
+  description?: string;
+}
+
+export interface ThemeEventPayload {
   slug: string;
   name: string;
   version: string;
@@ -110,6 +126,18 @@ export interface Content {
 }
 
 export interface Plugin {
+  id: number;
+  site_id: string;
+  slug: string;
+  name: string;
+  version: string | null;
+  is_active: boolean;
+  author: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface Theme {
   id: number;
   site_id: string;
   slug: string;

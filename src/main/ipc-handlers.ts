@@ -26,6 +26,46 @@ import { BulkOperationManager } from './bulk/BulkOperationManager';
 import { HealthTrendTracker } from './health/HealthTrendTracker';
 import { WPESyncService } from './events/WPESyncService';
 import { WpeAutoPullService } from './wpe-auto-pull';
+import { SiteMetadataCache } from './metadata/SiteMetadataCache';
+import { AIContextGenerator } from './ai-context/AIContextGenerator';
+import type { AIContextData } from './ai-context/AIContextGenerator';
+import { AuditLogger, AUDITED_OPERATIONS } from './audit/AuditLogger';
+import {
+  validateInput,
+  SiteIdSchema,
+  UpdateSettingsSchema,
+  IndexSiteSchema,
+  SearchUnifiedSchema,
+  BulkOperationRequestSchema,
+  BulkOperationIdSchema,
+  FleetOperationOptionsSchema,
+  WpeRemoveSiteSchema,
+  WpePullToLocalSchema,
+  WpeSyncSingleSchema,
+  WpeSyncAllSchema,
+  WpeInstallIdSchema,
+  HealthGetScoreSchema,
+  HealthGetTrendSchema,
+  HealthGetFleetTrendSchema,
+  QuerySchema,
+  QueryUpdateSchema,
+  QueryIdSchema,
+  AIGatewayUsageOptionsSchema,
+  AIGatewayCostOptionsSchema,
+  AIGatewayRateLimitSchema,
+  EventTimelineOptionsSchema,
+  StorageCleanupOptionsSchema,
+  FilterIdSchema,
+  GroupIdSchema,
+  GroupCreateSchema,
+  GroupUpdateSchema,
+  GroupAddRemoveSiteSchema,
+  SidebarFilterSchema,
+  SidebarBulkActionSchema,
+  SearchContentSchema,
+  SiteFinderAIParseSchema,
+  SiteFinderFiltersSchema,
+} from '../common/schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -67,6 +107,125 @@ export interface IpcHandlerDeps {
   nexusServices?: any;
   /** WPE site sync service (Phase 1) */
   wpeSyncService?: WPESyncService;
+  /** Site metadata cache (Digital Twin) */
+  metadataCache?: SiteMetadataCache;
+}
+
+/**
+ * Wait for database to be ready by polling with a simple WP-CLI command.
+ * Required after starting sites - web server starts quickly but DB takes longer.
+ */
+async function waitForDatabaseReady(
+  siteId: string,
+  localServices: LocalServicesBridge,
+  logger: any,
+  timeoutMs: number = 30000,
+): Promise<void> {
+  const startTime = Date.now();
+  const pollInterval = 1000; // Check every 1 second
+
+  logger.info(`[NexusAI] Waiting for database to be ready for site ${siteId}...`);
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      // Simple DB-dependent command to test readiness
+      const result = await localServices.wpCliRun(siteId, [
+        'eval',
+        "echo 'ready';",
+      ]);
+
+      if (result.success && result.stdout?.trim() === 'ready') {
+        logger.info(`[NexusAI] Database ready for site ${siteId} after ${Date.now() - startTime}ms`);
+        return; // Database is ready!
+      }
+    } catch {
+      // Database not ready yet, continue polling
+    }
+
+    // Wait before next attempt
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  }
+
+  throw new Error(`Database did not become ready within ${timeoutMs}ms`);
+}
+
+/**
+ * Helper function to ensure a site is running before executing an operation.
+ * Auto-starts the site if needed, executes the work function, then auto-stops if we started it.
+ *
+ * Safety: stopSite() is wrapped in try-catch because Local's database dump can fail and
+ * leave the site in a broken state. If stop fails, we log the error but don't crash.
+ *
+ * @param siteId - The site ID to ensure is running
+ * @param localServices - LocalServicesBridge instance
+ * @param logger - Logger instance
+ * @param work - Async function to execute while site is running
+ * @returns Result of the work function
+ */
+async function withSiteRunning<T>(
+  siteId: string,
+  localServices: LocalServicesBridge,
+  logger: any,
+  work: () => Promise<T>,
+): Promise<T> {
+  let wasAutoStarted = false;
+
+  try {
+    // Check if site is running
+    const statuses = localServices.getAllSiteStatuses();
+    const wasRunning = statuses[siteId] === 'running';
+
+    // Auto-start if not running
+    if (!wasRunning) {
+      logger.info(`[NexusAI] Site ${siteId} not running - auto-starting for operation`);
+      await localServices.startSite(siteId);
+      wasAutoStarted = true;
+
+      // Wait for database to be ready
+      await waitForDatabaseReady(siteId, localServices, logger, 30000);
+    }
+
+    // Execute work
+    const result = await work();
+
+    // Auto-stop if we started it
+    if (wasAutoStarted) {
+      logger.info(`[NexusAI] Operation complete - auto-stopping site ${siteId}`);
+
+      // Add small delay to let site settle after operation (prevents database dump errors)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      try {
+        await localServices.stopSite(siteId);
+        logger.info(`[NexusAI] Site ${siteId} stopped successfully`);
+      } catch (stopErr) {
+        // stopSite() can fail if Local's database dump fails. Don't crash the operation,
+        // just warn the user. The site will remain running, which is safer than a broken state.
+        logger.error(`[NexusAI] Failed to auto-stop site ${siteId}: ${(stopErr as Error).message}`);
+        logger.error(`[NexusAI] Site ${siteId} remains running. You may need to stop it manually from Local's UI.`);
+      }
+    }
+
+    return result;
+  } catch (err) {
+    // Auto-stop if we started it (even on error)
+    if (wasAutoStarted) {
+      try {
+        logger.info(`[NexusAI] Operation failed - attempting to auto-stop site ${siteId}`);
+
+        // Add small delay before stopping
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        await localServices.stopSite(siteId);
+        logger.info(`[NexusAI] Site ${siteId} stopped after operation failure`);
+      } catch (stopErr) {
+        // Non-fatal - log error but don't mask the original error
+        logger.error(`[NexusAI] Failed to auto-stop site ${siteId} after error: ${(stopErr as Error).message}`);
+        logger.error(`[NexusAI] Site ${siteId} remains running. You may need to stop it manually from Local's UI.`);
+      }
+    }
+    throw err;
+  }
 }
 
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
@@ -90,9 +249,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   const {
     siteData, localServicesBridge, indexRegistry, embeddingService,
     contentPipeline, vectorStore, registryStorage, localLogger, getMcpServer,
-    graphService, eventProcessor, vectorDbPath, serviceContainer,
+    graphService, eventProcessor, vectorDbPath, serviceContainer, metadataCache,
   } = deps;
   console.log('[NexusAI] 🟢 registerIpcHandlers() - deps destructured successfully');
+
+  // Initialize audit logger for tracking remote operations
+  const auditLogger = new AuditLogger(registryStorage);
 
   /**
    * Notify Local's main UI to refresh site groups after a mutation.
@@ -273,7 +435,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.START_SITE, async (_event: any, siteId: string) => {
     try {
-      await localServicesBridge.startSite(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+      await localServicesBridge.startSite(validated);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] start-site failed:', (err as Error).message);
@@ -283,7 +447,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.STOP_SITE, async (_event: any, siteId: string) => {
     try {
-      await localServicesBridge.stopSite(siteId);
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+      await localServicesBridge.stopSite(validated);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] stop-site failed:', (err as Error).message);
@@ -293,14 +459,17 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SEARCH, async (_event: any, query: string, siteId?: string, limit?: number) => {
     try {
-      const maxResults = limit ?? 10;
-      const [queryVector] = await embeddingService.embedBatch([query]);
+      // Validate input
+      const validated = validateInput(SearchContentSchema, { query, siteIds: siteId ? [siteId] : undefined, limit });
+      const maxResults = validated.limit ?? 10;
+      const [queryVector] = await embeddingService.embedBatch([validated.query]);
+      const targetSiteId = validated.siteIds?.[0];
 
-      if (siteId) {
-        const results = await vectorStore.search(siteId, queryVector, { limit: maxResults });
-        const site = siteData.getSite(siteId);
+      if (targetSiteId) {
+        const results = await vectorStore.search(targetSiteId, queryVector, { limit: maxResults });
+        const site = siteData.getSite(targetSiteId);
         return {
-          results: results.map((r: any) => ({ ...r, siteId, siteName: site?.name ?? siteId })),
+          results: results.map((r: any) => ({ ...r, siteId: targetSiteId, siteName: site?.name ?? targetSiteId })),
         };
       }
 
@@ -323,17 +492,41 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: any, params: { siteId: string }) => {
+    const startTime = Date.now();
     try {
+      // Validate input
+      const validated = validateInput(IndexSiteSchema, params);
+      const siteId = validated.siteId;
+
       const site = siteData.getSite(siteId);
       if (!site) {
+        auditLogger.logFailure(
+          'index_site',
+          siteId,
+          'local_site',
+          'Site not found',
+          params,
+          Date.now() - startTime,
+        );
         return { success: false, error: `Site ${siteId} not found` };
       }
+
       const result = await contentPipeline.indexSite({
         siteId: site.id,
         siteName: site.name,
         sitePath: site.path,
       });
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'index_site',
+        siteId,
+        'local_site',
+        { documentsIndexed: result.documentsIndexed, chunksIndexed: result.chunksIndexed },
+        Date.now() - startTime,
+      );
+
       return {
         success: true,
         documentsIndexed: result.documentsIndexed,
@@ -343,6 +536,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       };
     } catch (err) {
       localLogger.error('[NexusAI] index-site failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'index_site',
+        params?.siteId || 'unknown',
+        'local_site',
+        (err as Error).message,
+        params,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -358,9 +559,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, (_event: any, partial: Partial<NexusSettings>) => {
     try {
+      // Validate input
+      const validated = validateInput(UpdateSettingsSchema, partial);
+
       const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
       const current: NexusSettings = raw ?? DEFAULT_SETTINGS;
-      const updated = { ...current, ...partial };
+      const updated = { ...current, ...validated };
       registryStorage.set(STORAGE_KEYS.SETTINGS, updated as any);
       return updated;
     } catch (err) {
@@ -369,20 +573,310 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      let version: string | null = null;
+      let fromCache = false;
+      let metadataAge: string | null = null;
+
+      // Digital Twin: Check cache first (instant)
+      const cachedMetadata = metadataCache?.getWithAge(validated);
+      if (cachedMetadata) {
+        version = cachedMetadata.wpVersion;
+        fromCache = true;
+        metadataAge = metadataCache?.getAgeString(validated) ?? null;
+      }
+
+      // If cache is stale or doesn't exist, try live WP-CLI (slower)
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      const siteStatus = statuses[validated] ?? 'unknown';
+
+      if (siteStatus === 'running' && (!cachedMetadata || cachedMetadata.isStale)) {
+        try {
+          const liveVersion = await localServicesBridge.getWpVersion(validated);
+          if (liveVersion) {
+            version = liveVersion;
+            fromCache = false;
+            metadataAge = null; // Fresh data, no age
+          }
+        } catch (err) {
+          // WP-CLI failed - keep using cached version if we have it
+          if (!version) {
+            throw err; // No cache, propagate error
+          }
+        }
+      }
+
+      return {
+        success: true,
+        version,
+        fromCache,
+        metadataAge,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-wp-version failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.UPGRADE_WP, async (_event: any, siteId: string) => {
+    const startTime = Date.now();
+    try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+      siteId = validated; // Use validated value
+
+      localLogger.info(`[NexusAI] Starting WordPress upgrade for site ${siteId}`);
+
+      // Run upgrade with auto-start/stop
+      const result = await withSiteRunning(siteId, localServicesBridge, localLogger, async () => {
+        // Get current version
+        const currentVersion = await localServicesBridge.getWpVersion(siteId);
+        localLogger.info(`[NexusAI] Current WordPress version: ${currentVersion}`);
+
+        // Run wp core update to upgrade to WP 7.0-beta6
+        // Using --force to allow downgrade if on a dev version
+        const targetVersion = '7.0-beta6';
+
+        localLogger.info(`[NexusAI] Running wp core update --version=${targetVersion} --force for site ${siteId}`);
+        const updateResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update', `--version=${targetVersion}`, '--force']);
+        localLogger.info(`[NexusAI] wp core update result:`, updateResult);
+
+        // Check if update succeeded
+        if (!updateResult.success) {
+          const errorMsg = updateResult.stdout || 'WordPress core update failed';
+          localLogger.error(`[NexusAI] WordPress core update failed for site ${siteId}:`, errorMsg);
+          throw new Error(errorMsg);
+        }
+
+        // Update database if needed
+        localLogger.info(`[NexusAI] Running wp core update-db for site ${siteId}`);
+        const dbResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update-db']);
+        localLogger.info(`[NexusAI] wp core update-db result:`, dbResult);
+
+        // Get the new version
+        const newVersion = await localServicesBridge.getWpVersion(siteId);
+        localLogger.info(`[NexusAI] WordPress upgrade complete. New version: ${newVersion}`);
+
+        // Digital Twin: Refresh metadata cache after successful upgrade
+        // This ensures the WP version, plugin list, and theme list reflect the upgraded state
+        if (metadataCache) {
+          try {
+            const [wpVersion, plugins, themes] = await Promise.all([
+              localServicesBridge.getWpVersion(siteId),
+              localServicesBridge.getPlugins(siteId),
+              localServicesBridge.getThemes(siteId),
+            ]);
+
+            metadataCache.set(siteId, {
+              wpVersion: wpVersion ?? 'unknown',
+              plugins: plugins.map(p => ({
+                name: p.name,
+                title: p.title,
+                version: p.version,
+                status: p.status as 'active' | 'inactive',
+                file: p.file,
+              })),
+              themes: themes.map(t => ({
+                name: t.name,
+                title: t.title,
+                version: t.version,
+                status: t.status as 'active' | 'inactive',
+              })),
+              activeTheme: themes.find(t => t.status === 'active')?.name,
+              updateSource: 'upgrade-wp',
+            });
+
+            localLogger.info(`[NexusAI] Refreshed metadata cache after upgrade-wp for site ${siteId}`);
+
+            // Also update IndexRegistry structure to refresh digital twin
+            const existingEntry = indexRegistry.get(siteId);
+            if (existingEntry?.structure) {
+              indexRegistry.update(siteId, {
+                structure: {
+                  ...existingEntry.structure,
+                  wpVersion: wpVersion ?? 'unknown',
+                  plugins: plugins.map(p => ({
+                    name: p.name,
+                    slug: p.file?.split('/')[0] ?? p.name,
+                    version: p.version,
+                    isActive: p.status === 'active',
+                    description: '',
+                  })),
+                  themes: themes.map(t => ({
+                    name: t.name,
+                    slug: t.name,
+                    version: t.version,
+                    isActive: t.status === 'active',
+                    isChildTheme: false,
+                  })),
+                },
+              });
+
+              localLogger.info(`[NexusAI] Updated IndexRegistry structure after upgrade-wp for site ${siteId}`);
+            }
+          } catch (err) {
+            // Non-fatal — upgrade succeeded, cache refresh is nice-to-have
+            localLogger.error(`[NexusAI] Metadata refresh after upgrade-wp failed for ${siteId}:`, (err as Error).message);
+          }
+        }
+
+        return { success: true, version: newVersion, fromVersion: currentVersion, targetVersion };
+      });
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'upgrade_wp',
+        siteId,
+        'local_site',
+        { fromVersion: result.fromVersion, toVersion: result.version, targetVersion: result.targetVersion },
+        Date.now() - startTime,
+      );
+
+      return { success: true, version: result.version };
+    } catch (err) {
+      localLogger.error('[NexusAI] upgrade-wp failed:', (err as Error).message, err);
+      auditLogger.logFailure(
+        'upgrade_wp',
+        siteId || 'unknown',
+        'local_site',
+        (err as Error).message,
+        {},
+        Date.now() - startTime,
+      );
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
+    const startTime = Date.now();
+    let wasAutoStarted = false;
+
+    try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+      siteId = validated; // Use validated value
+
+      // Check if site is running
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      const wasRunning = statuses[siteId] === 'running';
+
+      // Auto-start if not running
+      if (!wasRunning) {
+        localLogger.info(`[NexusAI] Site ${siteId} not running - auto-starting for Setup AI`);
+        await localServicesBridge.startSite(siteId);
+        wasAutoStarted = true;
+
+        // Wait for database to be ready
+        await waitForDatabaseReady(siteId, localServicesBridge, localLogger, 30000);
+      }
+
       // Check if user has selected Ollama as their chat provider
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const enableOllama = settings?.chatProvider === 'ollama';
 
-      return await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, {
+      const result = await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, {
         enableOllama,
       });
+
+      // Cache setup state if AI plugin was successfully installed/activated
+      if (result.success && (result.aiPlugin === 'installed' || result.aiPlugin === 'activated' || result.aiPlugin === 'already_active')) {
+        const setupState = (registryStorage.get(STORAGE_KEYS.AI_SETUP_STATE) ?? {}) as Record<string, {
+          aiPlugin: string;
+          ollamaProvider: string;
+          timestamp: number;
+        }>;
+
+        setupState[siteId] = {
+          aiPlugin: result.aiPlugin,
+          ollamaProvider: result.ollamaProvider,
+          timestamp: Date.now(),
+        };
+
+        registryStorage.set(STORAGE_KEYS.AI_SETUP_STATE, setupState);
+      }
+
+      // Digital Twin: Refresh metadata cache after successful setup
+      // This ensures the plugin list reflects newly installed plugins (AI, Ollama provider, etc.)
+      if (result.success && metadataCache) {
+        try {
+          const [wpVersion, plugins, themes] = await Promise.all([
+            localServicesBridge.getWpVersion(siteId),
+            localServicesBridge.getPlugins(siteId),
+            localServicesBridge.getThemes(siteId),
+          ]);
+
+          metadataCache.set(siteId, {
+            wpVersion: wpVersion ?? 'unknown',
+            plugins: plugins.map(p => ({
+              name: p.name,
+              title: p.title,
+              version: p.version,
+              status: p.status as 'active' | 'inactive',
+              file: p.file,
+            })),
+            themes: themes.map(t => ({
+              name: t.name,
+              title: t.title,
+              version: t.version,
+              status: t.status as 'active' | 'inactive',
+            })),
+            activeTheme: themes.find(t => t.status === 'active')?.name,
+            updateSource: 'setup-ai',
+          });
+
+          localLogger.info(`[NexusAI] Refreshed metadata cache after setup-ai for site ${siteId}`);
+        } catch (err) {
+          // Non-fatal — setup succeeded, cache refresh is nice-to-have
+          localLogger.error(`[NexusAI] Metadata refresh after setup-ai failed for ${siteId}:`, (err as Error).message);
+        }
+      }
+
+      // Don't auto-stop after Setup AI - leave site running for user to verify
+      // Setup AI is a heavy operation (plugins, config, credentials) and auto-stop
+      // can trigger database dump errors that corrupt the site. Safer to let user
+      // stop manually when ready.
+      if (wasAutoStarted) {
+        localLogger.info(`[NexusAI] Setup AI complete - site ${siteId} remains running`);
+        localLogger.info(`[NexusAI] You can stop the site manually when ready`);
+      }
+
+      // Audit log successful setup
+      auditLogger.logSuccess(
+        'setup_ai',
+        siteId,
+        'local_site',
+        { enableOllama: settings?.chatProvider === 'ollama' },
+        Date.now() - startTime
+      );
+
+      return result;
     } catch (err) {
+      // Don't auto-stop even on error - safer to leave running for debugging
+      if (wasAutoStarted) {
+        localLogger.error(`[NexusAI] Setup AI failed - site ${siteId} remains running for debugging`);
+        localLogger.info(`[NexusAI] You can stop the site manually when ready`);
+      }
+
+      // Audit log failure
+      auditLogger.logFailure(
+        'setup_ai',
+        siteId,
+        'local_site',
+        (err as Error).message,
+        {},
+        Date.now() - startTime
+      );
+
       return {
         success: false,
         aiPlugin: 'failed' as const,
+        connectorPlugin: 'failed' as const,
         providerPlugins: 'failed' as const,
+        gatewayProvider: 'failed' as const,
         ollamaProvider: 'failed' as const,
         aiFeatures: 'failed' as const,
         credentials: 'failed' as const,
@@ -403,7 +897,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     siteId?: string;
   }) => {
     try {
-      const events = await graphService.getRecentEvents(options as any);
+      // Validate input
+      const validated = validateInput(EventTimelineOptionsSchema, options);
+
+      const events = await graphService.getRecentEvents(validated as any);
 
       // Transform to renderer-safe format with site names
       const timeline: EventTimelineEntry[] = events.map(e => {
@@ -499,14 +996,35 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   safeHandle(IPC_CHANNELS.STORAGE_CLEANUP, async (_event: any, options?: {
     retentionDays?: number;
   }) => {
+    const startTime = Date.now();
     try {
-      const retentionDays = options?.retentionDays ?? 30;
+      // Validate input
+      const validated = validateInput(StorageCleanupOptionsSchema, options);
+
+      const retentionDays = validated?.retentionDays ?? 30;
       const deleted = await graphService.cleanupOldData(retentionDays);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'storage_cleanup',
+        'all',
+        'database',
+        { retentionDays, eventsDeleted: deleted.events },
+        Date.now() - startTime,
+      );
 
       localLogger.info(`[NexusAI] Cleaned up ${deleted} old events (retention: ${retentionDays} days)`);
       return { success: true, deletedCount: deleted.events };
     } catch (err) {
       localLogger.error('[NexusAI] storage:cleanup failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'storage_cleanup',
+        'all',
+        'database',
+        (err as Error).message,
+        options || {},
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -537,10 +1055,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   queryStorage.load().catch(err => localLogger.error('[NexusAI] Failed to load saved queries:', err.message));
 
   // Unified search
-  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, query: string, filters?: any, options?: any) => {
+  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, params: { query: string; filters?: any; options?: any }) => {
     try {
-      localLogger.info('[NexusAI] Search request:', { query, filters, options });
-      const results = await searchService.searchFleet(query, filters, options);
+      // Validate input
+      const validated = validateInput(SearchUnifiedSchema, params);
+
+      localLogger.info('[NexusAI] Search request:', { query: validated.query, filters: validated.filters, options: validated.options });
+      const results = await searchService.searchFleet(validated.query, validated.filters, validated.options);
       localLogger.info('[NexusAI] Search results:', { total: results.total, resultCount: results.results.length });
       return { success: true, ...results };
     } catch (err) {
@@ -562,7 +1083,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.FILTERS_APPLY, async (_event: any, filterId: string) => {
     try {
-      const siteIds = await filterEngine.applyFilter(filterId);
+      // Validate input
+      const validated = validateInput(FilterIdSchema, filterId);
+
+      const siteIds = await filterEngine.applyFilter(validated);
       return { success: true, siteIds };
     } catch (err) {
       localLogger.error('[NexusAI] filters:apply failed:', (err as Error).message);
@@ -571,8 +1095,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Health scores
-  safeHandle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: any, params: { siteId: string }) => {
     try {
+      // Validate input
+      const validated = validateInput(HealthGetScoreSchema, params);
+      const siteId = validated.siteId;
+
       const site = siteData.getSite(siteId);
       const breakdown = await healthCalculator.calculateScore(siteId, {
         phpVersion: site?.phpVersion,
@@ -615,7 +1143,16 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.QUERIES_CREATE, async (_event: any, query: any) => {
     try {
-      const saved = await queryStorage.save(query);
+      // Validate input
+      const validated = validateInput(QuerySchema, query);
+
+      // Ensure pinned has a default value
+      const queryToSave = {
+        ...validated,
+        pinned: validated.pinned ?? false,
+      };
+
+      const saved = await queryStorage.save(queryToSave);
       return { success: true, query: saved };
     } catch (err) {
       localLogger.error('[NexusAI] queries:create failed:', (err as Error).message);
@@ -623,9 +1160,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: any, id: string, changes: any) => {
+  safeHandle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: any, params: { id: string; changes: any }) => {
     try {
-      const updated = await queryStorage.update(id, changes);
+      // Validate input
+      const validated = validateInput(QueryUpdateSchema, params);
+
+      const updated = await queryStorage.update(validated.id, validated.changes);
       return { success: true, query: updated };
     } catch (err) {
       localLogger.error('[NexusAI] queries:update failed:', (err as Error).message);
@@ -635,7 +1175,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.QUERIES_DELETE, async (_event: any, id: string) => {
     try {
-      await queryStorage.delete(id);
+      // Validate input
+      const validated = validateInput(QueryIdSchema, id);
+
+      await queryStorage.delete(validated);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] queries:delete failed:', (err as Error).message);
@@ -645,7 +1188,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.QUERIES_RUN, async (_event: any, id: string) => {
     try {
-      const query = queryStorage.get(id);
+      // Validate input
+      const validated = validateInput(QueryIdSchema, id);
+
+      const query = queryStorage.get(validated);
       if (!query) {
         return { success: false, error: 'Query not found' };
       }
@@ -682,7 +1228,49 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     setupSiteForAI: async (siteId: string, options?: any) => {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const enableOllama = options?.enableOllama ?? (settings?.chatProvider === 'ollama');
-      return setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, { enableOllama });
+      const result = await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, { enableOllama });
+
+      // Digital Twin: Refresh metadata cache after successful setup (bulk operations)
+      if (result.success && metadataCache) {
+        try {
+          const statuses = localServicesBridge.getAllSiteStatuses();
+          const siteStatus = statuses[siteId] ?? 'unknown';
+
+          if (siteStatus === 'running') {
+            const [wpVersion, plugins, themes] = await Promise.all([
+              localServicesBridge.getWpVersion(siteId),
+              localServicesBridge.getPlugins(siteId),
+              localServicesBridge.getThemes(siteId),
+            ]);
+
+            metadataCache.set(siteId, {
+              wpVersion: wpVersion ?? 'unknown',
+              plugins: plugins.map(p => ({
+                name: p.name,
+                title: p.title,
+                version: p.version,
+                status: p.status as 'active' | 'inactive',
+                file: p.file,
+              })),
+              themes: themes.map(t => ({
+                name: t.name,
+                title: t.title,
+                version: t.version,
+                status: t.status as 'active' | 'inactive',
+              })),
+              activeTheme: themes.find(t => t.status === 'active')?.name,
+              updateSource: 'setup-ai',
+            });
+
+            localLogger.info(`[NexusAI] Refreshed metadata cache after bulk setup-ai for site ${siteId}`);
+          }
+        } catch (err) {
+          // Non-fatal — setup succeeded, cache refresh is nice-to-have
+          localLogger.error(`[NexusAI] Bulk metadata refresh after setup-ai failed for ${siteId}:`, (err as Error).message);
+        }
+      }
+
+      return result;
     },
     onProgress: (opId, status) => {
       try {
@@ -721,22 +1309,57 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // --- Bulk Operations ---
 
   safeHandle(IPC_CHANNELS.BULK_EXECUTE, async (_event: any, request: any) => {
+    const startTime = Date.now();
     try {
-      const opId = await bulkOpManager.execute(request);
+      // Validate input
+      const validated = validateInput(BulkOperationRequestSchema, request);
+
+      // Audit log bulk operation start
+      auditLogger.log({
+        operation: `bulk_${validated.type}`,
+        target: `${validated.siteIds.length} sites`,
+        targetType: 'bulk_operation',
+        result: 'started',
+        params: { type: validated.type, siteCount: validated.siteIds.length },
+        durationMs: 0,
+      });
+
+      const opId = await bulkOpManager.execute(validated);
+
       return { success: true, opId };
     } catch (err) {
       localLogger.error('[NexusAI] bulk:execute failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'bulk_execute',
+        'multiple',
+        'bulk_operation',
+        (err as Error).message,
+        request,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
 
   safeHandle(IPC_CHANNELS.BULK_STATUS, async (_event: any, opId: string) => {
-    const status = bulkOpManager.getStatus(opId);
-    return status ? { success: true, ...status } : { success: false, error: 'Operation not found' };
+    try {
+      // Validate input
+      const validated = validateInput(BulkOperationIdSchema, opId);
+      const status = bulkOpManager.getStatus(validated);
+      return status ? { success: true, ...status } : { success: false, error: 'Operation not found' };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
   });
 
   safeHandle(IPC_CHANNELS.BULK_CANCEL, async (_event: any, opId: string) => {
-    return { success: bulkOpManager.cancel(opId) };
+    try {
+      // Validate input
+      const validated = validateInput(BulkOperationIdSchema, opId);
+      return { success: bulkOpManager.cancel(validated) };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
   });
 
   safeHandle(IPC_CHANNELS.BULK_LIST, async () => {
@@ -756,7 +1379,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GROUPS_CREATE, async (_event: any, args: { name: string }) => {
     try {
-      const group = localServicesBridge.createSiteGroup(args.name);
+      // Validate input
+      const validated = validateInput(GroupCreateSchema, args);
+
+      const group = localServicesBridge.createSiteGroup(validated.name);
       notifyGroupsChanged();
       return { success: true, group };
     } catch (err) {
@@ -764,10 +1390,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: any, id: string, changes: { name?: string }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: any, params: { id: string; changes: { name?: string } }) => {
     try {
-      if (changes.name) {
-        const group = localServicesBridge.renameSiteGroup(id, changes.name);
+      // Validate input
+      const validated = validateInput(GroupUpdateSchema, params);
+
+      if (validated.changes.name) {
+        const group = localServicesBridge.renameSiteGroup(validated.id, validated.changes.name);
         notifyGroupsChanged();
         return { success: true, group };
       }
@@ -779,7 +1408,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GROUPS_DELETE, async (_event: any, id: string) => {
     try {
-      localServicesBridge.deleteSiteGroup(id);
+      // Validate input
+      const validated = validateInput(GroupIdSchema, id);
+
+      localServicesBridge.deleteSiteGroup(validated);
       notifyGroupsChanged();
       return { success: true };
     } catch (err) {
@@ -787,9 +1419,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: any, groupId: string, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: any, params: { groupId: string; siteId: string }) => {
     try {
-      localServicesBridge.moveSitesToGroup([siteId], groupId);
+      // Validate input
+      const validated = validateInput(GroupAddRemoveSiteSchema, params);
+
+      localServicesBridge.moveSitesToGroup([validated.siteId], validated.groupId);
       notifyGroupsChanged();
       return { success: true };
     } catch (err) {
@@ -797,9 +1432,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: any, groupId: string, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: any, params: { groupId: string; siteId: string }) => {
     try {
-      localServicesBridge.removeSitesFromGroups([siteId]);
+      // Validate input
+      const validated = validateInput(GroupAddRemoveSiteSchema, params);
+
+      localServicesBridge.removeSitesFromGroups([validated.siteId]);
       notifyGroupsChanged();
       return { success: true };
     } catch (err) {
@@ -809,14 +1447,22 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // --- Health Trends ---
 
-  safeHandle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: any, siteId: string, days?: number) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: any, params: { siteId: string; days?: number }) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
-    return { success: true, trend: healthTrendTracker.getSiteTrend(siteId, days || 30) };
+
+    // Validate input
+    const validated = validateInput(HealthGetTrendSchema, params);
+
+    return { success: true, trend: healthTrendTracker.getSiteTrend(validated.siteId, validated.days || 30) };
   });
 
-  safeHandle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: any, days?: number) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: any, params?: { days?: number }) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
-    return { success: true, trend: healthTrendTracker.getFleetTrend(days || 30) };
+
+    // Validate input
+    const validated = validateInput(HealthGetFleetTrendSchema, params);
+
+    return { success: true, trend: healthTrendTracker.getFleetTrend(validated?.days || 30) };
   });
 
   // --- Dashboard v2 ---
@@ -882,9 +1528,20 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GET_AI_STATUS, async (_event: any, siteId?: string) => {
     try {
+      // Validate input if siteId provided
+      const validatedSiteId = siteId ? validateInput(SiteIdSchema, siteId) : undefined;
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
-      const targetIds = siteId ? [siteId] : Object.keys(allSites);
+      const targetIds = validatedSiteId ? [validatedSiteId] : Object.keys(allSites);
+
+      // Load cached setup state
+      const setupState = (registryStorage.get(STORAGE_KEYS.AI_SETUP_STATE) ?? {}) as Record<string, {
+        aiPlugin: string;
+        ollamaProvider: string;
+        gatewayProvider?: string; // Optional: added in later version
+        timestamp: number;
+      }>;
 
       const results: Record<string, any> = {};
       for (const id of targetIds) {
@@ -894,30 +1551,95 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         const siteStatus = statuses[id] ?? 'unknown';
         let aiPlugin: 'active' | 'inactive' | 'not_installed' = 'not_installed';
         let ollamaProvider: 'active' | 'inactive' | 'not_installed' = 'not_installed';
+        let gatewayProvider: 'active' | 'inactive' | 'not_installed' = 'not_installed';
         let credentialsSynced = false;
         const providers: string[] = [];
+        let metadataAge: string | null = null;
 
-        // Always try to get plugin data — WP-CLI will fail naturally if site isn't running
-        try {
-          const plugins = await localServicesBridge.getPlugins(id);
-          const ai = plugins.find((p: any) => p.name === 'ai');
-          if (ai) {
-            aiPlugin = ai.status === 'active' ? 'active' : 'inactive';
-          }
-          const ollama = plugins.find((p: any) => p.name === 'ai-provider-for-ollama');
-          if (ollama) {
-            ollamaProvider = ollama.status === 'active' ? 'active' : 'inactive';
+        // Digital Twin: Check cached metadata first (much faster than WP-CLI)
+        const cachedMetadata = metadataCache?.getWithAge(id);
+        if (cachedMetadata) {
+          // Use cached plugin data
+          const aiPluginData = cachedMetadata.plugins.find(p => p.name === 'ai');
+          if (aiPluginData) {
+            aiPlugin = aiPluginData.status;
           }
 
-          // Check if credentials are synced by looking at stored keys
-          const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-          for (const [provider, key] of Object.entries(storedKeys)) {
-            if (key) providers.push(provider);
+          const ollamaPluginData = cachedMetadata.plugins.find(p => p.name === 'ai-provider-for-ollama');
+          if (ollamaPluginData) {
+            ollamaProvider = ollamaPluginData.status;
           }
-          credentialsSynced = providers.length > 0;
-        } catch {
-          // Site may not be accessible — defaults remain
+
+          const gatewayPluginData = cachedMetadata.plugins.find(p => p.name === 'ai-provider-for-local-gateway');
+          if (gatewayPluginData) {
+            gatewayProvider = gatewayPluginData.status;
+          }
+
+          metadataAge = metadataCache?.getAgeString(id) ?? null;
+        } else {
+          // No cache - fall back to AI setup state cache
+          const cached = setupState[id];
+          if (cached) {
+            // Use cached state - if setup completed successfully, plugin should be active
+            aiPlugin = cached.aiPlugin === 'already_active' || cached.aiPlugin === 'installed' || cached.aiPlugin === 'activated'
+              ? 'active'
+              : cached.aiPlugin === 'inactive'
+              ? 'inactive'
+              : 'not_installed';
+
+            ollamaProvider = cached.ollamaProvider === 'already_active' || cached.ollamaProvider === 'installed' || cached.ollamaProvider === 'activated'
+              ? 'active'
+              : cached.ollamaProvider === 'inactive'
+              ? 'inactive'
+              : 'not_installed';
+
+            if (cached.gatewayProvider) {
+              gatewayProvider = cached.gatewayProvider === 'already_active' || cached.gatewayProvider === 'installed' || cached.gatewayProvider === 'activated'
+                ? 'active'
+                : cached.gatewayProvider === 'inactive'
+                ? 'inactive'
+                : 'not_installed';
+            }
+          }
         }
+
+        // If cache is stale or doesn't exist, and site is running, verify with live WP-CLI
+        // This keeps the cache accurate if plugins were manually deactivated
+        if (siteStatus === 'running' && (!cachedMetadata || cachedMetadata.isStale)) {
+          try {
+            const plugins = await localServicesBridge.getPlugins(id);
+            const ai = plugins.find((p: any) => p.name === 'ai');
+            if (ai) {
+              aiPlugin = ai.status === 'active' ? 'active' : 'inactive';
+            } else if (!cachedMetadata && !setupState[id]) {
+              // Only mark as not_installed if we don't have any cached state
+              aiPlugin = 'not_installed';
+            }
+
+            const ollama = plugins.find((p: any) => p.name === 'ai-provider-for-ollama');
+            if (ollama) {
+              ollamaProvider = ollama.status === 'active' ? 'active' : 'inactive';
+            } else if (!cachedMetadata && !setupState[id]) {
+              ollamaProvider = 'not_installed';
+            }
+
+            const gateway = plugins.find((p: any) => p.name === 'ai-provider-for-local-gateway');
+            if (gateway) {
+              gatewayProvider = gateway.status === 'active' ? 'active' : 'inactive';
+            } else if (!cachedMetadata && !setupState[id]) {
+              gatewayProvider = 'not_installed';
+            }
+          } catch {
+            // WP-CLI failed — keep using cached state (if available)
+          }
+        }
+
+        // Check if credentials are synced by looking at stored keys
+        const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+        for (const [provider, key] of Object.entries(storedKeys)) {
+          if (key) providers.push(provider);
+        }
+        credentialsSynced = providers.length > 0;
 
         results[id] = {
           siteId: id,
@@ -925,8 +1647,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           isRunning: siteStatus === 'running',
           aiPlugin,
           ollamaProvider,
+          gatewayProvider,
           credentialsSynced,
           providers,
+          metadataAge, // NEW: Age of cached metadata ("Just now", "5m ago", etc.)
+          metadataIsStale: cachedMetadata?.isStale ?? false, // NEW: True if > 24 hours old
         };
       }
 
@@ -958,11 +1683,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SETUP_AI_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
     try {
+      // Validate input
+      const validated = validateInput(FleetOperationOptionsSchema, options);
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
 
       // Use provided siteIds or all running sites
-      const targetIds = options?.siteIds
+      const targetIds = validated?.siteIds
         ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
 
       if (targetIds.length === 0) {
@@ -987,11 +1715,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.INDEX_ALL_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
     try {
+      // Validate input
+      const validated = validateInput(FleetOperationOptionsSchema, options);
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
 
       // Use provided siteIds or all running sites
-      const targetIds = options?.siteIds
+      const targetIds = validated?.siteIds
         ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
 
       if (targetIds.length === 0) {
@@ -1138,6 +1869,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SITE_FINDER_APPLY, async (_event: any, filters: any) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteFinderFiltersSchema, filters);
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
       const db = graphService.getDb();
@@ -1145,12 +1879,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       // Pre-filter by content if contentQuery is provided (semantic search)
       let contentMatchingSiteIds: Set<string> | null = null;
-      if (filters.contentQuery && filters.contentQuery.trim()) {
+      if (validated?.contentQuery && validated.contentQuery.trim()) {
         try {
-          localLogger.info('[NexusAI] Running content search for:', filters.contentQuery);
+          localLogger.info('[NexusAI] Running content search for:', validated.contentQuery);
 
           // Convert query text to embedding vector
-          const queryVector = await embeddingService.embed(filters.contentQuery);
+          const queryVector = await embeddingService.embed(validated.contentQuery);
 
           // Search across all indexed sites (local + WPE)
           contentMatchingSiteIds = new Set<string>();
@@ -1206,8 +1940,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Text search (name or domain)
-        if (filters.searchText && filters.searchText.trim()) {
-          const searchLower = filters.searchText.toLowerCase();
+        if (validated?.searchText && validated.searchText.trim()) {
+          const searchLower = validated.searchText.toLowerCase();
           const nameMatch = (site as any).name?.toLowerCase().includes(searchLower);
           const domainMatch = (site as any).domain?.toLowerCase().includes(searchLower);
           if (!nameMatch && !domainMatch) {
@@ -1216,19 +1950,19 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // PHP version filter (available even when stopped) - OR logic within array
-        if (matches && filters.phpVersions && filters.phpVersions.length > 0) {
+        if (matches && validated?.phpVersions && validated.phpVersions.length > 0) {
           const phpVersion = (site as any).phpVersion;
-          if (!filters.phpVersions.includes(phpVersion)) {
+          if (!validated.phpVersions.includes(phpVersion)) {
             matches = false;
           }
         }
 
         // Plugin filter (use graph - works on all sites) - OR logic within array
-        if (matches && filters.plugins && filters.plugins.length > 0) {
+        if (matches && validated?.plugins && validated.plugins.length > 0) {
           if (db) {
-            const placeholders = filters.plugins.map(() => '?').join(',');
+            const placeholders = validated.plugins.map(() => '?').join(',');
             const pluginRow = db.prepare(`SELECT 1 FROM plugins WHERE site_id = ? AND slug IN (${placeholders}) LIMIT 1`)
-              .get(siteId, ...filters.plugins);
+              .get(siteId, ...validated.plugins);
             if (!pluginRow) matches = false;
           } else {
             matches = false;
@@ -1236,11 +1970,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // WP version filter (use graph - works on all sites) - OR logic within array
-        if (matches && filters.wpVersions && filters.wpVersions.length > 0) {
+        if (matches && validated?.wpVersions && validated.wpVersions.length > 0) {
           if (db) {
             const siteRow = db.prepare('SELECT wp_version FROM sites WHERE id = ? LIMIT 1')
               .get(siteId) as any;
-            if (!siteRow || !filters.wpVersions.includes(siteRow.wp_version)) {
+            if (!siteRow || !validated.wpVersions.includes(siteRow.wp_version)) {
               matches = false;
             }
           } else {
@@ -1249,13 +1983,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Theme filter (requires WP-CLI - running sites only) - OR logic within array
-        if (matches && filters.themes && filters.themes.length > 0) {
+        if (matches && validated?.themes && validated.themes.length > 0) {
           if (!isRunning) {
             matches = false;
           } else {
             try {
               const themes = await localServicesBridge.getThemes(siteId);
-              const hasAnyTheme = themes.some((t: any) => filters.themes.includes(t.name));
+              const hasAnyTheme = themes.some((t: any) => validated.themes!.includes(t.name));
               if (!hasAnyTheme) matches = false;
             } catch {
               matches = false;
@@ -1282,8 +2016,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Text search (name or domain)
-        if (filters.searchText && filters.searchText.trim()) {
-          const searchLower = filters.searchText.toLowerCase();
+        if (validated?.searchText && validated.searchText.trim()) {
+          const searchLower = validated.searchText.toLowerCase();
           const nameMatch = wpeSite.name?.toLowerCase().includes(searchLower);
           const domainMatch = wpeSite.domain?.toLowerCase().includes(searchLower);
           if (!nameMatch && !domainMatch) {
@@ -1292,11 +2026,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // Plugin filter (use graph)
-        if (matches && filters.plugins && filters.plugins.length > 0) {
+        if (matches && validated?.plugins && validated.plugins.length > 0) {
           if (db) {
-            const placeholders = filters.plugins.map(() => '?').join(',');
+            const placeholders = validated.plugins.map(() => '?').join(',');
             const pluginRow = db.prepare(`SELECT 1 FROM plugins WHERE site_id = ? AND slug IN (${placeholders}) LIMIT 1`)
-              .get(wpeSite.id, ...filters.plugins);
+              .get(wpeSite.id, ...validated.plugins);
             if (!pluginRow) matches = false;
           } else {
             matches = false;
@@ -1304,14 +2038,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         // WP version filter (use graph)
-        if (matches && filters.wpVersions && filters.wpVersions.length > 0) {
-          if (!filters.wpVersions.includes(wpeSite.wp_version)) {
+        if (matches && validated?.wpVersions && validated.wpVersions.length > 0) {
+          if (!wpeSite.wp_version || !validated.wpVersions.includes(wpeSite.wp_version)) {
             matches = false;
           }
         }
 
         // Skip theme filter for WPE sites (requires WP-CLI on running sites)
-        if (matches && filters.themes && filters.themes.length > 0) {
+        if (matches && validated?.themes && validated.themes.length > 0) {
           matches = false; // WPE sites don't support theme filtering yet
         }
 
@@ -1322,7 +2056,41 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       localLogger.info(`[NexusAI] Site Finder results: ${matchingSiteIds.length} total (local + WPE)`);
 
-      return { success: true, siteIds: matchingSiteIds };
+      // Build detailed results for UI display
+      const localResults: Array<{ id: string; name: string; type: 'local' }> = [];
+      const wpeResults: Array<{ id: string; name: string; domain: string; installId: string; type: 'wpe' }> = [];
+
+      for (const siteId of matchingSiteIds) {
+        // Check if it's a local site
+        if (allSites[siteId]) {
+          localResults.push({
+            id: siteId,
+            name: allSites[siteId].name,
+            type: 'local',
+          });
+        } else {
+          // It's a WPE site - get details from graph
+          const wpeSite = wpeSites.find(s => s.id === siteId);
+          if (wpeSite) {
+            wpeResults.push({
+              id: wpeSite.id,
+              name: wpeSite.name,
+              domain: wpeSite.domain || wpeSite.remote_domain || 'Unknown',
+              installId: wpeSite.remote_install_id || wpeSite.id,
+              type: 'wpe',
+            });
+          }
+        }
+      }
+
+      localLogger.info(`[NexusAI] Site Finder breakdown: ${localResults.length} local, ${wpeResults.length} WPE`);
+
+      return {
+        success: true,
+        siteIds: matchingSiteIds,
+        local: localResults,
+        wpe: wpeResults,
+      };
     } catch (err) {
       localLogger.error('[NexusAI] site-finder:apply failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
@@ -1331,6 +2099,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.SITE_FINDER_AI_PARSE, async (_event: any, payload: { conversation: Array<{ role: string; content: string }> }) => {
     try {
+      // Validate input
+      const validated = validateInput(SiteFinderAIParseSchema, payload);
+
       const { getProvider } = require('./chat/providers/index');
 
       // Get settings to determine which provider to use
@@ -1402,7 +2173,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       // Build messages array
       const messages = [
         { role: 'system' as const, content: systemPrompt },
-        ...payload.conversation.map(msg => ({
+        ...validated.conversation.map(msg => ({
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
         })),
@@ -1502,10 +2273,12 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
   safeHandle(IPC_CHANNELS.SIDEBAR_FILTER, async (event: any, payload: { siteIds: string[] }) => {
     try {
-      sidebarFilteredSiteIds = payload.siteIds || [];
+      // Validate input
+      const validated = validateInput(SidebarFilterSchema, payload);
+      sidebarFilteredSiteIds = validated.siteIds || [];
 
       // Broadcast filter to renderer via CSS injection
-      const siteIds = payload.siteIds || [];
+      const siteIds = validated.siteIds || [];
       if (siteIds.length > 0) {
         event.sender.send('nexus:apply-sidebar-filter', siteIds);
       } else {
@@ -1521,13 +2294,38 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  safeHandle(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, async (_event: any, payload: { siteId: string }) => {
+    try {
+      const { siteId } = payload;
+
+      if (!serviceContainer) {
+        localLogger.error('[NexusAI] Navigate to site failed: Service container not available');
+        return { success: false, error: 'Service container not available' };
+      }
+
+      // Use Local's routing to navigate to site info page
+      const sendIPCEvent = serviceContainer.sendIPCEvent;
+      if (!sendIPCEvent || typeof sendIPCEvent !== 'function') {
+        localLogger.error('[NexusAI] Navigate to site failed: sendIPCEvent not available in service container');
+        localLogger.error('[NexusAI] Available keys:', Object.keys(serviceContainer).slice(0, 20).join(', '));
+        return { success: false, error: 'Navigation not available' };
+      }
+
+      sendIPCEvent('goToRoute', `/main/site-info/${siteId}`);
+      localLogger.info(`[NexusAI] Navigating to site ${siteId}`);
+      return { success: true };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      localLogger.error('[NexusAI] Navigate to site failed:', errorMsg);
+      return { success: false, error: errorMsg };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.SIDEBAR_BULK_ACTION, async (_event: any, payload: { action: string; siteIds: string[] }) => {
     try {
-      const { action, siteIds } = payload;
-
-      if (!siteIds || siteIds.length === 0) {
-        return { success: false, error: 'No sites selected' };
-      }
+      // Validate input
+      const validated = validateInput(SidebarBulkActionSchema, payload);
+      const { action, siteIds } = validated;
 
       const bulkMgr = deps.nexusServices?.bulkOperationManager;
       if (!bulkMgr) {
@@ -1583,21 +2381,44 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * Sync all WPE sites from wp-nexus MCP
    */
   safeHandle(IPC_CHANNELS.WPE_SYNC_ALL, async (_event: any, options?: { limit?: number }) => {
+    const startTime = Date.now();
+
     if (!deps.wpeSyncService) {
       localLogger.warn('[NexusAI] WPE sync service not initialized');
       return { success: false, error: 'WPE sync service not available' };
     }
 
     try {
-      const limit = options?.limit;
+      // Validate input
+      const validated = validateInput(WpeSyncAllSchema, options);
+
+      const limit = validated?.limit;
       localLogger.info(`[NexusAI] Starting WPE site sync${limit ? ` (limit: ${limit})` : ''}...`);
       const result = await deps.wpeSyncService.syncAllWPESites(limit);
       localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.failed} failed`);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'wpe_sync_all',
+        'all_installs',
+        'wpe_install',
+        { synced: result.synced, failed: result.failed, limit },
+        Date.now() - startTime,
+      );
+
       return result;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const errorStack = err instanceof Error ? err.stack : undefined;
       localLogger.error('[NexusAI] WPE sync failed:', errorMsg, errorStack);
+      auditLogger.logFailure(
+        'wpe_sync_all',
+        'all_installs',
+        'wpe_install',
+        errorMsg,
+        options || {},
+        Date.now() - startTime,
+      );
       return { success: false, error: errorMsg };
     }
   });
@@ -1661,26 +2482,25 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       return { success: false, error: 'WPE sync service not available' };
     }
 
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
       const sites = await deps.wpeSyncService.getSyncedWPESites();
       // installId could be:
       // - Full ID: "wpe-myinstprod"
       // - Stripped ID: "myinstprod"
       // - Install ID: "myinstprod"
       const site = sites.find((s: any) =>
-        s.id === installId ||
-        s.id === `wpe-${installId}` ||
-        s.remote_install_id === installId ||
-        s.install_id === installId
+        s.id === validated ||
+        s.id === `wpe-${validated}` ||
+        s.remote_install_id === validated ||
+        s.install_id === validated
       );
 
       if (!site) {
-        localLogger.warn(`[NexusAI] WPE site not found: ${installId}. Available sites:`, sites.map((s: any) => s.id));
-        return { success: false, error: `Site not found: ${installId}` };
+        localLogger.warn(`[NexusAI] WPE site not found: ${validated}. Available sites:`, sites.map((s: any) => s.id));
+        return { success: false, error: `Site not found: ${validated}` };
       }
 
       return { success: true, site };
@@ -1693,21 +2513,41 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Re-sync a single WPE site
    */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: any, params: { installId: string }) => {
+    const startTime = Date.now();
+
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
 
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeSyncSingleSchema, params);
+      const installId = validated.installId;
+
       await deps.wpeSyncService.syncSingleSite(installId);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'wpe_sync_single',
+        installId,
+        'wpe_install',
+        {},
+        Date.now() - startTime,
+      );
+
       localLogger.info(`[NexusAI] Re-synced WPE site: ${installId}`);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] Failed to re-sync WPE site:', (err as Error).message);
+      auditLogger.logFailure(
+        'wpe_sync_single',
+        params?.installId || 'unknown',
+        'wpe_install',
+        (err as Error).message,
+        params,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -1718,11 +2558,10 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * Uses wp-nexus MCP tools to gather detailed site information
    */
   safeHandle(IPC_CHANNELS.WPE_DIAGNOSE_SITE, async (_event: any, installId: string) => {
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
       // TODO: Call wpe_diagnose_site MCP tool when available
       // For now, return placeholder diagnostics
       const diagnostics = {
@@ -1744,21 +2583,41 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Remove a WPE site from the graph
    */
-  safeHandle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, params: { installId: string }) => {
+    const startTime = Date.now();
+
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
 
-    if (!installId) {
-      return { success: false, error: 'installId is required' };
-    }
-
     try {
+      // Validate input
+      const validated = validateInput(WpeRemoveSiteSchema, params);
+      const installId = validated.installId;
+
       await deps.wpeSyncService.removeWPESite(installId);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'wpe_remove_site',
+        installId,
+        'wpe_install',
+        {},
+        Date.now() - startTime,
+      );
+
       localLogger.info(`[NexusAI] Removed WPE site: ${installId}`);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] Failed to remove WPE site:', (err as Error).message);
+      auditLogger.logFailure(
+        'wpe_remove_site',
+        params?.installId || 'unknown',
+        'wpe_install',
+        (err as Error).message,
+        params,
+        Date.now() - startTime,
+      );
       return { success: false, error: (err as Error).message };
     }
   });
@@ -1773,40 +2632,59 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * - Links to WPE environment
    * - Triggers pull operation (database + files)
    */
-  safeHandle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, { wpeSiteId, installName, installId }: { wpeSiteId: string; installName: string; installId?: string }) => {
+  safeHandle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, params: { wpeSiteId: string; installName: string; installId: string }) => {
+    const startTime = Date.now();
     try {
-      if (!installId) {
-        return { success: false, errorCode: 'INVALID_ARGS', error: 'WPE install ID is required' };
-      }
+      // Validate input
+      const validated = validateInput(WpePullToLocalSchema, params);
 
       if (!serviceContainer) {
         return { success: false, errorCode: 'SERVICE_UNAVAILABLE', error: 'Service container not initialized' };
       }
 
-      localLogger.info(`[WpeAutoPull] Starting pull for ${installName} (${installId})`);
+      localLogger.info(`[WpeAutoPull] Starting pull for ${validated.installName} (${validated.installId})`);
 
       // Initialize WpeAutoPullService with Local's service container
       const autoPullService = new WpeAutoPullService(serviceContainer);
 
       // Execute the pull with full automation
       const result = await autoPullService.pullToLocal({
-        installId,
-        installName,
+        installId: validated.installId,
+        installName: validated.installName,
         includeSql: true,
         environment: 'production',
       });
 
       if (result.success) {
+        // Audit log success
+        auditLogger.logSuccess(
+          'wpe_pull_to_local',
+          validated.installId,
+          'wpe_install',
+          { siteId: result.siteId, siteName: result.siteName },
+          Date.now() - startTime,
+        );
+
         localLogger.info(`[WpeAutoPull] SUCCESS: ${result.message}`);
         return {
           success: true,
           siteId: result.siteId,
           siteName: result.siteName,
-          installName,
-          installId,
+          installName: validated.installName,
+          installId: validated.installId,
           message: result.message,
         };
       } else {
+        // Audit log failure
+        auditLogger.logFailure(
+          'wpe_pull_to_local',
+          validated.installId,
+          'wpe_install',
+          result.message || 'Pull to local failed',
+          params,
+          Date.now() - startTime,
+        );
+
         localLogger.error(`[WpeAutoPull] FAILED: ${result.message} (${result.errorCode})`);
         return {
           success: false,
@@ -1818,12 +2696,24 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const errorStack = err instanceof Error ? err.stack : undefined;
+      const errorCode = (err as any)?.errorCode || 'UNKNOWN';
+
+      // Audit log failure
+      auditLogger.logFailure(
+        'wpe_pull_to_local',
+        params?.installId || 'unknown',
+        'wpe_install',
+        errorMsg,
+        params,
+        Date.now() - startTime,
+      );
+
       localLogger.error('[WpeAutoPull] Unexpected error:', errorMsg, errorStack);
 
       return {
         success: false,
-        errorCode: 'UNKNOWN',
-        error: `Unexpected error: ${errorMsg}`,
+        errorCode,
+        error: errorMsg,
       };
     }
   });
@@ -1837,7 +2727,10 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
 
     try {
-      const site = await graphService.getSite(installId);
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
+      const site = await graphService.getSite(validated);
 
       if (!site) {
         return { success: false, error: 'Site not found' };
@@ -1859,8 +2752,11 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
 
     try {
-      await deps.wpeSyncService.syncSingleSite(installId);
-      localLogger.info(`[NexusAI] Re-synced WPE site: ${installId}`);
+      // Validate input
+      const validated = validateInput(WpeInstallIdSchema, installId);
+
+      await deps.wpeSyncService.syncSingleSite(validated);
+      localLogger.info(`[NexusAI] Re-synced WPE site: ${validated}`);
       return { success: true };
     } catch (err) {
       localLogger.error('[NexusAI] Failed to re-sync WPE site:', (err as Error).message);
@@ -1911,6 +2807,500 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   console.log('[NexusAI] ✓ Registered capi:get-accounts IPC handler');
+
+  // ---------------------------------------------------------------------------
+  // Digital Twin: Site Metadata Cache
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.GET_SITE_METADATA, async (_event: any, siteId: string) => {
+    if (!metadataCache) {
+      return { success: false, error: 'Metadata cache not available' };
+    }
+
+    try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      const metadata = metadataCache.getWithAge(validated);
+      return {
+        success: true,
+        metadata,
+        ageString: metadata ? metadataCache.getAgeString(validated) : null,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-site-metadata failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.REFRESH_SITE_METADATA, async (_event: any, siteId: string) => {
+    const startTime = Date.now();
+
+    if (!metadataCache) {
+      return { success: false, error: 'Metadata cache not available' };
+    }
+
+    try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+      siteId = validated; // Use validated value
+
+      // Fetch metadata with auto-start/stop
+      const result = await withSiteRunning(siteId, localServicesBridge, localLogger, async () => {
+        // Fetch fresh metadata via WP-CLI
+        const [wpVersion, plugins, themes] = await Promise.all([
+          localServicesBridge.getWpVersion(siteId),
+          localServicesBridge.getPlugins(siteId),
+          localServicesBridge.getThemes(siteId),
+        ]);
+
+        // Store in cache
+        metadataCache.set(siteId, {
+          wpVersion: wpVersion ?? 'unknown',
+          plugins: plugins.map(p => ({
+            name: p.name,
+            title: p.title,
+            version: p.version,
+            status: p.status as 'active' | 'inactive',
+            file: p.file,
+          })),
+          themes: themes.map(t => ({
+            name: t.name,
+            title: t.title,
+            version: t.version,
+            status: t.status as 'active' | 'inactive',
+          })),
+          activeTheme: themes.find(t => t.status === 'active')?.name,
+          updateSource: 'manual',
+        });
+
+        // Digital Twin: Also update IndexRegistry structure to refresh searchable data
+        const existingEntry = indexRegistry.get(siteId);
+        if (existingEntry?.structure) {
+          indexRegistry.update(siteId, {
+            structure: {
+              ...existingEntry.structure,
+              wpVersion: wpVersion ?? 'unknown',
+              plugins: plugins.map(p => ({
+                name: p.name,
+                slug: p.file?.split('/')[0] ?? p.name,
+                version: p.version,
+                isActive: p.status === 'active',
+                description: '',
+              })),
+              themes: themes.map(t => ({
+                name: t.name,
+                slug: t.name,
+                version: t.version,
+                isActive: t.status === 'active',
+                isChildTheme: false,
+              })),
+            },
+          });
+
+          localLogger.info(`[NexusAI] Updated IndexRegistry structure after metadata refresh for site ${siteId}`);
+        }
+
+        const metadata = metadataCache.getWithAge(siteId);
+
+        return {
+          success: true,
+          metadata,
+          ageString: metadataCache.getAgeString(siteId),
+          pluginCount: plugins.length,
+          themeCount: themes.length,
+        };
+      });
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'refresh_site_metadata',
+        siteId,
+        'local_site',
+        { pluginCount: result.pluginCount, themeCount: result.themeCount },
+        Date.now() - startTime,
+      );
+
+      localLogger.info(`[NexusAI] Refreshed metadata for ${siteId}`);
+
+      return {
+        success: result.success,
+        metadata: result.metadata,
+        ageString: result.ageString,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] refresh-site-metadata failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'refresh_site_metadata',
+        siteId || 'unknown',
+        'local_site',
+        (err as Error).message,
+        { siteId },
+        Date.now() - startTime,
+      );
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // AI Gateway (Phase 2.3)
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_USAGE, async (_event: any, options?: {
+    siteId?: string;
+    since?: number;
+    until?: number;
+    limit?: number;
+  }) => {
+    try {
+      // Validate input
+      const validated = validateInput(AIGatewayUsageOptionsSchema, options);
+
+      const USAGE_KEY = 'nexus_ai_gateway_usage';
+      const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
+
+      let filtered = allRecords;
+
+      // Filter by site ID if provided
+      if (validated?.siteId) {
+        filtered = filtered.filter(r => r.siteId === validated.siteId);
+      }
+
+      // Filter by date range if provided
+      if (validated?.since !== undefined) {
+        filtered = filtered.filter(r => r.timestamp >= validated.since!);
+      }
+      if (validated?.until !== undefined) {
+        filtered = filtered.filter(r => r.timestamp <= validated.until!);
+      }
+
+      // Apply limit (most recent first)
+      if (validated?.limit) {
+        filtered = filtered.slice(-validated.limit);
+      }
+
+      return { success: true, records: filtered };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-get-usage failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_COST, async (_event: any, options?: {
+    siteId?: string;
+    startDate?: number;
+    endDate?: number;
+  }) => {
+    try {
+      // Validate input
+      const validated = validateInput(AIGatewayCostOptionsSchema, options);
+
+      const USAGE_KEY = 'nexus_ai_gateway_usage';
+      const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
+
+      let filtered = allRecords;
+
+      // Filter by site ID if provided
+      if (validated?.siteId) {
+        filtered = filtered.filter(r => r.siteId === validated.siteId);
+      }
+
+      // Filter by date range if provided
+      if (validated?.startDate !== undefined) {
+        filtered = filtered.filter(r => r.timestamp >= validated.startDate!);
+      }
+      if (validated?.endDate !== undefined) {
+        filtered = filtered.filter(r => r.timestamp <= validated.endDate!);
+      }
+
+      // Calculate totals
+      const totalCost = filtered.reduce((sum, r) => sum + (r.costUsd || 0), 0);
+      const totalRequests = filtered.length;
+      const totalTokens = filtered.reduce((sum, r) => sum + (r.totalTokens || 0), 0);
+      const totalPromptTokens = filtered.reduce((sum, r) => sum + (r.promptTokens || 0), 0);
+      const totalCompletionTokens = filtered.reduce((sum, r) => sum + (r.completionTokens || 0), 0);
+
+      // Group by model
+      const byModel: Record<string, { requests: number; cost: number; tokens: number }> = {};
+      for (const record of filtered) {
+        if (!byModel[record.model]) {
+          byModel[record.model] = { requests: 0, cost: 0, tokens: 0 };
+        }
+        byModel[record.model].requests++;
+        byModel[record.model].cost += record.costUsd || 0;
+        byModel[record.model].tokens += record.totalTokens || 0;
+      }
+
+      return {
+        success: true,
+        totalCost,
+        totalRequests,
+        totalTokens,
+        totalPromptTokens,
+        totalCompletionTokens,
+        byModel,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-get-cost failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_STATS, async (_event: any) => {
+    try {
+      const USAGE_KEY = 'nexus_ai_gateway_usage';
+      const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
+
+      const now = Date.now();
+      const oneHourAgo = now - (60 * 60 * 1000);
+      const oneDayAgo = now - (24 * 60 * 60 * 1000);
+      const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
+
+      const lastHour = allRecords.filter(r => r.timestamp >= oneHourAgo);
+      const lastDay = allRecords.filter(r => r.timestamp >= oneDayAgo);
+      const lastWeek = allRecords.filter(r => r.timestamp >= oneWeekAgo);
+
+      // Get unique sites
+      const uniqueSites = new Set(allRecords.map(r => r.siteId));
+
+      // Get most active site (last 24 hours)
+      const siteActivity: Record<string, number> = {};
+      for (const record of lastDay) {
+        siteActivity[record.siteId] = (siteActivity[record.siteId] || 0) + 1;
+      }
+      const mostActiveSite = Object.entries(siteActivity)
+        .sort(([, a], [, b]) => b - a)[0];
+
+      return {
+        success: true,
+        stats: {
+          totalRequests: allRecords.length,
+          totalCost: allRecords.reduce((sum, r) => sum + (r.costUsd || 0), 0),
+          totalTokens: allRecords.reduce((sum, r) => sum + (r.totalTokens || 0), 0),
+          lastHour: {
+            requests: lastHour.length,
+            cost: lastHour.reduce((sum, r) => sum + (r.costUsd || 0), 0),
+          },
+          lastDay: {
+            requests: lastDay.length,
+            cost: lastDay.reduce((sum, r) => sum + (r.costUsd || 0), 0),
+          },
+          lastWeek: {
+            requests: lastWeek.length,
+            cost: lastWeek.reduce((sum, r) => sum + (r.costUsd || 0), 0),
+          },
+          uniqueSites: uniqueSites.size,
+          mostActiveSite: mostActiveSite ? {
+            siteId: mostActiveSite[0],
+            requests: mostActiveSite[1],
+          } : null,
+        },
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-get-stats failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_CLEAR_USAGE, async (_event: any) => {
+    const startTime = Date.now();
+    try {
+      const USAGE_KEY = 'nexus_ai_gateway_usage';
+      const existingRecords = registryStorage.get(USAGE_KEY) || [];
+      const recordCount = Array.isArray(existingRecords) ? existingRecords.length : 0;
+
+      registryStorage.set(USAGE_KEY, []);
+
+      // Audit log success
+      auditLogger.logSuccess(
+        'ai_gateway_clear_usage',
+        'all',
+        'registry',
+        { recordsCleared: recordCount },
+        Date.now() - startTime,
+      );
+
+      localLogger.info(`[NexusAI] Cleared ${recordCount} AI Gateway usage records`);
+      return { success: true, recordsCleared: recordCount };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-clear-usage failed:', (err as Error).message);
+      auditLogger.logFailure(
+        'ai_gateway_clear_usage',
+        'all',
+        'registry',
+        (err as Error).message,
+        {},
+        Date.now() - startTime,
+      );
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // Rate limiting (Phase 2.4)
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_RATE_LIMIT, async (_event: any, siteId: string) => {
+    try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      const { getRateLimit } = require('./ai-gateway/rate-limiter');
+      const config = getRateLimit(registryStorage, validated);
+      return { success: true, config };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-get-rate-limit failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_SET_RATE_LIMIT, async (_event: any, params: { siteId: string; config?: any }) => {
+    try {
+      // Validate input
+      const validated = validateInput(AIGatewayRateLimitSchema, params);
+
+      const { setRateLimit } = require('./ai-gateway/rate-limiter');
+      setRateLimit(registryStorage, validated.siteId, validated.config);
+      localLogger.info(`[NexusAI] Updated rate limit for site ${validated.siteId}`);
+      return { success: true };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-set-rate-limit failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_CHECK_RATE_LIMIT, async (_event: any, params: { siteId: string }) => {
+    try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, params.siteId);
+
+      const { checkRateLimit } = require('./ai-gateway/rate-limiter');
+      const status = checkRateLimit(registryStorage, validated);
+      return { success: true, status };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-gateway-check-rate-limit failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // AI Context File Generation
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.AI_CONTEXT_GENERATE, async (_event: any, siteId: string) => {
+    try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      const site = siteData.getSite(validated);
+      if (!site) {
+        return { success: false, error: `Site ${validated} not found` };
+      }
+
+      // Get site metadata
+      const metadata = metadataCache?.getWithAge(validated);
+
+      // Get AI Gateway info
+      const proxyInfo = registryStorage.get('ai_proxy_info') as any;
+
+      // Find active theme from metadata
+      let activeTheme: AIContextData['theme'];
+      if (metadata?.activeTheme && metadata?.themes) {
+        const themeData = metadata.themes.find(t => t.name === metadata.activeTheme);
+        if (themeData) {
+          activeTheme = {
+            name: themeData.name,
+            title: themeData.title,
+            version: themeData.version,
+          };
+        }
+      }
+
+      // Build AI context data
+      const contextData: AIContextData = {
+        siteName: site.name,
+        siteUrl: site.url || `http://${site.domain}`,
+        sitePath: site.path,
+        wpVersion: metadata?.wpVersion,
+        phpVersion: site.phpVersion,
+        mysqlPort: site.mysqlPort,
+        plugins: metadata?.plugins,
+        theme: activeTheme,
+        generatedAt: Date.now(),
+      };
+
+      // Add AI Gateway config if available
+      if (proxyInfo?.url && proxyInfo?.authToken) {
+        contextData.aiGateway = {
+          url: proxyInfo.url,
+          token: proxyInfo.authToken,
+          models: proxyInfo.models ?? [],
+        };
+      }
+
+      // Generate context markdown
+      const generator = new AIContextGenerator();
+      const markdown = generator.generateContext(contextData);
+
+      // Write to site root
+      const fs = require('fs').promises;
+      const path = require('path');
+      const filePath = path.join(site.path, 'app', 'public', 'AI-CONTEXT.md');
+      await fs.writeFile(filePath, markdown, 'utf-8');
+
+      localLogger.info(`[NexusAI] Generated AI context file: ${filePath}`);
+      return { success: true, filePath };
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-context-generate failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.AI_CONTEXT_GET_STATUS, async (_event: any, siteId: string) => {
+    try {
+      // Validate input
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      const site = siteData.getSite(validated);
+      if (!site) {
+        return { success: false, error: `Site ${validated} not found` };
+      }
+
+      const fs = require('fs').promises;
+      const path = require('path');
+      const filePath = path.join(site.path, 'app', 'public', 'AI-CONTEXT.md');
+
+      try {
+        const stats = await fs.stat(filePath);
+        const ageMs = Date.now() - stats.mtimeMs;
+        const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+        const ageHours = Math.floor((ageMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+        let ageString;
+        if (ageDays > 0) {
+          ageString = `${ageDays}d ${ageHours}h ago`;
+        } else if (ageHours > 0) {
+          ageString = `${ageHours}h ago`;
+        } else {
+          const ageMinutes = Math.floor((ageMs % (1000 * 60 * 60)) / (1000 * 60));
+          ageString = `${ageMinutes}m ago`;
+        }
+
+        return {
+          success: true,
+          exists: true,
+          filePath,
+          lastModified: stats.mtimeMs,
+          ageString,
+        };
+      } catch (statErr: any) {
+        if (statErr.code === 'ENOENT') {
+          return { success: true, exists: false, filePath };
+        }
+        throw statErr;
+      }
+    } catch (err) {
+      localLogger.error('[NexusAI] ai-context-get-status failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
 
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
 }

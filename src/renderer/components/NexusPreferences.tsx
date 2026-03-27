@@ -26,20 +26,7 @@ interface ProviderInfo {
   requiresApiKey: boolean;
 }
 
-interface CredentialSyncResult {
-  siteId: string;
-  siteName: string;
-  success: boolean;
-  providers: string[];
-  error?: string;
-}
 
-interface AiProxyInfo {
-  url: string;
-  port: number;
-  running: boolean;
-  models: string[];
-}
 
 interface NexusPreferencesState {
   settings: NexusSettings;
@@ -53,31 +40,19 @@ interface NexusPreferencesState {
   keyStatus: Record<string, 'valid' | 'invalid' | 'unchecked' | 'checking'>;
   keyInput: string;
   keySaved: boolean;
-  // Credential sync state (Sprint 4)
-  syncStatus: Record<string, { lastSync: number; success: boolean }>;
-  syncing: boolean;
-  syncResults: CredentialSyncResult[] | null;
-  // AI Proxy state (Sprint 4)
-  aiProxy: AiProxyInfo | null;
-  // WPE Sync state (Phase 3)
-  wpeSyncProgress: { total: number; current: number; currentSite: string; status: string } | null;
-  wpeSyncedCount: number;
-  wpeSyncing: boolean;
-  wpeSyncError: string | null;
 }
 
 const labelStyle: React.CSSProperties = {
   fontSize: '14px',
   fontWeight: 600,
-  color: 'var(--nxai-card-text, #111827)',
   marginBottom: '6px',
 };
 
 const descStyle: React.CSSProperties = {
   fontSize: '13px',
-  color: 'var(--nxai-card-sub, #6b7280)',
   marginBottom: '16px',
   lineHeight: 1.5,
+  opacity: 0.7,
 };
 
 const checkboxRowStyle: React.CSSProperties = {
@@ -95,9 +70,7 @@ const selectStyle: React.CSSProperties = {
   padding: '8px 12px',
   fontSize: '14px',
   borderRadius: '6px',
-  border: '1px solid var(--nxai-input-border, #d1d5db)',
-  backgroundColor: 'var(--nxai-input-bg, #fff)',
-  color: 'var(--nxai-card-text, #111827)',
+  border: '1px solid rgba(128, 128, 128, 0.3)',
   outline: 'none',
   minWidth: '200px',
   cursor: 'pointer',
@@ -106,21 +79,20 @@ const selectStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   padding: '8px 12px',
   fontSize: '14px',
+  lineHeight: '1.5',
   borderRadius: '6px',
-  border: '1px solid var(--nxai-input-border, #d1d5db)',
-  backgroundColor: 'var(--nxai-input-bg, #fff)',
-  color: 'var(--nxai-card-text, #111827)',
+  border: '1px solid rgba(128, 128, 128, 0.3)',
   outline: 'none',
-  minWidth: '200px',
+  width: '350px',
+  maxWidth: '100%',
   fontFamily: 'monospace',
+  boxSizing: 'border-box',
 };
 
 const btnSmallStyle: React.CSSProperties = {
   padding: '6px 12px',
   borderRadius: '6px',
-  border: '1px solid var(--nxai-card-border, #e5e7eb)',
-  backgroundColor: 'var(--nxai-card-bg, #fff)',
-  color: 'var(--nxai-card-text, #111827)',
+  border: '1px solid',
   fontSize: '12px',
   fontWeight: 500,
   cursor: 'pointer',
@@ -144,7 +116,6 @@ const rowStyle: React.CSSProperties = {
 
 export class NexusPreferences extends React.Component<NexusPreferencesProps, NexusPreferencesState> {
   private mounted = false;
-  private wpeSyncPollInterval: NodeJS.Timeout | null = null;
 
   state: NexusPreferencesState = {
     settings: { autoIndex: true, excludedSiteIds: [] },
@@ -157,14 +128,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     keyStatus: {},
     keyInput: '',
     keySaved: false,
-    syncStatus: {},
-    syncing: false,
-    syncResults: null,
-    aiProxy: null,
-    wpeSyncProgress: null,
-    wpeSyncedCount: 0,
-    wpeSyncing: false,
-    wpeSyncError: null,
   };
 
   componentDidMount(): void {
@@ -174,19 +137,16 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   componentWillUnmount(): void {
     this.mounted = false;
-    this.stopWpeSyncProgressPolling();
   }
 
   fetchData = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [settings, sites, providers, keyStatus, syncStatus, proxyResult] = await Promise.all([
+      const [settings, sites, providers, keyStatus] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
         ipc.invoke(IPC_CHANNELS.GET_PROVIDERS),
         ipc.invoke(IPC_CHANNELS.GET_API_KEY_STATUS),
-        ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
-        ipc.invoke(IPC_CHANNELS.GET_AI_PROXY_INFO),
       ]);
       if (!this.mounted) return;
       this.setState({
@@ -194,8 +154,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         sites: sites ?? [],
         providers: providers ?? [],
         keyStatus: keyStatus ?? {},
-        syncStatus: syncStatus ?? {},
-        aiProxy: proxyResult?.proxy ?? null,
         loading: false,
       }, () => {
         // Load models and stored key for the current provider
@@ -345,20 +303,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     }
   };
 
-  handleSyncAll = async (): Promise<void> => {
-    this.setState({ syncing: true, syncResults: null });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_ALL_CREDENTIALS);
-      if (!this.mounted) return;
-      this.setState({ syncing: false, syncResults: result?.results ?? [] });
-      // Refresh sync status
-      const syncStatus = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS);
-      if (this.mounted) this.setState({ syncStatus: syncStatus ?? {} });
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ syncing: false, syncResults: [] });
-    }
-  };
 
   saveSettings = async (): Promise<void> => {
     try {
@@ -384,7 +328,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     const statusColor = currentStatus === 'valid' ? UI_COLORS.STATUS_RUNNING
       : currentStatus === 'invalid' ? UI_COLORS.STATUS_ERROR
       : currentStatus === 'checking' ? UI_COLORS.WPE_BRAND
-      : 'var(--nxai-card-sub, #999)';
+      : '#999';
 
     const statusLabel = currentStatus === 'valid' ? 'Valid'
       : currentStatus === 'invalid' ? 'Invalid'
@@ -392,14 +336,14 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       : 'Not checked';
 
     return React.createElement('div', { style: sectionStyle },
-      React.createElement('div', { style: labelStyle }, 'AI Chat'),
+      React.createElement('div', { style: labelStyle }, 'AI Credentials'),
       React.createElement('div', { style: descStyle },
         'Configure the AI provider for the Chat tab. Ollama runs locally with no API key required.',
       ),
 
       // Provider dropdown
       React.createElement('div', { style: rowStyle },
-        React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', color: 'var(--nxai-card-text)' } }, 'Provider'),
+        React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', /* color inherited */ } }, 'Provider'),
         React.createElement('select', {
           value: settings.chatProvider || '',
           onChange: this.handleProviderChange,
@@ -416,9 +360,9 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
       // Model selector (shown when provider selected)
       settings.chatProvider ? React.createElement('div', { style: rowStyle },
-        React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', color: 'var(--nxai-card-text)' } }, 'Model'),
+        React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', /* color inherited */ } }, 'Model'),
         loadingModels
-          ? React.createElement('span', { style: { fontSize: '13px', color: 'var(--nxai-card-sub)' } }, 'Loading models...')
+          ? React.createElement('span', { style: { fontSize: '13px', opacity: 0.7 } }, 'Loading models...')
           : React.createElement('select', {
               value: settings.chatModel || '',
               onChange: this.handleModelChange,
@@ -434,13 +378,18 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       // API Key input (shown when provider requires key)
       currentProvider?.requiresApiKey ? React.createElement('div', { style: { marginTop: '4px' } },
         React.createElement('div', { style: rowStyle },
-          React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', color: 'var(--nxai-card-text)' } }, 'API Key'),
+          React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', /* color inherited */ } }, 'API Key'),
           React.createElement('input', {
             type: 'password',
             value: keyInput,
             onChange: this.handleKeyInputChange,
             placeholder: 'Enter API key...',
-            style: { ...inputStyle, flex: 1, maxWidth: '350px' },
+            className: 'nexus-password-input',
+            style: {
+              ...inputStyle,
+              flex: 1,
+              maxWidth: '350px',
+            },
           }),
           React.createElement('button', {
             style: {
@@ -470,273 +419,35 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     );
   }
 
-  renderCredentialSyncSection(): React.ReactNode {
-    const { syncStatus, syncing, syncResults, sites } = this.state;
-    const runningSites = sites.filter((s) => s.status === 'running');
-    const syncEntries = Object.entries(syncStatus);
-    const hasSyncData = syncEntries.length > 0;
-
-    return React.createElement('div', { style: sectionStyle },
-      React.createElement('div', { style: labelStyle }, 'Credential Sync'),
-      React.createElement('div', { style: descStyle },
-        'Push API keys to running WordPress sites so their AI features can use your configured providers.',
-      ),
-
-      // Sync status summary
-      hasSyncData
-        ? React.createElement('div', { style: { marginBottom: '12px' } },
-            ...syncEntries.map(([siteId, status]: [string, any]) => {
-              const site = sites.find((s) => s.id === siteId);
-              const color = status.success ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_ERROR;
-              const ago = status.lastSync ? this.formatTimeAgo(status.lastSync) : 'Never';
-              return React.createElement('div', {
-                key: siteId,
-                style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0', fontSize: '13px' },
-              },
-                React.createElement('span', { style: dotStyle(color) }),
-                React.createElement('span', { style: { color: 'var(--nxai-card-text)' } }, site?.name ?? siteId),
-                React.createElement('span', { style: { color: 'var(--nxai-card-sub)', fontSize: '12px' } }, `(${ago})`),
-              );
-            }),
-          )
-        : React.createElement('div', { style: { ...descStyle, fontStyle: 'italic' } },
-            'No credentials have been synced yet.',
-          ),
-
-      // Sync All button
-      React.createElement('div', { style: rowStyle },
-        React.createElement('button', {
-          style: {
-            ...btnSmallStyle,
-            ...(syncing ? { opacity: 0.6, cursor: 'not-allowed' } : { backgroundColor: UI_COLORS.WPE_BRAND, color: '#fff', border: 'none' }),
-          },
-          onClick: syncing ? undefined : this.handleSyncAll,
-          disabled: syncing || runningSites.length === 0,
-        }, syncing ? 'Syncing...' : `Sync All (${runningSites.length} running)`),
-      ),
-
-      // Results
-      syncResults && syncResults.length > 0
-        ? React.createElement('div', { style: { marginTop: '8px' } },
-            ...syncResults.map((r: CredentialSyncResult) =>
-              React.createElement('div', {
-                key: r.siteId,
-                style: { fontSize: '12px', padding: '2px 0', color: r.success ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_ERROR },
-              }, `${r.siteName}: ${r.success ? `synced (${r.providers.join(', ')})` : r.error ?? 'failed'}`),
-            ),
-          )
-        : null,
-    );
-  }
-
-  renderAiProxySection(): React.ReactNode {
-    const { aiProxy } = this.state;
-    const running = aiProxy?.running ?? false;
-    const color = running ? UI_COLORS.STATUS_RUNNING : 'var(--nxai-card-sub, #999)';
-
-    return React.createElement('div', { style: sectionStyle },
-      React.createElement('div', { style: labelStyle }, 'AI Proxy Server'),
-      React.createElement('div', { style: descStyle },
-        'OpenAI-compatible proxy backed by Ollama. Enables tool injection and agentic mode for advanced AI clients.',
-      ),
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-        React.createElement('span', { style: dotStyle(color) }),
-        React.createElement('span', { style: { fontSize: '14px', fontWeight: 500, color: 'var(--nxai-card-text)' } },
-          running ? 'Running' : 'Not running',
-        ),
-        aiProxy?.port
-          ? React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } },
-              `Port ${aiProxy.port}`,
-            )
-          : null,
-      ),
-      aiProxy?.models && aiProxy.models.length > 0
-        ? React.createElement('div', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)', marginTop: '6px' } },
-            `Models: ${aiProxy.models.slice(0, 5).join(', ')}${aiProxy.models.length > 5 ? ` +${aiProxy.models.length - 5} more` : ''}`,
-          )
-        : null,
-    );
-  }
-
-  // WPE Sync methods (Phase 3)
-  startWpeSyncProgressPolling = (): void => {
-    // Clear any existing interval
-    if (this.wpeSyncPollInterval) {
-      clearInterval(this.wpeSyncPollInterval);
-    }
-
-    // Poll progress every 1 second
-    this.wpeSyncPollInterval = setInterval(async () => {
-      try {
-        const statusResult = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_STATUS);
-        if (statusResult.success && statusResult.progress) {
-          this.setState({ wpeSyncProgress: statusResult.progress });
-
-          // Stop polling if sync completed or failed
-          if (statusResult.progress.status === 'completed' || statusResult.progress.status === 'failed') {
-            if (this.wpeSyncPollInterval) {
-              clearInterval(this.wpeSyncPollInterval);
-              this.wpeSyncPollInterval = null;
-            }
-          }
-        }
-      } catch (error) {
-        console.error('[NexusPreferences] Failed to poll WPE sync progress:', error);
-      }
-    }, 1000);
-  };
-
-  stopWpeSyncProgressPolling = (): void => {
-    if (this.wpeSyncPollInterval) {
-      clearInterval(this.wpeSyncPollInterval);
-      this.wpeSyncPollInterval = null;
-    }
-  };
-
-  handleWpeSync = async (): Promise<void> => {
-    if (this.state.wpeSyncing) return;
-
-    this.setState({ wpeSyncing: true, wpeSyncProgress: null, wpeSyncError: null });
-
-    // Start polling for progress
-    this.startWpeSyncProgressPolling();
-
-    try {
-      // Sync all WPE sites
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_ALL);
-
-      // Stop polling
-      this.stopWpeSyncProgressPolling();
-
-      if (result.success) {
-        this.setState({
-          wpeSyncedCount: result.synced || 0,
-          wpeSyncing: false,
-          wpeSyncProgress: null,
-          wpeSyncError: null,
-        });
-      } else {
-        const errorMsg = result.error || 'Unknown error occurred during sync';
-        this.setState({
-          wpeSyncing: false,
-          wpeSyncProgress: null,
-          wpeSyncError: errorMsg,
-        });
-        console.error('[NexusPreferences] WPE sync failed:', errorMsg);
-      }
-    } catch (error) {
-      this.stopWpeSyncProgressPolling();
-      const errorMsg = error instanceof Error ? error.message : 'Failed to sync WPE sites';
-      this.setState({
-        wpeSyncing: false,
-        wpeSyncProgress: null,
-        wpeSyncError: errorMsg,
-      });
-      console.error('[NexusPreferences] WPE sync error:', error);
-    }
-  };
-
-  renderWpeSyncSection(): React.ReactNode {
-    const { wpeSyncing, wpeSyncedCount, wpeSyncProgress, wpeSyncError } = this.state;
-
-    return React.createElement('div', { style: sectionStyle },
-      React.createElement('div', { style: labelStyle }, 'WP Engine Sites'),
-      React.createElement('div', { style: descStyle },
-        'Sync your WP Engine sites to make them searchable alongside local sites. Indexed content is available in Site Finder.',
-      ),
-
-      // Sync button and status
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' } },
-        React.createElement('button', {
-          onClick: this.handleWpeSync,
-          disabled: wpeSyncing,
-          style: {
-            padding: '8px 16px',
-            borderRadius: '6px',
-            border: 'none',
-            backgroundColor: wpeSyncing ? '#9ca3af' : '#3b82f6',
-            color: '#fff',
-            fontSize: '13px',
-            fontWeight: 600,
-            cursor: wpeSyncing ? 'not-allowed' : 'pointer',
-            opacity: wpeSyncing ? 0.6 : 1,
-          },
-        }, wpeSyncing ? 'Syncing...' : 'Sync Now'),
-
-        // Synced count
-        wpeSyncedCount > 0 && !wpeSyncing
-          ? React.createElement('span', {
-              style: {
-                fontSize: '13px',
-                color: 'var(--nxai-card-sub, #6b7280)',
-              },
-            }, `${wpeSyncedCount} site${wpeSyncedCount === 1 ? '' : 's'} synced`)
-          : null,
-      ),
-
-      // Progress indicator
-      wpeSyncProgress
-        ? React.createElement('div', {
-            style: {
-              fontSize: '12px',
-              color: 'var(--nxai-card-sub, #6b7280)',
-              marginTop: '8px',
-              fontStyle: 'italic',
-            },
-          }, `Syncing ${wpeSyncProgress.currentSite}... (${wpeSyncProgress.current}/${wpeSyncProgress.total})`)
-        : null,
-
-      // Error display
-      wpeSyncError
-        ? React.createElement('div', {
-            style: {
-              padding: '12px',
-              marginTop: '12px',
-              borderRadius: '6px',
-              backgroundColor: '#fee2e2',
-              border: '1px solid #fecaca',
-            },
-          },
-            React.createElement('div', {
-              style: {
-                fontSize: '13px',
-                fontWeight: 600,
-                color: '#991b1b',
-                marginBottom: '4px',
-              },
-            }, 'Sync Failed'),
-            React.createElement('div', {
-              style: {
-                fontSize: '12px',
-                color: 'var(--color-error, #dc2626)',
-              },
-            }, wpeSyncError),
-          )
-        : null,
-    );
-  }
-
-  private formatTimeAgo(timestamp: number): string {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return 'Just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  }
 
   render(): React.ReactNode {
     const { settings, sites, loading } = this.state;
 
     if (loading) {
       return React.createElement('div', {
-        style: { padding: '24px', color: 'var(--nxai-card-sub, #6b7280)' },
+        style: { padding: '24px', opacity: 0.7 },
       }, 'Loading preferences...');
     }
 
     return React.createElement('div', { style: { padding: '24px' } },
+      React.createElement('style', null, `
+        .nexus-password-input {
+          -webkit-text-fill-color: unset !important;
+        }
+      `),
+      // AI Credentials section (moved to top)
+      this.renderChatSection(),
+
+      // Divider
+      React.createElement('hr', {
+        style: {
+          border: 'none',
+          borderTop: '1px solid',
+          opacity: 0.2,
+          marginBottom: '24px',
+        },
+      }),
+
       // Auto-index toggle
       React.createElement('div', { style: sectionStyle },
         React.createElement('div', { style: labelStyle }, 'Auto-Index'),
@@ -751,7 +462,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
             style: { width: '16px', height: '16px', cursor: 'pointer' },
           }),
           React.createElement('span', {
-            style: { fontSize: '14px', color: 'var(--nxai-card-text, #111827)' },
+            style: { fontSize: '14px', /* color inherited */ },
           }, 'Automatically index sites when started'),
         ),
       ),
@@ -777,12 +488,13 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
                       style: { width: '16px', height: '16px', cursor: 'pointer' },
                     }),
                     React.createElement('span', {
-                      style: { fontSize: '13px', color: 'var(--nxai-card-text, #111827)' },
+                      style: { fontSize: '13px', /* color inherited */ },
                     }, site.name),
                     React.createElement('span', {
                       style: {
                         fontSize: '11px',
-                        color: site.status === 'running' ? UI_COLORS.STATUS_RUNNING : 'var(--nxai-card-sub)',
+                        color: site.status === 'running' ? UI_COLORS.STATUS_RUNNING : 'inherit',
+                        opacity: site.status === 'running' ? 1 : 0.7,
                         marginLeft: '4px',
                       },
                     }, `(${site.status})`),
@@ -791,53 +503,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
           )
         : null,
 
-      // Divider
-      React.createElement('hr', {
-        style: {
-          border: 'none',
-          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
-          marginBottom: '24px',
-        },
-      }),
-
-      // AI Chat section
-      this.renderChatSection(),
-
-      // Divider
-      React.createElement('hr', {
-        style: {
-          border: 'none',
-          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
-          marginBottom: '24px',
-        },
-      }),
-
-      // Credential sync section (Sprint 4)
-      this.renderCredentialSyncSection(),
-
-      // Divider
-      React.createElement('hr', {
-        style: {
-          border: 'none',
-          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
-          marginBottom: '24px',
-        },
-      }),
-
-      // AI Proxy section (Sprint 4)
-      this.renderAiProxySection(),
-
-      // Divider
-      React.createElement('hr', {
-        style: {
-          border: 'none',
-          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
-          marginBottom: '24px',
-        },
-      }),
-
-      // WPE Sync section (Phase 3)
-      this.renderWpeSyncSection(),
     );
   }
 }

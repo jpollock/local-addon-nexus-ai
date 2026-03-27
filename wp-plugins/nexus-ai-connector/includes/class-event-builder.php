@@ -334,4 +334,86 @@ class Nexus_AI_Event_Builder {
 
         return $payload;
     }
+
+    /**
+     * Build a theme event (installed or activated)
+     *
+     * @param string $event_type 'theme_installed' or 'theme_activated'
+     * @param string $theme_slug Theme stylesheet (slug)
+     * @return array Event payload
+     */
+    public static function build_theme_event($event_type, $theme_slug) {
+        $theme_data = self::get_theme_data($theme_slug);
+
+        return [
+            'site_id' => Nexus_AI_Config::get_site_id(),
+            'event_type' => $event_type,
+            'timestamp' => current_time('timestamp') * 1000,
+            'payload' => $theme_data,
+        ];
+    }
+
+    /**
+     * Build a theme deleted event
+     *
+     * @param string $theme_slug Theme stylesheet (slug)
+     * @return array Event payload
+     */
+    public static function build_theme_deleted_event($theme_slug) {
+        // Theme is already deleted, so we only have the slug
+        $payload = [
+            'slug' => $theme_slug,
+            'name' => $theme_slug, // Fallback to slug as name
+            'version' => '',
+            'is_active' => false,
+        ];
+
+        return [
+            'site_id' => Nexus_AI_Config::get_site_id(),
+            'event_type' => 'theme_deleted',
+            'timestamp' => current_time('timestamp') * 1000,
+            'payload' => $payload,
+        ];
+    }
+
+    /**
+     * Get theme data from theme slug
+     *
+     * @param string $theme_slug Theme stylesheet (slug)
+     * @return array Theme data
+     */
+    private static function get_theme_data($theme_slug) {
+        $theme = wp_get_theme($theme_slug);
+
+        // Check if theme exists
+        if (!$theme->exists()) {
+            return [
+                'slug' => $theme_slug,
+                'name' => $theme_slug,
+                'version' => '',
+                'is_active' => false,
+            ];
+        }
+
+        // Check if this is the active theme
+        $current_theme = wp_get_theme();
+        $is_active = ($current_theme->get_stylesheet() === $theme_slug);
+
+        $payload = [
+            'slug' => $theme->get_stylesheet(),
+            'name' => $theme->get('Name'),
+            'version' => $theme->get('Version'),
+            'is_active' => $is_active,
+        ];
+
+        if ($theme->get('Author')) {
+            $payload['author'] = strip_tags($theme->get('Author'));
+        }
+
+        if ($theme->get('Description')) {
+            $payload['description'] = strip_tags($theme->get('Description'));
+        }
+
+        return $payload;
+    }
 }

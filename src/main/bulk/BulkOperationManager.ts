@@ -34,7 +34,7 @@ export interface BulkOpDeps {
   setupSiteForAI?: (siteId: string, options?: any) => Promise<any>;
 }
 
-const MAX_CONCURRENCY = 3;
+const MAX_CONCURRENCY = 5; // Increased from 3 for better performance (50 sites: ~10 min vs ~17 min)
 const MAX_HISTORY = 20;
 
 export class BulkOperationManager {
@@ -206,9 +206,9 @@ export class BulkOperationManager {
   private async executeByType(op: BulkOperation, siteId: string): Promise<void> {
     switch (op.type) {
       case 'reindex':
-        return this.executeReindex(siteId);
+        return this.executeReindex(siteId, op.options);
       case 'plugin-update':
-        return this.executePluginUpdate(siteId, op.options.pluginSlug);
+        return this.executePluginUpdate(siteId, op.options.pluginSlug, op.options);
       case 'start':
         return this.deps.siteDataBridge.startSite(siteId);
       case 'stop':
@@ -218,21 +218,21 @@ export class BulkOperationManager {
       case 'setup-ai':
         return this.executeSetupAI(siteId, op.options);
       case 'sync-graph':
-        return this.executeGraphSync(siteId);
+        return this.executeGraphSync(siteId, op.options);
       default:
         throw new Error(`Unknown operation type: ${op.type}`);
     }
   }
 
-  private async executeReindex(siteId: string): Promise<void> {
+  private async executeReindex(siteId: string, options?: Record<string, any>): Promise<void> {
     const site = this.deps.siteDataBridge.resolveSiteObject(siteId);
     if (!site) {
       throw new Error(`Site not found: ${siteId}`);
     }
 
-    const status = this.deps.siteDataBridge.getSiteStatus(siteId);
-    if (status !== 'running') {
-      throw new Error(`Site is not running: ${siteId}`);
+    // If auto-started, wait for database to be ready
+    if (options?.autoStartStop) {
+      await this.waitForDatabaseReady(siteId, 30000);
     }
 
     const mysqlPort = site.services?.mysql?.port ?? 3306;
@@ -249,14 +249,14 @@ export class BulkOperationManager {
     });
   }
 
-  private async executePluginUpdate(siteId: string, pluginSlug?: string): Promise<void> {
+  private async executePluginUpdate(siteId: string, pluginSlug?: string, options?: Record<string, any>): Promise<void> {
     if (!pluginSlug) {
       throw new Error('pluginSlug is required for plugin-update');
     }
 
-    const status = this.deps.siteDataBridge.getSiteStatus(siteId);
-    if (status !== 'running') {
-      throw new Error(`Site is not running: ${siteId}`);
+    // If auto-started, wait for database to be ready
+    if (options?.autoStartStop) {
+      await this.waitForDatabaseReady(siteId, 30000);
     }
 
     const result = await this.deps.siteDataBridge.wpCliRun(siteId, [
@@ -276,9 +276,18 @@ export class BulkOperationManager {
       throw new Error('setupSiteForAI not configured');
     }
 
-    const status = this.deps.siteDataBridge.getSiteStatus(siteId);
-    if (status !== 'running') {
-      throw new Error(`Site is not running: ${siteId}`);
+    // Check if site is running (unless auto-start will handle it)
+    if (!options.autoStartStop) {
+      const currentStatus = this.deps.siteDataBridge.getSiteStatus(siteId);
+      if (currentStatus !== 'running') {
+        throw new Error(`Site must be running to setup AI. Current status: ${currentStatus}`);
+      }
+    }
+
+    // If auto-started, wait for database to be ready
+    // (auto-start logic already ensured site is running)
+    if (options.autoStartStop) {
+      await this.waitForDatabaseReady(siteId, 30000); // 30 second timeout
     }
 
     const result = await this.deps.setupSiteForAI(siteId, {
@@ -288,6 +297,36 @@ export class BulkOperationManager {
     if (!result.success) {
       throw new Error(result.message || 'Setup AI failed');
     }
+  }
+
+  /**
+   * Wait for database to be ready by polling with a simple WP-CLI command.
+   * Required after auto-starting sites - web server starts quickly but DB takes longer.
+   */
+  private async waitForDatabaseReady(siteId: string, timeoutMs: number = 30000): Promise<void> {
+    const startTime = Date.now();
+    const pollInterval = 1000; // Check every 1 second
+
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        // Simple DB-dependent command to test readiness
+        const result = await this.deps.siteDataBridge.wpCliRun(siteId, [
+          'eval',
+          "echo 'ready';",
+        ]);
+
+        if (result.success && result.stdout?.trim() === 'ready') {
+          return; // Database is ready!
+        }
+      } catch {
+        // Database not ready yet, continue polling
+      }
+
+      // Wait before next attempt
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error(`Database did not become ready within ${timeoutMs}ms`);
   }
 
   private async executeHealthRefresh(siteId: string): Promise<void> {
@@ -302,7 +341,7 @@ export class BulkOperationManager {
     });
   }
 
-  private async executeGraphSync(siteId: string): Promise<void> {
+  private async executeGraphSync(siteId: string, options?: Record<string, any>): Promise<void> {
     if (!this.deps.graphService) {
       throw new Error('GraphService not available');
     }
@@ -312,11 +351,9 @@ export class BulkOperationManager {
       throw new Error(`Site not found: ${siteId}`);
     }
 
-    // Site must be running for WP-CLI queries
-    // Auto-start/stop is handled by executeSingle() if enabled
-    const status = this.deps.siteDataBridge.getSiteStatus(siteId);
-    if (status !== 'running') {
-      throw new Error(`Site is not running: ${siteId}`);
+    // If auto-started, wait for database to be ready
+    if (options?.autoStartStop) {
+      await this.waitForDatabaseReady(siteId, 30000);
     }
 
     const now = Date.now();

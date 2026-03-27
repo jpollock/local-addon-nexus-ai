@@ -10,6 +10,7 @@ import { userListHandler } from './user-list';
 import { optionGetHandler } from './option-get';
 import { siteHealthHandler } from './site-health';
 import { dbExportHandler } from './db-export';
+import { importDatabaseHandler } from './import-database';
 import { searchReplaceHandler } from './search-replace';
 import { wpPostCreateHandler } from './post-create';
 import { wpPostUpdateHandler } from './post-update';
@@ -32,6 +33,7 @@ export function registerWpCliTools(registry: ToolRegistry): void {
   registry.register(optionGetHandler);
   registry.register(siteHealthHandler);
   registry.register(dbExportHandler);
+  registry.register(importDatabaseHandler);
   registry.register(searchReplaceHandler);
   registry.register(wpPostCreateHandler);
   registry.register(wpPostUpdateHandler);

@@ -5,6 +5,14 @@ import { registerWpConnectorTools } from '../../src/main/mcp/modules/wp-connecto
 import { setupSiteForAI, SetupAIResult } from '../../src/main/mcp/modules/wp-connector/setup-ai';
 import { STORAGE_KEYS } from '../../src/common/constants';
 import { TIER_OVERRIDES } from '../../src/main/mcp/safety';
+import * as fs from 'fs';
+
+// Mock fs operations for plugin installation tests
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  existsSync: jest.fn(() => true),
+  cpSync: jest.fn(),
+}));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,14 +52,28 @@ function createMockServices(storage: RegistryStorage): NexusServices {
     localServices: {
       wpCliRun: jest.fn(async (siteId: string, args: string[], opts?: any) => {
         wpCliCalls.push({ siteId, args, opts });
-        // Default: return JSON result for credential sync
+        // Handle WP_PLUGIN_DIR eval for plugin installation
         const phpCode = args[1] ?? '';
+        if (args[0] === 'eval' && phpCode.includes('WP_PLUGIN_DIR')) {
+          return { stdout: '/tmp/myblog/wp-content/plugins', success: true };
+        }
+        // Handle health check eval
+        if (args[0] === 'eval' && phpCode === "echo 'healthy';") {
+          return { stdout: 'healthy', success: true };
+        }
+        // Default: return JSON result for credential sync
         if (args[0] === 'eval' && phpCode.includes('connectors_written')) {
           return { stdout: JSON.stringify({ connectors: 1, ai_client: true }), success: true };
         }
         return { stdout: 'synced', success: true };
       }),
       getSiteStatus: (siteId: string) => testSites[siteId]?.status ?? 'halted',
+      resolveSiteObject: jest.fn((siteId: string) => ({
+        id: siteId,
+        paths: {
+          webRoot: '/tmp/myblog',
+        },
+      })),
     } as any,
     registryStorage: storage,
     _wpCliCalls: wpCliCalls,
@@ -663,8 +685,17 @@ describe('wp_setup_ai', () => {
     // Mock wpCliRun to handle all the setup steps
     (services.localServices as any).wpCliRun = jest.fn(async (_siteId: string, args: string[]) => {
       const phpCode = args[1] ?? '';
-      if (args[0] === 'plugin' && args[1] === 'install') {
+      // New implementation uses activate, not install
+      if (args[0] === 'plugin' && args[1] === 'activate') {
         return { stdout: 'ok', success: true };
+      }
+      // Handle WP_PLUGIN_DIR eval
+      if (args[0] === 'eval' && phpCode.includes('WP_PLUGIN_DIR')) {
+        return { stdout: '/tmp/myblog/wp-content/plugins', success: true };
+      }
+      // Handle health check
+      if (args[0] === 'eval' && phpCode === "echo 'healthy';") {
+        return { stdout: 'healthy', success: true };
       }
       if (args[0] === 'eval' && phpCode.includes('ai_experiments_enabled')) {
         return { stdout: JSON.stringify({ enabled: 7 }), success: true };
@@ -727,7 +758,7 @@ describe('wp_setup_ai', () => {
     (services.localServices as any).getPlugins = jest.fn(async () => [
       { name: 'ai', status: 'active', version: '1.0.0', title: 'AI' },
     ]);
-    (services.localServices as any).getWpVersion = jest.fn(async () => '6.7');
+    (services.localServices as any).getWpVersion = jest.fn(async () => '7.0');
     (services.localServices as any).wpCliRun = jest.fn(async (_siteId: string, args: string[]) => {
       const phpCode = args[1] ?? '';
       if (args[0] === 'eval' && phpCode.includes('ai_experiments_enabled')) {
@@ -762,12 +793,22 @@ describe('setupSiteForAI', () => {
       bridge: {
         getPlugins: jest.fn(async () => plugins.map((p) => ({ ...p, title: p.name }))),
         getWpVersion: jest.fn(async () => wpVersion),
+        resolveSiteObject: jest.fn((siteId: string) => ({
+          id: siteId,
+          paths: {
+            webRoot: '/tmp/test-site',
+          },
+        })),
         wpCliRun: jest.fn(async (siteId: string, args: string[], opts?: any) => {
           const idx = callCount++;
           wpCliCalls.push({ siteId, args, opts });
           if (overrideWpCli) {
             const resp = overrideWpCli(siteId, args, idx);
             if (resp) return resp;
+          }
+          // Return plugin directory path for WP_PLUGIN_DIR eval
+          if (args[0] === 'eval' && args[1]?.includes('WP_PLUGIN_DIR')) {
+            return { stdout: '/tmp/test-site/wp-content/plugins', success: true };
           }
           // Default: health check returns healthy
           if (args[0] === 'eval' && args[1] === "echo 'healthy';") {
@@ -793,7 +834,13 @@ describe('setupSiteForAI', () => {
     expect(result.success).toBe(true);
     expect(result.aiPlugin).toBe('installed');
     expect(result.acfAbilities).toBe('skipped');
-    expect(wpCliCalls[0].args).toEqual(['plugin', 'install', 'ai', '--activate']);
+
+    // New implementation copies bundled plugin and activates it
+    // First call gets the plugins directory, second call activates
+    const activateCall = wpCliCalls.find((c) =>
+      c.args[0] === 'plugin' && c.args[1] === 'activate' && c.args[2] === 'ai'
+    );
+    expect(activateCall).toBeDefined();
     expect(result.message).toContain('AI Experiments plugin installed');
   });
 
@@ -1082,6 +1129,7 @@ describe('setupSiteForAI', () => {
 
   test('deactivates provider plugin that crashes WordPress', async () => {
     const storage = createMockStorage({ anthropic: 'sk-ant-key-12345678' });
+    let healthCheckCount = 0;
     const { bridge, wpCliCalls } = createMockBridge(
       [],
       (_siteId, args, _idx) => {
@@ -1092,9 +1140,16 @@ describe('setupSiteForAI', () => {
         if (args[0] === 'eval' && phpCode.includes('wp_ai_client_provider_credentials')) {
           return { stdout: JSON.stringify({ connectors: 1, ai_client: true }), success: true };
         }
-        // Health check fails — simulates provider plugin crashing WordPress
+        // First health check (AI plugin) passes, second one (provider plugin) fails
         if (args[0] === 'eval' && args[1] === "echo 'healthy';") {
-          return { stdout: 'Fatal error: DiscoveryFailedException', success: false };
+          healthCheckCount++;
+          if (healthCheckCount === 1) {
+            // AI plugin health check passes
+            return { stdout: 'healthy', success: true };
+          } else {
+            // Provider plugin health check fails
+            return { stdout: 'Fatal error: DiscoveryFailedException', success: false };
+          }
         }
         return null;
       },
@@ -1113,8 +1168,9 @@ describe('setupSiteForAI', () => {
   test('handles plugin install failure', async () => {
     const storage = createMockStorage();
     const { bridge } = createMockBridge([], (_siteId, args) => {
-      if (args[0] === 'plugin' && args[1] === 'install') {
-        return { stdout: 'Could not install plugin', success: false };
+      // New implementation uses activate, not install
+      if (args[0] === 'plugin' && args[1] === 'activate' && args[2] === 'ai') {
+        return { stdout: 'Could not activate plugin', success: false };
       }
       return null;
     });

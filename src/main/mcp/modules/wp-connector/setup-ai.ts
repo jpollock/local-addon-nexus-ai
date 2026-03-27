@@ -20,6 +20,7 @@ import {
 } from './credential-helpers';
 import { getOllamaStatus } from '../ollama/ask-ollama';
 import { redactCredentials } from '../../security/credential-redaction';
+import { generateMuPluginContent } from '../../../ai-gateway/mu-plugin-template';
 
 /**
  * Path to bundled WP plugins directory.
@@ -66,7 +67,9 @@ function validatePluginPath(pluginDir: string, siteWebRoot: string): void {
 export interface SetupAIResult {
   success: boolean;
   aiPlugin: 'installed' | 'activated' | 'already_active' | 'failed';
+  connectorPlugin: 'installed' | 'already_active' | 'skipped' | 'failed';
   providerPlugins: 'installed' | 'already_active' | 'skipped' | 'failed';
+  gatewayProvider: 'installed' | 'activated' | 'already_active' | 'skipped' | 'failed';
   ollamaProvider: 'installed' | 'activated' | 'already_active' | 'skipped' | 'failed';
   aiFeatures: 'enabled' | 'already_enabled' | 'skipped' | 'failed';
   credentials: 'synced' | 'skipped' | 'failed';
@@ -113,15 +116,16 @@ function findPlugin(plugins: WpPlugin[], slug: string): WpPlugin | undefined {
 
 /**
  * Returns the absolute path to the site's wp-content/plugins directory.
+ * Uses direct path access (doesn't require site to be running).
  */
-async function getSitePluginsDir(
+function getSitePluginsDir(
   siteId: string,
   localServices: LocalServicesBridge,
-): Promise<string | null> {
+): string | null {
   try {
-    const result = await localServices.wpCliRun(siteId, ['eval', "echo WP_PLUGIN_DIR;"]);
-    if (result.success && result.stdout?.trim()) {
-      return result.stdout.trim();
+    const site = localServices.resolveSiteObject(siteId) as any;
+    if (site?.paths?.webRoot) {
+      return path.join(site.paths.webRoot, 'wp-content', 'plugins');
     }
   } catch {
     // Fall through
@@ -161,6 +165,44 @@ export async function setupSiteForAI(
 ): Promise<SetupAIResult> {
   const tag = '[NexusAI:setup-ai]';
 
+  // Step 0: Check WordPress version (AI plugin requires WP 7.0+)
+  let wpVersion: string | null;
+  try {
+    wpVersion = await localServices.getWpVersion(siteId);
+  } catch (err) {
+    const msg = `Failed to get WordPress version: ${err instanceof Error ? err.message : String(err)}`;
+    logger.error(`${tag} ${msg}`);
+    return {
+      success: false,
+      aiPlugin: 'failed',
+      connectorPlugin: 'failed',
+      providerPlugins: 'failed',
+      gatewayProvider: 'failed',
+      ollamaProvider: 'failed',
+      aiFeatures: 'failed',
+      credentials: 'failed',
+      acfAbilities: 'failed',
+      message: msg,
+    };
+  }
+
+  if (!isWp7OrLater(wpVersion || '')) {
+    const msg = `WordPress ${wpVersion || 'unknown'} is not supported. AI Experiments plugin requires WordPress 7.0 or later. Please upgrade WordPress first.`;
+    logger.error(`${tag} ${msg}`);
+    return {
+      success: false,
+      aiPlugin: 'failed',
+      connectorPlugin: 'skipped',
+      providerPlugins: 'skipped',
+      gatewayProvider: 'skipped',
+      ollamaProvider: 'skipped',
+      aiFeatures: 'skipped',
+      credentials: 'skipped',
+      acfAbilities: 'skipped',
+      message: msg,
+    };
+  }
+
   // Step 1: Get current plugin list
   let plugins: WpPlugin[];
   try {
@@ -171,7 +213,9 @@ export async function setupSiteForAI(
     return {
       success: false,
       aiPlugin: 'failed',
+      connectorPlugin: 'failed',
       providerPlugins: 'failed',
+      gatewayProvider: 'failed',
       ollamaProvider: 'failed',
       aiFeatures: 'failed',
       credentials: 'failed',
@@ -186,12 +230,45 @@ export async function setupSiteForAI(
 
   try {
     if (!existingAi) {
-      // Not installed — install and activate
-      logger.info(`${tag} Installing AI Experiments plugin on site ${siteId}`);
-      const result = await localServices.wpCliRun(siteId, ['plugin', 'install', 'ai', '--activate']);
-      if (!result.success) {
-        throw new Error(result.stdout ?? 'Unknown error');
+      // Not installed — copy from bundled source and activate
+      const sitePluginsDir = getSitePluginsDir(siteId, localServices);
+      if (!sitePluginsDir) {
+        throw new Error('Could not determine site plugins directory');
       }
+
+      // Security: Validate plugin path before file operations
+      const site = localServices.resolveSiteObject(siteId) as any;
+      validatePluginPath(sitePluginsDir, site.paths.webRoot);
+
+      const pluginDest = path.join(sitePluginsDir, 'ai');
+      const pluginSource = path.join(WP_PLUGINS_ROOT, 'ai');
+
+      if (!fs.existsSync(pluginSource)) {
+        throw new Error(`AI Experiments plugin source not found at ${pluginSource}`);
+      }
+
+      logger.info(`${tag} Copying AI Experiments plugin to site ${siteId}`);
+      fs.cpSync(pluginSource, pluginDest, { recursive: true });
+
+      logger.info(`${tag} Activating AI Experiments plugin on site ${siteId}`);
+      const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai']);
+      if (!result.success) {
+        throw new Error(result.stdout ?? 'Failed to activate');
+      }
+
+      // Health check: verify the plugin doesn't crash WordPress
+      const healthCheck = await localServices.wpCliRun(
+        siteId,
+        ['eval', "echo 'healthy';"],
+        { skipPlugins: false },
+      );
+
+      if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+        logger.error(`${tag} AI plugin crashes WordPress — deactivating`);
+        await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'ai']);
+        throw new Error('AI plugin failed health check');
+      }
+
       aiPlugin = 'installed';
     } else if (existingAi.status !== 'active') {
       // Installed but inactive — activate
@@ -209,6 +286,180 @@ export async function setupSiteForAI(
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`${tag} AI plugin step failed: ${msg}`);
     aiPlugin = 'failed';
+  }
+
+  // Step 1b: Install Nexus AI Connector plugin (event webhooks)
+  let connectorPlugin: 'installed' | 'already_active' | 'skipped' | 'failed' = 'skipped';
+
+  if (aiPlugin !== 'failed') {
+    // Refresh plugin list
+    try {
+      plugins = await localServices.getPlugins(siteId);
+    } catch {
+      // Continue with stale list
+    }
+
+    const existingConnector = findPlugin(plugins, 'nexus-ai-connector');
+
+    if (!existingConnector) {
+      try {
+        const sitePluginsDir = getSitePluginsDir(siteId, localServices);
+        if (sitePluginsDir) {
+          // Security: Validate plugin path
+          const site = localServices.resolveSiteObject(siteId) as any;
+          validatePluginPath(sitePluginsDir, site.paths.webRoot);
+
+          const pluginDest = path.join(sitePluginsDir, 'nexus-ai-connector');
+          const pluginSource = path.join(WP_PLUGINS_ROOT, 'nexus-ai-connector');
+
+          if (fs.existsSync(pluginSource)) {
+            logger.info(`${tag} Installing Nexus AI Connector plugin on site ${siteId}`);
+            fs.cpSync(pluginSource, pluginDest, { recursive: true });
+
+            const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'nexus-ai-connector']);
+            if (!result.success) {
+              throw new Error(result.stdout ?? 'Failed to activate');
+            }
+
+            // Health check
+            const healthCheck = await localServices.wpCliRun(
+              siteId,
+              ['eval', "echo 'healthy';"],
+              { skipPlugins: false },
+            );
+
+            if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+              logger.error(`${tag} Nexus AI Connector crashes WordPress — deactivating`);
+              await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'nexus-ai-connector']);
+              throw new Error('Nexus AI Connector failed health check');
+            }
+
+            connectorPlugin = 'installed';
+            logger.info(`${tag} Nexus AI Connector installed on site ${siteId}`);
+
+            // Configure connector plugin via MU plugin (defines webhook constants)
+            try {
+              const webhookInfo = registryStorage.get('http_webhook_info') as any;
+              if (webhookInfo && webhookInfo.url && webhookInfo.authToken) {
+                logger.info(`${tag} Configuring Nexus AI Connector via MU plugin`);
+
+                const site = localServices.resolveSiteObject(siteId) as any;
+                const muPluginsDir = path.join(site.paths.webRoot, 'wp-content', 'mu-plugins');
+
+                // Create mu-plugins directory if needed
+                if (!fs.existsSync(muPluginsDir)) {
+                  fs.mkdirSync(muPluginsDir, { recursive: true });
+                }
+
+                // Get AI Gateway info if available
+                const aiProxyInfo = registryStorage.get('ai_proxy_info') as any;
+
+                // Generate MU plugin content with caller detection
+                const muPluginContent = generateMuPluginContent({
+                  webhookUrl: webhookInfo.url,
+                  webhookAuthToken: webhookInfo.authToken,
+                  siteId,
+                  aiGatewayUrl: aiProxyInfo?.url,
+                  aiGatewayToken: aiProxyInfo?.authToken,
+                });
+
+                // Clean up old MU plugin file if it exists (pre-unified template)
+                const oldMuPluginPath = path.join(muPluginsDir, 'nexus-ai-gateway-config.php');
+                if (fs.existsSync(oldMuPluginPath)) {
+                  fs.unlinkSync(oldMuPluginPath);
+                  logger.info(`${tag} Removed obsolete nexus-ai-gateway-config.php MU plugin`);
+                }
+
+                const muPluginPath = path.join(muPluginsDir, 'nexus-ai-connector-config.php');
+                fs.writeFileSync(muPluginPath, muPluginContent);
+
+                logger.info(`${tag} Nexus AI Connector configured with webhook ${webhookInfo.url}/wp-events`);
+                if (aiProxyInfo?.url) {
+                  logger.info(`${tag} AI Gateway caller detection enabled`);
+                }
+              } else {
+                logger.info(`${tag} HTTP webhook info not available, connector will need manual configuration`);
+              }
+            } catch (err) {
+              logger.error(`${tag} Connector configuration failed: ${err}`);
+              // Non-fatal - plugin is installed and can be configured manually
+            }
+
+            // Refresh plugins for next steps
+            try {
+              plugins = await localServices.getPlugins(siteId);
+            } catch {
+              // Continue
+            }
+          } else {
+            logger.info(`${tag} Nexus AI Connector not bundled at ${pluginSource}, skipping`);
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`${tag} Nexus AI Connector installation failed: ${redactCredentials(msg)}`);
+        connectorPlugin = 'failed';
+      }
+    } else if (existingConnector.status === 'active') {
+      connectorPlugin = 'already_active';
+
+      // Make sure connector is configured even if already active
+      try {
+        const webhookInfo = registryStorage.get('http_webhook_info') as any;
+        if (webhookInfo && webhookInfo.url && webhookInfo.authToken) {
+          const site = localServices.resolveSiteObject(siteId) as any;
+          const muPluginPath = path.join(site.paths.webRoot, 'wp-content', 'mu-plugins', 'nexus-ai-connector-config.php');
+
+          // Only write if it doesn't exist or is outdated
+          if (!fs.existsSync(muPluginPath)) {
+            logger.info(`${tag} Configuring existing Nexus AI Connector via MU plugin`);
+
+            const muPluginsDir = path.join(site.paths.webRoot, 'wp-content', 'mu-plugins');
+            if (!fs.existsSync(muPluginsDir)) {
+              fs.mkdirSync(muPluginsDir, { recursive: true });
+            }
+
+            // Get AI Gateway info if available
+            const aiProxyInfo = registryStorage.get('ai_proxy_info') as any;
+
+            // Generate MU plugin content with caller detection
+            const muPluginContent = generateMuPluginContent({
+              webhookUrl: webhookInfo.url,
+              webhookAuthToken: webhookInfo.authToken,
+              siteId,
+              aiGatewayUrl: aiProxyInfo?.url,
+              aiGatewayToken: aiProxyInfo?.authToken,
+            });
+
+            fs.writeFileSync(muPluginPath, muPluginContent);
+            logger.info(`${tag} Nexus AI Connector configured`);
+            if (aiProxyInfo?.url) {
+              logger.info(`${tag} AI Gateway caller detection enabled`);
+            }
+          }
+        }
+      } catch (err) {
+        logger.error(`${tag} Connector configuration failed: ${err}`);
+      }
+    } else {
+      // Installed but not active - activate it
+      try {
+        logger.info(`${tag} Activating Nexus AI Connector on site ${siteId}`);
+        const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'nexus-ai-connector']);
+        if (result.success) {
+          connectorPlugin = 'already_active';
+          // Refresh plugins
+          try {
+            plugins = await localServices.getPlugins(siteId);
+          } catch {
+            // Continue
+          }
+        }
+      } catch (err) {
+        logger.error(`${tag} Failed to activate Nexus AI Connector: ${err}`);
+        connectorPlugin = 'failed';
+      }
+    }
   }
 
   const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
@@ -296,7 +547,92 @@ export async function setupSiteForAI(
     }
   }
 
-  // Step 2c: Install Ollama provider plugin (only when explicitly requested)
+  // Step 2c: Install Local Gateway provider plugin (centralized AI routing)
+  let gatewayProvider: 'installed' | 'activated' | 'already_active' | 'skipped' | 'failed' = 'skipped';
+
+  if (aiPlugin !== 'failed') {
+    try {
+      // Refresh plugin list
+      const currentPlugins = await localServices.getPlugins(siteId);
+      const existingGateway = findPlugin(currentPlugins, 'ai-provider-for-local-gateway');
+
+      if (existingGateway && existingGateway.status === 'active') {
+        gatewayProvider = 'already_active';
+      } else if (existingGateway) {
+        // Installed but inactive — activate
+        const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-local-gateway']);
+        if (result.success) {
+          gatewayProvider = 'activated';
+        } else {
+          throw new Error(result.stdout ?? 'Failed to activate');
+        }
+      } else {
+        // Not installed — copy from bundled source and activate
+        const sitePluginsDir = getSitePluginsDir(siteId, localServices);
+        if (!sitePluginsDir) {
+          logger.error(`${tag} Could not determine site plugins directory`);
+          gatewayProvider = 'failed';
+        } else {
+          // Security: Validate plugin path before file operations
+          const site = localServices.resolveSiteObject(siteId) as any;
+          validatePluginPath(sitePluginsDir, site.paths.webRoot);
+
+          const pluginDest = path.join(sitePluginsDir, 'ai-provider-for-local-gateway');
+          const pluginSource = path.join(WP_PLUGINS_ROOT, 'ai-provider-for-local-gateway');
+
+          if (!fs.existsSync(pluginSource)) {
+            logger.info(`${tag} Local Gateway provider plugin not bundled at ${pluginSource}, skipping`);
+            gatewayProvider = 'skipped';
+          } else {
+            try {
+              fs.cpSync(pluginSource, pluginDest, { recursive: true });
+
+              const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-local-gateway']);
+              if (!result.success) {
+                throw new Error(result.stdout ?? 'Failed to activate');
+              }
+
+              // Health check: verify the plugin doesn't crash WordPress
+              const healthCheck = await localServices.wpCliRun(
+                siteId,
+                ['eval', "echo 'healthy';"],
+                { skipPlugins: false },
+              );
+
+              if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+                logger.error(`${tag} Local Gateway provider plugin crashes WordPress — deactivating`);
+                await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'ai-provider-for-local-gateway']);
+                gatewayProvider = 'failed';
+              } else {
+                gatewayProvider = 'installed';
+                logger.info(`${tag} Local Gateway provider plugin installed on site ${siteId}`);
+              }
+            } catch (copyErr) {
+              const msg = copyErr instanceof Error ? copyErr.message : String(copyErr);
+              logger.error(`${tag} Failed to install Local Gateway provider plugin: ${redactCredentials(msg)}`);
+              gatewayProvider = 'failed';
+            }
+          }
+        }
+      }
+
+      // Gateway provider configuration is handled by the unified nexus-ai-connector-config.php MU plugin
+      // created earlier in this function (see lines 336-369). No separate MU plugin needed.
+      if (gatewayProvider === 'installed' || gatewayProvider === 'activated' || gatewayProvider === 'already_active') {
+        logger.info(`${tag} Local Gateway provider uses configuration from nexus-ai-connector-config.php MU plugin`);
+      }
+
+      if (gatewayProvider === 'installed' || gatewayProvider === 'activated') {
+        logger.info(`${tag} Local Gateway provider plugin ${gatewayProvider} on site ${siteId}`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`${tag} Local Gateway provider step failed: ${redactCredentials(msg)}`);
+      gatewayProvider = 'failed';
+    }
+  }
+
+  // Step 2d: Install Ollama provider plugin (only when explicitly requested)
   let ollamaProvider: SetupAIResult['ollamaProvider'] = 'skipped';
 
   if (options.enableOllama && aiPlugin !== 'failed') {
@@ -322,7 +658,7 @@ export async function setupSiteForAI(
           }
         } else {
           // Not installed — copy from bundled source and activate
-          const sitePluginsDir = await getSitePluginsDir(siteId, localServices);
+          const sitePluginsDir = getSitePluginsDir(siteId, localServices);
           if (!sitePluginsDir) {
             logger.error(`${tag} Could not determine site plugins directory`);
             ollamaProvider = 'failed';
@@ -391,19 +727,29 @@ export async function setupSiteForAI(
     }
   }
 
-  // Step 3: Enable all AI experiments
+  // Step 3: Enable all AI features
   let aiFeatures: SetupAIResult['aiFeatures'] = 'skipped';
 
   if (aiPlugin !== 'failed') {
     try {
       const phpLines: string[] = [];
-      // Set the global toggle
-      phpLines.push("update_option('ai_experiments_enabled', '1');");
-      // Set each experiment toggle
+      // Set the main AI features toggle (Settings → AI → Enable AI Features checkbox)
+      // This is the global master switch that enables/disables all AI features
+      phpLines.push("update_option('wpai_features_enabled', '1');");
+
+      // Set each individual feature toggle to enabled
+      // These correspond to the individual checkboxes in the AI settings page
       for (const id of AI_EXPERIMENT_IDS) {
-        phpLines.push(`update_option('ai_experiment_${id}_enabled', '1');`);
+        phpLines.push(`update_option('wpai_feature_${id}_enabled', '1');`);
       }
-      phpLines.push(`echo json_encode(['enabled' => ${AI_EXPERIMENT_IDS.length + 1}]);`);
+
+      // Verify the options were actually written by reading them back
+      phpLines.push("$verified = array();");
+      phpLines.push("$verified['global'] = get_option('wpai_features_enabled') === '1';");
+      for (const id of AI_EXPERIMENT_IDS) {
+        phpLines.push(`$verified['${id}'] = get_option('wpai_feature_${id}_enabled') === '1';`);
+      }
+      phpLines.push("echo json_encode($verified);");
 
       const phpCode = phpLines.join(' ');
       // skipPlugins defaults to true — safe because we're writing simple option values
@@ -414,17 +760,29 @@ export async function setupSiteForAI(
 
       if (result.success) {
         try {
-          const parsed = JSON.parse((result.stdout ?? '').trim());
-          aiFeatures = parsed.enabled > 0 ? 'enabled' : 'failed';
+          const verified = JSON.parse((result.stdout ?? '').trim());
+
+          // Check if all options were successfully written
+          const allEnabled = Object.values(verified).every(v => v === true);
+          const enabledCount = Object.values(verified).filter(v => v === true).length;
+
+          if (allEnabled) {
+            aiFeatures = 'enabled';
+            logger.info(`${tag} Verified: All AI features enabled (global + ${AI_EXPERIMENT_IDS.length} individual features) on site ${siteId}`);
+          } else {
+            // Partial success - some options didn't stick
+            const failed = Object.keys(verified).filter(k => verified[k] !== true);
+            logger.error(`${tag} Partial enable: ${enabledCount}/${Object.keys(verified).length} features enabled. Failed: ${failed.join(', ')}`);
+            aiFeatures = enabledCount > 0 ? 'enabled' : 'failed';
+          }
         } catch {
           // Got stdout but couldn't parse — assume success if command succeeded
+          logger.error(`${tag} Could not verify AI features - assuming success based on wp-cli exit code`);
           aiFeatures = 'enabled';
         }
       } else {
         throw new Error(result.stdout ?? 'Unknown error');
       }
-
-      logger.info(`${tag} Enabled AI experiments on site ${siteId}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(`${tag} AI features step failed: ${redactCredentials(msg)}`);
@@ -463,7 +821,13 @@ export async function setupSiteForAI(
     }
   }
 
-  // Step 5: Handle ACF abilities mu-plugin
+  // Step 5: Handle ACF abilities mu-plugin (only if ACF PRO is already installed)
+  // Refresh plugin list to check for ACF PRO
+  try {
+    plugins = await localServices.getPlugins(siteId);
+  } catch {
+    // Continue with stale plugin list
+  }
   let acfAbilities: SetupAIResult['acfAbilities'] = 'skipped';
   const acfPlugin = findPlugin(plugins, 'advanced-custom-fields-pro');
 
@@ -513,11 +877,26 @@ export async function setupSiteForAI(
     case 'failed': parts.push('AI Experiments plugin setup failed'); break;
   }
 
+  switch (connectorPlugin) {
+    case 'installed': parts.push('Nexus AI Connector plugin installed'); break;
+    case 'already_active': parts.push('Nexus AI Connector plugin already active'); break;
+    case 'skipped': break;
+    case 'failed': parts.push('Nexus AI Connector plugin failed'); break;
+  }
+
   switch (providerPlugins) {
     case 'installed': parts.push('AI provider plugin(s) installed'); break;
     case 'already_active': parts.push('AI provider plugin(s) already active'); break;
     case 'skipped': break;
     case 'failed': parts.push('AI provider plugin installation failed'); break;
+  }
+
+  switch (gatewayProvider) {
+    case 'installed': parts.push('Local Gateway provider installed'); break;
+    case 'activated': parts.push('Local Gateway provider activated'); break;
+    case 'already_active': parts.push('Local Gateway provider already active'); break;
+    case 'skipped': break;
+    case 'failed': parts.push('Local Gateway provider failed'); break;
   }
 
   switch (ollamaProvider) {
@@ -553,7 +932,9 @@ export async function setupSiteForAI(
   return {
     success,
     aiPlugin,
+    connectorPlugin,
     providerPlugins,
+    gatewayProvider,
     ollamaProvider,
     aiFeatures,
     credentials,

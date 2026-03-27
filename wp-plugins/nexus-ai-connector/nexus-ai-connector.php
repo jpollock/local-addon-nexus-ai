@@ -47,12 +47,18 @@ function nexus_ai_register_hooks() {
     // Content events
     add_action('save_post', 'nexus_ai_handle_post_save', 10, 3);
     add_action('delete_post', 'nexus_ai_handle_post_delete', 10, 1);
+    add_action('wp_trash_post', 'nexus_ai_handle_post_trash', 10, 1);
+    add_action('untrashed_post', 'nexus_ai_handle_post_untrash', 10, 1);
 
     // Plugin events
     add_action('activated_plugin', 'nexus_ai_handle_plugin_activated', 10, 2);
     add_action('deactivated_plugin', 'nexus_ai_handle_plugin_deactivated', 10, 2);
     add_action('upgrader_process_complete', 'nexus_ai_handle_upgrader_complete', 10, 2);
     add_action('deleted_plugin', 'nexus_ai_handle_plugin_deleted', 10, 2);
+
+    // Theme events
+    add_action('switch_theme', 'nexus_ai_handle_theme_activated', 10, 3);
+    add_action('deleted_theme', 'nexus_ai_handle_theme_deleted', 10, 2);
 
     // User events
     add_action('user_register', 'nexus_ai_handle_user_created', 10, 1);
@@ -146,6 +152,56 @@ function nexus_ai_handle_post_delete($post_id) {
 }
 
 /**
+ * Handle post trash
+ *
+ * @param int $post_id Post ID
+ */
+function nexus_ai_handle_post_trash($post_id) {
+    error_log('[Nexus AI] wp_trash_post hook fired for post #' . $post_id);
+
+    // Get post data
+    $post = get_post($post_id);
+
+    if (!$post) {
+        error_log('[Nexus AI] Post #' . $post_id . ' not found, skipping');
+        return;
+    }
+
+    // Build event
+    $event = Nexus_AI_Event_Builder::build_post_event('post_trashed', $post);
+
+    error_log('[Nexus AI] Sending post_trashed event for post #' . $post_id);
+
+    // Send to Local
+    Nexus_AI_HTTP_Client::send_event($event);
+}
+
+/**
+ * Handle post untrash (restore from trash)
+ *
+ * @param int $post_id Post ID
+ */
+function nexus_ai_handle_post_untrash($post_id) {
+    error_log('[Nexus AI] untrashed_post hook fired for post #' . $post_id);
+
+    // Get post data
+    $post = get_post($post_id);
+
+    if (!$post) {
+        error_log('[Nexus AI] Post #' . $post_id . ' not found, skipping');
+        return;
+    }
+
+    // Build event
+    $event = Nexus_AI_Event_Builder::build_post_event('post_untrashed', $post);
+
+    error_log('[Nexus AI] Sending post_untrashed event for post #' . $post_id);
+
+    // Send to Local
+    Nexus_AI_HTTP_Client::send_event($event);
+}
+
+/**
  * Handle plugin activation
  *
  * @param string $plugin_file Plugin file path (e.g., 'akismet/akismet.php')
@@ -182,38 +238,54 @@ function nexus_ai_handle_plugin_deactivated($plugin_file, $network_wide) {
 }
 
 /**
- * Handle plugin updates
+ * Handle plugin/theme installs and updates via upgrader
  *
  * @param WP_Upgrader $upgrader WP_Upgrader instance
  * @param array       $options  Array of bulk item update data
  */
 function nexus_ai_handle_upgrader_complete($upgrader, $options) {
-    // Only handle plugin updates
-    if (!isset($options['type']) || $options['type'] !== 'plugin') {
+    $type = $options['type'] ?? null;
+    $action = $options['action'] ?? null;
+
+    if (!$type || !$action) {
         return;
     }
 
-    // Only handle update actions
-    if (!isset($options['action']) || $options['action'] !== 'update') {
-        return;
+    error_log('[Nexus AI] upgrader_process_complete hook fired (type: ' . $type . ', action: ' . $action . ')');
+
+    // Handle plugin installs and updates
+    if ($type === 'plugin') {
+        // Get list of plugins
+        $plugins = [];
+        if (isset($options['plugins']) && is_array($options['plugins'])) {
+            $plugins = $options['plugins'];
+        } elseif (isset($options['plugin'])) {
+            $plugins = [$options['plugin']];
+        }
+
+        // Determine event type based on action
+        $event_type = ($action === 'install') ? 'plugin_installed' : 'plugin_updated';
+
+        // Send event for each plugin
+        foreach ($plugins as $plugin_file) {
+            error_log('[Nexus AI] Sending ' . $event_type . ' event for ' . $plugin_file);
+
+            $event = Nexus_AI_Event_Builder::build_plugin_event($event_type, $plugin_file);
+            Nexus_AI_HTTP_Client::send_event($event);
+        }
     }
 
-    error_log('[Nexus AI] upgrader_process_complete hook fired for plugin update');
+    // Handle theme installs
+    if ($type === 'theme' && $action === 'install') {
+        // Get theme slug
+        $theme_slug = $options['theme'] ?? null;
 
-    // Get list of updated plugins
-    $plugins = [];
-    if (isset($options['plugins']) && is_array($options['plugins'])) {
-        $plugins = $options['plugins'];
-    } elseif (isset($options['plugin'])) {
-        $plugins = [$options['plugin']];
-    }
+        if ($theme_slug) {
+            error_log('[Nexus AI] Sending theme_installed event for ' . $theme_slug);
 
-    // Send event for each updated plugin
-    foreach ($plugins as $plugin_file) {
-        error_log('[Nexus AI] Sending plugin_updated event for ' . $plugin_file);
-
-        $event = Nexus_AI_Event_Builder::build_plugin_event('plugin_updated', $plugin_file);
-        Nexus_AI_HTTP_Client::send_event($event);
+            $event = Nexus_AI_Event_Builder::build_theme_event('theme_installed', $theme_slug);
+            Nexus_AI_HTTP_Client::send_event($event);
+        }
     }
 }
 
@@ -315,6 +387,48 @@ function nexus_ai_handle_user_deleted($user_id, $reassign) {
     $event = Nexus_AI_Event_Builder::build_user_deleted_event($user_id, $user);
 
     error_log('[Nexus AI] Sending user_deleted event for user #' . $user_id);
+
+    // Send to Local
+    Nexus_AI_HTTP_Client::send_event($event);
+}
+
+/**
+ * Handle theme activation (when user switches themes)
+ *
+ * @param string   $new_name  New theme name
+ * @param WP_Theme $new_theme New theme object
+ * @param WP_Theme $old_theme Old theme object
+ */
+function nexus_ai_handle_theme_activated($new_name, $new_theme, $old_theme) {
+    error_log('[Nexus AI] switch_theme hook fired - new theme: ' . $new_name);
+
+    // Build event for newly activated theme
+    $event = Nexus_AI_Event_Builder::build_theme_event('theme_activated', $new_theme->get_stylesheet());
+
+    error_log('[Nexus AI] Sending theme_activated event for ' . $new_theme->get_stylesheet());
+
+    // Send to Local
+    Nexus_AI_HTTP_Client::send_event($event);
+}
+
+/**
+ * Handle theme deletion
+ *
+ * @param string $stylesheet Theme stylesheet (slug)
+ * @param bool   $deleted    Whether the theme was successfully deleted
+ */
+function nexus_ai_handle_theme_deleted($stylesheet, $deleted) {
+    error_log('[Nexus AI] deleted_theme hook fired for ' . $stylesheet);
+
+    if (!$deleted) {
+        error_log('[Nexus AI] Theme deletion failed, skipping event');
+        return;
+    }
+
+    // Build event (theme is already deleted, so we only have the slug)
+    $event = Nexus_AI_Event_Builder::build_theme_deleted_event($stylesheet);
+
+    error_log('[Nexus AI] Sending theme_deleted event for ' . $stylesheet);
 
     // Send to Local
     Nexus_AI_HTTP_Client::send_event($event);

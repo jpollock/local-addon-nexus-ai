@@ -32,7 +32,8 @@ for (let i = 0; i < args.length; i++) {
 const projectRoot = path.join(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
 const version = pkg.version;
-const archiveName = `local-addon-nexus-ai-${version}-${platform}-${arch}.tar.gz`;
+// Format matches auto-install expectation: nexus-ai-darwin-arm64-0.1.0.tgz
+const archiveName = `nexus-ai-${platform}-${arch}-${version}.tgz`;
 
 console.log(`\nPackaging ${pkg.name} v${version} for ${platform}-${arch}\n`);
 
@@ -97,6 +98,18 @@ console.log('Installing production dependencies...');
 execSync('npm install --omit=dev', { cwd: stagingDir, stdio: 'inherit' });
 
 // ---------------------------------------------------------------------------
+// Step 4.5: Rebuild native modules for Electron
+// ---------------------------------------------------------------------------
+
+console.log('Rebuilding native modules for Electron...');
+// Run from project root (where electron-rebuild is installed as devDep)
+// but target the staging directory
+execSync(
+  `npx electron-rebuild -v 37.8.0 -f -w better-sqlite3 --module-dir "${stagingDir}"`,
+  { cwd: projectRoot, stdio: 'inherit' }
+);
+
+// ---------------------------------------------------------------------------
 // Step 5: Strip non-target platform binaries
 // ---------------------------------------------------------------------------
 
@@ -115,8 +128,9 @@ if (fs.existsSync(stripScript)) {
 const archivePath = path.join(distDir, archiveName);
 console.log(`\nCreating ${archiveName}...`);
 
+// Create tarball with contents at root level (not nested in a directory)
 execSync(
-  `tar -czf "${archivePath}" -C "${path.dirname(stagingDir)}" "${path.basename(stagingDir)}"`,
+  `tar -czf "${archivePath}" -C "${stagingDir}" .`,
   { stdio: 'inherit' },
 );
 

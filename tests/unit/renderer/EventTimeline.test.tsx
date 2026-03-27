@@ -367,7 +367,7 @@ describe('EventTimeline', () => {
   });
 
   describe('rendering states', () => {
-    test('should render event entries', () => {
+    test('should render event list with events', () => {
       const mockEvents: EventTimelineEntry[] = [
         {
           id: 1,
@@ -386,9 +386,9 @@ describe('EventTimeline', () => {
       instance.state.events = mockEvents;
       instance.state.loading = false;
 
-      const entry = instance.renderEventEntry(mockEvents[0]);
-      expect(entry).toBeDefined();
-      expect(entry).not.toBeNull();
+      const list = instance.renderEventList();
+      expect(list).toBeDefined();
+      expect(list).not.toBeNull();
     });
 
     test('should render empty state when no events', () => {
@@ -464,9 +464,9 @@ describe('EventTimeline', () => {
       instance.state.events = mockEvents;
       instance.state.loading = false;
 
-      const entry = instance.renderEventEntry(mockEvents[0]);
-      expect(entry).toBeDefined();
-      expect(entry).not.toBeNull();
+      const list = instance.renderEventList();
+      expect(list).toBeDefined();
+      expect(list).not.toBeNull();
     });
   });
 });

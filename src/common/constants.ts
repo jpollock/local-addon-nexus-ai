@@ -21,6 +21,8 @@ export const IPC_CHANNELS = {
 
   // AI Setup
   SETUP_AI: `${ADDON_PREFIX}:setup-ai`,
+  GET_WP_VERSION: `${ADDON_PREFIX}:get-wp-version`,
+  UPGRADE_WP: `${ADDON_PREFIX}:upgrade-wp`,
 
   // Chat
   CHAT_SEND: `${ADDON_PREFIX}:chat-send`,
@@ -102,9 +104,27 @@ export const IPC_CHANNELS = {
   SIDEBAR_FILTER: `${ADDON_PREFIX}:sidebar:filter`,
   SIDEBAR_BULK_ACTION: `${ADDON_PREFIX}:sidebar:bulk-action`,
   SIDEBAR_SEARCH_TOGGLE: `${ADDON_PREFIX}:sidebar:search-toggle`,
+  SIDEBAR_NAVIGATE_TO_SITE: `${ADDON_PREFIX}:sidebar:navigate-to-site`,
 
   // Graph Sync
   SYNC_GRAPH_ALL: `${ADDON_PREFIX}:sync-graph-all`,
+
+  // Digital Twin (Site Metadata Cache)
+  GET_SITE_METADATA: `${ADDON_PREFIX}:metadata:get`,
+  REFRESH_SITE_METADATA: `${ADDON_PREFIX}:metadata:refresh`,
+
+  // AI Gateway (Centralized AI Routing)
+  AI_GATEWAY_GET_USAGE: `${ADDON_PREFIX}:ai-gateway:get-usage`,
+  AI_GATEWAY_GET_COST: `${ADDON_PREFIX}:ai-gateway:get-cost`,
+  AI_GATEWAY_GET_STATS: `${ADDON_PREFIX}:ai-gateway:get-stats`,
+  AI_GATEWAY_CLEAR_USAGE: `${ADDON_PREFIX}:ai-gateway:clear-usage`,
+  AI_GATEWAY_GET_RATE_LIMIT: `${ADDON_PREFIX}:ai-gateway:get-rate-limit`,
+  AI_GATEWAY_SET_RATE_LIMIT: `${ADDON_PREFIX}:ai-gateway:set-rate-limit`,
+  AI_GATEWAY_CHECK_RATE_LIMIT: `${ADDON_PREFIX}:ai-gateway:check-rate-limit`,
+
+  // AI Context File Generation
+  AI_CONTEXT_GENERATE: `${ADDON_PREFIX}:ai-context:generate`,
+  AI_CONTEXT_GET_STATUS: `${ADDON_PREFIX}:ai-context:get-status`,
 
   // WPE Site Sync (Phase 1)
   WPE_SYNC_ALL: `${ADDON_PREFIX}:wpe:sync-all`,
@@ -163,6 +183,8 @@ export const STORAGE_KEYS = {
   MCP_TOKEN: `${ADDON_PREFIX}_mcp_token`,
   API_KEYS: `${ADDON_PREFIX}_api_keys`,
   API_KEY_STATUS: `${ADDON_PREFIX}_api_key_status`,
+  AI_SETUP_STATE: `${ADDON_PREFIX}_ai_setup_state`, // Track which sites have AI setup complete
+  SITE_METADATA: `${ADDON_PREFIX}_site_metadata`, // Digital twin: cached site state (WP version, plugins, themes)
 } as const;
 
 // ---------------------------------------------------------------------------

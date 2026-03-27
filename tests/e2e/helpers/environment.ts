@@ -39,18 +39,25 @@ export interface E2EEnvironment {
 // ---------------------------------------------------------------------------
 
 const MCP_CONNECTION_INFO_FILE = 'nexus-ai-mcp-connection-info.json';
+const GRAPHQL_CONNECTION_INFO_FILE = 'graphql-connection-info.json';
+
+function getLocalDataDir(): string {
+  const platform = os.platform();
+  if (platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Application Support', 'Local');
+  } else if (platform === 'win32') {
+    return path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'Local');
+  } else {
+    return path.join(os.homedir(), '.config', 'Local');
+  }
+}
 
 function getConnectionInfoPath(): string {
-  const platform = os.platform();
-  let dataDir: string;
-  if (platform === 'darwin') {
-    dataDir = path.join(os.homedir(), 'Library', 'Application Support', 'Local');
-  } else if (platform === 'win32') {
-    dataDir = path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'Local');
-  } else {
-    dataDir = path.join(os.homedir(), '.config', 'Local');
-  }
-  return path.join(dataDir, MCP_CONNECTION_INFO_FILE);
+  return path.join(getLocalDataDir(), MCP_CONNECTION_INFO_FILE);
+}
+
+function getGraphQLConnectionInfoPath(): string {
+  return path.join(getLocalDataDir(), GRAPHQL_CONNECTION_INFO_FILE);
 }
 
 export function loadConnectionInfo(): ConnectionInfo | null {
@@ -58,6 +65,19 @@ export function loadConnectionInfo(): ConnectionInfo | null {
   try {
     const data = fs.readFileSync(filePath, 'utf-8');
     return JSON.parse(data) as ConnectionInfo;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load GraphQL connection info (for CLI testing).
+ */
+export function loadGraphQLConnectionInfo(): any | null {
+  const filePath = getGraphQLConnectionInfoPath();
+  try {
+    const data = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(data);
   } catch {
     return null;
   }
@@ -73,9 +93,9 @@ export function loadConnectionInfo(): ConnectionInfo | null {
  * Actual output format from the tool:
  *   ## Local Sites (2 total, 1 running)
  *   ### Running
- *   - **SiteName** (domain.local) [indexed: yes]
+ *   - **SiteName** (domain.local) [id: abc123, indexed: yes]
  *   ### Halted
- *   - SiteName (domain.local) [halted]
+ *   - SiteName (domain.local) [id: def456, halted]
  *
  * Note: local_list_sites does NOT include site IDs — only names and domains.
  * We use names as identifiers since all tools accept site names.
@@ -100,7 +120,7 @@ function parseSiteListOutput(text: string): { running: SiteInfo[]; halted: SiteI
       continue;
     }
 
-    // Parse site lines: "- **Name** (domain) [...]" or "- Name (domain) [...]"
+    // Parse site lines: "- **Name** (domain) [id: abc123, ...]" or "- Name (domain) [id: abc123, ...]"
     const boldMatch = trimmed.match(/^-\s+\*\*(.+?)\*\*\s+\(([^)]+)\)/);
     const plainMatch = !boldMatch ? trimmed.match(/^-\s+(.+?)\s+\(([^)]+)\)/) : null;
     const match = boldMatch || plainMatch;
@@ -108,8 +128,12 @@ function parseSiteListOutput(text: string): { running: SiteInfo[]; halted: SiteI
 
     const name = match[1].trim();
     const domain = match[2].trim();
-    // Use name as ID since local_list_sites doesn't include IDs
-    const site: SiteInfo = { id: name, name, domain };
+
+    // Extract ID from the [...] section
+    const idMatch = trimmed.match(/\[id:\s*(\S+)/);
+    const id = idMatch ? idMatch[1].replace(/,$/, '') : name; // Remove trailing comma if present
+
+    const site: SiteInfo = { id, name, domain };
 
     if (currentSection === 'running') {
       running.push(site);
@@ -167,15 +191,53 @@ async function isMcpServerReachable(): Promise<boolean> {
 }
 
 /**
+ * Check if GraphQL connection info exists (for CLI testing).
+ */
+async function isGraphQLConnectionReady(): Promise<boolean> {
+  const connectionInfo = loadGraphQLConnectionInfo();
+  return connectionInfo !== null;
+}
+
+/**
+ * Kill any running Local.app processes to ensure clean E2E environment.
+ */
+function killExistingLocal(): void {
+  try {
+    const { execSync } = require('child_process');
+    // Kill any Local.app processes (production or dev)
+    execSync('pkill -f "Local.app" || true', { stdio: 'ignore' });
+    execSync('pkill -f "local-lightning" || true', { stdio: 'ignore' });
+    console.log('[E2E Local] Killed existing Local processes');
+    // Wait for processes to fully terminate
+    const start = Date.now();
+    while (Date.now() - start < 5000) {
+      try {
+        execSync('pgrep -f "Local.app"', { stdio: 'ignore' });
+        // Still running, wait a bit more
+        require('child_process').execSync('sleep 0.5');
+      } catch {
+        // Process gone
+        break;
+      }
+    }
+  } catch {
+    // No processes to kill or already dead
+  }
+}
+
+/**
  * Start the Local Electron app and wait for the MCP server to become reachable.
  * Returns the child process, or null if Local was already running.
  */
 export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | null> {
-  // If MCP server is already up, Local is running — nothing to do
-  if (await isMcpServerReachable()) {
-    console.log('[E2E Local] MCP server already reachable — Local is running');
-    return null;
-  }
+  // Kill any existing Local instances to ensure clean startup
+  killExistingLocal();
+
+  // Delete stale connection info files
+  const mcpInfoPath = getConnectionInfoPath();
+  const graphqlInfoPath = getGraphQLConnectionInfoPath();
+  try { fs.unlinkSync(mcpInfoPath); } catch { /* file may not exist */ }
+  try { fs.unlinkSync(graphqlInfoPath); } catch { /* file may not exist */ }
 
   const localPath = resolveLocalRepoPath();
   if (!localPath) {
@@ -197,15 +259,14 @@ export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | nul
 
   console.log(`[E2E Local] Starting Local from ${localPath}...`);
 
-  // Delete stale connection info so we can detect fresh startup
-  const connInfoPath = getConnectionInfoPath();
-  try { fs.unlinkSync(connInfoPath); } catch { /* file may not exist */ }
-
   const child = spawn(electronBin, ['--remote-debugging-port=9223', buildDir], {
     cwd: localPath,
     stdio: 'ignore',
     detached: true,
-    env: { ...process.env },
+    env: {
+      ...process.env,
+      GRAPHQL_AUTH_TOKEN: 'local-dev', // Use known auth token for development
+    },
   });
 
   // Don't let the child keep the parent alive if something goes wrong
@@ -225,6 +286,23 @@ export async function startLocal(timeoutMs = 120000): Promise<ChildProcess | nul
   while (Date.now() - start < timeoutMs) {
     if (await isMcpServerReachable()) {
       console.log(`[E2E Local] MCP server ready (${Math.round((Date.now() - start) / 1000)}s)`);
+
+      // Wait for Local's GraphQL service to write connection info (for CLI tests)
+      console.log('[E2E Local] Waiting for GraphQL connection info...');
+      const graphqlStart = Date.now();
+      const graphqlTimeout = 30000; // 30 second timeout for GraphQL
+
+      while (Date.now() - graphqlStart < graphqlTimeout) {
+        if (await isGraphQLConnectionReady()) {
+          const graphqlInfo = loadGraphQLConnectionInfo();
+          console.log(`[E2E Local] GraphQL ready on port ${graphqlInfo.port} (${Math.round((Date.now() - graphqlStart) / 1000)}s)`);
+          return child;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      // GraphQL didn't start in time - warn but continue (MCP tests will still work)
+      console.warn('[E2E Local] WARNING: GraphQL connection info not available. CLI tests may fail.');
       return child;
     }
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -345,40 +423,30 @@ export async function discoverEnvironment(): Promise<E2EEnvironment> {
     if (existing) {
       console.log(`[E2E Setup] Found existing test site: ${existing.name}`);
 
-      // Start it if halted
+      // Use the test site even if halted (CLI tests don't need it running)
       const isHalted = haltedSites.some((s) => s.name === existing.name);
       if (isHalted) {
-        console.log('[E2E Setup] Starting halted test site...');
-        try {
-          await client.callTool('local_start_site', { site: existing.name });
-          await waitForSiteRunning(client, existing.name, 120000);
-
-          // Re-fetch site list to update runningSites array
-          const result = await client.callTool('local_list_sites');
-          if (!result.isError && result.content[0]?.text) {
-            const parsed = parseSiteListOutput(result.content[0].text);
-            runningSites = parsed.running;
-            haltedSites = parsed.halted;
-          }
-        } catch (err) {
-          console.warn(`[E2E Setup] Failed to start test site: ${err}`);
-        }
+        console.log('[E2E Setup] Test site is halted - will use for CLI tests');
+        // NOTE: Attempting to start sites with broken MySQL causes Local GraphQL to freeze
+        // CLI tests can work with halted sites (they just list sites, don't need WordPress)
+        // Tests that require WordPress should check for running sites and skip if needed
       }
 
-      // Validate the site has a working WordPress by running a simple WP-CLI command
-      try {
-        const versionResult = await client.callTool('wp_core_version', { site: existing.name });
-        if (versionResult.isError) {
-          console.warn(`[E2E Setup] Test site "${existing.name}" has broken WordPress — skipping as test site`);
-          console.warn(`[E2E Setup] (${versionResult.content[0]?.text})`);
-          // Don't use this site for mutations — WP-CLI won't work
-        } else {
-          testSiteId = existing.name;
-          testSiteName = existing.name;
-          console.log(`[E2E Setup] Test site validated (WP ${versionResult.content[0]?.text?.trim()})`);
+      // Use this as the test site for CLI tests (even if halted)
+      testSiteId = existing.id;
+      testSiteName = existing.name;
+      console.log(`[E2E Setup] Using "${existing.name}" as test site (${isHalted ? 'halted' : 'running'})`);
+
+      // Skip WordPress validation for halted sites (would require starting them)
+      if (!isHalted) {
+        try {
+          const versionResult = await client.callTool('wp_core_version', { site: existing.name });
+          if (!versionResult.isError) {
+            console.log(`[E2E Setup] Test site validated (WP ${versionResult.content[0]?.text?.trim()})`);
+          }
+        } catch {
+          console.warn('[E2E Setup] Could not validate test site WordPress');
         }
-      } catch {
-        console.warn('[E2E Setup] Could not validate test site — skipping as test site');
       }
     } else {
       // Create a new test site
@@ -503,14 +571,18 @@ export function getClient(): McpClient {
 }
 
 /**
- * Get the first running site, or throw if none available.
+ * Get any site (prefers running, falls back to halted).
+ * CLI tests can work with halted sites.
  */
 export function getAnySite(): SiteInfo {
   const env = deserializeEnvironment();
-  if (env.runningSites.length === 0) {
-    throw new Error('No running sites available for E2E tests');
+  if (env.runningSites.length > 0) {
+    return env.runningSites[0];
   }
-  return env.runningSites[0];
+  if (env.haltedSites.length > 0) {
+    return env.haltedSites[0];
+  }
+  throw new Error('No sites available for E2E tests (need at least one Local site)');
 }
 
 /**
@@ -542,4 +614,22 @@ export function expectSuccess(result: McpToolResult): void {
   if (result.isError) {
     throw new Error(`Tool returned error: ${resultText(result)}`);
   }
+}
+
+/**
+ * Poll a condition until it's true or timeout.
+ */
+export async function waitFor(
+  condition: () => Promise<boolean>,
+  timeoutMs: number = 10000,
+  intervalMs: number = 500,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await condition()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`waitFor timed out after ${timeoutMs}ms`);
 }

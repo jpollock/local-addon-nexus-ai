@@ -6,6 +6,7 @@ import { registerFleetTools } from '../../src/main/mcp/modules/fleet/index';
 import { registerSiteManagementTools } from '../../src/main/mcp/modules/site-management/index';
 import { registerWpCliTools } from '../../src/main/mcp/modules/wp-cli/index';
 import { registerWpeTools } from '../../src/main/mcp/modules/wpe/index';
+import { registerWpConnectorTools } from '../../src/main/mcp/modules/wp-connector/index';
 import { TIER_OVERRIDES } from '../../src/main/mcp/safety';
 import { createStubBridge } from './helpers/stub-bridge';
 import { createSiteData } from './helpers/fixtures';
@@ -36,6 +37,7 @@ describe('Tool Registry with All Modules', () => {
     registerSiteManagementTools(registry);
     registerWpCliTools(registry);
     registerWpeTools(registry);
+    registerWpConnectorTools(registry);
   });
 
   test('all expected tools are registered', () => {
@@ -103,8 +105,15 @@ describe('Tool Registry with All Modules', () => {
 
   test('every tool in TIER_OVERRIDES is actually registered', () => {
     const registeredNames = new Set(registry.allToolNames());
+    const missing: string[] = [];
     for (const name of Object.keys(TIER_OVERRIDES)) {
-      expect(registeredNames.has(name)).toBe(true);
+      if (!registeredNames.has(name)) {
+        missing.push(name);
+      }
     }
+    if (missing.length > 0) {
+      console.log('Missing tools:', missing);
+    }
+    expect(missing.length).toBe(0);
   });
 });

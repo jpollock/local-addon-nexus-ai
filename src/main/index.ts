@@ -20,6 +20,9 @@ import { registerWpeTools } from './mcp/modules/wpe/index';
 import { registerCompositeTools } from './mcp/modules/composite/index';
 import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
 import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence/index';
+import { registerTelemetryTools } from './mcp/modules/telemetry-tools';
+import { registerTelemetryControlTools } from './mcp/modules/telemetry-control-tools';
+import { registerTestTools } from './mcp/modules/test-tools';
 import { saveConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
 import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
@@ -36,6 +39,9 @@ import { CredentialSyncBroadcaster } from './credentials/CredentialSyncBroadcast
 import { WPESyncService } from './events/WPESyncService';
 import { RemoteContentExtractor } from './content/RemoteContentExtractor';
 import { AiProxyServer } from './ai-proxy/AiProxyServer';
+import { typeDefs } from './graphql/schema';
+import { createResolvers } from './graphql/resolvers';
+import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -46,7 +52,7 @@ let mcpServer: McpServer | null = null;
 export default function main(context: any): void {
   console.log('[NexusAI] 🟢🟢🟢 MAIN ENTRY POINT CALLED');
   const serviceContainer = LocalMain.getServiceContainer().cradle;
-  const { localLogger, userData, siteData } = serviceContainer;
+  const { localLogger, userData, siteData, graphql } = serviceContainer;
   console.log('[NexusAI] 🟢 Service container loaded');
 
   localLogger.info('[NexusAI] Addon loading...');
@@ -56,6 +62,9 @@ export default function main(context: any): void {
     get: (key: string) => userData.get(key) ?? null,
     set: (key: string, value: any) => userData.set(key, value),
   };
+
+  // Digital Twin: Site metadata cache (created early for lifecycle hooks)
+  const metadataCache = new SiteMetadataCache(registryStorage);
 
   // Build SiteDataAccessor from Local's siteData service
   const siteDataAccessor: SiteDataAccessor = {
@@ -119,7 +128,7 @@ export default function main(context: any): void {
 
   // Phase 2: Register lifecycle hooks (pass readyPromise so they wait for init)
   const localServicesBridge = createLocalServicesBridge(serviceContainer);
-  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge);
+  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge, metadataCache);
 
   // Phase 3: Boot MCP server (async — does not block addon load)
   const auditLogger = createAuditLogger(
@@ -138,6 +147,7 @@ export default function main(context: any): void {
   const httpEventInterface = new HttpEventInterface({
     eventProcessor,
     logger: localLogger,
+    storage: registryStorage,
   });
 
   // Initialize WPE sync service (Phase 1-2)
@@ -181,6 +191,25 @@ export default function main(context: any): void {
   registerCompositeTools(registry);
   registerWpConnectorTools(registry);
   registerFleetIntelligenceTools(registry);
+  registerTelemetryTools(registry);
+  registerTelemetryControlTools(registry);
+  registerTestTools(registry);
+
+  // Phase 3a: Register GraphQL schema for Nexus CLI
+  if (graphql) {
+    try {
+      const resolvers = createResolvers({
+        registry,
+        services: nexusServices as any,
+      });
+      graphql.registerGraphQLService('nexus-ai', typeDefs, resolvers);
+      localLogger.info('[NexusAI] Registered GraphQL: 5 CLI mutations (POC)');
+    } catch (error: any) {
+      localLogger.error('[NexusAI] Failed to register GraphQL:', error);
+    }
+  } else {
+    localLogger.warn('[NexusAI] GraphQL service not available - CLI will not work');
+  }
 
   // Phase 3b: Chat providers + service
   initializeProviders();
@@ -255,13 +284,38 @@ export default function main(context: any): void {
       // Start Ollama availability polling
       refreshOllamaStatus();
       setInterval(() => refreshOllamaStatus(), OLLAMA_POLL_INTERVAL_MS);
+
+      // Start periodic health check transmission (every hour)
+      // Transmits anonymous health metrics to Cloudflare for analytics
+      const { getHealthMonitor } = require('./telemetry/HealthMonitor');
+      setInterval(() => {
+        try {
+          const healthMonitor = getHealthMonitor();
+          const activeSites = indexRegistry.listAll().length;
+          healthMonitor.transmitHealthCheck(activeSites);
+        } catch {
+          // Ignore telemetry errors
+        }
+      }, 3600000); // 1 hour
     } catch (err) {
+      const error = err as any;
       rejectReady!(err as Error);
-      localLogger.error('[NexusAI] Failed to start:', (err as Error).message, (err as Error).stack);
+
+      // Log detailed error info for debugging
+      const errorDetails = {
+        message: error?.message || 'Unknown error',
+        code: error?.code || 'NO_CODE',
+        stack: error?.stack || 'No stack trace',
+        name: error?.name || 'Unknown',
+      };
+
+      localLogger.error('[NexusAI] Failed to start:', errorDetails);
+      console.error('[NexusAI] Startup error details:', errorDetails);
     }
   })();
 
   console.log('[NexusAI] 🟢 About to call registerIpcHandlers()');
+
   // Phase 4: IPC handlers
   registerIpcHandlers({
     siteData,
@@ -279,6 +333,7 @@ export default function main(context: any): void {
     serviceContainer,
     nexusServices,
     wpeSyncService,
+    metadataCache,
   });
 
   // Sprint 4: Credential sync broadcaster

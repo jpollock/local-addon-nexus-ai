@@ -7,6 +7,7 @@ import {
   EventProcessorStats,
   PostEventPayload,
   PluginEventPayload,
+  ThemeEventPayload,
   UserEventPayload,
   SiteEventPayload,
 } from './types';
@@ -156,6 +157,8 @@ export class EventProcessor {
     switch (event.event_type) {
       case 'post_created':
       case 'post_updated':
+      case 'post_trashed':
+      case 'post_untrashed':
         await this.processPostEvent(event.site_id, payload as PostEventPayload, event.event_type);
         this.sitesToOptimize.add(event.site_id);
         break;
@@ -165,6 +168,7 @@ export class EventProcessor {
         this.sitesToOptimize.add(event.site_id);
         break;
 
+      case 'plugin_installed':
       case 'plugin_activated':
       case 'plugin_deactivated':
       case 'plugin_updated':
@@ -173,6 +177,15 @@ export class EventProcessor {
 
       case 'plugin_deleted':
         await this.processPluginDeletion(event.site_id, payload as PluginEventPayload);
+        break;
+
+      case 'theme_installed':
+      case 'theme_activated':
+        await this.processThemeEvent(event.site_id, payload as ThemeEventPayload);
+        break;
+
+      case 'theme_deleted':
+        await this.processThemeDeletion(event.site_id, payload as ThemeEventPayload);
         break;
 
       case 'user_created':
@@ -269,6 +282,23 @@ export class EventProcessor {
 
   private async processPluginDeletion(siteId: string, payload: PluginEventPayload): Promise<void> {
     await this.graphService.deletePlugin(siteId, payload.slug);
+  }
+
+  private async processThemeEvent(siteId: string, payload: ThemeEventPayload): Promise<void> {
+    await this.graphService.upsertTheme({
+      site_id: siteId,
+      slug: payload.slug,
+      name: payload.name,
+      version: payload.version ?? null,
+      is_active: payload.is_active,
+      author: payload.author ?? null,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+  }
+
+  private async processThemeDeletion(siteId: string, payload: ThemeEventPayload): Promise<void> {
+    await this.graphService.deleteTheme(siteId, payload.slug);
   }
 
   private async processUserEvent(siteId: string, payload: UserEventPayload): Promise<void> {

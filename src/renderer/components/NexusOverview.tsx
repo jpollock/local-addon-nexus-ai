@@ -14,6 +14,18 @@ import { StorageHealthPanel } from './StorageHealthPanel';
 import { TopIssuesPanel } from './TopIssuesPanel';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
+import { AIGatewayUsagePanel } from './AIGatewayUsagePanel';
+import { AIGatewayByCallerPanel } from './AIGatewayByCallerPanel';
+import { LoadingSpinner } from './LoadingSpinner';
+
+// Local's native notification components
+let toast: any = null;
+try {
+  const localComponents = require('@getflywheel/local-components');
+  toast = localComponents.toast;
+} catch (err) {
+  console.warn('[Nexus AI] Could not load Local toast:', err);
+}
 
 interface NexusOverviewProps {
   NavLink: any;
@@ -104,7 +116,7 @@ interface NexusOverviewState {
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'operations';
+  activeTab: 'overview' | 'activity' | 'operations';
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -126,6 +138,12 @@ interface NexusOverviewState {
   pullingInstall: string | null;
   wpeSyncing: boolean;
   wpeSyncProgress: { total: number; current: number; currentSite: string; status: string } | null;
+  wpeSyncedCount: number;
+  wpeSyncError: string | null;
+  // Credential sync state
+  syncStatus: Record<string, { lastSync: number; success: boolean }>;
+  syncing: boolean;
+  syncResults: Array<{ siteId: string; siteName: string; success: boolean; providers: string[]; error?: string }> | null;
 }
 
 // -- Shared styles --
@@ -285,6 +303,11 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     pullingInstall: null,
     wpeSyncing: false,
     wpeSyncProgress: null,
+    wpeSyncedCount: 0,
+    wpeSyncError: null,
+    syncStatus: {},
+    syncing: false,
+    syncResults: null,
   };
 
   componentDidMount(): void {
@@ -345,7 +368,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -353,6 +376,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_AI_PROXY_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
         ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES),
+        ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
       ]);
       if (!this.mounted) return;
 
@@ -407,6 +431,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         aiProxy: proxyResult?.proxy ?? null,
         settings: settings ?? null,
         hasLLM,
+        syncStatus: syncStatus ?? {},
         loading: false,
         error: stats ? null : 'Failed to load stats',
       });
@@ -932,6 +957,9 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     return React.createElement(React.Fragment, null,
       this.renderSetupBanner(stats),
 
+      // Connect AI Tools (moved to top)
+      this.renderMcpPanel(),
+
       this.renderSectionLabel('Sites'),
       React.createElement('div', { style: cardContainerStyle },
         this.renderLocalSitesCard(stats),
@@ -947,13 +975,20 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         this.renderAiProxyCard(),
       ),
 
-      this.renderMcpPanel(),
+      // AI Gateway Usage (moved from Operations tab)
+      React.createElement(AIGatewayUsagePanel, { electron: this.props.electron }),
 
-      
-      // Visibility: Events and Timeline
-      this.renderSectionLabel('Activity'),
+      // AI Gateway By Caller (aggregated view)
+      React.createElement(AIGatewayByCallerPanel, { electron: this.props.electron }),
+    );
+  }
+
+  renderActivityTab(): React.ReactNode {
+    return React.createElement('div', null,
+      // Event Stats Cards
       React.createElement(EventStatsCards, { electron: this.props.electron }),
 
+      // Timeline + Side Panels
       React.createElement('div', {
         style: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '24px' },
       },
@@ -972,6 +1007,7 @@ renderTabBar(): React.ReactNode {
     const { activeTab } = this.state;
     const tabs: { key: NexusOverviewState['activeTab']; label: string }[] = [
       { key: 'overview', label: 'Overview' },
+      { key: 'activity', label: 'Activity' },
       { key: 'operations', label: 'Operations' },
     ];
 
@@ -1092,12 +1128,39 @@ renderTabBar(): React.ReactNode {
 
       // Bulk Operations Panel
       React.createElement(BulkOperationsPanel, { electron: this.props.electron }),
+
+      // Divider
+      React.createElement('hr', {
+        style: {
+          border: 'none',
+          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
+          margin: '32px 0 24px',
+        },
+      }),
+
+      // Credential Sync section
+      this.renderSectionLabel('Credential Sync'),
+      this.renderCredentialSyncSection(),
+
+      // Divider
+      React.createElement('hr', {
+        style: {
+          border: 'none',
+          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
+          margin: '32px 0 24px',
+        },
+      }),
+
+      // WPE Sync section
+      this.renderSectionLabel('WP Engine Sites'),
+      this.renderWpeSyncSection(),
     );
   }
 
   renderActiveTab(): React.ReactNode {
     switch (this.state.activeTab) {
       case 'overview': return this.renderOverviewTab();
+      case 'activity': return this.renderActivityTab();
       case 'operations': return this.renderOperationsTab();
       default: return this.renderOverviewTab();
     }
@@ -1156,6 +1219,277 @@ renderTabBar(): React.ReactNode {
       this.wpeSyncPollInterval = null;
     }
   };
+
+  // Credential Sync methods
+  handleSyncAll = async (): Promise<void> => {
+    this.setState({ syncing: true, syncResults: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_ALL_CREDENTIALS);
+      if (!this.mounted) return;
+
+      const results = result?.results ?? [];
+      this.setState({ syncing: false, syncResults: results });
+
+      // Show toast notification
+      const successCount = results.filter((r: any) => r.success).length;
+      const failCount = results.length - successCount;
+
+      if (toast) {
+        if (failCount === 0 && successCount > 0) {
+          toast({ type: 'success', content: `Successfully synced credentials to ${successCount} site${successCount === 1 ? '' : 's'}` });
+        } else if (failCount > 0 && successCount > 0) {
+          toast({ type: 'error', content: `Synced ${successCount} site${successCount === 1 ? '' : 's'}, ${failCount} failed` });
+        } else if (failCount > 0) {
+          toast({ type: 'error', content: `Failed to sync credentials to ${failCount} site${failCount === 1 ? '' : 's'}` });
+        }
+      }
+
+      // Refresh sync status
+      const syncStatus = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS);
+      if (this.mounted) this.setState({ syncStatus: syncStatus ?? {} });
+    } catch (err) {
+      if (!this.mounted) return;
+      this.setState({ syncing: false, syncResults: [] });
+      if (toast) {
+        toast({ type: 'error', content: 'Failed to sync credentials' });
+      }
+    }
+  };
+
+  handleWpeSync = async (): Promise<void> => {
+    if (this.state.wpeSyncing) return;
+
+    this.setState({ wpeSyncing: true, wpeSyncProgress: null, wpeSyncError: null });
+
+    // Start polling for progress
+    this.startWpeSyncProgressPolling();
+
+    try {
+      // Sync all WPE sites
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_ALL);
+
+      // Stop polling
+      this.stopWpeSyncProgressPolling();
+
+      if (result.success) {
+        const syncedCount = result.synced || 0;
+        this.setState({
+          wpeSyncedCount: syncedCount,
+          wpeSyncing: false,
+          wpeSyncProgress: null,
+          wpeSyncError: null,
+        });
+
+        // Show success toast
+        if (toast) {
+          if (syncedCount > 0) {
+            toast({ type: 'success', content: `Successfully synced ${syncedCount} WP Engine site${syncedCount === 1 ? '' : 's'}` });
+          } else {
+            toast({ type: 'cta', content: 'No WP Engine sites found to sync' });
+          }
+        }
+
+        // Refresh data
+        await this.fetchAll();
+      } else {
+        const errorMsg = result.error || 'Unknown error occurred during sync';
+        this.setState({
+          wpeSyncing: false,
+          wpeSyncProgress: null,
+          wpeSyncError: errorMsg,
+        });
+        if (toast) {
+          toast({ type: 'error', content: `WPE sync failed: ${errorMsg}` });
+        }
+        console.error('[NexusOverview] WPE sync failed:', errorMsg);
+      }
+    } catch (error) {
+      this.stopWpeSyncProgressPolling();
+      const errorMsg = error instanceof Error ? error.message : 'Failed to sync WPE sites';
+      this.setState({
+        wpeSyncing: false,
+        wpeSyncProgress: null,
+        wpeSyncError: errorMsg,
+      });
+      if (toast) {
+        toast({ type: 'error', content: `WPE sync error: ${errorMsg}` });
+      }
+      console.error('[NexusOverview] WPE sync error:', error);
+    }
+  };
+
+  renderCredentialSyncSection(): React.ReactNode {
+    const { syncStatus, syncing, syncResults, sites } = this.state;
+    const runningSites = sites.filter((s) => s.status === 'running');
+    const syncEntries = Object.entries(syncStatus);
+    const hasSyncData = syncEntries.length > 0;
+
+    const sectionStyle: React.CSSProperties = { marginBottom: '24px' };
+    const descStyle: React.CSSProperties = {
+      fontSize: '13px',
+      color: 'var(--nxai-card-sub, #6b7280)',
+      marginBottom: '16px',
+      lineHeight: 1.5,
+    };
+    const rowStyle: React.CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      marginBottom: '12px',
+    };
+    const btnSmallStyle: React.CSSProperties = {
+      padding: '6px 12px',
+      borderRadius: '6px',
+      border: '1px solid var(--nxai-card-border, #e5e7eb)',
+      backgroundColor: 'var(--nxai-card-bg, #fff)',
+      color: 'var(--nxai-card-text, #111827)',
+      fontSize: '12px',
+      fontWeight: 500,
+      cursor: 'pointer',
+    };
+
+    return React.createElement('div', { style: sectionStyle },
+      React.createElement('div', { style: descStyle },
+        'Push API keys to running WordPress sites so their AI features can use your configured providers.',
+      ),
+
+      // Sync status summary
+      hasSyncData
+        ? React.createElement('div', { style: { marginBottom: '12px' } },
+            ...syncEntries.map(([siteId, status]: [string, any]) => {
+              const site = sites.find((s) => s.id === siteId);
+              const color = status.success ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_ERROR;
+              const ago = status.lastSync ? formatTimeAgo(status.lastSync) : 'Never';
+              return React.createElement('div', {
+                key: siteId,
+                style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0', fontSize: '13px' },
+              },
+                React.createElement('span', { style: dotStyle(color) }),
+                React.createElement('span', { style: { color: 'var(--nxai-card-text)' } }, site?.name ?? siteId),
+                React.createElement('span', { style: { color: 'var(--nxai-card-sub)', fontSize: '12px' } }, `(${ago})`),
+              );
+            }),
+          )
+        : React.createElement('div', { style: { ...descStyle, fontStyle: 'italic' } },
+            'No credentials have been synced yet.',
+          ),
+
+      // Sync All button
+      React.createElement('div', { style: { ...rowStyle, alignItems: 'center' } },
+        React.createElement('button', {
+          style: {
+            ...btnSmallStyle,
+            ...(syncing ? { opacity: 0.6, cursor: 'not-allowed' } : { backgroundColor: UI_COLORS.WPE_BRAND, color: '#fff', border: 'none' }),
+          },
+          onClick: syncing ? undefined : this.handleSyncAll,
+          disabled: syncing || runningSites.length === 0,
+        }, syncing ? 'Syncing...' : `Sync All (${runningSites.length} running)`),
+        syncing ? React.createElement(LoadingSpinner, { size: 16, inline: true }) : null,
+      ),
+
+      // Results
+      syncResults && syncResults.length > 0
+        ? React.createElement('div', { style: { marginTop: '8px' } },
+            ...syncResults.map((r) =>
+              React.createElement('div', {
+                key: r.siteId,
+                style: { fontSize: '12px', padding: '2px 0', color: r.success ? UI_COLORS.STATUS_RUNNING : UI_COLORS.STATUS_ERROR },
+              }, `${r.siteName}: ${r.success ? `synced (${r.providers.join(', ')})` : r.error ?? 'failed'}`),
+            ),
+          )
+        : null,
+    );
+  }
+
+  renderWpeSyncSection(): React.ReactNode {
+    const { wpeSyncing, wpeSyncedCount, wpeSyncProgress, wpeSyncError } = this.state;
+
+    const sectionStyle: React.CSSProperties = { marginBottom: '24px' };
+    const descStyle: React.CSSProperties = {
+      fontSize: '13px',
+      color: 'var(--nxai-card-sub, #6b7280)',
+      marginBottom: '16px',
+      lineHeight: 1.5,
+    };
+
+    return React.createElement('div', { style: sectionStyle },
+      React.createElement('div', { style: descStyle },
+        'Sync your WP Engine sites to make them searchable alongside local sites. Indexed content is available in Site Finder.',
+      ),
+
+      // Sync button and status
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' } },
+        React.createElement('button', {
+          onClick: this.handleWpeSync,
+          disabled: wpeSyncing,
+          style: {
+            padding: '8px 16px',
+            borderRadius: '6px',
+            border: 'none',
+            backgroundColor: wpeSyncing ? 'var(--color-background-tertiary, #9ca3af)' : 'var(--color-primary, #3b82f6)',
+            color: '#fff',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: wpeSyncing ? 'not-allowed' : 'pointer',
+            opacity: wpeSyncing ? 0.6 : 1,
+          },
+        }, wpeSyncing ? 'Syncing...' : 'Sync Now'),
+
+        // Loading spinner
+        wpeSyncing ? React.createElement(LoadingSpinner, { size: 16, inline: true, color: '#fff' }) : null,
+
+        // Synced count
+        wpeSyncedCount > 0 && !wpeSyncing
+          ? React.createElement('span', {
+              style: {
+                fontSize: '13px',
+                color: 'var(--nxai-card-sub, #6b7280)',
+              },
+            }, `${wpeSyncedCount} site${wpeSyncedCount === 1 ? '' : 's'} synced`)
+          : null,
+      ),
+
+      // Progress indicator
+      wpeSyncProgress
+        ? React.createElement('div', {
+            style: {
+              fontSize: '12px',
+              color: 'var(--nxai-card-sub, #6b7280)',
+              marginTop: '8px',
+              fontStyle: 'italic',
+            },
+          }, `Syncing ${wpeSyncProgress.currentSite}... (${wpeSyncProgress.current}/${wpeSyncProgress.total})`)
+        : null,
+
+      // Error display
+      wpeSyncError
+        ? React.createElement('div', {
+            style: {
+              padding: '12px',
+              marginTop: '12px',
+              borderRadius: '6px',
+              backgroundColor: 'var(--color-background-error-subtle, rgba(239, 68, 68, 0.1))',
+              border: '1px solid var(--color-border-error, rgba(239, 68, 68, 0.3))',
+            },
+          },
+            React.createElement('div', {
+              style: {
+                fontSize: '13px',
+                fontWeight: 600,
+                color: 'var(--color-text-error, #dc2626)',
+                marginBottom: '4px',
+              },
+            }, 'Sync Failed'),
+            React.createElement('div', {
+              style: {
+                fontSize: '12px',
+                color: 'var(--color-text-error, #dc2626)',
+              },
+            }, wpeSyncError),
+          )
+        : null,
+    );
+  }
 
   render(): React.ReactNode {
     const { loading, error, stats } = this.state;

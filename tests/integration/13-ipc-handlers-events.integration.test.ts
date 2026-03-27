@@ -19,9 +19,14 @@ const MODELS_DIR = path.join(PROJECT_ROOT, 'models', 'all-MiniLM-L6-v2-quantized
  */
 class MockIpcMain {
   private handlers: Map<string, Function> = new Map();
+  private syncHandlers: Map<string, Function> = new Map();
 
   handle(channel: string, handler: Function) {
     this.handlers.set(channel, handler);
+  }
+
+  on(channel: string, handler: Function) {
+    this.syncHandlers.set(channel, handler);
   }
 
   async invokeHandler(channel: string, ...args: any[]): Promise<any> {
@@ -31,7 +36,7 @@ class MockIpcMain {
   }
 
   hasHandler(channel: string): boolean {
-    return this.handlers.has(channel);
+    return this.handlers.has(channel) || this.syncHandlers.has(channel);
   }
 }
 
@@ -355,11 +360,11 @@ describe('Event Tracking IPC Handlers (Sprint 1)', () => {
 
       expect(result.success).toBe(true);
       expect(result.health).toBeDefined();
-      expect(result.health.graph_db).toBeDefined();
-      expect(result.health.vector_db).toBeDefined();
-      expect(typeof result.health.graph_db.size_bytes).toBe('number');
-      expect(typeof result.health.pending_events).toBe('number');
-      expect(typeof result.health.failed_events).toBe('number');
+      expect(result.health.graphDb).toBeDefined();
+      expect(result.health.vectorDb).toBeDefined();
+      expect(typeof result.health.graphDb.sizeBytes).toBe('number');
+      expect(typeof result.health.pendingEvents).toBe('number');
+      expect(typeof result.health.failedEvents).toBe('number');
     });
   });
 

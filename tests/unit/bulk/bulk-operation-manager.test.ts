@@ -21,6 +21,9 @@ function createMockDeps(overrides?: Partial<BulkOpDeps>): BulkOpDeps {
       startSite: jest.fn().mockResolvedValue(undefined),
       stopSite: jest.fn().mockResolvedValue(undefined),
       wpCliRun: jest.fn().mockResolvedValue({ stdout: '[]', success: true }),
+      getPlugins: jest.fn().mockResolvedValue([]),
+      getThemes: jest.fn().mockResolvedValue([]),
+      getWpVersion: jest.fn().mockResolvedValue('6.4.2'),
     },
     healthCalculator: {
       calculateScore: jest.fn().mockResolvedValue({ score: 85 }),
@@ -71,7 +74,7 @@ describe('BulkOperationManager', () => {
 
     await manager.waitForCompletion(opId);
 
-    expect(peakConcurrent).toBeLessThanOrEqual(3);
+    expect(peakConcurrent).toBeLessThanOrEqual(5); // Updated to match MAX_CONCURRENCY = 5
     expect(peakConcurrent).toBeGreaterThanOrEqual(1);
     expect(slowIndexSite).toHaveBeenCalledTimes(6);
   });
@@ -373,7 +376,7 @@ describe('BulkOperationManager', () => {
     expect(setupFn).not.toHaveBeenCalled();
     const status = manager.getStatus(opId)!;
     expect(status.siteResults['halted-site'].status).toBe('failed');
-    expect(status.siteResults['halted-site'].error).toContain('not running');
+    expect(status.siteResults['halted-site'].error).toContain('must be running');
   });
 
   // 16. setup-ai isolates per-site failures
