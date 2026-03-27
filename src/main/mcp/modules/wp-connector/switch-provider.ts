@@ -5,11 +5,15 @@
  * Deactivates the old provider plugin, installs/activates the new one,
  * syncs the new provider's key, and updates SiteAIConfig.
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import type { LocalServicesBridge } from '../../local-services-bridge';
 import type { RegistryStorage } from '../../../content/IndexRegistry';
 import type { AIProvider, SiteAIConfig } from '../../../../common/types';
 import { STORAGE_KEYS } from '../../../../common/constants';
 import { PROVIDER_TO_WP_OPTION, buildCredentialSyncPhp, CredentialEntry } from './credential-helpers';
+
+const WP_PLUGINS_ROOT = path.resolve(__dirname, '..', '..', '..', '..', 'wp-plugins');
 
 interface Logger {
   info(...args: unknown[]): void;
@@ -73,15 +77,37 @@ export async function switchProviderForSite(
       // Try activating first (already installed)
       const activateResult = await localServices.wpCliRun(siteId, ['plugin', 'activate', newSlug, '--quiet']);
       if (!activateResult.success) {
-        // Not installed — install from wp.org (external providers) or skip for bundled
         const isBundled = newProvider === 'ollama' || newProvider === 'local-gateway';
         if (!isBundled) {
+          // External provider — install from wp.org
           const installResult = await localServices.wpCliRun(siteId, ['plugin', 'install', newSlug, '--activate', '--quiet']);
           if (!installResult.success) {
             return { success: false, error: `Failed to install provider plugin: ${newSlug}` };
           }
         } else {
-          return { success: false, error: `Bundled plugin ${newSlug} not found on this site. Run full Setup AI first.` };
+          // Bundled provider — copy from addon bundle then activate
+          const site = localServices.resolveSiteObject(siteId) as any;
+          const sitePluginsDir = site?.paths?.webRoot
+            ? path.join(site.paths.webRoot, 'wp-content', 'plugins')
+            : null;
+
+          if (!sitePluginsDir) {
+            return { success: false, error: `Could not determine plugins directory for site` };
+          }
+
+          const pluginSource = path.join(WP_PLUGINS_ROOT, newSlug);
+          if (!fs.existsSync(pluginSource)) {
+            return { success: false, error: `Bundled plugin not found: ${newSlug}` };
+          }
+
+          const pluginDest = path.join(sitePluginsDir, newSlug);
+          fs.cpSync(pluginSource, pluginDest, { recursive: true });
+          logger.info(`${tag} Copied bundled plugin ${newSlug} to site`);
+
+          const activateCopied = await localServices.wpCliRun(siteId, ['plugin', 'activate', newSlug, '--quiet']);
+          if (!activateCopied.success) {
+            return { success: false, error: `Failed to activate bundled plugin: ${newSlug}` };
+          }
         }
       }
       logger.info(`${tag} Activated ${newSlug}`);
