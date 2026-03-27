@@ -100,7 +100,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
-      id-token: write  # For npm provenance
+      id-token: write  # Required for npm Trusted Publishing (OIDC)
 
     steps:
       - name: Checkout
@@ -122,7 +122,5 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Publish to npm
+      - name: Publish to npm (OIDC - no token needed)
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
