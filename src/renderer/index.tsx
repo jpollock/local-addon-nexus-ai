@@ -50,7 +50,7 @@ export default function renderer(context: any): void {
     return [...items, {
       path: '/nexus-ai',
       displayName: 'Nexus AI',
-      sections: () => React.createElement(NexusPreferences, { electron }),
+      sections: (props: any) => React.createElement(NexusPreferences, { ...props, electron }),
       onApply: async () => { /* Settings saved inline on change */ },
     }];
   });
