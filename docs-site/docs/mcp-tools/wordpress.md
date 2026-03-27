@@ -771,6 +771,147 @@ Search and replace in WordPress database.
 
 ---
 
+## AI Provider Management
+
+Tools for configuring AI providers on individual WordPress sites.
+
+### `nexus_get_site_ai_config`
+
+Get the current AI provider configuration for a site.
+
+<div class="metadata">
+<dl>
+  <dt>Access</dt>
+  <dd><span class="access-badge">LOCAL</span></dd>
+  <dt>Safety Tier</dt>
+  <dd><span class="safety-tier safety-tier-1">1 - SAFE</span></dd>
+  <dt>Returns</dt>
+  <dd>Provider ID, model, configured timestamp, and whether Local AI Gateway is active</dd>
+</dl>
+</div>
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `site_id` | string | Yes | Local site ID |
+
+### Examples
+
+```json
+{
+  "tool": "nexus_get_site_ai_config",
+  "arguments": {
+    "site_id": "abc123"
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "mysite — AI Configuration\n─────────────────────────────────────────────\n  Provider:  Anthropic (Claude)\n  Model:     claude-sonnet-4-6\n  Set up:    3/27/2026\n  Gateway:   Disabled"
+  }]
+}
+```
+
+---
+
+### `nexus_switch_provider`
+
+Switch the AI provider on an already-configured site. Deactivates the old provider plugin, installs and activates the new one, and syncs the appropriate credentials.
+
+<div class="metadata">
+<dl>
+  <dt>Access</dt>
+  <dd><span class="access-badge">LOCAL</span></dd>
+  <dt>Safety Tier</dt>
+  <dd><span class="safety-tier safety-tier-2">2 - CAUTION</span></dd>
+  <dt>Returns</dt>
+  <dd>Confirmation of provider switch with old and new provider names</dd>
+</dl>
+</div>
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `site_id` | string | Yes | Local site ID |
+| `provider` | string | Yes | New provider: `anthropic`, `openai`, `google`, `ollama` |
+
+### Examples
+
+```json
+{
+  "tool": "nexus_switch_provider",
+  "arguments": {
+    "site_id": "abc123",
+    "provider": "openai"
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "✓ Switched AI provider on mysite\n\n  From: Anthropic (Claude)\n  To:   OpenAI (GPT)\n\n  Credentials synced."
+  }]
+}
+```
+
+---
+
+### `nexus_sync_credentials`
+
+Sync AI credentials to a specific WordPress site. Normally this happens automatically on site start; use this tool to trigger a manual sync.
+
+<div class="metadata">
+<dl>
+  <dt>Access</dt>
+  <dd><span class="access-badge">LOCAL</span></dd>
+  <dt>Safety Tier</dt>
+  <dd><span class="safety-tier safety-tier-1">1 - SAFE</span></dd>
+  <dt>Returns</dt>
+  <dd>Confirmation that credentials were written to the site</dd>
+</dl>
+</div>
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `site_id` | string | Yes | Local site ID |
+
+### Examples
+
+```json
+{
+  "tool": "nexus_sync_credentials",
+  "arguments": {
+    "site_id": "abc123"
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "✓ AI credentials synced to mysite\n\n  Provider: Anthropic (Claude)\n  API key written to wp-config constants."
+  }]
+}
+```
+
+---
+
 ## Usage Patterns
 
 ### Plugin Workflow

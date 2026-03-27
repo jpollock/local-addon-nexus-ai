@@ -1077,6 +1077,162 @@ Failed: 1 site (shop: woocommerce update failed)
 
 ---
 
+### `nexus ai`
+
+AI provider configuration and WordPress AI connector management.
+
+---
+
+#### `nexus ai config`
+
+View or configure the global AI provider used by Nexus AI's chat tab and AI features.
+
+```bash
+nexus ai config [options]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--gateway <on\|off>` | Enable or disable Local AI Gateway globally |
+
+**Interactive mode** (no flags): prompts to select provider, enter API key, and pick a model.
+
+**Examples:**
+
+```bash
+# Interactive provider setup
+nexus ai config
+
+# Enable Local AI Gateway
+nexus ai config --gateway on
+
+# Disable Local AI Gateway
+nexus ai config --gateway off
+```
+
+---
+
+#### `nexus ai setup`
+
+Set up AI on a WordPress site. Installs the AI plugin, configures the chosen provider, and syncs credentials.
+
+```bash
+nexus ai setup <site> [options]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `site` | Site target (e.g. `mysite@local`) |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--provider <id>` | Provider to configure (`anthropic`, `openai`, `google`, `ollama`). Skips interactive prompt. |
+| `--force` | Force re-setup even if already configured |
+
+**Examples:**
+
+```bash
+# Interactive — prompts for provider
+nexus ai setup mysite@local
+
+# Non-interactive
+nexus ai setup mysite@local --provider anthropic
+
+# Force re-setup with gateway enabled (set in Preferences first)
+nexus ai setup mysite@local --force
+```
+
+---
+
+#### `nexus ai switch-provider`
+
+Switch the AI provider on an already-configured site. Deactivates the old provider plugin, installs and activates the new one, and syncs the appropriate credentials.
+
+```bash
+nexus ai switch-provider <site>
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `site` | Site target (e.g. `mysite@local`) |
+
+**Example:**
+
+```bash
+nexus ai switch-provider mysite@local
+# Prompts: Current: Anthropic. Switch to: 1. OpenAI  2. Google  3. Ollama
+```
+
+---
+
+#### `nexus ai site-config`
+
+Show the current AI provider configuration for a site.
+
+```bash
+nexus ai site-config <site>
+```
+
+**Example output:**
+
+```
+mysite@local — AI Configuration
+─────────────────────────────────────────────
+  Provider:  Anthropic (Claude)
+  Model:     claude-sonnet-4-6
+  Set up:    3/27/2026
+```
+
+---
+
+#### `nexus ai sync-credentials`
+
+Manually sync AI credentials to a WordPress site. Normally this happens automatically on site start.
+
+```bash
+nexus ai sync-credentials <site>
+```
+
+---
+
+#### `nexus ai models`
+
+List available Ollama models.
+
+```bash
+nexus ai models [--json]
+```
+
+---
+
+#### `nexus ai status`
+
+Show AI connector status on a WordPress site.
+
+```bash
+nexus ai status <target>
+```
+
+---
+
+#### `nexus ai ask`
+
+Ask Ollama a question directly.
+
+```bash
+nexus ai ask <query> [--model <model>]
+```
+
+---
+
 ## Advanced Commands
 
 ### `nexus config`

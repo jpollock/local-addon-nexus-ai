@@ -338,29 +338,55 @@ Or click ⚙️ gear icon in Nexus AI sidebar
 
 ### Provider Configuration
 
+The AI Chat Settings panel controls how Nexus AI's own features connect to AI providers — including the Chat tab and AI Site Finder. This is separate from the AI provider installed on each individual WordPress site.
+
+**AI Provider**
+
+Select the global provider used by Nexus AI's chat tab and AI features:
+
 ```
 ┌─────────────────────────────────────────┐
 │ AI Provider                             │
-│ ● Anthropic Claude (via MCP)           │
-│ ○ OpenAI GPT-4                         │
-│ ○ Local Ollama                         │
+│ ● Anthropic (Claude)                   │
+│ ○ OpenAI (GPT)                         │
+│ ○ Google (Gemini)                      │
+│ ○ Ollama (local)                       │
 │                                         │
-│ Claude Settings:                        │
-│ Model: Claude 3.5 Sonnet ▼              │
-│ Max tokens: [4096]                      │
-│ Temperature: [0.7] (0.0-1.0)            │
+│ API Key:                                │
+│ [••••••••••••••••••••] [Test]           │
 │                                         │
-│ MCP Configuration:                      │
-│ Server path: [Browse...]                │
-│ Auto-start: ☑ Enabled                  │
-│ Port: [Auto]                            │
+│ Model:                                  │
+│ claude-sonnet-4-6 ▼                    │
 │                                         │
 │ API Status:                             │
 │ ✓ Connected                            │
-│ Rate limit: 45/50 requests remaining    │
 │ [Test Connection]                       │
 └─────────────────────────────────────────┘
 ```
+
+Each external provider (Anthropic, OpenAI, Google) requires an API key entered here. Ollama runs locally and does not require an API key.
+
+**Local AI Gateway**
+
+When enabled, all WordPress site AI requests are routed through a local gateway instead of directly to the external provider. The gateway uses the global AI provider set above.
+
+```
+┌─────────────────────────────────────────┐
+│ Local AI Gateway                        │
+│ ☐ Enable Local AI Gateway              │
+│                                         │
+│ Routes WordPress site AI requests       │
+│ through a local proxy using the         │
+│ global provider above.                  │
+│                                         │
+│ Note: Ollama sites ignore this setting  │
+│ (Ollama is already local).              │
+└─────────────────────────────────────────┘
+```
+
+**Per-site AI Provider**
+
+Each WordPress site can use a different AI provider for its content generation features. This is configured per site via the site card in the Local site list — not here. Use `nexus ai setup` or `nexus ai switch-provider` to configure a site's provider, or open the site card and click **AI Settings**.
 
 ### Chat Behavior
 
