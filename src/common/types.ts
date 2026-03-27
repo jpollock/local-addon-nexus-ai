@@ -221,6 +221,7 @@ export interface NexusSettings {
   excludedSiteIds: string[];
   chatProvider?: ChatProvider;
   chatModel?: string;      // Model name within provider
+  onboardingDismissed?: boolean;
 }
 
 // ===== Sprint 1: Visibility Types (Renderer-Safe) =====

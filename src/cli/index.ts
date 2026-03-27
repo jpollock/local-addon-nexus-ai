@@ -99,6 +99,20 @@ async function main() {
 
     // Store bootstrap result in context for commands to use
     setBootstrapResult(result);
+
+    // Hint if no AI provider is configured
+    try {
+      const { getClient } = await import('./utils/graphql');
+      const client = getClient();
+      const configResult = await client.mutate<{ nexusAiGetConfig: any }>(`
+        mutation { nexusAiGetConfig { success config { provider } } }
+      `, {});
+      if (configResult.nexusAiGetConfig?.success && !configResult.nexusAiGetConfig?.config?.provider) {
+        console.log('💡 No AI provider configured. Run: nexus ai config\n');
+      }
+    } catch {
+      // Non-blocking — don't fail startup if this check errors
+    }
   }
 
   // Parse arguments

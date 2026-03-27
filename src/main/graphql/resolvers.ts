@@ -74,6 +74,48 @@ export function createResolvers(context: ResolverContext) {
   return {
     Mutation: {
       /**
+       * Get current AI provider configuration
+       */
+      nexusAiGetConfig: () => {
+        try {
+          const settings = (services.registryStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
+          const apiKeys = (services.registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+          return {
+            success: true,
+            config: {
+              provider: settings.chatProvider ?? null,
+              model: settings.chatModel ?? null,
+              hasApiKey: settings.chatProvider ? !!apiKeys[settings.chatProvider] : false,
+            },
+          };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      },
+
+      /**
+       * Set AI provider, model, and optionally API key
+       */
+      nexusAiSetConfig: (_: any, { provider, model, apiKey }: { provider: string; model: string; apiKey?: string }) => {
+        try {
+          const current = (services.registryStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
+          services.registryStorage.set(STORAGE_KEYS.SETTINGS, {
+            ...current,
+            chatProvider: provider,
+            chatModel: model,
+            onboardingDismissed: true,
+          });
+          if (apiKey) {
+            const keys = (services.registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+            services.registryStorage.set(STORAGE_KEYS.API_KEYS, { ...keys, [provider]: apiKey });
+          }
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      },
+
+      /**
        * List all sites (local + WPE)
        */
       nexusSitesList: async () => {

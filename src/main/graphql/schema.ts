@@ -569,6 +569,12 @@ export const typeDefs = gql`
   # ============================================================================
 
   extend type Mutation {
+    "Get current AI provider configuration"
+    nexusAiGetConfig: NexusAiGetConfigResult!
+
+    "Set AI provider, model, and optionally API key"
+    nexusAiSetConfig(provider: String!, model: String!, apiKey: String): NexusAiSetConfigResult!
+
     "List all sites (local + WPE)"
     nexusSitesList: NexusSitesListResult!
 
@@ -1210,5 +1216,29 @@ export const typeDefs = gql`
     success: Boolean!
     error: String
     report: PluginAuditReport
+  }
+
+  # ============================================================================
+  # AI Provider Config Types
+  # ============================================================================
+
+  type AiProviderConfig {
+    "Currently configured provider ID (anthropic, openai, google, ollama, wpe-gateway)"
+    provider: String
+    "Currently configured model"
+    model: String
+    "Whether an API key is saved for the current provider"
+    hasApiKey: Boolean!
+  }
+
+  type NexusAiGetConfigResult {
+    success: Boolean!
+    error: String
+    config: AiProviderConfig
+  }
+
+  type NexusAiSetConfigResult {
+    success: Boolean!
+    error: String
   }
 `;

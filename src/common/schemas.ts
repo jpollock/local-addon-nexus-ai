@@ -20,8 +20,9 @@ export const SiteIdSchema = z.string().min(1, 'Site ID cannot be empty');
 export const UpdateSettingsSchema = z.object({
   autoIndex: z.boolean().optional(),
   excludedSiteIds: z.array(SiteIdSchema).optional(),
-  chatProvider: z.enum(['anthropic', 'openai', 'ollama']).optional(),
+  chatProvider: z.enum(['anthropic', 'openai', 'ollama', 'google', 'wpe-gateway']).optional(),
   chatModel: z.string().optional(),
+  onboardingDismissed: z.boolean().optional(),
 }).strict(); // Prevent unknown properties
 
 export const PluginSlugSchema = z

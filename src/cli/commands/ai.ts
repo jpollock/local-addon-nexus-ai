@@ -5,10 +5,169 @@
  */
 
 import { Command } from 'commander';
+import * as readline from 'readline';
 import { getClient } from '../utils/graphql';
 import { parseTarget } from '../utils/target';
 
 const aiCommand = new Command('ai').description('AI and connector management');
+
+// ============================================================================
+// AI Provider Config
+// ============================================================================
+
+const PROVIDERS = [
+  { id: 'anthropic',   label: 'Anthropic (Claude)',       requiresKey: true },
+  { id: 'openai',      label: 'OpenAI (GPT)',             requiresKey: true },
+  { id: 'google',      label: 'Google (Gemini)',          requiresKey: true },
+  { id: 'ollama',      label: 'Ollama (local, no key)',   requiresKey: false },
+  { id: 'wpe-gateway', label: 'WP Engine AI Gateway',     requiresKey: false },
+];
+
+function prompt(rl: readline.Interface, question: string): Promise<string> {
+  return new Promise((resolve) => rl.question(question, resolve));
+}
+
+function promptHidden(question: string): Promise<string> {
+  return new Promise((resolve) => {
+    process.stdout.write(question);
+    const stdin = process.stdin;
+    stdin.resume();
+    stdin.setRawMode?.(true);
+    stdin.setEncoding('utf8');
+    let value = '';
+    const handler = (ch: string) => {
+      if (ch === '\n' || ch === '\r' || ch === '\u0003') {
+        stdin.setRawMode?.(false);
+        stdin.pause();
+        stdin.removeListener('data', handler);
+        process.stdout.write('\n');
+        resolve(value);
+      } else if (ch === '\u007f') {
+        if (value.length > 0) value = value.slice(0, -1);
+      } else {
+        value += ch;
+        process.stdout.write('•');
+      }
+    };
+    stdin.on('data', handler);
+  });
+}
+
+aiCommand
+  .command('config')
+  .description('View or configure AI provider settings')
+  .action(async () => {
+    const client = getClient();
+
+    // Show current config
+    const configResult = await client.mutate<{ nexusAiGetConfig: any }>(`
+      mutation { nexusAiGetConfig { success error config { provider model hasApiKey } } }
+    `, {});
+
+    const { success, error, config } = configResult.nexusAiGetConfig;
+    if (!success) {
+      console.error(`\n❌ ${error}`);
+      process.exit(1);
+    }
+
+    console.log('\nCurrent AI Settings');
+    console.log('─'.repeat(40));
+    if (config.provider) {
+      const p = PROVIDERS.find((x) => x.id === config.provider);
+      console.log(`Provider:  ${p?.label ?? config.provider}`);
+      console.log(`Model:     ${config.model ?? '(none)'}`);
+      console.log(`API Key:   ${config.hasApiKey ? '••••••••' : '(not set)'}`);
+    } else {
+      console.log('  No provider configured.');
+    }
+    console.log('');
+
+    // Interactive setup
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+    try {
+      const reconfigure = await prompt(rl, 'Configure AI provider? [Y/n]: ');
+      if (reconfigure.toLowerCase() === 'n') {
+        rl.close();
+        return;
+      }
+
+      // Pick provider
+      console.log('\nAvailable providers:');
+      PROVIDERS.forEach((p, i) => console.log(`  ${i + 1}. ${p.label}`));
+
+      const currentIdx = config.provider ? PROVIDERS.findIndex((p) => p.id === config.provider) + 1 : 1;
+      const providerInput = await prompt(rl, `\nChoice [${currentIdx}]: `);
+      const providerIdx = (parseInt(providerInput, 10) || currentIdx) - 1;
+      const selectedProvider = PROVIDERS[Math.min(Math.max(providerIdx, 0), PROVIDERS.length - 1)];
+
+      // API key (if required)
+      let apiKey: string | undefined;
+      if (selectedProvider.requiresKey) {
+        rl.close(); // close before raw mode
+        apiKey = await promptHidden(`API Key${config.hasApiKey && config.provider === selectedProvider.id ? ' (leave blank to keep existing)' : ''}: `);
+        if (!apiKey && config.hasApiKey && config.provider === selectedProvider.id) {
+          apiKey = undefined; // keep existing
+        }
+      } else {
+        rl.close();
+      }
+
+      // Fetch models
+      console.log('\nFetching available models...');
+      let models: string[] = [];
+      try {
+        const modelsResult = await client.mutate<{ nexusAiModels: any }>(`
+          mutation { nexusAiModels { success models { name } } }
+        `, {});
+        models = (modelsResult.nexusAiModels?.models ?? []).map((m: any) => m.name);
+      } catch {
+        // Model list is best-effort
+      }
+
+      let selectedModel = config.model ?? '';
+      if (models.length > 0) {
+        console.log('\nAvailable models:');
+        models.slice(0, 20).forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
+        const currentModelIdx = models.indexOf(selectedModel) + 1 || 1;
+        const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const modelInput = await prompt(rl2, `\nChoice [${currentModelIdx}]: `);
+        rl2.close();
+        const modelIdx = (parseInt(modelInput, 10) || currentModelIdx) - 1;
+        selectedModel = models[Math.min(Math.max(modelIdx, 0), models.length - 1)];
+      } else if (selectedProvider.id === 'ollama') {
+        const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+        selectedModel = await prompt(rl2, 'Model name (e.g. llama3.2): ');
+        rl2.close();
+      } else {
+        const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const defaultModel = config.model || '';
+        selectedModel = await prompt(rl2, `Model name${defaultModel ? ` [${defaultModel}]` : ''}: `);
+        rl2.close();
+        if (!selectedModel) selectedModel = defaultModel;
+      }
+
+      // Save
+      const saveResult = await client.mutate<{ nexusAiSetConfig: any }>(`
+        mutation($provider: String!, $model: String!, $apiKey: String) {
+          nexusAiSetConfig(provider: $provider, model: $model, apiKey: $apiKey) {
+            success error
+          }
+        }
+      `, { provider: selectedProvider.id, model: selectedModel, apiKey });
+
+      if (!saveResult.nexusAiSetConfig.success) {
+        console.error(`\n❌ ${saveResult.nexusAiSetConfig.error}`);
+        process.exit(1);
+      }
+
+      console.log(`\n✅ Saved: ${selectedProvider.label} / ${selectedModel}`);
+      console.log('');
+    } finally {
+      // Ensure rl is closed if an error occurred mid-flow
+      try { rl.close(); } catch { /* already closed */ }
+    }
+  });
 
 // ============================================================================
 // Ollama Model Commands
