@@ -15,6 +15,7 @@ import type { LocalServicesBridge } from './mcp/local-services-bridge';
 import type { GraphService } from './events/GraphService';
 import type { EventProcessor } from './events/EventProcessor';
 import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
+import { switchProviderForSite } from './mcp/modules/wp-connector/switch-provider';
 import { generateEventSummary } from './events/event-summary';
 import type { EventTimelineEntry, EventStats } from '../common/types';
 import { SearchService } from './search/SearchService';
@@ -551,7 +552,17 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   safeHandle(IPC_CHANNELS.GET_SETTINGS, () => {
     try {
       const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
-      return raw ?? DEFAULT_SETTINGS;
+      if (!raw) return DEFAULT_SETTINGS;
+      // Migrate pre-rename field names (chatProvider→aiProvider, chatModel→aiModel)
+      if (raw.chatProvider !== undefined && raw.aiProvider === undefined) {
+        raw.aiProvider = raw.chatProvider;
+      }
+      if (raw.chatModel !== undefined && raw.aiModel === undefined) {
+        raw.aiModel = raw.chatModel;
+      }
+      delete raw.chatProvider;
+      delete raw.chatModel;
+      return raw;
     } catch {
       return DEFAULT_SETTINGS;
     }
@@ -751,7 +762,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string, provider?: string) => {
     const startTime = Date.now();
     let wasAutoStarted = false;
 
@@ -774,12 +785,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         await waitForDatabaseReady(siteId, localServicesBridge, localLogger, 30000);
       }
 
-      // Check if user has selected Ollama as their chat provider
+      // Determine which provider to configure for this site
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
-      const enableOllama = settings?.chatProvider === 'ollama';
 
       const result = await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, {
-        enableOllama,
+        provider: (provider as any) ?? settings?.aiProvider,
       });
 
       // Cache setup state if AI plugin was successfully installed/activated
@@ -849,7 +859,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         'setup_ai',
         siteId,
         'local_site',
-        { enableOllama: settings?.chatProvider === 'ollama' },
+        { provider: settings?.aiProvider },
         Date.now() - startTime
       );
 
@@ -883,6 +893,52 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         acfAbilities: 'failed' as const,
         message: (err as Error).message,
       };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Per-Site AI Config (Phase 4)
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.GET_SITE_AI_CONFIG, (_event: any, siteId: string) => {
+    try {
+      const validated = validateInput(SiteIdSchema, siteId);
+      const siteConfigs = (registryStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+      const config = siteConfigs[validated] ?? null;
+      return { success: true, config };
+    } catch (err: any) {
+      return { success: false, error: err.message, config: null };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.SWITCH_AI_PROVIDER, async (_event: any, siteId: string, provider: string) => {
+    try {
+      const validatedSiteId = validateInput(SiteIdSchema, siteId);
+
+      // Ensure site is running
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      let wasAutoStarted = false;
+      if (statuses[validatedSiteId] !== 'running') {
+        await localServicesBridge.startSite(validatedSiteId);
+        wasAutoStarted = true;
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+
+      const result = await switchProviderForSite(
+        validatedSiteId,
+        provider as any,
+        localServicesBridge,
+        registryStorage,
+        localLogger,
+      );
+
+      if (wasAutoStarted) {
+        await localServicesBridge.stopSite(validatedSiteId);
+      }
+
+      return result;
+    } catch (err: any) {
+      return { success: false, error: err.message };
     }
   });
 
@@ -1227,8 +1283,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     graphService,
     setupSiteForAI: async (siteId: string, options?: any) => {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
-      const enableOllama = options?.enableOllama ?? (settings?.chatProvider === 'ollama');
-      const result = await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, { enableOllama });
+      const provider = options?.provider ?? settings?.aiProvider;
+      const result = await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, { provider });
 
       // Digital Twin: Refresh metadata cache after successful setup (bulk operations)
       if (result.success && metadataCache) {
@@ -1698,12 +1754,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       }
 
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
-      const enableOllama = settings?.chatProvider === 'ollama';
 
       const opId = bulkOpManager.execute({
         type: 'setup-ai',
         siteIds: targetIds,
-        options: { enableOllama },
+        options: { provider: settings?.aiProvider },
       });
 
       return { success: true, opId };
@@ -1755,7 +1810,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const opId = bulkOpManager.execute({
         type: "setup-ai",
         siteIds: allSiteIds,
-        options: { autoStartStop: true, enableOllama: false },
+        options: { autoStartStop: true },
       });
 
       return { success: true, opId };
@@ -2108,25 +2163,25 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const apiKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
 
-      const chatProvider = settings?.chatProvider ?? 'ollama';
-      const chatModel = settings?.chatModel ?? 'llama3.2';
-      const apiKey = apiKeys[chatProvider];
+      const aiProvider = settings?.aiProvider ?? 'ollama';
+      const aiModel = settings?.aiModel ?? 'llama3.2';
+      const apiKey = apiKeys[aiProvider];
 
-      localLogger.info('[NexusAI] AI parse request - provider:', chatProvider, 'model:', chatModel, 'hasKey:', !!apiKey);
+      localLogger.info('[NexusAI] AI parse request - provider:', aiProvider, 'model:', aiModel, 'hasKey:', !!apiKey);
 
       // Check if provider is available
-      if (chatProvider !== 'ollama' && !apiKey) {
+      if (aiProvider !== 'ollama' && !apiKey) {
         return {
           success: false,
-          error: `No API key configured for ${chatProvider}. Please configure in Settings.`,
+          error: `No API key configured for ${aiProvider}. Please configure in Settings.`,
         };
       }
 
-      const provider = getProvider(chatProvider);
+      const provider = getProvider(aiProvider);
       if (!provider) {
         return {
           success: false,
-          error: `Provider ${chatProvider} not available. Try reloading the addon.`,
+          error: `Provider ${aiProvider} not available. Try reloading the addon.`,
         };
       }
 
@@ -2184,12 +2239,12 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       let responseText = '';
       let eventCount = 0;
 
-      localLogger.info('[NexusAI] Starting AI parse with provider:', chatProvider, 'model:', chatModel);
+      localLogger.info('[NexusAI] Starting AI parse with provider:', aiProvider, 'model:', aiModel);
 
       const stream = provider.streamChat(
         messages,
         [], // No tools for this call
-        { model: chatModel, apiKey },
+        { model: aiModel, apiKey },
         abortController.signal,
       );
 

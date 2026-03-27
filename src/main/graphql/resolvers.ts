@@ -10,6 +10,8 @@ import type { ToolRegistry } from '../mcp/tool-registry';
 import * as ollamaClient from '../helpers/ollama-client';
 import { setupSiteForAI } from '../mcp/modules/wp-connector/setup-ai';
 import { buildCredentialSyncPhp, SUPPORTED_PROVIDERS, PROVIDER_TO_WP_OPTION } from '../mcp/modules/wp-connector/credential-helpers';
+import { switchProviderForSite } from '../mcp/modules/wp-connector/switch-provider';
+import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
 import { STORAGE_KEYS } from '../../common/constants';
 
 interface ResolverContext {
@@ -83,9 +85,9 @@ export function createResolvers(context: ResolverContext) {
           return {
             success: true,
             config: {
-              provider: settings.chatProvider ?? null,
-              model: settings.chatModel ?? null,
-              hasApiKey: settings.chatProvider ? !!apiKeys[settings.chatProvider] : false,
+              provider: settings.aiProvider ?? null,
+              model: settings.aiModel ?? null,
+              hasApiKey: settings.aiProvider ? !!apiKeys[settings.aiProvider] : false,
             },
           };
         } catch (err: any) {
@@ -96,15 +98,19 @@ export function createResolvers(context: ResolverContext) {
       /**
        * Set AI provider, model, and optionally API key
        */
-      nexusAiSetConfig: (_: any, { provider, model, apiKey }: { provider: string; model: string; apiKey?: string }) => {
+      nexusAiSetConfig: (_: any, { provider, model, apiKey, useLocalGateway }: { provider: string; model: string; apiKey?: string; useLocalGateway?: boolean }) => {
         try {
           const current = (services.registryStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
-          services.registryStorage.set(STORAGE_KEYS.SETTINGS, {
+          const updated: any = {
             ...current,
-            chatProvider: provider,
-            chatModel: model,
+            chatProvider: undefined,
+            chatModel: undefined,
+            aiProvider: provider,
+            aiModel: model,
             onboardingDismissed: true,
-          });
+          };
+          if (useLocalGateway !== undefined) updated.useLocalGateway = useLocalGateway;
+          services.registryStorage.set(STORAGE_KEYS.SETTINGS, updated);
           if (apiKey) {
             const keys = (services.registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
             services.registryStorage.set(STORAGE_KEYS.API_KEYS, { ...keys, [provider]: apiKey });
@@ -2708,7 +2714,7 @@ export function createResolvers(context: ResolverContext) {
         }
       },
 
-      nexusAiSetup: async (_parent: any, { target, force }: { target: string; force?: boolean }) => {
+      nexusAiSetup: async (_parent: any, { target, provider, force }: { target: string; provider?: string; force?: boolean }) => {
         try {
           const parsed = parseTarget(target);
           const site = resolveSite(parsed.siteName!, services.siteData);
@@ -2731,13 +2737,17 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
+          // Resolve provider: explicit arg > global settings > default 'ollama'
+          const settings = (services.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
+          const resolvedProvider = (provider as any) ?? settings?.aiProvider ?? 'ollama';
+
           // Call setupSiteForAI directly
           const result = await setupSiteForAI(
             site.id,
             services.localServices,
             services.registryStorage,
             services.logger,
-            { enableOllama: true }
+            { provider: resolvedProvider }
           );
 
           if (!result.success) {
@@ -2777,68 +2787,31 @@ export function createResolvers(context: ResolverContext) {
           const site = resolveSite(parsed.siteName!, services.siteData);
 
           if (!site) {
-            return {
-              success: false,
-              error: `Site not found: ${parsed.siteName}`,
-              synced: [],
-            };
+            return { success: false, error: `Site not found: ${parsed.siteName}` };
           }
 
           if (!services.localServices || !services.registryStorage) {
-            return {
-              success: false,
-              error: 'Local services not available',
-              synced: [],
-            };
+            return { success: false, error: 'Local services not available' };
           }
 
-          // Get stored API keys from registry
-          const storedKeys = (services.registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-          const providersToSync = SUPPORTED_PROVIDERS.filter(p => storedKeys[p]);
+          const siteConfigs = (services.registryStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+          const siteConfig = siteConfigs[site.id];
 
-          if (providersToSync.length === 0) {
-            return {
-              success: false,
-              error: 'No AI provider API keys configured',
-              synced: [],
-            };
+          if (!siteConfig) {
+            return { success: false, error: 'Site has not been configured with Setup AI yet' };
           }
 
-          // Build credential entries for all providers
-          const credentialEntries = providersToSync.map(provider => ({
-            provider,
-            key: storedKeys[provider]!,
-            optionName: PROVIDER_TO_WP_OPTION[provider],
-          }));
+          await autoSyncCredentials(
+            site.id,
+            site.name,
+            services.localServices,
+            services.registryStorage,
+            services.logger,
+          );
 
-          // Execute credential sync PHP
-          const phpCode = buildCredentialSyncPhp(credentialEntries);
-          const result = await services.localServices.wpCliRun(site.id, ['eval', phpCode]);
-
-          if (!result.success) {
-            return {
-              success: false,
-              error: `Failed to sync credentials: ${result.stderr}`,
-              synced: [],
-            };
-          }
-
-          // Parse result to get synced providers
-          const synced = providersToSync.map(provider => ({
-            provider,
-            credentialCount: 1,
-          }));
-
-          return {
-            success: true,
-            synced,
-          };
+          return { success: true, provider: siteConfig.provider };
         } catch (error: any) {
-          return {
-            success: false,
-            error: error.message,
-            synced: [],
-          };
+          return { success: false, error: error.message };
         }
       },
 
@@ -3081,6 +3054,47 @@ export function createResolvers(context: ResolverContext) {
             error: error.message,
             status: null,
           };
+        }
+      },
+
+      nexusAiGetSiteConfig: (_parent: any, { target }: { target: string }) => {
+        try {
+          const parsed = parseTarget(target);
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) return { success: false, error: `Site not found: ${parsed.siteName}` };
+
+          const siteConfigs = (services.registryStorage?.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+          const config = siteConfigs[site.id];
+
+          if (!config) return { success: true, config: null };
+
+          return { success: true, config };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      },
+
+      nexusAiSwitchProvider: async (_parent: any, { target, provider }: { target: string; provider: string }) => {
+        try {
+          const parsed = parseTarget(target);
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) return { success: false, error: `Site not found: ${parsed.siteName}` };
+
+          if (!services.localServices || !services.registryStorage) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const result = await switchProviderForSite(
+            site.id,
+            provider as any,
+            services.localServices,
+            services.registryStorage,
+            services.logger,
+          );
+
+          return result;
+        } catch (err: any) {
+          return { success: false, error: err.message };
         }
       },
 

@@ -1,10 +1,10 @@
 import type { ChatMessage, ProviderStreamEvent } from '../../../common/chat-types';
-import type { ChatProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
+import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
 import { streamingRequest, apiRequest } from './http-utils';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-export class GoogleProvider implements ChatProvider {
+export class GoogleProvider implements AIProvider {
   readonly id = 'google';
   readonly displayName = 'Google Gemini';
   readonly requiresApiKey = true;

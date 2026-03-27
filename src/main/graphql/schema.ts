@@ -573,7 +573,7 @@ export const typeDefs = gql`
     nexusAiGetConfig: NexusAiGetConfigResult!
 
     "Set AI provider, model, and optionally API key"
-    nexusAiSetConfig(provider: String!, model: String!, apiKey: String): NexusAiSetConfigResult!
+    nexusAiSetConfig(provider: String!, model: String!, apiKey: String, useLocalGateway: Boolean): NexusAiSetConfigResult!
 
     "List all sites (local + WPE)"
     nexusSitesList: NexusSitesListResult!
@@ -730,7 +730,7 @@ export const typeDefs = gql`
     nexusAiAsk(query: String!, model: String): NexusAiAskResult!
 
     "Setup AI on WordPress site"
-    nexusAiSetup(target: String!, force: Boolean): NexusAiSetupResult!
+    nexusAiSetup(target: String!, provider: String, force: Boolean): NexusAiSetupResult!
 
     "Sync AI credentials to site"
     nexusAiSyncCredentials(target: String!): NexusAiSyncCredentialsResult!
@@ -743,6 +743,12 @@ export const typeDefs = gql`
 
     "Get AI connector status"
     nexusAiStatus(target: String!): NexusAiStatusResult!
+
+    "Get per-site AI provider configuration"
+    nexusAiGetSiteConfig(target: String!): NexusAiGetSiteConfigResult!
+
+    "Switch AI provider on an already-configured site"
+    nexusAiSwitchProvider(target: String!, provider: String!): NexusAiSwitchProviderResult!
 
     # Composite Audits
     "Comprehensive site audit"
@@ -1100,7 +1106,9 @@ export const typeDefs = gql`
   type NexusAiSyncCredentialsResult {
     success: Boolean!
     error: String
-    synced: [SyncedCredential!]!
+    synced: [SyncedCredential!]
+    "Provider configured for this site (when syncing via autoSyncCredentials)"
+    provider: String
   }
 
   type AbilityParameter {
@@ -1223,7 +1231,7 @@ export const typeDefs = gql`
   # ============================================================================
 
   type AiProviderConfig {
-    "Currently configured provider ID (anthropic, openai, google, ollama, wpe-gateway)"
+    "Currently configured provider ID (anthropic, openai, google, ollama, local-gateway)"
     provider: String
     "Currently configured model"
     model: String
@@ -1240,5 +1248,27 @@ export const typeDefs = gql`
   type NexusAiSetConfigResult {
     success: Boolean!
     error: String
+  }
+
+  type AiSiteConfig {
+    "Provider ID configured for this site"
+    provider: String!
+    "Model name (if set)"
+    model: String
+    "Unix timestamp when configured"
+    configuredAt: Float!
+  }
+
+  type NexusAiGetSiteConfigResult {
+    success: Boolean!
+    error: String
+    config: AiSiteConfig
+  }
+
+  type NexusAiSwitchProviderResult {
+    success: Boolean!
+    error: String
+    previousProvider: String
+    newProvider: String
   }
 `;

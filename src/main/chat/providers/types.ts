@@ -24,7 +24,7 @@ export interface ChatProviderConfig {
 // Provider Interface
 // ---------------------------------------------------------------------------
 
-export interface ChatProvider {
+export interface AIProvider {
   readonly id: string;
   readonly displayName: string;
   readonly requiresApiKey: boolean;

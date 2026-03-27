@@ -381,7 +381,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       if (!this.mounted) return;
 
       // Check if LLM is configured (any chat provider selected means LLM available)
-      const hasLLM = !!settings?.chatProvider;
+      const hasLLM = !!settings?.aiProvider;
 
       // Build a map of WPE install IDs to local sites (for linkage detection)
       const wpeInstallIdToLocalSite = new Map<string, { id: string; name: string }>();
@@ -828,10 +828,10 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       }, copiedField === field ? 'Copied!' : 'Copy');
 
     const { settings } = this.state;
-    const activeProvider = settings?.chatProvider
-      ? settings.chatProvider.charAt(0).toUpperCase() + settings.chatProvider.slice(1)
+    const activeProvider = settings?.aiProvider
+      ? settings.aiProvider.charAt(0).toUpperCase() + settings.aiProvider.slice(1)
       : 'Not configured';
-    const activeModel = settings?.chatModel || 'default';
+    const activeModel = settings?.aiModel || 'default';
 
     return React.createElement('div', { style: { marginBottom: '24px' } },
       this.renderSectionLabel('Connect to AI Tools'),
@@ -852,7 +852,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } },
           `Active AI: ${activeProvider}`,
         ),
-        settings?.chatModel
+        settings?.aiModel
           ? React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-text)' } },
               `(${activeModel})`,
             )

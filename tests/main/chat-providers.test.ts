@@ -2,7 +2,7 @@ import { OllamaProvider } from '../../src/main/chat/providers/ollama';
 import { OpenAIProvider } from '../../src/main/chat/providers/openai';
 import { AnthropicProvider } from '../../src/main/chat/providers/anthropic';
 import { GoogleProvider } from '../../src/main/chat/providers/google';
-import { WpeGatewayProvider } from '../../src/main/chat/providers/wpe-gateway';
+import { LocalGatewayProvider } from '../../src/main/chat/providers/local-gateway';
 import { initializeProviders, getProvider, listProviders } from '../../src/main/chat/providers/index';
 
 // ---------------------------------------------------------------------------
@@ -14,9 +14,9 @@ describe('Provider Registry', () => {
     initializeProviders();
   });
 
-  test('initializes all five providers', () => {
+  test('initializes four user-facing providers (local-gateway excluded from list)', () => {
     const providers = listProviders();
-    expect(providers.length).toBe(5);
+    expect(providers.length).toBe(4);
   });
 
   test('can retrieve each provider by id', () => {
@@ -24,7 +24,7 @@ describe('Provider Registry', () => {
     expect(getProvider('anthropic')).not.toBeNull();
     expect(getProvider('openai')).not.toBeNull();
     expect(getProvider('google')).not.toBeNull();
-    expect(getProvider('wpe-gateway')).not.toBeNull();
+    expect(getProvider('local-gateway')).not.toBeNull(); // still in registry, just not in listProviders()
   });
 
   test('returns null for unknown provider', () => {
@@ -39,7 +39,8 @@ describe('Provider Registry', () => {
     expect(byId['anthropic'].requiresApiKey).toBe(true);
     expect(byId['openai'].requiresApiKey).toBe(true);
     expect(byId['google'].requiresApiKey).toBe(true);
-    expect(byId['wpe-gateway'].requiresApiKey).toBe(false);
+    // local-gateway is excluded from listProviders() — verify it's absent
+    expect(byId['local-gateway']).toBeUndefined();
   });
 });
 
@@ -120,14 +121,14 @@ describe('GoogleProvider', () => {
 });
 
 // ---------------------------------------------------------------------------
-// WPE Gateway Provider (placeholder)
+// Local Gateway Provider
 // ---------------------------------------------------------------------------
 
-describe('WpeGatewayProvider', () => {
-  const provider = new WpeGatewayProvider();
+describe('LocalGatewayProvider', () => {
+  const provider = new LocalGatewayProvider();
 
   test('has correct static properties', () => {
-    expect(provider.id).toBe('wpe-gateway');
+    expect(provider.id).toBe('local-gateway');
     expect(provider.requiresApiKey).toBe(false);
   });
 
@@ -153,13 +154,13 @@ describe('WpeGatewayProvider', () => {
 // Provider Interface Contract
 // ---------------------------------------------------------------------------
 
-describe('All providers implement ChatProvider interface', () => {
+describe('All providers implement AIProvider interface', () => {
   const providers = [
     new OllamaProvider(),
     new OpenAIProvider(),
     new AnthropicProvider(),
     new GoogleProvider(),
-    new WpeGatewayProvider(),
+    new LocalGatewayProvider(),
   ];
 
   test.each(providers.map((p) => [p.id, p]))('%s has id string', (_id, provider: any) => {

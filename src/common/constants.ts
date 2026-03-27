@@ -21,6 +21,8 @@ export const IPC_CHANNELS = {
 
   // AI Setup
   SETUP_AI: `${ADDON_PREFIX}:setup-ai`,
+  GET_SITE_AI_CONFIG: `${ADDON_PREFIX}:ai:get-site-config`,
+  SWITCH_AI_PROVIDER: `${ADDON_PREFIX}:ai:switch-provider`,
   GET_WP_VERSION: `${ADDON_PREFIX}:get-wp-version`,
   UPGRADE_WP: `${ADDON_PREFIX}:upgrade-wp`,
 
@@ -185,6 +187,7 @@ export const STORAGE_KEYS = {
   API_KEY_STATUS: `${ADDON_PREFIX}_api_key_status`,
   AI_SETUP_STATE: `${ADDON_PREFIX}_ai_setup_state`, // Track which sites have AI setup complete
   SITE_METADATA: `${ADDON_PREFIX}_site_metadata`, // Digital twin: cached site state (WP version, plugins, themes)
+  SITE_AI_CONFIG: `${ADDON_PREFIX}_site_ai_config`, // Per-site AI provider configuration
 } as const;
 
 // ---------------------------------------------------------------------------

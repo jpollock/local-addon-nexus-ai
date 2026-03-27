@@ -1,12 +1,12 @@
 import type { ChatMessage, ProviderStreamEvent } from '../../../common/chat-types';
-import type { ChatProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
+import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
 
 /**
- * WP Engine Gateway — placeholder provider for future WPE-managed AI gateway.
+ * Local AI Gateway — provider for the locally-hosted AI gateway.
  */
-export class WpeGatewayProvider implements ChatProvider {
-  readonly id = 'wpe-gateway';
-  readonly displayName = 'WP Engine Gateway';
+export class LocalGatewayProvider implements AIProvider {
+  readonly id = 'local-gateway';
+  readonly displayName = 'Local AI Gateway';
   readonly requiresApiKey = false;
   readonly defaultModels: string[] = [];
 
@@ -18,7 +18,7 @@ export class WpeGatewayProvider implements ChatProvider {
   ): AsyncGenerator<ProviderStreamEvent> {
     yield {
       type: 'error',
-      message: 'WP Engine AI Gateway is coming soon. Please select a different provider.',
+      message: 'Local AI Gateway is coming soon. Please select a different provider.',
     };
   }
 
@@ -27,6 +27,6 @@ export class WpeGatewayProvider implements ChatProvider {
   }
 
   async validateKey(_apiKey: string): Promise<string | null> {
-    return 'WP Engine AI Gateway is not yet available.';
+    return 'Local AI Gateway is not yet available.';
   }
 }

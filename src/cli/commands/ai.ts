@@ -16,11 +16,10 @@ const aiCommand = new Command('ai').description('AI and connector management');
 // ============================================================================
 
 const PROVIDERS = [
-  { id: 'anthropic',   label: 'Anthropic (Claude)',       requiresKey: true },
-  { id: 'openai',      label: 'OpenAI (GPT)',             requiresKey: true },
-  { id: 'google',      label: 'Google (Gemini)',          requiresKey: true },
-  { id: 'ollama',      label: 'Ollama (local, no key)',   requiresKey: false },
-  { id: 'wpe-gateway', label: 'WP Engine AI Gateway',     requiresKey: false },
+  { id: 'anthropic', label: 'Anthropic (Claude)',     requiresKey: true },
+  { id: 'openai',    label: 'OpenAI (GPT)',           requiresKey: true },
+  { id: 'google',    label: 'Google (Gemini)',        requiresKey: true },
+  { id: 'ollama',    label: 'Ollama (local, no key)', requiresKey: false },
 ];
 
 function prompt(rl: readline.Interface, question: string): Promise<string> {
@@ -56,8 +55,41 @@ function promptHidden(question: string): Promise<string> {
 aiCommand
   .command('config')
   .description('View or configure AI provider settings')
-  .action(async () => {
+  .option('--gateway <value>', 'Enable or disable Local AI Gateway (on/off)')
+  .action(async (options) => {
     const client = getClient();
+
+    // Fast path: --gateway flag provided
+    if (options.gateway !== undefined) {
+      const enable = options.gateway === 'on' || options.gateway === 'true';
+
+      // Get current config to preserve provider/model
+      const currentResult = await client.mutate<{ nexusAiGetConfig: any }>(`
+        mutation { nexusAiGetConfig { success config { provider model } } }
+      `, {});
+      const currentConfig = currentResult.nexusAiGetConfig?.config;
+
+      const saveResult = await client.mutate<{ nexusAiSetConfig: any }>(`
+        mutation($provider: String!, $model: String!, $useLocalGateway: Boolean) {
+          nexusAiSetConfig(provider: $provider, model: $model, useLocalGateway: $useLocalGateway) {
+            success error
+          }
+        }
+      `, {
+        provider: currentConfig?.provider ?? 'ollama',
+        model: currentConfig?.model ?? '',
+        useLocalGateway: enable,
+      });
+
+      if (!saveResult.nexusAiSetConfig.success) {
+        console.error(`\n❌ ${saveResult.nexusAiSetConfig.error}`);
+        process.exit(1);
+      }
+
+      console.log(`\n✅ Local AI Gateway ${enable ? 'enabled' : 'disabled'}`);
+      console.log('');
+      return;
+    }
 
     // Show current config
     const configResult = await client.mutate<{ nexusAiGetConfig: any }>(`
@@ -274,33 +306,78 @@ aiCommand
 // ============================================================================
 
 aiCommand
-  .command('setup <target>')
+  .command('setup <site>')
   .description('Setup AI on a WordPress site')
+  .option('--provider <provider>', 'AI provider to use (skips interactive prompt)')
   .option('--force', 'Force setup even if already configured')
-  .action(async (target, options) => {
+  .action(async (site, options) => {
     try {
-      parseTarget(target);
-      const client = getClient({ timeout: 300000 }); // 5 min for setup
+      parseTarget(site);
+      const client = getClient({ timeout: 300000 });
 
-      console.log(`\nSetting up AI on ${target}...`);
+      // Fetch current global config for defaults
+      const configResult = await client.mutate<{ nexusAiGetConfig: any }>(`
+        mutation { nexusAiGetConfig { success config { provider } } }
+      `, {});
+      const globalProvider = configResult.nexusAiGetConfig?.config?.provider;
 
-      const result = await client.mutate<{ nexusAiSetup: any }>(`
-        mutation($target: String!, $force: Boolean) {
-          nexusAiSetup(target: $target, force: $force) {
-            success
-            error
-            installed {
-              plugin
-              version
-            }
-            configured {
-              experiments
-              providers
-              credentials
-            }
+      // Fetch current site config
+      const siteConfigResult = await client.mutate<{ nexusAiGetSiteConfig: any }>(`
+        mutation($target: String!) {
+          nexusAiGetSiteConfig(target: $target) {
+            success config { provider configuredAt }
           }
         }
-      `, { target, force: options.force || false });
+      `, { target: site });
+      const siteConfig = siteConfigResult.nexusAiGetSiteConfig?.config;
+
+      let selectedProvider: typeof PROVIDERS[0];
+
+      if (options.provider) {
+        // Non-interactive: --provider flag given
+        const found = PROVIDERS.find((p) => p.id === options.provider);
+        if (!found) {
+          console.error(`\n❌ Unknown provider: ${options.provider}`);
+          console.error(`   Valid options: ${PROVIDERS.map((p) => p.id).join(', ')}`);
+          process.exit(1);
+        }
+        selectedProvider = found;
+      } else {
+        // Interactive: prompt for provider
+        console.log(`\nSetup AI on ${site}`);
+        console.log('─'.repeat(45));
+
+        if (siteConfig) {
+          const p = PROVIDERS.find((x) => x.id === siteConfig.provider);
+          console.log(`  Currently: ${p?.label ?? siteConfig.provider}`);
+        }
+
+        const defaultProvider = siteConfig?.provider ?? globalProvider ?? 'ollama';
+        const defaultIdx = PROVIDERS.findIndex((p) => p.id === defaultProvider) + 1 || 1;
+
+        console.log('\nAvailable providers:');
+        PROVIDERS.forEach((p, i) => console.log(`  ${i + 1}. ${p.label}`));
+
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const providerInput = await prompt(rl, `\nProvider [${defaultIdx}]: `);
+        rl.close();
+
+        const providerIdx = (parseInt(providerInput, 10) || defaultIdx) - 1;
+        selectedProvider = PROVIDERS[Math.min(Math.max(providerIdx, 0), PROVIDERS.length - 1)];
+      }
+
+      console.log(`\nSetting up ${site} with ${selectedProvider.label}...`);
+
+      const result = await client.mutate<{ nexusAiSetup: any }>(`
+        mutation($target: String!, $provider: String, $force: Boolean) {
+          nexusAiSetup(target: $target, provider: $provider, force: $force) {
+            success
+            error
+            installed { plugin version }
+            configured { experiments providers credentials }
+          }
+        }
+      `, { target: site, provider: selectedProvider.id, force: options.force || false });
 
       const { success, error, installed, configured } = result.nexusAiSetup;
 
@@ -309,17 +386,19 @@ aiCommand
         process.exit(1);
       }
 
-      console.log(`\n✅ AI setup complete`);
+      console.log(`\n✅ AI setup complete on ${site}`);
+      console.log(`   Provider: ${selectedProvider.label}`);
       console.log('');
-      console.log('Installed:');
-      for (const item of installed) {
-        console.log(`  - ${item.plugin} (${item.version})`);
+      if (installed?.length > 0) {
+        console.log('Installed:');
+        for (const item of installed) {
+          console.log(`  - ${item.plugin} (${item.version})`);
+        }
+        console.log('');
       }
-      console.log('');
       console.log('Configured:');
-      console.log(`  - Experiments: ${configured.experiments.join(', ')}`);
-      console.log(`  - Providers: ${configured.providers.join(', ')}`);
-      console.log(`  - Credentials synced: ${configured.credentials ? 'Yes' : 'No'}`);
+      console.log(`  - Experiments: ${configured?.experiments?.join(', ') ?? 'none'}`);
+      console.log(`  - Credentials synced: ${configured?.credentials ? 'Yes' : 'No'}`);
       console.log('');
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
@@ -328,40 +407,34 @@ aiCommand
   });
 
 aiCommand
-  .command('sync-credentials <target>')
-  .description('Sync AI credentials to WordPress site')
-  .action(async (target) => {
+  .command('sync-credentials <site>')
+  .description('Sync AI credentials to a WordPress site')
+  .action(async (site) => {
     try {
-      parseTarget(target);
-      const client = getClient();
+      parseTarget(site);
+      const client = getClient({ timeout: 60000 });
 
-      console.log(`\nSyncing credentials to ${target}...`);
+      console.log(`\nSyncing AI credentials to ${site}...`);
 
       const result = await client.mutate<{ nexusAiSyncCredentials: any }>(`
         mutation($target: String!) {
           nexusAiSyncCredentials(target: $target) {
             success
             error
-            synced {
-              provider
-              credentialCount
-            }
+            provider
           }
         }
-      `, { target });
+      `, { target: site });
 
-      const { success, error, synced } = result.nexusAiSyncCredentials;
+      const { success, error, provider } = result.nexusAiSyncCredentials;
 
       if (!success) {
         console.error(`\n❌ ${error}`);
         process.exit(1);
       }
 
-      console.log(`\n✅ Credentials synced`);
-      console.log('');
-      for (const item of synced) {
-        console.log(`  ${item.provider}: ${item.credentialCount} credential${item.credentialCount !== 1 ? 's' : ''}`);
-      }
+      const p = PROVIDERS.find((x) => x.id === provider);
+      console.log(`\n✅ Credentials synced (${p?.label ?? provider ?? 'no provider configured'})`);
       console.log('');
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
@@ -540,6 +613,122 @@ aiCommand
       console.log(`Providers:     ${providersIcon} ${status.providersConfigured} configured`);
       console.log(`Credentials:   ${credentialsIcon} ${status.credentialsSynced ? 'Synced' : 'Not synced'}`);
       console.log(`Abilities:     ${status.abilitiesAvailable} available`);
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// Per-Site AI Provider Configuration Commands
+// ============================================================================
+
+aiCommand
+  .command('site-config <site>')
+  .description('Show AI provider configured for a site')
+  .action(async (site) => {
+    try {
+      const client = getClient();
+
+      const result = await client.mutate<{ nexusAiGetSiteConfig: any }>(`
+        mutation($target: String!) {
+          nexusAiGetSiteConfig(target: $target) {
+            success
+            error
+            config { provider model configuredAt }
+          }
+        }
+      `, { target: site });
+
+      const { success, error, config } = result.nexusAiGetSiteConfig;
+
+      if (!success) {
+        console.error(`\n❌ ${error}`);
+        process.exit(1);
+      }
+
+      console.log(`\n${site} — AI Configuration`);
+      console.log('─'.repeat(45));
+
+      if (!config) {
+        console.log('  Not configured. Run: nexus ai setup ' + site);
+      } else {
+        const p = PROVIDERS.find((x) => x.id === config.provider);
+        const date = new Date(config.configuredAt).toLocaleDateString();
+        console.log(`  Provider:  ${p?.label ?? config.provider}`);
+        console.log(`  Model:     ${config.model ?? '(not set)'}`);
+        console.log(`  Set up:    ${date}`);
+      }
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+aiCommand
+  .command('switch-provider <site>')
+  .description('Switch AI provider on an already-configured site')
+  .action(async (site) => {
+    try {
+      const client = getClient({ timeout: 120000 });
+
+      // Get current site config
+      const siteConfigResult = await client.mutate<{ nexusAiGetSiteConfig: any }>(`
+        mutation($target: String!) {
+          nexusAiGetSiteConfig(target: $target) {
+            success config { provider model }
+          }
+        }
+      `, { target: site });
+
+      const siteConfig = siteConfigResult.nexusAiGetSiteConfig?.config;
+
+      console.log(`\nSwitch AI provider on ${site}`);
+      console.log('─'.repeat(45));
+
+      if (siteConfig) {
+        const current = PROVIDERS.find((x) => x.id === siteConfig.provider);
+        console.log(`  Current provider: ${current?.label ?? siteConfig.provider}`);
+      } else {
+        console.log('  Note: site not yet configured — consider running: nexus ai setup ' + site);
+      }
+
+      // Show provider options (excluding current)
+      const currentId = siteConfig?.provider;
+      const choices = PROVIDERS.filter((p) => p.id !== currentId);
+
+      console.log('\nSwitch to:');
+      choices.forEach((p, i) => console.log(`  ${i + 1}. ${p.label}`));
+
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const input = await prompt(rl, '\nChoice [1]: ');
+      rl.close();
+
+      const idx = (parseInt(input, 10) || 1) - 1;
+      const selectedProvider = choices[Math.min(Math.max(idx, 0), choices.length - 1)];
+
+      console.log(`\nSwitching ${site} → ${selectedProvider.label}...`);
+
+      const result = await client.mutate<{ nexusAiSwitchProvider: any }>(`
+        mutation($target: String!, $provider: String!) {
+          nexusAiSwitchProvider(target: $target, provider: $provider) {
+            success error previousProvider newProvider
+          }
+        }
+      `, { target: site, provider: selectedProvider.id });
+
+      const { success, error, previousProvider, newProvider } = result.nexusAiSwitchProvider;
+
+      if (!success) {
+        console.error(`\n❌ ${error}`);
+        process.exit(1);
+      }
+
+      const prev = PROVIDERS.find((x) => x.id === previousProvider);
+      const next = PROVIDERS.find((x) => x.id === newProvider);
+      console.log(`\n✅ ${site} switched: ${prev?.label ?? previousProvider ?? 'unconfigured'} → ${next?.label ?? newProvider}`);
       console.log('');
     } catch (error: any) {
       console.error(`Error: ${error.message}`);

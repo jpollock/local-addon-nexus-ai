@@ -8,10 +8,14 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
-import type { ChatProvider, NexusSettings } from '../../common/types';
+import type { AIProvider, NexusSettings } from '../../common/types';
 
 interface NexusPreferencesProps {
   electron: any;
+  /** Called whenever settings change — triggers Apply button activation */
+  onSettingsChange?: (settings: NexusSettings) => void;
+  /** Passed by Local's withMenuLayout (forwarded via sections props) */
+  setApplyButtonDisabled?: (disabled: boolean) => void;
 }
 
 interface SiteListItem {
@@ -157,9 +161,9 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         loading: false,
       }, () => {
         // Load models and stored key for the current provider
-        if (this.state.settings.chatProvider) {
-          this.fetchModels(this.state.settings.chatProvider);
-          this.loadStoredKey(this.state.settings.chatProvider);
+        if (this.state.settings.aiProvider) {
+          this.fetchModels(this.state.settings.aiProvider);
+          this.loadStoredKey(this.state.settings.aiProvider);
         }
       });
     } catch {
@@ -192,64 +196,60 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     }
   };
 
+  notifyChange = (settings: NexusSettings): void => {
+    this.props.onSettingsChange?.(settings);
+  };
+
+  handleGatewayToggle = (): void => {
+    this.setState((prev) => {
+      const next = { ...prev.settings, useLocalGateway: !(prev.settings as any).useLocalGateway };
+      this.notifyChange(next);
+      return { settings: next };
+    });
+  };
+
   handleAutoIndexToggle = (): void => {
-    this.setState(
-      (prev) => ({
-        settings: { ...prev.settings, autoIndex: !prev.settings.autoIndex },
-        saved: false,
-      }),
-      () => this.saveSettings(),
-    );
+    this.setState((prev) => {
+      const next = { ...prev.settings, autoIndex: !prev.settings.autoIndex };
+      this.notifyChange(next);
+      return { settings: next };
+    });
   };
 
   handleSiteExclusionToggle = (siteId: string): void => {
-    this.setState(
-      (prev) => {
-        const excluded = prev.settings.excludedSiteIds;
-        const isExcluded = excluded.includes(siteId);
-        return {
-          settings: {
-            ...prev.settings,
-            excludedSiteIds: isExcluded
-              ? excluded.filter((id) => id !== siteId)
-              : [...excluded, siteId],
-          },
-          saved: false,
-        };
-      },
-      () => this.saveSettings(),
-    );
+    this.setState((prev) => {
+      const excluded = prev.settings.excludedSiteIds;
+      const isExcluded = excluded.includes(siteId);
+      const next = {
+        ...prev.settings,
+        excludedSiteIds: isExcluded
+          ? excluded.filter((id) => id !== siteId)
+          : [...excluded, siteId],
+      };
+      this.notifyChange(next);
+      return { settings: next };
+    });
   };
 
   handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
-    const providerId = e.target.value as ChatProvider;
-    this.setState(
-      (prev) => ({
-        settings: { ...prev.settings, chatProvider: providerId, chatModel: '' },
-        models: [],
-        keyInput: '',
-        keySaved: false,
-        saved: false,
-      }),
-      () => {
-        this.saveSettings();
-        this.fetchModels(providerId);
-        if (providerId) {
-          this.loadStoredKey(providerId);
-        }
-      },
-    );
+    const providerId = e.target.value as AIProvider;
+    this.setState((prev) => {
+      const next = { ...prev.settings, aiProvider: providerId, aiModel: '' as any };
+      this.notifyChange(next);
+      return { settings: next, models: [], keyInput: '', keySaved: false };
+    }, () => {
+      this.fetchModels(providerId);
+      if (providerId) this.loadStoredKey(providerId);
+    });
   };
 
   handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
     const model = e.target.value;
-    this.setState(
-      (prev) => ({
-        settings: { ...prev.settings, chatModel: model },
-        saved: false,
-      }),
-      () => this.saveSettings(),
-    );
+    this.setState((prev) => {
+      const next = { ...prev.settings, aiModel: model };
+      this.notifyChange(next);
+      return { settings: next };
+    });
   };
 
   handleKeyInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -258,7 +258,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   handleSaveKey = async (): Promise<void> => {
     const { keyInput, settings } = this.state;
-    const providerId = settings.chatProvider;
+    const providerId = settings.aiProvider;
     if (!providerId || !keyInput.trim()) return;
 
     await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SAVE_API_KEY, providerId, keyInput.trim());
@@ -272,7 +272,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   handleValidateKey = async (): Promise<void> => {
     const { keyInput, settings } = this.state;
-    const providerId = settings.chatProvider;
+    const providerId = settings.aiProvider;
     if (!providerId || !keyInput.trim()) return;
 
     this.setState((prev) => ({
@@ -304,17 +304,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   };
 
 
-  saveSettings = async (): Promise<void> => {
-    try {
-      await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.UPDATE_SETTINGS,
-        this.state.settings,
-      );
-      if (this.mounted) this.setState({ saved: true });
-    } catch {
-      // Best-effort save
-    }
-  };
 
   // -----------------------------------------------------------------------
   // Chat Section Render
@@ -322,8 +311,8 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   renderChatSection(): React.ReactNode {
     const { settings, providers, models, loadingModels, keyStatus, keyInput, keySaved } = this.state;
-    const currentProvider = providers.find((p) => p.id === settings.chatProvider);
-    const currentStatus = settings.chatProvider ? (keyStatus[settings.chatProvider] ?? 'unchecked') : 'unchecked';
+    const currentProvider = providers.find((p) => p.id === settings.aiProvider);
+    const currentStatus = settings.aiProvider ? (keyStatus[settings.aiProvider] ?? 'unchecked') : 'unchecked';
 
     const statusColor = currentStatus === 'valid' ? UI_COLORS.STATUS_RUNNING
       : currentStatus === 'invalid' ? UI_COLORS.STATUS_ERROR
@@ -338,14 +327,14 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     return React.createElement('div', { style: sectionStyle },
       React.createElement('div', { style: labelStyle }, 'AI Credentials'),
       React.createElement('div', { style: descStyle },
-        'Configure the AI provider for the Chat tab. Ollama runs locally with no API key required.',
+        'Choose the AI provider for Nexus AI features, e.g. Site Finder. Each WordPress site can use a different provider — configure per-site via the site\'s Nexus AI section.',
       ),
 
       // Provider dropdown
       React.createElement('div', { style: rowStyle },
         React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', /* color inherited */ } }, 'Provider'),
         React.createElement('select', {
-          value: settings.chatProvider || '',
+          value: settings.aiProvider || '',
           onChange: this.handleProviderChange,
           style: selectStyle,
         },
@@ -359,12 +348,12 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       ),
 
       // Model selector (shown when provider selected)
-      settings.chatProvider ? React.createElement('div', { style: rowStyle },
+      settings.aiProvider ? React.createElement('div', { style: rowStyle },
         React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', /* color inherited */ } }, 'Model'),
         loadingModels
           ? React.createElement('span', { style: { fontSize: '13px', opacity: 0.7 } }, 'Loading models...')
           : React.createElement('select', {
-              value: settings.chatModel || '',
+              value: settings.aiModel || '',
               onChange: this.handleModelChange,
               style: selectStyle,
             },
@@ -437,6 +426,25 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       `),
       // AI Credentials section (moved to top)
       this.renderChatSection(),
+
+      // Local AI Gateway toggle
+      React.createElement('div', { style: sectionStyle },
+        React.createElement('div', { style: labelStyle }, 'Local AI Gateway'),
+        React.createElement('div', { style: descStyle },
+          'When enabled, all AI requests from WordPress sites are proxied through the Local AI Gateway, which routes them to your configured AI provider above.',
+        ),
+        React.createElement('label', { style: checkboxRowStyle },
+          React.createElement('input', {
+            type: 'checkbox',
+            checked: !!((this.state.settings as any).useLocalGateway),
+            onChange: this.handleGatewayToggle,
+            style: { width: '16px', height: '16px', cursor: 'pointer' },
+          }),
+          React.createElement('span', { style: { fontSize: '14px' } },
+            'Route WordPress AI requests through Local AI Gateway',
+          ),
+        ),
+      ),
 
       // Divider
       React.createElement('hr', {

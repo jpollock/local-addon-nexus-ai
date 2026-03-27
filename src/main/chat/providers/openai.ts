@@ -1,10 +1,10 @@
 import type { ChatMessage, ProviderStreamEvent } from '../../../common/chat-types';
-import type { ChatProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
+import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
 import { streamingRequest, apiRequest } from './http-utils';
 
 const OPENAI_BASE = 'https://api.openai.com/v1';
 
-export class OpenAIProvider implements ChatProvider {
+export class OpenAIProvider implements AIProvider {
   readonly id = 'openai';
   readonly displayName = 'OpenAI';
   readonly requiresApiKey = true;

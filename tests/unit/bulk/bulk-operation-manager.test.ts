@@ -346,14 +346,14 @@ describe('BulkOperationManager', () => {
     const opId = manager.execute({
       type: 'setup-ai',
       siteIds: ['site-1', 'site-2'],
-      options: { enableOllama: true },
+      options: { provider: 'ollama' },
     });
 
     await manager.waitForCompletion(opId);
 
     expect(setupFn).toHaveBeenCalledTimes(2);
-    expect(setupFn).toHaveBeenCalledWith('site-1', { enableOllama: true });
-    expect(setupFn).toHaveBeenCalledWith('site-2', { enableOllama: true });
+    expect(setupFn).toHaveBeenCalledWith('site-1', { provider: 'ollama' });
+    expect(setupFn).toHaveBeenCalledWith('site-2', { provider: 'ollama' });
 
     const status = manager.getStatus(opId)!;
     expect(status.status).toBe('completed');

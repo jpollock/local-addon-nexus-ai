@@ -8,6 +8,8 @@ import { McpToolHandler, McpToolResult } from '../../types';
 import { requireRunning, ok, error } from '../wp-cli/preflight';
 import { resolveSite } from '../../site-resolver';
 import { setupSiteForAI, SetupAIResult } from './setup-ai';
+import type { AIProvider } from '../../../../common/types';
+import { STORAGE_KEYS } from '../../../../common/constants';
 
 function formatResult(result: SetupAIResult, siteName: string): string {
   const lines: string[] = [];
@@ -43,9 +45,10 @@ export const setupAIToolHandler: McpToolHandler = {
           type: 'string',
           description: 'Local site name, ID, or domain',
         },
-        enable_ollama: {
-          type: 'boolean',
-          description: 'Install the Ollama provider plugin for local AI (requires Ollama running). Defaults to false.',
+        provider: {
+          type: 'string',
+          enum: ['anthropic', 'openai', 'google', 'ollama', 'local-gateway'],
+          description: 'AI provider to configure for this site. Defaults to global aiProvider setting.',
         },
       },
       required: ['site'],
@@ -69,8 +72,12 @@ export const setupAIToolHandler: McpToolHandler = {
     if (check) return check;
 
     try {
+      // Resolve provider: explicit arg > global setting > default
+      const settings = (registryStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
+      const provider: AIProvider | undefined = (args.provider as AIProvider) ?? settings.aiProvider ?? undefined;
+
       const result = await setupSiteForAI(site.id, localServices, registryStorage, logger, {
-        enableOllama: args.enable_ollama === true,
+        provider,
       });
       const text = formatResult(result, site.name);
       return result.success ? ok(text) : error(text);

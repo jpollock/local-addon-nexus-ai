@@ -1,6 +1,6 @@
 import type { ChatMessage, ProviderStreamEvent } from '../../../common/chat-types';
 import { OLLAMA_BASE_URL } from '../../../common/constants';
-import type { ChatProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
+import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
 import { streamingRequest, apiRequest } from './http-utils';
 
 /**
@@ -10,7 +10,7 @@ import { streamingRequest, apiRequest } from './http-utils';
  */
 const MAX_OLLAMA_TOOLS = 20;
 
-export class OllamaProvider implements ChatProvider {
+export class OllamaProvider implements AIProvider {
   readonly id = 'ollama';
   readonly displayName = 'Ollama (Local)';
   readonly requiresApiKey = false;
