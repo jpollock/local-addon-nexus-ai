@@ -104,11 +104,10 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 const ALL_PROVIDERS: Array<{ id: string; label: string }> = [
-  { id: 'anthropic',      label: 'Anthropic (Claude)' },
-  { id: 'openai',         label: 'OpenAI (GPT)' },
-  { id: 'google',         label: 'Google (Gemini)' },
-  { id: 'ollama',         label: 'Ollama (local)' },
-  { id: 'local-gateway',  label: 'Local AI Gateway' },
+  { id: 'anthropic', label: 'Anthropic (Claude)' },
+  { id: 'openai',    label: 'OpenAI (GPT)' },
+  { id: 'google',    label: 'Google (Gemini)' },
+  { id: 'ollama',    label: 'Ollama (local)' },
 ];
 
 /** Mimics Local's <TableListRow label="..."> — renders a <li class="TableListRow"> */
@@ -578,7 +577,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
 
       // Provider picker — shown inline when user clicks Setup AI or Change Provider
       const providerPickerElement = showProviderPicker
-        ? React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6 } },
+        ? React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 10 } },
             React.createElement('select', {
               value: pickerProvider,
               onChange: (e: any) => this.setState({ pickerProvider: e.target.value }),

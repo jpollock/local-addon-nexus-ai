@@ -222,6 +222,7 @@ export interface NexusSettings {
   aiProvider?: AIProvider;
   aiModel?: string;      // Model name within provider
   onboardingDismissed?: boolean;
+  useLocalGateway?: boolean; // Route all AI requests through Local AI Gateway
 }
 
 export interface SiteAIConfig {

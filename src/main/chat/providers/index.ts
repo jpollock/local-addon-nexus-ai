@@ -29,9 +29,11 @@ export function getProvider(id: string): AIProvider | null {
 }
 
 export function listProviders(): Array<{ id: string; displayName: string; requiresApiKey: boolean }> {
-  return Array.from(providers.values()).map((p) => ({
-    id: p.id,
-    displayName: p.displayName,
-    requiresApiKey: p.requiresApiKey,
-  }));
+  return Array.from(providers.values())
+    .filter((p) => p.id !== 'local-gateway') // Local Gateway is a routing layer, not a user-selectable provider
+    .map((p) => ({
+      id: p.id,
+      displayName: p.displayName,
+      requiresApiKey: p.requiresApiKey,
+    }));
 }

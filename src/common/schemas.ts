@@ -23,6 +23,7 @@ export const UpdateSettingsSchema = z.object({
   aiProvider: z.enum(['anthropic', 'openai', 'ollama', 'google', 'local-gateway']).optional(),
   aiModel: z.string().optional(),
   onboardingDismissed: z.boolean().optional(),
+  useLocalGateway: z.boolean().optional(),
 }).strict(); // Prevent unknown properties
 
 export const PluginSlugSchema = z

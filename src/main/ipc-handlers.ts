@@ -552,7 +552,17 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   safeHandle(IPC_CHANNELS.GET_SETTINGS, () => {
     try {
       const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
-      return raw ?? DEFAULT_SETTINGS;
+      if (!raw) return DEFAULT_SETTINGS;
+      // Migrate pre-rename field names (chatProvider→aiProvider, chatModel→aiModel)
+      if (raw.chatProvider !== undefined && raw.aiProvider === undefined) {
+        raw.aiProvider = raw.chatProvider;
+      }
+      if (raw.chatModel !== undefined && raw.aiModel === undefined) {
+        raw.aiModel = raw.chatModel;
+      }
+      delete raw.chatProvider;
+      delete raw.chatModel;
+      return raw;
     } catch {
       return DEFAULT_SETTINGS;
     }

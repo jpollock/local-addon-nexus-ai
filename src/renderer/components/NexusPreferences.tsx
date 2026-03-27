@@ -192,6 +192,16 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     }
   };
 
+  handleGatewayToggle = (): void => {
+    this.setState(
+      (prev) => ({
+        settings: { ...prev.settings, useLocalGateway: !(prev.settings as any).useLocalGateway },
+        saved: false,
+      }),
+      () => this.saveSettings(),
+    );
+  };
+
   handleAutoIndexToggle = (): void => {
     this.setState(
       (prev) => ({
@@ -306,10 +316,17 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   saveSettings = async (): Promise<void> => {
     try {
-      await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.UPDATE_SETTINGS,
-        this.state.settings,
-      );
+      const { settings } = this.state;
+      // Explicitly pick known fields to avoid strict schema rejecting stale/unknown properties
+      const toSave: Record<string, unknown> = {
+        autoIndex: settings.autoIndex,
+        excludedSiteIds: settings.excludedSiteIds,
+      };
+      if (settings.aiProvider !== undefined) toSave.aiProvider = settings.aiProvider;
+      if (settings.aiModel !== undefined) toSave.aiModel = settings.aiModel;
+      if (settings.onboardingDismissed !== undefined) toSave.onboardingDismissed = settings.onboardingDismissed;
+      if ((settings as any).useLocalGateway !== undefined) toSave.useLocalGateway = (settings as any).useLocalGateway;
+      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, toSave);
       if (this.mounted) this.setState({ saved: true });
     } catch {
       // Best-effort save
@@ -437,6 +454,25 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       `),
       // AI Credentials section (moved to top)
       this.renderChatSection(),
+
+      // Local AI Gateway toggle
+      React.createElement('div', { style: sectionStyle },
+        React.createElement('div', { style: labelStyle }, 'Local AI Gateway'),
+        React.createElement('div', { style: descStyle },
+          'When enabled, all AI requests from WordPress sites are proxied through the Local AI Gateway, which routes them to your configured AI provider above.',
+        ),
+        React.createElement('label', { style: checkboxRowStyle },
+          React.createElement('input', {
+            type: 'checkbox',
+            checked: !!((this.state.settings as any).useLocalGateway),
+            onChange: this.handleGatewayToggle,
+            style: { width: '16px', height: '16px', cursor: 'pointer' },
+          }),
+          React.createElement('span', { style: { fontSize: '14px' } },
+            'Route WordPress AI requests through Local AI Gateway',
+          ),
+        ),
+      ),
 
       // Divider
       React.createElement('hr', {

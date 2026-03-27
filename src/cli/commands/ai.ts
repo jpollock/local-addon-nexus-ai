@@ -16,11 +16,10 @@ const aiCommand = new Command('ai').description('AI and connector management');
 // ============================================================================
 
 const PROVIDERS = [
-  { id: 'anthropic',   label: 'Anthropic (Claude)',       requiresKey: true },
-  { id: 'openai',      label: 'OpenAI (GPT)',             requiresKey: true },
-  { id: 'google',      label: 'Google (Gemini)',          requiresKey: true },
-  { id: 'ollama',      label: 'Ollama (local, no key)',   requiresKey: false },
-  { id: 'local-gateway', label: 'Local AI Gateway',        requiresKey: false },
+  { id: 'anthropic', label: 'Anthropic (Claude)',     requiresKey: true },
+  { id: 'openai',    label: 'OpenAI (GPT)',           requiresKey: true },
+  { id: 'google',    label: 'Google (Gemini)',        requiresKey: true },
+  { id: 'ollama',    label: 'Ollama (local, no key)', requiresKey: false },
 ];
 
 function prompt(rl: readline.Interface, question: string): Promise<string> {
