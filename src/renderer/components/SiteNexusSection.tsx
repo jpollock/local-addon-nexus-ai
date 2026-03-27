@@ -8,7 +8,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
-import type { NexusSettings } from '../../common/types';
+import type { NexusSettings, AIProvider, SiteAIConfig } from '../../common/types';
 
 interface SiteNexusSectionProps {
   site: { id: string; name: string; path: string; status?: string };
@@ -49,6 +49,10 @@ interface SiteNexusSectionState {
   refreshingMetadata: boolean; // NEW: True while refreshing cache
   aiContextStatus: { exists: boolean; ageString?: string; filePath?: string } | null;
   generatingContext: boolean;
+  siteAIConfig: SiteAIConfig | null;
+  showProviderPicker: boolean;
+  pickerProvider: AIProvider | '';
+  switchingProvider: boolean;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -91,6 +95,22 @@ const pluginLabel = (status: string) =>
   : status === 'inactive' ? 'Installed (inactive)'
   : 'Not installed';
 
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic:      'Anthropic (Claude)',
+  openai:         'OpenAI (GPT)',
+  google:         'Google (Gemini)',
+  ollama:         'Ollama (local)',
+  'local-gateway': 'Local AI Gateway',
+};
+
+const ALL_PROVIDERS: Array<{ id: string; label: string }> = [
+  { id: 'anthropic',      label: 'Anthropic (Claude)' },
+  { id: 'openai',         label: 'OpenAI (GPT)' },
+  { id: 'google',         label: 'Google (Gemini)' },
+  { id: 'ollama',         label: 'Ollama (local)' },
+  { id: 'local-gateway',  label: 'Local AI Gateway' },
+];
+
 /** Mimics Local's <TableListRow label="..."> — renders a <li class="TableListRow"> */
 function row(label: string, ...children: React.ReactNode[]): React.ReactElement {
   return React.createElement('li', { className: 'TableListRow', key: label },
@@ -117,6 +137,10 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     refreshingMetadata: false,
     aiContextStatus: null,
     generatingContext: false,
+    siteAIConfig: null,
+    showProviderPicker: false,
+    pickerProvider: '',
+    switchingProvider: false,
   };
 
   componentDidMount(): void {
@@ -209,6 +233,17 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       console.error('[NexusAI] ai-context-get-status failed:', err?.message || err?.toString() || 'Unknown error', err);
       // AI context status unavailable — non-fatal
     }
+
+    // Fetch per-site AI config
+    try {
+      const configResult = await ipc.invoke(IPC_CHANNELS.GET_SITE_AI_CONFIG, this.props.site.id);
+      if (!this.mounted) return;
+      if (configResult?.success) {
+        this.setState({ siteAIConfig: configResult.config ?? null });
+      }
+    } catch {
+      // Non-fatal
+    }
   };
 
   handleIndex = async (): Promise<void> => {
@@ -223,11 +258,11 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     if (this.mounted) this.setState({ indexing: false });
   };
 
-  handleSetupAI = async (): Promise<void> => {
-    this.setState({ settingUpAI: true, setupResult: null });
+  handleSetupAI = async (provider?: AIProvider): Promise<void> => {
+    this.setState({ settingUpAI: true, setupResult: null, showProviderPicker: false });
     try {
       const result = await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.SETUP_AI, this.props.site.id,
+        IPC_CHANNELS.SETUP_AI, this.props.site.id, provider,
       );
       if (!this.mounted) return;
       this.setState({
@@ -238,6 +273,31 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     } catch {
       if (!this.mounted) return;
       this.setState({ settingUpAI: false, setupResult: { success: false, message: 'Setup failed' } });
+    }
+  };
+
+  handleSwitchProvider = async (): Promise<void> => {
+    const { pickerProvider } = this.state;
+    if (!pickerProvider) return;
+    this.setState({ switchingProvider: true, setupResult: null, showProviderPicker: false });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.SWITCH_AI_PROVIDER, this.props.site.id, pickerProvider,
+      );
+      if (!this.mounted) return;
+      this.setState({
+        switchingProvider: false,
+        setupResult: {
+          success: result.success,
+          message: result.success
+            ? `Switched to ${pickerProvider}`
+            : (result.error ?? 'Switch failed'),
+        },
+      });
+      if (result.success) this.fetchData();
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ switchingProvider: false, setupResult: { success: false, message: 'Switch failed' } });
     }
   };
 
@@ -418,7 +478,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   }
 
   render(): React.ReactNode {
-    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds, wpVersion, wpVersionAge, upgradingWp, refreshingMetadata } = this.state;
+    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds, wpVersion, wpVersionAge, upgradingWp, refreshingMetadata, siteAIConfig, showProviderPicker, pickerProvider, switchingProvider } = this.state;
 
     if (loading) {
       return React.createElement('ul', { className: 'TableList' },
@@ -512,61 +572,130 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
         ));
       }
 
-      // AI Plugin
+      // AI Provider row — always show when we have aiStatus
       const canSetupAI = wpVersion === null || isWp7OrLater(wpVersion);
+      const isAIConfigured = !!siteAIConfig;
 
-      // Detect if AI is set up but missing gateway provider (needs update)
+      // Provider picker — shown inline when user clicks Setup AI or Change Provider
+      const providerPickerElement = showProviderPicker
+        ? React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6 } },
+            React.createElement('select', {
+              value: pickerProvider,
+              onChange: (e: any) => this.setState({ pickerProvider: e.target.value }),
+              style: {
+                fontSize: 12,
+                padding: '2px 6px',
+                borderRadius: 4,
+                border: '1px solid rgba(128,128,128,0.3)',
+                backgroundColor: 'transparent',
+                color: 'inherit',
+                cursor: 'pointer',
+              },
+            },
+              React.createElement('option', { value: '' }, 'Pick provider...'),
+              ...ALL_PROVIDERS.map((p) =>
+                React.createElement('option', { key: p.id, value: p.id }, p.label),
+              ),
+            ),
+            // Confirm button
+            this.createActionButton({
+              onClick: () => {
+                if (!pickerProvider) return;
+                if (isAIConfigured) {
+                  this.handleSwitchProvider();
+                } else {
+                  this.handleSetupAI(pickerProvider as AIProvider);
+                }
+              },
+              disabled: !pickerProvider || settingUpAI || switchingProvider,
+              children: isAIConfigured ? (switchingProvider ? 'Switching...' : 'Switch') : (settingUpAI ? 'Setting up...' : 'Go'),
+            }),
+            // Cancel
+            this.createActionButton({
+              onClick: () => this.setState({ showProviderPicker: false, pickerProvider: '' }),
+              children: 'Cancel',
+            }),
+          )
+        : null;
+
+      // AI Provider row
+      if (isAIConfigured) {
+        // Already set up — show provider name + Change Provider link
+        rows.push(row('AI Provider',
+          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
+          PROVIDER_LABELS[siteAIConfig!.provider] ?? siteAIConfig!.provider,
+          !showProviderPicker
+            ? this.createActionButton({
+                onClick: () => this.setState({ showProviderPicker: true, pickerProvider: siteAIConfig!.provider as AIProvider }),
+                disabled: switchingProvider,
+                children: switchingProvider ? 'Switching...' : 'Change',
+              })
+            : null,
+          providerPickerElement,
+        ));
+      } else {
+        // Not configured — show Setup AI button (with provider picker)
+        const setupButtonText = settingUpAI ? 'Setting up...'
+          : !canSetupAI ? 'Requires WP 7.0+'
+          : 'Setup AI';
+
+        rows.push(row('AI Provider',
+          React.createElement('span', { style: dotStyle('#888') }),
+          'Not configured',
+          !showProviderPicker && !settingUpAI
+            ? this.createActionButton({
+                onClick: canSetupAI ? () => this.setState({ showProviderPicker: true, pickerProvider: '' }) : undefined,
+                disabled: !canSetupAI,
+                children: setupButtonText,
+              })
+            : (settingUpAI ? React.createElement('span', { style: { fontSize: 12, opacity: 0.7, paddingLeft: 8 } }, 'Setting up...') : null),
+          providerPickerElement,
+        ));
+      }
+
+      // AI Plugin status row (secondary, only show if not active)
       const needsGatewayUpdate =
         aiStatus.aiPlugin === 'active' &&
         (!aiStatus.gatewayProvider || aiStatus.gatewayProvider === 'not_installed');
 
-      const setupButtonText = settingUpAI ? 'Setting up...'
-        : !canSetupAI ? 'Requires WP 7.0+'
-        : needsGatewayUpdate ? 'Update AI Setup'
-        : 'Setup AI';
+      if (aiStatus.aiPlugin !== 'active') {
+        rows.push(row('AI plugin',
+          React.createElement('span', { style: dotStyle(pluginColor(aiStatus.aiPlugin)) }),
+          pluginLabel(aiStatus.aiPlugin),
+        ));
+      }
 
-      rows.push(row('AI plugin',
-        React.createElement('span', { style: dotStyle(pluginColor(aiStatus.aiPlugin)) }),
-        pluginLabel(aiStatus.aiPlugin),
-        aiStatus.aiPlugin !== 'active' || needsGatewayUpdate
-          ? this.createActionButton({
-              onClick: (settingUpAI || !canSetupAI) ? undefined : this.handleSetupAI,
-              disabled: settingUpAI || !canSetupAI,
-              children: setupButtonText,
-            })
-          : null,
-      ));
-
-      // Local Gateway Provider (show status if active, or hint if needs update)
+      // Local Gateway
       if (aiStatus.gatewayProvider === 'active') {
         rows.push(row('Local Gateway',
           React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
-          'Active (centralized AI routing)',
+          'Active',
         ));
       } else if (needsGatewayUpdate) {
         rows.push(row('Local Gateway',
           React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_WARNING) }),
-          'Available update: centralized AI routing',
+          'Available update',
+          this.createActionButton({
+            onClick: settingUpAI ? undefined : () => this.handleSetupAI(siteAIConfig?.provider as AIProvider),
+            disabled: settingUpAI,
+            children: settingUpAI ? 'Updating...' : 'Update Setup',
+          }),
         ));
       }
 
-      // Ollama Provider
-      rows.push(row('Ollama provider',
-        React.createElement('span', { style: dotStyle(pluginColor(aiStatus.ollamaProvider)) }),
-        pluginLabel(aiStatus.ollamaProvider),
-      ));
-
-      // Credentials
-      const credsSynced = aiStatus.credentialsSynced ?? false;
-      rows.push(row('Credentials',
-        React.createElement('span', { style: dotStyle(credsSynced ? UI_COLORS.STATUS_RUNNING : '#888') }),
-        credsSynced ? `Synced (${aiStatus.providers.join(', ')})` : 'Not synced',
-        this.createActionButton({
-          onClick: syncingCreds ? undefined : this.handleSyncCredentials,
-          disabled: syncingCreds,
-          children: syncingCreds ? 'Syncing...' : 'Sync Keys',
-        }),
-      ));
+      // Credentials — only show if AI is configured
+      if (isAIConfigured) {
+        const credsSynced = aiStatus.credentialsSynced ?? false;
+        rows.push(row('Credentials',
+          React.createElement('span', { style: dotStyle(credsSynced ? UI_COLORS.STATUS_RUNNING : '#888') }),
+          credsSynced ? `Synced (${PROVIDER_LABELS[siteAIConfig!.provider] ?? siteAIConfig!.provider})` : 'Not synced',
+          this.createActionButton({
+            onClick: syncingCreds ? undefined : this.handleSyncCredentials,
+            disabled: syncingCreds,
+            children: syncingCreds ? 'Syncing...' : 'Sync Keys',
+          }),
+        ));
+      }
     }
 
     // AI Context File (show for all sites)

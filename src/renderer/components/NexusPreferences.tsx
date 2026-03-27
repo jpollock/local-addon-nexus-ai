@@ -338,7 +338,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     return React.createElement('div', { style: sectionStyle },
       React.createElement('div', { style: labelStyle }, 'AI Credentials'),
       React.createElement('div', { style: descStyle },
-        'Configure the AI provider for the Chat tab. Ollama runs locally with no API key required.',
+        'Choose the AI provider for Local\'s Chat tab and AI features. Each WordPress site can use a different provider — configure per-site via the site\'s Nexus AI section.',
       ),
 
       // Provider dropdown

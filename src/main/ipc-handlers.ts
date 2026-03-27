@@ -15,6 +15,7 @@ import type { LocalServicesBridge } from './mcp/local-services-bridge';
 import type { GraphService } from './events/GraphService';
 import type { EventProcessor } from './events/EventProcessor';
 import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
+import { switchProviderForSite } from './mcp/modules/wp-connector/switch-provider';
 import { generateEventSummary } from './events/event-summary';
 import type { EventTimelineEntry, EventStats } from '../common/types';
 import { SearchService } from './search/SearchService';
@@ -751,7 +752,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string, provider?: string) => {
     const startTime = Date.now();
     let wasAutoStarted = false;
 
@@ -778,7 +779,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
 
       const result = await setupSiteForAI(siteId, localServicesBridge, registryStorage, localLogger, {
-        provider: settings?.aiProvider,
+        provider: (provider as any) ?? settings?.aiProvider,
       });
 
       // Cache setup state if AI plugin was successfully installed/activated
@@ -882,6 +883,52 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         acfAbilities: 'failed' as const,
         message: (err as Error).message,
       };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Per-Site AI Config (Phase 4)
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.GET_SITE_AI_CONFIG, (_event: any, siteId: string) => {
+    try {
+      const validated = validateInput(SiteIdSchema, siteId);
+      const siteConfigs = (registryStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+      const config = siteConfigs[validated] ?? null;
+      return { success: true, config };
+    } catch (err: any) {
+      return { success: false, error: err.message, config: null };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.SWITCH_AI_PROVIDER, async (_event: any, siteId: string, provider: string) => {
+    try {
+      const validatedSiteId = validateInput(SiteIdSchema, siteId);
+
+      // Ensure site is running
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      let wasAutoStarted = false;
+      if (statuses[validatedSiteId] !== 'running') {
+        await localServicesBridge.startSite(validatedSiteId);
+        wasAutoStarted = true;
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+
+      const result = await switchProviderForSite(
+        validatedSiteId,
+        provider as any,
+        localServicesBridge,
+        registryStorage,
+        localLogger,
+      );
+
+      if (wasAutoStarted) {
+        await localServicesBridge.stopSite(validatedSiteId);
+      }
+
+      return result;
+    } catch (err: any) {
+      return { success: false, error: err.message };
     }
   });
 
