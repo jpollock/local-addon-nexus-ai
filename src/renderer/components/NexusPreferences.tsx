@@ -12,6 +12,8 @@ import type { AIProvider, NexusSettings } from '../../common/types';
 
 interface NexusPreferencesProps {
   electron: any;
+  /** Passed by Local's withMenuLayout — call false to enable Apply, true to disable */
+  setApplyButtonDisabled?: (disabled: boolean) => void;
 }
 
 interface SiteListItem {
@@ -192,7 +194,12 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     }
   };
 
+  markDirty = (): void => {
+    this.props.setApplyButtonDisabled?.(false);
+  };
+
   handleGatewayToggle = (): void => {
+    this.markDirty();
     this.setState(
       (prev) => ({
         settings: { ...prev.settings, useLocalGateway: !(prev.settings as any).useLocalGateway },
@@ -203,6 +210,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   };
 
   handleAutoIndexToggle = (): void => {
+    this.markDirty();
     this.setState(
       (prev) => ({
         settings: { ...prev.settings, autoIndex: !prev.settings.autoIndex },
@@ -213,6 +221,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   };
 
   handleSiteExclusionToggle = (siteId: string): void => {
+    this.markDirty();
     this.setState(
       (prev) => {
         const excluded = prev.settings.excludedSiteIds;
@@ -233,6 +242,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
     const providerId = e.target.value as AIProvider;
+    this.markDirty();
     this.setState(
       (prev) => ({
         settings: { ...prev.settings, aiProvider: providerId, aiModel: '' },
@@ -253,6 +263,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
     const model = e.target.value;
+    this.markDirty();
     this.setState(
       (prev) => ({
         settings: { ...prev.settings, aiModel: model },
@@ -327,7 +338,10 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       if (settings.onboardingDismissed !== undefined) toSave.onboardingDismissed = settings.onboardingDismissed;
       if ((settings as any).useLocalGateway !== undefined) toSave.useLocalGateway = (settings as any).useLocalGateway;
       await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, toSave);
-      if (this.mounted) this.setState({ saved: true });
+      if (this.mounted) {
+        this.setState({ saved: true });
+        this.props.setApplyButtonDisabled?.(true);
+      }
     } catch {
       // Best-effort save
     }
