@@ -648,9 +648,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         const currentVersion = await localServicesBridge.getWpVersion(siteId);
         localLogger.info(`[NexusAI] Current WordPress version: ${currentVersion}`);
 
-        // Run wp core update to upgrade to WP 7.0-beta6
-        // Using --force to allow downgrade if on a dev version
-        const targetVersion = '7.0-beta6';
+        // Run wp core update to upgrade to WP 7.0
+        // Using --force to allow upgrading from older dev/beta versions
+        const targetVersion = '7.0-RC2';
 
         localLogger.info(`[NexusAI] Running wp core update --version=${targetVersion} --force for site ${siteId}`);
         const updateResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update', `--version=${targetVersion}`, '--force']);
