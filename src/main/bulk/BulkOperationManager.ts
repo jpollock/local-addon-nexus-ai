@@ -291,7 +291,7 @@ export class BulkOperationManager {
     }
 
     const result = await this.deps.setupSiteForAI(siteId, {
-      enableOllama: options.enableOllama ?? false,
+      provider: options.provider,
     });
 
     if (!result.success) {

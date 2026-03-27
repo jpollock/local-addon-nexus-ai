@@ -48,26 +48,31 @@ export class CredentialSyncBroadcaster {
   }
 
   /**
-   * Sync credentials to all running sites after a key change.
+   * Sync credentials to all running sites configured for the given provider.
    * Fires in parallel, isolates per-site errors.
    */
   async broadcastKeyChange(providerId: string): Promise<CredentialSyncResult[]> {
     const runningSites = this.getRunningSites();
     if (runningSites.length === 0) return [];
 
-    this.logger.info(
-      `[NexusAI] Broadcasting ${providerId} key change to ${runningSites.length} running site(s)`,
-    );
+    // Only sync sites configured to use this provider
+    const siteConfigs = (this.registryStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+    const affectedSites = runningSites.filter(site => siteConfigs[site.id]?.provider === providerId);
+
+    if (affectedSites.length === 0) {
+      this.logger.info(`[NexusAI] No running sites use provider ${providerId} — skipping broadcast`);
+      return [];
+    }
+
+    this.logger.info(`[NexusAI] Broadcasting ${providerId} key change to ${affectedSites.length} site(s)`);
 
     const results = await Promise.all(
-      runningSites.map((site) => this.syncToSite(site.id, site.name)),
+      affectedSites.map((site) => this.syncToSite(site.id, site.name)),
     );
 
     const succeeded = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;
-    this.logger.info(
-      `[NexusAI] Credential broadcast complete: ${succeeded} succeeded, ${failed} failed`,
-    );
+    this.logger.info(`[NexusAI] Credential broadcast complete: ${succeeded} succeeded, ${failed} failed`);
 
     return results;
   }

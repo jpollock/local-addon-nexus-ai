@@ -185,6 +185,7 @@ export const STORAGE_KEYS = {
   API_KEY_STATUS: `${ADDON_PREFIX}_api_key_status`,
   AI_SETUP_STATE: `${ADDON_PREFIX}_ai_setup_state`, // Track which sites have AI setup complete
   SITE_METADATA: `${ADDON_PREFIX}_site_metadata`, // Digital twin: cached site state (WP version, plugins, themes)
+  SITE_AI_CONFIG: `${ADDON_PREFIX}_site_ai_config`, // Per-site AI provider configuration
 } as const;
 
 // ---------------------------------------------------------------------------

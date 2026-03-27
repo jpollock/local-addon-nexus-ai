@@ -11,6 +11,7 @@ import * as path from 'path';
 import type { LocalServicesBridge, WpPlugin } from '../../local-services-bridge';
 import type { RegistryStorage } from '../../../content/IndexRegistry';
 import { STORAGE_KEYS } from '../../../../common/constants';
+import type { AIProvider } from '../../../../common/types';
 import {
   PROVIDER_TO_WP_OPTION,
   PROVIDER_PLUGIN_SLUGS,
@@ -152,8 +153,10 @@ function isWp7OrLater(version: string): boolean {
 }
 
 export interface SetupAIOptions {
-  /** Install the Ollama provider plugin if Ollama is running. Defaults to false. */
-  enableOllama?: boolean;
+  /** Which AI provider to configure for this site. Defaults to global aiProvider setting. */
+  provider?: AIProvider;
+  /** Force setup even if already configured */
+  force?: boolean;
 }
 
 export async function setupSiteForAI(
@@ -164,6 +167,11 @@ export async function setupSiteForAI(
   options: SetupAIOptions = {},
 ): Promise<SetupAIResult> {
   const tag = '[NexusAI:setup-ai]';
+
+  // Resolve provider: explicit option > global setting > fallback to ollama
+  const settings = (registryStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
+  const provider: AIProvider = options.provider ?? settings.aiProvider ?? 'ollama';
+  const enableOllama = provider === 'ollama';
 
   // Step 0: Check WordPress version (AI plugin requires WP 7.0+)
   let wpVersion: string | null;
@@ -463,9 +471,8 @@ export async function setupSiteForAI(
   }
 
   const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-  const configuredProviders = SUPPORTED_PROVIDERS.filter((p) => storedKeys[p]);
 
-  // Step 2b: Install AI provider plugins for configured providers
+  // Step 2b: Install AI provider plugin for the chosen provider
   // Each provider needs its own plugin (e.g. ai-provider-for-anthropic) to register
   // with the ProviderRegistry. Without it, the Connector Screen can't validate keys.
   //
@@ -474,7 +481,12 @@ export async function setupSiteForAI(
   // "ai" plugin), the provider plugin crashes with DiscoveryFailedException.
   let providerPlugins: SetupAIResult['providerPlugins'] = 'skipped';
 
-  if (configuredProviders.length > 0 && aiPlugin !== 'failed') {
+  const providerSlug = PROVIDER_PLUGIN_SLUGS[provider];
+  // Only install remote provider plugins (anthropic, openai, google) — ollama and local-gateway
+  // are handled by their own dedicated steps below
+  const isRemoteProvider = providerSlug && provider !== 'ollama' && provider !== 'local-gateway';
+
+  if (isRemoteProvider && aiPlugin !== 'failed') {
     // Check WP version — provider plugins only work on WP 7.0+
     let wpVersion: string | null = null;
     try {
@@ -489,55 +501,37 @@ export async function setupSiteForAI(
       try {
         // Refresh plugin list after AI plugin install
         const currentPlugins = await localServices.getPlugins(siteId);
-        let installed = 0;
-        let alreadyActive = 0;
 
-        for (const provider of configuredProviders) {
-          const slug = PROVIDER_PLUGIN_SLUGS[provider];
-          if (!slug) continue;
-
-          const existing = findPlugin(currentPlugins, slug);
-          if (existing && existing.status === 'active') {
-            alreadyActive++;
-            continue;
-          }
-
-          logger.info(`${tag} Installing provider plugin "${slug}" on site ${siteId}`);
+        const existing = findPlugin(currentPlugins, providerSlug);
+        if (existing && existing.status === 'active') {
+          providerPlugins = 'already_active';
+        } else {
+          logger.info(`${tag} Installing provider plugin "${providerSlug}" on site ${siteId}`);
           const result = await localServices.wpCliRun(
             siteId,
-            ['plugin', 'install', slug, '--activate'],
+            ['plugin', 'install', providerSlug, '--activate'],
           );
 
           if (!result.success) {
-            logger.error(`${tag} Failed to install provider plugin "${slug}": ${redactCredentials(result.stdout ?? '')}`);
-            continue;
+            logger.error(`${tag} Failed to install provider plugin "${providerSlug}": ${redactCredentials(result.stdout ?? '')}`);
+            providerPlugins = 'failed';
+          } else {
+            // Health check: verify the activated plugin doesn't crash WordPress.
+            const healthCheck = await localServices.wpCliRun(
+              siteId,
+              ['eval', "echo 'healthy';"],
+              { skipPlugins: false },
+            );
+
+            if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+              logger.error(`${tag} Provider plugin "${providerSlug}" crashes WordPress — deactivating`);
+              await localServices.wpCliRun(siteId, ['plugin', 'deactivate', providerSlug]);
+              providerPlugins = 'failed';
+            } else {
+              providerPlugins = 'installed';
+              logger.info(`${tag} Installed provider plugin "${providerSlug}" on site ${siteId}`);
+            }
           }
-
-          // Health check: verify the activated plugin doesn't crash WordPress.
-          // Run with skipPlugins: false so all active plugins (including the new one) are loaded.
-          const healthCheck = await localServices.wpCliRun(
-            siteId,
-            ['eval', "echo 'healthy';"],
-            { skipPlugins: false },
-          );
-
-          if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
-            // Plugin crashed WordPress — deactivate it immediately (skipPlugins: true bypasses the crash)
-            logger.error(`${tag} Provider plugin "${slug}" crashes WordPress — deactivating`);
-            await localServices.wpCliRun(siteId, ['plugin', 'deactivate', slug]);
-            continue;
-          }
-
-          installed++;
-        }
-
-        if (installed > 0) {
-          providerPlugins = 'installed';
-          logger.info(`${tag} Installed ${installed} provider plugin(s) on site ${siteId}`);
-        } else if (alreadyActive === configuredProviders.length) {
-          providerPlugins = 'already_active';
-        } else {
-          providerPlugins = 'failed';
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -635,7 +629,7 @@ export async function setupSiteForAI(
   // Step 2d: Install Ollama provider plugin (only when explicitly requested)
   let ollamaProvider: SetupAIResult['ollamaProvider'] = 'skipped';
 
-  if (options.enableOllama && aiPlugin !== 'failed') {
+  if (enableOllama && aiPlugin !== 'failed') {
     const ollamaStatus = getOllamaStatus();
 
     if (!ollamaStatus.available) {
@@ -790,17 +784,22 @@ export async function setupSiteForAI(
     }
   }
 
-  // Step 4: Sync credentials
+  // Step 4: Sync credentials — only sync the key for the chosen provider
   let credentials: SetupAIResult['credentials'] = 'skipped';
 
-  if (configuredProviders.length > 0 && aiPlugin !== 'failed') {
-    try {
-      const entries: CredentialEntry[] = configuredProviders.map((provider) => ({
-        provider,
-        key: storedKeys[provider],
-        optionName: PROVIDER_TO_WP_OPTION[provider],
-      }));
+  const providerKey = storedKeys[provider];
+  const entries: CredentialEntry[] = [];
+  if (providerKey && PROVIDER_TO_WP_OPTION[provider]) {
+    entries.push({
+      provider,
+      key: providerKey,
+      optionName: PROVIDER_TO_WP_OPTION[provider],
+    });
+  }
+  // Providers that don't need a key (ollama, local-gateway) — entries will be empty
 
+  if (entries.length > 0 && aiPlugin !== 'failed') {
+    try {
       const phpCode = buildCredentialSyncPhp(entries);
       // skipPlugins defaults to true — safe because we remove all filters and verify via $wpdb
       const result = await localServices.wpCliRun(
@@ -810,7 +809,7 @@ export async function setupSiteForAI(
 
       if (result.success) {
         credentials = 'synced';
-        logger.info(`${tag} Synced ${configuredProviders.length} credential(s) to site ${siteId}`);
+        logger.info(`${tag} Synced ${provider} credential to site ${siteId}`);
       } else {
         throw new Error(result.stdout ?? 'Unknown error');
       }
@@ -866,6 +865,16 @@ export async function setupSiteForAI(
     }
   }
 
+  // Persist per-site AI config
+  if (aiPlugin !== 'failed') {
+    const siteConfigs = (registryStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+    siteConfigs[siteId] = {
+      provider,
+      configuredAt: Date.now(),
+    };
+    registryStorage.set(STORAGE_KEYS.SITE_AI_CONFIG, siteConfigs);
+  }
+
   // Build result
   const success = aiPlugin !== 'failed';
   const parts: string[] = [];
@@ -914,7 +923,7 @@ export async function setupSiteForAI(
   }
 
   switch (credentials) {
-    case 'synced': parts.push(`${configuredProviders.length} API key(s) synced`); break;
+    case 'synced': parts.push(`${provider} API key synced`); break;
     case 'skipped': parts.push('No API keys configured to sync'); break;
     case 'failed': parts.push('Credential sync failed'); break;
   }

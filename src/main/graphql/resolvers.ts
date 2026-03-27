@@ -83,9 +83,9 @@ export function createResolvers(context: ResolverContext) {
           return {
             success: true,
             config: {
-              provider: settings.chatProvider ?? null,
-              model: settings.chatModel ?? null,
-              hasApiKey: settings.chatProvider ? !!apiKeys[settings.chatProvider] : false,
+              provider: settings.aiProvider ?? null,
+              model: settings.aiModel ?? null,
+              hasApiKey: settings.aiProvider ? !!apiKeys[settings.aiProvider] : false,
             },
           };
         } catch (err: any) {
@@ -101,8 +101,8 @@ export function createResolvers(context: ResolverContext) {
           const current = (services.registryStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
           services.registryStorage.set(STORAGE_KEYS.SETTINGS, {
             ...current,
-            chatProvider: provider,
-            chatModel: model,
+            aiProvider: provider,
+            aiModel: model,
             onboardingDismissed: true,
           });
           if (apiKey) {
@@ -2737,7 +2737,7 @@ export function createResolvers(context: ResolverContext) {
             services.localServices,
             services.registryStorage,
             services.logger,
-            { enableOllama: true }
+            { provider: 'ollama' }
           );
 
           if (!result.success) {
