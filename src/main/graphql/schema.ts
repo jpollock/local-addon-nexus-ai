@@ -1237,6 +1237,8 @@ export const typeDefs = gql`
     model: String
     "Whether an API key is saved for the current provider"
     hasApiKey: Boolean!
+    "Whether Local AI Gateway is enabled"
+    useLocalGateway: Boolean!
   }
 
   type NexusAiGetConfigResult {

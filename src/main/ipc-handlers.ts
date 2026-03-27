@@ -642,15 +642,24 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       localLogger.info(`[NexusAI] Starting WordPress upgrade for site ${siteId}`);
 
-      // Run upgrade with auto-start/stop
-      const result = await withSiteRunning(siteId, localServicesBridge, localLogger, async () => {
+      // Ensure site is running — but don't auto-stop after upgrade.
+      // Stopping triggers Local's database dump which can fail, and users
+      // need the site running to verify the upgrade worked.
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      if (statuses[siteId] !== 'running') {
+        localLogger.info(`[NexusAI] Site ${siteId} not running - auto-starting for upgrade`);
+        await localServicesBridge.startSite(siteId);
+        await waitForDatabaseReady(siteId, localServicesBridge, localLogger, 30000);
+      }
+
+      const result = await (async () => {
         // Get current version
         const currentVersion = await localServicesBridge.getWpVersion(siteId);
         localLogger.info(`[NexusAI] Current WordPress version: ${currentVersion}`);
 
-        // Run wp core update to upgrade to WP 7.0-beta6
-        // Using --force to allow downgrade if on a dev version
-        const targetVersion = '7.0-beta6';
+        // Run wp core update to upgrade to WP 7.0
+        // Using --force to allow upgrading from older dev/beta versions
+        const targetVersion = '7.0-RC2';
 
         localLogger.info(`[NexusAI] Running wp core update --version=${targetVersion} --force for site ${siteId}`);
         const updateResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update', `--version=${targetVersion}`, '--force']);
@@ -736,7 +745,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
 
         return { success: true, version: newVersion, fromVersion: currentVersion, targetVersion };
-      });
+      })();
 
       // Audit log success
       auditLogger.logSuccess(

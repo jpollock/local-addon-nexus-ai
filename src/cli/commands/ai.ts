@@ -93,7 +93,7 @@ aiCommand
 
     // Show current config
     const configResult = await client.mutate<{ nexusAiGetConfig: any }>(`
-      mutation { nexusAiGetConfig { success error config { provider model hasApiKey } } }
+      mutation { nexusAiGetConfig { success error config { provider model hasApiKey useLocalGateway } } }
     `, {});
 
     const { success, error, config } = configResult.nexusAiGetConfig;
@@ -109,6 +109,7 @@ aiCommand
       console.log(`Provider:  ${p?.label ?? config.provider}`);
       console.log(`Model:     ${config.model ?? '(none)'}`);
       console.log(`API Key:   ${config.hasApiKey ? '••••••••' : '(not set)'}`);
+      console.log(`Gateway:   ${config.useLocalGateway ? '✅ Enabled' : '○ Disabled'}`);
     } else {
       console.log('  No provider configured.');
     }
@@ -260,46 +261,6 @@ aiCommand
     }
   });
 
-aiCommand
-  .command('ask <query>')
-  .description('Ask Ollama a question')
-  .option('--model <model>', 'Model to use', 'llama3.2')
-  .option('--json', 'Output as JSON')
-  .action(async (query, options) => {
-    try {
-      const client = getClient({ timeout: 60000 }); // 1 min for AI response
-
-      console.log(`\nAsking ${options.model}...\n`);
-
-      const result = await client.mutate<{ nexusAiAsk: any }>(`
-        mutation($query: String!, $model: String) {
-          nexusAiAsk(query: $query, model: $model) {
-            success
-            error
-            response
-          }
-        }
-      `, { query, model: options.model });
-
-      const { success, error, response } = result.nexusAiAsk;
-
-      if (!success) {
-        console.error(`\n❌ ${error}`);
-        process.exit(1);
-      }
-
-      if (options.json) {
-        console.log(JSON.stringify({ response }, null, 2));
-        return;
-      }
-
-      console.log(response);
-      console.log('');
-    } catch (error: any) {
-      console.error(`Error: ${error.message}`);
-      process.exit(1);
-    }
-  });
 
 // ============================================================================
 // WordPress AI Connector Commands
