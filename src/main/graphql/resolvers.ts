@@ -88,6 +88,7 @@ export function createResolvers(context: ResolverContext) {
               provider: settings.aiProvider ?? null,
               model: settings.aiModel ?? null,
               hasApiKey: settings.aiProvider ? !!apiKeys[settings.aiProvider] : false,
+              useLocalGateway: !!settings.useLocalGateway,
             },
           };
         } catch (err: any) {

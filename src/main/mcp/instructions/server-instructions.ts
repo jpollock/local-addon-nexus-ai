@@ -36,12 +36,37 @@ Route user requests to the correct tool namespace:
 | WP Engine ops | \`wpe_create_backup\`, \`wpe_purge_cache\` | "backup production", "clear cache" |
 | Sync with WPE | \`local_wpe_pull\`, \`local_wpe_push\` | "pull from staging", "push to dev" |
 | AI abilities | \`wp_list_abilities\`, \`wp_run_ability\` | "what abilities does this site have?", "run acf/list-field-groups" |
-| AI credentials | \`wp_sync_ai_credentials\` | "sync API keys to the site" |
+| AI credentials | \`wp_sync_ai_credentials\`, \`nexus_sync_credentials\` | "sync API keys to the site" |
+| AI provider config | \`nexus_get_site_ai_config\`, \`nexus_switch_provider\` | "what AI provider is this site using?", "switch to OpenAI" |
 | Local LLM | \`ask_ollama\`, \`list_ollama_models\` | "ask Ollama about this code" |
 
 ### Ollama Site Context
 
 \`ask_ollama\` accepts an optional \`site\` parameter. When provided, the tool injects the site's structure (theme, plugins, WP version) and relevant indexed content into the system prompt, giving the local LLM site-aware context. \`list_ollama_models\` includes hardware-aware model recommendations based on available RAM.
+
+### AI Provider Management
+
+Use these tools to inspect and change which AI provider a WordPress site is using.
+
+**\`nexus_get_site_ai_config\`** — Returns the per-site AI configuration (provider, model, useLocalGateway, configuredAt).
+- Call this before \`nexus_switch_provider\` to know the current state.
+- Use when the user asks "what AI provider is this site using?" or "is this site set up for AI?".
+- Returns null/not-found if the site has not been configured via Setup AI.
+
+**\`nexus_switch_provider\`** — Switches the AI provider on an already-configured local site.
+- Deactivates the old provider plugin, installs/activates the new one, and syncs the new provider's credentials.
+- Requires: \`site_id\` (from \`local_list_sites\`) and \`provider\` (one of: \`anthropic\`, \`openai\`, \`google\`, \`ollama\`).
+- Always call \`nexus_get_site_ai_config\` first to confirm the site is configured and to record the current provider.
+- For Ollama: confirm Ollama is running before switching (\`list_ollama_models\` will error if it is not).
+- Local-only — does not support \`install_name\`.
+- Safety: **Tier 2** — modifies the site's WordPress plugins. Execute and log; no confirmation token required, but the change is meaningful.
+
+**\`nexus_sync_credentials\`** — Manually syncs the AI API key for a site's configured provider.
+- Use when the user reports AI is not working on a site after changing API keys, or after adding a key for the first time.
+- Credentials are auto-synced when a site starts; this tool triggers an immediate manual sync without restarting.
+- Only syncs the key for the provider already configured on the site — it does not sync all providers.
+- Requires the site to be running and to have been previously configured via Setup AI.
+- Local-only — does not support \`install_name\`.
 
 ## Local vs Remote Execution
 
