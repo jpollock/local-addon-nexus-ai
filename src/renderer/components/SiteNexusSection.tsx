@@ -154,6 +154,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   componentDidUpdate(prevProps: SiteNexusSectionProps): void {
     // Re-fetch when switching to a different site
     if (prevProps.site.id !== this.props.site.id) {
+      this.setState({ setupResult: null, showProviderPicker: false });
       this.fetchData();
       return;
     }
