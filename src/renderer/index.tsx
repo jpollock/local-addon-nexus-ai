@@ -46,12 +46,27 @@ export default function renderer(context: any): void {
   );
 
   // Feature 2: Addon preferences page
+  // pendingSettings accumulates changes until the user clicks Apply
+  let pendingSettings: any = null;
+
   hooks.addFilter('preferencesMenuItems', (items: any[]) => {
     return [...items, {
       path: '/nexus-ai',
       displayName: 'Nexus AI',
-      sections: (props: any) => React.createElement(NexusPreferences, { ...props, electron }),
-      onApply: async () => { /* Settings saved inline on change */ },
+      sections: (props: any) => React.createElement(NexusPreferences, {
+        ...props,
+        electron,
+        onSettingsChange: (settings: any) => {
+          pendingSettings = settings;
+          props?.setApplyButtonDisabled?.(false);
+        },
+      }),
+      onApply: async () => {
+        if (pendingSettings) {
+          await electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, pendingSettings);
+          pendingSettings = null;
+        }
+      },
     }];
   });
 

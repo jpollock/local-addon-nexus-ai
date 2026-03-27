@@ -12,7 +12,9 @@ import type { AIProvider, NexusSettings } from '../../common/types';
 
 interface NexusPreferencesProps {
   electron: any;
-  /** Passed by Local's withMenuLayout — call false to enable Apply, true to disable */
+  /** Called whenever settings change — triggers Apply button activation */
+  onSettingsChange?: (settings: NexusSettings) => void;
+  /** Passed by Local's withMenuLayout (forwarded via sections props) */
   setApplyButtonDisabled?: (disabled: boolean) => void;
 }
 
@@ -194,83 +196,60 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     }
   };
 
-  markDirty = (): void => {
-    this.props.setApplyButtonDisabled?.(false);
+  notifyChange = (settings: NexusSettings): void => {
+    this.props.onSettingsChange?.(settings);
   };
 
   handleGatewayToggle = (): void => {
-    this.markDirty();
-    this.setState(
-      (prev) => ({
-        settings: { ...prev.settings, useLocalGateway: !(prev.settings as any).useLocalGateway },
-        saved: false,
-      }),
-      () => this.saveSettings(),
-    );
+    this.setState((prev) => {
+      const next = { ...prev.settings, useLocalGateway: !(prev.settings as any).useLocalGateway };
+      this.notifyChange(next);
+      return { settings: next };
+    });
   };
 
   handleAutoIndexToggle = (): void => {
-    this.markDirty();
-    this.setState(
-      (prev) => ({
-        settings: { ...prev.settings, autoIndex: !prev.settings.autoIndex },
-        saved: false,
-      }),
-      () => this.saveSettings(),
-    );
+    this.setState((prev) => {
+      const next = { ...prev.settings, autoIndex: !prev.settings.autoIndex };
+      this.notifyChange(next);
+      return { settings: next };
+    });
   };
 
   handleSiteExclusionToggle = (siteId: string): void => {
-    this.markDirty();
-    this.setState(
-      (prev) => {
-        const excluded = prev.settings.excludedSiteIds;
-        const isExcluded = excluded.includes(siteId);
-        return {
-          settings: {
-            ...prev.settings,
-            excludedSiteIds: isExcluded
-              ? excluded.filter((id) => id !== siteId)
-              : [...excluded, siteId],
-          },
-          saved: false,
-        };
-      },
-      () => this.saveSettings(),
-    );
+    this.setState((prev) => {
+      const excluded = prev.settings.excludedSiteIds;
+      const isExcluded = excluded.includes(siteId);
+      const next = {
+        ...prev.settings,
+        excludedSiteIds: isExcluded
+          ? excluded.filter((id) => id !== siteId)
+          : [...excluded, siteId],
+      };
+      this.notifyChange(next);
+      return { settings: next };
+    });
   };
 
   handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
     const providerId = e.target.value as AIProvider;
-    this.markDirty();
-    this.setState(
-      (prev) => ({
-        settings: { ...prev.settings, aiProvider: providerId, aiModel: '' },
-        models: [],
-        keyInput: '',
-        keySaved: false,
-        saved: false,
-      }),
-      () => {
-        this.saveSettings();
-        this.fetchModels(providerId);
-        if (providerId) {
-          this.loadStoredKey(providerId);
-        }
-      },
-    );
+    this.setState((prev) => {
+      const next = { ...prev.settings, aiProvider: providerId, aiModel: '' as any };
+      this.notifyChange(next);
+      return { settings: next, models: [], keyInput: '', keySaved: false };
+    }, () => {
+      this.fetchModels(providerId);
+      if (providerId) this.loadStoredKey(providerId);
+    });
   };
 
   handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
     const model = e.target.value;
-    this.markDirty();
-    this.setState(
-      (prev) => ({
-        settings: { ...prev.settings, aiModel: model },
-        saved: false,
-      }),
-      () => this.saveSettings(),
-    );
+    this.setState((prev) => {
+      const next = { ...prev.settings, aiModel: model };
+      this.notifyChange(next);
+      return { settings: next };
+    });
   };
 
   handleKeyInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -325,27 +304,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   };
 
 
-  saveSettings = async (): Promise<void> => {
-    try {
-      const { settings } = this.state;
-      // Explicitly pick known fields to avoid strict schema rejecting stale/unknown properties
-      const toSave: Record<string, unknown> = {
-        autoIndex: settings.autoIndex,
-        excludedSiteIds: settings.excludedSiteIds,
-      };
-      if (settings.aiProvider !== undefined) toSave.aiProvider = settings.aiProvider;
-      if (settings.aiModel !== undefined) toSave.aiModel = settings.aiModel;
-      if (settings.onboardingDismissed !== undefined) toSave.onboardingDismissed = settings.onboardingDismissed;
-      if ((settings as any).useLocalGateway !== undefined) toSave.useLocalGateway = (settings as any).useLocalGateway;
-      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, toSave);
-      if (this.mounted) {
-        this.setState({ saved: true });
-        this.props.setApplyButtonDisabled?.(true);
-      }
-    } catch {
-      // Best-effort save
-    }
-  };
 
   // -----------------------------------------------------------------------
   // Chat Section Render
