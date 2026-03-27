@@ -10,6 +10,7 @@ import type { ToolRegistry } from '../mcp/tool-registry';
 import * as ollamaClient from '../helpers/ollama-client';
 import { setupSiteForAI } from '../mcp/modules/wp-connector/setup-ai';
 import { buildCredentialSyncPhp, SUPPORTED_PROVIDERS, PROVIDER_TO_WP_OPTION } from '../mcp/modules/wp-connector/credential-helpers';
+import { switchProviderForSite } from '../mcp/modules/wp-connector/switch-provider';
 import { STORAGE_KEYS } from '../../common/constants';
 
 interface ResolverContext {
@@ -2708,7 +2709,7 @@ export function createResolvers(context: ResolverContext) {
         }
       },
 
-      nexusAiSetup: async (_parent: any, { target, force }: { target: string; force?: boolean }) => {
+      nexusAiSetup: async (_parent: any, { target, provider, force }: { target: string; provider?: string; force?: boolean }) => {
         try {
           const parsed = parseTarget(target);
           const site = resolveSite(parsed.siteName!, services.siteData);
@@ -2731,13 +2732,17 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
+          // Resolve provider: explicit arg > global settings > default 'ollama'
+          const settings = (services.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
+          const resolvedProvider = (provider as any) ?? settings?.aiProvider ?? 'ollama';
+
           // Call setupSiteForAI directly
           const result = await setupSiteForAI(
             site.id,
             services.localServices,
             services.registryStorage,
             services.logger,
-            { provider: 'ollama' }
+            { provider: resolvedProvider }
           );
 
           if (!result.success) {
@@ -3081,6 +3086,47 @@ export function createResolvers(context: ResolverContext) {
             error: error.message,
             status: null,
           };
+        }
+      },
+
+      nexusAiGetSiteConfig: (_parent: any, { target }: { target: string }) => {
+        try {
+          const parsed = parseTarget(target);
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) return { success: false, error: `Site not found: ${parsed.siteName}` };
+
+          const siteConfigs = (services.registryStorage?.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+          const config = siteConfigs[site.id];
+
+          if (!config) return { success: true, config: null };
+
+          return { success: true, config };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      },
+
+      nexusAiSwitchProvider: async (_parent: any, { target, provider }: { target: string; provider: string }) => {
+        try {
+          const parsed = parseTarget(target);
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) return { success: false, error: `Site not found: ${parsed.siteName}` };
+
+          if (!services.localServices || !services.registryStorage) {
+            return { success: false, error: 'Local services not available' };
+          }
+
+          const result = await switchProviderForSite(
+            site.id,
+            provider as any,
+            services.localServices,
+            services.registryStorage,
+            services.logger,
+          );
+
+          return result;
+        } catch (err: any) {
+          return { success: false, error: err.message };
         }
       },
 

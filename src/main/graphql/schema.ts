@@ -730,7 +730,7 @@ export const typeDefs = gql`
     nexusAiAsk(query: String!, model: String): NexusAiAskResult!
 
     "Setup AI on WordPress site"
-    nexusAiSetup(target: String!, force: Boolean): NexusAiSetupResult!
+    nexusAiSetup(target: String!, provider: String, force: Boolean): NexusAiSetupResult!
 
     "Sync AI credentials to site"
     nexusAiSyncCredentials(target: String!): NexusAiSyncCredentialsResult!
@@ -743,6 +743,12 @@ export const typeDefs = gql`
 
     "Get AI connector status"
     nexusAiStatus(target: String!): NexusAiStatusResult!
+
+    "Get per-site AI provider configuration"
+    nexusAiGetSiteConfig(target: String!): NexusAiGetSiteConfigResult!
+
+    "Switch AI provider on an already-configured site"
+    nexusAiSwitchProvider(target: String!, provider: String!): NexusAiSwitchProviderResult!
 
     # Composite Audits
     "Comprehensive site audit"
@@ -1240,5 +1246,27 @@ export const typeDefs = gql`
   type NexusAiSetConfigResult {
     success: Boolean!
     error: String
+  }
+
+  type AiSiteConfig {
+    "Provider ID configured for this site"
+    provider: String!
+    "Model name (if set)"
+    model: String
+    "Unix timestamp when configured"
+    configuredAt: Float!
+  }
+
+  type NexusAiGetSiteConfigResult {
+    success: Boolean!
+    error: String
+    config: AiSiteConfig
+  }
+
+  type NexusAiSwitchProviderResult {
+    success: Boolean!
+    error: String
+    previousProvider: String
+    newProvider: String
   }
 `;
