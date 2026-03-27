@@ -1085,7 +1085,7 @@ AI provider configuration and WordPress AI connector management.
 
 #### `nexus ai config`
 
-View or configure the global AI provider used by Nexus AI's chat tab and AI features.
+View or configure the global AI provider used by Nexus AI's Nexus AI features, e.g. Site Finder.
 
 ```bash
 nexus ai config [options]

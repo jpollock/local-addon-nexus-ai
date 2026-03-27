@@ -334,15 +334,54 @@ Or click ⚙️ gear icon in Nexus AI sidebar
 └─────────────────────────────────────────┘
 ```
 
-## AI Chat Settings
+## AI Settings
 
 ### Provider Configuration
 
-The AI Chat Settings panel controls how Nexus AI's own features connect to AI providers — including the Chat tab and AI Site Finder. This is separate from the AI provider installed on each individual WordPress site.
+The AI Settings panel controls how Nexus AI's own features connect to AI providers — including the AI Site Finder and other Nexus AI features. This is separate from the AI provider installed on each individual WordPress site.
+
+### Quick Reference
+
+**Which setting controls what:**
+
+| Setting | Where | What It Affects |
+|---------|-------|-----------------|
+| AI Provider | Preferences → Nexus AI | Nexus AI features (Site Finder, etc.) |
+| Local AI Gateway | Preferences → Nexus AI | How WordPress sites connect to AI |
+| Site AI Provider | Site card → Setup AI | That site's WordPress AI features only |
+
+**Provider comparison:**
+
+| Provider | API Key Required | Runs | Notes |
+|----------|-----------------|------|-------|
+| Anthropic (Claude) | Yes | Cloud | Recommended for best quality |
+| OpenAI (GPT) | Yes | Cloud | Wide model selection |
+| Google (Gemini) | Yes | Cloud | Fast and cost-effective |
+| Ollama | No | Local | Private, free, no internet needed |
+
+**What gets installed on a WordPress site (Setup AI):**
+
+| Global Provider | Gateway | Plugin Installed | Credential Synced |
+|----------------|---------|-----------------|-------------------|
+| Anthropic / OpenAI / Google | Off | Provider plugin | API key |
+| Anthropic / OpenAI / Google | On | Local Gateway plugin | Gateway token |
+| Ollama | Either | Ollama plugin | None needed |
+
+**Site card states:**
+
+| AI Provider Row | Gateway Row | Meaning |
+|-----------------|-------------|---------|
+| Not configured | Inactive | Click Setup AI to get started |
+| Anthropic (Claude) | Inactive | Direct connection, fully configured |
+| Anthropic via Gateway | Active | Routed through Local AI Gateway |
+| Ollama (local) | Inactive | Gateway ignored for local providers |
+| Anthropic (Claude) | Pending | Gateway toggled on — click Apply |
+
+---
 
 **AI Provider**
 
-Select the global provider used by Nexus AI's chat tab and AI features:
+Select the global provider used by Nexus AI features (e.g. Site Finder):
 
 ```
 ┌─────────────────────────────────────────┐
