@@ -3,6 +3,9 @@ import { syncCredentialsHandler } from './sync-credentials';
 import { listAbilitiesHandler } from './list-abilities';
 import { runAbilityHandler } from './run-ability';
 import { setupAIToolHandler } from './setup-ai-tool';
+import { getSiteAiConfigToolHandler } from './get-site-ai-config-tool';
+import { switchProviderToolHandler } from './switch-provider-tool';
+import { syncCredentialsMcpToolHandler } from './sync-credentials-mcp-tool';
 import {
   getEventEndpointInfoTool,
   getEventProcessorStatsTool,
@@ -25,6 +28,11 @@ export function registerWpConnectorTools(registry: ToolRegistry): void {
   registry.register(syncCredentialsHandler);
   registry.register(listAbilitiesHandler);
   registry.register(runAbilityHandler);
+
+  // Gateway-aware AI provider management tools
+  registry.register(getSiteAiConfigToolHandler);
+  registry.register(switchProviderToolHandler);
+  registry.register(syncCredentialsMcpToolHandler);
 
   // Event processing tools
   registry.register(getEventEndpointInfoTool);

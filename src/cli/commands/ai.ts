@@ -55,8 +55,41 @@ function promptHidden(question: string): Promise<string> {
 aiCommand
   .command('config')
   .description('View or configure AI provider settings')
-  .action(async () => {
+  .option('--gateway <value>', 'Enable or disable Local AI Gateway (on/off)')
+  .action(async (options) => {
     const client = getClient();
+
+    // Fast path: --gateway flag provided
+    if (options.gateway !== undefined) {
+      const enable = options.gateway === 'on' || options.gateway === 'true';
+
+      // Get current config to preserve provider/model
+      const currentResult = await client.mutate<{ nexusAiGetConfig: any }>(`
+        mutation { nexusAiGetConfig { success config { provider model } } }
+      `, {});
+      const currentConfig = currentResult.nexusAiGetConfig?.config;
+
+      const saveResult = await client.mutate<{ nexusAiSetConfig: any }>(`
+        mutation($provider: String!, $model: String!, $useLocalGateway: Boolean) {
+          nexusAiSetConfig(provider: $provider, model: $model, useLocalGateway: $useLocalGateway) {
+            success error
+          }
+        }
+      `, {
+        provider: currentConfig?.provider ?? 'ollama',
+        model: currentConfig?.model ?? '',
+        useLocalGateway: enable,
+      });
+
+      if (!saveResult.nexusAiSetConfig.success) {
+        console.error(`\n❌ ${saveResult.nexusAiSetConfig.error}`);
+        process.exit(1);
+      }
+
+      console.log(`\n✅ Local AI Gateway ${enable ? 'enabled' : 'disabled'}`);
+      console.log('');
+      return;
+    }
 
     // Show current config
     const configResult = await client.mutate<{ nexusAiGetConfig: any }>(`
@@ -374,40 +407,34 @@ aiCommand
   });
 
 aiCommand
-  .command('sync-credentials <target>')
-  .description('Sync AI credentials to WordPress site')
-  .action(async (target) => {
+  .command('sync-credentials <site>')
+  .description('Sync AI credentials to a WordPress site')
+  .action(async (site) => {
     try {
-      parseTarget(target);
-      const client = getClient();
+      parseTarget(site);
+      const client = getClient({ timeout: 60000 });
 
-      console.log(`\nSyncing credentials to ${target}...`);
+      console.log(`\nSyncing AI credentials to ${site}...`);
 
       const result = await client.mutate<{ nexusAiSyncCredentials: any }>(`
         mutation($target: String!) {
           nexusAiSyncCredentials(target: $target) {
             success
             error
-            synced {
-              provider
-              credentialCount
-            }
+            provider
           }
         }
-      `, { target });
+      `, { target: site });
 
-      const { success, error, synced } = result.nexusAiSyncCredentials;
+      const { success, error, provider } = result.nexusAiSyncCredentials;
 
       if (!success) {
         console.error(`\n❌ ${error}`);
         process.exit(1);
       }
 
-      console.log(`\n✅ Credentials synced`);
-      console.log('');
-      for (const item of synced) {
-        console.log(`  ${item.provider}: ${item.credentialCount} credential${item.credentialCount !== 1 ? 's' : ''}`);
-      }
+      const p = PROVIDERS.find((x) => x.id === provider);
+      console.log(`\n✅ Credentials synced (${p?.label ?? provider ?? 'no provider configured'})`);
       console.log('');
     } catch (error: any) {
       console.error(`Error: ${error.message}`);

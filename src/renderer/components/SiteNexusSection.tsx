@@ -53,6 +53,7 @@ interface SiteNexusSectionState {
   showProviderPicker: boolean;
   pickerProvider: AIProvider | '';
   switchingProvider: boolean;
+  useLocalGateway: boolean;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -140,6 +141,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     showProviderPicker: false,
     pickerProvider: '',
     switchingProvider: false,
+    useLocalGateway: false,
   };
 
   componentDidMount(): void {
@@ -179,6 +181,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
         indexEntry: entry,
         excluded: nexusSettings?.excludedSiteIds?.includes(this.props.site.id) ?? false,
         loading: false,
+        useLocalGateway: !!((nexusSettings as any)?.useLocalGateway),
       });
     } catch {
       if (!this.mounted) return;
@@ -477,7 +480,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   }
 
   render(): React.ReactNode {
-    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds, wpVersion, wpVersionAge, upgradingWp, refreshingMetadata, siteAIConfig, showProviderPicker, pickerProvider, switchingProvider } = this.state;
+    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds, wpVersion, wpVersionAge, upgradingWp, refreshingMetadata, siteAIConfig, showProviderPicker, pickerProvider, switchingProvider, useLocalGateway } = this.state;
 
     if (loading) {
       return React.createElement('ul', { className: 'TableList' },
@@ -619,17 +622,27 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
 
       // AI Provider row
       if (isAIConfigured) {
-        // Already set up — show provider name + Change Provider link
+        // Already set up — show provider name + Change Provider link (or gateway note)
+        const providerDisplayName = PROVIDER_LABELS[siteAIConfig!.provider] ?? siteAIConfig!.provider;
+        const displayName = (useLocalGateway && siteAIConfig!.provider !== 'ollama')
+          ? `${providerDisplayName} via Gateway`
+          : providerDisplayName;
+
+        // Show Change button only when gateway is off (or Ollama)
+        const changeButton = !useLocalGateway || siteAIConfig!.provider === 'ollama'
+          ? (!showProviderPicker
+              ? this.createActionButton({
+                  onClick: () => this.setState({ showProviderPicker: true, pickerProvider: siteAIConfig!.provider as AIProvider }),
+                  disabled: switchingProvider,
+                  children: switchingProvider ? 'Switching...' : 'Change',
+                })
+              : null)
+          : React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, paddingLeft: 8 } }, 'Change in Preferences');
+
         rows.push(row('AI Provider',
           React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
-          PROVIDER_LABELS[siteAIConfig!.provider] ?? siteAIConfig!.provider,
-          !showProviderPicker
-            ? this.createActionButton({
-                onClick: () => this.setState({ showProviderPicker: true, pickerProvider: siteAIConfig!.provider as AIProvider }),
-                disabled: switchingProvider,
-                children: switchingProvider ? 'Switching...' : 'Change',
-              })
-            : null,
+          displayName,
+          changeButton,
           providerPickerElement,
         ));
       } else {
@@ -653,10 +666,6 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       }
 
       // AI Plugin status row (secondary, only show if not active)
-      const needsGatewayUpdate =
-        aiStatus.aiPlugin === 'active' &&
-        (!aiStatus.gatewayProvider || aiStatus.gatewayProvider === 'not_installed');
-
       if (aiStatus.aiPlugin !== 'active') {
         rows.push(row('AI plugin',
           React.createElement('span', { style: dotStyle(pluginColor(aiStatus.aiPlugin)) }),
@@ -664,23 +673,20 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
         ));
       }
 
-      // Local Gateway
-      if (aiStatus.gatewayProvider === 'active') {
-        rows.push(row('Local Gateway',
-          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
-          'Active',
-        ));
-      } else if (needsGatewayUpdate) {
-        rows.push(row('Local Gateway',
-          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_WARNING) }),
-          'Available update',
-          this.createActionButton({
-            onClick: settingUpAI ? undefined : () => this.handleSetupAI(siteAIConfig?.provider as AIProvider),
-            disabled: settingUpAI,
-            children: settingUpAI ? 'Updating...' : 'Update Setup',
-          }),
-        ));
-      }
+      // Local AI Gateway row — always shown
+      const gatewayActive = aiStatus.gatewayProvider === 'active';
+      const gatewayPending = useLocalGateway && !gatewayActive; // Setting says on but plugin not active
+      const gatewayColor = gatewayActive ? UI_COLORS.STATUS_RUNNING
+        : gatewayPending ? UI_COLORS.STATUS_WARNING
+        : '#888';
+      const gatewayLabel = gatewayActive ? 'Active'
+        : gatewayPending ? 'Pending (run Setup AI)'
+        : 'Inactive';
+
+      rows.push(row('Local AI Gateway',
+        React.createElement('span', { style: dotStyle(gatewayColor) }),
+        gatewayLabel,
+      ));
 
       // Credentials — only show if AI is configured
       if (isAIConfigured) {

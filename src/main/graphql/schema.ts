@@ -573,7 +573,7 @@ export const typeDefs = gql`
     nexusAiGetConfig: NexusAiGetConfigResult!
 
     "Set AI provider, model, and optionally API key"
-    nexusAiSetConfig(provider: String!, model: String!, apiKey: String): NexusAiSetConfigResult!
+    nexusAiSetConfig(provider: String!, model: String!, apiKey: String, useLocalGateway: Boolean): NexusAiSetConfigResult!
 
     "List all sites (local + WPE)"
     nexusSitesList: NexusSitesListResult!
@@ -1106,7 +1106,9 @@ export const typeDefs = gql`
   type NexusAiSyncCredentialsResult {
     success: Boolean!
     error: String
-    synced: [SyncedCredential!]!
+    synced: [SyncedCredential!]
+    "Provider configured for this site (when syncing via autoSyncCredentials)"
+    provider: String
   }
 
   type AbilityParameter {
