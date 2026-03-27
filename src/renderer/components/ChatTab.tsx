@@ -242,8 +242,8 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
       const settings = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_SETTINGS);
       if (!this.mounted) return;
 
-      const providerId = settings?.chatProvider || CHAT_DEFAULTS.DEFAULT_PROVIDER;
-      const model = settings?.chatModel || '';
+      const providerId = settings?.aiProvider || CHAT_DEFAULTS.DEFAULT_PROVIDER;
+      const model = settings?.aiModel || '';
 
       this.setState({ providerId, model }, () => {
         this.checkProviderReady();

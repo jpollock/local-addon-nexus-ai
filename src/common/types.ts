@@ -214,14 +214,23 @@ export interface IpcResponse<T = unknown> {
 // Settings
 // ---------------------------------------------------------------------------
 
-export type ChatProvider = 'anthropic' | 'openai' | 'google' | 'ollama' | 'wpe-gateway';
+export type AIProvider = 'anthropic' | 'openai' | 'google' | 'ollama' | 'local-gateway';
 
 export interface NexusSettings {
   autoIndex: boolean;
   excludedSiteIds: string[];
-  chatProvider?: ChatProvider;
-  chatModel?: string;      // Model name within provider
+  aiProvider?: AIProvider;
+  aiModel?: string;      // Model name within provider
   onboardingDismissed?: boolean;
+}
+
+export interface SiteAIConfig {
+  /** Which AI provider this site is configured to use */
+  provider: AIProvider;
+  /** Which model (optional) */
+  model?: string;
+  /** Unix timestamp when this was configured */
+  configuredAt: number;
 }
 
 // ===== Sprint 1: Visibility Types (Renderer-Safe) =====

@@ -20,8 +20,8 @@ export const SiteIdSchema = z.string().min(1, 'Site ID cannot be empty');
 export const UpdateSettingsSchema = z.object({
   autoIndex: z.boolean().optional(),
   excludedSiteIds: z.array(SiteIdSchema).optional(),
-  chatProvider: z.enum(['anthropic', 'openai', 'ollama', 'google', 'wpe-gateway']).optional(),
-  chatModel: z.string().optional(),
+  aiProvider: z.enum(['anthropic', 'openai', 'ollama', 'google', 'local-gateway']).optional(),
+  aiModel: z.string().optional(),
   onboardingDismissed: z.boolean().optional(),
 }).strict(); // Prevent unknown properties
 
@@ -121,9 +121,8 @@ export const BulkOperationSchema = z.object({
 export const BulkSetupAISchema = BulkOperationSchema.extend({
   options: z
     .object({
-      enableOllama: z.boolean().optional(),
+      provider: z.enum(['anthropic', 'openai', 'google', 'ollama', 'local-gateway']).optional(),
       enableAcf: z.boolean().optional(),
-      enableGateway: z.boolean().optional(),
     })
     .optional(),
 });

@@ -20,7 +20,7 @@ const PROVIDERS = [
   { id: 'openai',      label: 'OpenAI (GPT)',             requiresKey: true },
   { id: 'google',      label: 'Google (Gemini)',          requiresKey: true },
   { id: 'ollama',      label: 'Ollama (local, no key)',   requiresKey: false },
-  { id: 'wpe-gateway', label: 'WP Engine AI Gateway',     requiresKey: false },
+  { id: 'local-gateway', label: 'Local AI Gateway',        requiresKey: false },
 ];
 
 function prompt(rl: readline.Interface, question: string): Promise<string> {

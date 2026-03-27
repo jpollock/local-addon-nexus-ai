@@ -75,7 +75,7 @@ export default function renderer(context: any): void {
 
       // Check if LLM is configured
       electron.ipcRenderer.invoke(IPC_CHANNELS.GET_SETTINGS).then((settings: any) => {
-        this.setState({ hasLLM: !!settings?.chatProvider });
+        this.setState({ hasLLM: !!settings?.aiProvider });
       });
 
       // Register keyboard shortcut

@@ -8,7 +8,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
-import type { ChatProvider, NexusSettings } from '../../common/types';
+import type { AIProvider, NexusSettings } from '../../common/types';
 
 interface NexusPreferencesProps {
   electron: any;
@@ -157,9 +157,9 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         loading: false,
       }, () => {
         // Load models and stored key for the current provider
-        if (this.state.settings.chatProvider) {
-          this.fetchModels(this.state.settings.chatProvider);
-          this.loadStoredKey(this.state.settings.chatProvider);
+        if (this.state.settings.aiProvider) {
+          this.fetchModels(this.state.settings.aiProvider);
+          this.loadStoredKey(this.state.settings.aiProvider);
         }
       });
     } catch {
@@ -222,10 +222,10 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   };
 
   handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
-    const providerId = e.target.value as ChatProvider;
+    const providerId = e.target.value as AIProvider;
     this.setState(
       (prev) => ({
-        settings: { ...prev.settings, chatProvider: providerId, chatModel: '' },
+        settings: { ...prev.settings, aiProvider: providerId, aiModel: '' },
         models: [],
         keyInput: '',
         keySaved: false,
@@ -245,7 +245,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     const model = e.target.value;
     this.setState(
       (prev) => ({
-        settings: { ...prev.settings, chatModel: model },
+        settings: { ...prev.settings, aiModel: model },
         saved: false,
       }),
       () => this.saveSettings(),
@@ -258,7 +258,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   handleSaveKey = async (): Promise<void> => {
     const { keyInput, settings } = this.state;
-    const providerId = settings.chatProvider;
+    const providerId = settings.aiProvider;
     if (!providerId || !keyInput.trim()) return;
 
     await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SAVE_API_KEY, providerId, keyInput.trim());
@@ -272,7 +272,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   handleValidateKey = async (): Promise<void> => {
     const { keyInput, settings } = this.state;
-    const providerId = settings.chatProvider;
+    const providerId = settings.aiProvider;
     if (!providerId || !keyInput.trim()) return;
 
     this.setState((prev) => ({
@@ -322,8 +322,8 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   renderChatSection(): React.ReactNode {
     const { settings, providers, models, loadingModels, keyStatus, keyInput, keySaved } = this.state;
-    const currentProvider = providers.find((p) => p.id === settings.chatProvider);
-    const currentStatus = settings.chatProvider ? (keyStatus[settings.chatProvider] ?? 'unchecked') : 'unchecked';
+    const currentProvider = providers.find((p) => p.id === settings.aiProvider);
+    const currentStatus = settings.aiProvider ? (keyStatus[settings.aiProvider] ?? 'unchecked') : 'unchecked';
 
     const statusColor = currentStatus === 'valid' ? UI_COLORS.STATUS_RUNNING
       : currentStatus === 'invalid' ? UI_COLORS.STATUS_ERROR
@@ -345,7 +345,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       React.createElement('div', { style: rowStyle },
         React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', /* color inherited */ } }, 'Provider'),
         React.createElement('select', {
-          value: settings.chatProvider || '',
+          value: settings.aiProvider || '',
           onChange: this.handleProviderChange,
           style: selectStyle,
         },
@@ -359,12 +359,12 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       ),
 
       // Model selector (shown when provider selected)
-      settings.chatProvider ? React.createElement('div', { style: rowStyle },
+      settings.aiProvider ? React.createElement('div', { style: rowStyle },
         React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', /* color inherited */ } }, 'Model'),
         loadingModels
           ? React.createElement('span', { style: { fontSize: '13px', opacity: 0.7 } }, 'Loading models...')
           : React.createElement('select', {
-              value: settings.chatModel || '',
+              value: settings.aiModel || '',
               onChange: this.handleModelChange,
               style: selectStyle,
             },

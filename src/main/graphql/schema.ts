@@ -1223,7 +1223,7 @@ export const typeDefs = gql`
   # ============================================================================
 
   type AiProviderConfig {
-    "Currently configured provider ID (anthropic, openai, google, ollama, wpe-gateway)"
+    "Currently configured provider ID (anthropic, openai, google, ollama, local-gateway)"
     provider: String
     "Currently configured model"
     model: String

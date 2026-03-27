@@ -1,11 +1,11 @@
 import type { ChatMessage, ProviderStreamEvent } from '../../../common/chat-types';
-import type { ChatProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
+import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
 import { streamingRequest, apiRequest } from './http-utils';
 
 const ANTHROPIC_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
 
-export class AnthropicProvider implements ChatProvider {
+export class AnthropicProvider implements AIProvider {
   readonly id = 'anthropic';
   readonly displayName = 'Anthropic';
   readonly requiresApiKey = true;
