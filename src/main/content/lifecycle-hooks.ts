@@ -5,9 +5,59 @@ import { STORAGE_KEYS } from '../../common/constants';
 import type { NexusSettings } from '../../common/types';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
+import { switchProviderForSite } from '../mcp/modules/wp-connector/switch-provider';
 import type { SiteMetadataCache } from '../metadata/SiteMetadataCache';
 import { autoGenerateContextFile } from '../ai-context/auto-generate';
 import { generateMuPluginContent } from '../ai-gateway/mu-plugin-template';
+
+/**
+ * Auto-apply gateway toggle changes on site start.
+ * If the global useLocalGateway setting differs from what the site was configured with,
+ * transition the site to the new state.
+ */
+async function applyGatewayChange(
+  site: LocalSiteRef,
+  localServices: LocalServicesBridge,
+  settingsStorage: RegistryStorage,
+  logger: Logger,
+): Promise<void> {
+  const tag = '[NexusAI:gateway-change]';
+
+  const settings = (settingsStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
+  const globalUseGateway = !!(settings.useLocalGateway);
+  const globalProvider: string = settings.aiProvider ?? 'ollama';
+
+  // Skip for Ollama — gateway is always ignored
+  if (globalProvider === 'ollama') return;
+
+  const siteConfigs = (settingsStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+  const siteConfig = siteConfigs[site.id];
+
+  // Only act on sites that have been set up AND have a different gateway state
+  if (!siteConfig) return;
+  if (!!siteConfig.useLocalGateway === globalUseGateway) return;
+
+  logger.info(`${tag} Gateway setting changed for "${site.name}": ${siteConfig.useLocalGateway ? 'on' : 'off'} → ${globalUseGateway ? 'on' : 'off'}`);
+
+  // Use switchProviderForSite with the same provider to apply the gateway change
+  // (switch-provider handles deactivating old plugin, activating new one)
+  const result = await switchProviderForSite(
+    site.id,
+    globalProvider as any,
+    localServices,
+    settingsStorage,
+    logger,
+  );
+
+  if (result.success) {
+    // Update siteConfig to reflect new gateway state
+    siteConfigs[site.id] = { ...siteConfig, useLocalGateway: globalUseGateway };
+    settingsStorage.set(STORAGE_KEYS.SITE_AI_CONFIG, siteConfigs);
+    logger.info(`${tag} Gateway change applied to "${site.name}"`);
+  } else {
+    logger.error(`${tag} Gateway change failed for "${site.name}": ${result.error}`);
+  }
+}
 
 export interface LifecycleContext {
   hooks: {
@@ -138,6 +188,15 @@ export function registerLifecycleHooks(
         await autoSyncCredentials(site.id, site.name, localServices, settingsStorage, logger);
       } catch (err) {
         logger.error(`[NexusAI] Auto-sync credentials failed for ${site.name}:`, err);
+      }
+    }
+
+    // Auto-apply gateway toggle changes
+    if (localServices && settingsStorage) {
+      try {
+        await applyGatewayChange(site, localServices, settingsStorage, logger);
+      } catch (err) {
+        logger.error(`[NexusAI] Gateway change failed for ${site.name}:`, err);
       }
     }
 

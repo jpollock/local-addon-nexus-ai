@@ -232,6 +232,8 @@ export interface SiteAIConfig {
   model?: string;
   /** Unix timestamp when this was configured */
   configuredAt: number;
+  /** Whether Local AI Gateway was active when this site was configured */
+  useLocalGateway?: boolean;
 }
 
 // ===== Sprint 1: Visibility Types (Renderer-Safe) =====

@@ -172,6 +172,7 @@ export async function setupSiteForAI(
   const settings = (registryStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
   const provider: AIProvider = options.provider ?? settings.aiProvider ?? 'ollama';
   const enableOllama = provider === 'ollama';
+  const useLocalGateway = !!(settings.useLocalGateway) && provider !== 'ollama';
 
   // Step 0: Check WordPress version (AI plugin requires WP 7.0+)
   let wpVersion: string | null;
@@ -479,114 +480,48 @@ export async function setupSiteForAI(
   // Provider plugins require WP 7.0+ core — they depend on wp-includes/php-ai-client/
   // which ships the PSR-18 HTTP adapter. On older WP versions (or with the standalone
   // "ai" plugin), the provider plugin crashes with DiscoveryFailedException.
+  //
+  // When useLocalGateway is true, we skip the individual provider plugin and install
+  // the gateway plugin instead (Step 2c).
   let providerPlugins: SetupAIResult['providerPlugins'] = 'skipped';
 
-  const providerSlug = PROVIDER_PLUGIN_SLUGS[provider];
-  // Only install remote provider plugins (anthropic, openai, google) — ollama and local-gateway
-  // are handled by their own dedicated steps below
-  const isRemoteProvider = providerSlug && provider !== 'ollama' && provider !== 'local-gateway';
+  if (!useLocalGateway) {
+    const providerSlug = PROVIDER_PLUGIN_SLUGS[provider];
+    // Only install remote provider plugins (anthropic, openai, google) — ollama and local-gateway
+    // are handled by their own dedicated steps below
+    const isRemoteProvider = providerSlug && provider !== 'ollama' && provider !== 'local-gateway';
 
-  if (isRemoteProvider && aiPlugin !== 'failed') {
-    // Check WP version — provider plugins only work on WP 7.0+
-    let wpVersion: string | null = null;
-    try {
-      wpVersion = await localServices.getWpVersion(siteId);
-    } catch {
-      // Can't determine version — skip provider plugins to be safe
-    }
-
-    if (!wpVersion || !isWp7OrLater(wpVersion)) {
-      logger.info(`${tag} Skipping provider plugins — WP ${wpVersion ?? 'unknown'} (requires 7.0+)`);
-    } else {
+    if (isRemoteProvider && aiPlugin !== 'failed') {
+      // Check WP version — provider plugins only work on WP 7.0+
+      let wpVersion: string | null = null;
       try {
-        // Refresh plugin list after AI plugin install
-        const currentPlugins = await localServices.getPlugins(siteId);
+        wpVersion = await localServices.getWpVersion(siteId);
+      } catch {
+        // Can't determine version — skip provider plugins to be safe
+      }
 
-        const existing = findPlugin(currentPlugins, providerSlug);
-        if (existing && existing.status === 'active') {
-          providerPlugins = 'already_active';
-        } else {
-          logger.info(`${tag} Installing provider plugin "${providerSlug}" on site ${siteId}`);
-          const result = await localServices.wpCliRun(
-            siteId,
-            ['plugin', 'install', providerSlug, '--activate'],
-          );
+      if (!wpVersion || !isWp7OrLater(wpVersion)) {
+        logger.info(`${tag} Skipping provider plugins — WP ${wpVersion ?? 'unknown'} (requires 7.0+)`);
+      } else {
+        try {
+          // Refresh plugin list after AI plugin install
+          const currentPlugins = await localServices.getPlugins(siteId);
 
-          if (!result.success) {
-            logger.error(`${tag} Failed to install provider plugin "${providerSlug}": ${redactCredentials(result.stdout ?? '')}`);
-            providerPlugins = 'failed';
+          const existing = findPlugin(currentPlugins, providerSlug);
+          if (existing && existing.status === 'active') {
+            providerPlugins = 'already_active';
           } else {
-            // Health check: verify the activated plugin doesn't crash WordPress.
-            const healthCheck = await localServices.wpCliRun(
+            logger.info(`${tag} Installing provider plugin "${providerSlug}" on site ${siteId}`);
+            const result = await localServices.wpCliRun(
               siteId,
-              ['eval', "echo 'healthy';"],
-              { skipPlugins: false },
+              ['plugin', 'install', providerSlug, '--activate'],
             );
 
-            if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
-              logger.error(`${tag} Provider plugin "${providerSlug}" crashes WordPress — deactivating`);
-              await localServices.wpCliRun(siteId, ['plugin', 'deactivate', providerSlug]);
+            if (!result.success) {
+              logger.error(`${tag} Failed to install provider plugin "${providerSlug}": ${redactCredentials(result.stdout ?? '')}`);
               providerPlugins = 'failed';
             } else {
-              providerPlugins = 'installed';
-              logger.info(`${tag} Installed provider plugin "${providerSlug}" on site ${siteId}`);
-            }
-          }
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error(`${tag} Provider plugin step failed: ${redactCredentials(msg)}`);
-        providerPlugins = 'failed';
-      }
-    }
-  }
-
-  // Step 2c: Install Local Gateway provider plugin (centralized AI routing)
-  let gatewayProvider: 'installed' | 'activated' | 'already_active' | 'skipped' | 'failed' = 'skipped';
-
-  if (aiPlugin !== 'failed') {
-    try {
-      // Refresh plugin list
-      const currentPlugins = await localServices.getPlugins(siteId);
-      const existingGateway = findPlugin(currentPlugins, 'ai-provider-for-local-gateway');
-
-      if (existingGateway && existingGateway.status === 'active') {
-        gatewayProvider = 'already_active';
-      } else if (existingGateway) {
-        // Installed but inactive — activate
-        const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-local-gateway']);
-        if (result.success) {
-          gatewayProvider = 'activated';
-        } else {
-          throw new Error(result.stdout ?? 'Failed to activate');
-        }
-      } else {
-        // Not installed — copy from bundled source and activate
-        const sitePluginsDir = getSitePluginsDir(siteId, localServices);
-        if (!sitePluginsDir) {
-          logger.error(`${tag} Could not determine site plugins directory`);
-          gatewayProvider = 'failed';
-        } else {
-          // Security: Validate plugin path before file operations
-          const site = localServices.resolveSiteObject(siteId) as any;
-          validatePluginPath(sitePluginsDir, site.paths.webRoot);
-
-          const pluginDest = path.join(sitePluginsDir, 'ai-provider-for-local-gateway');
-          const pluginSource = path.join(WP_PLUGINS_ROOT, 'ai-provider-for-local-gateway');
-
-          if (!fs.existsSync(pluginSource)) {
-            logger.info(`${tag} Local Gateway provider plugin not bundled at ${pluginSource}, skipping`);
-            gatewayProvider = 'skipped';
-          } else {
-            try {
-              fs.cpSync(pluginSource, pluginDest, { recursive: true });
-
-              const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-local-gateway']);
-              if (!result.success) {
-                throw new Error(result.stdout ?? 'Failed to activate');
-              }
-
-              // Health check: verify the plugin doesn't crash WordPress
+              // Health check: verify the activated plugin doesn't crash WordPress.
               const healthCheck = await localServices.wpCliRun(
                 siteId,
                 ['eval', "echo 'healthy';"],
@@ -594,36 +529,116 @@ export async function setupSiteForAI(
               );
 
               if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
-                logger.error(`${tag} Local Gateway provider plugin crashes WordPress — deactivating`);
-                await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'ai-provider-for-local-gateway']);
-                gatewayProvider = 'failed';
+                logger.error(`${tag} Provider plugin "${providerSlug}" crashes WordPress — deactivating`);
+                await localServices.wpCliRun(siteId, ['plugin', 'deactivate', providerSlug]);
+                providerPlugins = 'failed';
               } else {
-                gatewayProvider = 'installed';
-                logger.info(`${tag} Local Gateway provider plugin installed on site ${siteId}`);
+                providerPlugins = 'installed';
+                logger.info(`${tag} Installed provider plugin "${providerSlug}" on site ${siteId}`);
               }
-            } catch (copyErr) {
-              const msg = copyErr instanceof Error ? copyErr.message : String(copyErr);
-              logger.error(`${tag} Failed to install Local Gateway provider plugin: ${redactCredentials(msg)}`);
-              gatewayProvider = 'failed';
+            }
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          logger.error(`${tag} Provider plugin step failed: ${redactCredentials(msg)}`);
+          providerPlugins = 'failed';
+        }
+      }
+    }
+  } else {
+    providerPlugins = 'skipped';
+    logger.info(`${tag} Skipping provider plugin — using Local AI Gateway`);
+  }
+
+  // Step 2c: Install Local Gateway provider plugin (centralized AI routing)
+  // Only installed when useLocalGateway is true — otherwise we install the direct provider plugin.
+  let gatewayProvider: 'installed' | 'activated' | 'already_active' | 'skipped' | 'failed' = 'skipped';
+
+  if (useLocalGateway) {
+    if (aiPlugin !== 'failed') {
+      try {
+        // Refresh plugin list
+        const currentPlugins = await localServices.getPlugins(siteId);
+        const existingGateway = findPlugin(currentPlugins, 'ai-provider-for-local-gateway');
+
+        if (existingGateway && existingGateway.status === 'active') {
+          gatewayProvider = 'already_active';
+        } else if (existingGateway) {
+          // Installed but inactive — activate
+          const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-local-gateway']);
+          if (result.success) {
+            gatewayProvider = 'activated';
+          } else {
+            throw new Error(result.stdout ?? 'Failed to activate');
+          }
+        } else {
+          // Not installed — copy from bundled source and activate
+          const sitePluginsDir = getSitePluginsDir(siteId, localServices);
+          if (!sitePluginsDir) {
+            logger.error(`${tag} Could not determine site plugins directory`);
+            gatewayProvider = 'failed';
+          } else {
+            // Security: Validate plugin path before file operations
+            const site = localServices.resolveSiteObject(siteId) as any;
+            validatePluginPath(sitePluginsDir, site.paths.webRoot);
+
+            const pluginDest = path.join(sitePluginsDir, 'ai-provider-for-local-gateway');
+            const pluginSource = path.join(WP_PLUGINS_ROOT, 'ai-provider-for-local-gateway');
+
+            if (!fs.existsSync(pluginSource)) {
+              logger.info(`${tag} Local Gateway provider plugin not bundled at ${pluginSource}, skipping`);
+              gatewayProvider = 'skipped';
+            } else {
+              try {
+                fs.cpSync(pluginSource, pluginDest, { recursive: true });
+
+                const result = await localServices.wpCliRun(siteId, ['plugin', 'activate', 'ai-provider-for-local-gateway']);
+                if (!result.success) {
+                  throw new Error(result.stdout ?? 'Failed to activate');
+                }
+
+                // Health check: verify the plugin doesn't crash WordPress
+                const healthCheck = await localServices.wpCliRun(
+                  siteId,
+                  ['eval', "echo 'healthy';"],
+                  { skipPlugins: false },
+                );
+
+                if (!healthCheck.success || healthCheck.stdout?.trim() !== 'healthy') {
+                  logger.error(`${tag} Local Gateway provider plugin crashes WordPress — deactivating`);
+                  await localServices.wpCliRun(siteId, ['plugin', 'deactivate', 'ai-provider-for-local-gateway']);
+                  gatewayProvider = 'failed';
+                } else {
+                  gatewayProvider = 'installed';
+                  logger.info(`${tag} Local Gateway provider plugin installed on site ${siteId}`);
+                }
+              } catch (copyErr) {
+                const msg = copyErr instanceof Error ? copyErr.message : String(copyErr);
+                logger.error(`${tag} Failed to install Local Gateway provider plugin: ${redactCredentials(msg)}`);
+                gatewayProvider = 'failed';
+              }
             }
           }
         }
-      }
 
-      // Gateway provider configuration is handled by the unified nexus-ai-connector-config.php MU plugin
-      // created earlier in this function (see lines 336-369). No separate MU plugin needed.
-      if (gatewayProvider === 'installed' || gatewayProvider === 'activated' || gatewayProvider === 'already_active') {
-        logger.info(`${tag} Local Gateway provider uses configuration from nexus-ai-connector-config.php MU plugin`);
-      }
+        // Gateway provider configuration is handled by the unified nexus-ai-connector-config.php MU plugin
+        // created earlier in this function. No separate MU plugin needed.
+        if (gatewayProvider === 'installed' || gatewayProvider === 'activated' || gatewayProvider === 'already_active') {
+          logger.info(`${tag} Local Gateway provider uses configuration from nexus-ai-connector-config.php MU plugin`);
+        }
 
-      if (gatewayProvider === 'installed' || gatewayProvider === 'activated') {
-        logger.info(`${tag} Local Gateway provider plugin ${gatewayProvider} on site ${siteId}`);
+        if (gatewayProvider === 'installed' || gatewayProvider === 'activated') {
+          logger.info(`${tag} Local Gateway provider plugin ${gatewayProvider} on site ${siteId}`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`${tag} Local Gateway provider step failed: ${redactCredentials(msg)}`);
+        gatewayProvider = 'failed';
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`${tag} Local Gateway provider step failed: ${redactCredentials(msg)}`);
-      gatewayProvider = 'failed';
     }
+  } else {
+    gatewayProvider = 'skipped';
+    logger.info(`${tag} Skipping gateway plugin — using direct provider plugin`);
   }
 
   // Step 2d: Install Ollama provider plugin (only when explicitly requested)
@@ -820,6 +835,14 @@ export async function setupSiteForAI(
     }
   }
 
+  // When using Local AI Gateway, sync the gateway token to the MU plugin instead of provider key
+  if (useLocalGateway && aiPlugin !== 'failed') {
+    // Gateway credentials are handled by the MU plugin (nexus-ai-connector-config.php)
+    // which is written in step 2a. No additional credential sync needed.
+    credentials = 'synced';
+    logger.info(`${tag} Gateway credentials handled by MU plugin`);
+  }
+
   // Step 5: Handle ACF abilities mu-plugin (only if ACF PRO is already installed)
   // Refresh plugin list to check for ACF PRO
   try {
@@ -871,6 +894,7 @@ export async function setupSiteForAI(
     siteConfigs[siteId] = {
       provider,
       configuredAt: Date.now(),
+      useLocalGateway,
     };
     registryStorage.set(STORAGE_KEYS.SITE_AI_CONFIG, siteConfigs);
   }
