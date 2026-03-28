@@ -20,6 +20,7 @@ import { auditCommand } from './commands/audit';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
 import { setBootstrapResult } from './utils/context';
+import { startTracking, finishTracking, deriveCommandName } from './utils/telemetry';
 
 const program = new Command();
 
@@ -115,8 +116,20 @@ async function main() {
     }
   }
 
-  // Parse arguments
-  program.parse();
+  // Parse arguments — use parseAsync so async command actions are properly awaited
+  const commandName = deriveCommandName();
+  startTracking(commandName);
+  let parseSuccess = true;
+  let parseError: unknown;
+  try {
+    await program.parseAsync();
+  } catch (err) {
+    parseSuccess = false;
+    parseError = err;
+  } finally {
+    await finishTracking(parseSuccess);
+  }
+  if (parseError) throw parseError;
 }
 
 // Run main
