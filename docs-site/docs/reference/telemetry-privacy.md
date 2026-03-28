@@ -117,7 +117,7 @@ CLI telemetry transmits directly to the analytics endpoint — it does not write
 ### Transmission
 Events are sent individually to a Cloudflare Worker over HTTPS using fire-and-forget — transmission never blocks or delays addon operation. Failed transmissions are not retried.
 
-**Endpoint:** `https://nexus-analytics.jeremy7746.workers.dev/v1/events`
+**Endpoint:** `https://analytics.elasticapi.io/v1/events`
 
 ### Request Authentication
 Each request is signed with HMAC-SHA256 using the `secretKey` stored in `config.json`. This lets the server verify the event came from a legitimate Nexus AI installation without requiring any user account or login.
