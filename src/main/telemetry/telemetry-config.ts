@@ -138,11 +138,18 @@ export function readConfig(): TelemetryConfig {
   }
 
   // Default: enabled (opt-out model) with new credentials
-  return {
+  // Write to disk immediately so the same IDs are used on every subsequent call
+  const fresh: TelemetryConfig = {
     installationId: generateInstallationId(),
     secretKey: generateSecretKey(),
     telemetry: { enabled: true, promptedAt: null },
   };
+  try {
+    writeConfig(fresh);
+  } catch {
+    // Best-effort — if we can't write, IDs will be inconsistent but telemetry still works
+  }
+  return fresh;
 }
 
 export function writeConfig(config: TelemetryConfig): void {
