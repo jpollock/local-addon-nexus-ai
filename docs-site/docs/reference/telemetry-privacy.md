@@ -104,13 +104,15 @@ On first run, Nexus AI generates two values and stores them in:
 
 These are generated once and reused across sessions. They are not shared with any third party.
 
-### Local Event Queue
-Before transmitting, events are written to a local JSONL file:
+### Local Event Queue (MCP only)
+MCP telemetry (from AI tool invocations) is written to a local JSONL file before transmitting:
 ```
 ~/Library/Application Support/Local/nexus-ai/telemetry/events.jsonl
 ```
 
 This file is capped at 10,000 events (oldest are pruned when the limit is reached). You can inspect it, clear it with `nexus telemetry clear`, or delete it manually.
+
+CLI telemetry transmits directly to the analytics endpoint — it does not write to the local queue.
 
 ### Transmission
 Events are sent individually to a Cloudflare Worker over HTTPS using fire-and-forget — transmission never blocks or delays addon operation. Failed transmissions are not retried.
