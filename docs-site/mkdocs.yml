@@ -187,4 +187,5 @@ nav:
   - Reference:
     - CLI Commands: reference/cli-command-reference.md
     - Tool Reference: reference/tool-reference.md
+    - Telemetry & Privacy: reference/telemetry-privacy.md
     - FAQ: reference/faq.md
