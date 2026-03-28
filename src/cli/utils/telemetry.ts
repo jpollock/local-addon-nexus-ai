@@ -23,8 +23,7 @@ import * as os from 'os';
 
 const CONFIG_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
-const ENDPOINT = process.env.NEXUS_ANALYTICS_ENDPOINT?.replace(/\/$/, '') + '/v1/events'
-  || 'https://nexus-analytics.jeremy7746.workers.dev/v1/events';
+const ENDPOINT = (process.env.NEXUS_ANALYTICS_ENDPOINT?.replace(/\/$/, '') || 'https://nexus-analytics.jeremy7746.workers.dev') + '/v1/events';
 const TIMEOUT_MS = 5000;
 const SESSION_ID = crypto.randomUUID();
 const ADDON_VERSION: string = require('../../../package.json').version;
