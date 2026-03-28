@@ -258,7 +258,7 @@ describe('CLI Telemetry', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
 
-      expect(url).toContain('nexus-analytics.jeremy7746.workers.dev/v1/events');
+      expect(url).toContain('analytics.elasticapi.io/v1/events');
       expect(url).not.toContain('undefined/v1/events');
       expect(url).not.toContain('null/v1/events');
     });

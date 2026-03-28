@@ -354,7 +354,7 @@ describe('telemetry-config', () => {
   describe('getAnalyticsEndpoint()', () => {
     it('returns default endpoint when env var not set', () => {
       const endpoint = getAnalyticsEndpoint();
-      expect(endpoint).toContain('nexus-analytics.jeremy7746.workers.dev/v1/events');
+      expect(endpoint).toContain('analytics.elasticapi.io/v1/events');
     });
 
     it('does not return undefined/v1/events (regression)', () => {

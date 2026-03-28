@@ -10,7 +10,7 @@ import { OllamaProvider } from '../../src/main/chat/providers/ollama';
 import { OpenAIProvider } from '../../src/main/chat/providers/openai';
 import { AnthropicProvider } from '../../src/main/chat/providers/anthropic';
 import { GoogleProvider } from '../../src/main/chat/providers/google';
-import { WpeGatewayProvider } from '../../src/main/chat/providers/wpe-gateway';
+import { LocalGatewayProvider } from '../../src/main/chat/providers/local-gateway';
 import { CHAT_DEFAULTS, OLLAMA_BASE_URL } from '../../src/common/constants';
 import { adaptToolsForChat } from '../../src/main/chat/tool-adapter';
 import { ToolRegistry } from '../../src/main/mcp/tool-registry';
@@ -27,7 +27,7 @@ describe('Provider configuration quality', () => {
     new OpenAIProvider(),
     new AnthropicProvider(),
     new GoogleProvider(),
-    new WpeGatewayProvider(),
+    new LocalGatewayProvider(),
   ];
 
   test('all providers have unique IDs', () => {

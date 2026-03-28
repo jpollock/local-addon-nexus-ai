@@ -18,11 +18,10 @@ jest.mock('fs', () => ({
 // Helpers
 // ---------------------------------------------------------------------------
 
-function createMockStorage(initialKeys?: Record<string, string>): RegistryStorage {
+function createMockStorage(initialKeys?: Record<string, string>, initialSettings?: Record<string, any>): RegistryStorage {
   const store = new Map<string, any>();
-  if (initialKeys) {
-    store.set(STORAGE_KEYS.API_KEYS, initialKeys);
-  }
+  if (initialKeys) store.set(STORAGE_KEYS.API_KEYS, initialKeys);
+  if (initialSettings) store.set(STORAGE_KEYS.SETTINGS, initialSettings);
   return {
     get: (key: string) => store.get(key) ?? null,
     set: (key: string, value: any) => store.set(key, value),
@@ -679,7 +678,7 @@ describe('wp_setup_ai', () => {
   });
 
   test('returns setup result on success', async () => {
-    const storage = createMockStorage({ openai: 'sk-test-key-12345678' });
+    const storage = createMockStorage({ openai: 'sk-test-key-12345678' }, { aiProvider: 'openai' });
     const services = createMockServices(storage);
 
     // Mock wpCliRun to handle all the setup steps
@@ -697,8 +696,8 @@ describe('wp_setup_ai', () => {
       if (args[0] === 'eval' && phpCode === "echo 'healthy';") {
         return { stdout: 'healthy', success: true };
       }
-      if (args[0] === 'eval' && phpCode.includes('ai_experiments_enabled')) {
-        return { stdout: JSON.stringify({ enabled: 7 }), success: true };
+      if (args[0] === 'eval' && phpCode.includes('wpai_features_enabled')) {
+        return { stdout: JSON.stringify({ global: true, 'abilities-explorer': true, 'excerpt-generation': true, 'alt-text-generation': true, 'image-generation': true, summarization: true, 'title-generation': true }), success: true };
       }
       if (args[0] === 'eval' && phpCode.includes('wp_ai_client_provider_credentials')) {
         return { stdout: JSON.stringify({ connectors: 1, ai_client: true }), success: true };
@@ -877,8 +876,8 @@ describe('setupSiteForAI', () => {
       [],
       (_siteId, args) => {
         const phpCode = args[1] ?? '';
-        if (args[0] === 'eval' && phpCode.includes('ai_experiments_enabled')) {
-          return { stdout: JSON.stringify({ enabled: 7 }), success: true };
+        if (args[0] === 'eval' && phpCode.includes('wpai_features_enabled')) {
+          return { stdout: JSON.stringify({ global: true, 'abilities-explorer': true, 'excerpt-generation': true, 'alt-text-generation': true, 'image-generation': true, summarization: true, 'title-generation': true }), success: true };
         }
         return null;
       },
@@ -891,31 +890,31 @@ describe('setupSiteForAI', () => {
 
     // Find the experiment-enabling call
     const experimentCall = wpCliCalls.find((c) =>
-      c.args[0] === 'eval' && (c.args[1] ?? '').includes('ai_experiments_enabled'),
+      c.args[0] === 'eval' && (c.args[1] ?? '').includes('wpai_features_enabled'),
     );
     expect(experimentCall).toBeDefined();
-    expect(experimentCall!.args[1]).toContain('ai_experiment_abilities-explorer_enabled');
-    expect(experimentCall!.args[1]).toContain('ai_experiment_excerpt-generation_enabled');
-    expect(experimentCall!.args[1]).toContain('ai_experiment_alt-text-generation_enabled');
-    expect(experimentCall!.args[1]).toContain('ai_experiment_image-generation_enabled');
-    expect(experimentCall!.args[1]).toContain('ai_experiment_summarization_enabled');
-    expect(experimentCall!.args[1]).toContain('ai_experiment_title-generation_enabled');
+    expect(experimentCall!.args[1]).toContain("wpai_feature_abilities-explorer_enabled");
+    expect(experimentCall!.args[1]).toContain("wpai_feature_excerpt-generation_enabled");
+    expect(experimentCall!.args[1]).toContain("wpai_feature_alt-text-generation_enabled");
+    expect(experimentCall!.args[1]).toContain("wpai_feature_image-generation_enabled");
+    expect(experimentCall!.args[1]).toContain("wpai_feature_summarization_enabled");
+    expect(experimentCall!.args[1]).toContain("wpai_feature_title-generation_enabled");
   });
 
   test('syncs credentials when API keys are configured', async () => {
     const storage = createMockStorage({
       openai: 'sk-test-key-12345678',
       anthropic: 'sk-ant-key-87654321',
-    });
+    }, { aiProvider: 'openai' });
     const { bridge, wpCliCalls } = createMockBridge(
       [],
       (_siteId, args) => {
         const phpCode = args[1] ?? '';
-        if (args[0] === 'eval' && phpCode.includes('ai_experiments_enabled')) {
-          return { stdout: JSON.stringify({ enabled: 7 }), success: true };
+        if (args[0] === 'eval' && phpCode.includes('wpai_features_enabled')) {
+          return { stdout: JSON.stringify({ global: true, 'abilities-explorer': true, 'excerpt-generation': true, 'alt-text-generation': true, 'image-generation': true, summarization: true, 'title-generation': true }), success: true };
         }
         if (args[0] === 'eval' && phpCode.includes('wp_ai_client_provider_credentials')) {
-          return { stdout: JSON.stringify({ connectors: 2, ai_client: true }), success: true };
+          return { stdout: JSON.stringify({ connectors: 1, ai_client: true }), success: true };
         }
         return null;
       },
@@ -924,15 +923,14 @@ describe('setupSiteForAI', () => {
     const result = await setupSiteForAI('site1', bridge, storage, mockLogger);
 
     expect(result.credentials).toBe('synced');
-    expect(result.message).toContain('2 API key(s) synced');
+    expect(result.message).toContain('API key synced');
 
-    // Verify credentials were written to both stores
+    // Verify credentials were written for the configured provider (openai)
     const credCall = wpCliCalls.find((c) =>
       c.args[0] === 'eval' && (c.args[1] ?? '').includes('wp_ai_client_provider_credentials'),
     );
     expect(credCall).toBeDefined();
     expect(credCall!.args[1]).toContain('connectors_ai_openai_api_key');
-    expect(credCall!.args[1]).toContain('connectors_ai_anthropic_api_key');
   });
 
   test('skips credentials when no API keys configured', async () => {
@@ -1055,13 +1053,13 @@ describe('setupSiteForAI', () => {
   });
 
   test('installs provider plugins for configured API keys', async () => {
-    const storage = createMockStorage({ anthropic: 'sk-ant-key-12345678' });
+    const storage = createMockStorage({ anthropic: 'sk-ant-key-12345678' }, { aiProvider: 'anthropic' });
     const { bridge, wpCliCalls } = createMockBridge(
       [],
       (_siteId, args) => {
         const phpCode = args[1] ?? '';
-        if (args[0] === 'eval' && phpCode.includes('ai_experiments_enabled')) {
-          return { stdout: JSON.stringify({ enabled: 7 }), success: true };
+        if (args[0] === 'eval' && phpCode.includes('wpai_features_enabled')) {
+          return { stdout: JSON.stringify({ global: true, 'abilities-explorer': true, 'excerpt-generation': true, 'alt-text-generation': true, 'image-generation': true, summarization: true, 'title-generation': true }), success: true };
         }
         if (args[0] === 'eval' && phpCode.includes('wp_ai_client_provider_credentials')) {
           return { stdout: JSON.stringify({ connectors: 1, ai_client: true }), success: true };
@@ -1128,14 +1126,14 @@ describe('setupSiteForAI', () => {
   });
 
   test('deactivates provider plugin that crashes WordPress', async () => {
-    const storage = createMockStorage({ anthropic: 'sk-ant-key-12345678' });
+    const storage = createMockStorage({ anthropic: 'sk-ant-key-12345678' }, { aiProvider: 'anthropic' });
     let healthCheckCount = 0;
     const { bridge, wpCliCalls } = createMockBridge(
       [],
       (_siteId, args, _idx) => {
         const phpCode = args[1] ?? '';
-        if (args[0] === 'eval' && phpCode.includes('ai_experiments_enabled')) {
-          return { stdout: JSON.stringify({ enabled: 7 }), success: true };
+        if (args[0] === 'eval' && phpCode.includes('wpai_features_enabled')) {
+          return { stdout: JSON.stringify({ global: true, 'abilities-explorer': true, 'excerpt-generation': true, 'alt-text-generation': true, 'image-generation': true, summarization: true, 'title-generation': true }), success: true };
         }
         if (args[0] === 'eval' && phpCode.includes('wp_ai_client_provider_credentials')) {
           return { stdout: JSON.stringify({ connectors: 1, ai_client: true }), success: true };
@@ -1186,15 +1184,15 @@ describe('setupSiteForAI', () => {
   });
 
   test('returns combined result message with all steps', async () => {
-    const storage = createMockStorage({ openai: 'sk-test-1234' });
+    const storage = createMockStorage({ openai: 'sk-test-1234' }, { aiProvider: 'openai' });
     const { bridge } = createMockBridge(
       [
         { name: 'advanced-custom-fields-pro', status: 'active', version: '6.9.0' },
       ],
       (_siteId, args) => {
         const phpCode = args[1] ?? '';
-        if (args[0] === 'eval' && phpCode.includes('ai_experiments_enabled')) {
-          return { stdout: JSON.stringify({ enabled: 7 }), success: true };
+        if (args[0] === 'eval' && phpCode.includes('wpai_features_enabled')) {
+          return { stdout: JSON.stringify({ global: true, 'abilities-explorer': true, 'excerpt-generation': true, 'alt-text-generation': true, 'image-generation': true, summarization: true, 'title-generation': true }), success: true };
         }
         if (args[0] === 'eval' && phpCode.includes('wp_ai_client_provider_credentials')) {
           return { stdout: JSON.stringify({ connectors: 1, ai_client: true }), success: true };
@@ -1218,7 +1216,7 @@ describe('setupSiteForAI', () => {
     expect(result.acfAbilities).toBe('enabled');
     expect(result.message).toContain('installed and activated');
     expect(result.message).toContain('All AI experiments enabled');
-    expect(result.message).toContain('1 API key(s) synced');
+    expect(result.message).toContain('API key synced');
     expect(result.message).toContain('ACF abilities mu-plugin created');
   });
 });
