@@ -791,7 +791,9 @@ export class AiProxyServer {
     if (!authHeader) return false;
     const [scheme, token] = authHeader.split(' ');
     if (scheme !== 'Bearer') return false;
-    return token === this.authToken;
+    if (!token) return false;
+    if (token.length !== this.authToken.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(this.authToken));
   }
 
   private json(res: http.ServerResponse, status: number, data: unknown): void {

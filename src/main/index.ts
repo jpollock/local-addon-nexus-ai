@@ -193,7 +193,10 @@ export default function main(context: any): void {
   registerFleetIntelligenceTools(registry);
   registerTelemetryTools(registry);
   registerTelemetryControlTools(registry);
-  registerTestTools(registry);
+  if (process.env.NEXUS_E2E_MODE === '1') {
+    registerTestTools(registry);
+    localLogger.info('[NexusAI] Test tools registered (NEXUS_E2E_MODE=1)');
+  }
 
   // Phase 3a: Register GraphQL schema for Nexus CLI
   if (graphql) {

@@ -168,16 +168,16 @@ export class HttpEventInterface {
       return;
     }
 
-    // AI Gateway routes - use X-Auth-Token authentication
-    if (url.startsWith('/ai-gateway/v1/')) {
-      this.handleAIGatewayRoute(url, req, res);
-      return;
-    }
-
-    // WordPress event routes - use Bearer token authentication
+    // All authenticated routes require Bearer token
     if (!this.validateAuth(req)) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
+    }
+
+    // AI Gateway routes
+    if (url.startsWith('/ai-gateway/v1/')) {
+      this.handleAIGatewayRoute(url, req, res);
       return;
     }
 
@@ -206,14 +206,20 @@ export class HttpEventInterface {
     }
   }
 
+  private safeCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  }
+
   private validateAuth(req: http.IncomingMessage): boolean {
     const authHeader = req.headers.authorization;
     if (!authHeader) return false;
 
     const [scheme, token] = authHeader.split(' ');
     if (scheme !== 'Bearer') return false;
+    if (!token) return false;
 
-    return token === this.authToken;
+    return this.safeCompare(token, this.authToken);
   }
 
   private handleHealth(req: http.IncomingMessage, res: http.ServerResponse): void {
@@ -222,12 +228,24 @@ export class HttpEventInterface {
   }
 
   private handleEventPost(req: http.IncomingMessage, res: http.ServerResponse): void {
+    const MAX_BODY_SIZE = 1_048_576; // 1MB
+    let bodySize = 0;
     let body = '';
+    let aborted = false;
     req.on('data', (chunk: Buffer) => {
+      bodySize += chunk.length;
+      if (bodySize > MAX_BODY_SIZE) {
+        aborted = true;
+        req.destroy();
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Payload too large' }));
+        return;
+      }
       body += chunk.toString();
     });
 
     req.on('end', async () => {
+      if (aborted) return;
       try {
         const event = JSON.parse(body) as WordPressEvent;
 
@@ -316,8 +334,14 @@ export class HttpEventInterface {
       }
     }
 
-    if (typeof event.timestamp !== 'number') {
-      event.timestamp = Date.now(); // Auto-set if missing
+    const TIMESTAMP_TOLERANCE_MS = 60 * 60 * 1000; // 1 hour
+    if (typeof event.timestamp === 'number') {
+      if (Math.abs(Date.now() - event.timestamp) > TIMESTAMP_TOLERANCE_MS) {
+        return { valid: false, error: 'Event timestamp out of range' };
+      }
+    } else {
+      // Always use server time — never trust caller-supplied timestamp
+      event.timestamp = Date.now();
     }
 
     return { valid: true };

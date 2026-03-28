@@ -22,7 +22,7 @@ function getConnectionInfoPath(): string {
 
 export function saveConnectionInfo(info: ConnectionInfo): void {
   const filePath = getConnectionInfoPath();
-  fs.writeFileSync(filePath, JSON.stringify(info, null, 2), 'utf-8');
+  fs.writeFileSync(filePath, JSON.stringify(info, null, 2), { encoding: 'utf-8', mode: 0o600 });
 }
 
 export function loadConnectionInfo(): ConnectionInfo | null {

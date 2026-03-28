@@ -3,6 +3,11 @@ import * as http from 'http';
 
 const TRUSTED_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
 /**
  * Generates and validates Bearer tokens for MCP server authentication.
  */
@@ -45,7 +50,7 @@ export class McpAuth {
       return 'Missing Authorization header';
     }
 
-    if (providedToken !== this.token) {
+    if (!safeCompare(providedToken, this.token)) {
       return 'Invalid authentication token';
     }
 

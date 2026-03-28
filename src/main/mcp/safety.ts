@@ -60,11 +60,13 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   // Tier 3 — Destructive
   local_delete_site: 3,
   local_wpe_push: 3,
+  wp_eval: 3,
 };
 
 export const CONFIRMATION_MESSAGES: Record<string, string> = {
   local_delete_site: 'This will permanently delete the site and all its files.',
   local_wpe_push: 'This will overwrite the remote WP Engine environment with local site data.',
+  wp_eval: 'This will execute arbitrary PHP code on the WordPress site.',
 };
 
 export const PRE_CHECKS: Record<string, string[]> = {
@@ -75,6 +77,10 @@ export const PRE_CHECKS: Record<string, string[]> = {
   local_wpe_push: [
     'Verify the target environment is correct',
     'Confirm the remote environment has a recent backup',
+  ],
+  wp_eval: [
+    'Review the PHP code carefully before execution',
+    'Ensure the code does not perform destructive database operations',
   ],
 };
 

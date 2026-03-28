@@ -29,7 +29,7 @@ export const configureApiKeysHandler: McpToolHandler = {
         },
       },
     },
-    isAvailable: (services) => !!services.registryStorage,
+    isAvailable: (services) => process.env.NEXUS_E2E_MODE === '1' && !!services.registryStorage,
   },
 
   async execute(args, services): Promise<McpToolResult> {
