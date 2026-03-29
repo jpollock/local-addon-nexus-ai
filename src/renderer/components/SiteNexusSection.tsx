@@ -452,7 +452,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   };
 
   handleDbScan = async (): Promise<void> => {
-    this.setState({ dbScanning: true });
+    this.setState({ dbScanning: true, setupResult: null });
     try {
       const result = await this.props.electron.ipcRenderer.invoke(
         IPC_CHANNELS.DB_SCAN_SITE,
@@ -462,11 +462,17 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       if (result?.success) {
         this.setState({ dbScan: result.scan ?? null, dbScanning: false });
       } else {
-        this.setState({ dbScanning: false });
+        this.setState({
+          dbScanning: false,
+          setupResult: { success: false, message: result?.error ?? 'Scan failed' },
+        });
       }
-    } catch {
+    } catch (err: any) {
       if (!this.mounted) return;
-      this.setState({ dbScanning: false });
+      this.setState({
+        dbScanning: false,
+        setupResult: { success: false, message: err?.message ?? 'Scan failed' },
+      });
     }
   };
 
@@ -791,14 +797,15 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       : dbScan.healthScore >= 80 ? UI_COLORS.STATUS_RUNNING
       : dbScan.healthScore >= 50 ? UI_COLORS.STATUS_WARNING
       : UI_COLORS.STATUS_ERROR;
-    const dbScoreText = dbScan ? `${dbScan.healthScore}/100` : 'Not scanned';
+    const siteIsRunning = this.props.site.status === 'running';
+    const dbScoreText = dbScan ? `${dbScan.healthScore}/100` : (siteIsRunning ? 'Not scanned' : 'Start site to scan');
 
     rows.push(row('Database Health',
       React.createElement('span', { style: dotStyle(dbScoreColor) }),
       dbScoreText,
       this.createActionButton({
-        onClick: dbScanning ? undefined : this.handleDbScan,
-        disabled: dbScanning,
+        onClick: (dbScanning || !siteIsRunning) ? undefined : this.handleDbScan,
+        disabled: dbScanning || !siteIsRunning,
         children: dbScanning ? 'Scanning...' : (dbScan ? 'Re-scan' : 'Scan'),
       }),
     ));
