@@ -65,7 +65,7 @@ nexus wpe diagnose mysite-production
 | **WPE Read** | `wpe_get_accounts`, `wpe_get_installs`, `wpe_get_sites`, `wpe_diagnose_site`, `wpe_environment_diff`, `wpe_get_domain`, `wpe_get_backup` |
 | **Fleet** | `nexus_fleet_health` |
 | **Telemetry** | `get_telemetry_status` |
-| **Database** | `nexus_db_info` |
+| **Database** | `nexus_db_info`, `scan_database_health`, `get_database_recommendations`, `fleet_database_health` |
 
 **Why no protection?**
 
@@ -218,7 +218,7 @@ sequenceDiagram
 | Category | Tools |
 |----------|-------|
 | **Deletion** | `local_delete_site`, `wpe_delete_install`, `wpe_delete_site`, `wpe_delete_domain`, `wpe_delete_ssh_key`, `wpe_delete_account_user` |
-| **Database** | `nexus_db_reset`, `nexus_db_import` (overwrites existing) |
+| **Database** | `nexus_db_reset`, `nexus_db_import` (overwrites existing), `clean_database_items` (requires confirmation token; `dry_run` defaults to `true`) |
 | **WordPress** | `wp_plugin_deactivate --force`, `wp_search_replace` (without dry-run) |
 | **WPE Deploy** | `wpe_promote_to_production --force` (skips safety checks) |
 | **Telemetry** | `reset_telemetry` (generates new installation ID) |

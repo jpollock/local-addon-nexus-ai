@@ -1,8 +1,23 @@
 # AI Database Scanner and Optimizer — Implementation Plan
 
 **Project:** local-addon-nexus-ai
-**Status:** Ready to implement
+**Status:** Implemented — awaiting merge to main (`feature/db-scanner`)
 **Customer insight:** Users struggle with database bloat over time; want an automated tool to scan and suggest cleanup.
+
+---
+
+## What Was Built (v2 vs original spec)
+
+The implementation delivered everything in the original spec plus several additions discovered during development:
+
+- **Autoload audit** — scans total autoloaded option size and identifies large entries by option name (was missing from v1 spec)
+- **Meta key attribution** — orphaned postmeta rows broken down by `meta_key` and attributed to known plugins (Yoast, ACF, WooCommerce, etc.)
+- **Advisor voice** — recommendations written in plain language with prevention tips and plugin attribution, not just raw numbers
+- **Lowered thresholds** — score penalties trigger earlier than originally planned (e.g., revisions > 500 instead of > 1,000)
+- **Implementation detail**: uses `wp eval` + `$wpdb->get_results()` — `wp db query --format=json` proved unreliable in practice
+- **Table prefix**: read via `wp config get table_prefix` since sites may not use the default `wp_` prefix
+- **New exported functions**: `guessPluginFromOptionName()`, `attributePluginTable()`, `detectLeftoverTables()`
+- **47 unit tests** in `tests/unit/mcp/db-scanner.test.ts`
 
 ---
 

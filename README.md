@@ -67,6 +67,7 @@ Leverages Local's secure channels to WP Engine:
 - **CLI** — Terminal commands for all operations. Works with any AI that can write shell commands. No MCP setup required. Scriptable, automatable, transparent.
 - **MCP Server** — 111 tools for AI assistants (Claude Desktop, Cursor, etc.)
 - **WP Engine Remote Management** — Sync and manage WPE sites alongside local sites (see below)
+- **Database Health** — Scans WordPress databases for bloat (revisions, orphaned postmeta with plugin attribution, expired transients, autoload bloat, ghost plugin tables, auto-drafts, trash). Shows a 0–100 health score with advisor-voice recommendations and prevention tips. Safe cleanup via `nexus wp db clean` (dry-run default). Available via site card UI, CLI, and MCP tools. Local-only.
 - **Production-Ready Security** — Input validation, audit logging, credential redaction
 - **High-Performance UI** — Virtual scrolling for 500+ sites without lag, 7 active panels
 - **AI Gateway** — Credential proxy, usage tracking, cost monitoring
