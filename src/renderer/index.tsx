@@ -2,6 +2,8 @@ import { NavItemInjector } from './NavItemInjector';
 import { NexusOverview } from './components/NexusOverview';
 import { NexusPreferences } from './components/NexusPreferences';
 import { SiteNexusSection } from './components/SiteNexusSection';
+import { NexusSiteTab } from './components/NexusSiteTab';
+import { NexusSiteTabSummary } from './components/NexusSiteTabSummary';
 import { SidebarSearchPanel } from './components/SidebarSearchPanel';
 import { IPC_CHANNELS } from '../common/constants';
 
@@ -70,14 +72,37 @@ export default function renderer(context: any): void {
     }];
   });
 
-  // Feature 3: Per-site Nexus AI section on site overview
+  // Feature 3a: Nexus AI tab in site info panel nav
+  hooks.addContent('SiteInfo_TabNav_Items', (site: any) =>
+    React.createElement(NavLink, {
+      to: `/main/site-info/${site.id}/nexus`,
+      activeClassName: 'active',
+      style: { display: 'flex', alignItems: 'center' },
+    }, 'Nexus AI'),
+  );
+
+  // Feature 3b: Nexus AI tab route
+  hooks.addContent('routes[site-info]', ({ routeChildrenProps }: any) => {
+    const site = routeChildrenProps?.site;
+    const siteStatus = routeChildrenProps?.siteStatus ?? '';
+    return React.createElement(Route, {
+      path: `/main/site-info/${site?.id}/nexus`,
+      render: () => React.createElement(NexusSiteTab, {
+        site: { ...site, status: siteStatus },
+        siteStatus,
+        electron,
+        TextButton,
+      }),
+    });
+  });
+
+  // Feature 3c: Per-site Nexus AI summary section on site overview
   hooks.addFilter('SiteInfoOverview_Addon_Section', (sections: any[], site: any, siteStatusText: string) => {
     // siteStatusText is the third positional arg from Local's filter — merge it into site.status
-    // so SiteNexusSection can check this.props.site.status === 'running'
     const siteWithStatus = { ...site, status: siteStatusText };
     return [...sections, {
       title: 'Nexus AI',
-      component: React.createElement(SiteNexusSection, { site: siteWithStatus, electron, TextButton }),
+      component: React.createElement(NexusSiteTabSummary, { site: siteWithStatus, electron }),
     }];
   });
 
