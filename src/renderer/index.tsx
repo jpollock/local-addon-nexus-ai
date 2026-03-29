@@ -71,10 +71,13 @@ export default function renderer(context: any): void {
   });
 
   // Feature 3: Per-site Nexus AI section on site overview
-  hooks.addFilter('SiteInfoOverview_Addon_Section', (sections: any[], site: any) => {
+  hooks.addFilter('SiteInfoOverview_Addon_Section', (sections: any[], site: any, siteStatusText: string) => {
+    // siteStatusText is the third positional arg from Local's filter — merge it into site.status
+    // so SiteNexusSection can check this.props.site.status === 'running'
+    const siteWithStatus = { ...site, status: siteStatusText };
     return [...sections, {
       title: 'Nexus AI',
-      component: React.createElement(SiteNexusSection, { site, electron, TextButton }),
+      component: React.createElement(SiteNexusSection, { site: siteWithStatus, electron, TextButton }),
     }];
   });
 
