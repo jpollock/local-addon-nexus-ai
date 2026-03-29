@@ -8,7 +8,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
-import type { NexusSettings, AIProvider, SiteAIConfig } from '../../common/types';
+import type { NexusSettings, AIProvider, SiteAIConfig, DbScanResult } from '../../common/types';
 
 interface SiteNexusSectionProps {
   site: { id: string; name: string; path: string; status?: string };
@@ -55,6 +55,8 @@ interface SiteNexusSectionState {
   switchingProvider: boolean;
   useLocalGateway: boolean;
   globalAIProvider: string | null;
+  dbScan: DbScanResult | null;
+  dbScanning: boolean;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -144,6 +146,8 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     switchingProvider: false,
     useLocalGateway: false,
     globalAIProvider: null,
+    dbScan: null,
+    dbScanning: false,
   };
 
   componentDidMount(): void {
@@ -247,6 +251,15 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       if (configResult?.success) {
         this.setState({ siteAIConfig: configResult.config ?? null });
       }
+    } catch {
+      // Non-fatal
+    }
+
+    // Fetch last DB scan result (non-fatal)
+    try {
+      const lastScanResult = await ipc.invoke(IPC_CHANNELS.DB_GET_LAST_SCAN, this.props.site.id);
+      if (!this.mounted) return;
+      if (lastScanResult?.success) this.setState({ dbScan: lastScanResult.scan ?? null });
     } catch {
       // Non-fatal
     }
@@ -435,6 +448,31 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     const { shell } = this.props.electron;
     if (shell && shell.showItemInFolder) {
       shell.showItemInFolder(aiContextStatus.filePath);
+    }
+  };
+
+  handleDbScan = async (): Promise<void> => {
+    this.setState({ dbScanning: true, setupResult: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.DB_SCAN_SITE,
+        this.props.site.id,
+      );
+      if (!this.mounted) return;
+      if (result?.success) {
+        this.setState({ dbScan: result.scan ?? null, dbScanning: false });
+      } else {
+        this.setState({
+          dbScanning: false,
+          setupResult: { success: false, message: result?.error ?? 'Scan failed' },
+        });
+      }
+    } catch (err: any) {
+      if (!this.mounted) return;
+      this.setState({
+        dbScanning: false,
+        setupResult: { success: false, message: err?.message ?? 'Scan failed' },
+      });
     }
   };
 
@@ -750,6 +788,32 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
         React.createElement('span', { style: dotStyle(statusColor) }),
         statusText,
         ...actions,
+      ));
+    }
+
+    // Database Health row
+    const { dbScan, dbScanning } = this.state;
+    const dbScoreColor = !dbScan ? '#888'
+      : dbScan.healthScore >= 80 ? UI_COLORS.STATUS_RUNNING
+      : dbScan.healthScore >= 50 ? UI_COLORS.STATUS_WARNING
+      : UI_COLORS.STATUS_ERROR;
+    const siteIsRunning = this.props.site.status === 'running';
+    const dbScoreText = dbScan ? `${dbScan.healthScore}/100` : (siteIsRunning ? 'Not scanned' : 'Start site to scan');
+
+    rows.push(row('Database Health',
+      React.createElement('span', { style: dotStyle(dbScoreColor) }),
+      dbScoreText,
+      this.createActionButton({
+        onClick: (dbScanning || !siteIsRunning) ? undefined : this.handleDbScan,
+        disabled: dbScanning || !siteIsRunning,
+        children: dbScanning ? 'Scanning...' : (dbScan ? 'Re-scan' : 'Scan'),
+      }),
+    ));
+
+    // Top DB issue row (only if there's something to show)
+    if (dbScan && dbScan.summary.length > 0) {
+      rows.push(row('Top DB issue',
+        dbScan.summary[0],
       ));
     }
 

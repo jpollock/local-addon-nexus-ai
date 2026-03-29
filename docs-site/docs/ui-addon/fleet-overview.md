@@ -502,6 +502,31 @@ Click "Custom Filter" to build advanced queries:
 - **Health** - Detailed health report
 - **WPE** - WP Engine integration (if linked)
 
+#### Database Health Row
+
+The site card includes a **Database Health** row that summarizes bloat detected by the AI Database Scanner:
+
+```
+Database Health:  29 MB savings available  ⚠ WooCommerce bloat
+                  [Scan]  [Clean (dry run)]
+```
+
+**What it shows:**
+
+- **No scan yet** — "Not scanned" with a **Scan** button
+- **Clean** — "Database looks healthy" (< 1 MB savings detected)
+- **Savings available** — estimated MB that can be reclaimed, with a **Clean (dry run)** button
+- **WooCommerce bloat** badge — shown when stale sessions or orphaned order data are the primary contributor
+
+**How to use it:**
+
+1. Click **Scan** to run a database health check (read-only, safe at any time)
+2. Review the summary — click the row to expand the full report
+3. Click **Clean (dry run)** to preview what would be removed
+4. If the preview looks correct, click **Apply Cleanup** to delete the flagged rows
+
+The scanner runs through the MCP `scan_database_health` and `clean_database_items` tools; you can also trigger it directly from the AI chat or CLI (`nexus wp db scan <site>`).
+
 ## Charts and Visualizations
 
 ### Version Timeline

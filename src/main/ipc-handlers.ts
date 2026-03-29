@@ -15,6 +15,7 @@ import type { LocalServicesBridge } from './mcp/local-services-bridge';
 import type { GraphService } from './events/GraphService';
 import type { EventProcessor } from './events/EventProcessor';
 import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
+import { scanDatabase } from './mcp/modules/db-scanner/db-scanner';
 import { switchProviderForSite } from './mcp/modules/wp-connector/switch-provider';
 import { generateEventSummary } from './events/event-summary';
 import type { EventTimelineEntry, EventStats } from '../common/types';
@@ -3363,6 +3364,57 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     } catch (err) {
       localLogger.error('[NexusAI] ai-context-get-status failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // Database Scanner IPC handlers
+  safeHandle(IPC_CHANNELS.DB_SCAN_SITE, async (_event: any, siteId: string) => {
+    try {
+      const site = siteData.getSite(siteId);
+      if (!site) return { success: false, error: `Site ${siteId} not found` };
+
+      const status = localServicesBridge.getSiteStatus(siteId);
+      if (status !== 'running') {
+        return { success: false, error: `Site "${site.name}" is not running. Start it first.` };
+      }
+
+      const nexusServicesForDb = {
+        siteData: {
+          getSite: (id: string) => {
+            const s = siteData.getSite(id);
+            if (!s) return null;
+            return { id: s.id, name: s.name, path: s.path, domain: s.domain };
+          },
+          getSites: () => {
+            const all = siteData.getSites();
+            const result: Record<string, any> = {};
+            for (const [id, s] of Object.entries(all) as [string, any][]) {
+              result[id] = { id: s.id, name: s.name, path: s.path, domain: s.domain };
+            }
+            return result;
+          },
+        },
+        localServices: localServicesBridge,
+        registryStorage,
+        logger: localLogger,
+      } as any;
+
+      const scan = await scanDatabase(siteId, nexusServicesForDb);
+      return { success: true, scan };
+    } catch (err) {
+      localLogger.error('[NexusAI] db-scan-site failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.DB_GET_LAST_SCAN, async (_event: any, siteId: string) => {
+    try {
+      const cache = registryStorage.get(STORAGE_KEYS.DB_SCAN_CACHE) ?? {};
+      const scan = (cache as Record<string, any>)[siteId] ?? null;
+      return { success: true, scan };
+    } catch (err) {
+      localLogger.error('[NexusAI] db-get-last-scan failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message, scan: null };
     }
   });
 

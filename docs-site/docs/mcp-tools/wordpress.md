@@ -771,6 +771,213 @@ Search and replace in WordPress database.
 
 ---
 
+## AI Database Scanner
+
+Tools for scanning WordPress database health, getting cleanup recommendations, and safely removing bloat.
+
+---
+
+### `scan_database_health`
+
+Scan a site's database for bloat, stale data, and performance issues.
+
+<div class="metadata">
+<dl>
+  <dt>Access</dt>
+  <dd><span class="access-badge">LOCAL</span></dd>
+  <dt>Safety Tier</dt>
+  <dd><span class="safety-tier safety-tier-1">1 - SAFE</span></dd>
+  <dt>Returns</dt>
+  <dd>Categorized list of database issues with row counts and estimated savings</dd>
+</dl>
+</div>
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `site_id` | string | Yes | Local site ID |
+
+### Examples
+
+```json
+{
+  "tool": "scan_database_health",
+  "arguments": {
+    "site_id": "abc123"
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "Database Health — mysite\n─────────────────────────────────────────────\n  Post revisions:       1,204 rows  (~18 MB)\n  Expired transients:     892 rows  (~4 MB)\n  Orphaned postmeta:      341 rows  (~1 MB)\n  Spam/trash comments:    120 rows\n  Auto-draft posts:        14 rows\n\nWooCommerce:\n  Stale sessions:         567 rows  (~6 MB)\n  Orphaned order meta:    203 rows\n\nEstimated savings: ~29 MB\nRun get_database_recommendations for a prioritized action plan."
+  }]
+}
+```
+
+---
+
+### `get_database_recommendations`
+
+Get a prioritized list of cleanup recommendations based on the latest scan.
+
+<div class="metadata">
+<dl>
+  <dt>Access</dt>
+  <dd><span class="access-badge">LOCAL</span></dd>
+  <dt>Safety Tier</dt>
+  <dd><span class="safety-tier safety-tier-1">1 - SAFE</span></dd>
+  <dt>Returns</dt>
+  <dd>Ordered list of recommended cleanup actions with impact estimates</dd>
+</dl>
+</div>
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `site_id` | string | Yes | Local site ID |
+
+### Examples
+
+```json
+{
+  "tool": "get_database_recommendations",
+  "arguments": {
+    "site_id": "abc123"
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "Recommendations for mysite (high → low impact):\n\n  1. Clean stale WooCommerce sessions      — saves ~6 MB\n  2. Delete excess post revisions          — saves ~18 MB\n  3. Remove expired transients             — saves ~4 MB\n  4. Clear orphaned postmeta              — saves ~1 MB\n  5. Delete spam/trash comments\n\nRun clean_database_items with dry_run=true to preview changes."
+  }]
+}
+```
+
+---
+
+### `clean_database_items`
+
+Remove identified database bloat. Defaults to dry-run mode — no changes are made unless `dry_run` is explicitly set to `false`.
+
+<div class="metadata">
+<dl>
+  <dt>Access</dt>
+  <dd><span class="access-badge">LOCAL</span></dd>
+  <dt>Safety Tier</dt>
+  <dd><span class="safety-tier safety-tier-3">3 - DESTRUCTIVE</span></dd>
+  <dt>Returns</dt>
+  <dd>Rows affected (dry run) or rows deleted (live run) per category</dd>
+</dl>
+</div>
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `site_id` | string | Yes | Local site ID |
+| `items` | string[] | Yes | Categories to clean (e.g. `["revisions", "transients", "sessions"]`) |
+| `dry_run` | boolean | No | Preview only — **default `true`** |
+
+**Valid `items` values:** `revisions`, `transients`, `orphaned_postmeta`, `spam_comments`, `auto_drafts`, `orphaned_termmeta`, `woo_sessions`, `woo_order_meta`, `woo_variation_meta`
+
+### Examples
+
+=== "Dry Run (Preview)"
+
+    ```json
+    {
+      "tool": "clean_database_items",
+      "arguments": {
+        "site_id": "abc123",
+        "items": ["revisions", "transients"],
+        "dry_run": true
+      }
+    }
+    ```
+
+=== "Live Cleanup"
+
+    ```json
+    {
+      "tool": "clean_database_items",
+      "arguments": {
+        "site_id": "abc123",
+        "items": ["revisions", "transients", "woo_sessions"],
+        "dry_run": false
+      }
+    }
+    ```
+
+### Response
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "✓ Cleanup complete — mysite (DRY RUN)\n\n  revisions:   1,204 rows would be deleted (~18 MB)\n  transients:    892 rows would be deleted (~4 MB)\n\nRun with dry_run=false to apply."
+  }]
+}
+```
+
+---
+
+### `fleet_database_health`
+
+Summarize database health across all running local sites.
+
+<div class="metadata">
+<dl>
+  <dt>Access</dt>
+  <dd><span class="access-badge">LOCAL</span></dd>
+  <dt>Safety Tier</dt>
+  <dd><span class="safety-tier safety-tier-1">1 - SAFE</span></dd>
+  <dt>Returns</dt>
+  <dd>Per-site health summary sorted by estimated savings</dd>
+</dl>
+</div>
+
+**Parameters:** none
+
+### Examples
+
+```json
+{
+  "tool": "fleet_database_health",
+  "arguments": {}
+}
+```
+
+### Response
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "Fleet Database Health (5 running sites)\n─────────────────────────────────────────────\n  shop       — 29 MB savings available  ⚠ WooCommerce bloat\n  mysite     —  8 MB savings available\n  blog       —  2 MB savings available\n  portfolio  —  < 1 MB\n  staging    —  < 1 MB\n\nRun scan_database_health on a specific site for details."
+  }]
+}
+```
+
+### Related Tools
+
+- [scan_database_health](#scan_database_health) - Scan a single site
+- [get_database_recommendations](#get_database_recommendations) - Prioritized action plan
+- [clean_database_items](#clean_database_items) - Apply cleanup
+
+---
+
 ## AI Provider Management
 
 Tools for configuring AI providers on individual WordPress sites.

@@ -1,6 +1,7 @@
 import { ToolRegistry } from '../../tool-registry';
 import { siteAuditHandler } from './site-audit';
 import { pluginAuditHandler } from './plugin-audit';
+import { dbAuditHandler } from './db-audit';
 
 /**
  * Composite module — multi-step tools that orchestrate several service
@@ -9,4 +10,5 @@ import { pluginAuditHandler } from './plugin-audit';
 export function registerCompositeTools(registry: ToolRegistry): void {
   registry.register(siteAuditHandler);
   registry.register(pluginAuditHandler);
+  registry.register(dbAuditHandler);
 }

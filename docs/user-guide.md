@@ -252,6 +252,78 @@ The AI Proxy is an OpenAI-compatible HTTP server backed by local Ollama. It's bu
 
 See [AI Proxy Guide](ai-proxy-guide.md) for full documentation.
 
+## Database Health
+
+Nexus AI can scan WordPress databases for bloat, stale data, and inefficiencies — and clean them up safely.
+
+### When to Use It
+
+- Sites feel slow and you suspect database bloat
+- WooCommerce stores accumulating stale order data, orphaned carts, or expired transients
+- Before pushing a local site to production
+- Routine fleet maintenance to keep databases lean
+
+### CLI
+
+```bash
+# Scan a site and print a health report
+nexus wp db scan mysite
+
+# Preview what would be cleaned (no changes made)
+nexus wp db clean mysite --dry-run
+
+# Apply cleanup after reviewing the dry-run output
+nexus wp db clean mysite
+
+# Print a saved report for a previously scanned site
+nexus wp db report mysite
+```
+
+`clean` defaults to `--dry-run`, so running it without flags is always safe.
+
+### MCP Tool Usage
+
+```
+scan the database health of mysite
+```
+
+```
+show me database recommendations for mysite
+```
+
+```
+clean up post revisions and transients on mysite (dry run first)
+```
+
+```
+give me a database health summary across all my running sites
+```
+
+### What Each Cleanup Item Does
+
+| Item | What It Is | Safe to Clean? |
+|------|------------|----------------|
+| Post revisions | Old autosave/revision copies of posts | Yes — keep a few, delete the rest |
+| Transients | Temporary cached values stored in `wp_options` | Yes — expired ones are dead weight |
+| Orphaned postmeta | Post meta rows for deleted posts | Yes |
+| Spam/trash comments | Rejected or binned comments | Yes |
+| Auto-draft posts | Abandoned autosaves with no parent | Yes |
+| Orphaned termmeta | Term meta for deleted terms | Yes |
+
+### WooCommerce-Specific Cleanup
+
+WooCommerce sites accumulate additional data over time:
+
+| Item | Description |
+|------|-------------|
+| Stale sessions | Abandoned shopping cart sessions |
+| Orphaned order meta | Order meta for deleted orders |
+| Orphaned variation meta | Product variation meta for removed variations |
+| Failed/cancelled orders | Old orders in terminal states (configurable retention) |
+| Expired coupons (meta) | Meta for coupons that no longer exist |
+
+These items are surfaced separately in scan output so you can review them before cleaning.
+
 ## Production Deployment
 
 When pushing a Local site to WP Engine, AI plugins and settings transfer with the push. However, Ollama-based features only work locally — use cloud providers (OpenAI, Anthropic) for production AI.

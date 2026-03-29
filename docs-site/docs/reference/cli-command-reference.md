@@ -605,6 +605,159 @@ For security, these commands are blocked on remote WP Engine sites:
 
 ---
 
+### `nexus wp db`
+
+Scan and clean WordPress site databases. These are subcommands of `nexus wp` focused on database health.
+
+```bash
+nexus wp db <subcommand> <site> [options]
+```
+
+#### `nexus wp db scan`
+
+Scan a site's database and print a health report.
+
+```bash
+nexus wp db scan <site>
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `<site>` | Site ID or name |
+
+**Usage:**
+
+```bash
+# Scan a single site
+nexus wp db scan mysite
+
+# Output as JSON
+nexus wp db scan mysite --json
+```
+
+**Output:**
+
+```
+Database Health — mysite
+─────────────────────────────────────────────
+  Post revisions:       1,204 rows  (~18 MB)
+  Expired transients:     892 rows  (~4 MB)
+  Orphaned postmeta:      341 rows  (~1 MB)
+  Spam/trash comments:    120 rows
+  Auto-draft posts:        14 rows
+
+WooCommerce:
+  Stale sessions:         567 rows  (~6 MB)
+  Orphaned order meta:    203 rows
+
+Estimated savings: ~29 MB
+Run 'nexus wp db clean mysite --dry-run' for a cleanup preview.
+```
+
+---
+
+#### `nexus wp db clean`
+
+Clean database bloat on a site. **Defaults to `--dry-run`** — no changes are made until you remove that flag.
+
+```bash
+nexus wp db clean <site> [options]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `<site>` | Site ID or name |
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--dry-run` | Preview changes without deleting | `true` |
+| `--items <list>` | Comma-separated categories to clean | all detected |
+
+**Valid categories for `--items`:**
+
+| Category | What Gets Deleted |
+|----------|-------------------|
+| `revisions` | Excess post revisions |
+| `transients` | Expired transients from `wp_options` |
+| `orphaned_postmeta` | Post meta for deleted posts |
+| `spam_comments` | Spam and trashed comments |
+| `auto_drafts` | Abandoned autosave drafts |
+| `orphaned_termmeta` | Term meta for deleted terms |
+| `woo_sessions` | Stale WooCommerce cart sessions |
+| `woo_order_meta` | Orphaned meta for deleted orders |
+| `woo_variation_meta` | Meta for removed product variations |
+
+**Usage:**
+
+```bash
+# Preview everything (default dry-run)
+nexus wp db clean mysite --dry-run
+
+# Clean specific categories (still dry-run by default)
+nexus wp db clean mysite --items revisions,transients --dry-run
+
+# Apply cleanup after reviewing
+nexus wp db clean mysite --items revisions,transients
+
+# Clean all detected items
+nexus wp db clean mysite
+```
+
+**Output (dry run):**
+
+```
+Cleanup Preview — mysite (DRY RUN)
+
+  revisions:    1,204 rows would be deleted (~18 MB)
+  transients:     892 rows would be deleted (~4 MB)
+
+Total: 2,096 rows, ~22 MB savings
+Run without --dry-run to apply.
+```
+
+**Output (live):**
+
+```
+Cleanup complete — mysite
+
+  revisions:    1,204 rows deleted (~18 MB freed)
+  transients:     892 rows deleted (~4 MB freed)
+
+Total: 2,096 rows deleted, ~22 MB freed
+```
+
+---
+
+#### `nexus wp db report`
+
+Print the saved health report from the most recent scan of a site.
+
+```bash
+nexus wp db report <site>
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `<site>` | Site ID or name |
+
+**Usage:**
+
+```bash
+nexus wp db report mysite
+```
+
+**Output:** Same format as `nexus wp db scan`. If no scan has been run yet, you are prompted to run one.
+
+---
+
 ### `nexus wpe`
 
 Manage WP Engine sites and environments.
