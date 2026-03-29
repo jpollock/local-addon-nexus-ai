@@ -5,6 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as tar from 'tar';
+import { ADDON_PACKAGE_NAME } from './paths';
 
 export interface ExtractOptions {
   tarPath: string;       // '/tmp/nexus-ai-addon.tgz'
@@ -115,7 +116,7 @@ export function verifyExtractedAddon(destDir: string): boolean {
   // Verify it's the nexus-ai addon
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-    return pkg.name === 'local-addon-nexus-ai';
+    return pkg.name === ADDON_PACKAGE_NAME;
   } catch {
     return false;
   }
