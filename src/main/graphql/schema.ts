@@ -1273,4 +1273,143 @@ export const typeDefs = gql`
     previousProvider: String
     newProvider: String
   }
+
+  # ============================================================================
+  # Database Scanner Types
+  # ============================================================================
+
+  type DbTableInfo {
+    name: String!
+    rows: Int!
+    dataSizeBytes: Float!
+    indexSizeBytes: Float!
+    totalSizeBytes: Float!
+  }
+
+  type DbRevisionPost {
+    postId: Int!
+    postTitle: String!
+    revisionCount: Int!
+  }
+
+  type DbRevisionInfo {
+    totalCount: Int!
+    estimatedSizeBytes: Float!
+    topPosts: [DbRevisionPost!]!
+  }
+
+  type DbTransientInfo {
+    expiredCount: Int!
+    totalCount: Int!
+    estimatedSizeBytes: Float!
+  }
+
+  type DbOrphanInfo {
+    orphanedPostMeta: Int!
+    orphanedCommentMeta: Int!
+    orphanedUserMeta: Int!
+  }
+
+  type DbDraftTrashInfo {
+    autoDraftCount: Int!
+    trashedPostCount: Int!
+    estimatedSizeBytes: Float!
+  }
+
+  type DbPluginTableInfo {
+    leftoverTables: [String!]!
+    customTables: [DbTableInfo!]!
+  }
+
+  type DbWooCommerceInfo {
+    sessionCount: Int!
+    estimatedSessionSizeBytes: Float!
+    oldLogCount: Int!
+  }
+
+  type DbScanResultGql {
+    siteId: String!
+    siteName: String!
+    scannedAt: Float!
+    wpVersion: String!
+    isWooCommerceActive: Boolean!
+    tables: [DbTableInfo!]!
+    revisions: DbRevisionInfo!
+    transients: DbTransientInfo!
+    orphans: DbOrphanInfo!
+    draftsAndTrash: DbDraftTrashInfo!
+    pluginTables: DbPluginTableInfo!
+    wooCommerce: DbWooCommerceInfo
+    healthScore: Int!
+    summary: [String!]!
+    durationMs: Int!
+  }
+
+  type NexusDbScanResult {
+    success: Boolean!
+    error: String
+    scan: DbScanResultGql
+  }
+
+  input NexusDbCleanInput {
+    target: String!
+    items: [String!]
+    dryRun: Boolean
+  }
+
+  type DbCleanItemResult {
+    type: String!
+    label: String!
+    rowsAffected: Int!
+    success: Boolean!
+    error: String
+  }
+
+  type DbCleanResultGql {
+    siteId: String!
+    siteName: String!
+    dryRun: Boolean!
+    cleanedAt: Float!
+    items: [DbCleanItemResult!]!
+    totalRowsAffected: Int!
+    estimatedSpaceFreedBytes: Float!
+  }
+
+  type NexusDbCleanResult {
+    success: Boolean!
+    error: String
+    result: DbCleanResultGql
+  }
+
+  type DbFleetEntry {
+    siteId: String!
+    siteName: String!
+    healthScore: Int!
+    wpVersion: String!
+    isWooCommerceActive: Boolean!
+    revisionCount: Int!
+    expiredTransients: Int!
+    leftoverTables: Int!
+    topIssue: String
+    summary: [String!]!
+    durationMs: Int!
+  }
+
+  type NexusDbReportResult {
+    success: Boolean!
+    error: String
+    scannedAt: Float
+    sitesScanned: Int
+    sitesFailed: Int
+    sites: [DbFleetEntry!]
+  }
+
+  extend type Mutation {
+    "Scan database health for a local WordPress site"
+    nexusDbScan(target: String!): NexusDbScanResult!
+    "Clean database items (dry_run defaults true)"
+    nexusDbClean(input: NexusDbCleanInput!): NexusDbCleanResult!
+    "Fleet database health report — scans all running sites"
+    nexusDbReport: NexusDbReportResult!
+  }
 `;

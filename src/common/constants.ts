@@ -137,6 +137,10 @@ export const IPC_CHANNELS = {
   WPE_DIAGNOSE_SITE: `${ADDON_PREFIX}:wpe:diagnose-site`,
   WPE_REMOVE_SITE: `${ADDON_PREFIX}:wpe:remove-site`,
   WPE_PULL_TO_LOCAL: `${ADDON_PREFIX}:wpe:pull-to-local`,
+
+  // Database Scanner
+  DB_SCAN_SITE: `${ADDON_PREFIX}:db:scan`,
+  DB_GET_LAST_SCAN: `${ADDON_PREFIX}:db:get-last-scan`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -188,6 +192,7 @@ export const STORAGE_KEYS = {
   AI_SETUP_STATE: `${ADDON_PREFIX}_ai_setup_state`, // Track which sites have AI setup complete
   SITE_METADATA: `${ADDON_PREFIX}_site_metadata`, // Digital twin: cached site state (WP version, plugins, themes)
   SITE_AI_CONFIG: `${ADDON_PREFIX}_site_ai_config`, // Per-site AI provider configuration
+  DB_SCAN_CACHE: `${ADDON_PREFIX}_db_scan_cache`,
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -432,6 +432,248 @@ dbCommand
   });
 
 dbCommand
+  .command('scan <target>')
+  .description('Scan database for bloat and health issues')
+  .option('--json', 'Output as JSON')
+  .action(async (target, options) => {
+    try {
+      parseTarget(target);
+      const client = getClient({ timeout: 120000 }); // 2 min
+
+      const result = await client.mutate<{ nexusDbScan: any }>(`
+        mutation($target: String!) {
+          nexusDbScan(target: $target) {
+            success
+            error
+            scan {
+              siteId
+              siteName
+              scannedAt
+              wpVersion
+              healthScore
+              isWooCommerceActive
+              revisions { totalCount estimatedSizeBytes }
+              transients { expiredCount totalCount estimatedSizeBytes }
+              orphans { orphanedPostMeta orphanedCommentMeta orphanedUserMeta }
+              draftsAndTrash { autoDraftCount trashedPostCount estimatedSizeBytes }
+              pluginTables { leftoverTables customTables { name totalSizeBytes } }
+              wooCommerce { sessionCount oldLogCount }
+              summary
+              durationMs
+            }
+          }
+        }
+      `, { target });
+
+      const { success, error, scan } = result.nexusDbScan;
+
+      if (!success) {
+        console.error(`\n❌ ${error}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(scan, null, 2));
+        return;
+      }
+
+      const scoreColor = scan.healthScore >= 80 ? '\x1b[32m' // green
+        : scan.healthScore >= 50 ? '\x1b[33m' // yellow
+        : '\x1b[31m'; // red
+      const reset = '\x1b[0m';
+
+      console.log(`\nDatabase Health: ${target}`);
+      console.log(`  Health Score: ${scoreColor}${scan.healthScore}/100${reset}`);
+      console.log(`  WordPress:    ${scan.wpVersion}`);
+      console.log(`  WooCommerce:  ${scan.isWooCommerceActive ? 'active' : 'inactive'}`);
+      console.log('');
+
+      console.log('  Issues:');
+      if (scan.summary.length === 0) {
+        console.log('    ✅ No significant issues found.');
+      } else {
+        for (const bullet of scan.summary) {
+          console.log(`    ⚠️  ${bullet}`);
+        }
+      }
+      console.log('');
+      console.log(`  Scan completed in ${scan.durationMs}ms`);
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+dbCommand
+  .command('clean <target>')
+  .description('Clean database bloat (dry-run by default)')
+  .option('--no-dry-run', 'Actually delete (use with caution!)')
+  .option('--items <items>', 'Comma-separated list of item types to clean')
+  .option('--json', 'Output as JSON')
+  .action(async (target, options) => {
+    try {
+      parseTarget(target);
+
+      const dryRun = options.dryRun !== false;
+      const items = options.items ? options.items.split(',').map((s: string) => s.trim()) : undefined;
+
+      // Confirmation prompt for real deletes
+      if (!dryRun) {
+        const readline = require('readline');
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const answer: string = await new Promise((resolve) => {
+          rl.question(
+            `\n⚠️  This will permanently delete database rows from "${target}".\nAre you sure? [y/N] `,
+            (ans: string) => {
+              rl.close();
+              resolve(ans);
+            },
+          );
+        });
+        if (answer.toLowerCase() !== 'y') {
+          console.log('\nAborted.');
+          return;
+        }
+      }
+
+      const client = getClient({ timeout: 120000 });
+
+      const result = await client.mutate<{ nexusDbClean: any }>(`
+        mutation($input: NexusDbCleanInput!) {
+          nexusDbClean(input: $input) {
+            success
+            error
+            result {
+              siteId
+              siteName
+              dryRun
+              cleanedAt
+              items { type label rowsAffected success error }
+              totalRowsAffected
+              estimatedSpaceFreedBytes
+            }
+          }
+        }
+      `, { input: { target, items, dryRun } });
+
+      const { success, error, result: cleanResult } = result.nexusDbClean;
+
+      if (!success) {
+        console.error(`\n❌ ${error}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(cleanResult, null, 2));
+        return;
+      }
+
+      const mode = cleanResult.dryRun ? '(dry run — no changes made)' : '(changes applied)';
+      console.log(`\nDatabase Clean: ${target} ${mode}`);
+      console.log('');
+
+      for (const item of cleanResult.items) {
+        const icon = item.success ? '✅' : '❌';
+        const count = item.rowsAffected >= 0 ? ` — ${item.rowsAffected.toLocaleString()} rows` : '';
+        console.log(`  ${icon} ${item.label}${count}${item.error ? ` (${item.error})` : ''}`);
+      }
+
+      console.log('');
+      if (cleanResult.dryRun) {
+        console.log(`  Would delete: ${cleanResult.totalRowsAffected.toLocaleString()} rows`);
+        console.log(`  To apply: nexus wp db clean ${target} --no-dry-run`);
+      } else {
+        console.log(`  Deleted: ${cleanResult.totalRowsAffected.toLocaleString()} rows`);
+      }
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+dbCommand
+  .command('report')
+  .description('Fleet database health report for all running sites')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      const client = getClient({ timeout: 300000 }); // 5 min for fleet scan
+
+      const result = await client.mutate<{ nexusDbReport: any }>(`
+        mutation {
+          nexusDbReport {
+            success
+            error
+            scannedAt
+            sitesScanned
+            sitesFailed
+            sites {
+              siteId
+              siteName
+              healthScore
+              wpVersion
+              isWooCommerceActive
+              revisionCount
+              expiredTransients
+              leftoverTables
+              topIssue
+            }
+          }
+        }
+      `);
+
+      const { success, error, ...report } = result.nexusDbReport;
+
+      if (!success) {
+        console.error(`\n❌ ${error}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2));
+        return;
+      }
+
+      console.log(`\nFleet Database Health Report`);
+      console.log(`Sites scanned: ${report.sitesScanned}${report.sitesFailed > 0 ? `, ${report.sitesFailed} failed` : ''}`);
+      console.log('');
+
+      if (!report.sites || report.sites.length === 0) {
+        console.log('  No running sites found.');
+        console.log('');
+        return;
+      }
+
+      const nameWidth = Math.max(15, ...report.sites.map((s: any) => s.siteName.length));
+      console.log('  ' + 'Site'.padEnd(nameWidth) + '  Score  WP Version   Top Issue');
+      console.log('  ' + '-'.repeat(nameWidth + 50));
+
+      for (const site of report.sites) {
+        const scoreColor = site.healthScore >= 80 ? '\x1b[32m'
+          : site.healthScore >= 50 ? '\x1b[33m'
+          : '\x1b[31m';
+        const reset = '\x1b[0m';
+        const score = `${scoreColor}${String(site.healthScore).padEnd(3)}${reset}`;
+        const topIssue = site.topIssue
+          ? (site.topIssue.length > 40 ? site.topIssue.slice(0, 37) + '...' : site.topIssue)
+          : '—';
+        console.log(
+          '  ' + site.siteName.padEnd(nameWidth) + '  ' +
+          score + '/100  ' +
+          (site.wpVersion || '?').padEnd(11) + '  ' +
+          topIssue,
+        );
+      }
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+dbCommand
   .command('search-replace <target> <from> <to>')
   .description('Search and replace in database')
   .option('--dry-run', 'Show what would be changed')

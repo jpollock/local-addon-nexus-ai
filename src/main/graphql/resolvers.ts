@@ -9,6 +9,7 @@
 import type { ToolRegistry } from '../mcp/tool-registry';
 import * as ollamaClient from '../helpers/ollama-client';
 import { setupSiteForAI } from '../mcp/modules/wp-connector/setup-ai';
+import { scanDatabase, cleanDatabase } from '../mcp/modules/db-scanner/db-scanner';
 import { buildCredentialSyncPhp, SUPPORTED_PROVIDERS, PROVIDER_TO_WP_OPTION } from '../mcp/modules/wp-connector/credential-helpers';
 import { switchProviderForSite } from '../mcp/modules/wp-connector/switch-provider';
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
@@ -3258,6 +3259,167 @@ export function createResolvers(context: ResolverContext) {
             error: error.message,
             report: null,
           };
+        }
+      },
+
+      /**
+       * Scan database health for a local WordPress site
+       */
+      nexusDbScan: async (_parent: any, { target }: { target: string }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available', scan: null };
+          }
+
+          const parsed = parseTarget(target);
+          if (parsed.type !== 'local') {
+            return { success: false, error: 'Database scanner only supports local sites', scan: null };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return { success: false, error: `Site not found: ${parsed.siteName}`, scan: null };
+          }
+
+          const status = services.localServices.getSiteStatus(site.id);
+          if (status !== 'running') {
+            return { success: false, error: `Site "${site.name}" is not running. Start it first.`, scan: null };
+          }
+
+          const scan = await scanDatabase(site.id, services);
+
+          // Map to GraphQL-friendly structure (Float fields for large numbers)
+          const scanGql = {
+            ...scan,
+            tables: scan.tables.map((t) => ({
+              ...t,
+              dataSizeBytes: t.dataSizeBytes,
+              indexSizeBytes: t.indexSizeBytes,
+              totalSizeBytes: t.totalSizeBytes,
+            })),
+            pluginTables: {
+              leftoverTables: scan.pluginTables.leftoverTables,
+              customTables: scan.pluginTables.customTables.map((t) => ({
+                ...t,
+                dataSizeBytes: t.dataSizeBytes,
+                indexSizeBytes: t.indexSizeBytes,
+                totalSizeBytes: t.totalSizeBytes,
+              })),
+            },
+          };
+
+          return { success: true, scan: scanGql };
+        } catch (error: any) {
+          return { success: false, error: error.message, scan: null };
+        }
+      },
+
+      /**
+       * Clean database items (dry_run defaults to true)
+       */
+      nexusDbClean: async (_parent: any, { input }: { input: { target: string; items?: string[]; dryRun?: boolean } }) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available', result: null };
+          }
+
+          const parsed = parseTarget(input.target);
+          if (parsed.type !== 'local') {
+            return { success: false, error: 'Database cleaner only supports local sites', result: null };
+          }
+
+          const site = resolveSite(parsed.siteName!, services.siteData);
+          if (!site) {
+            return { success: false, error: `Site not found: ${parsed.siteName}`, result: null };
+          }
+
+          const status = services.localServices.getSiteStatus(site.id);
+          if (status !== 'running') {
+            return { success: false, error: `Site "${site.name}" is not running. Start it first.`, result: null };
+          }
+
+          const dryRun = input.dryRun !== false; // Default true
+          const items = input.items ?? [
+            'post_revisions',
+            'expired_transients',
+            'orphaned_post_meta',
+            'orphaned_comment_meta',
+            'auto_drafts',
+            'trashed_posts',
+          ];
+
+          const cleanResult = await cleanDatabase(site.id, items, dryRun, services);
+
+          return { success: true, result: cleanResult };
+        } catch (error: any) {
+          return { success: false, error: error.message, result: null };
+        }
+      },
+
+      /**
+       * Fleet database health report — scans all running sites
+       */
+      nexusDbReport: async (_parent: any) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available', sites: null };
+          }
+
+          const allSites = services.siteData.getSites();
+          const statuses = services.localServices.getAllSiteStatuses() || {};
+          const runningSiteIds = Object.keys(allSites).filter((id) => statuses[id] === 'running');
+
+          if (runningSiteIds.length === 0) {
+            return {
+              success: true,
+              scannedAt: Date.now(),
+              sitesScanned: 0,
+              sitesFailed: 0,
+              sites: [],
+            };
+          }
+
+          const scanResults = await Promise.allSettled(
+            runningSiteIds.map((id) => scanDatabase(id, services)),
+          );
+
+          const sites: any[] = [];
+          let sitesFailed = 0;
+
+          for (let i = 0; i < scanResults.length; i++) {
+            const r = scanResults[i];
+            if (r.status === 'fulfilled') {
+              const s = r.value;
+              sites.push({
+                siteId: s.siteId,
+                siteName: s.siteName,
+                healthScore: s.healthScore,
+                wpVersion: s.wpVersion,
+                isWooCommerceActive: s.isWooCommerceActive,
+                revisionCount: s.revisions.totalCount,
+                expiredTransients: s.transients.expiredCount,
+                leftoverTables: s.pluginTables.leftoverTables.length,
+                topIssue: s.summary[0] ?? null,
+                summary: s.summary,
+                durationMs: s.durationMs,
+              });
+            } else {
+              sitesFailed++;
+            }
+          }
+
+          // Sort by healthScore ascending (worst first)
+          sites.sort((a, b) => a.healthScore - b.healthScore);
+
+          return {
+            success: true,
+            scannedAt: Date.now(),
+            sitesScanned: sites.length,
+            sitesFailed,
+            sites,
+          };
+        } catch (error: any) {
+          return { success: false, error: error.message, sites: null };
         }
       },
     },

@@ -61,12 +61,19 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   local_delete_site: 3,
   local_wpe_push: 3,
   wp_eval: 3,
+  clean_database_items: 3,
+
+  // DB Scanner — Tier 1 (read-only)
+  scan_database_health: 1,
+  get_database_recommendations: 1,
+  fleet_database_health: 1,
 };
 
 export const CONFIRMATION_MESSAGES: Record<string, string> = {
   local_delete_site: 'This will permanently delete the site and all its files.',
   local_wpe_push: 'This will overwrite the remote WP Engine environment with local site data.',
   wp_eval: 'This will execute arbitrary PHP code on the WordPress site.',
+  clean_database_items: 'This will permanently delete database rows. Always run with dry_run=true first.',
 };
 
 export const PRE_CHECKS: Record<string, string[]> = {
@@ -81,6 +88,11 @@ export const PRE_CHECKS: Record<string, string[]> = {
   wp_eval: [
     'Review the PHP code carefully before execution',
     'Ensure the code does not perform destructive database operations',
+  ],
+  clean_database_items: [
+    'Run scan_database_health first',
+    'Run clean_database_items with dry_run=true to preview',
+    'Ensure a database backup exists',
   ],
 };
 

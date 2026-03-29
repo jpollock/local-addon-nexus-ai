@@ -440,3 +440,84 @@ export interface AiProxyInfo {
   toolCapableModels: string[];
   toolCount: number;
 }
+
+// ---------------------------------------------------------------------------
+// Database Scanner
+// ---------------------------------------------------------------------------
+
+export interface DbTableInfo {
+  name: string;
+  rows: number;
+  dataSizeBytes: number;
+  indexSizeBytes: number;
+  totalSizeBytes: number;
+}
+
+export interface DbRevisionInfo {
+  totalCount: number;
+  estimatedSizeBytes: number;
+  topPosts: Array<{ postId: number; postTitle: string; revisionCount: number }>;
+}
+
+export interface DbTransientInfo {
+  expiredCount: number;
+  totalCount: number;
+  estimatedSizeBytes: number;
+}
+
+export interface DbOrphanInfo {
+  orphanedPostMeta: number;
+  orphanedCommentMeta: number;
+  orphanedUserMeta: number;
+}
+
+export interface DbDraftTrashInfo {
+  autoDraftCount: number;
+  trashedPostCount: number;
+  estimatedSizeBytes: number;
+}
+
+export interface DbPluginTableInfo {
+  leftoverTables: string[];
+  customTables: DbTableInfo[];
+}
+
+export interface DbWooCommerceInfo {
+  sessionCount: number;
+  estimatedSessionSizeBytes: number;
+  oldLogCount: number;
+}
+
+export interface DbScanResult {
+  siteId: string;
+  siteName: string;
+  scannedAt: number;
+  wpVersion: string;
+  isWooCommerceActive: boolean;
+  tables: DbTableInfo[];
+  revisions: DbRevisionInfo;
+  transients: DbTransientInfo;
+  orphans: DbOrphanInfo;
+  draftsAndTrash: DbDraftTrashInfo;
+  pluginTables: DbPluginTableInfo;
+  wooCommerce: DbWooCommerceInfo | null;
+  healthScore: number;
+  summary: string[];
+  durationMs: number;
+}
+
+export interface DbCleanResult {
+  siteId: string;
+  siteName: string;
+  dryRun: boolean;
+  cleanedAt: number;
+  items: Array<{
+    type: string;
+    label: string;
+    rowsAffected: number;
+    success: boolean;
+    error?: string;
+  }>;
+  totalRowsAffected: number;
+  estimatedSpaceFreedBytes: number;
+}
