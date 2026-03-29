@@ -1,7 +1,7 @@
 {
   "name": "@local-labs-jpollock/local-addon-nexus-ai",
   "productName": "Nexus AI",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "main": "lib/main.js",
   "renderer": "lib/renderer.js",
   "bin": {
@@ -12,6 +12,14 @@
     "type": "addon",
     "category": "developer-tools"
   },
+  "files": [
+    "bin",
+    "lib",
+    "models",
+    "wp-plugins",
+    "package.json",
+    "README.md"
+  ],
   "scripts": {
     "build": "npm run clean && npm run compile && npm run create-entry-points",
     "compile": "tsc -p .",

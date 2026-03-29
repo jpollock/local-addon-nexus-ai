@@ -168,20 +168,24 @@ function findBundledAddonPath(): string | null {
 
 /**
  * Find the local development addon path (for dev mode)
- * Looks for the addon relative to the CLI package in monorepo
+ * Only activates when running from a git repo — never matches an installed npm package.
  */
 function findDevAddonPath(): string | null {
-  // Check if we're in the monorepo structure
-  // Works from both lib/cli/bootstrap (compiled) and src/cli/bootstrap (ts-node)
-  const cliDir = __dirname;
-  const addonPath = path.resolve(cliDir, '..', '..', '..', 'src', 'main');
+  // From lib/cli/bootstrap/ (compiled) or src/cli/bootstrap/ (ts-node), go up to project root
+  const projectRoot = path.resolve(__dirname, '..', '..', '..');
 
-  if (fs.existsSync(path.join(addonPath, 'index.ts'))) {
-    // Development mode - use the parent directory as addon root
-    return path.resolve(addonPath, '..');
+  // Require .git to exist — installed npm packages never have .git
+  if (!fs.existsSync(path.join(projectRoot, '.git'))) {
+    return null;
   }
 
-  return null;
+  // Verify this looks like the Nexus AI dev repo
+  const srcMain = path.join(projectRoot, 'src', 'main', 'index.ts');
+  if (!fs.existsSync(srcMain)) {
+    return null;
+  }
+
+  return projectRoot;
 }
 
 /**
