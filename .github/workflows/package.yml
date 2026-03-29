@@ -177,6 +177,15 @@ jobs:
 
           echo "✅ All tarballs uploaded to releases.elasticapi.io/nexus-ai/v${VERSION}/"
 
+          # Update latest.json so nexus update can check for new versions
+          echo "{\"version\":\"${VERSION}\"}" > /tmp/latest.json
+          aws s3 cp /tmp/latest.json \
+            "s3://nexus-ai-releases/nexus-ai/latest.json" \
+            --endpoint-url "$ENDPOINT" \
+            --region auto \
+            --cache-control "no-cache, max-age=0"
+          echo "✅ latest.json updated to v${VERSION}"
+
   publish-npm:
     needs: release
     runs-on: ubuntu-latest

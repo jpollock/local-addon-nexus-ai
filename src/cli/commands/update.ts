@@ -34,7 +34,7 @@ export const updateCommand = new Command('update')
 
     try {
       // Run npm update
-      execSync(`npm update -g local-addon-nexus-ai`, { stdio: 'inherit' });
+      execSync(`npm update -g @local-labs-jpollock/local-addon-nexus-ai`, { stdio: 'inherit' });
       console.log('✅ CLI updated successfully');
 
       // Check new version

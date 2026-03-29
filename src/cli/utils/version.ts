@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-const PACKAGE_NAME = 'local-addon-nexus-ai';
+const LATEST_VERSION_URL = 'https://releases.elasticapi.io/nexus-ai/latest.json';
 const UPDATE_CHECK_FILE = path.join(os.homedir(), '.nexus-update-check');
 const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -45,7 +45,7 @@ function writeUpdateCache(cache: UpdateCheckCache): void {
  */
 export async function fetchLatestVersion(): Promise<string | null> {
   try {
-    const response = await fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/latest`, {
+    const response = await fetch(LATEST_VERSION_URL, {
       headers: { Accept: 'application/json' },
     });
     if (response.ok) {
