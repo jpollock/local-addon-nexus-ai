@@ -110,15 +110,16 @@ export function computeHealthScore(result: {
  * Detect tables that are not core WP tables AND have no matching active plugin slug.
  * Exported for unit testing.
  */
-export function detectLeftoverTables(tableNames: string[], activeSlugs: string[]): string[] {
+export function detectLeftoverTables(tableNames: string[], activeSlugs: string[], tablePrefix = 'wp_'): string[] {
   const leftover: string[] = [];
+  const coreWithPrefix = new Set([...CORE_WP_TABLES].map((t) => t.replace('wp_', tablePrefix)));
 
   for (const table of tableNames) {
-    // Skip core WP tables
-    if (CORE_WP_TABLES.has(table)) continue;
+    // Skip core WP tables (prefix-aware)
+    if (coreWithPrefix.has(table)) continue;
 
-    // Strip wp_ prefix for matching
-    const withoutPrefix = table.startsWith('wp_') ? table.slice(3) : table;
+    // Strip actual prefix for matching
+    const withoutPrefix = table.startsWith(tablePrefix) ? table.slice(tablePrefix.length) : table;
 
     // Check if any active plugin slug appears in the table name
     const hasMatch = activeSlugs.some((slug) => {
@@ -237,17 +238,29 @@ export async function scanDatabase(siteId: string, services: NexusServices): Pro
     // Non-fatal
   }
 
-  // SQL queries
-  const tableSql = `SELECT TABLE_NAME as name, TABLE_ROWS as rows, DATA_LENGTH as data_length, INDEX_LENGTH as index_length FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'wp_%' ORDER BY (DATA_LENGTH + INDEX_LENGTH) DESC`;
-  const revCountSql = `SELECT COUNT(*) as cnt FROM wp_posts WHERE post_type = 'revision'`;
-  const revSizeSql = `SELECT COALESCE(SUM(LENGTH(post_content)), 0) as total_bytes FROM wp_posts WHERE post_type = 'revision'`;
-  const revTopSql = `SELECT p.post_parent as postId, SUBSTRING(parent.post_title, 1, 60) as postTitle, COUNT(*) as revisionCount FROM wp_posts p LEFT JOIN wp_posts parent ON p.post_parent = parent.ID WHERE p.post_type = 'revision' GROUP BY p.post_parent ORDER BY revisionCount DESC LIMIT 5`;
-  const transExpiredSql = `SELECT COUNT(*) as cnt FROM wp_options WHERE option_name LIKE '_transient_timeout_%' AND CAST(option_value AS UNSIGNED) < UNIX_TIMESTAMP()`;
-  const transTotalSql = `SELECT COUNT(*) as cnt FROM wp_options WHERE option_name LIKE '_transient_%' AND option_name NOT LIKE '_transient_timeout_%'`;
-  const transSizeSql = `SELECT COALESCE(SUM(LENGTH(option_value)), 0) as total_bytes FROM wp_options WHERE option_name LIKE '_transient_%'`;
-  const orphanPostMetaSql = `SELECT COUNT(*) as cnt FROM wp_postmeta pm LEFT JOIN wp_posts p ON pm.post_id = p.ID WHERE p.ID IS NULL`;
-  const orphanCommentMetaSql = `SELECT COUNT(*) as cnt FROM wp_commentmeta cm LEFT JOIN wp_comments c ON cm.comment_id = c.comment_ID WHERE c.comment_ID IS NULL`;
-  const draftTrashSql = `SELECT post_status, COUNT(*) as cnt FROM wp_posts WHERE post_status IN ('auto-draft', 'trash') GROUP BY post_status`;
+  // Get actual table prefix (sites may use non-default prefix)
+  let tablePrefix = 'wp_';
+  try {
+    const prefixResult = await ls.wpCliRun(siteId, ['config', 'get', 'table_prefix']);
+    if (prefixResult.success && prefixResult.stdout?.trim()) {
+      tablePrefix = prefixResult.stdout.trim();
+    }
+  } catch {
+    // Fall back to wp_
+  }
+  const p = tablePrefix; // shorthand
+
+  // SQL queries (using actual table prefix)
+  const tableSql = `SELECT TABLE_NAME as name, TABLE_ROWS as rows, DATA_LENGTH as data_length, INDEX_LENGTH as index_length FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE '${p}%' ORDER BY (DATA_LENGTH + INDEX_LENGTH) DESC`;
+  const revCountSql = `SELECT COUNT(*) as cnt FROM ${p}posts WHERE post_type = 'revision'`;
+  const revSizeSql = `SELECT COALESCE(SUM(LENGTH(post_content)), 0) as total_bytes FROM ${p}posts WHERE post_type = 'revision'`;
+  const revTopSql = `SELECT p.post_parent as postId, SUBSTRING(parent.post_title, 1, 60) as postTitle, COUNT(*) as revisionCount FROM ${p}posts p LEFT JOIN ${p}posts parent ON p.post_parent = parent.ID WHERE p.post_type = 'revision' GROUP BY p.post_parent ORDER BY revisionCount DESC LIMIT 5`;
+  const transExpiredSql = `SELECT COUNT(*) as cnt FROM ${p}options WHERE option_name LIKE '_transient_timeout_%' AND CAST(option_value AS UNSIGNED) < UNIX_TIMESTAMP()`;
+  const transTotalSql = `SELECT COUNT(*) as cnt FROM ${p}options WHERE option_name LIKE '_transient_%' AND option_name NOT LIKE '_transient_timeout_%'`;
+  const transSizeSql = `SELECT COALESCE(SUM(LENGTH(option_value)), 0) as total_bytes FROM ${p}options WHERE option_name LIKE '_transient_%'`;
+  const orphanPostMetaSql = `SELECT COUNT(*) as cnt FROM ${p}postmeta pm LEFT JOIN ${p}posts po ON pm.post_id = po.ID WHERE po.ID IS NULL`;
+  const orphanCommentMetaSql = `SELECT COUNT(*) as cnt FROM ${p}commentmeta cm LEFT JOIN ${p}comments c ON cm.comment_id = c.comment_ID WHERE c.comment_ID IS NULL`;
+  const draftTrashSql = `SELECT post_status, COUNT(*) as cnt FROM ${p}posts WHERE post_status IN ('auto-draft', 'trash') GROUP BY post_status`;
 
   // Run all in parallel
   const [
@@ -350,18 +363,21 @@ export async function scanDatabase(siteId: string, services: NexusServices): Pro
     }
   }
 
-  // Detect leftover tables
+  // Detect leftover tables (compare against prefix-aware core table names)
+  const coreTablesWithPrefix = new Set(
+    [...CORE_WP_TABLES].map((t) => t.replace('wp_', p))
+  );
   const tableNames = tables.map((t) => t.name);
-  const leftoverTables = detectLeftoverTables(tableNames, activeSlugs);
-  const customTables = tables.filter((t) => !CORE_WP_TABLES.has(t.name));
+  const leftoverTables = detectLeftoverTables(tableNames, activeSlugs, p);
+  const customTables = tables.filter((t) => !coreTablesWithPrefix.has(t.name));
 
   // WooCommerce queries (if active)
   let wooCommerce = null;
   if (isWooCommerceActive) {
     try {
       const [wcSessionsResult, wcLogsResult] = await Promise.allSettled([
-        runSql(siteId, `SELECT COUNT(*) as cnt, COALESCE(SUM(LENGTH(session_value)), 0) as total_bytes FROM wp_woocommerce_sessions`, services),
-        runSql(siteId, `SELECT COUNT(*) as cnt FROM wp_wc_log WHERE timestamp < DATE_SUB(NOW(), INTERVAL 30 DAY)`, services),
+        runSql(siteId, `SELECT COUNT(*) as cnt, COALESCE(SUM(LENGTH(session_value)), 0) as total_bytes FROM ${p}woocommerce_sessions`, services),
+        runSql(siteId, `SELECT COUNT(*) as cnt FROM ${p}wc_log WHERE timestamp < DATE_SUB(NOW(), INTERVAL 30 DAY)`, services),
       ]);
 
       const sessionCount = wcSessionsResult.status === 'fulfilled'
@@ -449,6 +465,7 @@ async function cleanItem(
   dryRun: boolean,
   siteId: string,
   services: NexusServices,
+  p: string, // table prefix e.g. 'wp_'
 ): Promise<{ rowsAffected: number; success: boolean; error?: string }> {
   const ls = services.localServices!;
 
@@ -466,14 +483,14 @@ async function cleanItem(
     if (dryRun) {
       // Dry-run: count what would be affected
       const countSqls: Record<DbCleanItemType, string> = {
-        post_revisions: `SELECT COUNT(*) as cnt FROM wp_posts WHERE post_type = 'revision'`,
-        expired_transients: `SELECT COUNT(*) as cnt FROM wp_options WHERE option_name LIKE '_transient_timeout_%' AND CAST(option_value AS UNSIGNED) < UNIX_TIMESTAMP()`,
-        orphaned_post_meta: `SELECT COUNT(*) as cnt FROM wp_postmeta pm LEFT JOIN wp_posts p ON pm.post_id = p.ID WHERE p.ID IS NULL`,
-        orphaned_comment_meta: `SELECT COUNT(*) as cnt FROM wp_commentmeta cm LEFT JOIN wp_comments c ON cm.comment_id = c.comment_ID WHERE c.comment_ID IS NULL`,
-        auto_drafts: `SELECT COUNT(*) as cnt FROM wp_posts WHERE post_status = 'auto-draft'`,
-        trashed_posts: `SELECT COUNT(*) as cnt FROM wp_posts WHERE post_status = 'trash'`,
-        wc_sessions: `SELECT COUNT(*) as cnt FROM wp_woocommerce_sessions WHERE session_expiry < UNIX_TIMESTAMP()`,
-        wc_old_logs: `SELECT COUNT(*) as cnt FROM wp_wc_log WHERE timestamp < DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+        post_revisions: `SELECT COUNT(*) as cnt FROM ${p}posts WHERE post_type = 'revision'`,
+        expired_transients: `SELECT COUNT(*) as cnt FROM ${p}options WHERE option_name LIKE '_transient_timeout_%' AND CAST(option_value AS UNSIGNED) < UNIX_TIMESTAMP()`,
+        orphaned_post_meta: `SELECT COUNT(*) as cnt FROM ${p}postmeta pm LEFT JOIN ${p}posts po ON pm.post_id = po.ID WHERE po.ID IS NULL`,
+        orphaned_comment_meta: `SELECT COUNT(*) as cnt FROM ${p}commentmeta cm LEFT JOIN ${p}comments c ON cm.comment_id = c.comment_ID WHERE c.comment_ID IS NULL`,
+        auto_drafts: `SELECT COUNT(*) as cnt FROM ${p}posts WHERE post_status = 'auto-draft'`,
+        trashed_posts: `SELECT COUNT(*) as cnt FROM ${p}posts WHERE post_status = 'trash'`,
+        wc_sessions: `SELECT COUNT(*) as cnt FROM ${p}woocommerce_sessions WHERE session_expiry < UNIX_TIMESTAMP()`,
+        wc_old_logs: `SELECT COUNT(*) as cnt FROM ${p}wc_log WHERE timestamp < DATE_SUB(NOW(), INTERVAL 30 DAY)`,
       };
       const cnt = await querySql(countSqls[type]);
       return { rowsAffected: cnt, success: true };
@@ -481,45 +498,43 @@ async function cleanItem(
       // Real delete
       switch (type) {
         case 'post_revisions': {
-          await execSql(`DELETE FROM wp_posts WHERE post_type = 'revision'`);
-          // Also clean up orphaned postmeta for the deleted revisions
-          await execSql(`DELETE pm FROM wp_postmeta pm LEFT JOIN wp_posts p ON pm.post_id = p.ID WHERE p.ID IS NULL`).catch(() => {});
-          return { rowsAffected: -1, success: true }; // rows affected not easily returned from DELETE
+          await execSql(`DELETE FROM ${p}posts WHERE post_type = 'revision'`);
+          await execSql(`DELETE pm FROM ${p}postmeta pm LEFT JOIN ${p}posts po ON pm.post_id = po.ID WHERE po.ID IS NULL`).catch(() => {});
+          return { rowsAffected: -1, success: true };
         }
         case 'expired_transients': {
-          // Get the names first, then delete both timeout and value keys
-          const rows = await runSql(siteId, `SELECT option_name FROM wp_options WHERE option_name LIKE '_transient_timeout_%' AND CAST(option_value AS UNSIGNED) < UNIX_TIMESTAMP() LIMIT 5000`, services);
+          const rows = await runSql(siteId, `SELECT option_name FROM ${p}options WHERE option_name LIKE '_transient_timeout_%' AND CAST(option_value AS UNSIGNED) < UNIX_TIMESTAMP() LIMIT 5000`, services);
           let count = 0;
           for (const row of rows) {
             const timeoutKey = row.option_name;
             const valueKey = timeoutKey.replace('_transient_timeout_', '_transient_');
-            await execSql(`DELETE FROM wp_options WHERE option_name IN ('${timeoutKey}', '${valueKey}')`);
+            await execSql(`DELETE FROM ${p}options WHERE option_name IN ('${timeoutKey}', '${valueKey}')`);
             count++;
           }
           return { rowsAffected: count, success: true };
         }
         case 'orphaned_post_meta': {
-          await execSql(`DELETE pm FROM wp_postmeta pm LEFT JOIN wp_posts p ON pm.post_id = p.ID WHERE p.ID IS NULL`);
+          await execSql(`DELETE pm FROM ${p}postmeta pm LEFT JOIN ${p}posts po ON pm.post_id = po.ID WHERE po.ID IS NULL`);
           return { rowsAffected: -1, success: true };
         }
         case 'orphaned_comment_meta': {
-          await execSql(`DELETE cm FROM wp_commentmeta cm LEFT JOIN wp_comments c ON cm.comment_id = c.comment_ID WHERE c.comment_ID IS NULL`);
+          await execSql(`DELETE cm FROM ${p}commentmeta cm LEFT JOIN ${p}comments c ON cm.comment_id = c.comment_ID WHERE c.comment_ID IS NULL`);
           return { rowsAffected: -1, success: true };
         }
         case 'auto_drafts': {
-          await execSql(`DELETE FROM wp_posts WHERE post_status = 'auto-draft'`);
+          await execSql(`DELETE FROM ${p}posts WHERE post_status = 'auto-draft'`);
           return { rowsAffected: -1, success: true };
         }
         case 'trashed_posts': {
-          await execSql(`DELETE FROM wp_posts WHERE post_status = 'trash'`);
+          await execSql(`DELETE FROM ${p}posts WHERE post_status = 'trash'`);
           return { rowsAffected: -1, success: true };
         }
         case 'wc_sessions': {
-          await execSql(`DELETE FROM wp_woocommerce_sessions WHERE session_expiry < UNIX_TIMESTAMP()`);
+          await execSql(`DELETE FROM ${p}woocommerce_sessions WHERE session_expiry < UNIX_TIMESTAMP()`);
           return { rowsAffected: -1, success: true };
         }
         case 'wc_old_logs': {
-          await execSql(`DELETE FROM wp_wc_log WHERE timestamp < DATE_SUB(NOW(), INTERVAL 30 DAY)`);
+          await execSql(`DELETE FROM ${p}wc_log WHERE timestamp < DATE_SUB(NOW(), INTERVAL 30 DAY)`);
           return { rowsAffected: -1, success: true };
         }
         default:
@@ -544,9 +559,18 @@ export async function cleanDatabase(
   const site = services.siteData.getSite(siteId);
   if (!site) throw new Error(`Site "${siteId}" not found`);
 
+  // Get table prefix
+  let tablePrefix = 'wp_';
+  try {
+    const prefixResult = await services.localServices!.wpCliRun(siteId, ['config', 'get', 'table_prefix']);
+    if (prefixResult.success && prefixResult.stdout?.trim()) {
+      tablePrefix = prefixResult.stdout.trim();
+    }
+  } catch { /* fall back to wp_ */ }
+
   const results = await Promise.allSettled(
     items.map(async (type) => {
-      const itemResult = await cleanItem(type as DbCleanItemType, dryRun, siteId, services);
+      const itemResult = await cleanItem(type as DbCleanItemType, dryRun, siteId, services, tablePrefix);
       return {
         type,
         label: CLEAN_LABELS[type as DbCleanItemType] ?? type,
