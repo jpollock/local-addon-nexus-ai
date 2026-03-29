@@ -6,7 +6,33 @@ on:
   workflow_dispatch:
 
 jobs:
+  download-model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Download ONNX model
+        run: npm run download-model
+
+      - name: Upload model as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: onnx-model
+          path: models
+          retention-days: 1
+
   package:
+    needs: download-model
     strategy:
       matrix:
         include:
@@ -38,16 +64,11 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Cache ONNX model
-        id: model-cache
-        uses: actions/cache@v4
+      - name: Download ONNX model artifact
+        uses: actions/download-artifact@v4
         with:
+          name: onnx-model
           path: models
-          key: onnx-model-${{ hashFiles('scripts/download-model.js') }}
-
-      - name: Download ONNX model
-        if: steps.model-cache.outputs.cache-hit != 'true'
-        run: npm run download-model
 
       - name: Build
         run: npm run build
@@ -144,16 +165,11 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Cache ONNX model
-        id: model-cache
-        uses: actions/cache@v4
+      - name: Download ONNX model artifact
+        uses: actions/download-artifact@v4
         with:
+          name: onnx-model
           path: models
-          key: onnx-model-${{ hashFiles('scripts/download-model.js') }}
-
-      - name: Download ONNX model
-        if: steps.model-cache.outputs.cache-hit != 'true'
-        run: npm run download-model
 
       - name: Build
         run: npm run build
