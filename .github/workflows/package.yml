@@ -75,20 +75,17 @@ jobs:
         with:
           path: artifacts
 
-      - name: Create Release
+      - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Extract version from tag (v0.1.0 -> 0.1.0)
           VERSION=${GITHUB_REF#refs/tags/v}
 
-          # Create release
           gh release create $GITHUB_REF_NAME \
             --repo ${{ github.repository }} \
             --title "Nexus AI v${VERSION}" \
             --generate-notes
 
-          # Upload all platform tarballs
           for artifact_dir in artifacts/*/; do
             for tarball in "$artifact_dir"*.tgz; do
               if [ -f "$tarball" ]; then
@@ -98,6 +95,33 @@ jobs:
               fi
             done
           done
+
+      - name: Upload to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          # Install AWS CLI if needed
+          aws --version 2>/dev/null || pip install awscli --quiet
+
+          for artifact_dir in artifacts/*/; do
+            for tarball in "$artifact_dir"*.tgz; do
+              if [ -f "$tarball" ]; then
+                FILENAME=$(basename "$tarball")
+                echo "Uploading $FILENAME to R2..."
+                aws s3 cp "$tarball" \
+                  "s3://nexus-ai-releases/nexus-ai/v${VERSION}/${FILENAME}" \
+                  --endpoint-url "$ENDPOINT" \
+                  --region auto
+              fi
+            done
+          done
+
+          echo "✅ All tarballs uploaded to releases.elasticapi.io/nexus-ai/v${VERSION}/"
 
   publish-npm:
     needs: release

@@ -9,7 +9,7 @@ import * as readline from 'readline';
 import { getLocalPaths, ADDON_PACKAGE_NAME, ADDON_DIR_NAME } from './paths';
 import { isLocalRunning, stopLocal, restartLocal } from './process';
 import { detectPlatform, getPlatformDisplayName } from './platform';
-import { downloadFromGitHub, formatBytes } from './downloader';
+import { downloadAddon, formatBytes } from './downloader';
 import { extractTarball, verifyExtractedAddon } from './extractor';
 import { getCurrentVersion } from '../utils/version';
 
@@ -239,21 +239,20 @@ async function autoDownloadAddon(
 
     // Download to temp directory
     const tmpPath = path.join(os.tmpdir(), 'nexus-ai-addon.tgz');
+    const version = getCurrentVersion();
     log(`Downloading ${platform.assetName}...`);
 
-    let lastPercent = 0;
-    await downloadFromGitHub({
-      owner: 'jpollock',
-      repo: 'local-addon-nexus-ai',
+    await downloadAddon({
       assetName: platform.assetName,
+      version,
       destPath: tmpPath,
       onProgress: (percent, downloaded, total) => {
-        // Show progress every 10%
-        if (percent >= lastPercent + 10 || percent === 100) {
+        if (total > 0) {
           log(`Downloading... ${percent}% (${formatBytes(downloaded)} / ${formatBytes(total)})`);
-          lastPercent = percent;
+        } else {
+          log(`Downloading... ${formatBytes(downloaded)}`);
         }
-      }
+      },
     });
 
     log('Download complete. Installing...');

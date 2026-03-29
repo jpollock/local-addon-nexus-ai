@@ -1,5 +1,9 @@
 /**
- * GitHub release asset downloader
+ * Release asset downloader — Cloudflare R2
+ *
+ * Tarballs are hosted at releases.elasticapi.io/nexus-ai/v{version}/{assetName}
+ * No authentication required — public bucket with custom domain.
+ * URL is constructed directly from CLI version + platform, no API call needed.
  */
 
 import * as fs from 'fs';
@@ -7,144 +11,26 @@ import * as https from 'https';
 import { createWriteStream } from 'fs';
 import { IncomingMessage } from 'http';
 
+const RELEASES_BASE_URL = 'https://releases.elasticapi.io/nexus-ai';
+
 export interface DownloadOptions {
-  owner: string;          // 'your-org'
-  repo: string;           // 'local-addon-nexus-ai'
-  assetName: string;      // 'nexus-ai-darwin-arm64-0.1.0.tgz'
-  version?: string;       // 'v0.1.0' (optional, defaults to latest)
+  assetName: string;      // 'nexus-ai-darwin-arm64-0.1.5.tgz'
+  version: string;        // '0.1.5' (without 'v' prefix)
   destPath: string;       // '/tmp/nexus-ai-addon.tgz'
   onProgress?: (percent: number, downloaded: number, total: number) => void;
 }
 
-export interface GitHubRelease {
-  tag_name: string;
-  name: string;
-  assets: Array<{
-    name: string;
-    browser_download_url: string;
-    size: number;
-  }>;
-}
-
 /**
- * Download addon from GitHub Releases
+ * Download addon tarball from Cloudflare R2
  */
-export async function downloadFromGitHub(options: DownloadOptions): Promise<string> {
-  const { owner, repo, assetName, version, destPath, onProgress } = options;
+export async function downloadAddon(options: DownloadOptions): Promise<string> {
+  const { assetName, version, destPath, onProgress } = options;
 
-  // Get release (specific version or latest)
-  const release = await (version
-    ? getRelease(owner, repo, version)
-    : getLatestRelease(owner, repo)
-  );
+  const url = `${RELEASES_BASE_URL}/v${version}/${assetName}`;
 
-  // Find asset by name
-  const asset = release.assets.find(a => a.name === assetName);
-  if (!asset) {
-    throw new Error(
-      `Asset not found: ${assetName}\n` +
-      `Available assets: ${release.assets.map(a => a.name).join(', ')}`
-    );
-  }
-
-  // Download asset
-  await downloadFile(asset.browser_download_url, destPath, asset.size, onProgress);
+  await downloadFile(url, destPath, 0, onProgress);
 
   return destPath;
-}
-
-/**
- * Get specific release by tag
- */
-async function getRelease(owner: string, repo: string, tag: string): Promise<GitHubRelease> {
-  const url = `https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`;
-
-  try {
-    return await fetchJson(url);
-  } catch (error: any) {
-    if (error.statusCode === 404) {
-      throw new Error(
-        `Release not found: ${tag}\n` +
-        `Check https://github.com/${owner}/${repo}/releases`
-      );
-    }
-    throw error;
-  }
-}
-
-/**
- * Get latest release
- */
-async function getLatestRelease(owner: string, repo: string): Promise<GitHubRelease> {
-  const url = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
-
-  try {
-    return await fetchJson(url);
-  } catch (error: any) {
-    if (error.statusCode === 404) {
-      throw new Error(
-        `No releases found for ${owner}/${repo}\n` +
-        `Check https://github.com/${owner}/${repo}/releases`
-      );
-    }
-    throw error;
-  }
-}
-
-/**
- * Fetch JSON from GitHub API
- */
-async function fetchJson(url: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, {
-      headers: {
-        'User-Agent': 'nexus-ai-cli',
-        'Accept': 'application/vnd.github.v3+json'
-      }
-    }, (res: IncomingMessage) => {
-      // Handle rate limiting
-      if (res.statusCode === 403) {
-        const resetTime = res.headers['x-ratelimit-reset'];
-        const resetDate = resetTime ? new Date(parseInt(resetTime as string) * 1000) : null;
-        reject(new Error(
-          `GitHub API rate limit exceeded\n` +
-          (resetDate ? `Resets at: ${resetDate.toLocaleString()}\n` : '') +
-          `Try again later or install manually`
-        ));
-        return;
-      }
-
-      // Handle errors
-      if (res.statusCode !== 200) {
-        const error: any = new Error(`HTTP ${res.statusCode}`);
-        error.statusCode = res.statusCode;
-        reject(error);
-        return;
-      }
-
-      // Collect response
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (parseError) {
-          reject(new Error(`Failed to parse GitHub API response: ${parseError}`));
-        }
-      });
-    });
-
-    req.on('error', (error: any) => {
-      if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-        reject(new Error(
-          `No internet connection\n` +
-          `Please check your network and try again`
-        ));
-      } else {
-        reject(error);
-      }
-    });
-  });
 }
 
 /**
