@@ -48,7 +48,22 @@ function readConfig(): TelemetryConfig {
       if (raw.installationId && raw.secretKey) return raw;
     }
   } catch { /* corrupted — fall through */ }
-  return {};
+
+  // No valid config — generate and persist so same IDs are used every time
+  const fresh: TelemetryConfig = {
+    installationId: crypto.randomUUID(),
+    secretKey: crypto.randomBytes(32).toString('base64'),
+    telemetry: { enabled: true },
+  };
+  try {
+    const dir = path.dirname(CONFIG_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const tmp = `${CONFIG_PATH}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(fresh, null, 2), 'utf-8');
+    fs.chmodSync(tmp, 0o600);
+    fs.renameSync(tmp, CONFIG_PATH);
+  } catch { /* best-effort */ }
+  return fresh;
 }
 
 function isEnabled(): boolean {
