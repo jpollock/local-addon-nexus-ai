@@ -206,10 +206,15 @@ function buildSummary(result: Partial<DbScanResult> & {
 // ---------------------------------------------------------------------------
 
 async function runSql(siteId: string, sql: string, services: NexusServices): Promise<any[]> {
-  const result = await services.localServices!.wpCliRun(siteId, ['db', 'query', sql, '--format=json']);
+  // Use wp eval + $wpdb->get_results() for reliable JSON output.
+  // wp db query --format=json is not supported by WP-CLI (it's a mysql wrapper).
+  // Base64-encode the SQL to avoid quoting/escaping issues.
+  const b64 = Buffer.from(sql).toString('base64');
+  const php = `global $wpdb; $r=$wpdb->get_results(base64_decode('${b64}'),ARRAY_A); echo json_encode($r?$r:[]);`;
+  const result = await services.localServices!.wpCliRun(siteId, ['eval', php]);
   if (!result.success) return [];
   try {
-    return JSON.parse(result.stdout || '[]');
+    return JSON.parse((result.stdout ?? '').trim() || '[]');
   } catch {
     return [];
   }
@@ -475,7 +480,9 @@ async function cleanItem(
   };
 
   const execSql = async (sql: string) => {
-    const result = await ls.wpCliRun(siteId, ['db', 'query', sql]);
+    const b64 = Buffer.from(sql).toString('base64');
+    const php = `global $wpdb; $wpdb->query(base64_decode('${b64}'));`;
+    const result = await ls.wpCliRun(siteId, ['eval', php]);
     return result.success;
   };
 

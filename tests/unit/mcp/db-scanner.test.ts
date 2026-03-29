@@ -43,12 +43,25 @@ const createMockSiteData = (sites: LocalSiteInfo[]): SiteDataAccessor => {
 /** Build a mock WP-CLI response factory */
 const makeWpCliMock = (overrides: Record<string, { stdout: string; success?: boolean }> = {}) => {
   return jest.fn().mockImplementation((_siteId: string, args: string[]) => {
-    const sql = args[2] ?? '';
     const cmd = args[0];
+
+    // Decode SQL from wp eval calls (base64 encoded)
+    let sql = '';
+    if (cmd === 'eval' && args[1]) {
+      const match = args[1].match(/base64_decode\('([^']+)'\)/);
+      if (match) {
+        sql = Buffer.from(match[1], 'base64').toString('utf-8');
+      }
+    }
 
     // core version
     if (cmd === 'core' && args[1] === 'version') {
       return Promise.resolve({ success: true, stdout: '6.5.0', stderr: '' });
+    }
+
+    // config get table_prefix
+    if (cmd === 'config' && args[1] === 'get' && args[2] === 'table_prefix') {
+      return Promise.resolve({ success: true, stdout: 'wp_', stderr: '' });
     }
 
     // plugin list
@@ -115,14 +128,14 @@ const makeWpCliMock = (overrides: Record<string, { stdout: string; success?: boo
     }
 
     // orphaned post meta
-    if (sql.includes('wp_postmeta') && sql.includes('LEFT JOIN wp_posts')) {
+    if (sql.includes('postmeta') && sql.includes('LEFT JOIN') && sql.includes('posts')) {
       const key = 'orphan_pm';
       if (overrides[key]) return Promise.resolve({ success: true, ...overrides[key] });
       return Promise.resolve({ success: true, stdout: JSON.stringify([{ cnt: 0 }]), stderr: '' });
     }
 
     // orphaned comment meta
-    if (sql.includes('wp_commentmeta')) {
+    if (sql.includes('commentmeta')) {
       return Promise.resolve({ success: true, stdout: JSON.stringify([{ cnt: 0 }]), stderr: '' });
     }
 
