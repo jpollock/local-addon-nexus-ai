@@ -189,10 +189,11 @@ export function getLocalPaths(): LocalPaths {
 
 /**
  * Get the addon package name (used in enabled-addons.json)
+ * Must match the "name" field in package.json exactly — Local uses this as the key.
  */
-export const ADDON_PACKAGE_NAME = 'local-addon-nexus-ai';
+export const ADDON_PACKAGE_NAME = '@local-labs-jpollock/local-addon-nexus-ai';
 
 /**
  * Get the addon directory name (used in addons/ folder)
  */
-export const ADDON_DIR_NAME = '@local-nexus-ai';
+export const ADDON_DIR_NAME = 'local-addon-nexus-ai';
