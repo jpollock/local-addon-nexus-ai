@@ -469,6 +469,8 @@ export interface DbOrphanInfo {
   orphanedPostMeta: number;
   orphanedCommentMeta: number;
   orphanedUserMeta: number;
+  /** Top meta keys by orphan count */
+  topOrphanedMetaKeys: Array<{ metaKey: string; count: number }>;
 }
 
 export interface DbDraftTrashInfo {
@@ -479,6 +481,8 @@ export interface DbDraftTrashInfo {
 
 export interface DbPluginTableInfo {
   leftoverTables: string[];
+  /** same tables with plugin attribution where known */
+  leftoverTablesWithAttribution: Array<{ tableName: string; likelyPlugin: string | null }>;
   customTables: DbTableInfo[];
 }
 
@@ -501,6 +505,11 @@ export interface DbScanResult {
   draftsAndTrash: DbDraftTrashInfo;
   pluginTables: DbPluginTableInfo;
   wooCommerce: DbWooCommerceInfo | null;
+  autoload: {
+    totalSizeBytes: number;
+    topOptions: Array<{ optionName: string; sizeBytes: number; likelyPlugin: string | null }>;
+    inactivePluginOptions: number;
+  };
   healthScore: number;
   summary: string[];
   durationMs: number;

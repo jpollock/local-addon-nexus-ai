@@ -454,10 +454,11 @@ dbCommand
               isWooCommerceActive
               revisions { totalCount estimatedSizeBytes }
               transients { expiredCount totalCount estimatedSizeBytes }
-              orphans { orphanedPostMeta orphanedCommentMeta orphanedUserMeta }
+              orphans { orphanedPostMeta orphanedCommentMeta orphanedUserMeta topOrphanedMetaKeys { metaKey count } }
               draftsAndTrash { autoDraftCount trashedPostCount estimatedSizeBytes }
-              pluginTables { leftoverTables customTables { name totalSizeBytes } }
+              pluginTables { leftoverTables leftoverTablesWithAttribution { tableName likelyPlugin } customTables { name totalSizeBytes } }
               wooCommerce { sessionCount oldLogCount }
+              autoload { totalSizeBytes inactivePluginOptions topOptions { optionName sizeBytes likelyPlugin } }
               summary
               durationMs
             }
@@ -482,20 +483,47 @@ dbCommand
         : '\x1b[31m'; // red
       const reset = '\x1b[0m';
 
+      const autoloadMb = scan.autoload
+        ? (scan.autoload.totalSizeBytes / (1024 * 1024)).toFixed(1)
+        : '0.0';
+
       console.log(`\nDatabase Health: ${target}`);
       console.log(`  Health Score: ${scoreColor}${scan.healthScore}/100${reset}`);
       console.log(`  WordPress:    ${scan.wpVersion}`);
       console.log(`  WooCommerce:  ${scan.isWooCommerceActive ? 'active' : 'inactive'}`);
+      console.log(`  Autoload:     ${autoloadMb} MB`);
       console.log('');
 
       console.log('  Issues:');
       if (scan.summary.length === 0) {
-        console.log('    ✅ No significant issues found.');
+        console.log('    No significant issues found.');
       } else {
         for (const bullet of scan.summary) {
-          console.log(`    ⚠️  ${bullet}`);
+          console.log(`    - ${bullet}`);
         }
       }
+
+      // Show meta key breakdown if there are orphaned meta rows
+      if (scan.orphans && scan.orphans.orphanedPostMeta > 0 &&
+          scan.orphans.topOrphanedMetaKeys && scan.orphans.topOrphanedMetaKeys.length > 0) {
+        console.log('');
+        console.log('  Top orphaned meta keys:');
+        for (const key of scan.orphans.topOrphanedMetaKeys.slice(0, 5)) {
+          console.log(`    ${key.metaKey}: ${key.count.toLocaleString()} rows`);
+        }
+      }
+
+      // Show ghost table attribution
+      if (scan.pluginTables && scan.pluginTables.leftoverTablesWithAttribution &&
+          scan.pluginTables.leftoverTablesWithAttribution.length > 0) {
+        console.log('');
+        console.log('  Ghost plugin tables:');
+        for (const t of scan.pluginTables.leftoverTablesWithAttribution) {
+          const attr = t.likelyPlugin ? ` (${t.likelyPlugin})` : '';
+          console.log(`    ${t.tableName}${attr}`);
+        }
+      }
+
       console.log('');
       console.log(`  Scan completed in ${scan.durationMs}ms`);
       console.log('');

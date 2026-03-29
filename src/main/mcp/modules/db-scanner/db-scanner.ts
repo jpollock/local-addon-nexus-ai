@@ -13,6 +13,77 @@ import type { NexusServices } from '../../types';
 // Core WP table names (used to distinguish custom/plugin tables)
 // ---------------------------------------------------------------------------
 
+// Known option name prefixes → plugin names
+const KNOWN_OPTION_PREFIXES: Array<[string, string | null]> = [
+  ['elementor', 'Elementor'],
+  ['_elementor', 'Elementor'],
+  ['woocommerce_', 'WooCommerce'],
+  ['wc_', 'WooCommerce'],
+  ['yoast', 'Yoast SEO'],
+  ['_yoast', 'Yoast SEO'],
+  ['rank_math', 'Rank Math'],
+  ['wpml_', 'WPML'],
+  ['icl_', 'WPML'],
+  ['gravityforms', 'Gravity Forms'],
+  ['gform_', 'Gravity Forms'],
+  ['wordfence', 'Wordfence'],
+  ['wf_', 'Wordfence'],
+  ['wp_rocket_', 'WP Rocket'],
+  ['wpr_', 'WP Rocket'],
+  ['redirection_', 'Redirection'],
+  ['w3tc_', 'W3 Total Cache'],
+  ['wpb_', 'WPBakery'],
+  ['vc_', 'WPBakery'],
+  ['acf_', 'Advanced Custom Fields'],
+  ['_acf', 'Advanced Custom Fields'],
+  ['ninja_forms_', 'Ninja Forms'],
+  ['nf_', 'Ninja Forms'],
+  ['mailchimp_', 'Mailchimp'],
+  ['mc4wp_', 'Mailchimp for WP'],
+  ['_transient_', null],  // transients are not plugin options
+  ['_site_transient_', null],
+];
+
+export function guessPluginFromOptionName(optionName: string): string | null {
+  for (const [prefix, plugin] of KNOWN_OPTION_PREFIXES) {
+    if (optionName.startsWith(prefix) || optionName.includes(prefix)) {
+      return plugin;
+    }
+  }
+  return null;
+}
+
+// Known plugin table suffixes (without prefix) → plugin names
+const KNOWN_PLUGIN_TABLES: Record<string, string> = {
+  'gf_entry': 'Gravity Forms',
+  'gf_entry_meta': 'Gravity Forms',
+  'gf_form': 'Gravity Forms',
+  'gf_form_meta': 'Gravity Forms',
+  'wfblockediplog': 'Wordfence',
+  'wfhits': 'Wordfence',
+  'wflogins': 'Wordfence',
+  'wflocs': 'Wordfence',
+  'wfls_settings': 'Wordfence',
+  'icl_translations': 'WPML',
+  'icl_string_translations': 'WPML',
+  'wpr_rucss_used_css': 'WP Rocket',
+  'redirection_items': 'Redirection',
+  'redirection_logs': 'Redirection',
+  'redirection_groups': 'Redirection',
+  'nf3_forms': 'Ninja Forms',
+  'nf3_fields': 'Ninja Forms',
+  'e2pdf_templates': 'e2pdf',
+  'wc_download_log': 'WooCommerce',
+  'wc_log': 'WooCommerce',
+};
+
+export function attributePluginTable(tableName: string, tablePrefix: string): string | null {
+  const withoutPrefix = tableName.startsWith(tablePrefix)
+    ? tableName.slice(tablePrefix.length)
+    : tableName;
+  return KNOWN_PLUGIN_TABLES[withoutPrefix] ?? null;
+}
+
 const CORE_WP_TABLES = new Set([
   'wp_posts',
   'wp_postmeta',
@@ -39,65 +110,63 @@ const CORE_WP_TABLES = new Set([
 export function computeHealthScore(result: {
   revisions: { totalCount: number };
   transients: { expiredCount: number };
-  orphans: { orphanedPostMeta: number; orphanedCommentMeta: number };
+  orphans: { orphanedPostMeta: number; orphanedCommentMeta: number; topOrphanedMetaKeys?: any[] };
   draftsAndTrash: { autoDraftCount: number; trashedPostCount: number };
   pluginTables: { leftoverTables: string[] };
   wooCommerce: { sessionCount: number } | null;
   tables: DbTableInfo[];
+  autoload?: { totalSizeBytes: number };
 }): number {
   let penalty = 0;
 
-  // Post revisions
-  if (result.revisions.totalCount > 2000) {
-    penalty += 20;
-  } else if (result.revisions.totalCount > 500) {
-    penalty += 10;
-  }
+  // Post revisions — lower thresholds
+  if (result.revisions.totalCount > 2000) penalty += 20;
+  else if (result.revisions.totalCount > 200) penalty += 10;
+  else if (result.revisions.totalCount > 50) penalty += 5;
 
-  // Expired transients
-  if (result.transients.expiredCount > 500) {
-    penalty += 20;
-  } else if (result.transients.expiredCount > 100) {
-    penalty += 10;
-  }
+  // Expired transients — lower thresholds
+  if (result.transients.expiredCount > 500) penalty += 20;
+  else if (result.transients.expiredCount > 50) penalty += 10;
+  else if (result.transients.expiredCount > 10) penalty += 5;
 
-  // Orphaned post meta
-  if (result.orphans.orphanedPostMeta > 500) {
-    penalty += 5;
-  }
+  // Orphaned post meta — lower thresholds (was >500, now >50)
+  if (result.orphans.orphanedPostMeta > 1000) penalty += 15;
+  else if (result.orphans.orphanedPostMeta > 100) penalty += 10;
+  else if (result.orphans.orphanedPostMeta > 50) penalty += 5;
 
   // Orphaned comment meta
-  if (result.orphans.orphanedCommentMeta > 500) {
-    penalty += 5;
-  }
+  if (result.orphans.orphanedCommentMeta > 500) penalty += 5;
+  else if (result.orphans.orphanedCommentMeta > 50) penalty += 3;
 
   // Auto-drafts
-  if (result.draftsAndTrash.autoDraftCount > 50) {
-    penalty += 5;
-  }
+  if (result.draftsAndTrash.autoDraftCount > 50) penalty += 5;
+  else if (result.draftsAndTrash.autoDraftCount > 10) penalty += 3;
 
-  // Trashed posts
-  if (result.draftsAndTrash.trashedPostCount > 50) {
-    penalty += 5;
-  }
+  // Trashed posts — any trash is worth noting
+  if (result.draftsAndTrash.trashedPostCount > 50) penalty += 5;
+  else if (result.draftsAndTrash.trashedPostCount > 0) penalty += 2;
 
-  // Leftover plugin tables (max -15)
+  // Leftover plugin tables
   const leftoverPenalty = Math.min(result.pluginTables.leftoverTables.length * 5, 15);
   penalty += leftoverPenalty;
 
   // WooCommerce stale sessions
-  if (result.wooCommerce && result.wooCommerce.sessionCount > 1000) {
-    penalty += 10;
+  if (result.wooCommerce && result.wooCommerce.sessionCount > 1000) penalty += 10;
+  else if (result.wooCommerce && result.wooCommerce.sessionCount > 100) penalty += 5;
+
+  // Autoload bloat (NEW)
+  if (result.autoload) {
+    const autoloadMb = result.autoload.totalSizeBytes / (1024 * 1024);
+    if (autoloadMb > 5) penalty += 20;
+    else if (autoloadMb > 2) penalty += 10;
+    else if (autoloadMb > 1) penalty += 5;
   }
 
   // Total DB size
   const totalBytes = result.tables.reduce((sum, t) => sum + t.totalSizeBytes, 0);
   const totalMb = totalBytes / (1024 * 1024);
-  if (totalMb > 1000) {
-    penalty += 15;
-  } else if (totalMb > 500) {
-    penalty += 5;
-  }
+  if (totalMb > 1000) penalty += 15;
+  else if (totalMb > 500) penalty += 5;
 
   return Math.max(0, 100 - penalty);
 }
@@ -154,23 +223,33 @@ function buildSummary(result: Partial<DbScanResult> & {
   draftsAndTrash: DbScanResult['draftsAndTrash'];
   pluginTables: DbScanResult['pluginTables'];
   wooCommerce: DbScanResult['wooCommerce'];
+  autoload?: DbScanResult['autoload'];
 }): string[] {
   const bullets: string[] = [];
 
   if (result.revisions.totalCount > 0) {
+    const tip = result.revisions.totalCount > 200
+      ? " — add define('WP_POST_REVISIONS', 5) to wp-config.php to prevent future accumulation"
+      : '';
     bullets.push(
-      `${result.revisions.totalCount.toLocaleString()} post revisions using ~${formatBytes(result.revisions.estimatedSizeBytes)} (consider limiting to 5 revisions per post)`,
+      `${result.revisions.totalCount.toLocaleString()} post revisions (~${formatBytes(result.revisions.estimatedSizeBytes)})${tip}`,
     );
   }
 
   if (result.transients.expiredCount > 0) {
     bullets.push(
-      `${result.transients.expiredCount.toLocaleString()} expired transients (~${formatBytes(result.transients.estimatedSizeBytes)}) — safe to delete`,
+      `${result.transients.expiredCount.toLocaleString()} expired transients — wp transient delete --expired will clear these`,
     );
   }
 
   if (result.orphans.orphanedPostMeta > 0) {
-    bullets.push(`${result.orphans.orphanedPostMeta.toLocaleString()} orphaned post meta rows`);
+    let detail = `${result.orphans.orphanedPostMeta.toLocaleString()} orphaned post meta rows`;
+    const topKeys = result.orphans.topOrphanedMetaKeys;
+    if (topKeys && topKeys.length > 0) {
+      const topKey = topKeys[0];
+      detail += ` — mostly \`${topKey.metaKey}\` (${topKey.count.toLocaleString()} rows), likely left by a bulk importer or removed plugin`;
+    }
+    bullets.push(detail);
   }
 
   if (result.orphans.orphanedCommentMeta > 0) {
@@ -185,8 +264,28 @@ function buildSummary(result: Partial<DbScanResult> & {
     bullets.push(`${result.draftsAndTrash.trashedPostCount.toLocaleString()} trashed posts — safe to empty`);
   }
 
-  for (const table of result.pluginTables.leftoverTables) {
-    bullets.push(`Plugin table ${table} found with no matching active plugin`);
+  // Autoload summary with top offender
+  if (result.autoload && result.autoload.totalSizeBytes > 0) {
+    const autoloadMb = (result.autoload.totalSizeBytes / (1024 * 1024)).toFixed(1);
+    let autoloadDetail = `Autoload payload: ${autoloadMb} MB loaded on every request`;
+    const topOption = result.autoload.topOptions.find((o) => o.likelyPlugin !== null);
+    if (topOption) {
+      autoloadDetail += ` — top offender: ${topOption.likelyPlugin} options even when page builder is inactive`;
+    }
+    bullets.push(autoloadDetail);
+  }
+
+  // Plugin table attribution
+  const attributed = result.pluginTables.leftoverTablesWithAttribution ?? [];
+  if (attributed.length > 0) {
+    const tableList = attributed
+      .map((t) => t.likelyPlugin ? `${t.tableName} (${t.likelyPlugin})` : t.tableName)
+      .join(', ');
+    bullets.push(`Plugin tables without active plugin: ${tableList}`);
+  } else {
+    for (const table of result.pluginTables.leftoverTables) {
+      bullets.push(`Plugin table ${table} found with no matching active plugin`);
+    }
   }
 
   if (result.wooCommerce) {
@@ -267,6 +366,13 @@ export async function scanDatabase(siteId: string, services: NexusServices): Pro
   const orphanCommentMetaSql = `SELECT COUNT(*) as cnt FROM ${p}commentmeta cm LEFT JOIN ${p}comments c ON cm.comment_id = c.comment_ID WHERE c.comment_ID IS NULL`;
   const draftTrashSql = `SELECT post_status, COUNT(*) as cnt FROM ${p}posts WHERE post_status IN ('auto-draft', 'trash') GROUP BY post_status`;
 
+  // Autoload queries
+  const autoloadSizeSql = `SELECT COALESCE(SUM(LENGTH(option_value)), 0) as total_bytes FROM ${p}options WHERE autoload = 'yes'`;
+  const autoloadTopSql = `SELECT option_name, LENGTH(option_value) as size_bytes FROM ${p}options WHERE autoload = 'yes' ORDER BY size_bytes DESC LIMIT 20`;
+
+  // Top orphaned meta keys (which plugins left the mess)
+  const orphanMetaKeysSql = `SELECT pm.meta_key, COUNT(*) as cnt FROM ${p}postmeta pm LEFT JOIN ${p}posts po ON pm.post_id = po.ID WHERE po.ID IS NULL GROUP BY pm.meta_key ORDER BY cnt DESC LIMIT 10`;
+
   // Run all in parallel
   const [
     tableRows,
@@ -280,6 +386,9 @@ export async function scanDatabase(siteId: string, services: NexusServices): Pro
     orphanCommentMetaRows,
     draftTrashRows,
     pluginListResult,
+    autoloadSizeRows,
+    autoloadTopRows,
+    orphanMetaKeysRows,
   ] = await Promise.allSettled([
     runSql(siteId, tableSql, services),
     runSql(siteId, revCountSql, services),
@@ -292,6 +401,9 @@ export async function scanDatabase(siteId: string, services: NexusServices): Pro
     runSql(siteId, orphanCommentMetaSql, services),
     runSql(siteId, draftTrashSql, services),
     ls.wpCliRun(siteId, ['plugin', 'list', '--status=active', '--fields=name', '--format=json']),
+    runSql(siteId, autoloadSizeSql, services),
+    runSql(siteId, autoloadTopSql, services),
+    runSql(siteId, orphanMetaKeysSql, services),
   ]);
 
   // Parse table info
@@ -368,12 +480,41 @@ export async function scanDatabase(siteId: string, services: NexusServices): Pro
     }
   }
 
+  // Parse autoload
+  const autoloadSizeBytes = autoloadSizeRows.status === 'fulfilled'
+    ? Number(autoloadSizeRows.value[0]?.total_bytes ?? 0) : 0;
+
+  const autoloadTopOptions = autoloadTopRows.status === 'fulfilled'
+    ? autoloadTopRows.value.map((r: any) => ({
+        optionName: String(r.option_name ?? ''),
+        sizeBytes: Number(r.size_bytes ?? 0),
+        likelyPlugin: guessPluginFromOptionName(String(r.option_name ?? '')),
+      }))
+    : [];
+
+  // Count inactive plugin options (options whose prefix doesn't match any active plugin)
+  const inactivePluginOptionCount = autoloadTopOptions.filter(
+    (o) => o.likelyPlugin === null
+  ).length;
+
+  // Parse orphaned meta keys
+  const topOrphanedMetaKeys = orphanMetaKeysRows.status === 'fulfilled'
+    ? orphanMetaKeysRows.value.map((r: any) => ({
+        metaKey: String(r.meta_key ?? ''),
+        count: Number(r.cnt ?? 0),
+      }))
+    : [];
+
   // Detect leftover tables (compare against prefix-aware core table names)
   const coreTablesWithPrefix = new Set(
     [...CORE_WP_TABLES].map((t) => t.replace('wp_', p))
   );
   const tableNames = tables.map((t) => t.name);
   const leftoverTables = detectLeftoverTables(tableNames, activeSlugs, p);
+  const leftoverTablesWithAttribution = leftoverTables.map((tableName) => ({
+    tableName,
+    likelyPlugin: attributePluginTable(tableName, p),
+  }));
   const customTables = tables.filter((t) => !coreTablesWithPrefix.has(t.name));
 
   // WooCommerce queries (if active)
@@ -404,10 +545,20 @@ export async function scanDatabase(siteId: string, services: NexusServices): Pro
   const partialResult = {
     revisions: { totalCount: revCount, estimatedSizeBytes: revSize, topPosts: revTop },
     transients: { expiredCount: transExpired, totalCount: transTotal, estimatedSizeBytes: transSize },
-    orphans: { orphanedPostMeta: orphanPostMeta, orphanedCommentMeta: orphanCommentMeta, orphanedUserMeta: 0 },
+    orphans: {
+      orphanedPostMeta: orphanPostMeta,
+      orphanedCommentMeta: orphanCommentMeta,
+      orphanedUserMeta: 0,
+      topOrphanedMetaKeys,
+    },
     draftsAndTrash: { autoDraftCount, trashedPostCount, estimatedSizeBytes: draftTrashSize },
-    pluginTables: { leftoverTables, customTables },
+    pluginTables: { leftoverTables, leftoverTablesWithAttribution, customTables },
     wooCommerce,
+    autoload: {
+      totalSizeBytes: autoloadSizeBytes,
+      topOptions: autoloadTopOptions,
+      inactivePluginOptions: inactivePluginOptionCount,
+    },
     tables,
   };
 
