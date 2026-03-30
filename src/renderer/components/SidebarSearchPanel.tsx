@@ -14,6 +14,20 @@ interface SidebarSearchPanelProps {
   hasLLM: boolean;
 }
 
+interface LocalSiteResult {
+  id: string;
+  name: string;
+  type: 'local';
+}
+
+interface WpeSiteResult {
+  id: string;
+  name: string;
+  domain: string;
+  installId: string;
+  type: 'wpe';
+}
+
 interface SidebarSearchPanelState {
   aiMode: boolean;
   query: string;
@@ -22,6 +36,9 @@ interface SidebarSearchPanelState {
   error: string | null;
   interpretedFilters: InterpretedFilters | null;
   resultsCount: number | null;
+  localResults: LocalSiteResult[];
+  wpeResults: WpeSiteResult[];
+  expandedWpeId: string | null;
   // Manual filters
   searchText: string;
   selectedPlugins: string[];
@@ -190,6 +207,9 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     error: null,
     interpretedFilters: null,
     resultsCount: null,
+    localResults: [],
+    wpeResults: [],
+    expandedWpeId: null,
     searchText: '',
     selectedPlugins: [],
     selectedThemes: [],
@@ -327,17 +347,14 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     if (!this.mounted) return;
 
     if (result.success) {
-      const siteIds = result.siteIds || [];
+      const localResults: LocalSiteResult[] = result.local || [];
+      const wpeResults: WpeSiteResult[] = result.wpe || [];
       this.setState({
-        resultsCount: siteIds.length,
+        resultsCount: localResults.length + wpeResults.length,
+        localResults,
+        wpeResults,
         loading: false,
       });
-
-      // Notify Local to filter sidebar (this auto-filters the left sidebar)
-      await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.SIDEBAR_FILTER,
-        { siteIds },
-      );
     } else {
       this.setState({ loading: false, error: 'Search failed' });
     }
@@ -349,6 +366,9 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
       conversation: [],
       interpretedFilters: null,
       resultsCount: null,
+      localResults: [],
+      wpeResults: [],
+      expandedWpeId: null,
       error: null,
       searchText: '',
       selectedPlugins: [],
@@ -356,11 +376,26 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
       selectedPhpVersions: [],
       selectedWpVersions: [],
     });
+  };
 
-    // Clear sidebar filter (show all sites again)
+  handleToggleWpeSite = (id: string): void => {
+    this.setState(prev => ({
+      expandedWpeId: prev.expandedWpeId === id ? null : id,
+    }));
+  };
+
+  handleNavigateToSite = (siteId: string): void => {
     this.props.electron.ipcRenderer.invoke(
-      IPC_CHANNELS.SIDEBAR_FILTER,
-      { siteIds: [] },
+      IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE,
+      { siteId },
+    );
+    this.props.onClose();
+  };
+
+  handlePullToLocal = (site: WpeSiteResult): void => {
+    this.props.electron.ipcRenderer.invoke(
+      IPC_CHANNELS.WPE_PULL_TO_LOCAL,
+      { installId: site.installId, installName: site.name },
     );
   };
 
@@ -582,26 +617,126 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     );
   }
 
-  renderResultsCount(): React.ReactNode {
-    const { resultsCount } = this.state;
+  renderResultsList(): React.ReactNode {
+    const { resultsCount, localResults, wpeResults, expandedWpeId } = this.state;
     if (resultsCount === null) return null;
 
-    const countStyle: React.CSSProperties = {
-      marginTop: '20px',
-      padding: '12px',
-      borderRadius: '6px',
-      backgroundColor: resultsCount > 0 ? '#1d3d1d' : '#3d1d1d',
-      border: resultsCount > 0 ? '1px solid #2d5d2d' : '1px solid #5d2d2d',
-      textAlign: 'center',
-      fontSize: '13px',
-      fontWeight: 600,
-      color: resultsCount > 0 ? '#7dd87d' : '#d87d7d',
+    if (resultsCount === 0) {
+      return React.createElement('div', {
+        style: {
+          marginTop: '20px', padding: '12px', borderRadius: '6px',
+          backgroundColor: '#3d1d1d', border: '1px solid #5d2d2d',
+          textAlign: 'center' as const, fontSize: '13px', color: '#d87d7d',
+        },
+      }, '⚠️ No matching sites found');
+    }
+
+    const sectionHeaderStyle: React.CSSProperties = {
+      fontSize: '11px', fontWeight: 600, color: '#999',
+      textTransform: 'uppercase' as const, letterSpacing: '0.08em',
+      padding: '12px 0 6px',
     };
 
-    return React.createElement('div', { style: countStyle },
-      resultsCount === 0
-        ? '⚠️ No matching sites found'
-        : `✓ Found ${resultsCount} site${resultsCount === 1 ? '' : 's'} — see left sidebar`,
+    const siteRowStyle: React.CSSProperties = {
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '8px 10px', borderRadius: '5px', cursor: 'pointer',
+      backgroundColor: '#1d1d1d', border: '1px solid #2d2d2d',
+      marginBottom: '4px',
+    };
+
+    const siteNameStyle: React.CSSProperties = {
+      fontSize: '13px', color: '#ffffff', fontWeight: 500,
+    };
+
+    const pillStyle: React.CSSProperties = {
+      fontSize: '10px', color: '#51BB7B', backgroundColor: 'rgba(81,187,123,0.12)',
+      border: '1px solid rgba(81,187,123,0.25)', borderRadius: '10px',
+      padding: '2px 7px',
+    };
+
+    const expandedPanelStyle: React.CSSProperties = {
+      backgroundColor: '#161616', border: '1px solid #2d2d2d', borderTop: 'none',
+      borderRadius: '0 0 5px 5px', padding: '10px 12px', marginBottom: '4px',
+      marginTop: '-4px',
+    };
+
+    const actionBtnStyle: React.CSSProperties = {
+      fontSize: '11px', padding: '5px 10px', borderRadius: '4px', border: 'none',
+      cursor: 'pointer', fontWeight: 600,
+    };
+
+    return React.createElement('div', { style: { marginTop: '20px' } },
+
+      // Summary line
+      React.createElement('div', {
+        style: { fontSize: '12px', color: '#7dd87d', marginBottom: '4px', fontWeight: 600 },
+      }, `✓ Found ${resultsCount} site${resultsCount === 1 ? '' : 's'} (${localResults.length} local, ${wpeResults.length} WPE)`),
+
+      // LOCAL SITES
+      localResults.length > 0 ? React.createElement('div', null,
+        React.createElement('div', { style: sectionHeaderStyle }, `📍 Local Sites (${localResults.length})`),
+        localResults.map((site: LocalSiteResult) =>
+          React.createElement('div', {
+            key: site.id,
+            style: { ...siteRowStyle, cursor: 'pointer' },
+            onClick: () => this.handleNavigateToSite(site.id),
+            title: 'Click to open site',
+          },
+            React.createElement('span', { style: siteNameStyle }, site.name),
+            React.createElement('span', { style: pillStyle }, 'Open →'),
+          ),
+        ),
+      ) : null,
+
+      // WPE SITES
+      wpeResults.length > 0 ? React.createElement('div', null,
+        React.createElement('div', { style: sectionHeaderStyle }, `🌐 WPE Sites (${wpeResults.length})`),
+        wpeResults.map((site: WpeSiteResult) => {
+          const isExpanded = expandedWpeId === site.id;
+          return React.createElement('div', { key: site.id },
+            // Row
+            React.createElement('div', {
+              style: {
+                ...siteRowStyle,
+                borderRadius: isExpanded ? '5px 5px 0 0' : '5px',
+                borderBottom: isExpanded ? 'none' : '1px solid #2d2d2d',
+              },
+              onClick: () => this.handleToggleWpeSite(site.id),
+            },
+              React.createElement('div', null,
+                React.createElement('span', {
+                  style: { fontSize: '11px', color: '#666', marginRight: '6px' },
+                }, isExpanded ? '▼' : '▶'),
+                React.createElement('span', { style: siteNameStyle }, site.name),
+              ),
+              React.createElement('span', {
+                style: { fontSize: '11px', color: '#666' },
+              }, site.domain),
+            ),
+            // Expanded panel
+            isExpanded ? React.createElement('div', { style: expandedPanelStyle },
+              React.createElement('div', {
+                style: { fontSize: '11px', color: '#666', marginBottom: '8px', fontFamily: 'monospace' },
+              }, site.installId),
+              React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+                React.createElement('button', {
+                  style: { ...actionBtnStyle, backgroundColor: '#51BB7B', color: '#fff' },
+                  onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handlePullToLocal(site); },
+                  title: 'Pull this WPE site to Local',
+                }, '⬇ Pull to Local'),
+                React.createElement('button', {
+                  style: { ...actionBtnStyle, backgroundColor: '#2d2d2d', color: '#ccc', border: '1px solid #3d3d3d' },
+                  onClick: (e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    this.props.electron.shell?.openExternal(`https://my.wpengine.com/installs/${site.installId}`);
+                  },
+                  title: 'Open in WP Engine dashboard',
+                }, '🌍 View on WPE'),
+              ),
+            ) : null,
+          );
+        }),
+      ) : null,
     );
   }
 
@@ -679,8 +814,8 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
           // Mode content
           aiMode ? this.renderAIMode() : this.renderManualMode(),
 
-          // Results count (sidebar is filtered automatically)
-          this.renderResultsCount(),
+          // Results list (Local + WPE sites)
+          this.renderResultsList(),
         ),
       ),
     );
