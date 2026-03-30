@@ -45,9 +45,10 @@ export default function renderer(context: any): void {
   try {
     const styleEl = document.createElement('style');
     styleEl.id = 'nexus-ai-tabnav-fix';
+    // Target TabNav_Items using the CSS module hash pattern from local-components v17.8.1
+    // The hash "ko_uu" is derived from the file; version suffix confirms the version.
     styleEl.textContent = `
-      [class*="TabNav_TabNav_Items"] { white-space: nowrap; }
-      [class*="TabNav_Items"] { white-space: nowrap; }
+      [class*="TabNav_Items"] { white-space: nowrap !important; }
     `;
     document.head.appendChild(styleEl);
   } catch (err) {
