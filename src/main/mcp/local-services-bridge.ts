@@ -452,9 +452,12 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     async wpeGetUserInfo(): Promise<{ email?: string; accountName?: string } | null> {
       const wpeOAuth = svc('wpeOAuth');
       if (!wpeOAuth) return null;
-      // getAccessToken() returns undefined when not authenticated
-      const token = await wpeOAuth.getAccessToken?.();
-      if (!token) return null;
+      // Check userData directly — tokens are stored there by both Express callback
+      // and deep link auth flows. getAccessToken() only reads in-memory _accessToken
+      // which isn't set when auth happens via deep link (flywheel-local:// flow).
+      const userData = svc('userData');
+      const tokenData = userData?.get?.('wpeOAuth');
+      if (!tokenData?.accessToken) return null;
       // Try to get user info — _getUserInfo is private but accessible at runtime
       try {
         const userInfo = await svc('capi')?._getUserInfo?.();
