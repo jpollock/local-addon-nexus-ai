@@ -39,6 +39,21 @@ export default function renderer(context: any): void {
     console.error('[Nexus AI] NavItemInjector failed:', err);
   }
 
+  // Inject CSS so addon tabs don't wrap to a new line in the site info tab bar.
+  // TabNav_Items is a block container with inline-block children — without
+  // white-space: nowrap, a 5th tab wraps below the existing four.
+  try {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'nexus-ai-tabnav-fix';
+    styleEl.textContent = `
+      [class*="TabNav_TabNav_Items"] { white-space: nowrap; }
+      [class*="TabNav_Items"] { white-space: nowrap; }
+    `;
+    document.head.appendChild(styleEl);
+  } catch (err) {
+    console.warn('[Nexus AI] Could not inject TabNav fix CSS:', err);
+  }
+
   // Feature 1: Nexus AI Overview route
   hooks.addContent('routes[main]', () =>
     React.createElement(Route, {
