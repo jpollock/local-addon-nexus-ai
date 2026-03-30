@@ -68,16 +68,16 @@ export const wpeStatusHandler = {
   async execute(_args: unknown, _services: NexusServices): Promise<McpToolResult> {
     try {
       const data = await localGql<{
-        wpeStatus: { authenticated: boolean; userInfo?: { email?: string; firstName?: string; lastName?: string } };
-      }>('mutation { wpeStatus { authenticated userInfo { email firstName lastName } } }', 10000);
+        wpeStatus: { authenticated: boolean; email?: string; accountId?: string; accountName?: string };
+      }>('query { wpeStatus { authenticated email accountId accountName } }', 10000);
 
-      const { authenticated, userInfo } = data.wpeStatus;
-      if (authenticated && userInfo?.email) {
-        const name = userInfo.firstName ? `${userInfo.firstName} ${userInfo.lastName}` : null;
+      const { authenticated, email, accountName } = data.wpeStatus;
+      if (authenticated && email) {
+        const name = accountName || null;
         return {
           content: [{
             type: 'text',
-            text: `✅ Authenticated with WP Engine${name ? ` as ${name}` : ''} (${userInfo.email})`,
+            text: `✅ Authenticated with WP Engine${name ? ` (${name})` : ''} as ${email}`,
           }],
         };
       }

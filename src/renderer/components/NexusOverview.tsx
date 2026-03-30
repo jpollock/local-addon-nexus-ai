@@ -144,6 +144,7 @@ interface NexusOverviewState {
   syncStatus: Record<string, { lastSync: number; success: boolean }>;
   syncing: boolean;
   syncResults: Array<{ siteId: string; siteName: string; success: boolean; providers: string[]; error?: string }> | null;
+  wpeAuthError: boolean;
 }
 
 // -- Shared styles --
@@ -308,6 +309,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     syncStatus: {},
     syncing: false,
     syncResults: null,
+    wpeAuthError: false,
   };
 
   componentDidMount(): void {

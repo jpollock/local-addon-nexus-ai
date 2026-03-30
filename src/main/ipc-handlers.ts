@@ -2516,6 +2516,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       const sites = await deps.wpeSyncService.getSyncedWPESites();
 
       // Enrich sites with account_id from CAPI if available
+      let wpeAuthError = false;
       if (localServicesBridge.isCAPIAvailable()) {
         try {
           const installs = await localServicesBridge.capiGetInstalls() as any[];
@@ -2530,14 +2531,14 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
         } catch (err) {
           const status = (err as any)?.response?.status;
           if (status === 401 || status === 403) {
-            // Not authenticated to WPE — expected when user is not logged in
+            wpeAuthError = true;
           } else {
             localLogger.warn('[NexusAI] Failed to enrich sites with account_id:', String(err));
           }
         }
       }
 
-      return { success: true, sites };
+      return { success: true, sites, wpeAuthError };
     } catch (err) {
       localLogger.error('[NexusAI] Failed to get synced WPE sites:', (err as Error).message);
       return { success: false, error: (err as Error).message };

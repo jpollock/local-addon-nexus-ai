@@ -433,13 +433,13 @@ wpeCommand
   .action(async () => {
     try {
       const data = await localGql<{
-        wpeStatus: { authenticated: boolean; userInfo?: { email?: string; firstName?: string; lastName?: string } };
-      }>('mutation { wpeStatus { authenticated userInfo { email firstName lastName } } }');
+        wpeStatus: { authenticated: boolean; email?: string; accountId?: string; accountName?: string };
+      }>('query { wpeStatus { authenticated email accountId accountName } }');
 
-      const { authenticated, userInfo } = data.wpeStatus;
+      const { authenticated, email, accountName } = data.wpeStatus;
       console.log('');
-      if (authenticated && userInfo?.email) {
-        console.log(`✅ Authenticated as ${userInfo.firstName ? `${userInfo.firstName} ${userInfo.lastName} (${userInfo.email})` : userInfo.email}`);
+      if (authenticated && email) {
+        console.log(`✅ Authenticated as ${email}${accountName ? ` (${accountName})` : ''}`);
       } else {
         console.log('⚫ Not authenticated');
         console.log('\nRun: nexus wpe login');
