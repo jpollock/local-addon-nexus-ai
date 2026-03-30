@@ -36,6 +36,18 @@ function makeLocalServices(capiAvailable = true): jest.Mocked<LocalServicesBridg
     })),
     capiCreateBackup: jest.fn(),
     capiPurgeCache: jest.fn(),
+    capiDirect: jest.fn(() => Promise.resolve({
+      install_name: 'mysite-prod',
+      metrics_rollup: {
+        visit_count: { sum: '12345' },
+        network_total_bytes: { sum: '4831838208' },
+        storage_file_bytes: { latest: { value: '2254857830' } },
+        storage_database_bytes: { latest: { value: '536870912' } },
+      },
+    })),
+    wpeGetUserInfo: jest.fn(() => Promise.resolve({ email: 'test@example.com', accountName: 'Test Account' })),
+    wpeAuthenticate: jest.fn(() => Promise.resolve()),
+    wpeLogout: jest.fn(() => Promise.resolve()),
     isCAPIAvailable: jest.fn(() => capiAvailable),
     trustCert: jest.fn(),
     getAvailablePhpVersions: jest.fn(),
@@ -83,8 +95,8 @@ describe('WPE Integration Tools', () => {
     registerWpeTools(registry);
   });
 
-  test('registers 11 tools', () => {
-    expect(registry.allToolNames()).toHaveLength(11);
+  test('registers 16 tools', () => {
+    expect(registry.allToolNames()).toHaveLength(16);
   });
 
   describe('CAPI tool gating', () => {
@@ -92,16 +104,29 @@ describe('WPE Integration Tools', () => {
       const tools = registry.list(services);
       const capiTools = tools.filter((t) =>
         ['wpe_get_accounts', 'wpe_get_installs', 'wpe_get_install',
-         'wpe_create_backup', 'wpe_purge_cache'].includes(t.name));
-      expect(capiTools).toHaveLength(5);
+         'wpe_create_backup', 'wpe_purge_cache',
+         'wpe_get_install_usage', 'wpe_get_account_usage'].includes(t.name));
+      expect(capiTools).toHaveLength(7);
     });
 
     test('CAPI tools hidden when not authenticated', () => {
       const noAuth = makeLocalServices(false);
       const s = makeServices(noAuth);
       const tools = registry.list(s);
-      const capiTools = tools.filter((t) => t.name.startsWith('wpe_'));
+      const capiTools = tools.filter((t) =>
+        ['wpe_get_accounts', 'wpe_get_installs', 'wpe_get_install',
+         'wpe_create_backup', 'wpe_purge_cache',
+         'wpe_get_install_usage', 'wpe_get_account_usage'].includes(t.name));
       expect(capiTools).toHaveLength(0);
+    });
+
+    test('auth tools always available with localServices', () => {
+      const noAuth = makeLocalServices(false);
+      const s = makeServices(noAuth);
+      const tools = registry.list(s);
+      const authTools = tools.filter((t) =>
+        ['wpe_status', 'wpe_login', 'wpe_logout'].includes(t.name));
+      expect(authTools).toHaveLength(3);
     });
 
     test('local_wpe_* and nexus_list_sites always available with localServices', () => {
@@ -259,6 +284,77 @@ describe('WPE Integration Tools', () => {
       expect(result.isError).toBeUndefined();
       // Should still show local sites
       expect(result.content[0].text).toContain('My Site');
+    });
+  });
+
+  // --- wpe_status / wpe_login / wpe_logout ---
+  // These tools call Local's built-in GraphQL server directly (not localServices).
+  // In unit tests Local is not running, so they return an error — verify graceful degradation.
+
+  describe('wpe auth tools', () => {
+    test('wpe_status is registered and always available', () => {
+      const tools = registry.list(services);
+      expect(tools.find((t) => t.name === 'wpe_status')).toBeDefined();
+    });
+
+    test('wpe_login is registered and always available', () => {
+      const tools = registry.list(services);
+      expect(tools.find((t) => t.name === 'wpe_login')).toBeDefined();
+    });
+
+    test('wpe_logout is registered and always available', () => {
+      const tools = registry.list(services);
+      expect(tools.find((t) => t.name === 'wpe_logout')).toBeDefined();
+    });
+
+    test('wpe_status returns error (not crash) when Local is not running', async () => {
+      const result = await registry.call('wpe_status', {}, services);
+      // Must degrade gracefully — isError true with a message, not a thrown exception
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toBeTruthy();
+    });
+  });
+
+  // --- wpe_get_install_usage ---
+
+  describe('wpe_get_install_usage', () => {
+    test('fetches usage data for an install', async () => {
+      const result = await registry.call('wpe_get_install_usage', { install_id: 'inst-1' }, services);
+      expect(result.isError).toBeUndefined();
+      const text = result.content[0].text;
+      expect(text).toContain('mysite-prod');
+      expect(localServices.capiDirect).toHaveBeenCalledWith(
+        expect.stringContaining('/installs/inst-1/usage'),
+      );
+    });
+
+    test('uses correct date params', async () => {
+      await registry.call('wpe_get_install_usage', { install_id: 'inst-1', month_offset: 1 }, services);
+      const callArg: string = localServices.capiDirect.mock.calls[0][0];
+      expect(callArg).toContain('first_date=');
+      expect(callArg).toContain('last_date=');
+    });
+
+    test('returns cached response on second call', async () => {
+      localServices.capiDirect.mockClear();
+      // First call populates cache
+      await registry.call('wpe_get_install_usage', { install_id: 'cached-inst', month_offset: 2 }, services);
+      // Second call should hit cache (past month — 24h TTL)
+      await registry.call('wpe_get_install_usage', { install_id: 'cached-inst', month_offset: 2 }, services);
+      expect(localServices.capiDirect).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // --- wpe_get_account_usage ---
+
+  describe('wpe_get_account_usage', () => {
+    test('fetches usage data for an account', async () => {
+      localServices.capiDirect.mockClear();
+      const result = await registry.call('wpe_get_account_usage', { account_id: 'acc-1' }, services);
+      expect(result.isError).toBeUndefined();
+      expect(localServices.capiDirect).toHaveBeenCalledWith(
+        expect.stringContaining('/accounts/acc-1/usage'),
+      );
     });
   });
 });

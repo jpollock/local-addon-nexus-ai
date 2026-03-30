@@ -63,6 +63,11 @@ function sendRequest(url, token, body) {
         let data = '';
         res.on('data', (chunk) => (data += chunk));
         res.on('end', () => {
+          // 204 No Content (notification acknowledgement) — return null, not an error
+          if (!data.trim()) {
+            resolve(null);
+            return;
+          }
           try {
             resolve(JSON.parse(data));
           } catch {
@@ -96,17 +101,25 @@ async function main() {
   for await (const line of rl) {
     if (!line.trim()) continue;
 
+    // Declare outside try so catch can also suppress notification errors
+    let isNotification = false;
     try {
       const request = JSON.parse(line);
+      // JSON-RPC 2.0: notifications have no id and must not receive a response
+      isNotification = !('id' in request);
       const response = await sendRequest(info.url, info.authToken, request);
-      process.stdout.write(JSON.stringify(response) + '\n');
+      if (!isNotification && response !== null) {
+        process.stdout.write(JSON.stringify(response) + '\n');
+      }
     } catch (err) {
-      const errorResponse = {
-        jsonrpc: '2.0',
-        id: null,
-        error: { code: -32603, message: err.message },
-      };
-      process.stdout.write(JSON.stringify(errorResponse) + '\n');
+      if (!isNotification) {
+        const errorResponse = {
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32603, message: err.message },
+        };
+        process.stdout.write(JSON.stringify(errorResponse) + '\n');
+      }
     }
   }
 }

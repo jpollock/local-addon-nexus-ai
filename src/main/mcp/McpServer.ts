@@ -1,5 +1,6 @@
 import * as http from 'http';
 import * as crypto from 'crypto';
+import * as path from 'path';
 import { McpAuth } from './McpAuth';
 import { ToolRegistry } from './tool-registry';
 import { McpSafetyWrapper } from './mcp-safety-wrapper';
@@ -25,6 +26,8 @@ export interface McpServerOptions {
   instructionRegistry?: InstructionRegistry;
   /** Pre-existing auth token to reuse across restarts */
   existingToken?: string;
+  /** Try this port first before scanning the range (reuses last-known port) */
+  preferredPort?: number;
   /** Override port for testing */
   port?: number;
 }
@@ -47,6 +50,8 @@ export class McpServer {
   private port = 0;
   private sseClients = new Map<string, http.ServerResponse>();
 
+  private preferredPort?: number;
+
   constructor(options: McpServerOptions) {
     this.auth = new McpAuth(options.existingToken);
     this.registry = options.registry;
@@ -54,6 +59,7 @@ export class McpServer {
     this.instructionRegistry = options.instructionRegistry ?? new InstructionRegistry();
     this.services = options.services;
     if (options.port) this.port = options.port;
+    this.preferredPort = options.preferredPort;
   }
 
   async start(): Promise<ConnectionInfo> {
@@ -99,6 +105,8 @@ export class McpServer {
       port: this.port,
       version: '0.1.0',
       tools: this.registry.allToolNames(),
+      // __dirname is lib/ in production, so bin/mcp-stdio.js is one level up
+      stdioPath: path.resolve(__dirname, '..', 'bin', 'mcp-stdio.js'),
     };
   }
 
@@ -107,7 +115,12 @@ export class McpServer {
   }
 
   private async findPort(): Promise<number> {
+    // Try the preferred port first (reuses last-known port for stable HTTP configs)
+    if (this.preferredPort && await this.isPortAvailable(this.preferredPort)) {
+      return this.preferredPort;
+    }
     for (let port = MCP_PORT_RANGE_START; port <= MCP_PORT_RANGE_END; port++) {
+      if (port === this.preferredPort) continue; // already tried above
       const available = await this.isPortAvailable(port);
       if (available) return port;
     }
@@ -192,6 +205,12 @@ export class McpServer {
       try {
         const request = JSON.parse(body) as JsonRpcRequest;
         const response = await this.dispatch(request);
+        // Notifications return null — no response body per JSON-RPC 2.0 spec
+        if (response === null) {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(response));
       } catch (err) {
@@ -204,8 +223,13 @@ export class McpServer {
     });
   }
 
-  private async dispatch(request: JsonRpcRequest): Promise<JsonRpcResponse> {
+  private async dispatch(request: JsonRpcRequest): Promise<JsonRpcResponse | null> {
     const { method, id, params } = request;
+
+    // Notifications have no id — must not receive a response per JSON-RPC 2.0 spec
+    if (!('id' in request) || request.id === undefined) {
+      return null;
+    }
 
     const instructions = this.instructionRegistry.getInstructions();
 
@@ -221,10 +245,6 @@ export class McpServer {
       }
 
       case 'ping':
-        return this.jsonRpcResult(id, {});
-
-      case 'notifications/initialized':
-        // Client acknowledgement — no response needed for notifications
         return this.jsonRpcResult(id, {});
 
       // --- Tools ---

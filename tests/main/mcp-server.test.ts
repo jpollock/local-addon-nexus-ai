@@ -33,6 +33,10 @@ function httpRequest(
         let data = '';
         res.on('data', (chunk: Buffer) => (data += chunk.toString()));
         res.on('end', () => {
+          if (!data.trim()) {
+            resolve({ status: res.statusCode!, body: '' });
+            return;
+          }
           try {
             resolve({ status: res.statusCode!, body: JSON.parse(data) });
           } catch {
@@ -173,5 +177,44 @@ describe('McpServer', () => {
     expect(info.authToken).toBeTruthy();
     expect(info.tools).toContain('test_tool');
     expect(info.version).toBe('0.1.0');
+    expect(info.stdioPath).toContain('mcp-stdio.js');
+  });
+
+  test('notifications return 204 with no body', async () => {
+    // JSON-RPC notifications have no id — server must not send a response body
+    const res = await httpRequest(
+      port,
+      'POST',
+      '/mcp/messages',
+      { jsonrpc: '2.0', method: 'notifications/initialized' } as any,
+      token,
+    );
+    expect(res.status).toBe(204);
+    expect(res.body).toBe(''); // empty body
+  });
+
+  test('any notification method returns 204', async () => {
+    const res = await httpRequest(
+      port,
+      'POST',
+      '/mcp/messages',
+      { jsonrpc: '2.0', method: 'notifications/some/event' } as any,
+      token,
+    );
+    expect(res.status).toBe(204);
+  });
+
+  test('token is stable when existingToken is passed', async () => {
+    const existingToken = 'stable-token-abc123';
+    const registry2 = new ToolRegistry();
+    const s2 = new McpServer({
+      services: createMockServices(),
+      registry: registry2,
+      port: 0,
+      existingToken,
+    });
+    const info2 = await s2.start();
+    expect(info2.authToken).toBe(existingToken);
+    await s2.stop();
   });
 });

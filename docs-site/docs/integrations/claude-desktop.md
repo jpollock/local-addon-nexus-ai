@@ -30,7 +30,7 @@ Before you begin:
    ```bash
    npm install -g @local-labs-jpollock/local-addon-nexus-ai
    ```
-3. **Local with WordPress sites** running
+3. **Local with WordPress sites** running (required when tools are invoked)
 4. **Claude Pro or Team subscription** (MCP requires paid plan)
 
 !!! info "MCP Availability"
@@ -38,21 +38,33 @@ Before you begin:
 
 ## Installation
 
+### Automated Setup (Recommended)
+
+The fastest way to configure Claude Desktop is:
+
+```bash
+nexus mcp setup --agent claude-desktop --write
+```
+
+This writes the correct config to `~/Library/Application Support/Claude/claude_desktop_config.json` automatically. Then skip to [Step 5: Restart Claude Desktop](#step-5-restart-claude-desktop).
+
+### Manual Setup
+
 ### Step 1: Locate Config File
 
 Claude Desktop's MCP configuration is stored in a JSON file:
 
 === "macOS"
 
-    ```bash
-    ~/.config/Claude/claude_desktop_config.json
+    ```
+    ~/Library/Application Support/Claude/claude_desktop_config.json
     ```
 
     **If directory doesn't exist:**
 
     ```bash
-    mkdir -p ~/.config/Claude
-    touch ~/.config/Claude/claude_desktop_config.json
+    mkdir -p ~/Library/Application\ Support/Claude
+    touch ~/Library/Application\ Support/Claude/claude_desktop_config.json
     ```
 
 === "Windows"
@@ -78,27 +90,40 @@ Claude Desktop's MCP configuration is stored in a JSON file:
 Open the config file in your preferred editor:
 
 ```bash
-# macOS/Linux
-nano ~/.config/Claude/claude_desktop_config.json
+# macOS
+open -a "TextEdit" ~/Library/Application\ Support/Claude/claude_desktop_config.json
 
 # Or use VS Code
-code ~/.config/Claude/claude_desktop_config.json
+code ~/Library/Application\ Support/Claude/claude_desktop_config.json
 ```
 
-### Step 3: Add Nexus AI Server
+### Step 3: Find the Bridge Path
 
-Add this configuration:
+Nexus AI uses a **stdio bridge** to communicate with Claude Desktop. Get the correct path for your system:
+
+```bash
+nexus mcp setup --agent claude-desktop
+```
+
+This prints the exact JSON block to paste, with the absolute path to `mcp-stdio.js` already filled in.
+
+### Step 4: Add Nexus AI Server
+
+Add this configuration (replace the path with the one from Step 3):
 
 ```json
 {
   "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/usr/local/lib/node_modules/@local-labs-jpollock/local-addon-nexus-ai/bin/mcp-stdio.js"]
     }
   }
 }
 ```
+
+!!! important "Use node + mcp-stdio.js, not `nexus mcp`"
+    Claude Desktop requires the `node` command with the absolute path to `bin/mcp-stdio.js`. Do **not** use `"command": "nexus"` — that form does not work reliably with Claude Desktop.
 
 **If you already have other MCP servers:**
 
@@ -109,21 +134,21 @@ Add this configuration:
       "command": "some-command",
       "args": ["arg1", "arg2"]
     },
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/usr/local/lib/node_modules/@local-labs-jpollock/local-addon-nexus-ai/bin/mcp-stdio.js"]
     }
   }
 }
 ```
 
-### Step 4: Verify JSON Syntax
+### Verify JSON Syntax
 
 Validate your JSON before restarting Claude:
 
 ```bash
 # macOS/Linux
-cat ~/.config/Claude/claude_desktop_config.json | jq
+cat ~/Library/Application\ Support/Claude/claude_desktop_config.json | jq
 ```
 
 If `jq` reports errors, fix the JSON syntax. Common mistakes:
@@ -133,20 +158,7 @@ If `jq` reports errors, fix the JSON syntax. Common mistakes:
 - ❌ Unquoted strings
 - ❌ Single quotes instead of double quotes
 
-**Valid example:**
-
-```json
-{
-  "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-### Step 5: Restart Claude Desktop
+### Step 5: Restart Claude Desktop {#step-5-restart-claude-desktop}
 
 **Important:** Fully quit Claude Desktop (not just close the window):
 
@@ -546,9 +558,9 @@ If you store your Nexus database in a custom location:
 ```json
 {
   "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"],
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/path/to/bin/mcp-stdio.js"],
       "env": {
         "NEXUS_DB_PATH": "/custom/path/nexus.db"
       }
@@ -564,9 +576,9 @@ Enable debug logging for troubleshooting:
 ```json
 {
   "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"],
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/path/to/bin/mcp-stdio.js"],
       "env": {
         "NEXUS_DEBUG": "true"
       }
@@ -588,15 +600,15 @@ Run multiple Nexus instances with different databases:
 {
   "mcpServers": {
     "nexus-personal": {
-      "command": "nexus",
-      "args": ["mcp"],
+      "command": "node",
+      "args": ["/path/to/bin/mcp-stdio.js"],
       "env": {
         "NEXUS_DB_PATH": "~/.nexus/personal.db"
       }
     },
     "nexus-work": {
-      "command": "nexus",
-      "args": ["mcp"],
+      "command": "node",
+      "args": ["/path/to/bin/mcp-stdio.js"],
       "env": {
         "NEXUS_DB_PATH": "~/.nexus/work.db"
       }
@@ -622,8 +634,8 @@ Claude will show both sets of tools prefixed by the server name.
 
 2. **Check config file path:**
    ```bash
-   # macOS/Linux
-   cat ~/.config/Claude/claude_desktop_config.json
+   # macOS
+   cat ~/Library/Application\ Support/Claude/claude_desktop_config.json
 
    # Windows
    type %APPDATA%\Claude\claude_desktop_config.json
@@ -631,7 +643,7 @@ Claude will show both sets of tools prefixed by the server name.
 
 3. **Validate JSON syntax:**
    ```bash
-   cat ~/.config/Claude/claude_desktop_config.json | jq
+   cat ~/Library/Application\ Support/Claude/claude_desktop_config.json | jq
    ```
 
 4. **Check Claude Desktop logs:**
@@ -672,9 +684,9 @@ Claude will show both sets of tools prefixed by the server name.
    ```json
    {
      "mcpServers": {
-       "nexus-ai": {
-         "command": "nexus",
-         "args": ["mcp"],
+       "local-nexus-ai": {
+         "command": "node",
+         "args": ["/path/to/bin/mcp-stdio.js"],
          "env": {
            "NEXUS_DEBUG": "true"
          }
@@ -737,31 +749,32 @@ Claude will show both sets of tools prefixed by the server name.
 
 ### "Command not found"
 
-**Problem:** Claude reports `nexus` command not found.
+**Problem:** Claude reports `node` command not found or bridge fails to start.
 
 **Solutions:**
 
-1. **Verify PATH in shell:**
+1. **Verify node is accessible:**
    ```bash
-   echo $PATH
-   npm config get prefix
+   which node
+   node --version
    ```
 
-2. **Use full path in config:**
+2. **Use full path to node in config:**
    ```json
    {
      "mcpServers": {
-       "nexus-ai": {
-         "command": "/usr/local/bin/nexus",
-         "args": ["mcp"]
+       "local-nexus-ai": {
+         "command": "/usr/local/bin/node",
+         "args": ["/path/to/bin/mcp-stdio.js"]
        }
      }
    }
    ```
 
-   Find full path:
+   Find paths:
    ```bash
-   which nexus
+   which node
+   nexus mcp setup --agent claude-desktop
    ```
 
 ## Best Practices

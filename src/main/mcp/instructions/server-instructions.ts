@@ -21,30 +21,56 @@ Route user requests to the correct tool namespace:
 |-------------|---------------|----------|
 | List/find sites | \`local_list_sites\`, \`nexus_list_sites\` | "what sites do I have?", "show my sites" |
 | Site lifecycle | \`local_start_site\`, \`local_stop_site\`, \`local_restart_site\` | "start my blog", "stop the test site" |
-| Create/delete sites | \`local_create_site\`, \`local_delete_site\` | "make a new site", "remove old-project" |
+| Create/delete/clone sites | \`local_create_site\`, \`local_delete_site\`, \`local_clone_site\` | "make a new site", "clone my staging site" |
+| Site details & logs | \`local_get_site\`, \`local_get_site_logs\` | "show site config", "what errors are in the log?" |
 | WordPress info | \`wp_core_version\`, \`wp_plugin_list\`, \`wp_theme_list\`, \`wp_user_list\` | "what plugins?", "WP version?" |
 | Plugin management | \`wp_plugin_install\`, \`wp_plugin_activate\`, \`wp_plugin_deactivate\`, \`wp_plugin_update\` | "install ACF", "update all plugins" |
+| Content management | \`wp_post_create\`, \`wp_post_update\`, \`wp_post_delete\` | "create a draft post", "update the homepage" |
 | Site options | \`wp_option_get\` | "what's the site title?" |
+| Arbitrary PHP | \`wp_eval\` | "run this PHP snippet", "check if a function exists" |
 | Site health | \`wp_site_health\` | "is the site healthy?" |
 | Site audit | \`nexus_site_audit\` | "audit my blog", "check everything on test-site" |
-| Database | \`wp_db_export\`, \`wp_search_replace\` | "export the database", "change domain" |
-| Fleet overview | \`fleet_summary\`, \`find_sites_with_plugin\`, \`compare_sites\`, \`detect_drift\` | "which sites use WooCommerce?" |
-| Fleet plugin audit | \`nexus_plugin_audit\` | "audit plugins across all sites", "what needs updating?" |
+| Database | \`wp_db_export\`, \`wp_import_database\`, \`wp_search_replace\` | "export the database", "change domain" |
+| Fleet overview | \`fleet_summary\`, \`find_sites_with_plugin\`, \`find_sites_with_theme\`, \`compare_sites\`, \`detect_drift\`, \`find_outdated_sites\` | "which sites use WooCommerce?" |
+| Fleet health | \`fleet_health_summary\`, \`get_site_health\`, \`fleet_filter\`, \`fleet_search\` | "which sites have issues?", "find sites running PHP 7" |
+| Fleet plugin audit | \`nexus_plugin_audit\`, \`bulk_plugin_update\` | "audit plugins across all sites", "update Yoast everywhere" |
 | Content search | \`search_site_content\`, \`search_across_sites\` | "find posts about pricing" |
-| Site structure | \`get_site_structure\`, \`get_index_status\`, \`reindex_site\` | "what's installed on this site?" |
-| WP Engine accounts | \`wpe_get_accounts\`, \`wpe_get_installs\` | "show my WPE installs" |
+| Site structure | \`get_site_structure\`, \`get_index_status\`, \`reindex_site\`, \`list_indexed_sites\` | "what's installed on this site?" |
+| WP Engine auth | \`wpe_status\`, \`wpe_login\`, \`wpe_logout\` | "am I logged in to WPE?", "connect to WP Engine" |
+| WP Engine accounts | \`wpe_get_accounts\`, \`wpe_get_installs\`, \`wpe_get_install\` | "show my WPE installs" |
+| WP Engine usage | \`wpe_get_install_usage\`, \`wpe_get_account_usage\` | "show bandwidth this month", "how much storage am I using?" |
 | WP Engine ops | \`wpe_create_backup\`, \`wpe_purge_cache\` | "backup production", "clear cache" |
-| Sync with WPE | \`local_wpe_pull\`, \`local_wpe_push\` | "pull from staging", "push to dev" |
+| Sync with WPE | \`local_wpe_pull\`, \`local_wpe_push\`, \`local_wpe_link\` | "pull from staging", "push to dev", "link this site to WPE" |
+| Sync history | \`local_get_site_changes\`, \`local_get_sync_history\` | "what changed since last pull?", "show sync history" |
+| AI setup | \`wp_setup_ai\` | "set up AI on this site" |
 | AI abilities | \`wp_list_abilities\`, \`wp_run_ability\` | "what abilities does this site have?", "run acf/list-field-groups" |
 | AI credentials | \`wp_sync_ai_credentials\`, \`nexus_sync_credentials\` | "sync API keys to the site" |
 | AI provider config | \`nexus_get_site_ai_config\`, \`nexus_switch_provider\` | "what AI provider is this site using?", "switch to OpenAI" |
 | Local LLM | \`ask_ollama\`, \`list_ollama_models\` | "ask Ollama about this code" |
+| Site groups | \`list_site_groups\`, \`manage_site_group\` | "show my site groups", "add site to production group" |
 
-### Ollama Site Context
+## WP Engine Authentication
+
+**Always check auth before WPE operations.** If any \`wpe_*\` tool returns an authentication error, call \`wpe_status\` immediately to diagnose.
+
+- **\`wpe_status\`** — Check whether the user is authenticated. Returns \`authenticated\`, \`email\`, and \`accountName\`. Tier 1 (read-only).
+- **\`wpe_login\`** — Opens a browser for OAuth login. Returns immediately (fire-and-forget). Poll \`wpe_status\` every few seconds until \`authenticated: true\`. Tier 2.
+- **\`wpe_logout\`** — Clears WPE credentials. Tier 2.
+
+When WPE tools fail with auth errors: call \`wpe_status\` → if not authenticated, call \`wpe_login\` → poll \`wpe_status\` → retry the original tool.
+
+## WP Engine Usage Metrics
+
+- **\`wpe_get_install_usage\`** — Bandwidth, storage, and visitor data for a specific install. Requires \`install_id\` (UUID from \`wpe_get_installs\`). Optional \`month_offset\` (0 = current month, 1 = last month).
+- **\`wpe_get_account_usage\`** — Same metrics aggregated at the account level. Requires \`account_id\` (from \`wpe_get_accounts\`).
+
+Responses are cached (current month: 1-hour TTL; past months: 24-hour TTL). A \`_cached\` field in the response indicates a cache hit.
+
+## Ollama Site Context
 
 \`ask_ollama\` accepts an optional \`site\` parameter. When provided, the tool injects the site's structure (theme, plugins, WP version) and relevant indexed content into the system prompt, giving the local LLM site-aware context. \`list_ollama_models\` includes hardware-aware model recommendations based on available RAM.
 
-### AI Provider Management
+## AI Provider Management
 
 Use these tools to inspect and change which AI provider a WordPress site is using.
 
@@ -59,12 +85,12 @@ Use these tools to inspect and change which AI provider a WordPress site is usin
 - Always call \`nexus_get_site_ai_config\` first to confirm the site is configured and to record the current provider.
 - For Ollama: confirm Ollama is running before switching (\`list_ollama_models\` will error if it is not).
 - Local-only — does not support \`install_name\`.
-- Safety: **Tier 2** — modifies the site's WordPress plugins. Execute and log; no confirmation token required, but the change is meaningful.
+- Safety: **Tier 2** — modifies the site's WordPress plugins.
 
 **\`nexus_sync_credentials\`** — Manually syncs the AI API key for a site's configured provider.
 - Use when the user reports AI is not working on a site after changing API keys, or after adding a key for the first time.
 - Credentials are auto-synced when a site starts; this tool triggers an immediate manual sync without restarting.
-- Only syncs the key for the provider already configured on the site — it does not sync all providers.
+- Only syncs the key for the provider already configured on the site.
 - Requires the site to be running and to have been previously configured via Setup AI.
 - Local-only — does not support \`install_name\`.
 
@@ -85,8 +111,8 @@ Three tools are local-only and do not support \`install_name\`: \`wp_db_export\`
 
 Tools are classified into three safety tiers:
 
-- **Tier 1 (read-only)**: Execute immediately. No side effects. Examples: \`local_list_sites\`, \`wp_plugin_list\`.
-- **Tier 2 (modifying)**: Execute and log. Changes state but is recoverable. Examples: \`local_start_site\`, \`wp_plugin_install\`.
+- **Tier 1 (read-only)**: Execute immediately. No side effects. Examples: \`local_list_sites\`, \`wp_plugin_list\`, \`wpe_status\`.
+- **Tier 2 (modifying)**: Execute and log. Changes state but is recoverable. Examples: \`local_start_site\`, \`wp_plugin_install\`, \`wpe_login\`.
 - **Tier 3 (destructive)**: Requires confirmation token. The first call returns a confirmation prompt with a token. Call again with \`_confirmationToken\` to proceed. Examples: \`local_delete_site\`, \`local_wpe_push\`.
 
 Always use \`wp_plugin_update\` with dry-run awareness — check what will change before updating. Use \`wp_search_replace\` in dry-run mode first to preview changes.
@@ -98,6 +124,7 @@ Always use \`wp_plugin_update\` with dry-run awareness — check what will chang
 - When listing plugins, show name, version, and status (active/inactive).
 - For fleet operations, summarize totals and highlight outliers.
 - Include version numbers when reporting WordPress or PHP versions.
+- For usage metrics, format bytes as GB/MB and large numbers with commas.
 
 ## Resources
 

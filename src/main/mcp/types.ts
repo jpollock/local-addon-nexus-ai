@@ -161,4 +161,6 @@ export interface ConnectionInfo {
   port: number;
   version: string;
   tools: string[];
+  /** Absolute path to bin/mcp-stdio.js — used to generate correct agent setup configs */
+  stdioPath: string;
 }

@@ -524,4 +524,157 @@ wpeCommand
     }
   });
 
+// ---------------------------------------------------------------------------
+// Shared usage formatting helpers
+// ---------------------------------------------------------------------------
+
+function formatBytes(bytes: number | string | undefined | null): string {
+  const n = typeof bytes === 'string' ? parseInt(bytes, 10) : (bytes ?? 0);
+  if (!n || isNaN(n)) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(n) / Math.log(1024));
+  return `${(n / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+}
+
+function formatNum(v: number | string | undefined | null): string {
+  const n = typeof v === 'string' ? parseInt(v, 10) : (v ?? 0);
+  if (!n || isNaN(n)) return '0';
+  return new Intl.NumberFormat('en-US').format(n);
+}
+
+function printUsage(
+  label: string,
+  data: any,
+  opts: { firstDate: string; lastDate: string; cached: boolean; cachedAgeMinutes: number },
+): void {
+  const r = data?.metrics_rollup ?? {};
+  const monthLabel = (() => {
+    const [y, m] = opts.firstDate.split('-');
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  })();
+
+  const line = '─'.repeat(42);
+  console.log(`\n${label} — ${monthLabel}`);
+  console.log(line);
+  console.log(`  Visits (total):    ${formatNum(r.visit_count?.sum)}`);
+  console.log(`  Billable visits:   ${formatNum(r.billable_visits?.sum)}`);
+  console.log(`  Bandwidth:         ${formatBytes(r.network_total_bytes?.sum)}`);
+  console.log(`  File storage:      ${formatBytes(r.storage_file_bytes?.latest?.value)}`);
+  console.log(`  DB storage:        ${formatBytes(r.storage_database_bytes?.latest?.value)}`);
+  console.log(line);
+  console.log(`  Period:  ${opts.firstDate} → ${opts.lastDate}`);
+  if (opts.cached) {
+    console.log(`  Cached:  yes (${opts.cachedAgeMinutes}m old)`);
+  }
+  console.log('');
+}
+
+// ---------------------------------------------------------------------------
+// nexus wpe usage
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('usage <installId>')
+  .description('Show bandwidth, storage, and visitor usage for a WP Engine install')
+  .option('--month-offset <n>', 'Month offset (0 = current, 1 = last month)', '0')
+  .option('--json', 'Output raw JSON')
+  .action(async (installId, options) => {
+    try {
+      const monthOffset = parseInt(options.monthOffset ?? '0', 10);
+      const client = getClient();
+
+      const result = await client.mutate<{ nexusWpeInstallUsage: any }>(`
+        mutation($installId: String!, $monthOffset: Int) {
+          nexusWpeInstallUsage(installId: $installId, monthOffset: $monthOffset) {
+            success
+            error
+            data
+            cached
+            cachedAgeMinutes
+            firstDate
+            lastDate
+          }
+        }
+      `, { installId, monthOffset });
+
+      const { success, error, data, cached, cachedAgeMinutes, firstDate, lastDate } =
+        result.nexusWpeInstallUsage;
+
+      if (!success) {
+        console.error(`\n❌ ${error}`);
+        process.exit(1);
+      }
+
+      const parsed = JSON.parse(data);
+
+      if (options.json) {
+        console.log(JSON.stringify(parsed, null, 2));
+        return;
+      }
+
+      printUsage(
+        `Install: ${parsed.install_name ?? installId}`,
+        parsed,
+        { firstDate, lastDate, cached, cachedAgeMinutes },
+      );
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe account-usage
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('account-usage <accountId>')
+  .description('Show bandwidth, storage, and visitor usage for a WP Engine account')
+  .option('--month-offset <n>', 'Month offset (0 = current, 1 = last month)', '0')
+  .option('--json', 'Output raw JSON')
+  .action(async (accountId, options) => {
+    try {
+      const monthOffset = parseInt(options.monthOffset ?? '0', 10);
+      const client = getClient();
+
+      const result = await client.mutate<{ nexusWpeAccountUsage: any }>(`
+        mutation($accountId: String!, $monthOffset: Int) {
+          nexusWpeAccountUsage(accountId: $accountId, monthOffset: $monthOffset) {
+            success
+            error
+            data
+            cached
+            cachedAgeMinutes
+            firstDate
+            lastDate
+          }
+        }
+      `, { accountId, monthOffset });
+
+      const { success, error, data, cached, cachedAgeMinutes, firstDate, lastDate } =
+        result.nexusWpeAccountUsage;
+
+      if (!success) {
+        console.error(`\n❌ ${error}`);
+        process.exit(1);
+      }
+
+      const parsed = JSON.parse(data);
+
+      if (options.json) {
+        console.log(JSON.stringify(parsed, null, 2));
+        return;
+      }
+
+      printUsage(
+        `Account: ${accountId}`,
+        parsed,
+        { firstDate, lastDate, cached, cachedAgeMinutes },
+      );
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 export { wpeCommand };

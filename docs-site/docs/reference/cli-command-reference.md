@@ -24,71 +24,82 @@ Available on all commands:
 
 ### `nexus mcp`
 
-Start the MCP server for AI assistant integration.
+Command group for MCP server management and agent configuration.
 
 ```bash
-nexus mcp [options]
+nexus mcp <subcommand> [options]
+```
+
+**Subcommands:**
+
+| Subcommand | Description |
+|-----------|-------------|
+| `status` | Show MCP server status |
+| `setup` | Generate or write agent config |
+
+!!! note "Works without Local running"
+    `nexus mcp status` and `nexus mcp setup` skip the Local bootstrap and work regardless of whether Local is open.
+
+---
+
+#### `nexus mcp status`
+
+Show the current MCP server status (port, tool count, live connectivity check).
+
+```bash
+nexus mcp status
+```
+
+**Output:**
+
+```
+MCP server: running
+Port:       50123
+Tools:      88
+```
+
+---
+
+#### `nexus mcp setup`
+
+Generate or write the correct MCP configuration for a supported AI agent.
+
+```bash
+nexus mcp setup [--agent <name>] [--write]
 ```
 
 **Options:**
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--stdio` | Use stdio transport (default) | `true` |
-| `--port <port>` | Use HTTP transport on port | - |
+| `--agent <name>` | Target agent | Interactive prompt |
+| `--write` | Write config to disk (or register with CLI) | `false` (print only) |
+
+**Supported agents:**
+
+| Agent | `--agent` value | `--write` behavior |
+|-------|----------------|-------------------|
+| Claude Code | `claude-code` | Runs `claude mcp add` |
+| Claude Desktop | `claude-desktop` | Writes to `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Cursor | `cursor` | Writes to `~/.cursor/mcp.json` |
+| Windsurf | `windsurf` | Writes to `~/.codeium/windsurf/mcp_config.json` |
+| Cline (VS Code) | `cline` | Writes to `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
+| Gemini CLI | `gemini` | Writes to `~/.gemini/settings.json` |
 
 **Usage:**
 
 ```bash
-# Start MCP server (stdio)
-nexus mcp
+# Print config for Claude Desktop (no changes made)
+nexus mcp setup --agent claude-desktop
 
-# Start MCP server (HTTP)
-nexus mcp --port 3000
+# Write config for Cursor automatically
+nexus mcp setup --agent cursor --write
+
+# Register with Claude Code CLI
+nexus mcp setup --agent claude-code --write
 ```
 
-**MCP Client Configuration:**
-
-=== "Claude Desktop"
-
-    ```json
-    {
-      "mcpServers": {
-        "nexus-ai": {
-          "command": "nexus",
-          "args": ["mcp"]
-        }
-      }
-    }
-    ```
-
-=== "Cursor"
-
-    ```json
-    {
-      "mcpServers": {
-        "nexus-ai": {
-          "command": "nexus",
-          "args": ["mcp"]
-        }
-      }
-    }
-    ```
-
-=== "Zed"
-
-    ```json
-    {
-      "context_servers": {
-        "nexus-ai": {
-          "command": {
-            "path": "nexus",
-            "args": ["mcp"]
-          }
-        }
-      }
-    }
-    ```
+**All agents use the stdio bridge** (`bin/mcp-stdio.js`), not an HTTP URL. The generated config always uses `"command": "node"` with the absolute path to the bridge.
 
 **Environment Variables:**
 
@@ -770,12 +781,37 @@ nexus wpe <action> [options]
 
 | Action | Description |
 |--------|-------------|
+| `status` | Check WPE authentication status |
 | `accounts` | List WPE accounts |
 | `installs` | List WPE installs |
 | `diagnose` | Diagnose site health |
 | `diff` | Compare environments |
 | `backup` | Create backup |
 | `promote` | Promote staging to production |
+| `usage` | Show bandwidth/storage/visitor metrics for an install |
+| `account-usage` | Show bandwidth/storage/visitor metrics for an account |
+
+#### `nexus wpe status`
+
+Check WP Engine authentication status.
+
+```bash
+nexus wpe status
+```
+
+**Output (authenticated):**
+
+```
+WP Engine: authenticated
+User:      you@example.com
+```
+
+**Output (not authenticated):**
+
+```
+WP Engine: not authenticated
+Run 'nexus wpe login' to authenticate.
+```
 
 #### `nexus wpe accounts`
 
@@ -1041,6 +1077,95 @@ Promoting environment...
 Promotion complete!
   - Production is now running staging code
   - Rollback available: nexus wpe rollback mysite backup_xyz789
+```
+
+#### `nexus wpe usage`
+
+Show bandwidth, storage, and visitor metrics for a WP Engine install.
+
+```bash
+nexus wpe usage <installId> [options]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `<installId>` | WP Engine install ID or name |
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--month-offset <n>` | Months back from current (`0` = this month, `1` = last month) | `0` |
+| `--json` | Output as JSON | `false` |
+
+**Usage:**
+
+```bash
+# Current month usage
+nexus wpe usage mysite-production
+
+# Last month usage
+nexus wpe usage mysite-production --month-offset 1
+
+# JSON output
+nexus wpe usage mysite-production --json
+```
+
+**Output:**
+
+```
+Usage — mysite-production (March 2026)
+
+  Bandwidth:  12.4 GB
+  Storage:    1.8 GB
+  Visitors:   24,531
+```
+
+**Caching:** Current month is cached for 1 hour; past months are cached for 24 hours.
+
+---
+
+#### `nexus wpe account-usage`
+
+Show bandwidth, storage, and visitor metrics aggregated for a WP Engine account.
+
+```bash
+nexus wpe account-usage <accountId> [options]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `<accountId>` | WP Engine account ID |
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--month-offset <n>` | Months back from current (`0` = this month, `1` = last month) | `0` |
+| `--json` | Output as JSON | `false` |
+
+**Usage:**
+
+```bash
+# Current month account usage
+nexus wpe account-usage my-agency
+
+# Last month as JSON
+nexus wpe account-usage my-agency --month-offset 1 --json
+```
+
+**Output:**
+
+```
+Account Usage — my-agency (March 2026)
+
+  Bandwidth:  84.7 GB
+  Storage:    14.2 GB
+  Visitors:   182,045
 ```
 
 ---

@@ -1,7 +1,7 @@
 ---
 title: MCP Setup
-description: Configure Nexus AI MCP server for Claude Desktop, Cursor, Zed, and other AI assistants
-keywords: [mcp, model context protocol, claude desktop, cursor, zed, ai assistant, configuration]
+description: Configure Nexus AI MCP server for Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Gemini, and other AI assistants
+keywords: [mcp, model context protocol, claude desktop, cursor, windsurf, cline, gemini, ai assistant, configuration]
 ---
 
 # MCP Setup
@@ -12,7 +12,7 @@ Configure the Nexus AI MCP server to work with AI assistants via the Model Conte
 
 The **Model Context Protocol (MCP)** is a standard for connecting AI assistants to external tools and data sources.
 
-When configured as an MCP server, Nexus AI exposes **88 tools** that AI assistants can use to:
+When configured as an MCP server, Nexus AI exposes tools that AI assistants can use to:
 
 - Manage WordPress sites (local and WP Engine)
 - Execute WP-CLI commands
@@ -24,81 +24,141 @@ When configured as an MCP server, Nexus AI exposes **88 tools** that AI assistan
 
 ```mermaid
 graph LR
-    A[Claude Desktop] -->|MCP Protocol| B[Nexus AI MCP Server]
-    C[Cursor IDE] -->|MCP Protocol| B
-    D[Zed Editor] -->|MCP Protocol| B
-    B -->|Manages| E[Local Sites]
-    B -->|Manages| F[WP Engine Sites]
+    A[Claude Code] -->|stdio| B[Nexus AI MCP Bridge]
+    C[Claude Desktop] -->|stdio| B
+    D[Cursor IDE] -->|stdio| B
+    E[Windsurf] -->|stdio| B
+    B -->|Manages| F[Local Sites]
+    B -->|Manages| G[WP Engine Sites]
 ```
 
 **How it works:**
 
-1. AI assistant starts Nexus AI as a subprocess
+1. AI assistant launches the Nexus AI stdio bridge as a subprocess
 2. Communicates via stdio (standard input/output)
 3. Discovers available tools via MCP protocol
 4. Calls tools to perform WordPress operations
 5. Receives structured responses
 
+All agents use a **stdio bridge** (`bin/mcp-stdio.js`) — not an HTTP URL. The bridge connects to the Local addon's GraphQL server, so Local must be running when tools are invoked.
+
+## Automated Setup with `nexus mcp setup`
+
+The easiest way to configure any supported agent is the `nexus mcp setup` command. It works without Local running.
+
+```bash
+# Show the correct config for your agent (print only)
+nexus mcp setup --agent claude-desktop
+
+# Write the config to disk automatically
+nexus mcp setup --agent cursor --write
+
+# Claude Code: register with the claude CLI directly
+nexus mcp setup --agent claude-code --write
+```
+
+**Supported agents:**
+
+| Agent | `--agent` value |
+|-------|----------------|
+| Claude Code (CLI) | `claude-code` |
+| Claude Desktop | `claude-desktop` |
+| Cursor | `cursor` |
+| Windsurf | `windsurf` |
+| Cline (VS Code) | `cline` |
+| Gemini CLI | `gemini` |
+
+Check MCP server status at any time:
+
+```bash
+nexus mcp status
+```
+
+Output example:
+
+```
+MCP server: running
+Port:       50123
+Tools:      88
+```
+
+## Claude Code
+
+Claude Code is Anthropic's official CLI. It manages MCP servers via the `claude mcp` command.
+
+### Automated setup (recommended)
+
+```bash
+nexus mcp setup --agent claude-code --write
+```
+
+This runs `claude mcp add local-nexus-ai -- node "/path/to/bin/mcp-stdio.js"` for you.
+
+### Manual setup
+
+```bash
+# Find the bridge path
+nexus mcp setup --agent claude-code
+
+# Register with claude CLI (use the path shown above)
+claude mcp add local-nexus-ai -- node "/usr/local/lib/node_modules/@local-labs-jpollock/local-addon-nexus-ai/bin/mcp-stdio.js"
+```
+
+### Verify
+
+```bash
+claude mcp list
+```
+
+`local-nexus-ai` should appear in the list.
+
 ## Claude Desktop
 
 Claude Desktop is Anthropic's official desktop app with native MCP support.
 
-### Configuration
+### Automated setup (recommended)
 
-Edit the Claude Desktop config file:
+```bash
+nexus mcp setup --agent claude-desktop --write
+```
+
+### Manual configuration
+
+Config file location:
 
 === "macOS"
 
-    ```bash
-    # Edit config file
-    nano ~/.config/Claude/claude_desktop_config.json
+    ```
+    ~/Library/Application Support/Claude/claude_desktop_config.json
     ```
 
 === "Windows"
 
     ```powershell
-    # Edit config file
-    notepad %APPDATA%\Claude\claude_desktop_config.json
+    %APPDATA%\Claude\claude_desktop_config.json
     ```
 
 === "Linux"
 
     ```bash
-    # Edit config file
-    nano ~/.config/Claude/claude_desktop_config.json
+    ~/.config/Claude/claude_desktop_config.json
     ```
-
-### Config File
 
 Add Nexus AI to the `mcpServers` section:
 
 ```json
 {
   "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/usr/local/lib/node_modules/@local-labs-jpollock/local-addon-nexus-ai/bin/mcp-stdio.js"]
     }
   }
 }
 ```
 
-**Complete example with multiple servers:**
-
-```json
-{
-  "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
-    },
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/username/Documents"]
-    }
-  }
-}
-```
+!!! note "Path may differ"
+    Replace the path with the output of `nexus mcp setup --agent claude-desktop` which shows the correct absolute path for your system.
 
 ### Restart Claude Desktop
 
@@ -114,30 +174,7 @@ Start a new conversation in Claude and ask:
 
 > "What MCP tools are available?"
 
-Claude should respond with a list of Nexus AI tools:
-
-```
-I have access to 88 Nexus AI tools:
-
-Local Site Management:
-- local_list_sites
-- local_create_site
-- local_start_site
-- local_stop_site
-...
-
-WP Engine Operations:
-- wpe_get_installs
-- wpe_get_accounts
-- wpe_diagnose_site
-...
-
-WordPress Management:
-- wp_plugin_list
-- wp_plugin_activate
-- wp_core_version
-...
-```
+Claude should respond with a list of Nexus AI tools including `local_list_sites`, `wpe_get_installs`, `wp_plugin_list`, and many more.
 
 ### Example Usage
 
@@ -151,40 +188,26 @@ WordPress Management:
 
 Cursor is a code editor with built-in AI and MCP support.
 
-### Configuration
+### Automated setup (recommended)
 
-1. Open Cursor Settings (Cmd+, on macOS)
-2. Search for "MCP"
-3. Or edit config directly:
+```bash
+nexus mcp setup --agent cursor --write
+```
+
+### Manual configuration
 
 **Config file location:**
 
-=== "macOS"
-
-    ```bash
-    ~/.cursor/mcp_config.json
-    ```
-
-=== "Windows"
-
-    ```powershell
-    %APPDATA%\Cursor\mcp_config.json
-    ```
-
-=== "Linux"
-
-    ```bash
-    ~/.cursor/mcp_config.json
-    ```
-
-### Config File
+```
+~/.cursor/mcp.json
+```
 
 ```json
 {
   "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/usr/local/lib/node_modules/@local-labs-jpollock/local-addon-nexus-ai/bin/mcp-stdio.js"]
     }
   }
 }
@@ -206,84 +229,100 @@ Use Cursor's AI chat (Cmd+L) to interact with WordPress sites:
 
 > "Search my sites for posts about React"
 
-## Zed Editor
+## Windsurf
 
-Zed is a high-performance code editor with MCP support.
+Windsurf is Codeium's AI-native code editor with MCP support.
 
-### Configuration
+### Automated setup (recommended)
 
-Edit Zed's MCP config:
+```bash
+nexus mcp setup --agent windsurf --write
+```
 
-=== "macOS/Linux"
+### Manual configuration
 
-    ```bash
-    ~/.config/zed/mcp.json
-    ```
+**Config file location:**
 
-=== "Windows"
-
-    ```powershell
-    %APPDATA%\Zed\mcp.json
-    ```
-
-### Config File
+```
+~/.codeium/windsurf/mcp_config.json
+```
 
 ```json
 {
-  "servers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
+  "mcpServers": {
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/usr/local/lib/node_modules/@local-labs-jpollock/local-addon-nexus-ai/bin/mcp-stdio.js"]
     }
   }
 }
 ```
 
-### Restart Zed
+Restart Windsurf after saving the config.
 
-1. Quit Zed
-2. Relaunch Zed
-3. MCP tools available in assistant
+## Cline (VS Code)
 
-## Continue.dev
+Cline is an autonomous coding agent extension for VS Code.
 
-Continue is an AI coding assistant plugin for VS Code and JetBrains IDEs.
+### Automated setup (recommended)
 
-### Configuration
-
-Edit Continue config:
-
-**VS Code:**
-```
-~/.continue/config.json
+```bash
+nexus mcp setup --agent cline --write
 ```
 
-**JetBrains:**
-```
-~/.continue/config.json
-```
+### Manual configuration
 
-### Config File
+**Config file location (macOS):**
+
+```
+~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json
+```
 
 ```json
 {
-  "mcpServers": [
-    {
-      "name": "nexus-ai",
-      "command": "nexus",
-      "args": ["mcp"]
+  "mcpServers": {
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/usr/local/lib/node_modules/@local-labs-jpollock/local-addon-nexus-ai/bin/mcp-stdio.js"]
     }
-  ]
+  }
 }
 ```
 
-### Restart Extension
+Reload VS Code after saving the config.
 
-Reload VS Code or JetBrains IDE window after editing config.
+## Gemini CLI
+
+Google's Gemini CLI supports MCP servers via `~/.gemini/settings.json`.
+
+### Automated setup (recommended)
+
+```bash
+nexus mcp setup --agent gemini --write
+```
+
+### Manual configuration
+
+**Config file location:**
+
+```
+~/.gemini/settings.json
+```
+
+```json
+{
+  "mcpServers": {
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/usr/local/lib/node_modules/@local-labs-jpollock/local-addon-nexus-ai/bin/mcp-stdio.js"]
+    }
+  }
+}
+```
 
 ## Other MCP Clients
 
-Any tool that supports the Model Context Protocol can use Nexus AI.
+Any tool that supports the Model Context Protocol can use Nexus AI via stdio.
 
 ### Generic MCP Configuration
 
@@ -291,30 +330,29 @@ Most MCP clients use this pattern:
 
 ```json
 {
-  "command": "nexus",
-  "args": ["mcp"],
-  "env": {
-    "DEBUG": "nexus:*"  // Optional: enable debug logging
-  }
+  "command": "node",
+  "args": ["/path/to/bin/mcp-stdio.js"]
 }
 ```
 
+Use `nexus mcp setup --agent claude-desktop` (or any supported agent) to see the correct absolute path for your system.
+
 ### Testing MCP Directly
 
-You can test the MCP server directly via command line:
+You can test the MCP bridge directly via command line:
 
 ```bash
-# Start MCP server
-nexus mcp
+# Check server status
+nexus mcp status
 
-# Server starts and waits for JSON-RPC messages on stdin
-# Press Ctrl+C to exit
+# Print config for an agent
+nexus mcp setup --agent cursor
 ```
 
-**Send test message:**
+**Send test message to the bridge:**
 
 ```bash
-echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | nexus mcp
+echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | node /path/to/bin/mcp-stdio.js
 ```
 
 Expected response:

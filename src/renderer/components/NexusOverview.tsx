@@ -47,6 +47,7 @@ interface McpInfo {
   port: number;
   version: string;
   tools: string[];
+  stdioPath: string;
 }
 
 interface SiteListItem {
@@ -847,12 +848,14 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       }, 'MCP server not yet running. Waiting for initialization...');
     }
 
-    const claudeCodeCmd = `claude mcp add nexus-ai -- curl ${mcpInfo.url}`;
+    // Both Claude Code and Claude Desktop use the stdio bridge so configs
+    // survive Local restarts without needing to update port/token.
+    const claudeCodeCmd = `claude mcp add local-nexus-ai -- node "${mcpInfo.stdioPath}"`;
     const claudeDesktopConfig = JSON.stringify({
       mcpServers: {
-        'nexus-ai': {
-          url: mcpInfo.url,
-          headers: { Authorization: `Bearer ${mcpInfo.authToken}` },
+        'local-nexus-ai': {
+          command: 'node',
+          args: [mcpInfo.stdioPath],
         },
       },
     }, null, 2);
@@ -868,6 +871,20 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       ? settings.aiProvider.charAt(0).toUpperCase() + settings.aiProvider.slice(1)
       : 'Not configured';
     const activeModel = settings?.aiModel || 'default';
+
+    // Shared stdio entry — same for Desktop, Cursor, Windsurf, Cline, Gemini
+    const stdioEntry = JSON.stringify(
+      { 'local-nexus-ai': { command: 'node', args: [mcpInfo.stdioPath] } },
+      null, 2,
+    );
+
+    const agentCard = (title: string, subtitle: string, code: string, field: string) =>
+      React.createElement('div', { style: cardStyle },
+        React.createElement('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--nxai-card-text)' } }, title),
+        React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginBottom: '6px' } }, subtitle),
+        React.createElement('div', { style: { ...codeBlockStyle, fontSize: '10px' } }, code),
+        copyBtn(code, field),
+      );
 
     return React.createElement('div', { style: { marginBottom: '24px' } },
       this.renderSectionLabel('Connect to AI Tools'),
@@ -896,27 +913,21 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       ),
 
       React.createElement('div', {
-        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' },
+        style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' },
       },
-        // Claude Code
-        React.createElement('div', { style: cardStyle },
-          React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--nxai-card-text)' } }, 'Claude Code'),
-          React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginBottom: '8px' } },
-            'Run in your terminal:',
-          ),
-          React.createElement('div', { style: codeBlockStyle }, claudeCodeCmd),
-          copyBtn(claudeCodeCmd, 'claude-code'),
-        ),
+        agentCard('Claude Code', 'Run in your terminal:', claudeCodeCmd, 'claude-code'),
+        agentCard('Claude Desktop', 'Add to claude_desktop_config.json:', claudeDesktopConfig, 'claude-desktop'),
+        agentCard('Cursor', 'Add to ~/.cursor/mcp.json:', stdioEntry, 'cursor'),
+        agentCard('Windsurf', 'Add to ~/.codeium/windsurf/mcp_config.json:', stdioEntry, 'windsurf'),
+        agentCard('Cline (VS Code)', 'Add to cline_mcp_settings.json:', stdioEntry, 'cline'),
+        agentCard('Gemini CLI', 'Add to ~/.gemini/settings.json:', stdioEntry, 'gemini'),
+      ),
 
-        // Claude Desktop
-        React.createElement('div', { style: cardStyle },
-          React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--nxai-card-text)' } }, 'Claude Desktop'),
-          React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginBottom: '8px' } },
-            'Add to claude_desktop_config.json:',
-          ),
-          React.createElement('div', { style: codeBlockStyle }, claudeDesktopConfig),
-          copyBtn(claudeDesktopConfig, 'claude-desktop'),
-        ),
+      React.createElement('div', { style: { marginTop: '10px', fontSize: '11px', color: 'var(--nxai-card-sub)' } },
+        'Or use the CLI: ',
+        React.createElement('code', {
+          style: { fontFamily: 'monospace', backgroundColor: 'var(--nxai-code-bg, rgba(0,0,0,0.08))', padding: '1px 5px', borderRadius: '3px' },
+        }, 'nexus mcp setup --agent <name> --write'),
       ),
     );
   }

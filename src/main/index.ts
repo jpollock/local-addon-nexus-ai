@@ -24,7 +24,7 @@ import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence
 import { registerTelemetryTools } from './mcp/modules/telemetry-tools';
 import { registerTelemetryControlTools } from './mcp/modules/telemetry-control-tools';
 import { registerTestTools } from './mcp/modules/test-tools';
-import { saveConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
+import { saveConnectionInfo, loadConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
 import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
@@ -264,7 +264,15 @@ export default function main(context: any): void {
       const instructionRegistry = new InstructionRegistry();
       registerAllInstructions(instructionRegistry);
 
-      mcpServer = new McpServer({ services: nexusServices, registry, instructionRegistry });
+      // Reuse token and preferred port from previous run so HTTP configs stay stable
+      const previousConnectionInfo = loadConnectionInfo();
+      mcpServer = new McpServer({
+        services: nexusServices,
+        registry,
+        instructionRegistry,
+        existingToken: previousConnectionInfo?.authToken,
+        preferredPort: previousConnectionInfo?.port,
+      });
       const connectionInfo = await mcpServer.start();
       saveConnectionInfo(connectionInfo);
 

@@ -8,6 +8,13 @@
 
 import type { ToolRegistry } from '../mcp/tool-registry';
 import * as ollamaClient from '../helpers/ollama-client';
+import {
+  buildDateRange,
+  getUsageCached,
+  isCurrentMonthRange,
+  makeUsageCacheKey,
+  setUsageCached,
+} from '../mcp/modules/wpe/usage-cache';
 import { setupSiteForAI } from '../mcp/modules/wp-connector/setup-ai';
 import { scanDatabase, cleanDatabase } from '../mcp/modules/db-scanner/db-scanner';
 import { buildCredentialSyncPhp, SUPPORTED_PROVIDERS, PROVIDER_TO_WP_OPTION } from '../mcp/modules/wp-connector/credential-helpers';
@@ -3452,6 +3459,74 @@ export function createResolvers(context: ResolverContext) {
           return { success: true };
         } catch (err: any) {
           return { success: false, error: err.message };
+        }
+      },
+
+      nexusWpeInstallUsage: async (
+        _parent: any,
+        { installId, monthOffset = 0 }: { installId: string; monthOffset?: number },
+      ) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available', cached: false, cachedAgeMinutes: 0 };
+          }
+          const { firstDate, lastDate } = buildDateRange(monthOffset);
+          const cacheKey = makeUsageCacheKey('install', installId, firstDate, lastDate);
+
+          const hit = getUsageCached(cacheKey);
+          if (hit) {
+            const age = Math.round((Date.now() - hit.cachedAt) / 60000);
+            return {
+              success: true,
+              data: JSON.stringify(hit.data),
+              cached: true,
+              cachedAgeMinutes: age,
+              firstDate,
+              lastDate,
+            };
+          }
+
+          const data = await services.localServices.capiDirect(
+            `/installs/${installId}/usage?first_date=${firstDate}&last_date=${lastDate}`,
+          );
+          setUsageCached(cacheKey, data, isCurrentMonthRange(firstDate, lastDate));
+          return { success: true, data: JSON.stringify(data), cached: false, cachedAgeMinutes: 0, firstDate, lastDate };
+        } catch (err: any) {
+          return { success: false, error: err.message, cached: false, cachedAgeMinutes: 0 };
+        }
+      },
+
+      nexusWpeAccountUsage: async (
+        _parent: any,
+        { accountId, monthOffset = 0 }: { accountId: string; monthOffset?: number },
+      ) => {
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available', cached: false, cachedAgeMinutes: 0 };
+          }
+          const { firstDate, lastDate } = buildDateRange(monthOffset);
+          const cacheKey = makeUsageCacheKey('account', accountId, firstDate, lastDate);
+
+          const hit = getUsageCached(cacheKey);
+          if (hit) {
+            const age = Math.round((Date.now() - hit.cachedAt) / 60000);
+            return {
+              success: true,
+              data: JSON.stringify(hit.data),
+              cached: true,
+              cachedAgeMinutes: age,
+              firstDate,
+              lastDate,
+            };
+          }
+
+          const data = await services.localServices.capiDirect(
+            `/accounts/${accountId}/usage?first_date=${firstDate}&last_date=${lastDate}`,
+          );
+          setUsageCached(cacheKey, data, isCurrentMonthRange(firstDate, lastDate));
+          return { success: true, data: JSON.stringify(data), cached: false, cachedAgeMinutes: 0, firstDate, lastDate };
+        } catch (err: any) {
+          return { success: false, error: err.message, cached: false, cachedAgeMinutes: 0 };
         }
       },
     },

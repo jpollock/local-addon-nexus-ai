@@ -1420,6 +1420,12 @@ export const typeDefs = gql`
 
     "Log out of WP Engine"
     nexusWpeLogout: NexusWpeAuthResult!
+
+    "Get bandwidth, storage, and visitor usage for a WP Engine install"
+    nexusWpeInstallUsage(installId: String!, monthOffset: Int): NexusWpeUsageResult!
+
+    "Get account-level bandwidth, storage, and visitor usage for a WP Engine account"
+    nexusWpeAccountUsage(accountId: String!, monthOffset: Int): NexusWpeUsageResult!
   }
 
   type NexusWpeStatusResult {
@@ -1434,5 +1440,18 @@ export const typeDefs = gql`
     success: Boolean!
     error: String
     email: String
+  }
+
+  type NexusWpeUsageResult {
+    success: Boolean!
+    error: String
+    "Raw usage JSON from CAPI"
+    data: String
+    "True when response was served from cache"
+    cached: Boolean!
+    "Age of cached response in minutes (0 if not cached)"
+    cachedAgeMinutes: Int!
+    firstDate: String
+    lastDate: String
   }
 `;
