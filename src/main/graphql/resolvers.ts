@@ -3425,16 +3425,11 @@ export function createResolvers(context: ResolverContext) {
 
       nexusWpeStatus: async () => {
         try {
-          const capi = (services as any)._serviceContainer?.capi || null;
-          const isAuthed = services.localServices?.isCAPIAvailable() ?? false;
-          if (!isAuthed) return { success: true, authenticated: false };
-          const userInfo = capi ? await capi._getUserInfo?.() : null;
-          return {
-            success: true,
-            authenticated: true,
-            email: userInfo?.wpeEmail ?? userInfo?.email ?? null,
-            accountName: userInfo?.accountName ?? null,
-          };
+          if (!services.localServices?.isCAPIAvailable()) {
+            return { success: true, authenticated: false };
+          }
+          const userInfo = await services.localServices.wpeGetUserInfo();
+          return { success: true, authenticated: true, email: userInfo?.email ?? null, accountName: userInfo?.accountName ?? null };
         } catch (err: any) {
           return { success: false, error: err.message, authenticated: false };
         }
@@ -3442,12 +3437,9 @@ export function createResolvers(context: ResolverContext) {
 
       nexusWpeLogin: async () => {
         try {
-          const wpeOAuth = (services as any)._serviceContainer?.wpeOAuth || null;
-          if (!wpeOAuth) return { success: false, error: 'WPE OAuth service not available' };
-          await wpeOAuth.authenticate();
-          const capi = (services as any)._serviceContainer?.capi || null;
-          const userInfo = capi ? await capi._getUserInfo?.() : null;
-          return { success: true, email: userInfo?.wpeEmail ?? userInfo?.email ?? null };
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const result = await services.localServices.wpeAuthenticate();
+          return { success: true, email: result?.email ?? null };
         } catch (err: any) {
           return { success: false, error: err.message };
         }
@@ -3455,9 +3447,8 @@ export function createResolvers(context: ResolverContext) {
 
       nexusWpeLogout: async () => {
         try {
-          const wpeOAuth = (services as any)._serviceContainer?.wpeOAuth || null;
-          if (!wpeOAuth) return { success: false, error: 'WPE OAuth service not available' };
-          await wpeOAuth.clearTokens();
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          await services.localServices.wpeLogout();
           return { success: true };
         } catch (err: any) {
           return { success: false, error: err.message };

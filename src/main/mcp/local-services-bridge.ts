@@ -108,6 +108,9 @@ export interface LocalServicesBridge {
   capiCreateBackup(installId: string, description: string): Promise<unknown>;
   capiPurgeCache(installId: string): Promise<unknown>;
   isCAPIAvailable(): boolean;
+  wpeAuthenticate(): Promise<{ email?: string } | null>;
+  wpeLogout(): Promise<void>;
+  wpeGetUserInfo(): Promise<{ email?: string; accountName?: string } | null>;
 
   // SSL
   trustCert(siteId: string): Promise<void>;
@@ -430,6 +433,30 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     isCAPIAvailable(): boolean {
       return !!svc('capi');
+    },
+
+    async wpeAuthenticate(): Promise<{ email?: string } | null> {
+      const wpeOAuth = svc('wpeOAuth');
+      if (!wpeOAuth) throw new Error('WPE OAuth service not available');
+      await wpeOAuth.authenticate();
+      const userInfo = await svc('capi')?._getUserInfo?.();
+      return { email: userInfo?.wpeEmail ?? userInfo?.email ?? undefined };
+    },
+
+    async wpeLogout(): Promise<void> {
+      const wpeOAuth = svc('wpeOAuth');
+      if (!wpeOAuth) throw new Error('WPE OAuth service not available');
+      await wpeOAuth.clearTokens();
+    },
+
+    async wpeGetUserInfo(): Promise<{ email?: string; accountName?: string } | null> {
+      if (!svc('capi')) return null;
+      const userInfo = await svc('capi')._getUserInfo?.();
+      if (!userInfo) return null;
+      return {
+        email: userInfo.wpeEmail ?? userInfo.email ?? undefined,
+        accountName: userInfo.accountName ?? undefined,
+      };
     },
 
     // --- SSL ---
