@@ -432,6 +432,10 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     },
 
     isCAPIAvailable(): boolean {
+      // Sync userData tokens into memory so CAPI operations work after
+      // deep link auth (which writes to userData but not _accessToken in memory)
+      const wpeOAuth = svc('wpeOAuth');
+      if (wpeOAuth) (wpeOAuth as any)._loadFromUserData?.();
       return !!svc('capi');
     },
 
