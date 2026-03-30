@@ -47,8 +47,10 @@ export default function renderer(context: any): void {
     styleEl.id = 'nexus-ai-tabnav-fix';
     // Target TabNav_Items using the CSS module hash pattern from local-components v17.8.1
     // The hash "ko_uu" is derived from the file; version suffix confirms the version.
+    // Target the exact CSS module class for local-components v17.8.1
     styleEl.textContent = `
       [class*="TabNav_Items"] { white-space: nowrap !important; }
+      .TabNav_Items_ad_cY_v17-8-1 { white-space: nowrap !important; }
     `;
     document.head.appendChild(styleEl);
   } catch (err) {
@@ -89,13 +91,13 @@ export default function renderer(context: any): void {
   });
 
   // Feature 3a: Nexus AI tab in site info panel nav
+  // Priority 1 ensures it appears directly after the built-in tabs (default priority is 10)
   hooks.addContent('SiteInfo_TabNav_Items', (site: any) =>
     React.createElement(NavLink, {
       to: `/main/site-info/${site.id}/nexus`,
       activeClassName: 'active',
-      style: { display: 'flex', alignItems: 'center' },
     }, 'Nexus AI'),
-  );
+  1);
 
   // Feature 3b: Nexus AI tab route
   hooks.addContent('routes[site-info]', ({ routeChildrenProps }: any) => {
