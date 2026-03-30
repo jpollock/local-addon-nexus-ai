@@ -3425,11 +3425,10 @@ export function createResolvers(context: ResolverContext) {
 
       nexusWpeStatus: async () => {
         try {
-          if (!services.localServices?.isCAPIAvailable()) {
-            return { success: true, authenticated: false };
-          }
+          if (!services.localServices) return { success: true, authenticated: false };
           const userInfo = await services.localServices.wpeGetUserInfo();
-          return { success: true, authenticated: true, email: userInfo?.email ?? null, accountName: userInfo?.accountName ?? null };
+          if (!userInfo) return { success: true, authenticated: false };
+          return { success: true, authenticated: true, email: userInfo.email ?? null, accountName: userInfo.accountName ?? null };
         } catch (err: any) {
           return { success: false, error: err.message, authenticated: false };
         }

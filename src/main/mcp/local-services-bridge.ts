@@ -450,13 +450,22 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     },
 
     async wpeGetUserInfo(): Promise<{ email?: string; accountName?: string } | null> {
-      if (!svc('capi')) return null;
-      const userInfo = await svc('capi')._getUserInfo?.();
-      if (!userInfo) return null;
-      return {
-        email: userInfo.wpeEmail ?? userInfo.email ?? undefined,
-        accountName: userInfo.accountName ?? undefined,
-      };
+      const wpeOAuth = svc('wpeOAuth');
+      if (!wpeOAuth) return null;
+      // getAccessToken() returns undefined when not authenticated
+      const token = await wpeOAuth.getAccessToken?.();
+      if (!token) return null;
+      // Try to get user info — _getUserInfo is private but accessible at runtime
+      try {
+        const userInfo = await svc('capi')?._getUserInfo?.();
+        return {
+          email: userInfo?.wpeEmail ?? userInfo?.email ?? undefined,
+          accountName: userInfo?.accountName ?? undefined,
+        };
+      } catch {
+        // Authenticated but couldn't get user details — still return something
+        return { email: undefined, accountName: undefined };
+      }
     },
 
     // --- SSL ---
