@@ -114,16 +114,6 @@ export default function renderer(context: any): void {
     });
   });
 
-  // Feature 3c: Per-site Nexus AI summary section on site overview
-  hooks.addFilter('SiteInfoOverview_Addon_Section', (sections: any[], site: any, siteStatusText: string) => {
-    // siteStatusText is the third positional arg from Local's filter — merge it into site.status
-    const siteWithStatus = { ...site, status: siteStatusText };
-    return [...sections, {
-      title: 'Nexus AI',
-      component: React.createElement(NexusSiteTabSummary, { site: siteWithStatus, electron }),
-    }];
-  });
-
   // Feature 4: Sidebar Search Panel (AI Site Finder)
   // Add search button to sidebar header and keyboard shortcut (Cmd+K / Ctrl+K)
   let searchContainerInstance: SidebarSearchContainer | null = null;
