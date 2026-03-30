@@ -5,7 +5,47 @@
  */
 
 import { Command } from 'commander';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { getClient } from '../utils/graphql';
+
+// ---------------------------------------------------------------------------
+// Local's built-in GraphQL client (for WPE auth — different from addon GQL)
+// ---------------------------------------------------------------------------
+
+function getLocalGraphQLUrl(): string | null {
+  const dataDir = process.platform === 'win32'
+    ? path.join(process.env.APPDATA || os.homedir(), 'Local')
+    : path.join(os.homedir(), 'Library', 'Application Support', 'Local');
+  const infoFile = path.join(dataDir, 'graphql-connection-info.json');
+  try {
+    const info = JSON.parse(fs.readFileSync(infoFile, 'utf-8'));
+    return info.url || null;
+  } catch {
+    return null;
+  }
+}
+
+async function localGql<T>(query: string, timeout = 120000): Promise<T> {
+  const url = getLocalGraphQLUrl();
+  if (!url) throw new Error('Could not find Local GraphQL endpoint. Is Local running?');
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+      signal: controller.signal,
+    });
+    const json = await res.json() as { data?: T; errors?: any[] };
+    if (json.errors?.length) throw new Error(json.errors[0].message);
+    return json.data as T;
+  } finally {
+    clearTimeout(id);
+  }
+}
 
 const wpeCommand = new Command('wpe').description('Manage WP Engine accounts and installs');
 
@@ -371,6 +411,93 @@ wpeCommand
       console.log('');
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe status
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('status')
+  .description('Show WP Engine authentication status')
+  .action(async () => {
+    try {
+      const data = await localGql<{
+        wpeStatus: { authenticated: boolean; userInfo?: { email?: string; firstName?: string; lastName?: string } };
+      }>('mutation { wpeStatus { authenticated userInfo { email firstName lastName } } }');
+
+      const { authenticated, userInfo } = data.wpeStatus;
+      console.log('');
+      if (authenticated && userInfo?.email) {
+        console.log(`✅ Authenticated as ${userInfo.firstName ? `${userInfo.firstName} ${userInfo.lastName} (${userInfo.email})` : userInfo.email}`);
+      } else {
+        console.log('⚫ Not authenticated');
+        console.log('\nRun: nexus wpe login');
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`\n❌ ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe login
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('login')
+  .description('Authenticate with WP Engine (opens browser)')
+  .action(async () => {
+    try {
+      console.log('\nOpening browser for WP Engine authentication...');
+      console.log('(Waiting up to 2 minutes for you to complete login)\n');
+
+      const data = await localGql<{
+        wpeAuthenticate: { success: boolean; email: string; message: string; error: string | null };
+      }>('mutation { wpeAuthenticate { success email message error } }', 120000);
+
+      const { success, email, error } = data.wpeAuthenticate;
+
+      if (!success) {
+        console.error(`\n❌ Authentication failed: ${error || 'Unknown error'}`);
+        process.exit(1);
+      }
+
+      console.log(`✅ Authenticated as ${email}\n`);
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.error('\n❌ Timed out waiting for authentication. Please try again.');
+      } else {
+        console.error(`\n❌ ${err.message}`);
+      }
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe logout
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('logout')
+  .description('Log out of WP Engine')
+  .action(async () => {
+    try {
+      const data = await localGql<{
+        wpeLogout: { success: boolean; error: string | null };
+      }>('mutation { wpeLogout { success error } }');
+
+      if (!data.wpeLogout.success) {
+        console.error(`\n❌ Logout failed: ${data.wpeLogout.error || 'Unknown error'}`);
+        process.exit(1);
+      }
+
+      console.log('\n✅ Logged out of WP Engine\n');
+    } catch (err: any) {
+      console.error(`\n❌ ${err.message}`);
       process.exit(1);
     }
   });
