@@ -2528,7 +2528,12 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
             }
           });
         } catch (err) {
-          localLogger.warn('[NexusAI] Failed to enrich sites with account_id:', (err as Error).message);
+          const status = (err as any)?.response?.status;
+          if (status === 401 || status === 403) {
+            // Not authenticated to WPE — expected when user is not logged in
+          } else {
+            localLogger.warn('[NexusAI] Failed to enrich sites with account_id:', String(err));
+          }
         }
       }
 
