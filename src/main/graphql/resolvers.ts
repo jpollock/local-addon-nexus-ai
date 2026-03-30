@@ -3422,6 +3422,47 @@ export function createResolvers(context: ResolverContext) {
           return { success: false, error: error.message, sites: null };
         }
       },
+
+      nexusWpeStatus: async () => {
+        try {
+          const capi = (services as any)._serviceContainer?.capi || null;
+          const isAuthed = services.localServices?.isCAPIAvailable() ?? false;
+          if (!isAuthed) return { success: true, authenticated: false };
+          const userInfo = capi ? await capi._getUserInfo?.() : null;
+          return {
+            success: true,
+            authenticated: true,
+            email: userInfo?.wpeEmail ?? userInfo?.email ?? null,
+            accountName: userInfo?.accountName ?? null,
+          };
+        } catch (err: any) {
+          return { success: false, error: err.message, authenticated: false };
+        }
+      },
+
+      nexusWpeLogin: async () => {
+        try {
+          const wpeOAuth = (services as any)._serviceContainer?.wpeOAuth || null;
+          if (!wpeOAuth) return { success: false, error: 'WPE OAuth service not available' };
+          await wpeOAuth.authenticate();
+          const capi = (services as any)._serviceContainer?.capi || null;
+          const userInfo = capi ? await capi._getUserInfo?.() : null;
+          return { success: true, email: userInfo?.wpeEmail ?? userInfo?.email ?? null };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      },
+
+      nexusWpeLogout: async () => {
+        try {
+          const wpeOAuth = (services as any)._serviceContainer?.wpeOAuth || null;
+          if (!wpeOAuth) return { success: false, error: 'WPE OAuth service not available' };
+          await wpeOAuth.clearTokens();
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      },
     },
   };
 }

@@ -432,16 +432,17 @@ wpeCommand
   .description('Show WP Engine authentication status')
   .action(async () => {
     try {
-      const data = await localGql<{
-        wpeStatus: { authenticated: boolean; email?: string; accountId?: string; accountName?: string };
-      }>('query { wpeStatus { authenticated email accountId accountName } }');
-
-      const { authenticated, email, accountName } = data.wpeStatus;
+      const client = getClient({ timeout: 10000 });
+      const data = await client.mutate<{ nexusWpeStatus: any }>(`
+        mutation { nexusWpeStatus { success error authenticated email accountName } }
+      `, {});
+      const { authenticated, email, accountName, error } = data.nexusWpeStatus;
+      if (error) { console.error(`\n❌ ${error}`); process.exit(1); }
       console.log('');
       if (authenticated && email) {
         console.log(`✅ Authenticated as ${email}${accountName ? ` (${accountName})` : ''}`);
       } else {
-        console.log('⚫ Not authenticated');
+        console.log('⚫ Not authenticated with WP Engine');
         console.log('\nRun: nexus wpe login');
       }
       console.log('');
@@ -461,28 +462,19 @@ wpeCommand
   .action(async () => {
     try {
       console.log('\nOpening browser for WP Engine authentication...');
-      console.log('If a browser window does not open automatically, visit:');
-      console.log('  https://my.wpengine.com/\n');
       console.log('(Waiting up to 2 minutes)\n');
-
-      const data = await localGql<{
-        wpeAuthenticate: { success: boolean; email: string; message: string; error: string | null };
-      }>('mutation { wpeAuthenticate { success email message error } }', 120000);
-
-      const { success, email, error } = data.wpeAuthenticate;
-
+      const client = getClient({ timeout: 120000 });
+      const data = await client.mutate<{ nexusWpeLogin: any }>(`
+        mutation { nexusWpeLogin { success error email } }
+      `, {});
+      const { success, email, error } = data.nexusWpeLogin;
       if (!success) {
         console.error(`\n❌ Authentication failed: ${error || 'Unknown error'}`);
         process.exit(1);
       }
-
       console.log(`✅ Authenticated as ${email}\n`);
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        console.error('\n❌ Timed out waiting for authentication. Please try again.');
-      } else {
-        console.error(`\n❌ ${err.message}`);
-      }
+      console.error(`\n❌ ${err.message}`);
       process.exit(1);
     }
   });
@@ -496,15 +488,14 @@ wpeCommand
   .description('Log out of WP Engine')
   .action(async () => {
     try {
-      const data = await localGql<{
-        wpeLogout: { success: boolean; error: string | null };
-      }>('mutation { wpeLogout { success error } }');
-
-      if (!data.wpeLogout.success) {
-        console.error(`\n❌ Logout failed: ${data.wpeLogout.error || 'Unknown error'}`);
+      const client = getClient({ timeout: 10000 });
+      const data = await client.mutate<{ nexusWpeLogout: any }>(`
+        mutation { nexusWpeLogout { success error } }
+      `, {});
+      if (!data.nexusWpeLogout.success) {
+        console.error(`\n❌ Logout failed: ${data.nexusWpeLogout.error || 'Unknown error'}`);
         process.exit(1);
       }
-
       console.log('\n✅ Logged out of WP Engine\n');
     } catch (err: any) {
       console.error(`\n❌ ${err.message}`);

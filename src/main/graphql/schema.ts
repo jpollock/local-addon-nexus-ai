@@ -1411,5 +1411,28 @@ export const typeDefs = gql`
     nexusDbClean(input: NexusDbCleanInput!): NexusDbCleanResult!
     "Fleet database health report — scans all running sites"
     nexusDbReport: NexusDbReportResult!
+
+    "Check WP Engine authentication status"
+    nexusWpeStatus: NexusWpeStatusResult!
+
+    "Authenticate with WP Engine (opens browser for OAuth)"
+    nexusWpeLogin: NexusWpeAuthResult!
+
+    "Log out of WP Engine"
+    nexusWpeLogout: NexusWpeAuthResult!
+  }
+
+  type NexusWpeStatusResult {
+    success: Boolean!
+    error: String
+    authenticated: Boolean!
+    email: String
+    accountName: String
+  }
+
+  type NexusWpeAuthResult {
+    success: Boolean!
+    error: String
+    email: String
   }
 `;

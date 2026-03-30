@@ -436,6 +436,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         syncStatus: syncStatus ?? {},
         loading: false,
         error: stats ? null : 'Failed to load stats',
+        wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
       });
     } catch (err: any) {
       if (!this.mounted) return;
@@ -805,6 +806,39 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     );
   }
 
+  renderWpeAuthBanner(): React.ReactNode {
+    const { stats, wpeAuthError } = this.state;
+    if (!stats?.remoteSites.capiAvailable || !wpeAuthError) return null;
+    return React.createElement('div', {
+      style: {
+        padding: '12px 16px',
+        borderRadius: '8px',
+        backgroundColor: 'rgba(59, 130, 246, 0.08)',
+        border: '1px solid rgba(59, 130, 246, 0.35)',
+        marginBottom: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+      },
+    },
+      React.createElement('span', {
+        style: { fontSize: '15px', lineHeight: 1, flexShrink: 0 },
+      }, '\u{1F512}'),
+      React.createElement('span', { style: { fontSize: '13px', color: 'var(--nxai-card-text)', flex: 1 } },
+        React.createElement('strong', null, 'Not signed in to WP Engine.'),
+        ' WPE-specific features are unavailable. Run ',
+        React.createElement('code', {
+          style: { fontFamily: 'monospace', fontSize: '12px', backgroundColor: 'var(--nxai-code-bg, rgba(0,0,0,0.08))', padding: '1px 5px', borderRadius: '3px' },
+        }, 'nexus wpe login'),
+        ' to connect, or check your status with ',
+        React.createElement('code', {
+          style: { fontFamily: 'monospace', fontSize: '12px', backgroundColor: 'var(--nxai-code-bg, rgba(0,0,0,0.08))', padding: '1px 5px', borderRadius: '3px' },
+        }, 'nexus wpe status'),
+        '.',
+      ),
+    );
+  }
+
   renderMcpPanel(): React.ReactNode {
     const { mcpInfo, copiedField } = this.state;
     if (!mcpInfo) {
@@ -958,6 +992,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
 
     return React.createElement(React.Fragment, null,
       this.renderSetupBanner(stats),
+      this.renderWpeAuthBanner(),
 
       // Connect AI Tools (moved to top)
       this.renderMcpPanel(),
