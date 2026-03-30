@@ -2,6 +2,8 @@ import { NavItemInjector } from './NavItemInjector';
 import { NexusOverview } from './components/NexusOverview';
 import { NexusPreferences } from './components/NexusPreferences';
 import { SiteNexusSection } from './components/SiteNexusSection';
+import { NexusSiteTab } from './components/NexusSiteTab';
+import { NexusSiteTabSummary } from './components/NexusSiteTabSummary';
 import { SidebarSearchPanel } from './components/SidebarSearchPanel';
 import { IPC_CHANNELS } from '../common/constants';
 
@@ -37,6 +39,24 @@ export default function renderer(context: any): void {
     console.error('[Nexus AI] NavItemInjector failed:', err);
   }
 
+  // Inject CSS so addon tabs don't wrap to a new line in the site info tab bar.
+  // TabNav_Items is a block container with inline-block children — without
+  // white-space: nowrap, a 5th tab wraps below the existing four.
+  try {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'nexus-ai-tabnav-fix';
+    // Target TabNav_Items using the CSS module hash pattern from local-components v17.8.1
+    // The hash "ko_uu" is derived from the file; version suffix confirms the version.
+    // Target the exact CSS module class for local-components v17.8.1
+    styleEl.textContent = `
+      [class*="TabNav_Items"] { white-space: nowrap !important; }
+      .TabNav_Items_ad_cY_v17-8-1 { white-space: nowrap !important; }
+    `;
+    document.head.appendChild(styleEl);
+  } catch (err) {
+    console.warn('[Nexus AI] Could not inject TabNav fix CSS:', err);
+  }
+
   // Feature 1: Nexus AI Overview route
   hooks.addContent('routes[main]', () =>
     React.createElement(Route, {
@@ -70,15 +90,28 @@ export default function renderer(context: any): void {
     }];
   });
 
-  // Feature 3: Per-site Nexus AI section on site overview
-  hooks.addFilter('SiteInfoOverview_Addon_Section', (sections: any[], site: any, siteStatusText: string) => {
-    // siteStatusText is the third positional arg from Local's filter — merge it into site.status
-    // so SiteNexusSection can check this.props.site.status === 'running'
-    const siteWithStatus = { ...site, status: siteStatusText };
-    return [...sections, {
-      title: 'Nexus AI',
-      component: React.createElement(SiteNexusSection, { site: siteWithStatus, electron, TextButton }),
-    }];
+  // Feature 3a: Nexus AI tab in site info panel nav
+  // Priority 1 ensures it appears directly after the built-in tabs (default priority is 10)
+  hooks.addContent('SiteInfo_TabNav_Items', (site: any) =>
+    React.createElement(NavLink, {
+      to: `/main/site-info/${site.id}/nexus`,
+      activeClassName: 'active',
+    }, 'Nexus AI'),
+  1);
+
+  // Feature 3b: Nexus AI tab route
+  hooks.addContent('routes[site-info]', ({ routeChildrenProps }: any) => {
+    const site = routeChildrenProps?.site;
+    const siteStatus = routeChildrenProps?.siteStatus ?? '';
+    return React.createElement(Route, {
+      path: `/main/site-info/${site?.id}/nexus`,
+      render: () => React.createElement(NexusSiteTab, {
+        site: { ...site, status: siteStatus },
+        siteStatus,
+        electron,
+        TextButton,
+      }),
+    });
   });
 
   // Feature 4: Sidebar Search Panel (AI Site Finder)
