@@ -376,84 +376,23 @@ Expected response:
 
 ## Environment Variables
 
-Configure MCP server behavior via environment variables:
+Pass environment variables to the stdio bridge via your agent's config:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DEBUG` | Enable debug logging | None |
 | `NEXUS_TELEMETRY` | `0` to disable telemetry | `1` |
-| `NEXUS_CONCURRENCY` | Max parallel operations | `10` |
 
-**Example with debug logging:**
+**Example with telemetry disabled:**
 
 ```json
 {
   "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"],
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/path/to/bin/mcp-stdio.js"],
       "env": {
-        "DEBUG": "nexus:*",
         "NEXUS_TELEMETRY": "0"
-      }
-    }
-  }
-}
-```
-
-## Advanced Configuration
-
-### Custom Working Directory
-
-Specify a custom working directory:
-
-```json
-{
-  "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"],
-      "cwd": "/path/to/custom/directory"
-    }
-  }
-}
-```
-
-### Timeout Configuration
-
-Some MCP clients support timeout settings:
-
-```json
-{
-  "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"],
-      "timeout": 60000  // 60 seconds
-    }
-  }
-}
-```
-
-### Multiple Profiles
-
-Run multiple Nexus AI instances with different configs:
-
-```json
-{
-  "mcpServers": {
-    "nexus-production": {
-      "command": "nexus",
-      "args": ["mcp"],
-      "env": {
-        "NEXUS_PROFILE": "production"
-      }
-    },
-    "nexus-staging": {
-      "command": "nexus",
-      "args": ["mcp"],
-      "env": {
-        "NEXUS_PROFILE": "staging"
       }
     }
   }
@@ -476,25 +415,25 @@ Run multiple Nexus AI instances with different configs:
    # Should show parsed JSON (no errors)
    ```
 
-2. **Check command is accessible:**
+2. **Check bridge is accessible:**
 
    ```bash
-   which nexus
-   # Should show: /usr/local/bin/nexus or similar
+   nexus mcp setup --agent claude-desktop
+   # Shows the correct absolute path to bin/mcp-stdio.js
    ```
 
-3. **Test MCP server directly:**
+3. **Test MCP bridge directly:**
 
    ```bash
-   echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | nexus mcp
+   echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | node /path/to/bin/mcp-stdio.js
    # Should return JSON with tools list
    ```
 
-4. **Check logs:**
+4. **Check server status:**
 
    ```bash
-   # Enable debug logging
-   DEBUG=nexus:* nexus mcp
+   nexus mcp status
+   # Shows port, tool count, and whether the server is live
    ```
 
 5. **Restart AI assistant completely:**
@@ -611,27 +550,27 @@ Run multiple Nexus AI instances with different configs:
 
 ### Enable Debug Logging
 
-=== "Claude Desktop"
+Pass `DEBUG` via your agent config's `env` block:
 
-    ```json
-    {
-      "mcpServers": {
-        "nexus-ai": {
-          "command": "nexus",
-          "args": ["mcp"],
-          "env": {
-            "DEBUG": "nexus:*"
-          }
-        }
+```json
+{
+  "mcpServers": {
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/path/to/bin/mcp-stdio.js"],
+      "env": {
+        "DEBUG": "nexus:*"
       }
     }
-    ```
+  }
+}
+```
 
-=== "Command Line"
+Or test the bridge directly from the terminal:
 
-    ```bash
-    DEBUG=nexus:* nexus mcp
-    ```
+```bash
+DEBUG=nexus:* node /path/to/bin/mcp-stdio.js
+```
 
 ### View Logs
 
