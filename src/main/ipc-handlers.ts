@@ -3413,6 +3413,23 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  // WPE Login — fire-and-forget so the Express OAuth server stays alive in the
+  // main process independently of the IPC/GraphQL connection lifetime.
+  // The caller should poll wpe status after this returns.
+  safeHandle(IPC_CHANNELS.WPE_LOGIN_START, async () => {
+    try {
+      const wpeOAuth = (serviceContainer as any).wpeOAuth;
+      if (!wpeOAuth) return { success: false, error: 'WPE OAuth service not available in this version of Local' };
+      // Start auth in background — keeps server alive until callback is received
+      wpeOAuth.authenticate().catch((err: Error) => {
+        localLogger.warn('[NexusAI] WPE auth failed:', err.message);
+      });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.DB_GET_LAST_SCAN, async (_event: any, siteId: string) => {
     try {
       const cache = registryStorage.get(STORAGE_KEYS.DB_SCAN_CACHE) ?? {};

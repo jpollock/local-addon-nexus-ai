@@ -461,18 +461,39 @@ wpeCommand
   .description('Authenticate with WP Engine (opens browser)')
   .action(async () => {
     try {
-      console.log('\nOpening browser for WP Engine authentication...');
-      console.log('(Waiting up to 2 minutes)\n');
-      const client = getClient({ timeout: 120000 });
-      const data = await client.mutate<{ nexusWpeLogin: any }>(`
-        mutation { nexusWpeLogin { success error email } }
+      const client = getClient({ timeout: 10000 });
+
+      // Start auth flow (fire-and-forget in main process — Express server stays alive)
+      const start = await client.mutate<{ nexusWpeLogin: any }>(`
+        mutation { nexusWpeLogin { success error } }
       `, {});
-      const { success, email, error } = data.nexusWpeLogin;
-      if (!success) {
-        console.error(`\n❌ Authentication failed: ${error || 'Unknown error'}`);
+
+      if (!start.nexusWpeLogin.success) {
+        console.error(`\n❌ ${start.nexusWpeLogin.error}`);
         process.exit(1);
       }
-      console.log(`✅ Authenticated as ${email}\n`);
+
+      console.log('\n🔐 Browser opened for WP Engine authentication.');
+      console.log('   Complete the login in your browser, then wait...\n');
+
+      // Poll until authenticated (up to 3 minutes)
+      const deadline = Date.now() + 3 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        process.stdout.write('.');
+        try {
+          const status = await client.mutate<{ nexusWpeStatus: any }>(`
+            mutation { nexusWpeStatus { success authenticated email accountName } }
+          `, {});
+          if (status.nexusWpeStatus?.authenticated) {
+            const { email, accountName } = status.nexusWpeStatus;
+            console.log(`\n\n✅ Authenticated as ${email}${accountName ? ` (${accountName})` : ''}\n`);
+            return;
+          }
+        } catch { /* keep polling */ }
+      }
+
+      console.log('\n\n⚠️  Timed out waiting. Run: nexus wpe status\n');
     } catch (err: any) {
       console.error(`\n❌ ${err.message}`);
       process.exit(1);

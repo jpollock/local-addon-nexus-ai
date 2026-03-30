@@ -3437,9 +3437,11 @@ export function createResolvers(context: ResolverContext) {
 
       nexusWpeLogin: async () => {
         try {
-          if (!services.localServices) return { success: false, error: 'Local services not available' };
-          const result = await services.localServices.wpeAuthenticate();
-          return { success: true, email: result?.email ?? null };
+          const wpeOAuth = (services as any)._svc?.('wpeOAuth');
+          if (!wpeOAuth) return { success: false, error: 'WPE OAuth service not available' };
+          // Fire-and-forget: Express server stays alive in main process
+          wpeOAuth.authenticate().catch(() => {});
+          return { success: true, email: null };
         } catch (err: any) {
           return { success: false, error: err.message };
         }
