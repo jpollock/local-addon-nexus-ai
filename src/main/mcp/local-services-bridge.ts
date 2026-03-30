@@ -458,6 +458,10 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       const userData = svc('userData');
       const tokenData = userData?.get?.('wpeOAuth');
       if (!tokenData?.accessToken) return null;
+      // Force-load tokens from userData into wpeOAuth's in-memory state so
+      // CAPI's internal getAccessToken() calls also work (deep link auth only
+      // writes to userData, doesn't update the in-memory _accessToken).
+      (wpeOAuth as any)._loadFromUserData?.();
       // Try to get user info — _getUserInfo is private but accessible at runtime
       try {
         const userInfo = await svc('capi')?._getUserInfo?.();
