@@ -872,19 +872,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       : 'Not configured';
     const activeModel = settings?.aiModel || 'default';
 
-    // Shared stdio entry — same for Desktop, Cursor, Windsurf, Cline, Gemini
-    const stdioEntry = JSON.stringify(
-      { 'local-nexus-ai': { command: 'node', args: [mcpInfo.stdioPath] } },
-      null, 2,
-    );
-
-    const agentCard = (title: string, subtitle: string, code: string, field: string) =>
-      React.createElement('div', { style: cardStyle },
-        React.createElement('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--nxai-card-text)' } }, title),
-        React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginBottom: '6px' } }, subtitle),
-        React.createElement('div', { style: { ...codeBlockStyle, fontSize: '10px' } }, code),
-        copyBtn(code, field),
-      );
+    const codeStyle = { fontFamily: 'monospace', backgroundColor: 'var(--nxai-code-bg, rgba(0,0,0,0.08))', padding: '1px 5px', borderRadius: '3px', fontSize: '11px' };
 
     return React.createElement('div', { style: { marginBottom: '24px' } },
       this.renderSectionLabel('Connect to AI Tools'),
@@ -913,21 +901,41 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       ),
 
       React.createElement('div', {
-        style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' },
+        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
       },
-        agentCard('Claude Code', 'Run in your terminal:', claudeCodeCmd, 'claude-code'),
-        agentCard('Claude Desktop', 'Add to claude_desktop_config.json:', claudeDesktopConfig, 'claude-desktop'),
-        agentCard('Cursor', 'Add to ~/.cursor/mcp.json:', stdioEntry, 'cursor'),
-        agentCard('Windsurf', 'Add to ~/.codeium/windsurf/mcp_config.json:', stdioEntry, 'windsurf'),
-        agentCard('Cline (VS Code)', 'Add to cline_mcp_settings.json:', stdioEntry, 'cline'),
-        agentCard('Gemini CLI', 'Add to ~/.gemini/settings.json:', stdioEntry, 'gemini'),
-      ),
+        // Claude Code — unique command
+        React.createElement('div', { style: cardStyle },
+          React.createElement('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--nxai-card-text)' } }, 'Claude Code'),
+          React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginBottom: '6px' } }, 'Run in your terminal:'),
+          React.createElement('div', { style: { ...codeBlockStyle, fontSize: '10px' } }, claudeCodeCmd),
+          copyBtn(claudeCodeCmd, 'claude-code'),
+        ),
 
-      React.createElement('div', { style: { marginTop: '10px', fontSize: '11px', color: 'var(--nxai-card-sub)' } },
-        'Or use the CLI: ',
-        React.createElement('code', {
-          style: { fontFamily: 'monospace', backgroundColor: 'var(--nxai-code-bg, rgba(0,0,0,0.08))', padding: '1px 5px', borderRadius: '3px' },
-        }, 'nexus mcp setup --agent <name> --write'),
+        // All other agents share the same stdio config
+        React.createElement('div', { style: cardStyle },
+          React.createElement('div', { style: { fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--nxai-card-text)' } },
+            'Claude Desktop · Cursor · Windsurf · Cline · Gemini',
+          ),
+          React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)', marginBottom: '6px' } },
+            'All use the same config — auto-install with:',
+          ),
+          React.createElement('div', { style: { ...codeBlockStyle, fontSize: '10px' } },
+            'nexus mcp setup --agent <name> --write',
+          ),
+          copyBtn('nexus mcp setup --agent <name> --write', 'other-agents'),
+          React.createElement('div', { style: { marginTop: '8px', fontSize: '10px', color: 'var(--nxai-card-sub)' } },
+            'Names: ',
+            React.createElement('code', { style: codeStyle }, 'claude-desktop'),
+            ' · ',
+            React.createElement('code', { style: codeStyle }, 'cursor'),
+            ' · ',
+            React.createElement('code', { style: codeStyle }, 'windsurf'),
+            ' · ',
+            React.createElement('code', { style: codeStyle }, 'cline'),
+            ' · ',
+            React.createElement('code', { style: codeStyle }, 'gemini'),
+          ),
+        ),
       ),
     );
   }
