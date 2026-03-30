@@ -106,6 +106,7 @@ export interface LocalServicesBridge {
   capiGetInstalls(): Promise<unknown>;
   capiGetInstall(installId: string): Promise<unknown>;
   capiCreateBackup(installId: string, description: string): Promise<unknown>;
+  capiDirect(path: string, method?: string, body?: unknown): Promise<unknown>;
   capiPurgeCache(installId: string): Promise<unknown>;
   isCAPIAvailable(): boolean;
   wpeAuthenticate(): Promise<{ email?: string } | null>;
@@ -400,6 +401,24 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     },
 
     // --- CAPI (WP Engine) ---
+
+    capiDirect: async (path: string, method = 'GET', body?: unknown) => {
+      const wpeOAuth = svc('wpeOAuth');
+      if (!wpeOAuth) throw new Error('WPE OAuth service not available');
+      const token = await wpeOAuth.getAccessToken();
+      if (!token) throw new Error('Not authenticated with WP Engine. Run: nexus wpe login');
+      const url = `https://api.wpengineapi.com/v1${path}`;
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      if (!res.ok) throw new Error(`CAPI ${method} ${path} failed: HTTP ${res.status}`);
+      return res.json();
+    },
 
     capiGetAccounts: async () => {
       const capi = svc('capi');
