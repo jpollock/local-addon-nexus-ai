@@ -14,28 +14,36 @@ import { getClient } from '../utils/graphql';
 // Local's built-in GraphQL client (for WPE auth — different from addon GQL)
 // ---------------------------------------------------------------------------
 
-function getLocalGraphQLUrl(): string | null {
+interface LocalConnectionInfo {
+  url: string;
+  authToken: string;
+  port: number;
+}
+
+function getLocalConnectionInfo(): LocalConnectionInfo | null {
   const dataDir = process.platform === 'win32'
     ? path.join(process.env.APPDATA || os.homedir(), 'Local')
     : path.join(os.homedir(), 'Library', 'Application Support', 'Local');
   const infoFile = path.join(dataDir, 'graphql-connection-info.json');
   try {
-    const info = JSON.parse(fs.readFileSync(infoFile, 'utf-8'));
-    return info.url || null;
+    return JSON.parse(fs.readFileSync(infoFile, 'utf-8'));
   } catch {
     return null;
   }
 }
 
 async function localGql<T>(query: string, timeout = 120000): Promise<T> {
-  const url = getLocalGraphQLUrl();
-  if (!url) throw new Error('Could not find Local GraphQL endpoint. Is Local running?');
+  const info = getLocalConnectionInfo();
+  if (!info) throw new Error('Could not connect to Local. Is Local running?');
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   try {
-    const res = await fetch(url, {
+    const res = await fetch(info.url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${info.authToken}`,
+      },
       body: JSON.stringify({ query }),
       signal: controller.signal,
     });
@@ -453,7 +461,9 @@ wpeCommand
   .action(async () => {
     try {
       console.log('\nOpening browser for WP Engine authentication...');
-      console.log('(Waiting up to 2 minutes for you to complete login)\n');
+      console.log('If a browser window does not open automatically, visit:');
+      console.log('  https://my.wpengine.com/\n');
+      console.log('(Waiting up to 2 minutes)\n');
 
       const data = await localGql<{
         wpeAuthenticate: { success: boolean; email: string; message: string; error: string | null };
