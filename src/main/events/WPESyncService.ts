@@ -134,8 +134,8 @@ export class WPESyncService {
 
       this.logger.info(`[WPESyncService] Starting sync loop for ${installsToSync.length} installs${limit ? ` (limited from ${wpeInstalls.length})` : ''}...`);
 
-      // Sync with concurrency control (10 parallel sites max)
-      const concurrencyLimit = pLimit(10);
+      // Sync with concurrency control (20 parallel sites via SSH)
+      const concurrencyLimit = pLimit(20);
       let completed = 0;
 
       const syncTasks = installsToSync.map((install, i) =>
@@ -199,26 +199,34 @@ export class WPESyncService {
    */
   async syncInstall(install: WPEInstallData): Promise<void> {
     const now = Date.now();
+    const siteId = `wpe-${install.install_id}`;
 
-    // Extract WordPress version via remote WP-CLI
-    let wpVersion: string | undefined;
-    try {
-      const versionResult = await this.localServices.remoteWpCliRun(install.install_name, [
-        'core',
-        'version',
-      ]);
+    // Run WP version, plugins, and users in parallel — all independent SSH calls
+    const [wpVersion, pluginRows, userRows] = await Promise.all([
+      this.localServices.remoteWpCliRun(install.install_name, ['core', 'version'])
+        .then((r) => (r.success && r.stdout ? r.stdout.trim() : undefined))
+        .catch(() => undefined),
 
-      if (versionResult.success && versionResult.stdout) {
-        wpVersion = versionResult.stdout.trim();
-      }
-    } catch (error) {
-      // Continue without version if WP-CLI fails
-      this.logger.warn(`[WPESyncService] Failed to get WP version for ${install.install_name}:`, error);
-    }
+      this.localServices.remoteWpCliRun(install.install_name, ['plugin', 'list', '--format=json'])
+        .then((r) => {
+          if (!r.success || !r.stdout) return [];
+          const parsed = JSON.parse(r.stdout);
+          return Array.isArray(parsed) ? parsed : [];
+        })
+        .catch(() => []),
 
-    // Create site record in graph
+      this.localServices.remoteWpCliRun(install.install_name, ['user', 'list', '--format=json'])
+        .then((r) => {
+          if (!r.success || !r.stdout) return [];
+          const parsed = JSON.parse(r.stdout);
+          return Array.isArray(parsed) ? parsed : [];
+        })
+        .catch(() => []),
+    ]);
+
+    // Upsert site record
     const site: Site = {
-      id: `wpe-${install.install_id}`,
+      id: siteId,
       name: install.install_name,
       domain: install.primary_domain,
       wp_version: wpVersion,
@@ -234,49 +242,13 @@ export class WPESyncService {
 
     await this.graphService.upsertSite(site);
 
-    // Sync plugins
-    await this.syncPlugins(site.id, install.install_name);
-
-    // Sync users
-    await this.syncUsers(site.id, install.install_name);
-
-    // Sync content (Phase 2 - optional, don't fail sync if content extraction fails)
-    if (this.remoteContentExtractor && this.embeddingService && this.vectorStore) {
-      await this.syncContent(site.id, install.install_name);
-    }
-  }
-
-  /**
-   * Sync plugins for a WPE install
-   */
-  private async syncPlugins(siteId: string, installName: string): Promise<void> {
-    try {
-      const pluginsResult = await this.localServices.remoteWpCliRun(installName, [
-        'plugin',
-        'list',
-        '--format=json',
-      ]);
-
-      if (!pluginsResult.success || !pluginsResult.stdout) {
-        return;
-      }
-
-      const plugins = JSON.parse(pluginsResult.stdout);
-
-      if (!Array.isArray(plugins) || plugins.length === 0) {
-        return;
-      }
-
-      const now = Date.now();
-
-      // Delete existing plugins for this site (refresh)
+    // Write plugins
+    if (pluginRows.length > 0) {
       await this.graphService.deletePlugins(siteId);
-
-      // Insert fresh plugin data
-      for (const plugin of plugins) {
+      for (const plugin of pluginRows) {
         await this.graphService.upsertPlugin({
           site_id: siteId,
-          slug: plugin.name, // WP-CLI returns 'name' as the slug
+          slug: plugin.name,
           name: plugin.title || plugin.name,
           version: plugin.version || null,
           is_active: plugin.status === 'active',
@@ -285,50 +257,27 @@ export class WPESyncService {
           updated_at: now,
         });
       }
-    } catch (error) {
-      this.logger.warn(`[WPESyncService] Failed to sync plugins for ${installName}:`, error);
+    }
+
+    // Write users
+    for (const user of userRows) {
+      await this.graphService.upsertUser({
+        site_id: siteId,
+        user_id: user.ID,
+        username: user.user_login,
+        email: user.user_email || null,
+        roles: JSON.stringify(user.roles ? user.roles.split(',') : []),
+        created_at: now,
+        updated_at: now,
+      });
+    }
+
+    // Content indexing (optional — don't fail sync if this errors)
+    if (this.remoteContentExtractor && this.embeddingService && this.vectorStore) {
+      await this.syncContent(siteId, install.install_name);
     }
   }
 
-  /**
-   * Sync users for a WPE install
-   */
-  private async syncUsers(siteId: string, installName: string): Promise<void> {
-    try {
-      const usersResult = await this.localServices.remoteWpCliRun(installName, [
-        'user',
-        'list',
-        '--format=json',
-      ]);
-
-      if (!usersResult.success || !usersResult.stdout) {
-        return;
-      }
-
-      const users = JSON.parse(usersResult.stdout);
-
-      if (!Array.isArray(users) || users.length === 0) {
-        return;
-      }
-
-      const now = Date.now();
-
-      // Insert/update user data
-      for (const user of users) {
-        await this.graphService.upsertUser({
-          site_id: siteId,
-          user_id: user.ID,
-          username: user.user_login,
-          email: user.user_email || null,
-          roles: JSON.stringify(user.roles ? user.roles.split(',') : []),
-          created_at: now,
-          updated_at: now,
-        });
-      }
-    } catch (error) {
-      this.logger.warn(`[WPESyncService] Failed to sync users for ${installName}:`, error);
-    }
-  }
 
   /**
    * Sync content for a WPE install (Phase 2)
