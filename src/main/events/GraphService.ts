@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS sites (
   name TEXT NOT NULL,
   domain TEXT NOT NULL,
   wp_version TEXT,
+  php_version TEXT,
   last_sync_at INTEGER,
   is_active INTEGER DEFAULT 1,
   created_at INTEGER NOT NULL,
@@ -177,7 +178,6 @@ export class GraphService {
     if (!hasSourceColumn) {
       this.logger.info('[GraphService] Adding WPE columns to sites table...');
       try {
-        // Add new columns for WPE site tracking
         this.db.exec('ALTER TABLE sites ADD COLUMN source TEXT DEFAULT "local"');
         this.logger.info('[GraphService]   - Added source column');
         this.db.exec('ALTER TABLE sites ADD COLUMN remote_install_id TEXT');
@@ -193,6 +193,16 @@ export class GraphService {
       }
     } else {
       this.logger.info('[GraphService] WPE columns already exist, skipping migration');
+    }
+
+    // Migration: add php_version column if missing
+    const hasPhpVersion = this.db
+      .prepare("SELECT COUNT(*) as c FROM pragma_table_info('sites') WHERE name='php_version'")
+      .get() as { c: number };
+    if (!hasPhpVersion.c) {
+      this.logger.info('[GraphService] Adding php_version column to sites table...');
+      this.db.exec('ALTER TABLE sites ADD COLUMN php_version TEXT');
+      this.logger.info('[GraphService] ✓ php_version column added');
     }
   }
 
@@ -224,12 +234,13 @@ export class GraphService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(`
-      INSERT INTO sites (id, name, domain, wp_version, last_sync_at, is_active, created_at, updated_at, source, remote_install_id, remote_domain)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sites (id, name, domain, wp_version, php_version, last_sync_at, is_active, created_at, updated_at, source, remote_install_id, remote_domain)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         domain = excluded.domain,
         wp_version = excluded.wp_version,
+        php_version = excluded.php_version,
         last_sync_at = excluded.last_sync_at,
         is_active = excluded.is_active,
         updated_at = excluded.updated_at,
@@ -243,6 +254,7 @@ export class GraphService {
       site.name,
       site.domain,
       site.wp_version ?? null,
+      site.php_version ?? null,
       site.last_sync_at ?? null,
       site.is_active ? 1 : 0,
       site.created_at,
@@ -267,6 +279,7 @@ export class GraphService {
       name: row.name,
       domain: row.domain,
       wp_version: row.wp_version,
+      php_version: row.php_version,
       last_sync_at: row.last_sync_at,
       is_active: row.is_active === 1,
       created_at: row.created_at,
@@ -306,6 +319,7 @@ export class GraphService {
       name: row.name,
       domain: row.domain,
       wp_version: row.wp_version,
+      php_version: row.php_version,
       last_sync_at: row.last_sync_at,
       is_active: row.is_active === 1,
       created_at: row.created_at,

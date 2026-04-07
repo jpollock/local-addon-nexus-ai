@@ -104,6 +104,7 @@ export interface Site {
   name: string;
   domain: string;
   wp_version?: string;
+  php_version?: string;
   last_sync_at?: number;
   is_active: boolean;
   created_at: number;

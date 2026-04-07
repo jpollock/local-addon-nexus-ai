@@ -38,6 +38,7 @@ export interface WPEInstallData {
   install_name: string;
   environment: string;
   primary_domain: string;
+  php_version?: string;
 }
 
 export interface WPESyncServiceOptions {
@@ -118,6 +119,7 @@ export class WPESyncService {
         install_name: i.name,
         environment: i.environment ?? 'production',
         primary_domain: i.primaryDomain || `${i.name}.wpengine.com`,
+        php_version: i.phpVersion ?? undefined,
       }));
 
       // Apply limit if specified
@@ -220,6 +222,7 @@ export class WPESyncService {
       name: install.install_name,
       domain: install.primary_domain,
       wp_version: wpVersion,
+      php_version: install.php_version,
       last_sync_at: now,
       is_active: true,
       created_at: now,
