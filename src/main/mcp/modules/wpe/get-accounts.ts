@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { ok, error, requireCAPI } from './helpers';
+import { ok, error, capiError, requireCAPI } from './helpers';
 
 export const getAccountsHandler: McpToolHandler = {
   definition: {
@@ -13,15 +13,19 @@ export const getAccountsHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const accounts = await services.localServices!.capiGetAccounts() as any[];
-    if (!accounts || accounts.length === 0) {
-      return ok('No WP Engine accounts found.');
-    }
+    try {
+      const accounts = await services.localServices!.capiGetAccounts() as any[];
+      if (!accounts || accounts.length === 0) {
+        return ok('No WP Engine accounts found.');
+      }
 
-    const lines = [`## WP Engine Accounts (${accounts.length})`];
-    for (const a of accounts) {
-      lines.push(`- **${a.name}** (ID: ${a.id})`);
+      const lines = [`## WP Engine Accounts (${accounts.length})`];
+      for (const a of accounts) {
+        lines.push(`- **${a.name}** (ID: ${a.id})`);
+      }
+      return ok(lines.join('\n'));
+    } catch (err: any) {
+      return capiError(err);
     }
-    return ok(lines.join('\n'));
   },
 };

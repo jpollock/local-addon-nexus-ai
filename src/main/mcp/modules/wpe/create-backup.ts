@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { ok, error, requireCAPI } from './helpers';
+import { ok, error, capiError, requireCAPI } from './helpers';
 
 export const createBackupHandler: McpToolHandler = {
   definition: {
@@ -17,12 +17,16 @@ export const createBackupHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const installId = args.install_id as string;
-    if (!installId) return error('Install ID is required.');
+    try {
+      const installId = args.install_id as string;
+      if (!installId) return error('Install ID is required.');
 
-    const description = (args.description as string) || 'Backup via Nexus AI';
-    await services.localServices!.capiCreateBackup(installId, description);
+      const description = (args.description as string) || 'Backup via Nexus AI';
+      await services.localServices!.capiCreateBackup(installId, description);
 
-    return ok(`Backup created for install "${installId}".`);
+      return ok(`Backup created for install "${installId}".`);
+    } catch (err: any) {
+      return capiError(err);
+    }
   },
 };

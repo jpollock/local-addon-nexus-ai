@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { ok, requireCAPI } from './helpers';
+import { ok, capiError, requireCAPI } from './helpers';
 
 export const getInstallsHandler: McpToolHandler = {
   definition: {
@@ -13,15 +13,19 @@ export const getInstallsHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const installs = await services.localServices!.capiGetInstalls() as any[];
-    if (!installs || installs.length === 0) {
-      return ok('No WP Engine installs found.');
-    }
+    try {
+      const installs = await services.localServices!.capiGetInstalls() as any[];
+      if (!installs || installs.length === 0) {
+        return ok('No WP Engine installs found.');
+      }
 
-    const lines = [`## WP Engine Installs (${installs.length})`];
-    for (const i of installs) {
-      lines.push(`- **${i.name}** (ID: ${i.id}, env: ${i.environment ?? 'unknown'})`);
+      const lines = [`## WP Engine Installs (${installs.length})`];
+      for (const i of installs) {
+        lines.push(`- **${i.name}** (ID: ${i.id}, env: ${i.environment ?? 'unknown'})`);
+      }
+      return ok(lines.join('\n'));
+    } catch (err: any) {
+      return capiError(err);
     }
-    return ok(lines.join('\n'));
   },
 };

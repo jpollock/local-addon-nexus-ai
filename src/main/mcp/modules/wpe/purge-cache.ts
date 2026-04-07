@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { ok, error, requireCAPI } from './helpers';
+import { ok, error, capiError, requireCAPI } from './helpers';
 
 export const purgeCacheHandler: McpToolHandler = {
   definition: {
@@ -16,10 +16,14 @@ export const purgeCacheHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const installId = args.install_id as string;
-    if (!installId) return error('Install ID is required.');
+    try {
+      const installId = args.install_id as string;
+      if (!installId) return error('Install ID is required.');
 
-    await services.localServices!.capiPurgeCache(installId);
-    return ok(`Cache purged for install "${installId}".`);
+      await services.localServices!.capiPurgeCache(installId);
+      return ok(`Cache purged for install "${installId}".`);
+    } catch (err: any) {
+      return capiError(err);
+    }
   },
 };

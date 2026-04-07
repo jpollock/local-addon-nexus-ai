@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { ok, error, requireCAPI } from './helpers';
+import { ok, error, capiError, requireCAPI } from './helpers';
 
 export const getInstallHandler: McpToolHandler = {
   definition: {
@@ -16,12 +16,16 @@ export const getInstallHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const installId = args.install_id as string;
-    if (!installId) return error('Install ID is required.');
+    try {
+      const installId = args.install_id as string;
+      if (!installId) return error('Install ID is required.');
 
-    const install = await services.localServices!.capiGetInstall(installId) as any;
-    if (!install) return error(`Install "${installId}" not found.`);
+      const install = await services.localServices!.capiGetInstall(installId) as any;
+      if (!install) return error(`Install "${installId}" not found.`);
 
-    return ok(JSON.stringify(install, null, 2));
+      return ok(JSON.stringify(install, null, 2));
+    } catch (err: any) {
+      return capiError(err);
+    }
   },
 };

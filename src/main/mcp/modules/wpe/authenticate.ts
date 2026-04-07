@@ -61,30 +61,49 @@ async function localGql<T>(query: string, timeoutMs = 120000): Promise<T> {
 export const wpeStatusHandler = {
   definition: {
     name: 'wpe_status',
-    description: 'Check WP Engine authentication status. Returns whether the user is authenticated and their email address.',
+    description: 'Check WP Engine authentication status. Validates the token is still active against the live API.',
     inputSchema: { type: 'object' as const, properties: {} },
     isAvailable: (_services: NexusServices) => true,
   },
-  async execute(_args: unknown, _services: NexusServices): Promise<McpToolResult> {
+  async execute(_args: unknown, services: NexusServices): Promise<McpToolResult> {
     try {
+      // Check stored token via Local GraphQL first
       const data = await localGql<{
         wpeStatus: { authenticated: boolean; email?: string; accountId?: string; accountName?: string };
       }>('query { wpeStatus { authenticated email accountId accountName } }', 10000);
 
       const { authenticated, email, accountName } = data.wpeStatus;
-      if (authenticated && email) {
-        const name = accountName || null;
+
+      if (!authenticated || !email) {
         return {
           content: [{
             type: 'text',
-            text: `✅ Authenticated with WP Engine${name ? ` (${name})` : ''} as ${email}`,
+            text: '⚫ Not authenticated with WP Engine. Call wpe_login to connect.',
           }],
         };
       }
+
+      // Validate token is still active with a live CAPI call
+      if (services.localServices) {
+        try {
+          await services.localServices.capiGetAccounts();
+        } catch {
+          // Token exists but is expired
+          return {
+            content: [{
+              type: 'text',
+              text: `⚠️ WP Engine token expired for ${email}. Call wpe_login to re-authenticate.`,
+            }],
+            isError: true,
+          };
+        }
+      }
+
+      const name = accountName || null;
       return {
         content: [{
           type: 'text',
-          text: '⚫ Not authenticated with WP Engine. Use wpe_login to connect.',
+          text: `✅ Authenticated with WP Engine${name ? ` (${name})` : ''} as ${email}`,
         }],
       };
     } catch (err: any) {
