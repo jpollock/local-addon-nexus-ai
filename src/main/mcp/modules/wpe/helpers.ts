@@ -27,14 +27,15 @@ export async function staleSyncWarning(services: NexusServices): Promise<string>
     const db = graphService.getDb();
     if (!db) return '';
 
-    const row = db.prepare('SELECT MIN(last_sync_at) as oldest FROM sites WHERE source = ?').get('wpe') as { oldest: number | null } | undefined;
-    if (!row?.oldest) return '';
+    // Use MAX(last_sync_at) — when the most recent sync ran, not the oldest record
+    const row = db.prepare('SELECT MAX(last_sync_at) as latest FROM sites WHERE source = ?').get('wpe') as { latest: number | null } | undefined;
+    if (!row?.latest) return '';
 
     const registryStorage = (services as any).registryStorage;
     const settings = registryStorage?.get?.('nexus_settings') as { wpeSyncIntervalHours?: number } | null;
     const thresholdHours = settings?.wpeSyncIntervalHours ?? 8;
 
-    const ageMs = Date.now() - row.oldest;
+    const ageMs = Date.now() - row.latest;
     const ageHours = Math.round(ageMs / 3600000);
 
     if (ageMs > thresholdHours * 3600000) {

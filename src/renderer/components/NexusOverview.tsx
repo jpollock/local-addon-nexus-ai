@@ -141,6 +141,7 @@ interface NexusOverviewState {
   wpeSyncProgress: { total: number; current: number; currentSite: string; status: string } | null;
   wpeSyncedCount: number;
   wpeSyncError: string | null;
+  wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null } | null;
   // Credential sync state
   syncStatus: Record<string, { lastSync: number; success: boolean }>;
   syncing: boolean;
@@ -307,6 +308,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     wpeSyncProgress: null,
     wpeSyncedCount: 0,
     wpeSyncError: null,
+    wpeSyncStats: null,
     syncStatus: {},
     syncing: false,
     syncResults: null,
@@ -371,7 +373,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -380,6 +382,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
         ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES),
         ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
+        ipc.invoke(IPC_CHANNELS.WPE_SYNC_STATS),
       ]);
       if (!this.mounted) return;
 
@@ -435,6 +438,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         settings: settings ?? null,
         hasLLM,
         syncStatus: syncStatus ?? {},
+        wpeSyncStats: wpeSyncStatsResult?.stats ?? null,
         loading: false,
         error: stats ? null : 'Failed to load stats',
         wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
@@ -1458,91 +1462,72 @@ renderTabBar(): React.ReactNode {
   }
 
   renderWpeSyncSection(): React.ReactNode {
-    const { wpeSyncing, wpeSyncedCount, wpeSyncProgress, wpeSyncError } = this.state;
+    const { wpeSyncing, wpeSyncProgress, wpeSyncError, wpeSyncStats } = this.state;
 
-    const sectionStyle: React.CSSProperties = { marginBottom: '24px' };
-    const descStyle: React.CSSProperties = {
-      fontSize: '13px',
-      color: 'var(--nxai-card-sub, #6b7280)',
-      marginBottom: '16px',
-      lineHeight: 1.5,
-    };
+    const subStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub, #6b7280)' };
 
-    return React.createElement('div', { style: sectionStyle },
-      React.createElement('div', { style: descStyle },
-        'Sync your WP Engine sites to make them searchable alongside local sites. Indexed content is available in Site Finder.',
-      ),
+    // Format last sync time
+    let lastSyncLabel = 'Never synced';
+    if (wpeSyncStats?.last_sync_at) {
+      const ageMs = Date.now() - wpeSyncStats.last_sync_at;
+      const ageHours = Math.floor(ageMs / 3600000);
+      const ageMins = Math.floor((ageMs % 3600000) / 60000);
+      lastSyncLabel = ageHours > 0
+        ? `Last synced ${ageHours}h${ageMins > 0 ? ` ${ageMins}m` : ''} ago`
+        : `Last synced ${ageMins}m ago`;
+    }
 
-      // Sync button and status
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' } },
+    return React.createElement('div', { style: { marginBottom: '24px' } },
+
+      // Sync button row
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' } },
         React.createElement('button', {
           onClick: this.handleWpeSync,
           disabled: wpeSyncing,
           style: {
-            padding: '8px 16px',
-            borderRadius: '6px',
-            border: 'none',
+            padding: '8px 16px', borderRadius: '6px', border: 'none',
             backgroundColor: wpeSyncing ? 'var(--color-background-tertiary, #9ca3af)' : 'var(--color-primary, #3b82f6)',
-            color: '#fff',
-            fontSize: '13px',
-            fontWeight: 600,
-            cursor: wpeSyncing ? 'not-allowed' : 'pointer',
-            opacity: wpeSyncing ? 0.6 : 1,
+            color: '#fff', fontSize: '13px', fontWeight: 600,
+            cursor: wpeSyncing ? 'not-allowed' : 'pointer', opacity: wpeSyncing ? 0.6 : 1,
           },
-        }, wpeSyncing ? 'Syncing...' : 'Sync Now'),
-
-        // Loading spinner
+        }, wpeSyncing ? 'Syncing...' : 'Sync WP Engine Sites'),
         wpeSyncing ? React.createElement(LoadingSpinner, { size: 16, inline: true, color: '#fff' }) : null,
-
-        // Synced count
-        wpeSyncedCount > 0 && !wpeSyncing
-          ? React.createElement('span', {
-              style: {
-                fontSize: '13px',
-                color: 'var(--nxai-card-sub, #6b7280)',
-              },
-            }, `${wpeSyncedCount} site${wpeSyncedCount === 1 ? '' : 's'} synced`)
-          : null,
       ),
 
-      // Progress indicator
-      wpeSyncProgress
-        ? React.createElement('div', {
-            style: {
-              fontSize: '12px',
-              color: 'var(--nxai-card-sub, #6b7280)',
-              marginTop: '8px',
-              fontStyle: 'italic',
-            },
-          }, `Syncing ${wpeSyncProgress.currentSite}... (${wpeSyncProgress.current}/${wpeSyncProgress.total})`)
+      // In-progress
+      wpeSyncing && wpeSyncProgress
+        ? React.createElement('div', { style: { ...subStyle, fontStyle: 'italic', marginBottom: '8px' } },
+            `${wpeSyncProgress.currentSite} (${wpeSyncProgress.current}/${wpeSyncProgress.total})`,
+          )
         : null,
 
-      // Error display
+      // Stats row (persists across restarts)
+      wpeSyncStats
+        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '4px' } },
+            React.createElement('div', { style: subStyle }, lastSyncLabel),
+            React.createElement('div', { style: subStyle },
+              `${wpeSyncStats.total} installs synced · `,
+              `WP version: ${wpeSyncStats.has_wp_version}/${wpeSyncStats.total}`,
+              wpeSyncStats.total - wpeSyncStats.has_wp_version > 0
+                ? React.createElement('span', {
+                    style: { opacity: 0.7 },
+                    title: 'WP version requires SSH — installs without SSH access show unknown',
+                  }, ` (${wpeSyncStats.total - wpeSyncStats.has_wp_version} need SSH)`)
+                : null,
+              ` · PHP version: ${wpeSyncStats.has_php_version}/${wpeSyncStats.total}`,
+            ),
+          )
+        : React.createElement('div', { style: subStyle }, 'No sync data yet. Click Sync to fetch WP Engine site metadata.'),
+
+      // Error
       wpeSyncError
         ? React.createElement('div', {
             style: {
-              padding: '12px',
-              marginTop: '12px',
-              borderRadius: '6px',
-              backgroundColor: 'var(--color-background-error-subtle, rgba(239, 68, 68, 0.1))',
-              border: '1px solid var(--color-border-error, rgba(239, 68, 68, 0.3))',
+              padding: '10px 12px', marginTop: '10px', borderRadius: '6px',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+              fontSize: '12px', color: '#dc2626',
             },
-          },
-            React.createElement('div', {
-              style: {
-                fontSize: '13px',
-                fontWeight: 600,
-                color: 'var(--color-text-error, #dc2626)',
-                marginBottom: '4px',
-              },
-            }, 'Sync Failed'),
-            React.createElement('div', {
-              style: {
-                fontSize: '12px',
-                color: 'var(--color-text-error, #dc2626)',
-              },
-            }, wpeSyncError),
-          )
+          }, `Sync error: ${wpeSyncError}`)
         : null,
     );
   }

@@ -165,7 +165,14 @@ function formatVersionSection(
   }
 
   const missing = sites.length - withVersion.length;
-  if (missing > 0) lines.push(`- ${missing} site${missing !== 1 ? 's' : ''} with no version data`);
+  if (missing > 0) {
+    const caveat = label === 'WordPress'
+      ? ' (WP version requires SSH — installs without SSH access show unknown)'
+      : label === 'PHP'
+      ? ' (PHP version from CAPI — unexpected if you just synced)'
+      : '';
+    lines.push(`- ${missing} site${missing !== 1 ? 's' : ''} with no ${label} version data${caveat}`);
+  }
   lines.push('');
   return lines;
 }

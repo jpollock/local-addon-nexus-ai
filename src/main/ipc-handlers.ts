@@ -2505,6 +2505,29 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   /**
+   * Get WPE sync summary stats from graph DB for dashboard display
+   */
+  safeHandle(IPC_CHANNELS.WPE_SYNC_STATS, async () => {
+    try {
+      const db = graphService.getDb();
+      if (!db) return { success: true, stats: null };
+
+      const row = db.prepare(`
+        SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN wp_version IS NOT NULL THEN 1 ELSE 0 END) as has_wp_version,
+          SUM(CASE WHEN php_version IS NOT NULL THEN 1 ELSE 0 END) as has_php_version,
+          MAX(last_sync_at) as last_sync_at
+        FROM sites WHERE source = 'wpe'
+      `).get() as { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null } | undefined;
+
+      return { success: true, stats: row ?? null };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  /**
    * Get list of synced WPE sites
    */
   safeHandle(IPC_CHANNELS.WPE_GET_SYNCED_SITES, async () => {
