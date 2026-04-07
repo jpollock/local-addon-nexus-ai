@@ -38,7 +38,8 @@ Route user requests to the correct tool namespace:
 | Site structure | \`get_site_structure\`, \`get_index_status\`, \`reindex_site\`, \`list_indexed_sites\` | "what's installed on this site?" |
 | WP Engine auth | \`wpe_status\`, \`wpe_login\`, \`wpe_logout\` | "am I logged in to WPE?", "connect to WP Engine" |
 | WP Engine accounts | \`wpe_get_accounts\`, \`wpe_get_installs\`, \`wpe_get_install\` | "show my WPE installs" |
-| WP Engine usage | \`wpe_get_install_usage\`, \`wpe_get_account_usage\` | "show bandwidth this month", "how much storage am I using?" |
+| WP Engine usage (fleet) | \`wpe_portfolio_usage\` | "which sites get the most traffic?", "installs with >100 visits/day", "highest bandwidth sites" |
+| WP Engine usage (single) | \`wpe_get_install_usage\`, \`wpe_get_account_usage\` | "show bandwidth for this install", "storage for my account" |
 | WP Engine ops | \`wpe_create_backup\`, \`wpe_purge_cache\` | "backup production", "clear cache" |
 | Sync with WPE | \`local_wpe_pull\`, \`local_wpe_push\`, \`local_wpe_link\` | "pull from staging", "push to dev", "link this site to WPE" |
 | Sync history | \`local_get_site_changes\`, \`local_get_sync_history\` | "what changed since last pull?", "show sync history" |
@@ -61,8 +62,16 @@ When WPE tools fail with auth errors: call \`wpe_status\` → if not authenticat
 
 ## WP Engine Usage Metrics
 
-- **\`wpe_get_install_usage\`** — Bandwidth, storage, and visitor data for a specific install. Requires \`install_id\` (UUID from \`wpe_get_installs\`). Optional \`month_offset\` (0 = current month, 1 = last month).
-- **\`wpe_get_account_usage\`** — Same metrics aggregated at the account level. Requires \`account_id\` (from \`wpe_get_accounts\`).
+**\`wpe_portfolio_usage\`** — The right tool for fleet-wide traffic questions. Fetches usage for ALL installs across ALL accounts in O(accounts) calls — not one call per install. Use this for:
+- "Which installs have more than N visits per day?" → pass \`min_visits_per_day\`
+- "What are my highest-traffic sites?"
+- "Which environments use the most bandwidth/storage?"
+
+Returns a sorted table (visits descending). After identifying high-traffic installs by name, use \`wpe_get_installs\` to get their IDs, then \`wp_core_version\` / \`wpe_get_install\` for WP/PHP versions.
+
+**\`wpe_get_install_usage\`** — Single install. Requires \`install_id\`. Use after \`wpe_portfolio_usage\` identifies a specific install of interest.
+
+**\`wpe_get_account_usage\`** — Account-level aggregate only (not per-install). Use for account billing/quota questions.
 
 Responses are cached (current month: 1-hour TTL; past months: 24-hour TTL). A \`_cached\` field in the response indicates a cache hit.
 

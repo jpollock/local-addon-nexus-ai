@@ -12,6 +12,7 @@ import { getSiteChangesHandler } from './get-site-changes';
 import { getSyncHistoryHandler } from './get-sync-history';
 import { wpeStatusHandler, wpeLoginHandler, wpeLogoutHandler } from './authenticate';
 import { getInstallUsageHandler, getAccountUsageHandler } from './get-install-usage';
+import { portfolioUsageHandler } from './portfolio-usage';
 
 /**
  * WPE integration module — tools for WP Engine account/install management
@@ -37,4 +38,5 @@ export function registerWpeTools(registry: ToolRegistry): void {
   registry.register(wpeLogoutHandler);
   registry.register(getInstallUsageHandler);
   registry.register(getAccountUsageHandler);
+  registry.register(portfolioUsageHandler);
 }
