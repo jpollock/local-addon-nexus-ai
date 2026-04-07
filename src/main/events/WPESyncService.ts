@@ -134,8 +134,9 @@ export class WPESyncService {
 
       this.logger.info(`[WPESyncService] Starting sync loop for ${installsToSync.length} installs${limit ? ` (limited from ${wpeInstalls.length})` : ''}...`);
 
-      // Sync with concurrency control (20 parallel sites via SSH)
-      const concurrencyLimit = pLimit(20);
+      // WP Engine SSH gateway limits to 5 concurrent connections per user.
+      // Use 4 to leave one slot for interactive use.
+      const concurrencyLimit = pLimit(4);
       let completed = 0;
 
       const syncTasks = installsToSync.map((install, i) =>

@@ -606,7 +606,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         // ControlMaster: reuse SSH connections to reduce overhead
         '-o', 'ControlMaster=auto',
         '-o', 'ControlPath=/tmp/ssh-nexus-%C',
-        '-o', 'ControlPersist=10m',
+        '-o', 'ControlPersist=5s',
         '-i', sshKeyPath,
         `${username}@${host}`,
         wpCommand,
