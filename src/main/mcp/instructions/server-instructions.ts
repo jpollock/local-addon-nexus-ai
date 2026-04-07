@@ -9,6 +9,19 @@ export const INSTRUCTIONS = `
 
 You have access to tools for managing WordPress sites locally (via Local by Flywheel) and remotely (via WP Engine). Always follow these principles.
 
+## Fleet Mental Model
+
+The user's fleet has two layers — always keep this in mind:
+
+- **WP Engine installs** = live production/staging environments (the real fleet). Use \`wpe_*\` tools and \`install_name\` with \`wp_*\` tools.
+- **Local sites** = development copies in Local by WP Engine. Some are linked (↔) to a WPE install; some are standalone.
+
+When the user says "my sites" or "my fleet" they usually mean **both**. When they say "my WP Engine sites" or "live sites" they mean WPE installs only.
+
+\`nexus_list_sites\` is the unified view — it shows both layers and marks linked pairs with ↔.
+
+\`find_outdated_sites\` labels each site \`[local]\` or \`[wpe]\` and accepts a \`source\` filter (\`wpe\` or \`local\`).
+
 ## Discovery First
 
 ALWAYS call \`local_list_sites\` or \`nexus_list_sites\` before using any other tool. These return site IDs, names, domains, and statuses needed by all other tools. Never ask the user for a site ID or name — discover them.

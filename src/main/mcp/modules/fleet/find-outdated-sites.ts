@@ -7,7 +7,8 @@ export const findOutdatedSitesHandler: McpToolHandler = {
     name: 'find_outdated_sites',
     description:
       'Identify sites running older versions of WordPress, PHP, or plugins compared to other sites ' +
-      'in your fleet. Flags version mismatches across sites. Works even when sites are stopped.',
+      'in your fleet. Each site is labeled [local] or [wpe] so you can see which are live WP Engine ' +
+      'environments vs local development copies. Works even when sites are stopped.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -16,57 +17,91 @@ export const findOutdatedSitesHandler: McpToolHandler = {
           enum: ['wordpress', 'php', 'plugins'],
           description: 'Which component to check (default: all)',
         },
+        source: {
+          type: 'string',
+          enum: ['local', 'wpe', 'all'],
+          description: 'Filter to local sites, WP Engine installs, or all (default: all)',
+        },
       },
     },
   },
 
   async execute(args, services): Promise<McpToolResult> {
     const component = args.component as string | undefined;
+    const sourceFilter = (args.source as string | undefined) ?? 'all';
+
     const entries = services.indexRegistry.listAll();
-    const indexed = entries.filter((e) => e.structure);
+    let indexed = entries.filter((e) => e.structure);
 
     if (indexed.length === 0) {
       return ok('No indexed sites with structure data available.');
     }
 
-    if (indexed.length === 1) {
-      return ok('Only one indexed site — need at least two sites to compare versions.');
+    // Enrich entries with source info from the graph DB
+    const graphService = (services as any).graphService;
+    const sourceMap = new Map<string, 'local' | 'wpe'>();
+    if (graphService?.getDb) {
+      try {
+        const db = graphService.getDb();
+        if (db) {
+          const rows = db.prepare('SELECT id, source FROM sites').all() as Array<{ id: string; source: string }>;
+          for (const row of rows) {
+            sourceMap.set(row.id, (row.source ?? 'local') as 'local' | 'wpe');
+          }
+        }
+      } catch { /* graph not available — continue without source info */ }
     }
 
-    const lines: string[] = ['## Outdated Sites Report', ''];
+    // Apply source filter
+    if (sourceFilter !== 'all') {
+      indexed = indexed.filter((e) => (sourceMap.get(e.siteId) ?? 'local') === sourceFilter);
+      if (indexed.length === 0) {
+        return ok(`No indexed ${sourceFilter === 'wpe' ? 'WP Engine' : 'local'} sites with version data available.`);
+      }
+    }
+
+    if (indexed.length === 1) {
+      return ok('Only one indexed site matches — need at least two to compare versions.');
+    }
+
+    // Attach source label to each entry for display
+    const withSource = indexed.map((e) => ({
+      ...e,
+      _source: sourceMap.get(e.siteId) ?? 'local' as 'local' | 'wpe',
+    }));
+
+    const sourceLabel = sourceFilter === 'wpe' ? ' (WP Engine installs only)'
+      : sourceFilter === 'local' ? ' (local sites only)' : '';
+    const lines: string[] = [`## Outdated Sites Report${sourceLabel}`, ''];
     const checkAll = !component;
 
     if (checkAll || component === 'wordpress') {
-      lines.push(...formatVersionSection(
-        'WordPress',
-        indexed,
-        (e) => e.structure!.wpVersion,
-      ));
+      lines.push(...formatVersionSection('WordPress', withSource, (e) => e.structure!.wpVersion));
     }
-
     if (checkAll || component === 'php') {
-      lines.push(...formatVersionSection(
-        'PHP',
-        indexed,
-        (e) => e.structure!.phpVersion,
-      ));
+      lines.push(...formatVersionSection('PHP', withSource, (e) => e.structure!.phpVersion));
     }
-
     if (checkAll || component === 'plugins') {
-      lines.push(...formatPluginMismatches(indexed));
+      lines.push(...formatPluginMismatches(withSource));
     }
 
     return ok(lines.join('\n'));
   },
 };
 
+type EnrichedEntry = IndexEntry & { _source: 'local' | 'wpe' };
+
+function siteLabel(e: EnrichedEntry): string {
+  return `${e.siteName || e.siteId} [${e._source}]`;
+}
+
 function formatVersionSection(
   label: string,
-  entries: IndexEntry[],
-  getVersion: (e: IndexEntry) => string,
+  entries: EnrichedEntry[],
+  getVersion: (e: EnrichedEntry) => string,
 ): string[] {
   const lines: string[] = [`### ${label}`];
-  const groups = groupByVersion(entries, getVersion);
+  const groups = groupByVersion(entries as any, getVersion as any) as Map<string, EnrichedEntry[]>;
 
   if (groups.size <= 1) {
     const [version] = groups.keys();
@@ -79,7 +114,7 @@ function formatVersionSection(
   const latest = versions[0];
 
   for (const [version, sites] of groups) {
-    const names = sites.map((s) => s.siteName || s.siteId).join(', ');
+    const names = sites.map((s) => siteLabel(s)).join(', ');
     if (version === latest) {
       lines.push(`- Latest: ${version} (${sites.length} site${sites.length !== 1 ? 's' : ''})`);
     } else {
@@ -91,7 +126,7 @@ function formatVersionSection(
   return lines;
 }
 
-function formatPluginMismatches(entries: IndexEntry[]): string[] {
+function formatPluginMismatches(entries: EnrichedEntry[]): string[] {
   const lines: string[] = ['### Plugin Version Mismatches'];
 
   // Collect all plugin versions across sites
@@ -103,7 +138,7 @@ function formatPluginMismatches(entries: IndexEntry[]): string[] {
         versions = new Map<string, string[]>();
         pluginVersions.set(plugin.slug, versions);
       }
-      const siteName = entry.siteName || entry.siteId;
+      const siteName = siteLabel(entry as EnrichedEntry);
       const siteList = versions.get(plugin.version);
       if (siteList) {
         siteList.push(siteName);
