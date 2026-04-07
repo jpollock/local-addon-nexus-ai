@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
-import { IPC_CHANNELS, OLLAMA_POLL_INTERVAL_MS } from '../common/constants';
+import { IPC_CHANNELS, OLLAMA_POLL_INTERVAL_MS, STORAGE_KEYS } from '../common/constants';
 import { VectorStore } from './vector-store/VectorStore';
 import { EmbeddingService } from './embeddings/EmbeddingService';
 import { ContentPipeline } from './content/ContentPipeline';
@@ -297,6 +297,46 @@ export default function main(context: any): void {
       // Start Ollama availability polling
       refreshOllamaStatus();
       setInterval(() => refreshOllamaStatus(), OLLAMA_POLL_INTERVAL_MS);
+
+      // WPE auto-sync: startup check + scheduled interval
+      const runWpeAutoSync = async (reason: string) => {
+        if (!wpeSyncService || !localServicesBridge.isCAPIAvailable()) return;
+        localLogger.info(`[NexusAI] WPE auto-sync triggered: ${reason}`);
+        try {
+          await wpeSyncService.syncAllWPESites();
+          localLogger.info('[NexusAI] WPE auto-sync completed');
+        } catch (err) {
+          localLogger.error('[NexusAI] WPE auto-sync failed:', (err as Error).message);
+        }
+      };
+
+      const getWpeSyncIntervalMs = () => {
+        const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncIntervalHours?: number } | null;
+        const hours = settings?.wpeSyncIntervalHours ?? 8;
+        return hours * 60 * 60 * 1000;
+      };
+
+      // Startup: sync if data is stale
+      setTimeout(async () => {
+        try {
+          const intervalMs = getWpeSyncIntervalMs();
+          const stale = await wpeSyncService.isStale(intervalMs / 3600000);
+          if (stale) {
+            await runWpeAutoSync('startup — data is stale');
+          } else {
+            localLogger.info('[NexusAI] WPE sync is fresh — skipping startup sync');
+          }
+        } catch { /* non-fatal */ }
+      }, 10000); // 10s after startup to let services settle
+
+      // Scheduled: re-check every hour whether it's time to sync
+      setInterval(async () => {
+        try {
+          const intervalMs = getWpeSyncIntervalMs();
+          const stale = await wpeSyncService.isStale(intervalMs / 3600000);
+          if (stale) await runWpeAutoSync('scheduled interval');
+        } catch { /* non-fatal */ }
+      }, 60 * 60 * 1000); // check every hour
 
       // Start periodic health check transmission (every hour)
       // Transmits anonymous health metrics to Cloudflare for analytics

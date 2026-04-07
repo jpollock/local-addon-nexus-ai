@@ -415,6 +415,25 @@ export class WPESyncService {
   }
 
   /**
+   * Returns the oldest last_sync_at across all WPE sites, or null if none synced.
+   */
+  async getLastSyncTime(): Promise<number | null> {
+    const sites = await this.graphService.listSites({ source: 'wpe' });
+    if (sites.length === 0) return null;
+    const times = sites.map((s) => s.last_sync_at ?? 0).filter((t) => t > 0);
+    return times.length > 0 ? Math.min(...times) : null;
+  }
+
+  /**
+   * Returns true if the oldest WPE sync is older than thresholdHours.
+   */
+  async isStale(thresholdHours: number): Promise<boolean> {
+    const lastSync = await this.getLastSyncTime();
+    if (lastSync === null) return true;
+    return Date.now() - lastSync > thresholdHours * 60 * 60 * 1000;
+  }
+
+  /**
    * Re-sync a single WPE site's metadata
    */
   async syncSingleSite(installId: string): Promise<void> {

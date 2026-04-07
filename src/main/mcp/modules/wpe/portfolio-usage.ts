@@ -11,7 +11,7 @@
  * fetching WP/PHP versions for sites that don't qualify.
  */
 import { McpToolHandler } from '../../types';
-import { requireCAPI, capiError } from './helpers';
+import { requireCAPI, capiError, staleSyncWarning } from './helpers';
 
 export const portfolioUsageHandler: McpToolHandler = {
   definition: {
@@ -144,7 +144,8 @@ export const portfolioUsageHandler: McpToolHandler = {
         lines.push('', `⚠️ Errors for ${errors.length} account(s): ${errors.join('; ')}`);
       }
 
-      return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
+      const warning = await staleSyncWarning(services);
+      return { content: [{ type: 'text' as const, text: lines.join('\n') + warning }] };
     } catch (err: any) {
       return capiError(err);
     }

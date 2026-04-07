@@ -2737,6 +2737,14 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
         );
 
         localLogger.info(`[WpeAutoPull] SUCCESS: ${result.message}`);
+
+        // Re-sync this install's metadata so the graph reflects post-pull state
+        if (deps.wpeSyncService) {
+          deps.wpeSyncService.syncSingleSite(validated.installId).catch((err: Error) => {
+            localLogger.warn('[NexusAI] Post-pull sync failed (non-fatal):', err.message);
+          });
+        }
+
         return {
           success: true,
           siteId: result.siteId,

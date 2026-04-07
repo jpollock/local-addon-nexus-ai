@@ -231,6 +231,16 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     });
   };
 
+  handleWpeSyncIntervalChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const val = parseInt(e.target.value, 10);
+    const hours = isNaN(val) || val < 1 ? 1 : val > 168 ? 168 : val;
+    this.setState((prev) => {
+      const next = { ...prev.settings, wpeSyncIntervalHours: hours };
+      this.notifyChange(next);
+      return { settings: next };
+    });
+  };
+
   handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
     const providerId = e.target.value as AIProvider;
     this.setState((prev) => {
@@ -510,6 +520,33 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
                 ),
           )
         : null,
+
+      // WPE Auto-Sync Interval
+      React.createElement('div', { style: sectionStyle },
+        React.createElement('div', { style: labelStyle }, 'WP Engine Auto-Sync Interval'),
+        React.createElement('div', { style: descStyle },
+          'How often Nexus AI automatically syncs WP Engine site metadata (plugins, WP version, PHP version). Also syncs on startup if data is stale.',
+        ),
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+          React.createElement('input', {
+            type: 'number',
+            min: 1,
+            max: 168,
+            value: settings.wpeSyncIntervalHours ?? 8,
+            onChange: this.handleWpeSyncIntervalChange,
+            style: {
+              width: '64px',
+              padding: '4px 8px',
+              fontSize: '14px',
+              borderRadius: '4px',
+              border: '1px solid var(--color-border-primary, #ccc)',
+              textAlign: 'center' as const,
+            },
+          }),
+          React.createElement('span', { style: { fontSize: '14px' } }, 'hours'),
+          React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, marginLeft: '4px' } }, '(1–168)'),
+        ),
+      ),
 
     );
   }

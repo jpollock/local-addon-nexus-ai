@@ -223,6 +223,7 @@ export interface NexusSettings {
   aiModel?: string;      // Model name within provider
   onboardingDismissed?: boolean;
   useLocalGateway?: boolean; // Route all AI requests through Local AI Gateway
+  wpeSyncIntervalHours?: number; // How often to auto-sync WPE sites (default: 8)
 }
 
 export interface SiteAIConfig {
