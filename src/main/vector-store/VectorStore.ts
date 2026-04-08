@@ -261,6 +261,38 @@ export class VectorStore {
     return results;
   }
 
+  /**
+   * Remove documents of excluded post types from all vector tables.
+   * Returns { tablesScanned, docsRemoved }.
+   */
+  async cleanupExcludedTypes(
+    excludedTypes: string[],
+    onProgress?: (current: number, total: number, tableName: string) => void,
+  ): Promise<{ tablesScanned: number; docsRemoved: number }> {
+    const db = this.getDb();
+    const tables = await db.tableNames();
+    let docsRemoved = 0;
+
+    const typeList = excludedTypes.map((t) => `'${t}'`).join(', ');
+    const whereClause = `postType IN (${typeList})`;
+
+    for (let i = 0; i < tables.length; i++) {
+      const name = tables[i];
+      onProgress?.(i + 1, tables.length, name);
+      try {
+        const table = await db.openTable(name);
+        // Count before to know if anything was removed
+        const before = (await table.query().select(['postType']).where(whereClause).limit(10000).toArray()).length;
+        if (before > 0) {
+          await table.delete(whereClause);
+          docsRemoved += before;
+        }
+      } catch { /* table may be empty or schema mismatch */ }
+    }
+
+    return { tablesScanned: tables.length, docsRemoved };
+  }
+
   async delete(siteId: string, documentIds: string[]): Promise<void> {
     const db = this.getDb();
     const name = this.tableName(siteId);

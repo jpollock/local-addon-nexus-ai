@@ -1322,9 +1322,34 @@ renderTabBar(): React.ReactNode {
       this.renderSectionLabel('WP Engine Sites'),
       this.renderWpeSyncSection(),
 
+      // Content Index Maintenance
+      this.renderSectionLabel('Content Index'),
+      this.renderContentMaintenance(),
+
       // SSH Diagnostics
       this.renderSectionLabel('SSH Diagnostics'),
       this.renderSshDiagnostics(),
+    );
+  }
+
+  renderContentMaintenance(): React.ReactNode {
+    const sub: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub)' };
+    return React.createElement('div', { style: { marginBottom: '24px' } },
+      React.createElement('div', { style: { ...sub, marginBottom: '10px' } },
+        'Remove stale content (wp_block, acf-field, acf-field-group, attachment, etc.) from the vector store and graph.',
+      ),
+      React.createElement('button', {
+        style: {
+          padding: '7px 14px', borderRadius: '5px', border: 'none', fontSize: '12px',
+          fontWeight: 600, cursor: 'pointer', backgroundColor: '#6b7280', color: '#fff',
+        },
+        onClick: async () => {
+          const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES);
+          if (result.success) {
+            (window as any).showToast?.(`Cleanup done: ${result.vectorDocsRemoved} vector docs + ${result.graphRowsRemoved} graph rows removed`, 'success');
+          }
+        },
+      }, 'Remove Excluded Post Types'),
     );
   }
 

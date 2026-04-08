@@ -2512,6 +2512,32 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  safeHandle(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES, async () => {
+    try {
+      // Clean vector store
+      const vecResult = await vectorStore.cleanupExcludedTypes(EXCLUDED_POST_TYPES);
+
+      // Clean graph DB content table
+      const db = graphService.getDb();
+      let graphRemoved = 0;
+      if (db) {
+        const placeholders = EXCLUDED_POST_TYPES.map(() => '?').join(',');
+        const result = db.prepare(
+          `DELETE FROM content WHERE post_type IN (${placeholders})`
+        ).run(...EXCLUDED_POST_TYPES);
+        graphRemoved = result.changes;
+      }
+
+      localLogger.info(
+        `[NexusAI] Cleanup: removed ${vecResult.docsRemoved} vector docs + ${graphRemoved} graph content rows for excluded types`
+      );
+
+      return { success: true, vectorDocsRemoved: vecResult.docsRemoved, graphRowsRemoved: graphRemoved, tablesScanned: vecResult.tablesScanned };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.WPE_SYNC_STOP, () => {
     if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
     deps.wpeSyncService.stopSync();
