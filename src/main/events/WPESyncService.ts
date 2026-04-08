@@ -541,6 +541,7 @@ export class WPESyncService {
         install_name: install.name,
         environment: install.environment ?? 'production',
         primary_domain: install.primaryDomain || `${install.name}.wpengine.com`,
+        php_version: install.phpVersion ?? undefined,
       };
 
       await this.syncInstall(wpeInstall);
