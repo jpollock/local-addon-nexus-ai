@@ -237,14 +237,19 @@ export const EXCLUDED_POST_TYPES = [
   'custom_css',
   'customize_changeset',
   // Internal/system types that produce noise, not searchable content
-  'wp_block',          // reusable blocks
-  'user_request',      // GDPR data requests
-  'wp_pattern',        // block patterns
-  'wp_template_part',  // already above but alias
-  'wp_global_styles',  // already above but alias
-  'scheduled-action',  // Action Scheduler
-  'shop_order',        // WooCommerce orders (not content)
-  'shop_order_refund', // WooCommerce refunds
+  'wp_block',           // reusable blocks
+  'user_request',       // GDPR data requests
+  'wp_pattern',         // block patterns
+  'scheduled-action',   // Action Scheduler
+  'shop_order',         // WooCommerce orders (not content)
+  'shop_order_refund',  // WooCommerce refunds
+  'pm_pattern',         // Pattern Manager plugin
+  // ACF internal config types — these are field/group definitions, not content
+  'acf-field-group',
+  'acf-field',
+  'acf-taxonomy',
+  'acf-post-type',
+  'acf-ui-options-page',
 ];
 
 /** Max words per chunk before splitting */

@@ -1427,8 +1427,9 @@ renderTabBar(): React.ReactNode {
                 ),
                 React.createElement('pre', {
                   style: { margin: 0, whiteSpace: 'pre-wrap' as const, wordBreak: 'break-all' as const,
-                    maxHeight: '120px', overflow: 'auto', color: 'var(--nxai-card-sub)', fontSize: '10px' },
-                }, r.error ?? (r.stdout?.slice(0, 500) || '(empty)')),
+                    maxHeight: '200px', overflow: 'auto', color: 'var(--nxai-card-sub)', fontSize: '10px',
+                    userSelect: 'text' as const, cursor: 'text' },
+                }, r.error ?? (r.stdout?.slice(0, 2000) || '(empty)') + (r.stdout && r.stdout.length > 2000 ? '\n… (truncated)' : '')),
               ),
             ),
           )
