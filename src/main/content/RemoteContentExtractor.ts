@@ -98,106 +98,65 @@ export class RemoteContentExtractor {
   }
 
   /**
-   * Extract posts of a specific type
+   * Extract posts of a specific type — batched single SSH call.
+   * Fetches all post content fields in one wp post list call instead of
+   * one wp post get per post.
    */
   private async extractPostType(installName: string, postType: string): Promise<ExtractedPost[]> {
-    const posts: ExtractedPost[] = [];
-
     try {
       this.logger.info(`[RemoteContentExtractor] Getting post list for type: ${postType}...`);
 
-      // Get list of post IDs
+      // Fetch all posts with full content fields in one SSH round trip
       const listResult = await this.localServices.remoteWpCliRun(installName, [
         'post',
         'list',
         `--post_type=${postType}`,
         '--post_status=publish',
-        '--fields=ID,post_title',
+        '--fields=ID,post_title,post_content,post_excerpt,post_type,post_status,post_author,post_date',
+        '--posts_per_page=100',
         '--format=json',
       ]);
 
-      this.logger.info(`[RemoteContentExtractor] Post list result:`, listResult);
+      this.logger.info(`[RemoteContentExtractor] Post list result: --`, listResult);
 
       if (!listResult.success || !listResult.stdout) {
         this.logger.warn(`[RemoteContentExtractor] No posts found for type ${postType}`);
-        return posts;
+        return [];
       }
 
       const postList = JSON.parse(listResult.stdout);
       this.logger.info(`[RemoteContentExtractor] Parsed ${Array.isArray(postList) ? postList.length : 0} posts`);
 
       if (!Array.isArray(postList) || postList.length === 0) {
-        return posts;
+        return [];
       }
 
       this.logger.info(`[RemoteContentExtractor] Found ${postList.length} ${postType} posts in ${installName}`);
 
-      // Extract content for each post (limit to 100 posts per type to avoid overwhelming)
-      const limit = Math.min(postList.length, 100);
-      for (let i = 0; i < limit; i++) {
-        const postMeta = postList[i];
-
-        try {
-          const post = await this.extractPost(installName, postMeta.ID);
-          if (post) {
-            posts.push(post);
-          }
-        } catch (error) {
-          this.logger.warn(`[RemoteContentExtractor] Failed to extract post ${postMeta.ID}:`, error);
-        }
-      }
-
-      if (postList.length > limit) {
-        this.logger.info(`[RemoteContentExtractor] Limited to ${limit} of ${postList.length} ${postType} posts`);
-      }
-
-      return posts;
+      return postList
+        .map((postData: any) => {
+          const cleanContent = postData.post_content
+            ? cleanWordPressContent(postData.post_content)
+            : '';
+          return {
+            id: Number(postData.ID),
+            title: postData.post_title || '',
+            content: postData.post_content || '',
+            cleanedContent: cleanContent,
+            excerpt: postData.post_excerpt || '',
+            postType: postData.post_type || postType,
+            postStatus: postData.post_status || 'publish',
+            author: postData.post_author ? String(postData.post_author) : '0',
+            date: postData.post_date || new Date().toISOString(),
+            categories: [],
+            tags: [],
+            customFields: {},
+          } as ExtractedPost;
+        })
+        .filter((p: ExtractedPost) => p.cleanedContent.trim().length > 0);
     } catch (error) {
       this.logger.error(`[RemoteContentExtractor] Failed to extract ${postType}:`, error);
-      return posts;
-    }
-  }
-
-  /**
-   * Extract a single post via WP-CLI
-   */
-  private async extractPost(installName: string, postId: number): Promise<ExtractedPost | null> {
-    try {
-      const result = await this.localServices.remoteWpCliRun(installName, [
-        'post',
-        'get',
-        postId.toString(),
-        '--format=json',
-      ]);
-
-      if (!result.success || !result.stdout) {
-        return null;
-      }
-
-      const postData = JSON.parse(result.stdout);
-
-      // Clean HTML content
-      const cleanContent = postData.post_content
-        ? cleanWordPressContent(postData.post_content)
-        : '';
-
-      return {
-        id: postData.ID,
-        title: postData.post_title || '',
-        content: postData.post_content || '',
-        cleanedContent: cleanContent,
-        excerpt: postData.post_excerpt || '',
-        postType: postData.post_type || 'post',
-        postStatus: postData.post_status || 'publish',
-        author: postData.post_author ? String(postData.post_author) : '0',
-        date: postData.post_date || new Date().toISOString(),
-        categories: [],
-        tags: [],
-        customFields: {},
-      };
-    } catch (error) {
-      this.logger.warn(`[RemoteContentExtractor] Failed to parse post ${postId}:`, error);
-      return null;
+      return [];
     }
   }
 }

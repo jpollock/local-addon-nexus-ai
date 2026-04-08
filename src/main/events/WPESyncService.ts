@@ -291,7 +291,19 @@ export class WPESyncService {
       }
     } catch (err: any) {
       this.logger.warn(`[WPESyncService] eval error: ${install.install_name} — ${err.message}`);
-      // SSH or parse failure — continue with nulls, site record still gets upserted
+    }
+
+    // Fallback: if eval didn't get wp_version, try wp core version alone (simpler, more compatible)
+    if (!wpVersion) {
+      try {
+        const versionResult = await this.localServices.remoteWpCliRun(install.install_name, ['core', 'version']);
+        if (versionResult.success && versionResult.stdout) {
+          wpVersion = versionResult.stdout.trim();
+          this.logger.info(`[WPESyncService] fallback version ok: ${install.install_name} — wp=${wpVersion}`);
+        }
+      } catch {
+        // SSH not available for this install — continue with null
+      }
     }
 
     // Upsert site record

@@ -269,6 +269,7 @@ function truncate(text: string, maxLen: number): string {
 export class NexusOverview extends React.Component<NexusOverviewProps, NexusOverviewState> {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private wpeSyncPassivePoll: ReturnType<typeof setInterval> | null = null;
   private mounted = false;
 
   state: NexusOverviewState = {
@@ -325,14 +326,22 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     this.fetchAll();
     this.pollTimer = setInterval(() => this.fetchAll(), POLL_INTERVALS.DASHBOARD_STATS_MS);
     
-    // Check if WPE sync is already running
+    // Check if WPE sync is already running (catches auto-syncs started before mount)
     this.checkWpeSyncStatus();
+
+    // Passive poll: pick up auto-syncs that start after mount (every 10s when not already syncing)
+    this.wpeSyncPassivePoll = setInterval(() => {
+      if (!this.state.wpeSyncing) {
+        this.checkWpeSyncStatus();
+      }
+    }, 10000);
   }
 
   componentWillUnmount(): void {
     this.mounted = false;
     if (this.pollTimer) clearInterval(this.pollTimer);
     if (this.searchTimer) clearTimeout(this.searchTimer);
+    if (this.wpeSyncPassivePoll) clearInterval(this.wpeSyncPassivePoll);
     this.stopWpeSyncProgressPolling();
   }
 

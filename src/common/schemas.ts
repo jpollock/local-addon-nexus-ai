@@ -24,6 +24,7 @@ export const UpdateSettingsSchema = z.object({
   aiModel: z.string().optional(),
   onboardingDismissed: z.boolean().optional(),
   useLocalGateway: z.boolean().optional(),
+  wpeSyncIntervalHours: z.number().int().min(1).max(168).optional(),
 }).strict(); // Prevent unknown properties
 
 export const PluginSlugSchema = z
