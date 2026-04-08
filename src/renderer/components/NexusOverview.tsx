@@ -141,6 +141,7 @@ interface NexusOverviewState {
   wpeSyncProgress: { total: number; current: number; skipped: number; currentSite: string; status: string } | null;
   wpeSyncedCount: number;
   wpeSyncError: string | null;
+  wpeStopping: boolean;
   wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null; fresh_count: number; stale_count: number } | null;
   wpeSyncThresholdHours: number;
   // Credential sync state
@@ -309,6 +310,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     wpeSyncProgress: null,
     wpeSyncedCount: 0,
     wpeSyncError: null,
+    wpeStopping: false,
     wpeSyncStats: null,
     wpeSyncThresholdHours: 8,
     syncStatus: {},
@@ -1321,6 +1323,7 @@ renderTabBar(): React.ReactNode {
 
   handleWpeSyncStop = (): void => {
     this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_STOP);
+    this.setState({ wpeStopping: true });
   };
 
   handleWpeSync = async (): Promise<void> => {
@@ -1343,6 +1346,7 @@ renderTabBar(): React.ReactNode {
         this.setState({
           wpeSyncedCount: syncedCount,
           wpeSyncing: false,
+          wpeStopping: false,
           wpeSyncProgress: null,
           wpeSyncError: null,
         });
@@ -1469,7 +1473,7 @@ renderTabBar(): React.ReactNode {
   }
 
   renderWpeSyncSection(): React.ReactNode {
-    const { wpeSyncing, wpeSyncProgress, wpeSyncError, wpeSyncStats, wpeSyncThresholdHours } = this.state;
+    const { wpeSyncing, wpeStopping, wpeSyncProgress, wpeSyncError, wpeSyncStats, wpeSyncThresholdHours } = this.state;
 
     const subStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub, #6b7280)' };
 
@@ -1511,11 +1515,18 @@ renderTabBar(): React.ReactNode {
         wpeSyncing ? React.createElement(LoadingSpinner, { size: 14, inline: true }) : null,
       ),
 
-      // In-progress
+      // In-progress / stopping message
       wpeSyncing && wpeSyncProgress
-        ? React.createElement('div', { style: { ...subStyle, fontStyle: 'italic', marginBottom: '8px' } },
-            `${wpeSyncProgress.currentSite} (${wpeSyncProgress.current}/${wpeSyncProgress.total}` +
-            (wpeSyncProgress.skipped > 0 ? `, ${wpeSyncProgress.skipped} skipped` : '') + ')',
+        ? React.createElement('div', { style: { marginBottom: '8px' } },
+            React.createElement('div', { style: { ...subStyle, fontStyle: 'italic' } },
+              `${wpeSyncProgress.currentSite} (${wpeSyncProgress.current}/${wpeSyncProgress.total}` +
+              (wpeSyncProgress.skipped > 0 ? `, ${wpeSyncProgress.skipped} skipped` : '') + ')',
+            ),
+            wpeStopping
+              ? React.createElement('div', {
+                  style: { fontSize: '12px', color: '#f59e0b', marginTop: '4px', fontWeight: 500 },
+                }, '⚠ Stopping after current batch completes…')
+              : null,
           )
         : null,
 
