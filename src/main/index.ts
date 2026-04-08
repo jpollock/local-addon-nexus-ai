@@ -299,9 +299,14 @@ export default function main(context: any): void {
       setInterval(() => refreshOllamaStatus(), OLLAMA_POLL_INTERVAL_MS);
 
       // WPE auto-sync: startup check + scheduled interval
-const getWpeSyncIntervalHours = () => {
+      const getWpeSyncIntervalHours = () => {
         const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncIntervalHours?: number } | null;
         return settings?.wpeSyncIntervalHours ?? 8;
+      };
+
+      const isWpeSyncAutoEnabled = () => {
+        const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncAutoEnabled?: boolean } | null;
+        return settings?.wpeSyncAutoEnabled !== false; // default: true
       };
 
       const runWpeAutoSyncIncremental = async (reason: string) => {
@@ -321,6 +326,10 @@ const getWpeSyncIntervalHours = () => {
       // Startup: sync any stale sites
       setTimeout(async () => {
         try {
+          if (!isWpeSyncAutoEnabled()) {
+            localLogger.info('[NexusAI] WPE auto-sync disabled — skipping startup sync');
+            return;
+          }
           const hours = getWpeSyncIntervalHours();
           const stale = await wpeSyncService.isStale(hours);
           if (stale) {
@@ -334,6 +343,7 @@ const getWpeSyncIntervalHours = () => {
       // Scheduled: re-check every hour
       setInterval(async () => {
         try {
+          if (!isWpeSyncAutoEnabled()) return;
           const hours = getWpeSyncIntervalHours();
           const stale = await wpeSyncService.isStale(hours);
           if (stale) await runWpeAutoSyncIncremental('scheduled interval');

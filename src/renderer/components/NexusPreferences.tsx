@@ -521,31 +521,49 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
           )
         : null,
 
-      // WPE Auto-Sync Interval
+      // WPE Auto-Sync
       React.createElement('div', { style: sectionStyle },
-        React.createElement('div', { style: labelStyle }, 'WP Engine Auto-Sync Interval'),
+        React.createElement('div', { style: labelStyle }, 'WP Engine Auto-Sync'),
         React.createElement('div', { style: descStyle },
-          'How often Nexus AI automatically syncs WP Engine site metadata (plugins, WP version, PHP version). Also syncs on startup if data is stale.',
+          'Automatically sync WP Engine site metadata (plugins, WP version, PHP version) on startup and on a schedule.',
         ),
-        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+        React.createElement('label', { style: checkboxRowStyle },
           React.createElement('input', {
-            type: 'number',
-            min: 1,
-            max: 168,
-            value: settings.wpeSyncIntervalHours ?? 8,
-            onChange: this.handleWpeSyncIntervalChange,
-            style: {
-              width: '64px',
-              padding: '4px 8px',
-              fontSize: '14px',
-              borderRadius: '4px',
-              border: '1px solid var(--color-border-primary, #ccc)',
-              textAlign: 'center' as const,
+            type: 'checkbox',
+            checked: settings.wpeSyncAutoEnabled !== false,
+            onChange: () => {
+              this.setState((prev) => {
+                const next = { ...prev.settings, wpeSyncAutoEnabled: prev.settings.wpeSyncAutoEnabled === false ? true : false };
+                this.notifyChange(next);
+                return { settings: next };
+              });
             },
+            style: { width: '16px', height: '16px', cursor: 'pointer' },
           }),
-          React.createElement('span', { style: { fontSize: '14px' } }, 'hours'),
-          React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, marginLeft: '4px' } }, '(1–168)'),
+          React.createElement('span', { style: { fontSize: '14px' } }, 'Enable auto-sync'),
         ),
+        settings.wpeSyncAutoEnabled !== false
+          ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' } },
+              React.createElement('span', { style: { fontSize: '14px' } }, 'Sync every'),
+              React.createElement('input', {
+                type: 'number',
+                min: 1,
+                max: 168,
+                value: settings.wpeSyncIntervalHours ?? 8,
+                onChange: this.handleWpeSyncIntervalChange,
+                style: {
+                  width: '64px',
+                  padding: '4px 8px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  border: '1px solid var(--color-border-primary, #ccc)',
+                  textAlign: 'center' as const,
+                },
+              }),
+              React.createElement('span', { style: { fontSize: '14px' } }, 'hours'),
+              React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, marginLeft: '4px' } }, '(1–168)'),
+            )
+          : null,
       ),
 
     );
