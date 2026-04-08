@@ -2458,9 +2458,11 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       const validated = validateInput(WpeSyncAllSchema, options);
 
       const limit = validated?.limit;
-      localLogger.info(`[NexusAI] Starting WPE site sync${limit ? ` (limit: ${limit})` : ''}...`);
-      const result = await deps.wpeSyncService.syncAllWPESites(limit);
-      localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.failed} failed`);
+      // Manual sync always force-refreshes all installs (staleThresholdHours=0)
+      // Incremental staleness is only for scheduled/auto syncs
+      localLogger.info(`[NexusAI] Starting WPE site sync (force)${limit ? ` (limit: ${limit})` : ''}...`);
+      const result = await deps.wpeSyncService.syncAllWPESites(limit, 0);
+      localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed`);
 
       // Audit log success
       auditLogger.logSuccess(
