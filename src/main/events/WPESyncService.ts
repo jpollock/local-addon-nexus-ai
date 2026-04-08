@@ -255,16 +255,23 @@ export class WPESyncService {
     // Run commands sequentially so the first call establishes the ControlMaster socket
     // and subsequent calls reuse it. Running in parallel causes all 3 to race for the
     // socket, potentially opening 3 real TCP connections and hitting WPE's 5-conn limit.
+    const t0 = Date.now();
     const versionResult = await this.localServices.remoteWpCliRun(install.install_name, ['core', 'version']).catch(() => ({ stdout: '', success: false }));
+    const t1 = Date.now();
+    this.logger.info(`[WPESyncService] ${install.install_name} core version: success=${versionResult.success} stdout="${versionResult.stdout?.slice(0, 80)}" ms=${t1 - t0}`);
     const wpVersion = versionResult.success && versionResult.stdout ? versionResult.stdout.trim() : undefined;
 
     const pluginResult = await this.localServices.remoteWpCliRun(install.install_name, ['plugin', 'list', '--format=json']).catch(() => ({ stdout: '', success: false }));
+    const t2 = Date.now();
+    this.logger.info(`[WPESyncService] ${install.install_name} plugin list: success=${pluginResult.success} ms=${t2 - t1}`);
     let pluginRows: any[] = [];
     if (pluginResult.success && pluginResult.stdout) {
       try { const p = JSON.parse(pluginResult.stdout); pluginRows = Array.isArray(p) ? p : []; } catch { /* skip */ }
     }
 
     const userResult = await this.localServices.remoteWpCliRun(install.install_name, ['user', 'list', '--format=json']).catch(() => ({ stdout: '', success: false }));
+    const t3 = Date.now();
+    this.logger.info(`[WPESyncService] ${install.install_name} user list: success=${userResult.success} ms=${t3 - t2}`);
     let userRows: any[] = [];
     if (userResult.success && userResult.stdout) {
       try { const u = JSON.parse(userResult.stdout); userRows = Array.isArray(u) ? u : []; } catch { /* skip */ }
