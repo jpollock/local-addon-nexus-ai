@@ -37,6 +37,9 @@ export class RemoteContentExtractor {
     try {
       this.logger.info(`[RemoteContentExtractor] Starting content extraction for ${installName}...`);
 
+      // Load plugins so custom post types (e.g. 'recipe') are registered
+      // and included when post_type=any is used. Without plugins, only
+      // core post types appear in WP_Query results.
       const result = await this.localServices.remoteWpCliRun(installName, [
         'post',
         'list',
@@ -45,7 +48,7 @@ export class RemoteContentExtractor {
         '--fields=ID,post_title,post_content,post_excerpt,post_type,post_status,post_author,post_date',
         '--posts_per_page=200',
         '--format=json',
-      ]);
+      ], { skipPlugins: false });
 
       if (!result.success || !result.stdout) {
         this.logger.warn(`[RemoteContentExtractor] No posts returned for ${installName}`);

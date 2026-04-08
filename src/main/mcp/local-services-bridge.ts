@@ -131,7 +131,7 @@ export interface LocalServicesBridge {
   resolveSiteObject(siteId: string): unknown;
 
   // Remote WP-CLI (via SSH to WP Engine)
-  remoteWpCliRun(installName: string, args: string[]): Promise<WpCliResult>;
+  remoteWpCliRun(installName: string, args: string[], opts?: { skipPlugins?: boolean }): Promise<WpCliResult>;
   resolveWpeInstall(siteId: string): Promise<WpeInstallInfo | null>;
   isSSHKeyAvailable(): boolean;
 
@@ -576,7 +576,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     // --- Remote WP-CLI (via SSH to WP Engine) ---
 
-    async remoteWpCliRun(installName: string, args: string[]): Promise<WpCliResult> {
+    async remoteWpCliRun(installName: string, args: string[], opts?: { skipPlugins?: boolean }): Promise<WpCliResult> {
       // Shell-escape each argument to prevent command injection
       const escapeShellArg = (arg: string): string => {
         // Replace single quotes with '\'' (close quote, escaped quote, open quote)
@@ -584,9 +584,11 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         return `'${arg.replace(/'/g, "'\\''")}'`;
       };
 
-      // Build WP-CLI command with individually escaped arguments
+      // Build WP-CLI command — skip plugins/themes by default for speed/safety,
+      // but allow content extraction to load plugins (needed for custom post types)
+      const skipFlags = opts?.skipPlugins === false ? '' : '--skip-plugins --skip-themes';
       const escapedArgs = args.map(escapeShellArg);
-      const wpCommand = `wp --skip-plugins --skip-themes ${escapedArgs.join(' ')}`;
+      const wpCommand = `wp ${skipFlags} ${escapedArgs.join(' ')}`.trim();
 
       // SSH key path: {userDataPath}/ssh/wpe-connect
       const userDataPath = (process as any).electronPaths?.userDataPath
