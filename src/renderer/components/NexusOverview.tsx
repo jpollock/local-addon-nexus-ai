@@ -777,6 +777,89 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     );
   }
 
+  renderGraphCard(): React.ReactNode {
+    const { wpeSyncStats } = this.state;
+    const total = wpeSyncStats?.total ?? 0;
+    const hasWp = wpeSyncStats?.has_wp_version ?? 0;
+    const hasPhp = wpeSyncStats?.has_php_version ?? 0;
+    const plugins = 0; // could query graph but keep simple for now
+
+    if (!wpeSyncStats) {
+      return React.createElement('div', { style: cardStyle },
+        React.createElement('div', { style: cardTitleStyle }, 'Site Graph'),
+        React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-sub)' } }, '—'),
+        React.createElement('div', { style: subStatStyle }, 'No WPE data yet'),
+      );
+    }
+
+    const wpPct = total > 0 ? Math.round((hasWp / total) * 100) : 0;
+    const phpPct = total > 0 ? Math.round((hasPhp / total) * 100) : 0;
+    const wpColor = wpPct === 100 ? UI_COLORS.STATUS_RUNNING : wpPct > 50 ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_ERROR;
+
+    return React.createElement('div', { style: cardStyle },
+      React.createElement('div', { style: cardTitleStyle }, 'Site Graph'),
+      React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-text)' } },
+        total,
+        React.createElement('span', { style: { fontSize: '13px', fontWeight: 400, color: 'var(--nxai-card-sub)' } }, ' WPE installs'),
+      ),
+      React.createElement('div', { style: subStatStyle },
+        React.createElement('span', { style: { color: wpColor } }, `WP version: ${hasWp}/${total} (${wpPct}%)`),
+        React.createElement('br'),
+        `PHP version: ${hasPhp}/${total} (${phpPct}%)`,
+        React.createElement('br'),
+        `Plugins synced for ${total > 0 ? total : '—'} installs`,
+      ),
+    );
+  }
+
+  renderWpeSyncCard(): React.ReactNode {
+    const { wpeSyncStats, wpeSyncThresholdHours, wpeSyncing } = this.state;
+
+    if (wpeSyncing) {
+      return React.createElement('div', { style: cardStyle },
+        React.createElement('div', { style: cardTitleStyle }, 'WPE Sync'),
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
+          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_WARNING) }),
+          React.createElement('span', { style: { fontSize: '18px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, 'Syncing…'),
+        ),
+        React.createElement('div', { style: subStatStyle }, 'Sync in progress'),
+      );
+    }
+
+    if (!wpeSyncStats || !wpeSyncStats.last_sync_at) {
+      return React.createElement('div', { style: cardStyle },
+        React.createElement('div', { style: cardTitleStyle }, 'WPE Sync'),
+        React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-sub)' } }, '—'),
+        React.createElement('div', { style: subStatStyle }, 'Never synced'),
+      );
+    }
+
+    const ageMs = Date.now() - wpeSyncStats.last_sync_at;
+    const ageHours = Math.round(ageMs / 3600000);
+    const ageMins = Math.round(ageMs / 60000);
+    const ageLabel = ageHours > 0 ? `${ageHours}h ago` : `${ageMins}m ago`;
+    const isStale = ageMs > wpeSyncThresholdHours * 3600000;
+    const statusColor = isStale ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING;
+    const staleCount = wpeSyncStats.stale_count ?? 0;
+    const freshCount = wpeSyncStats.fresh_count ?? 0;
+
+    return React.createElement('div', { style: cardStyle },
+      React.createElement('div', { style: cardTitleStyle }, 'WPE Sync'),
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
+        React.createElement('span', { style: dotStyle(statusColor) }),
+        React.createElement('span', { style: { fontSize: '16px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, ageLabel),
+      ),
+      React.createElement('div', { style: subStatStyle },
+        React.createElement('span', { style: { color: UI_COLORS.STATUS_RUNNING } }, `${freshCount} fresh`),
+        staleCount > 0
+          ? React.createElement('span', { style: { color: UI_COLORS.STATUS_WARNING } }, ` · ${staleCount} stale`)
+          : React.createElement('span', null, ' · all current ✓'),
+        React.createElement('br'),
+        `Threshold: ${wpeSyncThresholdHours}h`,
+      ),
+    );
+  }
+
   renderAiProxyCard(): React.ReactNode {
     const { aiProxy } = this.state;
     const running = aiProxy?.running ?? false;
@@ -1048,11 +1131,15 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       ),
 
       this.renderSectionLabel('Nexus AI'),
-      React.createElement('div', { style: { ...cardContainerStyle, gridTemplateColumns: 'repeat(4, 1fr)' } },
+      React.createElement('div', { style: { ...cardContainerStyle, gridTemplateColumns: 'repeat(3, 1fr)' } },
         this.renderMcpCard(stats),
         this.renderEmbeddingCard(stats),
-        this.renderIndexCard(stats),
         this.renderAiProxyCard(),
+      ),
+      React.createElement('div', { style: { ...cardContainerStyle, gridTemplateColumns: 'repeat(3, 1fr)', marginTop: '12px' } },
+        this.renderIndexCard(stats),
+        this.renderGraphCard(),
+        this.renderWpeSyncCard(),
       ),
 
       // AI Gateway Usage (moved from Operations tab)
