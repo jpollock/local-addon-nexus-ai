@@ -2463,33 +2463,71 @@ export function createResolvers(context: ResolverContext) {
 
       nexusContentSearchAll: async (_parent: any, { query, limit }: { query: string; limit?: number }) => {
         try {
-          if (!services.vectorStore) {
-            return {
-              success: false,
-              error: 'Vector store not available',
-              results: [],
-            };
+          if (!services.vectorStore || !services.embeddingService) {
+            return { success: false, error: 'Vector store or embedding service not available', results: [] };
           }
 
-          const searchResults = await services.vectorStore.search(query, limit || 20);
+          // Embed the query
+          const queryVector = await services.embeddingService.embed(query);
+
+          // Search all indexed site IDs (local + WPE)
+          const indexEntries = services.indexRegistry.listAll();
+          const graphService = (services as any).graphService;
+          let wpeSiteIds: string[] = [];
+          if (graphService?.getDb?.()) {
+            try {
+              const rows = graphService.getDb().prepare("SELECT id FROM sites WHERE source='wpe'").all() as Array<{ id: string }>;
+              wpeSiteIds = rows.map((r) => r.id);
+            } catch { /* skip wpe */ }
+          }
+          const allSiteIds = [
+            ...indexEntries.map((e: any) => e.siteId),
+            ...wpeSiteIds,
+          ];
+
+          // Search in parallel batches
+          interface Hit { siteId: string; siteName: string; score: number; title: string; content: string; postType: string }
+          const hits: Hit[] = [];
+          const maxPerSite = 3;
+          const CONCURRENCY = 20;
+          const siteNames = new Map(indexEntries.map((e: any) => [e.siteId, e.siteName || e.siteId]));
+
+          for (let i = 0; i < allSiteIds.length; i += CONCURRENCY) {
+            const batch = allSiteIds.slice(i, i + CONCURRENCY);
+            await Promise.all(batch.map(async (siteId) => {
+              try {
+                const results = await services.vectorStore!.search(siteId, queryVector, { limit: maxPerSite, relevanceFloor: 0.4 });
+                for (const r of results) {
+                  hits.push({
+                    siteId,
+                    siteName: siteNames.get(siteId) || siteId,
+                    score: r.score,
+                    title: r.title || '',
+                    content: r.content || '',
+                    postType: r.postType || 'post',
+                  });
+                }
+              } catch { /* not indexed */ }
+            }));
+          }
+
+          // Sort by score, take top N
+          hits.sort((a, b) => b.score - a.score);
+          const topHits = hits.slice(0, limit || 20);
 
           return {
             success: true,
-            results: searchResults.map((r: any) => ({
-              target: `${r.metadata?.siteName || 'unknown'}@local`,
-              siteName: r.metadata?.siteName || 'unknown',
-              path: r.metadata?.filePath || r.metadata?.path || 'unknown',
-              type: r.metadata?.type || 'content',
-              score: r.score || 0,
-              snippet: r.text?.substring(0, 200) || '',
+            results: topHits.map((h) => ({
+              target: `${h.siteName}@local`,
+              siteName: h.siteName,
+              path: h.title || '(untitled)',
+              type: h.postType,
+              score: h.score,
+              snippet: h.content.substring(0, 200),
             })),
           };
         } catch (error: any) {
-          return {
-            success: false,
-            error: error.message,
-            results: [],
-          };
+          return { success: false, error: error.message, results: [] };
         }
       },
 
