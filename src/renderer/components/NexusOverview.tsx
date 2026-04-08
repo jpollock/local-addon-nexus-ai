@@ -1341,8 +1341,9 @@ renderTabBar(): React.ReactNode {
       { label: 'wp core version', args: ['core', 'version'] },
       { label: 'wp plugin list', args: ['plugin', 'list', '--format=json'] },
       { label: 'wp user list', args: ['user', 'list', '--format=json'] },
+      { label: 'wp post-type list', args: ['post-type', 'list', '--format=json'] },
+      { label: 'wp post list (5)', args: ['post', 'list', '--format=json', '--posts_per_page=5', '--fields=ID,post_title,post_type'] },
       { label: 'wp cli info', args: ['cli', 'info'] },
-      { label: 'wp post list', args: ['post', 'list', '--format=json', '--posts_per_page=5'] },
     ];
 
     return React.createElement('div', { style: { marginBottom: '24px' } },
@@ -1369,7 +1370,7 @@ renderTabBar(): React.ReactNode {
       ),
 
       // Preset command buttons
-      React.createElement('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' as const, marginBottom: '12px' } },
+      React.createElement('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' as const, marginBottom: '8px' } },
         PRESETS.map(({ label, args }) =>
           React.createElement('button', {
             key: label,
@@ -1378,6 +1379,32 @@ renderTabBar(): React.ReactNode {
             onClick: () => this.handleDiag(args),
           }, label),
         ),
+      ),
+
+      // Custom command input
+      React.createElement('div', { style: { display: 'flex', gap: '6px', marginBottom: '12px', alignItems: 'center' } },
+        React.createElement('input', {
+          type: 'text',
+          placeholder: 'wp post list --post_type=recipe --format=json',
+          style: {
+            padding: '5px 10px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace',
+            border: '1px solid var(--color-border-primary, #ccc)',
+            backgroundColor: 'var(--color-background-secondary, #f9fafb)',
+            flex: 1,
+          },
+          onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'Enter' && !diagRunning && diagInstall.trim()) {
+              const raw = (e.target as HTMLInputElement).value.trim();
+              if (raw) {
+                // Strip leading "wp " if user typed it
+                const normalized = raw.startsWith('wp ') ? raw.slice(3) : raw;
+                const args = normalized.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map(a => a.replace(/^['"]|['"]$/g, '')) ?? [];
+                this.handleDiag(args);
+              }
+            }
+          },
+        }),
+        React.createElement('span', { style: sub }, '↵'),
       ),
 
       // Results
