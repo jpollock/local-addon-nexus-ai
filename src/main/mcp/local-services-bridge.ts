@@ -618,7 +618,10 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
         const proc = spawn('ssh', sshArgs, {
           stdio: ['ignore', 'pipe', 'pipe'],
-          timeout: 12000, // 12s: wp eval should return in 3-5s; 12s catches slow sites without hanging sync
+          // 30s: first call per install takes ~22s (SSH handshake + WP bootstrap without existing ControlMaster).
+          // Subsequent calls reuse the master and complete in 2-3s.
+          // Truly unreachable sites fail with immediate DNS error, not timeout.
+          timeout: 30000,
         });
 
         proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
