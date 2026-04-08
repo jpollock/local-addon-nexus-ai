@@ -2506,6 +2506,18 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  safeHandle(IPC_CHANNELS.WPE_DIAGNOSE, async (_event: any, params: { installName: string; args: string[] }) => {
+    const { installName, args } = params;
+    if (!installName || !args?.length) return { success: false, error: 'installName and args required' };
+    const start = Date.now();
+    try {
+      const result = await localServicesBridge.remoteWpCliRun(installName, args);
+      return { success: result.success, stdout: result.stdout, durationMs: Date.now() - start };
+    } catch (err: any) {
+      return { success: false, error: err.message, durationMs: Date.now() - start };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.WPE_SYNC_STOP, () => {
     if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
     deps.wpeSyncService.stopSync();

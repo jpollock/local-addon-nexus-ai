@@ -142,6 +142,9 @@ interface NexusOverviewState {
   wpeSyncedCount: number;
   wpeSyncError: string | null;
   wpeStopping: boolean;
+  diagInstall: string;
+  diagRunning: boolean;
+  diagResults: Array<{ cmd: string; success: boolean; stdout: string; durationMs: number; error?: string }>;
   wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null; fresh_count: number; stale_count: number } | null;
   wpeSyncThresholdHours: number;
   // Credential sync state
@@ -312,6 +315,9 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     wpeSyncedCount: 0,
     wpeSyncError: null,
     wpeStopping: false,
+    diagInstall: '',
+    diagRunning: false,
+    diagResults: [],
     wpeSyncStats: null,
     wpeSyncThresholdHours: 8,
     syncStatus: {},
@@ -1228,6 +1234,91 @@ renderTabBar(): React.ReactNode {
       // WPE Sync section
       this.renderSectionLabel('WP Engine Sites'),
       this.renderWpeSyncSection(),
+
+      // SSH Diagnostics
+      this.renderSectionLabel('SSH Diagnostics'),
+      this.renderSshDiagnostics(),
+    );
+  }
+
+  renderSshDiagnostics(): React.ReactNode {
+    const { diagInstall, diagRunning, diagResults } = this.state;
+    const sub: React.CSSProperties = { fontSize: '11px', color: 'var(--nxai-card-sub)' };
+    const btnStyle: React.CSSProperties = {
+      padding: '5px 10px', borderRadius: '4px', border: '1px solid var(--color-border-primary, #ccc)',
+      backgroundColor: 'transparent', fontSize: '11px', cursor: diagRunning ? 'not-allowed' : 'pointer',
+      opacity: diagRunning ? 0.5 : 1, fontFamily: 'monospace',
+    };
+
+    const PRESETS: Array<{ label: string; args: string[] }> = [
+      { label: 'wp core version', args: ['core', 'version'] },
+      { label: 'wp plugin list', args: ['plugin', 'list', '--format=json'] },
+      { label: 'wp user list', args: ['user', 'list', '--format=json'] },
+      { label: 'wp cli info', args: ['cli', 'info'] },
+      { label: 'wp post list', args: ['post', 'list', '--format=json', '--posts_per_page=5'] },
+    ];
+
+    return React.createElement('div', { style: { marginBottom: '24px' } },
+      React.createElement('div', { style: { ...sub, marginBottom: '8px' } },
+        'Run WP-CLI commands against any WPE install to diagnose SSH/timing issues.',
+      ),
+
+      // Install input
+      React.createElement('div', { style: { display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' } },
+        React.createElement('input', {
+          type: 'text',
+          placeholder: 'install-name (e.g. acfrecipes)',
+          value: diagInstall,
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.setState({ diagInstall: e.target.value }),
+          style: {
+            padding: '5px 10px', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace',
+            border: '1px solid var(--color-border-primary, #ccc)', width: '220px',
+            backgroundColor: 'var(--color-background-secondary, #f9fafb)',
+          },
+        }),
+        diagRunning
+          ? React.createElement('span', { style: { ...sub, fontStyle: 'italic' } }, 'running…')
+          : null,
+      ),
+
+      // Preset command buttons
+      React.createElement('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' as const, marginBottom: '12px' } },
+        PRESETS.map(({ label, args }) =>
+          React.createElement('button', {
+            key: label,
+            style: btnStyle,
+            disabled: diagRunning || !diagInstall.trim(),
+            onClick: () => this.handleDiag(args),
+          }, label),
+        ),
+      ),
+
+      // Results
+      diagResults.length > 0
+        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '8px' } },
+            diagResults.map((r, i) =>
+              React.createElement('div', {
+                key: i,
+                style: {
+                  padding: '8px 10px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace',
+                  backgroundColor: r.success ? 'rgba(81,187,123,0.07)' : 'rgba(239,68,68,0.07)',
+                  border: `1px solid ${r.success ? 'rgba(81,187,123,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                },
+              },
+                React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+                  React.createElement('span', { style: { fontWeight: 600, color: 'var(--nxai-card-text)' } }, r.cmd),
+                  React.createElement('span', { style: { color: r.success ? '#51BB7B' : '#ef4444' } },
+                    `${r.success ? '✓' : '✗'} ${r.durationMs}ms`,
+                  ),
+                ),
+                React.createElement('pre', {
+                  style: { margin: 0, whiteSpace: 'pre-wrap' as const, wordBreak: 'break-all' as const,
+                    maxHeight: '120px', overflow: 'auto', color: 'var(--nxai-card-sub)', fontSize: '10px' },
+                }, r.error ?? (r.stdout?.slice(0, 500) || '(empty)')),
+              ),
+            ),
+          )
+        : null,
     );
   }
 
@@ -1328,6 +1419,21 @@ renderTabBar(): React.ReactNode {
         toast({ type: 'error', content: 'Failed to sync credentials' });
       }
     }
+  };
+
+  handleDiag = async (args: string[]): Promise<void> => {
+    const { diagInstall } = this.state;
+    if (!diagInstall.trim() || this.state.diagRunning) return;
+    const cmd = args.join(' ');
+    this.setState({ diagRunning: true });
+    const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_DIAGNOSE, {
+      installName: diagInstall.trim(),
+      args,
+    });
+    this.setState((prev) => ({
+      diagRunning: false,
+      diagResults: [{ cmd, ...result }, ...prev.diagResults].slice(0, 20),
+    }));
   };
 
   handleWpeSyncStop = (): void => {
