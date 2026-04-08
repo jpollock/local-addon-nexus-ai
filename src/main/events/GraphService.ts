@@ -239,8 +239,8 @@ export class GraphService {
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         domain = excluded.domain,
-        wp_version = excluded.wp_version,
-        php_version = excluded.php_version,
+        wp_version = COALESCE(excluded.wp_version, wp_version),
+        php_version = COALESCE(excluded.php_version, php_version),
         last_sync_at = excluded.last_sync_at,
         is_active = excluded.is_active,
         updated_at = excluded.updated_at,
