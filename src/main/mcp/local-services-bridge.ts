@@ -606,7 +606,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         // ControlMaster: reuse SSH connections to reduce overhead
         '-o', 'ControlMaster=auto',
         '-o', 'ControlPath=/tmp/ssh-nexus-%C',
-        '-o', 'ControlPersist=5s',
+        '-o', 'ControlPersist=30s',
         '-i', sshKeyPath,
         `${username}@${host}`,
         wpCommand,
@@ -618,10 +618,10 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
         const proc = spawn('ssh', sshArgs, {
           stdio: ['ignore', 'pipe', 'pipe'],
-          // 30s: first call per install takes ~22s (SSH handshake + WP bootstrap without existing ControlMaster).
-          // Subsequent calls reuse the master and complete in 2-3s.
-          // Truly unreachable sites fail with immediate DNS error, not timeout.
-          timeout: 30000,
+          // 20s: measured cold start (ssh + WP bootstrap, no ControlMaster) = 13-17s.
+          // Subsequent calls reuse ControlMaster and complete in 2-3s.
+          // Unreachable sites fail immediately with DNS error, not timeout.
+          timeout: 20000,
         });
 
         proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
