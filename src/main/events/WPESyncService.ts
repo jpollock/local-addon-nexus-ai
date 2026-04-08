@@ -252,59 +252,31 @@ export class WPESyncService {
     const now = Date.now();
     const siteId = `wpe-${install.install_id}`;
 
-    // Single SSH round trip: wp eval returns WP version, plugins, and users as one JSON blob.
-    // is_plugin_active() requires the plugin to be loaded, so we check against active_plugins option instead.
-    const evalCode = [
-      '$active = (array)get_option("active_plugins",[]);',
-      '$plugins = array_map(',
-      '  function($f,$d) use($active){',
-      '    return ["slug"=>dirname($f)?:basename($f,".php"),"name"=>$d["Name"],',
-      '      "version"=>$d["Version"],"active"=>in_array($f,$active),"author"=>$d["AuthorName"]];},',
-      '  array_keys($p=get_plugins()),$p',
-      ');',
-      '$users = array_map(',
-      '  function($u){return ["ID"=>$u->ID,"user_login"=>$u->user_login,',
-      '    "user_email"=>$u->user_email,"roles"=>implode(",",$u->roles)];},',
-      '  get_users()',
-      ');',
-      'echo json_encode(["wp_version"=>get_bloginfo("version"),"plugins"=>$plugins,"users"=>$users],JSON_UNESCAPED_UNICODE);',
-    ].join('');
+    // wp eval fails via WPE SSH gateway — shell strips quotes and interprets PHP as shell syntax.
+    // Run 3 parallel commands instead; ControlMaster means they share 1 TCP connection.
+    const [wpVersion, pluginRows, userRows] = await Promise.all([
+      this.localServices.remoteWpCliRun(install.install_name, ['core', 'version'])
+        .then((r) => (r.success && r.stdout ? r.stdout.trim() : undefined))
+        .catch(() => undefined),
 
-    let wpVersion: string | undefined;
-    let pluginRows: any[] = [];
-    let userRows: any[] = [];
+      this.localServices.remoteWpCliRun(install.install_name, ['plugin', 'list', '--format=json'])
+        .then((r) => {
+          if (!r.success || !r.stdout) return [];
+          try { const p = JSON.parse(r.stdout); return Array.isArray(p) ? p : []; } catch { return []; }
+        })
+        .catch(() => []),
 
-    try {
-      const result = await this.localServices.remoteWpCliRun(install.install_name, ['eval', evalCode]);
-      if (result.success && result.stdout) {
-        const data = JSON.parse(result.stdout);
-        wpVersion = data.wp_version || undefined;
-        pluginRows = Array.isArray(data.plugins) ? data.plugins : [];
-        userRows = Array.isArray(data.users) ? data.users : [];
-        this.logger.info(
-          `[WPESyncService] eval ok: ${install.install_name} — wp=${wpVersion ?? '?'} plugins=${pluginRows.length} users=${userRows.length}`
-        );
-      } else {
-        this.logger.warn(
-          `[WPESyncService] eval failed: ${install.install_name} — success=${result.success} stdout=${result.stdout?.slice(0, 120) ?? '(empty)'}`
-        );
-      }
-    } catch (err: any) {
-      this.logger.warn(`[WPESyncService] eval error: ${install.install_name} — ${err.message}`);
-    }
+      this.localServices.remoteWpCliRun(install.install_name, ['user', 'list', '--format=json'])
+        .then((r) => {
+          if (!r.success || !r.stdout) return [];
+          try { const u = JSON.parse(r.stdout); return Array.isArray(u) ? u : []; } catch { return []; }
+        })
+        .catch(() => []),
+    ]);
 
-    // Fallback: if eval didn't get wp_version, try wp core version alone (simpler, more compatible)
-    if (!wpVersion) {
-      try {
-        const versionResult = await this.localServices.remoteWpCliRun(install.install_name, ['core', 'version']);
-        if (versionResult.success && versionResult.stdout) {
-          wpVersion = versionResult.stdout.trim();
-          this.logger.info(`[WPESyncService] fallback version ok: ${install.install_name} — wp=${wpVersion}`);
-        }
-      } catch {
-        // SSH not available for this install — continue with null
-      }
-    }
+    this.logger.info(
+      `[WPESyncService] synced: ${install.install_name} — wp=${wpVersion ?? '?'} plugins=${(pluginRows as any[]).length} users=${(userRows as any[]).length}`
+    );
 
     // Upsert site record
     const site: Site = {
@@ -324,16 +296,16 @@ export class WPESyncService {
 
     await this.graphService.upsertSite(site);
 
-    // Write plugins
-    if (pluginRows.length > 0) {
+    // Write plugins (wp plugin list returns: name=slug, title=display name, status, version, author)
+    if ((pluginRows as any[]).length > 0) {
       await this.graphService.deletePlugins(siteId);
-      for (const plugin of pluginRows) {
+      for (const plugin of pluginRows as any[]) {
         await this.graphService.upsertPlugin({
           site_id: siteId,
-          slug: plugin.slug,
-          name: plugin.name || plugin.slug,
+          slug: plugin.name,           // wp plugin list uses 'name' for the slug
+          name: plugin.title || plugin.name,
           version: plugin.version || null,
-          is_active: !!plugin.active,
+          is_active: plugin.status === 'active',
           author: plugin.author || null,
           created_at: now,
           updated_at: now,
