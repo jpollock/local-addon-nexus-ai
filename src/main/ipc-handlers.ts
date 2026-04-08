@@ -1962,21 +1962,23 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           const allSearchableSiteIds = [...localSiteIds, ...wpeSiteIds];
           localLogger.info(`[NexusAI] Searching ${localSiteIds.length} local + ${wpeSiteIds.length} WPE sites for content`);
 
-          for (const siteId of allSearchableSiteIds) {
-            try {
-              const results = await vectorStore.search(siteId, queryVector, {
-                limit: 5, // Top 5 results per site
-                relevanceFloor: 0.5, // Only return good matches
-              });
-
-              // If site has matching content, add it to the set
-              if (results.length > 0) {
-                contentMatchingSiteIds.add(siteId);
-                localLogger.info('[NexusAI] Site', siteId, 'has', results.length, 'matching content (top score:', results[0].score.toFixed(3), ')');
+          // Search sites in parallel batches — LanceDB reads are local disk ops, safe to parallelize
+          const SEARCH_CONCURRENCY = 20;
+          for (let i = 0; i < allSearchableSiteIds.length; i += SEARCH_CONCURRENCY) {
+            const batch = allSearchableSiteIds.slice(i, i + SEARCH_CONCURRENCY);
+            await Promise.all(batch.map(async (siteId) => {
+              try {
+                const results = await vectorStore.search(siteId, queryVector, {
+                  limit: 3,
+                  relevanceFloor: 0.5,
+                });
+                if (results.length > 0) {
+                  contentMatchingSiteIds!.add(siteId);
+                }
+              } catch {
+                // Site not indexed or search failed - skip it
               }
-            } catch (err) {
-              // Site not indexed or search failed - skip it
-            }
+            }));
           }
 
           localLogger.info('[NexusAI] Content search found', contentMatchingSiteIds.size, 'sites with matching content');
