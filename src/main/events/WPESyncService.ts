@@ -60,6 +60,18 @@ export class WPESyncService {
   private vectorStore?: VectorStore;
   private logger: any;
   private currentProgress: WPESyncProgress | null = null;
+  private abortRequested = false;
+
+  stopSync(): void {
+    if (this.currentProgress?.status === 'running') {
+      this.abortRequested = true;
+      this.logger.info('[WPESyncService] Stop requested — will halt after current install completes');
+    }
+  }
+
+  isRunning(): boolean {
+    return this.currentProgress?.status === 'running';
+  }
 
   constructor(options: WPESyncServiceOptions) {
     this.graphService = options.graphService;
@@ -82,6 +94,7 @@ export class WPESyncService {
    * @param limit - Optional limit on number of sites to sync (for testing)
    */
   async syncAllWPESites(limit?: number, staleThresholdHours?: number): Promise<WPESyncResult> {
+    this.abortRequested = false;
     const result: WPESyncResult = {
       success: true,
       synced: 0,
@@ -172,6 +185,11 @@ export class WPESyncService {
 
       const syncTasks = installsToSync.map((install, i) =>
         concurrencyLimit(async () => {
+          if (this.abortRequested) {
+            this.logger.info(`[WPESyncService] Abort requested — skipping ${install.install_name}`);
+            return;
+          }
+
           if (this.currentProgress) {
             this.currentProgress.current = completed + 1;
             this.currentProgress.currentSite = install.install_name;
@@ -263,8 +281,16 @@ export class WPESyncService {
         wpVersion = data.wp_version || undefined;
         pluginRows = Array.isArray(data.plugins) ? data.plugins : [];
         userRows = Array.isArray(data.users) ? data.users : [];
+        this.logger.info(
+          `[WPESyncService] eval ok: ${install.install_name} — wp=${wpVersion ?? '?'} plugins=${pluginRows.length} users=${userRows.length}`
+        );
+      } else {
+        this.logger.warn(
+          `[WPESyncService] eval failed: ${install.install_name} — success=${result.success} stdout=${result.stdout?.slice(0, 120) ?? '(empty)'}`
+        );
       }
-    } catch {
+    } catch (err: any) {
+      this.logger.warn(`[WPESyncService] eval error: ${install.install_name} — ${err.message}`);
       // SSH or parse failure — continue with nulls, site record still gets upserted
     }
 

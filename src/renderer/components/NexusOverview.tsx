@@ -1319,6 +1319,10 @@ renderTabBar(): React.ReactNode {
     }
   };
 
+  handleWpeSyncStop = (): void => {
+    this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_STOP);
+  };
+
   handleWpeSync = async (): Promise<void> => {
     if (this.state.wpeSyncing) return;
 
@@ -1483,18 +1487,28 @@ renderTabBar(): React.ReactNode {
     return React.createElement('div', { style: { marginBottom: '24px' } },
 
       // Sync button row
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' } },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' as const } },
         React.createElement('button', {
           onClick: this.handleWpeSync,
           disabled: wpeSyncing,
           style: {
             padding: '8px 16px', borderRadius: '6px', border: 'none',
-            backgroundColor: wpeSyncing ? 'var(--color-background-tertiary, #9ca3af)' : 'var(--color-primary, #3b82f6)',
+            backgroundColor: wpeSyncing ? '#3b82f680' : '#3b82f6',
             color: '#fff', fontSize: '13px', fontWeight: 600,
-            cursor: wpeSyncing ? 'not-allowed' : 'pointer', opacity: wpeSyncing ? 0.6 : 1,
+            cursor: wpeSyncing ? 'not-allowed' : 'pointer',
           },
-        }, wpeSyncing ? 'Syncing...' : 'Sync WP Engine Sites'),
-        wpeSyncing ? React.createElement(LoadingSpinner, { size: 16, inline: true, color: '#fff' }) : null,
+        }, wpeSyncing ? 'Syncing...' : 'Sync All'),
+        wpeSyncing
+          ? React.createElement('button', {
+              onClick: this.handleWpeSyncStop,
+              style: {
+                padding: '8px 14px', borderRadius: '6px', border: '1px solid #ef4444',
+                backgroundColor: 'transparent', color: '#ef4444', fontSize: '13px',
+                fontWeight: 600, cursor: 'pointer',
+              },
+            }, 'Stop')
+          : null,
+        wpeSyncing ? React.createElement(LoadingSpinner, { size: 14, inline: true }) : null,
       ),
 
       // In-progress
@@ -1529,6 +1543,32 @@ renderTabBar(): React.ReactNode {
             ),
           )
         : React.createElement('div', { style: subStyle }, 'No sync data yet. Click Sync to fetch WP Engine site metadata.'),
+
+      // Single-site sync (when not running a full sync)
+      !wpeSyncing
+        ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginTop: '10px' } },
+            React.createElement('input', {
+              type: 'text',
+              placeholder: 'install-name (sync single)',
+              style: {
+                padding: '5px 10px', borderRadius: '5px', fontSize: '12px',
+                border: '1px solid var(--color-border-primary, #ccc)',
+                backgroundColor: 'var(--color-background-secondary, #f9fafb)',
+                width: '180px',
+              },
+              onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === 'Enter') {
+                  const installName = (e.target as HTMLInputElement).value.trim();
+                  if (installName) {
+                    this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_SINGLE, { installId: installName });
+                    (e.target as HTMLInputElement).value = '';
+                  }
+                }
+              },
+            }),
+            React.createElement('span', { style: { ...subStyle, fontSize: '11px' } }, '↵ to sync'),
+          )
+        : null,
 
       // Error
       wpeSyncError

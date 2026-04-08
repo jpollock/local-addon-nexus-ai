@@ -618,7 +618,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
         const proc = spawn('ssh', sshArgs, {
           stdio: ['ignore', 'pipe', 'pipe'],
-          timeout: 60000,
+          timeout: 12000, // 12s: wp eval should return in 3-5s; 12s catches slow sites without hanging sync
         });
 
         proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });

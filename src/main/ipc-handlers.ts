@@ -2506,6 +2506,12 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  safeHandle(IPC_CHANNELS.WPE_SYNC_STOP, () => {
+    if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
+    deps.wpeSyncService.stopSync();
+    return { success: true };
+  });
+
   /**
    * Get WPE sync summary stats from graph DB for dashboard display
    */
@@ -2628,7 +2634,23 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     try {
       // Validate input
       const validated = validateInput(WpeSyncSingleSchema, params);
-      const installId = validated.installId;
+      let installId = validated.installId;
+
+      // If looks like a name (not a UUID), resolve to UUID via graph
+      const isUuid = /^[0-9a-f-]{36}$/i.test(installId);
+      if (!isUuid) {
+        const db = graphService.getDb();
+        if (db) {
+          const row = db.prepare(
+            "SELECT remote_install_id FROM sites WHERE source='wpe' AND name=? LIMIT 1"
+          ).get(installId) as { remote_install_id: string } | undefined;
+          if (row?.remote_install_id) {
+            installId = row.remote_install_id;
+          } else {
+            return { success: false, error: `Install "${installId}" not found in graph. Run Sync All first.` };
+          }
+        }
+      }
 
       await deps.wpeSyncService.syncSingleSite(installId);
 
