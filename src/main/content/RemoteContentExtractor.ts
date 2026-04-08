@@ -1,8 +1,12 @@
 /**
  * RemoteContentExtractor - Extracts content from WPE sites via WP-CLI
  *
- * Uses localServices.remoteWpCliRun() to execute WP-CLI commands on remote WPE installs.
- * Extracts posts/pages for vector indexing.
+ * Uses --post_type=any to get ALL published posts in a single SSH call,
+ * regardless of post type registration. This is crucial because --skip-plugins
+ * (used for safety/speed) prevents custom post types from being registered,
+ * so wp post-type list misses plugin-registered types like 'recipe'.
+ *
+ * Posts are filtered client-side against EXCLUDED_POST_TYPES.
  */
 
 import { ExtractedContent, ExtractedPost } from '../../common/types';
@@ -25,115 +29,52 @@ export class RemoteContentExtractor {
   }
 
   /**
-   * Extract content from a WPE install via remote WP-CLI
+   * Extract all published content from a WPE install in a single SSH call.
+   * Uses --post_type=any so plugin-registered types (e.g. 'recipe') are
+   * captured even when --skip-plugins prevents their registration.
    */
   async extract(installName: string): Promise<ExtractedContent> {
-    const posts: ExtractedPost[] = [];
-
     try {
       this.logger.info(`[RemoteContentExtractor] Starting content extraction for ${installName}...`);
 
-      // Get list of post types
-      this.logger.info(`[RemoteContentExtractor] Step 1: Getting post types...`);
-      const postTypes = await this.getPostTypes(installName);
-      this.logger.info(`[RemoteContentExtractor] Got post types:`, postTypes);
-
-      const indexableTypes = postTypes.filter(
-        (type: string) => !EXCLUDED_POST_TYPES.includes(type)
-      );
-
-      this.logger.info(`[RemoteContentExtractor] Found ${indexableTypes.length} indexable post types: ${indexableTypes.join(', ')}`);
-
-      // Extract posts for each post type
-      for (const postType of indexableTypes) {
-        this.logger.info(`[RemoteContentExtractor] Step 2: Extracting posts for type: ${postType}...`);
-        const typePosts = await this.extractPostType(installName, postType);
-        this.logger.info(`[RemoteContentExtractor] Extracted ${typePosts.length} posts for type: ${postType}`);
-        posts.push(...typePosts);
-      }
-
-      this.logger.info(`[RemoteContentExtractor] Extracted ${posts.length} total posts from ${installName}`);
-
-      return {
-        posts,
-        siteInfo: {
-          name: installName,
-          url: `${installName}.wpengine.com`,
-          wpVersion: '',
-        },
-        extractedAt: Date.now(),
-      };
-    } catch (error: any) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : undefined;
-      this.logger.error(`[RemoteContentExtractor] Failed to extract from ${installName}:`, errorMsg, errorStack);
-      throw error;
-    }
-  }
-
-  /**
-   * Get list of post types via WP-CLI
-   */
-  private async getPostTypes(installName: string): Promise<string[]> {
-    try {
       const result = await this.localServices.remoteWpCliRun(installName, [
-        'post-type',
-        'list',
-        '--field=name',
-        '--format=json',
-      ]);
-
-      if (result.success && result.stdout) {
-        const parsed = JSON.parse(result.stdout);
-        return Array.isArray(parsed) ? parsed : [];
-      }
-
-      // Fallback to common types
-      this.logger.warn(`[RemoteContentExtractor] Failed to get post types, using defaults`);
-      return ['post', 'page'];
-    } catch (error) {
-      this.logger.warn(`[RemoteContentExtractor] Failed to get post types, using defaults:`, error);
-      return ['post', 'page'];
-    }
-  }
-
-  /**
-   * Extract posts of a specific type — batched single SSH call.
-   * Fetches all post content fields in one wp post list call instead of
-   * one wp post get per post.
-   */
-  private async extractPostType(installName: string, postType: string): Promise<ExtractedPost[]> {
-    try {
-      this.logger.info(`[RemoteContentExtractor] Getting post list for type: ${postType}...`);
-
-      // Fetch all posts with full content fields in one SSH round trip
-      const listResult = await this.localServices.remoteWpCliRun(installName, [
         'post',
         'list',
-        `--post_type=${postType}`,
+        '--post_type=any',
         '--post_status=publish',
         '--fields=ID,post_title,post_content,post_excerpt,post_type,post_status,post_author,post_date',
-        '--posts_per_page=100',
+        '--posts_per_page=200',
         '--format=json',
       ]);
 
-      this.logger.info(`[RemoteContentExtractor] Post list result: --`, listResult);
-
-      if (!listResult.success || !listResult.stdout) {
-        this.logger.warn(`[RemoteContentExtractor] No posts found for type ${postType}`);
-        return [];
+      if (!result.success || !result.stdout) {
+        this.logger.warn(`[RemoteContentExtractor] No posts returned for ${installName}`);
+        return this.emptyResult(installName);
       }
 
-      const postList = JSON.parse(listResult.stdout);
-      this.logger.info(`[RemoteContentExtractor] Parsed ${Array.isArray(postList) ? postList.length : 0} posts`);
-
-      if (!Array.isArray(postList) || postList.length === 0) {
-        return [];
+      const rawPosts = JSON.parse(result.stdout);
+      if (!Array.isArray(rawPosts) || rawPosts.length === 0) {
+        this.logger.info(`[RemoteContentExtractor] No published posts in ${installName}`);
+        return this.emptyResult(installName);
       }
 
-      this.logger.info(`[RemoteContentExtractor] Found ${postList.length} ${postType} posts in ${installName}`);
+      // Filter out excluded post types client-side
+      const filtered = rawPosts.filter(
+        (p: any) => p.post_type && !EXCLUDED_POST_TYPES.includes(p.post_type)
+      );
 
-      return postList
+      const typeBreakdown = Object.entries(
+        filtered.reduce((acc: Record<string, number>, p: any) => {
+          acc[p.post_type] = (acc[p.post_type] || 0) + 1;
+          return acc;
+        }, {})
+      ).map(([t, n]) => `${t}:${n}`).join(', ');
+
+      this.logger.info(
+        `[RemoteContentExtractor] ${installName}: ${rawPosts.length} total → ${filtered.length} indexable (${typeBreakdown})`
+      );
+
+      const posts: ExtractedPost[] = filtered
         .map((postData: any) => {
           const cleanContent = postData.post_content
             ? cleanWordPressContent(postData.post_content)
@@ -144,7 +85,7 @@ export class RemoteContentExtractor {
             content: postData.post_content || '',
             cleanedContent: cleanContent,
             excerpt: postData.post_excerpt || '',
-            postType: postData.post_type || postType,
+            postType: postData.post_type || 'post',
             postStatus: postData.post_status || 'publish',
             author: postData.post_author ? String(postData.post_author) : '0',
             date: postData.post_date || new Date().toISOString(),
@@ -154,9 +95,26 @@ export class RemoteContentExtractor {
           } as ExtractedPost;
         })
         .filter((p: ExtractedPost) => p.cleanedContent.trim().length > 0);
-    } catch (error) {
-      this.logger.error(`[RemoteContentExtractor] Failed to extract ${postType}:`, error);
-      return [];
+
+      this.logger.info(`[RemoteContentExtractor] Extracted ${posts.length} posts with content from ${installName}`);
+
+      return {
+        posts,
+        siteInfo: { name: installName, url: `${installName}.wpengine.com`, wpVersion: '' },
+        extractedAt: Date.now(),
+      };
+    } catch (error: any) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`[RemoteContentExtractor] Failed to extract from ${installName}:`, errorMsg);
+      throw error;
     }
+  }
+
+  private emptyResult(installName: string): ExtractedContent {
+    return {
+      posts: [],
+      siteInfo: { name: installName, url: `${installName}.wpengine.com`, wpVersion: '' },
+      extractedAt: Date.now(),
+    };
   }
 }
