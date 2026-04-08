@@ -234,28 +234,39 @@ export class WPESyncService {
     const now = Date.now();
     const siteId = `wpe-${install.install_id}`;
 
-    // Run WP version, plugins, and users in parallel — all independent SSH calls
-    const [wpVersion, pluginRows, userRows] = await Promise.all([
-      this.localServices.remoteWpCliRun(install.install_name, ['core', 'version'])
-        .then((r) => (r.success && r.stdout ? r.stdout.trim() : undefined))
-        .catch(() => undefined),
+    // Single SSH round trip: wp eval returns WP version, plugins, and users as one JSON blob.
+    // is_plugin_active() requires the plugin to be loaded, so we check against active_plugins option instead.
+    const evalCode = [
+      '$active = (array)get_option("active_plugins",[]);',
+      '$plugins = array_map(',
+      '  function($f,$d) use($active){',
+      '    return ["slug"=>dirname($f)?:basename($f,".php"),"name"=>$d["Name"],',
+      '      "version"=>$d["Version"],"active"=>in_array($f,$active),"author"=>$d["AuthorName"]];},',
+      '  array_keys($p=get_plugins()),$p',
+      ');',
+      '$users = array_map(',
+      '  function($u){return ["ID"=>$u->ID,"user_login"=>$u->user_login,',
+      '    "user_email"=>$u->user_email,"roles"=>implode(",",$u->roles)];},',
+      '  get_users()',
+      ');',
+      'echo json_encode(["wp_version"=>get_bloginfo("version"),"plugins"=>$plugins,"users"=>$users],JSON_UNESCAPED_UNICODE);',
+    ].join('');
 
-      this.localServices.remoteWpCliRun(install.install_name, ['plugin', 'list', '--format=json'])
-        .then((r) => {
-          if (!r.success || !r.stdout) return [];
-          const parsed = JSON.parse(r.stdout);
-          return Array.isArray(parsed) ? parsed : [];
-        })
-        .catch(() => []),
+    let wpVersion: string | undefined;
+    let pluginRows: any[] = [];
+    let userRows: any[] = [];
 
-      this.localServices.remoteWpCliRun(install.install_name, ['user', 'list', '--format=json'])
-        .then((r) => {
-          if (!r.success || !r.stdout) return [];
-          const parsed = JSON.parse(r.stdout);
-          return Array.isArray(parsed) ? parsed : [];
-        })
-        .catch(() => []),
-    ]);
+    try {
+      const result = await this.localServices.remoteWpCliRun(install.install_name, ['eval', evalCode]);
+      if (result.success && result.stdout) {
+        const data = JSON.parse(result.stdout);
+        wpVersion = data.wp_version || undefined;
+        pluginRows = Array.isArray(data.plugins) ? data.plugins : [];
+        userRows = Array.isArray(data.users) ? data.users : [];
+      }
+    } catch {
+      // SSH or parse failure — continue with nulls, site record still gets upserted
+    }
 
     // Upsert site record
     const site: Site = {
@@ -281,10 +292,10 @@ export class WPESyncService {
       for (const plugin of pluginRows) {
         await this.graphService.upsertPlugin({
           site_id: siteId,
-          slug: plugin.name,
-          name: plugin.title || plugin.name,
+          slug: plugin.slug,
+          name: plugin.name || plugin.slug,
           version: plugin.version || null,
-          is_active: plugin.status === 'active',
+          is_active: !!plugin.active,
           author: plugin.author || null,
           created_at: now,
           updated_at: now,
