@@ -20,7 +20,7 @@ import { scanDatabase, cleanDatabase } from '../mcp/modules/db-scanner/db-scanne
 import { buildCredentialSyncPhp, SUPPORTED_PROVIDERS, PROVIDER_TO_WP_OPTION } from '../mcp/modules/wp-connector/credential-helpers';
 import { switchProviderForSite } from '../mcp/modules/wp-connector/switch-provider';
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
-import { STORAGE_KEYS } from '../../common/constants';
+import { STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../../common/constants';
 
 interface ResolverContext {
   registry: ToolRegistry;
@@ -2493,7 +2493,7 @@ export function createResolvers(context: ResolverContext) {
           const matchMap = await services.vectorStore!.searchAcrossSites(
             allSiteIds,
             queryVector,
-            { limit: 3, relevanceFloor: 0.25, queryText: query },
+            { limit: 3, relevanceFloor: 0.35, queryText: query, excludedTypes: EXCLUDED_POST_TYPES },
             5,
           );
           for (const [siteId, results] of matchMap) {

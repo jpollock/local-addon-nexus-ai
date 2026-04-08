@@ -4,7 +4,7 @@
  * All Electron IPC handlers for the Nexus AI addon, extracted from index.ts
  * to keep the main entry point focused on initialization.
  */
-import { IPC_CHANNELS, STORAGE_KEYS } from '../common/constants';
+import { IPC_CHANNELS, STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../common/constants';
 import type { NexusSettings } from '../common/types';
 import type { IndexRegistry, RegistryStorage } from './content/IndexRegistry';
 import type { ContentPipeline } from './content/ContentPipeline';
@@ -1962,11 +1962,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           const allSearchableSiteIds = [...localSiteIds, ...wpeSiteIds];
           localLogger.info(`[NexusAI] Searching ${localSiteIds.length} local + ${wpeSiteIds.length} WPE sites for content`);
 
-          // Hybrid search: vector + FTS via RRF, single tableNames() call
+          // Hybrid search: vector + FTS keyword boost, single tableNames() call
           const matchMap = await vectorStore.searchAcrossSites(
             allSearchableSiteIds,
             queryVector,
-            { limit: 3, relevanceFloor: 0.25, queryText: validated.contentQuery },
+            { limit: 3, relevanceFloor: 0.35, queryText: validated.contentQuery, excludedTypes: EXCLUDED_POST_TYPES },
             5,
           );
           for (const siteId of matchMap.keys()) {
