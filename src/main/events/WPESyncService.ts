@@ -252,11 +252,23 @@ export class WPESyncService {
     const now = Date.now();
     const siteId = `wpe-${install.install_id}`;
 
-    // Run commands sequentially so the first call establishes the ControlMaster socket
-    // and subsequent calls reuse it. Running in parallel causes all 3 to race for the
-    // socket, potentially opening 3 real TCP connections and hitting WPE's 5-conn limit.
+    // Helper: run a WP-CLI command with 1 retry.
+    // The first call establishes the SSH ControlMaster (~13-30s cold start).
+    // If it times out, ControlPersist=30s may have kept the master daemon alive,
+    // so a retry completes in 1-3s via the existing socket.
+    const runWithRetry = async (args: string[]): Promise<{ stdout: string; success: boolean }> => {
+      const norm = (r: any) => ({ stdout: r.stdout ?? '', success: !!r.success });
+      const first = norm(await this.localServices.remoteWpCliRun(install.install_name, args).catch(() => ({ stdout: '', success: false })));
+      if (first.success) return first;
+      // Brief pause — gives ControlPersist daemon time to stabilise if the first
+      // call established the connection but timed out before WP-CLI responded.
+      await new Promise((r) => setTimeout(r, 2000));
+      return norm(await this.localServices.remoteWpCliRun(install.install_name, args).catch(() => ({ stdout: '', success: false })));
+    };
+
+    // Run commands sequentially: first establishes ControlMaster, rest reuse it.
     const t0 = Date.now();
-    const versionResult = await this.localServices.remoteWpCliRun(install.install_name, ['core', 'version']).catch(() => ({ stdout: '', success: false }));
+    const versionResult = await runWithRetry(['core', 'version']);
     const t1 = Date.now();
     this.logger.info(`[WPESyncService] ${install.install_name} core version: success=${versionResult.success} stdout="${versionResult.stdout?.slice(0, 80)}" ms=${t1 - t0}`);
     const wpVersion = versionResult.success && versionResult.stdout ? versionResult.stdout.trim() : undefined;

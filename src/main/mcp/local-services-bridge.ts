@@ -620,10 +620,11 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
         const proc = spawn('ssh', sshArgs, {
           stdio: ['ignore', 'pipe', 'pipe'],
-          // 20s: measured cold start (ssh + WP bootstrap, no ControlMaster) = 13-17s.
-          // Subsequent calls reuse ControlMaster and complete in 2-3s.
-          // Unreachable sites fail immediately with DNS error, not timeout.
-          timeout: 20000,
+          // 35s: WPE SSH cold-start variance is 13-30s depending on server load,
+          // DB size, and PHP process warmth. Subsequent calls via ControlMaster
+          // complete in 1-3s. Truly unreachable sites fail immediately with DNS
+          // error regardless of timeout.
+          timeout: 35000,
         });
 
         proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
