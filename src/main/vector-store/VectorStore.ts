@@ -1,4 +1,5 @@
 import * as lancedb from '@lancedb/lancedb';
+import { Index } from '@lancedb/lancedb';
 import * as path from 'path';
 import * as fs from 'fs';
 import { SITE_TABLE_PREFIX, VECTOR_DIMENSIONS } from '../../common/constants';
@@ -62,6 +63,16 @@ export class VectorStore {
     // Insert new records
     const records = documents.map(toRecord);
     await table.add(records);
+
+    // Create/update FTS index on content field for hybrid search
+    try {
+      await table.createIndex('content', {
+        config: Index.fts({ withPosition: false }),
+        replace: true,
+      });
+    } catch {
+      // FTS index creation is best-effort — vector search still works without it
+    }
   }
 
   /**
@@ -147,59 +158,99 @@ export class VectorStore {
   }
 
   /**
-   * Search across multiple sites in one operation.
-   * Calls tableNames() once instead of once per site, avoiding filesystem
-   * lock contention when searching hundreds of sites.
+   * Hybrid search across multiple sites — vector + FTS combined via RRF.
+   * Calls tableNames() once to avoid filesystem lock contention.
+   *
+   * Uses Reciprocal Rank Fusion to merge vector and keyword results:
+   * RRF score = 1/(k + rank_vector) + 1/(k + rank_fts)
+   * This surfaces results that appear in BOTH searches highest,
+   * while still returning good vector-only or keyword-only results.
    */
   async searchAcrossSites(
     siteIds: string[],
     queryVector: Float32Array | number[],
-    options: SearchOptions,
+    options: SearchOptions & { queryText?: string },
     concurrency = 5,
   ): Promise<Map<string, SearchResult[]>> {
     const db = this.getDb();
     const existingNames = new Set(await db.tableNames());
-
-    // Filter to sites that actually have a table
     const searchable = siteIds.filter((id) => existingNames.has(this.tableName(id)));
 
     const results = new Map<string, SearchResult[]>();
     const vecArray = Array.from(queryVector);
+    const limit = options.limit ?? 3;
+    const relevanceFloor = options.relevanceFloor ?? 0.25; // lowered for hybrid
+    const RRF_K = 60;
 
     for (let i = 0; i < searchable.length; i += concurrency) {
       const batch = searchable.slice(i, i + concurrency);
       await Promise.all(batch.map(async (siteId) => {
         try {
           const table = await db.openTable(this.tableName(siteId));
-          const fetchLimit = (options.limit ?? 3) * 3;
-          let query = table.vectorSearch(vecArray).distanceType('cosine').limit(fetchLimit);
-          if (options.postType) query = query.where(`\`postType\` = '${options.postType}'`);
 
-          const rawResults = await query.toArray();
-          const relevanceFloor = options.relevanceFloor ?? 0.3;
+          // Vector search
+          let vecQuery = table.vectorSearch(vecArray).distanceType('cosine').limit(limit * 3);
+          if (options.postType) vecQuery = vecQuery.where(`\`postType\` = '${options.postType}'`);
+          const vecRaw = await vecQuery.toArray();
 
-          let hits: SearchResult[] = rawResults
+          const vecRows = vecRaw
             .map((row: Record<string, unknown>) => ({
-              id: row.id as string,
-              title: row.title as string,
-              content: row.content as string,
-              postType: row.postType as string,
-              postId: row.postId as number,
+              id: row.id as string, title: row.title as string,
+              content: row.content as string, postType: row.postType as string,
+              postId: row.postId as number, metadata: row.metadata as string,
               score: 1 - ((row._distance as number) ?? 0),
-              metadata: row.metadata as string,
             }))
             .filter((r) => r.score >= relevanceFloor);
 
-          // Deduplicate by postId
-          const best = new Map<number, SearchResult>();
-          for (const r of hits) {
-            const existing = best.get(r.postId);
-            if (!existing || r.score > existing.score) best.set(r.postId, r);
+          // FTS search (keyword) — only if queryText provided and FTS index exists
+          let ftsRows: typeof vecRows = [];
+          if (options.queryText) {
+            try {
+              const ftsRaw = await table.query()
+                .fullTextSearch(options.queryText, { columns: ['content', 'title'] })
+                .limit(limit * 3)
+                .toArray();
+              ftsRows = ftsRaw.map((row: Record<string, unknown>, idx: number) => ({
+                id: row.id as string, title: row.title as string,
+                content: row.content as string, postType: row.postType as string,
+                postId: row.postId as number, metadata: row.metadata as string,
+                score: 1 / (RRF_K + idx + 1), // rank-based score for FTS
+              }));
+            } catch { /* FTS index not yet built — vector only */ }
           }
-          hits = Array.from(best.values()).sort((a, b) => b.score - a.score).slice(0, options.limit ?? 3);
+
+          // RRF fusion: combine vector rank + FTS rank
+          const scoreMap = new Map<string, { row: typeof vecRows[0]; rrfScore: number }>();
+
+          vecRows.forEach((r, rank) => {
+            const rrfScore = 1 / (RRF_K + rank + 1);
+            scoreMap.set(r.id, { row: r, rrfScore });
+          });
+
+          ftsRows.forEach((r, rank) => {
+            const rrfScore = 1 / (RRF_K + rank + 1);
+            const existing = scoreMap.get(r.id);
+            if (existing) {
+              existing.rrfScore += rrfScore; // appears in both — boost
+            } else {
+              scoreMap.set(r.id, { row: r, rrfScore });
+            }
+          });
+
+          // Deduplicate by postId, keep best RRF score per post
+          const bestByPost = new Map<number, { row: typeof vecRows[0]; rrfScore: number }>();
+          for (const { row, rrfScore } of scoreMap.values()) {
+            const existing = bestByPost.get(row.postId);
+            if (!existing || rrfScore > existing.rrfScore) bestByPost.set(row.postId, { row, rrfScore });
+          }
+
+          const hits: SearchResult[] = Array.from(bestByPost.values())
+            .sort((a, b) => b.rrfScore - a.rrfScore)
+            .slice(0, limit)
+            .map(({ row, rrfScore }) => ({ ...row, score: rrfScore }));
 
           if (hits.length > 0) results.set(siteId, hits);
-        } catch { /* site not indexed or search failed */ }
+        } catch { /* site not indexed */ }
       }));
     }
 

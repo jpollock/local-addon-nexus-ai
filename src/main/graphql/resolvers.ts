@@ -2493,7 +2493,7 @@ export function createResolvers(context: ResolverContext) {
           const matchMap = await services.vectorStore!.searchAcrossSites(
             allSiteIds,
             queryVector,
-            { limit: 3, relevanceFloor: 0.4 },
+            { limit: 3, relevanceFloor: 0.25, queryText: query },
             5,
           );
           for (const [siteId, results] of matchMap) {

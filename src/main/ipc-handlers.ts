@@ -1962,11 +1962,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           const allSearchableSiteIds = [...localSiteIds, ...wpeSiteIds];
           localLogger.info(`[NexusAI] Searching ${localSiteIds.length} local + ${wpeSiteIds.length} WPE sites for content`);
 
-          // Single tableNames() call + batched search — avoids filesystem lock contention
+          // Hybrid search: vector + FTS via RRF, single tableNames() call
           const matchMap = await vectorStore.searchAcrossSites(
             allSearchableSiteIds,
             queryVector,
-            { limit: 3, relevanceFloor: 0.5 },
+            { limit: 3, relevanceFloor: 0.25, queryText: validated.contentQuery },
             5,
           );
           for (const siteId of matchMap.keys()) {
