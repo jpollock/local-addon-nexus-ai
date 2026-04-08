@@ -138,10 +138,11 @@ interface NexusOverviewState {
   wpeSites: SiteListItem[];
   pullingInstall: string | null;
   wpeSyncing: boolean;
-  wpeSyncProgress: { total: number; current: number; currentSite: string; status: string } | null;
+  wpeSyncProgress: { total: number; current: number; skipped: number; currentSite: string; status: string } | null;
   wpeSyncedCount: number;
   wpeSyncError: string | null;
-  wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null } | null;
+  wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null; fresh_count: number; stale_count: number } | null;
+  wpeSyncThresholdHours: number;
   // Credential sync state
   syncStatus: Record<string, { lastSync: number; success: boolean }>;
   syncing: boolean;
@@ -309,6 +310,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     wpeSyncedCount: 0,
     wpeSyncError: null,
     wpeSyncStats: null,
+    wpeSyncThresholdHours: 8,
     syncStatus: {},
     syncing: false,
     syncResults: null,
@@ -439,6 +441,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         hasLLM,
         syncStatus: syncStatus ?? {},
         wpeSyncStats: wpeSyncStatsResult?.stats ?? null,
+        wpeSyncThresholdHours: wpeSyncStatsResult?.thresholdHours ?? 8,
         loading: false,
         error: stats ? null : 'Failed to load stats',
         wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
@@ -1462,7 +1465,7 @@ renderTabBar(): React.ReactNode {
   }
 
   renderWpeSyncSection(): React.ReactNode {
-    const { wpeSyncing, wpeSyncProgress, wpeSyncError, wpeSyncStats } = this.state;
+    const { wpeSyncing, wpeSyncProgress, wpeSyncError, wpeSyncStats, wpeSyncThresholdHours } = this.state;
 
     const subStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub, #6b7280)' };
 
@@ -1497,16 +1500,24 @@ renderTabBar(): React.ReactNode {
       // In-progress
       wpeSyncing && wpeSyncProgress
         ? React.createElement('div', { style: { ...subStyle, fontStyle: 'italic', marginBottom: '8px' } },
-            `${wpeSyncProgress.currentSite} (${wpeSyncProgress.current}/${wpeSyncProgress.total})`,
+            `${wpeSyncProgress.currentSite} (${wpeSyncProgress.current}/${wpeSyncProgress.total}` +
+            (wpeSyncProgress.skipped > 0 ? `, ${wpeSyncProgress.skipped} skipped` : '') + ')',
           )
         : null,
 
-      // Stats row (persists across restarts)
+      // Stats row (persists across restarts, per-site freshness)
       wpeSyncStats
         ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '4px' } },
             React.createElement('div', { style: subStyle }, lastSyncLabel),
             React.createElement('div', { style: subStyle },
-              `${wpeSyncStats.total} installs synced · `,
+              `${wpeSyncStats.fresh_count}/${wpeSyncStats.total} fresh`,
+              wpeSyncStats.stale_count > 0
+                ? React.createElement('span', { style: { color: '#f59e0b' } },
+                    ` · ${wpeSyncStats.stale_count} need refresh (>${wpeSyncThresholdHours}h old)`,
+                  )
+                : React.createElement('span', { style: { color: '#51BB7B' } }, ' · all up to date ✓'),
+            ),
+            React.createElement('div', { style: subStyle },
               `WP version: ${wpeSyncStats.has_wp_version}/${wpeSyncStats.total}`,
               wpeSyncStats.total - wpeSyncStats.has_wp_version > 0
                 ? React.createElement('span', {
@@ -1514,7 +1525,7 @@ renderTabBar(): React.ReactNode {
                     title: 'WP version requires SSH — installs without SSH access show unknown',
                   }, ` (${wpeSyncStats.total - wpeSyncStats.has_wp_version} need SSH)`)
                 : null,
-              ` · PHP version: ${wpeSyncStats.has_php_version}/${wpeSyncStats.total}`,
+              ` · PHP: ${wpeSyncStats.has_php_version}/${wpeSyncStats.total}`,
             ),
           )
         : React.createElement('div', { style: subStyle }, 'No sync data yet. Click Sync to fetch WP Engine site metadata.'),

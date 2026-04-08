@@ -21,6 +21,7 @@ import pLimit from 'p-limit';
 export interface WPESyncProgress {
   total: number;
   current: number;
+  skipped: number;
   currentSite: string;
   status: 'running' | 'completed' | 'failed';
   error?: string;
@@ -29,6 +30,7 @@ export interface WPESyncProgress {
 export interface WPESyncResult {
   success: boolean;
   synced: number;
+  skipped: number;
   failed: number;
   errors: Array<{ installId: string; error: string }>;
 }
@@ -79,10 +81,11 @@ export class WPESyncService {
    * Sync all WPE sites from CAPI
    * @param limit - Optional limit on number of sites to sync (for testing)
    */
-  async syncAllWPESites(limit?: number): Promise<WPESyncResult> {
+  async syncAllWPESites(limit?: number, staleThresholdHours?: number): Promise<WPESyncResult> {
     const result: WPESyncResult = {
       success: true,
       synced: 0,
+      skipped: 0,
       failed: 0,
       errors: [],
     };
@@ -122,17 +125,45 @@ export class WPESyncService {
         php_version: i.phpVersion ?? undefined,
       }));
 
-      // Apply limit if specified
-      const installsToSync = limit ? wpeInstalls.slice(0, limit) : wpeInstalls;
+      // Build a per-site last_sync_at map from graph for staleness filtering
+      const graphDb = this.graphService.getDb();
+      const lastSyncMap = new Map<string, number>();
+      if (graphDb) {
+        try {
+          const rows = graphDb.prepare(
+            "SELECT remote_install_id, last_sync_at FROM sites WHERE source='wpe' AND remote_install_id IS NOT NULL"
+          ).all() as Array<{ remote_install_id: string; last_sync_at: number | null }>;
+          for (const r of rows) {
+            if (r.last_sync_at) lastSyncMap.set(r.remote_install_id, r.last_sync_at);
+          }
+        } catch { /* continue without filter */ }
+      }
+
+      // Filter to stale installs only (never synced OR older than threshold)
+      const thresholdMs = (staleThresholdHours ?? 8) * 60 * 60 * 1000;
+      const now = Date.now();
+      const staleInstalls = wpeInstalls.filter((i) => {
+        const last = lastSyncMap.get(i.install_id);
+        return !last || (now - last) > thresholdMs;
+      });
+      result.skipped = wpeInstalls.length - staleInstalls.length;
+
+      this.logger.info(
+        `[WPESyncService] ${staleInstalls.length} stale, ${result.skipped} fresh (skipping) out of ${wpeInstalls.length} total`
+      );
+
+      // Apply limit if specified (after staleness filter)
+      const installsToSync = limit ? staleInstalls.slice(0, limit) : staleInstalls;
 
       this.currentProgress = {
         total: installsToSync.length,
         current: 0,
+        skipped: result.skipped,
         currentSite: '',
         status: 'running',
       };
 
-      this.logger.info(`[WPESyncService] Starting sync loop for ${installsToSync.length} installs${limit ? ` (limited from ${wpeInstalls.length})` : ''}...`);
+      this.logger.info(`[WPESyncService] Starting sync loop for ${installsToSync.length} installs${limit ? ` (limited)` : ''}...`);
 
       // WP Engine SSH gateway limits to 5 concurrent connections per user.
       // Use 4 to leave one slot for interactive use.
@@ -180,6 +211,7 @@ export class WPESyncService {
       this.currentProgress = {
         total: 0,
         current: 0,
+        skipped: 0,
         currentSite: '',
         status: 'failed',
         error: errorMsg,
@@ -416,22 +448,54 @@ export class WPESyncService {
   }
 
   /**
-   * Returns the oldest last_sync_at across all WPE sites, or null if none synced.
+   * Returns the most recent last_sync_at across all WPE sites, or null if none synced.
    */
   async getLastSyncTime(): Promise<number | null> {
-    const sites = await this.graphService.listSites({ source: 'wpe' });
-    if (sites.length === 0) return null;
-    const times = sites.map((s) => s.last_sync_at ?? 0).filter((t) => t > 0);
-    return times.length > 0 ? Math.min(...times) : null;
+    const db = this.graphService.getDb();
+    if (!db) return null;
+    try {
+      const row = db.prepare(
+        "SELECT MAX(last_sync_at) as latest FROM sites WHERE source='wpe'"
+      ).get() as { latest: number | null } | undefined;
+      return row?.latest ?? null;
+    } catch { return null; }
   }
 
   /**
-   * Returns true if the oldest WPE sync is older than thresholdHours.
+   * Returns count of WPE sites not synced within thresholdHours.
+   * Returns true (needs sync) if any sites are stale or unsynced.
    */
   async isStale(thresholdHours: number): Promise<boolean> {
-    const lastSync = await this.getLastSyncTime();
-    if (lastSync === null) return true;
-    return Date.now() - lastSync > thresholdHours * 60 * 60 * 1000;
+    const db = this.graphService.getDb();
+    if (!db) return true;
+    try {
+      const thresholdMs = thresholdHours * 60 * 60 * 1000;
+      const cutoff = Date.now() - thresholdMs;
+      const row = db.prepare(
+        "SELECT COUNT(*) as stale FROM sites WHERE source='wpe' AND (last_sync_at IS NULL OR last_sync_at < ?)"
+      ).get(cutoff) as { stale: number } | undefined;
+      // Also stale if there are CAPI installs not yet in graph at all
+      return (row?.stale ?? 1) > 0;
+    } catch { return true; }
+  }
+
+  /**
+   * Returns count of stale vs fresh WPE sites for dashboard display.
+   */
+  async getStalenessStats(thresholdHours: number): Promise<{ total: number; fresh: number; stale: number }> {
+    const db = this.graphService.getDb();
+    if (!db) return { total: 0, fresh: 0, stale: 0 };
+    try {
+      const cutoff = Date.now() - thresholdHours * 60 * 60 * 1000;
+      const row = db.prepare(`
+        SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN last_sync_at >= ? THEN 1 ELSE 0 END) as fresh,
+          SUM(CASE WHEN last_sync_at IS NULL OR last_sync_at < ? THEN 1 ELSE 0 END) as stale
+        FROM sites WHERE source='wpe'
+      `).get(cutoff, cutoff) as { total: number; fresh: number; stale: number } | undefined;
+      return row ?? { total: 0, fresh: 0, stale: 0 };
+    } catch { return { total: 0, fresh: 0, stale: 0 }; }
   }
 
   /**

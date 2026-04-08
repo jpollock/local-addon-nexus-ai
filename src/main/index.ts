@@ -299,44 +299,46 @@ export default function main(context: any): void {
       setInterval(() => refreshOllamaStatus(), OLLAMA_POLL_INTERVAL_MS);
 
       // WPE auto-sync: startup check + scheduled interval
-      const runWpeAutoSync = async (reason: string) => {
+const getWpeSyncIntervalHours = () => {
+        const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncIntervalHours?: number } | null;
+        return settings?.wpeSyncIntervalHours ?? 8;
+      };
+
+      const runWpeAutoSyncIncremental = async (reason: string) => {
         if (!wpeSyncService || !localServicesBridge.isCAPIAvailable()) return;
-        localLogger.info(`[NexusAI] WPE auto-sync triggered: ${reason}`);
+        const hours = getWpeSyncIntervalHours();
+        localLogger.info(`[NexusAI] WPE incremental sync triggered: ${reason} (threshold: ${hours}h)`);
         try {
-          await wpeSyncService.syncAllWPESites();
-          localLogger.info('[NexusAI] WPE auto-sync completed');
+          const result = await wpeSyncService.syncAllWPESites(undefined, hours);
+          localLogger.info(
+            `[NexusAI] WPE sync done: ${result.synced} synced, ${result.skipped} skipped (fresh), ${result.failed} failed`
+          );
         } catch (err) {
           localLogger.error('[NexusAI] WPE auto-sync failed:', (err as Error).message);
         }
       };
 
-      const getWpeSyncIntervalMs = () => {
-        const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncIntervalHours?: number } | null;
-        const hours = settings?.wpeSyncIntervalHours ?? 8;
-        return hours * 60 * 60 * 1000;
-      };
-
-      // Startup: sync if data is stale
+      // Startup: sync any stale sites
       setTimeout(async () => {
         try {
-          const intervalMs = getWpeSyncIntervalMs();
-          const stale = await wpeSyncService.isStale(intervalMs / 3600000);
+          const hours = getWpeSyncIntervalHours();
+          const stale = await wpeSyncService.isStale(hours);
           if (stale) {
-            await runWpeAutoSync('startup — data is stale');
+            await runWpeAutoSyncIncremental('startup — stale sites detected');
           } else {
-            localLogger.info('[NexusAI] WPE sync is fresh — skipping startup sync');
+            localLogger.info('[NexusAI] All WPE sites fresh — skipping startup sync');
           }
         } catch { /* non-fatal */ }
-      }, 10000); // 10s after startup to let services settle
+      }, 10000);
 
-      // Scheduled: re-check every hour whether it's time to sync
+      // Scheduled: re-check every hour
       setInterval(async () => {
         try {
-          const intervalMs = getWpeSyncIntervalMs();
-          const stale = await wpeSyncService.isStale(intervalMs / 3600000);
-          if (stale) await runWpeAutoSync('scheduled interval');
+          const hours = getWpeSyncIntervalHours();
+          const stale = await wpeSyncService.isStale(hours);
+          if (stale) await runWpeAutoSyncIncremental('scheduled interval');
         } catch { /* non-fatal */ }
-      }, 60 * 60 * 1000); // check every hour
+      }, 60 * 60 * 1000);
 
       // Start periodic health check transmission (every hour)
       // Transmits anonymous health metrics to Cloudflare for analytics

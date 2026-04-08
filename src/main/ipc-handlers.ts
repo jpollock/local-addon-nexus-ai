@@ -2512,16 +2512,25 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       const db = graphService.getDb();
       if (!db) return { success: true, stats: null };
 
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncIntervalHours?: number } | null;
+      const thresholdHours = settings?.wpeSyncIntervalHours ?? 8;
+      const cutoff = Date.now() - thresholdHours * 60 * 60 * 1000;
+
       const row = db.prepare(`
         SELECT
           COUNT(*) as total,
           SUM(CASE WHEN wp_version IS NOT NULL THEN 1 ELSE 0 END) as has_wp_version,
           SUM(CASE WHEN php_version IS NOT NULL THEN 1 ELSE 0 END) as has_php_version,
-          MAX(last_sync_at) as last_sync_at
+          MAX(last_sync_at) as last_sync_at,
+          SUM(CASE WHEN last_sync_at >= ? THEN 1 ELSE 0 END) as fresh_count,
+          SUM(CASE WHEN last_sync_at IS NULL OR last_sync_at < ? THEN 1 ELSE 0 END) as stale_count
         FROM sites WHERE source = 'wpe'
-      `).get() as { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null } | undefined;
+      `).get(cutoff, cutoff) as {
+        total: number; has_wp_version: number; has_php_version: number;
+        last_sync_at: number | null; fresh_count: number; stale_count: number;
+      } | undefined;
 
-      return { success: true, stats: row ?? null };
+      return { success: true, stats: row ?? null, thresholdHours };
     } catch (err) {
       return { success: false, error: (err as Error).message };
     }
