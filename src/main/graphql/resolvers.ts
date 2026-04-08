@@ -2485,30 +2485,28 @@ export function createResolvers(context: ResolverContext) {
             ...wpeSiteIds,
           ];
 
-          // Search in parallel batches
+          // Single tableNames() call + batched search — avoids filesystem lock contention
           interface Hit { siteId: string; siteName: string; score: number; title: string; content: string; postType: string }
           const hits: Hit[] = [];
-          const maxPerSite = 3;
-          const CONCURRENCY = 20;
           const siteNames = new Map(indexEntries.map((e: any) => [e.siteId, e.siteName || e.siteId]));
 
-          for (let i = 0; i < allSiteIds.length; i += CONCURRENCY) {
-            const batch = allSiteIds.slice(i, i + CONCURRENCY);
-            await Promise.all(batch.map(async (siteId) => {
-              try {
-                const results = await services.vectorStore!.search(siteId, queryVector, { limit: maxPerSite, relevanceFloor: 0.4 });
-                for (const r of results) {
-                  hits.push({
-                    siteId,
-                    siteName: siteNames.get(siteId) || siteId,
-                    score: r.score,
-                    title: r.title || '',
-                    content: r.content || '',
-                    postType: r.postType || 'post',
-                  });
-                }
-              } catch { /* not indexed */ }
-            }));
+          const matchMap = await services.vectorStore!.searchAcrossSites(
+            allSiteIds,
+            queryVector,
+            { limit: 3, relevanceFloor: 0.4 },
+            5,
+          );
+          for (const [siteId, results] of matchMap) {
+            for (const r of results) {
+              hits.push({
+                siteId,
+                siteName: siteNames.get(siteId) || siteId,
+                score: r.score,
+                title: r.title || '',
+                content: r.content || '',
+                postType: r.postType || 'post',
+              });
+            }
           }
 
           // Sort by score, take top N

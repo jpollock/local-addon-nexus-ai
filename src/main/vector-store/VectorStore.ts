@@ -146,6 +146,66 @@ export class VectorStore {
       .slice(0, options.limit);
   }
 
+  /**
+   * Search across multiple sites in one operation.
+   * Calls tableNames() once instead of once per site, avoiding filesystem
+   * lock contention when searching hundreds of sites.
+   */
+  async searchAcrossSites(
+    siteIds: string[],
+    queryVector: Float32Array | number[],
+    options: SearchOptions,
+    concurrency = 5,
+  ): Promise<Map<string, SearchResult[]>> {
+    const db = this.getDb();
+    const existingNames = new Set(await db.tableNames());
+
+    // Filter to sites that actually have a table
+    const searchable = siteIds.filter((id) => existingNames.has(this.tableName(id)));
+
+    const results = new Map<string, SearchResult[]>();
+    const vecArray = Array.from(queryVector);
+
+    for (let i = 0; i < searchable.length; i += concurrency) {
+      const batch = searchable.slice(i, i + concurrency);
+      await Promise.all(batch.map(async (siteId) => {
+        try {
+          const table = await db.openTable(this.tableName(siteId));
+          const fetchLimit = (options.limit ?? 3) * 3;
+          let query = table.vectorSearch(vecArray).distanceType('cosine').limit(fetchLimit);
+          if (options.postType) query = query.where(`\`postType\` = '${options.postType}'`);
+
+          const rawResults = await query.toArray();
+          const relevanceFloor = options.relevanceFloor ?? 0.3;
+
+          let hits: SearchResult[] = rawResults
+            .map((row: Record<string, unknown>) => ({
+              id: row.id as string,
+              title: row.title as string,
+              content: row.content as string,
+              postType: row.postType as string,
+              postId: row.postId as number,
+              score: 1 - ((row._distance as number) ?? 0),
+              metadata: row.metadata as string,
+            }))
+            .filter((r) => r.score >= relevanceFloor);
+
+          // Deduplicate by postId
+          const best = new Map<number, SearchResult>();
+          for (const r of hits) {
+            const existing = best.get(r.postId);
+            if (!existing || r.score > existing.score) best.set(r.postId, r);
+          }
+          hits = Array.from(best.values()).sort((a, b) => b.score - a.score).slice(0, options.limit ?? 3);
+
+          if (hits.length > 0) results.set(siteId, hits);
+        } catch { /* site not indexed or search failed */ }
+      }));
+    }
+
+    return results;
+  }
+
   async delete(siteId: string, documentIds: string[]): Promise<void> {
     const db = this.getDb();
     const name = this.tableName(siteId);

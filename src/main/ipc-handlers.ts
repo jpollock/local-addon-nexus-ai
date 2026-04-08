@@ -1962,23 +1962,15 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           const allSearchableSiteIds = [...localSiteIds, ...wpeSiteIds];
           localLogger.info(`[NexusAI] Searching ${localSiteIds.length} local + ${wpeSiteIds.length} WPE sites for content`);
 
-          // Search sites in parallel batches — LanceDB reads are local disk ops, safe to parallelize
-          const SEARCH_CONCURRENCY = 20;
-          for (let i = 0; i < allSearchableSiteIds.length; i += SEARCH_CONCURRENCY) {
-            const batch = allSearchableSiteIds.slice(i, i + SEARCH_CONCURRENCY);
-            await Promise.all(batch.map(async (siteId) => {
-              try {
-                const results = await vectorStore.search(siteId, queryVector, {
-                  limit: 3,
-                  relevanceFloor: 0.5,
-                });
-                if (results.length > 0) {
-                  contentMatchingSiteIds!.add(siteId);
-                }
-              } catch {
-                // Site not indexed or search failed - skip it
-              }
-            }));
+          // Single tableNames() call + batched search — avoids filesystem lock contention
+          const matchMap = await vectorStore.searchAcrossSites(
+            allSearchableSiteIds,
+            queryVector,
+            { limit: 3, relevanceFloor: 0.5 },
+            5,
+          );
+          for (const siteId of matchMap.keys()) {
+            contentMatchingSiteIds!.add(siteId);
           }
 
           localLogger.info('[NexusAI] Content search found', contentMatchingSiteIds.size, 'sites with matching content');
