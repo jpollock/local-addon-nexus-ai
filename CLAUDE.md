@@ -1,4 +1,22 @@
+## CRITICAL: No Releases Without Explicit Permission
 
+**NEVER do any of the following unless the user explicitly says "push", "release", "deploy", or "ship":**
+
+- `npm version` (bumping version)
+- `git tag`
+- `git push` (to any remote)
+- `git push origin v*` (release tags)
+- Triggering CI releases
+
+**This applies even when:**
+- Merging branches
+- "Finalizing" work
+- The task seems complete
+- Docs are done and tests pass
+
+**Wait for the user to explicitly say to proceed with any of the above.**
+
+---
 
 ## Native Modules & Electron
 
