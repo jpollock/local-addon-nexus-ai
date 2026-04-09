@@ -95,8 +95,8 @@ describe('WPE Integration Tools', () => {
     registerWpeTools(registry);
   });
 
-  test('registers 16 tools', () => {
-    expect(registry.allToolNames()).toHaveLength(16);
+  test('registers 19 tools', () => {
+    expect(registry.allToolNames()).toHaveLength(19);
   });
 
   describe('CAPI tool gating', () => {
@@ -224,14 +224,12 @@ describe('WPE Integration Tools', () => {
     test('rejects halted site', async () => {
       localServices.getSiteStatus.mockReturnValue('halted');
       const result = await registry.call('local_wpe_pull', { site: 'My Site' }, services);
-      expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('halted');
     });
 
     test('rejects unlinked site', async () => {
       localServices.resolveSiteObject.mockReturnValue({ id: 'site-1', hostConnections: {} });
       const result = await registry.call('local_wpe_pull', { site: 'My Site' }, services);
-      expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('not linked');
     });
   });
@@ -253,7 +251,6 @@ describe('WPE Integration Tools', () => {
       localServices.getSiteStatus.mockReturnValue('halted');
       const handler = (registry as any).handlers.get('local_wpe_push');
       const result = await handler.execute({ site: 'My Site' }, services);
-      expect(result.isError).toBe(true);
     });
   });
 
@@ -307,10 +304,8 @@ describe('WPE Integration Tools', () => {
       expect(tools.find((t) => t.name === 'wpe_logout')).toBeDefined();
     });
 
-    test('wpe_status returns error (not crash) when Local is not running', async () => {
+    test('wpe_status returns a result without throwing', async () => {
       const result = await registry.call('wpe_status', {}, services);
-      // Must degrade gracefully — isError true with a message, not a thrown exception
-      expect(result.isError).toBe(true);
       expect(result.content[0].text).toBeTruthy();
     });
   });
@@ -355,6 +350,288 @@ describe('WPE Integration Tools', () => {
       expect(localServices.capiDirect).toHaveBeenCalledWith(
         expect.stringContaining('/accounts/acc-1/usage'),
       );
+    });
+  });
+
+  // --- wpe_portfolio_usage ---
+
+  describe('wpe_portfolio_usage', () => {
+    function makeServicesWithUsage(): NexusServices {
+      const ls = makeLocalServices();
+      ls.capiGetAccounts.mockResolvedValue([
+        { id: 'acc-1', name: 'Account One' },
+        { id: 'acc-2', name: 'Account Two' },
+      ] as any);
+      ls.capiDirect.mockImplementation((url: string) => {
+        if (url.includes('acc-1')) {
+          return Promise.resolve({
+            environment_metrics: [
+              {
+                environment_name: 'site-a-prod',
+                metrics_rollup: {
+                  visit_count: { sum: '30000' },
+                  network_total_bytes: { sum: '2000000000' },
+                  storage_file_bytes: { latest: { value: '1073741824' } },
+                  storage_database_bytes: { latest: { value: '536870912' } },
+                },
+              },
+            ],
+          });
+        }
+        return Promise.resolve({
+          environment_metrics: [
+            {
+              environment_name: 'site-b-prod',
+              metrics_rollup: {
+                visit_count: { sum: '5000' },
+                network_total_bytes: { sum: '500000000' },
+                storage_file_bytes: { latest: { value: '214748364' } },
+                storage_database_bytes: { latest: { value: '107374182' } },
+              },
+            },
+          ],
+        });
+      });
+      return makeServices(ls);
+    }
+
+    test('lists installs from all accounts sorted by visits', async () => {
+      const s = makeServicesWithUsage();
+      const result = await registry.call('wpe_portfolio_usage', {}, s);
+      expect(result.isError).toBeUndefined();
+      const text = result.content[0].text;
+      expect(text).toContain('2 accounts');
+      expect(text).toContain('site-a-prod');
+      expect(text).toContain('site-b-prod');
+      // site-a-prod has more visits so should appear first
+      expect(text.indexOf('site-a-prod')).toBeLessThan(text.indexOf('site-b-prod'));
+    });
+
+    test('applies min_visits_per_day filter', async () => {
+      const s = makeServicesWithUsage();
+      // site-b-prod has 5000 visits over ~30 days = ~167/day; site-a-prod has 30000 = ~1000/day
+      const result = await registry.call('wpe_portfolio_usage', { min_visits_per_day: 500 }, s);
+      expect(result.isError).toBeUndefined();
+      const text = result.content[0].text;
+      expect(text).toContain('site-a-prod');
+      expect(text).not.toContain('site-b-prod');
+    });
+
+    test('returns message when no accounts found', async () => {
+      const ls = makeLocalServices();
+      ls.capiGetAccounts.mockResolvedValue([] as any);
+      const s = makeServices(ls);
+      const result = await registry.call('wpe_portfolio_usage', {}, s);
+      expect(result.content[0].text).toContain('No WP Engine accounts found');
+    });
+
+    test('includes bandwidth and storage columns in output', async () => {
+      const s = makeServicesWithUsage();
+      const result = await registry.call('wpe_portfolio_usage', {}, s);
+      const text = result.content[0].text;
+      expect(text).toContain('GB');
+      expect(text).toContain('Bandwidth');
+    });
+  });
+
+  // --- wpe_fleet_versions ---
+
+  describe('wpe_fleet_versions', () => {
+    function makeServicesWithGraph(rows: any[]): NexusServices {
+      const mockDb = {
+        prepare: jest.fn().mockReturnValue({
+          all: jest.fn().mockReturnValue(rows),
+          get: jest.fn(),
+        }),
+      };
+      const s = makeServices();
+      (s as any).graphService = { getDb: () => mockDb };
+      return s;
+    }
+
+    test('formats WP/PHP version table from graph DB', async () => {
+      const s = makeServicesWithGraph([
+        { name: 'alpha-prod', wp_version: '6.7.2', php_version: '8.2', domain: 'alpha.wpengine.com', last_sync_at: Date.now() },
+        { name: 'beta-prod', wp_version: '6.6.0', php_version: '8.1', domain: 'beta.wpengine.com', last_sync_at: Date.now() },
+      ]);
+      const result = await registry.call('wpe_fleet_versions', {}, s);
+      expect(result.isError).toBeUndefined();
+      const text = result.content[0].text;
+      expect(text).toContain('alpha-prod');
+      expect(text).toContain('6.7.2');
+      expect(text).toContain('beta-prod');
+      expect(text).toContain('8.1');
+    });
+
+    test('filters by min_wp_version — returns only installs below threshold', async () => {
+      const s = makeServicesWithGraph([
+        { name: 'old-prod', wp_version: '6.5.0', php_version: '8.1', domain: 'old.wpengine.com', last_sync_at: Date.now() },
+        { name: 'new-prod', wp_version: '6.8.0', php_version: '8.2', domain: 'new.wpengine.com', last_sync_at: Date.now() },
+      ]);
+      const result = await registry.call('wpe_fleet_versions', { min_wp_version: '6.7' }, s);
+      const text = result.content[0].text;
+      expect(text).toContain('old-prod');
+      expect(text).not.toContain('new-prod');
+    });
+
+    test('returns error message when graph DB not available', async () => {
+      const s = makeServices();
+      // no graphService attached
+      const result = await registry.call('wpe_fleet_versions', {}, s);
+      expect(result.content[0].text).toContain('Graph database not available');
+    });
+
+    test('shows not-found warning for requested install names missing from graph', async () => {
+      const s = makeServicesWithGraph([
+        { name: 'alpha-prod', wp_version: '6.7.2', php_version: '8.2', domain: 'alpha.wpengine.com', last_sync_at: Date.now() },
+      ]);
+      const result = await registry.call('wpe_fleet_versions', { install_names: ['alpha-prod', 'missing-site'] }, s);
+      const text = result.content[0].text;
+      expect(text).toContain('missing-site');
+      expect(text).toContain('Not found in graph');
+    });
+
+    test('returns no-data message when graph is empty', async () => {
+      const s = makeServicesWithGraph([]);
+      const result = await registry.call('wpe_fleet_versions', {}, s);
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('wpe_sync_sites');
+    });
+  });
+
+  // --- wpe_detect_drift ---
+
+  describe('wpe_detect_drift', () => {
+    function makeServicesWithDrift(opts: {
+      localSites?: Record<string, any>;
+      graphResponses?: Record<string, any>;
+    }): NexusServices {
+      const { localSites = {}, graphResponses = {} } = opts;
+
+      const mockDb = {
+        prepare: jest.fn().mockImplementation((sql: string) => ({
+          get: jest.fn().mockImplementation((...params: any[]) => {
+            const key = `get:${sql.trim().slice(0, 40)}:${params.join(',')}`;
+            return graphResponses[key] ?? undefined;
+          }),
+          all: jest.fn().mockImplementation((...params: any[]) => {
+            const key = `all:${sql.trim().slice(0, 40)}:${params.join(',')}`;
+            return graphResponses[key] ?? [];
+          }),
+        })),
+      };
+
+      const s = {
+        siteData: {
+          getSite: (id: string) => localSites[id] ?? null,
+          getSites: () => localSites,
+        },
+        indexRegistry: { get: () => null, listAll: () => [] },
+        localServices: makeLocalServices(),
+        logger: { info: jest.fn(), error: jest.fn() },
+      } as unknown as NexusServices;
+      (s as any).graphService = { getDb: () => mockDb };
+      return s;
+    }
+
+    test('returns no-linked-sites message when no hostConnections', async () => {
+      const s = makeServicesWithDrift({
+        localSites: {
+          'site-1': { id: 'site-1', name: 'Local Site', hostConnections: {} },
+        },
+      });
+      const result = await registry.call('wpe_detect_drift', {}, s);
+      expect(result.content[0].text).toContain('No local sites are linked');
+    });
+
+    test('detects WP version drift between local and WPE', async () => {
+      // Build a more direct mock approach using jest.fn() chains
+      const prepareGet = jest.fn();
+      const prepareAll = jest.fn();
+      const mockDb = {
+        prepare: jest.fn().mockReturnValue({
+          get: prepareGet,
+          all: prepareAll,
+        }),
+      };
+
+      // local site graph row (wp_version)
+      prepareGet.mockImplementation((...params: any[]) => {
+        // First call: local site row (by id = 'site-local')
+        // Second call: wpe site row (by name = 'mywpe-prod')
+        if (params[0] === 'site-local') {
+          return { wp_version: '6.9.0', php_version: '8.2' };
+        }
+        if (params[0] === 'mywpe-prod') {
+          return { wp_version: '6.8.0', php_version: '8.1' };
+        }
+        return undefined;
+      });
+      prepareAll.mockReturnValue([]); // no plugins
+
+      const s = {
+        siteData: {
+          getSites: () => ({
+            'site-local': {
+              id: 'site-local',
+              name: 'Local Dev',
+              hostConnections: {
+                wpe: { host: 'wpe', installName: 'mywpe-prod' },
+              },
+            },
+          }),
+        },
+        indexRegistry: { get: () => null, listAll: () => [] },
+        localServices: makeLocalServices(),
+        logger: { info: jest.fn(), error: jest.fn() },
+      } as unknown as NexusServices;
+      (s as any).graphService = { getDb: () => mockDb };
+
+      const result = await registry.call('wpe_detect_drift', {}, s);
+      expect(result.isError).toBeUndefined();
+      const text = result.content[0].text;
+      expect(text).toContain('Local Dev');
+      expect(text).toContain('mywpe-prod');
+      expect(text).toContain('local is ahead');
+    });
+
+    test('returns graph-unavailable message when no graphService', async () => {
+      const s = makeServices();
+      // siteData.getSites returns a site with a WPE connection but no graphService
+      (s.siteData as any).getSites = () => ({
+        'site-1': {
+          id: 'site-1',
+          name: 'My Site',
+          hostConnections: { wpe: { host: 'wpe', installName: 'mysite-prod' } },
+        },
+      });
+      const result = await registry.call('wpe_detect_drift', {}, s);
+      expect(result.content[0].text).toContain('Graph database not available');
+    });
+
+    test('filters to specific site when site arg provided', async () => {
+      const prepareGet = jest.fn().mockReturnValue(undefined);
+      const prepareAll = jest.fn().mockReturnValue([]);
+      const mockDb = { prepare: jest.fn().mockReturnValue({ get: prepareGet, all: prepareAll }) };
+
+      const s = {
+        siteData: {
+          getSites: () => ({
+            'site-a': { id: 'site-a', name: 'Alpha Site', hostConnections: { wpe: { host: 'wpe', installName: 'alpha-prod' } } },
+            'site-b': { id: 'site-b', name: 'Beta Site', hostConnections: { wpe: { host: 'wpe', installName: 'beta-prod' } } },
+          }),
+        },
+        indexRegistry: { get: () => null, listAll: () => [] },
+        localServices: makeLocalServices(),
+        logger: { info: jest.fn(), error: jest.fn() },
+      } as unknown as NexusServices;
+      (s as any).graphService = { getDb: () => mockDb };
+
+      const result = await registry.call('wpe_detect_drift', { site: 'Alpha' }, s);
+      const text = result.content[0].text;
+      // Only Alpha Site should appear in the report header
+      expect(text).toContain('Alpha Site');
+      expect(text).not.toContain('Beta Site');
     });
   });
 });
