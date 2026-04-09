@@ -81,9 +81,28 @@ export const wpePullHandler: McpToolHandler = {
       environment = (wpeConnection as any).remoteSiteEnv || 'production';
     }
 
+    // Link the site to the WPE install BEFORE the pull so Local shows it as connected
+    if (args.remote_install_id && !wpeConnection && remoteSiteId) {
+      try {
+        services.localServices.updateSite(site.id, {
+          hostConnections: [{
+            hostId: 'wpe',
+            remoteSiteId,
+            remoteSiteEnv: environment,
+            installName,
+            installId,
+          }],
+        });
+      } catch {
+        // Non-fatal — pull still works without the link
+      }
+    }
+
     try {
-      // Call Local's wpePull service
-      await services.localServices.wpePull.pull({
+      // Fire-and-forget: wpePull.pull() is a long-running operation.
+      // Awaiting it blocks Claude for 2+ minutes. Return immediately and
+      // let the user monitor progress in Local.
+      services.localServices.wpePull.pull({
         includeSql: args.include_database === true,
         wpengineInstallName: installName,
         wpengineInstallId: installId,
@@ -92,16 +111,16 @@ export const wpePullHandler: McpToolHandler = {
         localSiteId: site.id,
         environment,
         isMagicSync: false,
-      });
+      }).catch(() => { /* errors surfaced in Local UI */ });
 
       return ok(
         JSON.stringify({
-          status: 'queued',
-          async: true,
+          status: 'in_progress',
           site: site.name,
           install: installName,
           include_database: args.include_database === true,
-          message: 'Pull operation queued. Check the Local app for progress. Do NOT run wp_* commands until the pull completes.',
+          linked: true,
+          message: `Pull started. The site is now linked to "${installName}" in Local. Monitor progress in the Local app — do NOT run wp_* commands until the pull completes and the site restarts.`,
         }, null, 2),
       );
     } catch (err: any) {
