@@ -38,6 +38,8 @@ export interface WpCliRunOpts {
   skipPlugins?: boolean;
   /** When false, themes are loaded during WP-CLI execution. Default: true (skip). */
   skipThemes?: boolean;
+  /** Timeout in ms. Default: 120000 (2 min). Use higher for slow operations like plugin update. */
+  timeoutMs?: number;
 }
 
 export interface CreateSiteOpts {
@@ -360,8 +362,13 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     async wpCliRun(siteId: string, args: string[], opts?: WpCliRunOpts): Promise<WpCliResult> {
       const site = requireSite(siteId);
+      const timeoutMs = opts?.timeoutMs ?? 120000; // 2 min default; plugin updates can be slow
       try {
-        const stdout = await svc('wpCli').run(site, args, opts);
+        const runPromise = svc('wpCli').run(site, args, opts);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`WP-CLI timed out after ${timeoutMs / 1000}s`)), timeoutMs)
+        );
+        const stdout = await Promise.race([runPromise, timeoutPromise]);
         return { stdout, success: true };
       } catch (err) {
         return {
