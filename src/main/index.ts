@@ -323,11 +323,26 @@ export default function main(context: any): void {
         }
       };
 
-      // Startup: sync any stale sites
+      // Startup: Tier 1 CAPI-only sync (fast, every startup when authenticated)
+      // then Tier 2 SSH sync (slow, only if stale)
       setTimeout(async () => {
+        if (!localServicesBridge.isCAPIAvailable()) return;
+        try {
+          // Tier 1: always run — updates account/PHP/domain data from CAPI, detects new installs
+          const capiResult = await wpeSyncService.syncFromCAPI();
+          if (capiResult.newInstalls.length > 0) {
+            localLogger.info(
+              `[NexusAI] CAPI sync: ${capiResult.newInstalls.length} new installs detected: ${capiResult.newInstalls.slice(0, 5).join(', ')}${capiResult.newInstalls.length > 5 ? '...' : ''}`
+            );
+          }
+        } catch (err) {
+          localLogger.warn('[NexusAI] CAPI-only sync failed (non-fatal):', (err as Error).message);
+        }
+
+        // Tier 2: SSH sync only if auto-sync enabled and data is stale
         try {
           if (!isWpeSyncAutoEnabled()) {
-            localLogger.info('[NexusAI] WPE auto-sync disabled — skipping startup sync');
+            localLogger.info('[NexusAI] WPE auto-sync disabled — skipping SSH sync');
             return;
           }
           const hours = getWpeSyncIntervalHours();
@@ -335,7 +350,7 @@ export default function main(context: any): void {
           if (stale) {
             await runWpeAutoSyncIncremental('startup — stale sites detected');
           } else {
-            localLogger.info('[NexusAI] All WPE sites fresh — skipping startup sync');
+            localLogger.info('[NexusAI] All WPE sites fresh — skipping SSH sync');
           }
         } catch { /* non-fatal */ }
       }, 10000);

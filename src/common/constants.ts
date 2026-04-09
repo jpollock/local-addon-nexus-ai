@@ -135,6 +135,7 @@ export const IPC_CHANNELS = {
   WPE_SYNC_STATUS: `${ADDON_PREFIX}:wpe:sync-status`,
   WPE_SYNC_STATS: `${ADDON_PREFIX}:wpe:sync-stats`,
   CLEANUP_EXCLUDED_TYPES: `${ADDON_PREFIX}:content:cleanup-excluded-types`,
+  WPE_CAPI_SYNC: `${ADDON_PREFIX}:wpe:capi-sync`,
   WPE_SYNC_SINGLE: `${ADDON_PREFIX}:wpe:sync-single`,
   WPE_GET_SYNCED_SITES: `${ADDON_PREFIX}:wpe:get-synced-sites`,
   WPE_GET_SITE_DETAILS: `${ADDON_PREFIX}:wpe:get-site-details`,

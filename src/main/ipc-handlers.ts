@@ -2512,6 +2512,16 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  safeHandle(IPC_CHANNELS.WPE_CAPI_SYNC, async () => {
+    if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
+    try {
+      const result = await deps.wpeSyncService.syncFromCAPI();
+      return { success: true, ...result };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES, async () => {
     try {
       // Clean vector store

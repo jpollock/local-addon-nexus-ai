@@ -495,6 +495,102 @@ export class WPESyncService {
   }
 
   /**
+   * Tier 1: CAPI-only sync — runs on every startup, no SSH required.
+   *
+   * Fetches accounts and installs from CAPI (fast, ~2-3s) and:
+   * - Upserts wpe_accounts (name, nickname)
+   * - Updates sites with php_version, account_id, domain from CAPI
+   * - Detects new installs not yet in the graph
+   * - Detects removed installs (deleted from WPE)
+   *
+   * Does NOT fetch wp_version, plugins, or users (those need SSH).
+   * Returns a summary useful for nudging the user toward a full sync.
+   */
+  async syncFromCAPI(): Promise<{
+    accounts: number;
+    total: number;
+    newInstalls: string[];
+    updatedFields: number;
+  }> {
+    if (!this.localServices.isCAPIAvailable()) {
+      throw new Error('WP Engine API not available. Authenticate first.');
+    }
+
+    this.logger.info('[WPESyncService] Starting CAPI-only sync...');
+
+    // Fetch accounts
+    const accounts = await this.localServices.capiGetAccounts() as any[];
+    const accountMap = new Map<string, { name: string; nickname?: string }>();
+    for (const a of accounts ?? []) {
+      if (a.id) {
+        accountMap.set(a.id, { name: a.name ?? a.id, nickname: a.nickname ?? undefined });
+        await this.graphService.upsertAccount({ id: a.id, name: a.name ?? a.id, nickname: a.nickname });
+      }
+    }
+    this.logger.info(`[WPESyncService] CAPI: ${accountMap.size} accounts`);
+
+    // Fetch all installs
+    const installs = await this.localServices.capiGetInstalls() as any[];
+    if (!installs?.length) return { accounts: accountMap.size, total: 0, newInstalls: [], updatedFields: 0 };
+
+    // Build set of existing site IDs in graph
+    const db = this.graphService.getDb();
+    const existingIds = new Set<string>();
+    if (db) {
+      const rows = db.prepare("SELECT id FROM sites WHERE source='wpe'").all() as Array<{ id: string }>;
+      for (const r of rows) existingIds.add(r.id);
+    }
+
+    const now = Date.now();
+    const newInstalls: string[] = [];
+    let updatedFields = 0;
+
+    for (const i of installs) {
+      const siteId = `wpe-${i.id}`;
+      const isNew = !existingIds.has(siteId);
+
+      if (isNew) {
+        newInstalls.push(i.name);
+        // Insert bare record — SSH sync will fill wp_version, plugins, users
+        await this.graphService.upsertSite({
+          id: siteId,
+          name: i.name,
+          domain: i.primaryDomain || `${i.name}.wpengine.com`,
+          php_version: i.phpVersion ?? undefined,
+          account_id: i.account?.id ?? undefined,
+          last_sync_at: undefined, // not SSH-synced yet
+          is_active: true,
+          created_at: now,
+          updated_at: now,
+          source: 'wpe',
+          remote_install_id: i.id,
+          remote_domain: i.primaryDomain || `${i.name}.wpengine.com`,
+        });
+        updatedFields++;
+      } else {
+        // Update CAPI fields on existing record (COALESCE preserves existing values)
+        if (db) {
+          const result = db.prepare(`
+            UPDATE sites SET
+              php_version = COALESCE(php_version, ?),
+              account_id = COALESCE(account_id, ?),
+              domain = CASE WHEN domain = '' OR domain IS NULL THEN ? ELSE domain END,
+              updated_at = ?
+            WHERE id = ?
+          `).run(i.phpVersion ?? null, i.account?.id ?? null, i.primaryDomain ?? null, now, siteId);
+          if (result.changes > 0) updatedFields++;
+        }
+      }
+    }
+
+    this.logger.info(
+      `[WPESyncService] CAPI sync done: ${installs.length} installs, ${newInstalls.length} new, ${updatedFields} fields updated`
+    );
+
+    return { accounts: accountMap.size, total: installs.length, newInstalls, updatedFields };
+  }
+
+  /**
    * Get list of synced WPE sites
    */
   async getSyncedWPESites(): Promise<Site[]> {
