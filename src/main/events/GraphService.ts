@@ -58,7 +58,6 @@ CREATE TABLE IF NOT EXISTS sites (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sites_active ON sites(is_active);
-CREATE INDEX IF NOT EXISTS idx_sites_account ON sites(account_id);
 
 CREATE TABLE IF NOT EXISTS content (
   id INTEGER PRIMARY KEY,
