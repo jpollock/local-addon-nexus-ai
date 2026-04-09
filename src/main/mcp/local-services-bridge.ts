@@ -105,6 +105,7 @@ export interface LocalServicesBridge {
 
   // CAPI (WP Engine)
   capiGetAccounts(): Promise<unknown>;
+  capiGetSites(): Promise<unknown>;
   capiGetInstalls(): Promise<unknown>;
   capiGetInstall(installId: string): Promise<unknown>;
   capiCreateBackup(installId: string, description: string): Promise<unknown>;
@@ -114,6 +115,7 @@ export interface LocalServicesBridge {
   wpeAuthenticate(): Promise<{ email?: string } | null>;
   wpeLogout(): Promise<void>;
   wpeGetUserInfo(): Promise<{ email?: string; accountName?: string } | null>;
+  getWpeUserId(): string | null;
 
   // SSL
   trustCert(siteId: string): Promise<void>;
@@ -274,7 +276,10 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       const site = requireSite(siteId);
       const exportService = svc('exportSite');
       if (exportService?.exportSite) {
-        return await exportService.exportSite({ site, outputPath, filter: '' });
+        // filter='' causes picomatch to fail on empty string pattern.
+        // Pass a valid but no-op pattern so ignoredPatterns.split(',') produces
+        // ['__noop__'] — a glob that matches nothing in a WP install.
+        return await exportService.exportSite({ site, outputPath, filter: '__noop__' });
       }
       throw new Error('Export service not available');
     },
@@ -433,6 +438,12 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       return capi.getAccountList();
     },
 
+    capiGetSites: async () => {
+      const capi = svc('capi');
+      if (!capi) throw new Error('CAPI not available');
+      return capi.getSiteList();
+    },
+
     capiGetInstalls: async () => {
       const capi = svc('capi');
       if (!capi) throw new Error('CAPI not available');
@@ -503,6 +514,13 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         // Authenticated but couldn't get user details — still return something
         return { email: undefined, accountName: undefined };
       }
+    },
+
+    getWpeUserId(): string | null {
+      const userData = svc('userData');
+      if (!userData) return null;
+      const tokenData = userData.get?.('wpeOAuth');
+      return tokenData?.userId ?? null;
     },
 
     // --- SSL ---
