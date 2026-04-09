@@ -714,7 +714,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     return React.createElement('div', { style: cardStyle },
       React.createElement('div', { style: cardTitleStyle }, 'Remote Sites'),
       React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-text)' } }, remoteSites.total),
-      React.createElement('div', { style: subStatStyle }, `${remoteSites.unlinked} not linked to Local`),
+      React.createElement('div', { style: subStatStyle }, `${remoteSites.total - remoteSites.unlinked} linked · ${remoteSites.unlinked} not linked`),
     );
   }
 

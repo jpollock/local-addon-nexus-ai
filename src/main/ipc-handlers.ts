@@ -383,9 +383,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         if (capiAvailable) {
           const installs = await localServicesBridge.capiGetInstalls() as any[];
           totalRemoteInstalls = installs?.length ?? 0;
-          remoteInstalls = installs
-            ? installs.filter((i: any) => !linkedRemoteIds.has(i.site?.id)).length
+          const linkedCount = installs
+            ? installs.filter((i: any) => linkedRemoteIds.has(i.site?.id)).length
             : 0;
+          remoteInstalls = totalRemoteInstalls - linkedCount;
         }
       } catch {
         // CAPI may not be authenticated
