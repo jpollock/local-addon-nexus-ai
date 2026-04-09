@@ -272,7 +272,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       const site = requireSite(siteId);
       const exportService = svc('exportSite');
       if (exportService?.exportSite) {
-        return await exportService.exportSite({ site, outputPath });
+        return await exportService.exportSite({ site, outputPath, filter: '' });
       }
       throw new Error('Export service not available');
     },
