@@ -337,9 +337,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     // Check if WPE sync is already running (catches auto-syncs started before mount)
     this.checkWpeSyncStatus();
 
-    // Run CAPI-only sync on mount to detect new installs
-    setTimeout(() => this.runCapiSync(), 3000);
-
     // Passive poll: pick up auto-syncs that start after mount (every 10s when not already syncing)
     this.wpeSyncPassivePoll = setInterval(() => {
       if (!this.state.wpeSyncing) {
