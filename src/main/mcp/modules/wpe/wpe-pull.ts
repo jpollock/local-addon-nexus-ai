@@ -58,6 +58,8 @@ export const wpePullHandler: McpToolHandler = {
     let primaryDomain: string;
     let environment: string;
 
+    let installAccountId: string | null = null;
+
     if (args.remote_install_id) {
       // Get install details from CAPI
       const installs = (await services.localServices.capiGetInstalls()) as any[];
@@ -72,6 +74,7 @@ export const wpePullHandler: McpToolHandler = {
       remoteSiteId = typeof install.site === 'object' ? install.site.id : install.site;
       primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
       environment = install.environment || 'production';
+      installAccountId = install.account?.id ?? null;
     } else {
       // Use existing link
       installName = (wpeConnection as any).remoteSiteId; // This might need adjustment
@@ -81,7 +84,9 @@ export const wpePullHandler: McpToolHandler = {
       environment = (wpeConnection as any).remoteSiteEnv || 'production';
     }
 
-    // Link the site to the WPE install BEFORE the pull so Local shows it as connected
+    // Link the site to the WPE install BEFORE the pull so Local shows it as connected.
+    // remoteSiteId = WPE site UUID (install.site.id, NOT the install UUID).
+    // accountId + remoteSiteEnv match what the Connect Drawer stores.
     if (args.remote_install_id && !wpeConnection && remoteSiteId) {
       try {
         services.localServices.updateSite(site.id, {
@@ -89,8 +94,7 @@ export const wpePullHandler: McpToolHandler = {
             hostId: 'wpe',
             remoteSiteId,
             remoteSiteEnv: environment,
-            installName,
-            installId,
+            accountId: installAccountId,
           }],
         });
       } catch {
