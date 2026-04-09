@@ -39,18 +39,26 @@ CREATE INDEX IF NOT EXISTS idx_event_status ON event_queue(status);
 CREATE INDEX IF NOT EXISTS idx_event_type ON event_queue(event_type);
 CREATE INDEX IF NOT EXISTS idx_event_site_created ON event_queue(site_id, created_at);
 
+CREATE TABLE IF NOT EXISTS wpe_accounts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  nickname TEXT
+);
+
 CREATE TABLE IF NOT EXISTS sites (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   domain TEXT NOT NULL,
   wp_version TEXT,
   php_version TEXT,
+  account_id TEXT,
   last_sync_at INTEGER,
   is_active INTEGER DEFAULT 1,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sites_active ON sites(is_active);
+CREATE INDEX IF NOT EXISTS idx_sites_account ON sites(account_id);
 
 CREATE TABLE IF NOT EXISTS content (
   id INTEGER PRIMARY KEY,
@@ -204,6 +212,27 @@ export class GraphService {
       this.db.exec('ALTER TABLE sites ADD COLUMN php_version TEXT');
       this.logger.info('[GraphService] ✓ php_version column added');
     }
+
+    // Migration: add account_id column if missing
+    const hasAccountId = this.db
+      .prepare("SELECT COUNT(*) as c FROM pragma_table_info('sites') WHERE name='account_id'")
+      .get() as { c: number };
+    if (!hasAccountId.c) {
+      this.logger.info('[GraphService] Adding account_id column to sites table...');
+      this.db.exec('ALTER TABLE sites ADD COLUMN account_id TEXT');
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_sites_account ON sites(account_id)');
+      this.logger.info('[GraphService] ✓ account_id column added');
+    }
+
+    // Migration: create wpe_accounts table if missing
+    const hasAccountsTable = this.db
+      .prepare("SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name='wpe_accounts'")
+      .get() as { c: number };
+    if (!hasAccountsTable.c) {
+      this.logger.info('[GraphService] Creating wpe_accounts table...');
+      this.db.exec('CREATE TABLE IF NOT EXISTS wpe_accounts (id TEXT PRIMARY KEY, name TEXT NOT NULL, nickname TEXT)');
+      this.logger.info('[GraphService] ✓ wpe_accounts table created');
+    }
   }
 
   /** Expose the underlying database for shared use (e.g., HealthTrendTracker). */
@@ -234,13 +263,14 @@ export class GraphService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(`
-      INSERT INTO sites (id, name, domain, wp_version, php_version, last_sync_at, is_active, created_at, updated_at, source, remote_install_id, remote_domain)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sites (id, name, domain, wp_version, php_version, account_id, last_sync_at, is_active, created_at, updated_at, source, remote_install_id, remote_domain)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         domain = excluded.domain,
         wp_version = COALESCE(excluded.wp_version, wp_version),
         php_version = COALESCE(excluded.php_version, php_version),
+        account_id = COALESCE(excluded.account_id, account_id),
         last_sync_at = excluded.last_sync_at,
         is_active = excluded.is_active,
         updated_at = excluded.updated_at,
@@ -255,6 +285,7 @@ export class GraphService {
       site.domain,
       site.wp_version ?? null,
       site.php_version ?? null,
+      site.account_id ?? null,
       site.last_sync_at ?? null,
       site.is_active ? 1 : 0,
       site.created_at,
@@ -263,6 +294,22 @@ export class GraphService {
       site.remote_install_id ?? null,
       site.remote_domain ?? null
     );
+  }
+
+  async upsertAccount(account: { id: string; name: string; nickname?: string }): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    this.db.prepare(`
+      INSERT INTO wpe_accounts (id, name, nickname)
+      VALUES (?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        nickname = COALESCE(excluded.nickname, nickname)
+    `).run(account.id, account.name, account.nickname ?? null);
+  }
+
+  async getAccounts(): Promise<Array<{ id: string; name: string; nickname: string | null }>> {
+    if (!this.db) throw new Error('Database not initialized');
+    return this.db.prepare('SELECT id, name, nickname FROM wpe_accounts ORDER BY name').all() as any[];
   }
 
   async getSite(id: string): Promise<Site | null> {
@@ -287,6 +334,7 @@ export class GraphService {
       source: row.source ?? 'local',
       remote_install_id: row.remote_install_id,
       remote_domain: row.remote_domain,
+      account_id: row.account_id,
     };
   }
 
@@ -327,6 +375,7 @@ export class GraphService {
       source: row.source ?? 'local',
       remote_install_id: row.remote_install_id,
       remote_domain: row.remote_domain,
+      account_id: row.account_id,
     }));
   }
 

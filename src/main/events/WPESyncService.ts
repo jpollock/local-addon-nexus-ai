@@ -41,6 +41,7 @@ export interface WPEInstallData {
   environment: string;
   primary_domain: string;
   php_version?: string;
+  account_id?: string;
 }
 
 export interface WPESyncServiceOptions {
@@ -129,6 +130,21 @@ export class WPESyncService {
 
       this.logger.info(`[WPESyncService] Found ${installs.length} WPE installs`);
 
+      // Fetch and store accounts for name/nickname lookup
+      let accountMap = new Map<string, { name: string; nickname?: string }>();
+      try {
+        const accounts = await this.localServices.capiGetAccounts() as any[];
+        for (const a of accounts ?? []) {
+          if (a.id) {
+            accountMap.set(a.id, { name: a.name ?? a.id, nickname: a.nickname ?? undefined });
+            await this.graphService.upsertAccount({ id: a.id, name: a.name ?? a.id, nickname: a.nickname });
+          }
+        }
+        this.logger.info(`[WPESyncService] Stored ${accountMap.size} accounts`);
+      } catch (err: any) {
+        this.logger.warn('[WPESyncService] Could not fetch accounts:', err.message);
+      }
+
       // Map to WPEInstallData
       const wpeInstalls: WPEInstallData[] = installs.map((i: any) => ({
         install_id: i.id,
@@ -136,6 +152,7 @@ export class WPESyncService {
         environment: i.environment ?? 'production',
         primary_domain: i.primaryDomain || `${i.name}.wpengine.com`,
         php_version: i.phpVersion ?? undefined,
+        account_id: i.account?.id ?? undefined,
       }));
 
       // Build a per-site last_sync_at map from graph for staleness filtering
@@ -300,6 +317,7 @@ export class WPESyncService {
       domain: install.primary_domain,
       wp_version: wpVersion,
       php_version: install.php_version,
+      account_id: install.account_id,
       last_sync_at: now,
       is_active: true,
       created_at: now,
@@ -554,6 +572,7 @@ export class WPESyncService {
         environment: install.environment ?? 'production',
         primary_domain: install.primaryDomain || `${install.name}.wpengine.com`,
         php_version: install.phpVersion ?? undefined,
+        account_id: install.account?.id ?? undefined,
       };
 
       await this.syncInstall(wpeInstall);
