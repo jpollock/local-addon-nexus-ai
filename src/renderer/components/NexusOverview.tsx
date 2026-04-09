@@ -147,7 +147,6 @@ interface NexusOverviewState {
   diagResults: Array<{ cmd: string; success: boolean; stdout: string; durationMs: number; error?: string }>;
   wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null; fresh_count: number; stale_count: number } | null;
   wpeSyncThresholdHours: number;
-  wpeNewInstalls: string[];
   // Credential sync state
   syncStatus: Record<string, { lastSync: number; success: boolean }>;
   syncing: boolean;
@@ -321,7 +320,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     diagResults: [],
     wpeSyncStats: null,
     wpeSyncThresholdHours: 8,
-    wpeNewInstalls: [],
     syncStatus: {},
     syncing: false,
     syncResults: null,
@@ -815,7 +813,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   }
 
   renderWpeSyncCard(): React.ReactNode {
-    const { wpeSyncStats, wpeSyncThresholdHours, wpeSyncing, wpeNewInstalls } = this.state;
+    const { wpeSyncStats, wpeSyncThresholdHours, wpeSyncing } = this.state;
 
     if (wpeSyncing) {
       return React.createElement('div', { style: cardStyle },
@@ -858,15 +856,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
           : React.createElement('span', null, ' · all current ✓'),
         React.createElement('br'),
         `Threshold: ${wpeSyncThresholdHours}h`,
-        wpeNewInstalls.length > 0
-          ? React.createElement('div', {
-              style: { marginTop: '6px', padding: '5px 8px', borderRadius: '4px',
-                backgroundColor: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
-                fontSize: '11px', color: '#60a5fa' },
-            },
-              `🆕 ${wpeNewInstalls.length} new install${wpeNewInstalls.length > 1 ? 's' : ''} — run full sync to get WP versions`,
-            )
-          : null,
       ),
     );
   }
@@ -1613,16 +1602,6 @@ renderTabBar(): React.ReactNode {
       diagRunning: false,
       diagResults: [{ cmd, ...result }, ...prev.diagResults].slice(0, 20),
     }));
-  };
-
-  runCapiSync = async (): Promise<void> => {
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_CAPI_SYNC);
-      if (result.success && result.newInstalls?.length > 0) {
-        this.setState({ wpeNewInstalls: result.newInstalls });
-        await this.fetchAll(); // refresh stats
-      }
-    } catch { /* non-fatal */ }
   };
 
   handleWpeSyncStop = (): void => {

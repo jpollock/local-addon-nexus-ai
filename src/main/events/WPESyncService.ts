@@ -287,12 +287,12 @@ export class WPESyncService {
     const t0 = Date.now();
     const versionResult = await runWithRetry(['core', 'version']);
     const t1 = Date.now();
-    this.logger.info(`[WPESyncService] ${install.install_name} core version: success=${versionResult.success} stdout="${versionResult.stdout?.slice(0, 80)}" ms=${t1 - t0}`);
+    this.logger.debug(`[WPESyncService] ${install.install_name} core version: success=${versionResult.success} stdout="${versionResult.stdout?.slice(0, 80)}" ms=${t1 - t0}`);
     const wpVersion = versionResult.success && versionResult.stdout ? versionResult.stdout.trim() : undefined;
 
     const pluginResult = await this.localServices.remoteWpCliRun(install.install_name, ['plugin', 'list', '--format=json']).catch(() => ({ stdout: '', success: false }));
     const t2 = Date.now();
-    this.logger.info(`[WPESyncService] ${install.install_name} plugin list: success=${pluginResult.success} ms=${t2 - t1}`);
+    this.logger.debug(`[WPESyncService] ${install.install_name} plugin list: success=${pluginResult.success} ms=${t2 - t1}`);
     let pluginRows: any[] = [];
     if (pluginResult.success && pluginResult.stdout) {
       try { const p = JSON.parse(pluginResult.stdout); pluginRows = Array.isArray(p) ? p : []; } catch { /* skip */ }
@@ -300,7 +300,7 @@ export class WPESyncService {
 
     const userResult = await this.localServices.remoteWpCliRun(install.install_name, ['user', 'list', '--format=json']).catch(() => ({ stdout: '', success: false }));
     const t3 = Date.now();
-    this.logger.info(`[WPESyncService] ${install.install_name} user list: success=${userResult.success} ms=${t3 - t2}`);
+    this.logger.debug(`[WPESyncService] ${install.install_name} user list: success=${userResult.success} ms=${t3 - t2}`);
     let userRows: any[] = [];
     if (userResult.success && userResult.stdout) {
       try { const u = JSON.parse(userResult.stdout); userRows = Array.isArray(u) ? u : []; } catch { /* skip */ }
@@ -511,6 +511,7 @@ export class WPESyncService {
     total: number;
     newInstalls: string[];
     updatedFields: number;
+    ghostInstalls: number;
   }> {
     if (!this.localServices.isCAPIAvailable()) {
       throw new Error('WP Engine API not available. Authenticate first.');
@@ -531,7 +532,7 @@ export class WPESyncService {
 
     // Fetch all installs
     const installs = await this.localServices.capiGetInstalls() as any[];
-    if (!installs?.length) return { accounts: accountMap.size, total: 0, newInstalls: [], updatedFields: 0 };
+    if (!installs?.length) return { accounts: accountMap.size, total: 0, newInstalls: [], updatedFields: 0, ghostInstalls: 0 };
 
     // Build set of existing site IDs in graph
     const db = this.graphService.getDb();
@@ -583,11 +584,24 @@ export class WPESyncService {
       }
     }
 
+    // Detect ghost installs (in graph but not returned by CAPI)
+    let ghosts: string[] = [];
+    if (db) {
+      const capiIds = new Set(installs.map((i: any) => `wpe-${i.id}`));
+      const graphIds = Array.from(existingIds);
+      ghosts = graphIds.filter(id => !capiIds.has(id));
+      if (ghosts.length > 0) {
+        const placeholders = ghosts.map(() => '?').join(',');
+        db.prepare(`UPDATE sites SET is_active=0, updated_at=? WHERE id IN (${placeholders})`).run(now, ...ghosts);
+        this.logger.info(`[WPESyncService] CAPI sync: ${ghosts.length} ghost installs marked inactive`);
+      }
+    }
+
     this.logger.info(
       `[WPESyncService] CAPI sync done: ${installs.length} installs, ${newInstalls.length} new, ${updatedFields} fields updated`
     );
 
-    return { accounts: accountMap.size, total: installs.length, newInstalls, updatedFields };
+    return { accounts: accountMap.size, total: installs.length, newInstalls, updatedFields, ghostInstalls: ghosts?.length ?? 0 };
   }
 
   /**
