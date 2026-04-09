@@ -76,27 +76,49 @@ export const wpePullHandler: McpToolHandler = {
       environment = install.environment || 'production';
       installAccountId = install.account?.id ?? null;
     } else {
-      // Use existing link
-      installName = (wpeConnection as any).remoteSiteId; // This might need adjustment
-      installId = (wpeConnection as any).remoteSiteId;
-      remoteSiteId = (wpeConnection as any).remoteSiteId;
-      primaryDomain = ''; // Will be resolved by wpePull service
+      // Resolve install from CAPI using site UUID + environment stored in hostConnections.
+      // remoteSiteId is the WPE *site* UUID — must look up the install name for SSH.
+      const wpeSiteId = (wpeConnection as any).remoteSiteId;
       environment = (wpeConnection as any).remoteSiteEnv || 'production';
+
+      const installs = (await services.localServices.capiGetInstalls()) as any[];
+      const install = installs.find(
+        (i: any) => (typeof i.site === 'object' ? i.site.id : i.site) === wpeSiteId
+          && i.environment === environment
+      );
+
+      if (!install) {
+        return error(
+          `Could not find WPE install for site ${wpeSiteId} (${environment}). ` +
+          `Try passing remote_install_id directly.`
+        );
+      }
+
+      installName = install.name;
+      installId = install.id;
+      remoteSiteId = wpeSiteId;
+      primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
+      installAccountId = install.account?.id ?? null;
     }
 
-    // Link the site to the WPE install BEFORE the pull so Local shows it as connected.
-    // remoteSiteId = WPE site UUID (install.site.id, NOT the install UUID).
-    // accountId + remoteSiteEnv match what the Connect Drawer stores.
+    // Prepare hostConnections object (will be saved twice to work around race condition)
+    const userId = services.localServices!.getWpeUserId();
+    const hostConnectionUpdate = {
+      hostConnections: [{
+        hostId: 'wpe' as const,
+        remoteSiteId,
+        remoteSiteEnv: environment,
+        accountId: installAccountId,
+        userId: userId || undefined,
+        magicSync: true,
+        database: true,
+      }],
+    };
+
+    // FIRST UPDATE: Before the pull starts (so UI shows it's linked)
     if (args.remote_install_id && !wpeConnection && remoteSiteId) {
       try {
-        services.localServices.updateSite(site.id, {
-          hostConnections: [{
-            hostId: 'wpe',
-            remoteSiteId,
-            remoteSiteEnv: environment,
-            accountId: installAccountId,
-          }],
-        });
+        services.localServices.updateSite(site.id, hostConnectionUpdate);
       } catch {
         // Non-fatal — pull still works without the link
       }
@@ -106,7 +128,7 @@ export const wpePullHandler: McpToolHandler = {
       // Fire-and-forget: wpePull.pull() is a long-running operation.
       // Awaiting it blocks Claude for 2+ minutes. Return immediately and
       // let the user monitor progress in Local.
-      services.localServices.wpePull.pull({
+      const pullPromise = services.localServices.wpePull.pull({
         includeSql: args.include_database === true,
         wpengineInstallName: installName,
         wpengineInstallId: installId,
@@ -117,6 +139,18 @@ export const wpePullHandler: McpToolHandler = {
         isMagicSync: false,
       }).catch(() => { /* errors surfaced in Local UI */ });
 
+      // SECOND UPDATE: After pull completes, re-save hostConnections to ensure it persists
+      // (works around race condition where pull process might overwrite site.json)
+      if (args.remote_install_id && !wpeConnection && remoteSiteId) {
+        pullPromise.then(() => {
+          try {
+            services.localServices?.updateSite(site.id, hostConnectionUpdate);
+          } catch {
+            // Non-fatal
+          }
+        });
+      }
+
       return ok(
         JSON.stringify({
           status: 'in_progress',
@@ -125,8 +159,8 @@ export const wpePullHandler: McpToolHandler = {
           include_database: args.include_database === true,
           linked: true,
           message: `Pull started. The site is now linked to "${installName}" in Local.`,
-          how_to_check: `Call local_get_site with site="${site.name}" and check the status field. "pulling" = in progress, "running" = complete. You can also call local_get_sync_history to see the completed pull event.`,
-          warning: 'Do NOT run wp_* commands until status changes to "running".',
+          next_steps: 'The pull runs in the background (1-3 minutes). Check the Local app UI for progress. When complete, the site status will show "running".',
+          warning: 'DO NOT poll local_get_site repeatedly — this wastes tool calls. Wait for the user to confirm the site is running in Local, then continue.',
         }, null, 2),
       );
     } catch (err: any) {

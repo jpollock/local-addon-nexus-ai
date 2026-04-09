@@ -73,12 +73,28 @@ export const wpePushHandler: McpToolHandler = {
       primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
       environment = install.environment || 'production';
     } else {
-      // Use existing link
-      installName = (wpeConnection as any).remoteSiteId; // This might need adjustment
-      installId = (wpeConnection as any).remoteSiteId;
-      remoteSiteId = (wpeConnection as any).remoteSiteId;
-      primaryDomain = ''; // Will be resolved by wpePush service
+      // Resolve install from CAPI using site UUID + environment stored in hostConnections.
+      // remoteSiteId is the WPE *site* UUID — must look up the install name for SSH.
+      const wpeSiteId = (wpeConnection as any).remoteSiteId;
       environment = (wpeConnection as any).remoteSiteEnv || 'production';
+
+      const installs = (await services.localServices.capiGetInstalls()) as any[];
+      const install = installs.find(
+        (i: any) => (typeof i.site === 'object' ? i.site.id : i.site) === wpeSiteId
+          && i.environment === environment
+      );
+
+      if (!install) {
+        return error(
+          `Could not find WPE install for site ${wpeSiteId} (${environment}). ` +
+          `Try passing install_name or remote_install_id directly.`
+        );
+      }
+
+      installName = install.name;
+      installId = install.id;
+      remoteSiteId = wpeSiteId;
+      primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
     }
 
     try {
