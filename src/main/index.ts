@@ -355,8 +355,14 @@ export default function main(context: any): void {
         } catch { /* non-fatal */ }
       }, 10000);
 
-      // Scheduled: re-check every hour
+      // Scheduled hourly: Tier 1 CAPI (always) + Tier 2 SSH (if stale)
       setInterval(async () => {
+        if (!localServicesBridge.isCAPIAvailable()) return;
+        // Tier 1: always — keeps account/PHP/domain data fresh, detects new installs
+        try {
+          await wpeSyncService.syncFromCAPI();
+        } catch { /* non-fatal */ }
+        // Tier 2: SSH only if enabled and data is stale
         try {
           if (!isWpeSyncAutoEnabled()) return;
           const hours = getWpeSyncIntervalHours();
