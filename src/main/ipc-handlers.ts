@@ -398,12 +398,23 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       // Embedding model
       const embeddingReady = embeddingService.isReady();
 
-      // Index stats
+      // Index stats — local (index registry) + WPE (graph content table)
       const indexEntries = indexRegistry.listAll();
-      const indexedSites = indexEntries.filter((e: any) => e.state === 'indexed').length;
+      const localIndexedSites = indexEntries.filter((e: any) => e.state === 'indexed').length;
       const totalDocs = indexEntries.reduce((sum: number, e: any) => sum + (e.documentCount || 0), 0);
       const totalChunks = indexEntries.reduce((sum: number, e: any) => sum + (e.chunkCount || 0), 0);
       const lastIndexed = indexEntries.reduce((max: number, e: any) => Math.max(max, e.lastIndexed || 0), 0);
+
+      // WPE indexed sites — count distinct sites with content in graph DB
+      let wpeIndexedSites = 0;
+      let wpeIndexedDocs = 0;
+      try {
+        const db = graphService.getDb();
+        if (db) {
+          wpeIndexedSites = (db.prepare("SELECT COUNT(DISTINCT site_id) as c FROM content WHERE site_id LIKE 'wpe-%'").get() as { c: number }).c;
+          wpeIndexedDocs = (db.prepare("SELECT COUNT(*) as c FROM content WHERE site_id LIKE 'wpe-%'").get() as { c: number }).c;
+        }
+      } catch { /* graph may not be ready */ }
 
       return {
         localSites: { total: totalSites, running: runningSites, halted: totalSites - runningSites },
@@ -423,9 +434,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           maxSequenceLength: 256,
         },
         index: {
-          sitesIndexed: indexedSites,
-          totalSites: totalSites,
-          totalDocuments: totalDocs,
+          localIndexed: localIndexedSites,
+          localTotal: totalSites,
+          wpeIndexed: wpeIndexedSites,
+          wpeTotal: totalRemoteInstalls,
+          totalDocuments: totalDocs + wpeIndexedDocs,
           totalChunks: totalChunks,
           lastIndexed: lastIndexed || null,
         },
