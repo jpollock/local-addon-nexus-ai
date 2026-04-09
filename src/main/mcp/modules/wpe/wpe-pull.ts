@@ -124,7 +124,9 @@ export const wpePullHandler: McpToolHandler = {
           install: installName,
           include_database: args.include_database === true,
           linked: true,
-          message: `Pull started. The site is now linked to "${installName}" in Local. Monitor progress in the Local app — do NOT run wp_* commands until the pull completes and the site restarts.`,
+          message: `Pull started. The site is now linked to "${installName}" in Local.`,
+          how_to_check: `Call local_get_site with site="${site.name}" and check the status field. "pulling" = in progress, "running" = complete. You can also call local_get_sync_history to see the completed pull event.`,
+          warning: 'Do NOT run wp_* commands until status changes to "running".',
         }, null, 2),
       );
     } catch (err: any) {
