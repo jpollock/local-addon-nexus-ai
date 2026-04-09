@@ -130,7 +130,13 @@ export const IPC_CHANNELS = {
 
   // WPE Site Sync (Phase 1)
   WPE_SYNC_ALL: `${ADDON_PREFIX}:wpe:sync-all`,
+  WPE_SYNC_STOP: `${ADDON_PREFIX}:wpe:sync-stop`,
+  WPE_DIAGNOSE: `${ADDON_PREFIX}:wpe:diagnose`,
   WPE_SYNC_STATUS: `${ADDON_PREFIX}:wpe:sync-status`,
+  WPE_SYNC_STATS: `${ADDON_PREFIX}:wpe:sync-stats`,
+  CLEANUP_EXCLUDED_TYPES: `${ADDON_PREFIX}:content:cleanup-excluded-types`,
+  WPE_CAPI_SYNC: `${ADDON_PREFIX}:wpe:capi-sync`,
+  RESET_AND_REFRESH: `${ADDON_PREFIX}:data:reset-and-refresh`,
   WPE_SYNC_SINGLE: `${ADDON_PREFIX}:wpe:sync-single`,
   WPE_GET_SYNCED_SITES: `${ADDON_PREFIX}:wpe:get-synced-sites`,
   WPE_GET_SITE_DETAILS: `${ADDON_PREFIX}:wpe:get-site-details`,
@@ -233,6 +239,20 @@ export const EXCLUDED_POST_TYPES = [
   'oembed_cache',
   'custom_css',
   'customize_changeset',
+  // Internal/system types that produce noise, not searchable content
+  'wp_block',           // reusable blocks
+  'user_request',       // GDPR data requests
+  'wp_pattern',         // block patterns
+  'scheduled-action',   // Action Scheduler
+  'shop_order',         // WooCommerce orders (not content)
+  'shop_order_refund',  // WooCommerce refunds
+  'pm_pattern',         // Pattern Manager plugin
+  // ACF internal config types — these are field/group definitions, not content
+  'acf-field-group',
+  'acf-field',
+  'acf-taxonomy',
+  'acf-post-type',
+  'acf-ui-options-page',
 ];
 
 /** Max words per chunk before splitting */

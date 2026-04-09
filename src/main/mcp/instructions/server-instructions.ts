@@ -52,6 +52,8 @@ Route user requests to the correct tool namespace:
 | WP Engine auth | \`wpe_status\`, \`wpe_login\`, \`wpe_logout\` | "am I logged in to WPE?", "connect to WP Engine" |
 | WP Engine accounts | \`wpe_get_accounts\`, \`wpe_get_installs\`, \`wpe_get_install\` | "show my WPE installs" |
 | WP Engine usage (fleet) | \`wpe_portfolio_usage\` | "which sites get the most traffic?", "installs with >100 visits/day", "highest bandwidth sites" |
+| WP Engine versions (fleet) | \`wpe_fleet_versions\` | "WP/PHP versions of my high-traffic sites", "which installs run old WordPress?" |
+| Local ↔ WPE drift | \`wpe_detect_drift\` | "are my local sites in sync with WPE?", "what's different between local and production?", "plugin differences between dev and live" |
 | WP Engine usage (single) | \`wpe_get_install_usage\`, \`wpe_get_account_usage\` | "show bandwidth for this install", "storage for my account" |
 | WP Engine ops | \`wpe_create_backup\`, \`wpe_purge_cache\` | "backup production", "clear cache" |
 | Sync with WPE | \`local_wpe_pull\`, \`local_wpe_push\`, \`local_wpe_link\` | "pull from staging", "push to dev", "link this site to WPE" |
@@ -81,6 +83,8 @@ When WPE tools fail with auth errors: call \`wpe_status\` → if not authenticat
 - "Which environments use the most bandwidth/storage?"
 
 Returns a sorted table (visits descending). After identifying high-traffic installs by name, use \`wpe_get_installs\` to get their IDs, then \`wp_core_version\` / \`wpe_get_install\` for WP/PHP versions.
+
+**\`wpe_fleet_versions\`** — WP and PHP versions for all (or a filtered list of) WPE installs, read from the local graph — zero API calls. Use this immediately after \`wpe_portfolio_usage\` identifies high-traffic installs. Pass \`install_names\` to filter. Never call \`wpe_get_install\` in a loop for version data when this tool exists.
 
 **\`wpe_get_install_usage\`** — Single install. Requires \`install_id\`. Use after \`wpe_portfolio_usage\` identifies a specific install of interest.
 

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
-import { IPC_CHANNELS, OLLAMA_POLL_INTERVAL_MS } from '../common/constants';
+import { IPC_CHANNELS, OLLAMA_POLL_INTERVAL_MS, STORAGE_KEYS } from '../common/constants';
 import { VectorStore } from './vector-store/VectorStore';
 import { EmbeddingService } from './embeddings/EmbeddingService';
 import { ContentPipeline } from './content/ContentPipeline';
@@ -297,6 +297,79 @@ export default function main(context: any): void {
       // Start Ollama availability polling
       refreshOllamaStatus();
       setInterval(() => refreshOllamaStatus(), OLLAMA_POLL_INTERVAL_MS);
+
+      // WPE auto-sync: startup check + scheduled interval
+      const getWpeSyncIntervalHours = () => {
+        const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncIntervalHours?: number } | null;
+        return settings?.wpeSyncIntervalHours ?? 8;
+      };
+
+      const isWpeSyncAutoEnabled = () => {
+        const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncAutoEnabled?: boolean } | null;
+        return settings?.wpeSyncAutoEnabled !== false; // default: true
+      };
+
+      const runWpeAutoSyncIncremental = async (reason: string) => {
+        if (!wpeSyncService || !localServicesBridge.isCAPIAvailable()) return;
+        const hours = getWpeSyncIntervalHours();
+        localLogger.info(`[NexusAI] WPE incremental sync triggered: ${reason} (threshold: ${hours}h)`);
+        try {
+          const result = await wpeSyncService.syncAllWPESites(undefined, hours);
+          localLogger.info(
+            `[NexusAI] WPE sync done: ${result.synced} synced, ${result.skipped} skipped (fresh), ${result.failed} failed`
+          );
+        } catch (err) {
+          localLogger.error('[NexusAI] WPE auto-sync failed:', (err as Error).message);
+        }
+      };
+
+      // Startup: Tier 1 CAPI-only sync (fast, every startup when authenticated)
+      // then Tier 2 SSH sync (slow, only if stale)
+      setTimeout(async () => {
+        if (!localServicesBridge.isCAPIAvailable()) return;
+        try {
+          // Tier 1: always run — updates account/PHP/domain data from CAPI, detects new installs
+          const capiResult = await wpeSyncService.syncFromCAPI();
+          if (capiResult.newInstalls.length > 0) {
+            localLogger.info(
+              `[NexusAI] CAPI sync: ${capiResult.newInstalls.length} new installs detected: ${capiResult.newInstalls.slice(0, 5).join(', ')}${capiResult.newInstalls.length > 5 ? '...' : ''}`
+            );
+          }
+        } catch (err) {
+          localLogger.warn('[NexusAI] CAPI-only sync failed (non-fatal):', (err as Error).message);
+        }
+
+        // Tier 2: SSH sync only if auto-sync enabled and data is stale
+        try {
+          if (!isWpeSyncAutoEnabled()) {
+            localLogger.info('[NexusAI] WPE auto-sync disabled — skipping SSH sync');
+            return;
+          }
+          const hours = getWpeSyncIntervalHours();
+          const stale = await wpeSyncService.isStale(hours);
+          if (stale) {
+            await runWpeAutoSyncIncremental('startup — stale sites detected');
+          } else {
+            localLogger.info('[NexusAI] All WPE sites fresh — skipping SSH sync');
+          }
+        } catch { /* non-fatal */ }
+      }, 10000);
+
+      // Scheduled hourly: Tier 1 CAPI (always) + Tier 2 SSH (if stale)
+      setInterval(async () => {
+        if (!localServicesBridge.isCAPIAvailable()) return;
+        // Tier 1: always — keeps account/PHP/domain data fresh, detects new installs
+        try {
+          await wpeSyncService.syncFromCAPI();
+        } catch { /* non-fatal */ }
+        // Tier 2: SSH only if enabled and data is stale
+        try {
+          if (!isWpeSyncAutoEnabled()) return;
+          const hours = getWpeSyncIntervalHours();
+          const stale = await wpeSyncService.isStale(hours);
+          if (stale) await runWpeAutoSyncIncremental('scheduled interval');
+        } catch { /* non-fatal */ }
+      }, 60 * 60 * 1000);
 
       // Start periodic health check transmission (every hour)
       // Transmits anonymous health metrics to Cloudflare for analytics

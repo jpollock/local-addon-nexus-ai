@@ -138,9 +138,15 @@ interface NexusOverviewState {
   wpeSites: SiteListItem[];
   pullingInstall: string | null;
   wpeSyncing: boolean;
-  wpeSyncProgress: { total: number; current: number; currentSite: string; status: string } | null;
+  wpeSyncProgress: { total: number; current: number; skipped: number; currentSite: string; status: string } | null;
   wpeSyncedCount: number;
   wpeSyncError: string | null;
+  wpeStopping: boolean;
+  diagInstall: string;
+  diagRunning: boolean;
+  diagResults: Array<{ cmd: string; success: boolean; stdout: string; durationMs: number; error?: string }>;
+  wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null; fresh_count: number; stale_count: number } | null;
+  wpeSyncThresholdHours: number;
   // Credential sync state
   syncStatus: Record<string, { lastSync: number; success: boolean }>;
   syncing: boolean;
@@ -266,6 +272,7 @@ function truncate(text: string, maxLen: number): string {
 export class NexusOverview extends React.Component<NexusOverviewProps, NexusOverviewState> {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private wpeSyncPassivePoll: ReturnType<typeof setInterval> | null = null;
   private mounted = false;
 
   state: NexusOverviewState = {
@@ -307,6 +314,12 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     wpeSyncProgress: null,
     wpeSyncedCount: 0,
     wpeSyncError: null,
+    wpeStopping: false,
+    diagInstall: '',
+    diagRunning: false,
+    diagResults: [],
+    wpeSyncStats: null,
+    wpeSyncThresholdHours: 8,
     syncStatus: {},
     syncing: false,
     syncResults: null,
@@ -319,14 +332,22 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     this.fetchAll();
     this.pollTimer = setInterval(() => this.fetchAll(), POLL_INTERVALS.DASHBOARD_STATS_MS);
     
-    // Check if WPE sync is already running
+    // Check if WPE sync is already running (catches auto-syncs started before mount)
     this.checkWpeSyncStatus();
+
+    // Passive poll: pick up auto-syncs that start after mount (every 10s when not already syncing)
+    this.wpeSyncPassivePoll = setInterval(() => {
+      if (!this.state.wpeSyncing) {
+        this.checkWpeSyncStatus();
+      }
+    }, 10000);
   }
 
   componentWillUnmount(): void {
     this.mounted = false;
     if (this.pollTimer) clearInterval(this.pollTimer);
     if (this.searchTimer) clearTimeout(this.searchTimer);
+    if (this.wpeSyncPassivePoll) clearInterval(this.wpeSyncPassivePoll);
     this.stopWpeSyncProgressPolling();
   }
 
@@ -371,7 +392,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -380,6 +401,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
         ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES),
         ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
+        ipc.invoke(IPC_CHANNELS.WPE_SYNC_STATS),
       ]);
       if (!this.mounted) return;
 
@@ -435,6 +457,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         settings: settings ?? null,
         hasLLM,
         syncStatus: syncStatus ?? {},
+        wpeSyncStats: wpeSyncStatsResult?.stats ?? null,
+        wpeSyncThresholdHours: wpeSyncStatsResult?.thresholdHours ?? 8,
         loading: false,
         error: stats ? null : 'Failed to load stats',
         wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
@@ -753,6 +777,89 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     );
   }
 
+  renderGraphCard(): React.ReactNode {
+    const { wpeSyncStats } = this.state;
+    const total = wpeSyncStats?.total ?? 0;
+    const hasWp = wpeSyncStats?.has_wp_version ?? 0;
+    const hasPhp = wpeSyncStats?.has_php_version ?? 0;
+    const plugins = 0; // could query graph but keep simple for now
+
+    if (!wpeSyncStats) {
+      return React.createElement('div', { style: cardStyle },
+        React.createElement('div', { style: cardTitleStyle }, 'Site Graph'),
+        React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-sub)' } }, '—'),
+        React.createElement('div', { style: subStatStyle }, 'No WPE data yet'),
+      );
+    }
+
+    const wpPct = total > 0 ? Math.round((hasWp / total) * 100) : 0;
+    const phpPct = total > 0 ? Math.round((hasPhp / total) * 100) : 0;
+    const wpColor = wpPct === 100 ? UI_COLORS.STATUS_RUNNING : wpPct > 50 ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_ERROR;
+
+    return React.createElement('div', { style: cardStyle },
+      React.createElement('div', { style: cardTitleStyle }, 'Site Graph'),
+      React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-text)' } },
+        total,
+        React.createElement('span', { style: { fontSize: '13px', fontWeight: 400, color: 'var(--nxai-card-sub)' } }, ' WPE installs'),
+      ),
+      React.createElement('div', { style: subStatStyle },
+        React.createElement('span', { style: { color: wpColor } }, `WP version: ${hasWp}/${total} (${wpPct}%)`),
+        React.createElement('br'),
+        `PHP version: ${hasPhp}/${total} (${phpPct}%)`,
+        React.createElement('br'),
+        `Plugins synced for ${total > 0 ? total : '—'} installs`,
+      ),
+    );
+  }
+
+  renderWpeSyncCard(): React.ReactNode {
+    const { wpeSyncStats, wpeSyncThresholdHours, wpeSyncing } = this.state;
+
+    if (wpeSyncing) {
+      return React.createElement('div', { style: cardStyle },
+        React.createElement('div', { style: cardTitleStyle }, 'WPE Sync'),
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
+          React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_WARNING) }),
+          React.createElement('span', { style: { fontSize: '18px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, 'Syncing…'),
+        ),
+        React.createElement('div', { style: subStatStyle }, 'Sync in progress'),
+      );
+    }
+
+    if (!wpeSyncStats || !wpeSyncStats.last_sync_at) {
+      return React.createElement('div', { style: cardStyle },
+        React.createElement('div', { style: cardTitleStyle }, 'WPE Sync'),
+        React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-sub)' } }, '—'),
+        React.createElement('div', { style: subStatStyle }, 'Never synced'),
+      );
+    }
+
+    const ageMs = Date.now() - wpeSyncStats.last_sync_at;
+    const ageHours = Math.round(ageMs / 3600000);
+    const ageMins = Math.round(ageMs / 60000);
+    const ageLabel = ageHours > 0 ? `${ageHours}h ago` : `${ageMins}m ago`;
+    const isStale = ageMs > wpeSyncThresholdHours * 3600000;
+    const statusColor = isStale ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING;
+    const staleCount = wpeSyncStats.stale_count ?? 0;
+    const freshCount = wpeSyncStats.fresh_count ?? 0;
+
+    return React.createElement('div', { style: cardStyle },
+      React.createElement('div', { style: cardTitleStyle }, 'WPE Sync'),
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '8px' } },
+        React.createElement('span', { style: dotStyle(statusColor) }),
+        React.createElement('span', { style: { fontSize: '16px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, ageLabel),
+      ),
+      React.createElement('div', { style: subStatStyle },
+        React.createElement('span', { style: { color: UI_COLORS.STATUS_RUNNING } }, `${freshCount} fresh`),
+        staleCount > 0
+          ? React.createElement('span', { style: { color: UI_COLORS.STATUS_WARNING } }, ` · ${staleCount} stale`)
+          : React.createElement('span', null, ' · all current ✓'),
+        React.createElement('br'),
+        `Threshold: ${wpeSyncThresholdHours}h`,
+      ),
+    );
+  }
+
   renderAiProxyCard(): React.ReactNode {
     const { aiProxy } = this.state;
     const running = aiProxy?.running ?? false;
@@ -1024,11 +1131,15 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       ),
 
       this.renderSectionLabel('Nexus AI'),
-      React.createElement('div', { style: { ...cardContainerStyle, gridTemplateColumns: 'repeat(4, 1fr)' } },
+      React.createElement('div', { style: { ...cardContainerStyle, gridTemplateColumns: 'repeat(3, 1fr)' } },
         this.renderMcpCard(stats),
         this.renderEmbeddingCard(stats),
-        this.renderIndexCard(stats),
         this.renderAiProxyCard(),
+      ),
+      React.createElement('div', { style: { ...cardContainerStyle, gridTemplateColumns: 'repeat(3, 1fr)', marginTop: '12px' } },
+        this.renderIndexCard(stats),
+        this.renderGraphCard(),
+        this.renderWpeSyncCard(),
       ),
 
       // AI Gateway Usage (moved from Operations tab)
@@ -1210,6 +1321,172 @@ renderTabBar(): React.ReactNode {
       // WPE Sync section
       this.renderSectionLabel('WP Engine Sites'),
       this.renderWpeSyncSection(),
+
+      // Content Index Maintenance
+      this.renderSectionLabel('Content Index'),
+      this.renderContentMaintenance(),
+
+      // SSH Diagnostics
+      this.renderSectionLabel('SSH Diagnostics'),
+      this.renderSshDiagnostics(),
+    );
+  }
+
+  renderContentMaintenance(): React.ReactNode {
+    const sub: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub)' };
+    const dangerBtn: React.CSSProperties = {
+      padding: '7px 14px', borderRadius: '5px', border: '1px solid #ef4444', fontSize: '12px',
+      fontWeight: 600, cursor: 'pointer', backgroundColor: 'transparent', color: '#ef4444',
+    };
+    const grayBtn: React.CSSProperties = {
+      padding: '7px 14px', borderRadius: '5px', border: 'none', fontSize: '12px',
+      fontWeight: 600, cursor: 'pointer', backgroundColor: '#6b7280', color: '#fff',
+    };
+
+    return React.createElement('div', { style: { marginBottom: '24px' } },
+      React.createElement('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap' as const } },
+
+        React.createElement('button', {
+          style: grayBtn,
+          onClick: async () => {
+            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES);
+            if (result.success) {
+              (window as any).showToast?.(`Cleanup: ${result.vectorDocsRemoved} vector docs + ${result.graphRowsRemoved} graph rows removed`, 'success');
+            }
+          },
+        }, 'Remove Excluded Types'),
+
+        React.createElement('button', {
+          style: dangerBtn,
+          onClick: async () => {
+            if (!(window as any).confirm?.('This will clear all graph and vector data then run a full sync. Continue?')) return;
+            (window as any).showToast?.('Resetting data — full sync starting, this will take a while...', 'info');
+            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.RESET_AND_REFRESH);
+            if (result.success) {
+              (window as any).showToast?.(
+                `Reset complete: ${result.capiInstalls} CAPI installs, ${result.sshSynced} SSH synced, ${result.vectorTablesDropped} vector tables cleared`,
+                'success',
+              );
+              await this.fetchAll();
+            } else {
+              (window as any).showToast?.(`Reset failed: ${result.error}`, 'error');
+            }
+          },
+        }, 'Reset & Refresh All Data'),
+      ),
+
+      React.createElement('div', { style: { ...sub, marginTop: '8px' } },
+        'Reset: clears graph + vector store, then runs full CAPI + SSH sync. Takes ~30 min for full fleet.',
+      ),
+    );
+  }
+
+  renderSshDiagnostics(): React.ReactNode {
+    const { diagInstall, diagRunning, diagResults } = this.state;
+    const sub: React.CSSProperties = { fontSize: '11px', color: 'var(--nxai-card-sub)' };
+    const btnStyle: React.CSSProperties = {
+      padding: '5px 10px', borderRadius: '4px', border: '1px solid var(--color-border-primary, #ccc)',
+      backgroundColor: 'transparent', fontSize: '11px', cursor: diagRunning ? 'not-allowed' : 'pointer',
+      opacity: diagRunning ? 0.5 : 1, fontFamily: 'monospace',
+    };
+
+    const PRESETS: Array<{ label: string; args: string[] }> = [
+      { label: 'wp core version', args: ['core', 'version'] },
+      { label: 'wp plugin list', args: ['plugin', 'list', '--format=json'] },
+      { label: 'wp user list', args: ['user', 'list', '--format=json'] },
+      { label: 'wp post-type list', args: ['post-type', 'list', '--format=json'] },
+      { label: 'wp post list (5)', args: ['post', 'list', '--format=json', '--posts_per_page=5', '--fields=ID,post_title,post_type'] },
+      { label: 'wp cli info', args: ['cli', 'info'] },
+    ];
+
+    return React.createElement('div', { style: { marginBottom: '24px' } },
+      React.createElement('div', { style: { ...sub, marginBottom: '8px' } },
+        'Run WP-CLI commands against any WPE install to diagnose SSH/timing issues.',
+      ),
+
+      // Install input
+      React.createElement('div', { style: { display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' } },
+        React.createElement('input', {
+          type: 'text',
+          placeholder: 'install-name (e.g. acfrecipes)',
+          value: diagInstall,
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.setState({ diagInstall: e.target.value }),
+          style: {
+            padding: '5px 10px', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace',
+            border: '1px solid var(--color-border-primary, #ccc)', width: '220px',
+            backgroundColor: 'var(--color-background-secondary, #f9fafb)',
+          },
+        }),
+        diagRunning
+          ? React.createElement('span', { style: { ...sub, fontStyle: 'italic' } }, 'running…')
+          : null,
+      ),
+
+      // Preset command buttons
+      React.createElement('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' as const, marginBottom: '8px' } },
+        PRESETS.map(({ label, args }) =>
+          React.createElement('button', {
+            key: label,
+            style: btnStyle,
+            disabled: diagRunning || !diagInstall.trim(),
+            onClick: () => this.handleDiag(args),
+          }, label),
+        ),
+      ),
+
+      // Custom command input
+      React.createElement('div', { style: { display: 'flex', gap: '6px', marginBottom: '12px', alignItems: 'center' } },
+        React.createElement('input', {
+          type: 'text',
+          placeholder: 'wp post list --post_type=recipe --format=json',
+          style: {
+            padding: '5px 10px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace',
+            border: '1px solid var(--color-border-primary, #ccc)',
+            backgroundColor: 'var(--color-background-secondary, #f9fafb)',
+            flex: 1,
+          },
+          onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'Enter' && !diagRunning && diagInstall.trim()) {
+              const raw = (e.target as HTMLInputElement).value.trim();
+              if (raw) {
+                // Strip leading "wp " if user typed it
+                const normalized = raw.startsWith('wp ') ? raw.slice(3) : raw;
+                const args = normalized.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map(a => a.replace(/^['"]|['"]$/g, '')) ?? [];
+                this.handleDiag(args);
+              }
+            }
+          },
+        }),
+        React.createElement('span', { style: sub }, '↵'),
+      ),
+
+      // Results
+      diagResults.length > 0
+        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '8px' } },
+            diagResults.map((r, i) =>
+              React.createElement('div', {
+                key: i,
+                style: {
+                  padding: '8px 10px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace',
+                  backgroundColor: r.success ? 'rgba(81,187,123,0.07)' : 'rgba(239,68,68,0.07)',
+                  border: `1px solid ${r.success ? 'rgba(81,187,123,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                },
+              },
+                React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+                  React.createElement('span', { style: { fontWeight: 600, color: 'var(--nxai-card-text)' } }, r.cmd),
+                  React.createElement('span', { style: { color: r.success ? '#51BB7B' : '#ef4444' } },
+                    `${r.success ? '✓' : '✗'} ${r.durationMs}ms`,
+                  ),
+                ),
+                React.createElement('pre', {
+                  style: { margin: 0, whiteSpace: 'pre-wrap' as const, wordBreak: 'break-all' as const,
+                    maxHeight: '200px', overflow: 'auto', color: 'var(--nxai-card-sub)', fontSize: '10px',
+                    userSelect: 'text' as const, cursor: 'text' },
+                }, r.error ?? (r.stdout?.slice(0, 2000) || '(empty)') + (r.stdout && r.stdout.length > 2000 ? '\n… (truncated)' : '')),
+              ),
+            ),
+          )
+        : null,
     );
   }
 
@@ -1312,6 +1589,26 @@ renderTabBar(): React.ReactNode {
     }
   };
 
+  handleDiag = async (args: string[]): Promise<void> => {
+    const { diagInstall } = this.state;
+    if (!diagInstall.trim() || this.state.diagRunning) return;
+    const cmd = args.join(' ');
+    this.setState({ diagRunning: true });
+    const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_DIAGNOSE, {
+      installName: diagInstall.trim(),
+      args,
+    });
+    this.setState((prev) => ({
+      diagRunning: false,
+      diagResults: [{ cmd, ...result }, ...prev.diagResults].slice(0, 20),
+    }));
+  };
+
+  handleWpeSyncStop = (): void => {
+    this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_STOP);
+    this.setState({ wpeStopping: true });
+  };
+
   handleWpeSync = async (): Promise<void> => {
     if (this.state.wpeSyncing) return;
 
@@ -1332,6 +1629,7 @@ renderTabBar(): React.ReactNode {
         this.setState({
           wpeSyncedCount: syncedCount,
           wpeSyncing: false,
+          wpeStopping: false,
           wpeSyncProgress: null,
           wpeSyncError: null,
         });
@@ -1458,91 +1756,123 @@ renderTabBar(): React.ReactNode {
   }
 
   renderWpeSyncSection(): React.ReactNode {
-    const { wpeSyncing, wpeSyncedCount, wpeSyncProgress, wpeSyncError } = this.state;
+    const { wpeSyncing, wpeStopping, wpeSyncProgress, wpeSyncError, wpeSyncStats, wpeSyncThresholdHours } = this.state;
 
-    const sectionStyle: React.CSSProperties = { marginBottom: '24px' };
-    const descStyle: React.CSSProperties = {
-      fontSize: '13px',
-      color: 'var(--nxai-card-sub, #6b7280)',
-      marginBottom: '16px',
-      lineHeight: 1.5,
-    };
+    const subStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub, #6b7280)' };
 
-    return React.createElement('div', { style: sectionStyle },
-      React.createElement('div', { style: descStyle },
-        'Sync your WP Engine sites to make them searchable alongside local sites. Indexed content is available in Site Finder.',
-      ),
+    // Format last sync time
+    let lastSyncLabel = 'Never synced';
+    if (wpeSyncStats?.last_sync_at) {
+      const ageMs = Date.now() - wpeSyncStats.last_sync_at;
+      const ageHours = Math.floor(ageMs / 3600000);
+      const ageMins = Math.floor((ageMs % 3600000) / 60000);
+      lastSyncLabel = ageHours > 0
+        ? `Last synced ${ageHours}h${ageMins > 0 ? ` ${ageMins}m` : ''} ago`
+        : `Last synced ${ageMins}m ago`;
+    }
 
-      // Sync button and status
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' } },
+    return React.createElement('div', { style: { marginBottom: '24px' } },
+
+      // Sync button row
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' as const } },
         React.createElement('button', {
           onClick: this.handleWpeSync,
           disabled: wpeSyncing,
           style: {
-            padding: '8px 16px',
-            borderRadius: '6px',
-            border: 'none',
-            backgroundColor: wpeSyncing ? 'var(--color-background-tertiary, #9ca3af)' : 'var(--color-primary, #3b82f6)',
-            color: '#fff',
-            fontSize: '13px',
-            fontWeight: 600,
+            padding: '8px 16px', borderRadius: '6px', border: 'none',
+            backgroundColor: wpeSyncing ? '#3b82f680' : '#3b82f6',
+            color: '#fff', fontSize: '13px', fontWeight: 600,
             cursor: wpeSyncing ? 'not-allowed' : 'pointer',
-            opacity: wpeSyncing ? 0.6 : 1,
           },
-        }, wpeSyncing ? 'Syncing...' : 'Sync Now'),
-
-        // Loading spinner
-        wpeSyncing ? React.createElement(LoadingSpinner, { size: 16, inline: true, color: '#fff' }) : null,
-
-        // Synced count
-        wpeSyncedCount > 0 && !wpeSyncing
-          ? React.createElement('span', {
+        }, wpeSyncing ? 'Syncing...' : 'Sync All'),
+        wpeSyncing
+          ? React.createElement('button', {
+              onClick: this.handleWpeSyncStop,
               style: {
-                fontSize: '13px',
-                color: 'var(--nxai-card-sub, #6b7280)',
+                padding: '8px 14px', borderRadius: '6px', border: '1px solid #ef4444',
+                backgroundColor: 'transparent', color: '#ef4444', fontSize: '13px',
+                fontWeight: 600, cursor: 'pointer',
               },
-            }, `${wpeSyncedCount} site${wpeSyncedCount === 1 ? '' : 's'} synced`)
+            }, 'Stop')
           : null,
+        wpeSyncing ? React.createElement(LoadingSpinner, { size: 14, inline: true }) : null,
       ),
 
-      // Progress indicator
-      wpeSyncProgress
-        ? React.createElement('div', {
-            style: {
-              fontSize: '12px',
-              color: 'var(--nxai-card-sub, #6b7280)',
-              marginTop: '8px',
-              fontStyle: 'italic',
-            },
-          }, `Syncing ${wpeSyncProgress.currentSite}... (${wpeSyncProgress.current}/${wpeSyncProgress.total})`)
+      // In-progress / stopping message
+      wpeSyncing && wpeSyncProgress
+        ? React.createElement('div', { style: { marginBottom: '8px' } },
+            React.createElement('div', { style: { ...subStyle, fontStyle: 'italic' } },
+              `${wpeSyncProgress.currentSite} (${wpeSyncProgress.current}/${wpeSyncProgress.total}` +
+              (wpeSyncProgress.skipped > 0 ? `, ${wpeSyncProgress.skipped} skipped` : '') + ')',
+            ),
+            wpeStopping
+              ? React.createElement('div', {
+                  style: { fontSize: '12px', color: '#f59e0b', marginTop: '4px', fontWeight: 500 },
+                }, '⚠ Stopping after current batch completes…')
+              : null,
+          )
         : null,
 
-      // Error display
+      // Stats row (persists across restarts, per-site freshness)
+      wpeSyncStats
+        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '4px' } },
+            React.createElement('div', { style: subStyle }, lastSyncLabel),
+            React.createElement('div', { style: subStyle },
+              `${wpeSyncStats.fresh_count}/${wpeSyncStats.total} fresh`,
+              wpeSyncStats.stale_count > 0
+                ? React.createElement('span', { style: { color: '#f59e0b' } },
+                    ` · ${wpeSyncStats.stale_count} need refresh (>${wpeSyncThresholdHours}h old)`,
+                  )
+                : React.createElement('span', { style: { color: '#51BB7B' } }, ' · all up to date ✓'),
+            ),
+            React.createElement('div', { style: subStyle },
+              `WP version: ${wpeSyncStats.has_wp_version}/${wpeSyncStats.total}`,
+              wpeSyncStats.total - wpeSyncStats.has_wp_version > 0
+                ? React.createElement('span', {
+                    style: { opacity: 0.7 },
+                    title: 'WP version requires SSH — installs without SSH access show unknown',
+                  }, ` (${wpeSyncStats.total - wpeSyncStats.has_wp_version} need SSH)`)
+                : null,
+              ` · PHP: ${wpeSyncStats.has_php_version}/${wpeSyncStats.total}`,
+            ),
+          )
+        : React.createElement('div', { style: subStyle }, 'No sync data yet. Click Sync to fetch WP Engine site metadata.'),
+
+      // Single-site sync (when not running a full sync)
+      !wpeSyncing
+        ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginTop: '10px' } },
+            React.createElement('input', {
+              type: 'text',
+              placeholder: 'install-name (sync single)',
+              style: {
+                padding: '5px 10px', borderRadius: '5px', fontSize: '12px',
+                border: '1px solid var(--color-border-primary, #ccc)',
+                backgroundColor: 'var(--color-background-secondary, #f9fafb)',
+                width: '180px',
+              },
+              onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === 'Enter') {
+                  const installName = (e.target as HTMLInputElement).value.trim();
+                  if (installName) {
+                    this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_SINGLE, { installId: installName });
+                    (e.target as HTMLInputElement).value = '';
+                  }
+                }
+              },
+            }),
+            React.createElement('span', { style: { ...subStyle, fontSize: '11px' } }, '↵ to sync'),
+          )
+        : null,
+
+      // Error
       wpeSyncError
         ? React.createElement('div', {
             style: {
-              padding: '12px',
-              marginTop: '12px',
-              borderRadius: '6px',
-              backgroundColor: 'var(--color-background-error-subtle, rgba(239, 68, 68, 0.1))',
-              border: '1px solid var(--color-border-error, rgba(239, 68, 68, 0.3))',
+              padding: '10px 12px', marginTop: '10px', borderRadius: '6px',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+              fontSize: '12px', color: '#dc2626',
             },
-          },
-            React.createElement('div', {
-              style: {
-                fontSize: '13px',
-                fontWeight: 600,
-                color: 'var(--color-text-error, #dc2626)',
-                marginBottom: '4px',
-              },
-            }, 'Sync Failed'),
-            React.createElement('div', {
-              style: {
-                fontSize: '12px',
-                color: 'var(--color-text-error, #dc2626)',
-              },
-            }, wpeSyncError),
-          )
+          }, `Sync error: ${wpeSyncError}`)
         : null,
     );
   }

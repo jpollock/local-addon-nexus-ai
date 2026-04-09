@@ -12,6 +12,21 @@ Manage your entire WP Engine hosting infrastructure directly from Local.
 
 The WPE Management panel provides **unified control** over WP Engine accounts, sites, and environments without leaving Local.
 
+## How WPE Sync Works
+
+Nexus AI uses a **two-tier sync model** to keep WP Engine site data up to date without blocking Local's startup.
+
+| Tier | When | Duration | What it fetches |
+|------|------|----------|-----------------|
+| **Tier 1 — CAPI sync** | Every startup (automatic) | ~2–3 seconds | PHP versions, account info, detects new installs and ghost installs |
+| **Tier 2 — SSH sync** | Scheduled (configurable) | Seconds to minutes depending on fleet size | WordPress versions, installed plugins, user lists |
+
+**On startup**, Nexus AI automatically runs the fast CAPI sync to detect any new installs added to your WP Engine account and refresh PHP/account data. This is lightweight and runs in the background.
+
+**The SSH sync** runs on the configured schedule (or manually via the Operations panel). It fetches deeper data — WP core versions, plugins, users — that requires an SSH connection to each install.
+
+The Operations panel (under WPE Management) shows the current sync status, lets you stop a running sync, and allows triggering a sync for a single install without waiting for the next scheduled run.
+
 ```mermaid
 graph TB
     A[Local Site] <-->|Pull/Push| B[WPE Staging]

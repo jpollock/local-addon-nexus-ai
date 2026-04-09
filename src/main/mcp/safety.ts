@@ -32,6 +32,8 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   wpe_get_install_usage: 1,
   wpe_get_account_usage: 1,
   wpe_portfolio_usage: 1,
+  wpe_fleet_versions: 1,
+  wpe_detect_drift: 1,
   wpe_login: 1,
   wpe_logout: 2,
   wpe_get_accounts: 1,

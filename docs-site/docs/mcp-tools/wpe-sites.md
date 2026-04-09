@@ -327,11 +327,127 @@ Remove a domain from a WP Engine install.
 
 ---
 
+## Fleet Intelligence
+
+### `wpe_portfolio_usage`
+
+Get fleet-wide traffic, bandwidth, and storage across all installs in all accessible WP Engine accounts. Makes one CAPI call per account and returns aggregated per-install metrics — useful for identifying the heaviest or most expensive sites in a portfolio.
+
+**Tier:** 1
+
+**Parameters:**
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `min_visits_per_day` | number (optional) | Only return installs averaging at least this many visits per day | — |
+
+**Example:**
+
+```json
+// wpe_portfolio_usage({ min_visits_per_day: 1000 })
+{
+  "period": "2026-03",
+  "installs": [
+    {
+      "install_id": "hightraffic-production",
+      "account_id": "my-agency",
+      "bandwidth_gb": 48.2,
+      "storage_gb": 3.1,
+      "visitors": 91400,
+      "visits_per_day": 2948
+    }
+  ],
+  "total_installs": 1,
+  "accounts_queried": 2
+}
+```
+
+**When to use:** Ask "which of my WPE sites is using the most bandwidth?" or "show me all high-traffic production installs."
+
+---
+
+### `wpe_fleet_versions`
+
+Return WordPress and PHP version information for all indexed WP Engine installs, sourced entirely from the local site graph. Makes **zero API calls** — data comes from the most recent SSH sync.
+
+**Tier:** 1
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `install_names` | string[] (optional) | Filter to specific install names |
+| `min_wp_version` | string (optional) | Only return installs running at least this WP version (e.g. `"6.5"`) |
+
+**Example:**
+
+```json
+// wpe_fleet_versions({ min_wp_version: "6.6" })
+{
+  "installs": [
+    {
+      "install_name": "mysite-production",
+      "wp_version": "6.7.2",
+      "php_version": "8.3",
+      "last_synced": "2026-03-30T14:22:00Z"
+    }
+  ],
+  "total": 1,
+  "data_source": "local_graph"
+}
+```
+
+**When to use:** "What WP versions are my production sites running?" or "which installs are still on PHP 8.1?"
+
+---
+
+### `wpe_detect_drift`
+
+Compare local development sites against their linked WP Engine production installs to identify version mismatches and plugin differences. Surfaces cases where local and production have diverged.
+
+**Tier:** 1
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `site` | string (optional) | Limit comparison to a specific local site name |
+| `plugins_only` | boolean (optional) | When `true`, skip WP/PHP version comparison and only report plugin diffs |
+
+**What it compares:**
+
+- WordPress core version (local vs. WPE production)
+- PHP version (local vs. WPE production)
+- Active plugin list and versions (added, removed, version changed)
+
+**Example:**
+
+```json
+// wpe_detect_drift({ site: "mysite" })
+{
+  "site": "mysite",
+  "wpe_install": "mysite-production",
+  "drift": {
+    "wp_version": { "local": "6.7.2", "production": "6.6.1", "status": "local_ahead" },
+    "php_version": { "local": "8.3", "production": "8.2", "status": "mismatch" },
+    "plugins": [
+      { "plugin": "woocommerce", "local": "9.4.0", "production": "9.3.3", "status": "local_ahead" },
+      { "plugin": "yoast-seo", "local": null, "production": "21.9", "status": "missing_local" }
+    ]
+  },
+  "has_drift": true
+}
+```
+
+**When to use:** Before pushing local changes to staging, or to audit how far local dev has diverged from production.
+
+---
+
 ## Tool Tiers
 
 | Tier | Risk level | Examples |
 |------|-----------|---------|
-| 1 | Read-only | `wpe_status`, `wpe_get_installs`, `wpe_get_install_usage` |
+| 1 | Read-only | `wpe_status`, `wpe_get_installs`, `wpe_get_install_usage`, `wpe_portfolio_usage`, `wpe_fleet_versions`, `wpe_detect_drift` |
 | 2 | Reversible writes | `wpe_login`, `wpe_logout`, `wpe_create_backup`, `wpe_purge_cache` |
 | 3 | Irreversible / destructive | `wpe_promote_to_production`, `wpe_copy_install`, `wpe_delete_domain` |
 

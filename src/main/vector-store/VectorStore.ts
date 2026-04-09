@@ -1,4 +1,5 @@
 import * as lancedb from '@lancedb/lancedb';
+import { Index } from '@lancedb/lancedb';
 import * as path from 'path';
 import * as fs from 'fs';
 import { SITE_TABLE_PREFIX, VECTOR_DIMENSIONS } from '../../common/constants';
@@ -62,6 +63,16 @@ export class VectorStore {
     // Insert new records
     const records = documents.map(toRecord);
     await table.add(records);
+
+    // Create/update FTS index on content field for hybrid search
+    try {
+      await table.createIndex('content', {
+        config: Index.fts({ withPosition: false }),
+        replace: true,
+      });
+    } catch {
+      // FTS index creation is best-effort — vector search still works without it
+    }
   }
 
   /**
@@ -144,6 +155,152 @@ export class VectorStore {
     return Array.from(bestByPost.values())
       .sort((a, b) => b.score - a.score)
       .slice(0, options.limit);
+  }
+
+  /**
+   * Hybrid search across multiple sites — vector similarity + FTS keyword boost.
+   * Calls tableNames() once to avoid filesystem lock contention.
+   *
+   * Scoring:
+   * - Vector search: cosine similarity score (0-1). Primary signal.
+   * - FTS keyword search: exact word match. Results included even if below
+   *   vector threshold, displayed with a fixed 0.45 "keyword match" score.
+   * - Results in both: cosine score boosted by 0.1.
+   *
+   * Excluded post types are filtered from results.
+   */
+  async searchAcrossSites(
+    siteIds: string[],
+    queryVector: Float32Array | number[],
+    options: SearchOptions & { queryText?: string; excludedTypes?: string[] },
+    concurrency = 5,
+  ): Promise<Map<string, SearchResult[]>> {
+    const db = this.getDb();
+    const existingNames = new Set(await db.tableNames());
+    const searchable = siteIds.filter((id) => existingNames.has(this.tableName(id)));
+
+    const results = new Map<string, SearchResult[]>();
+    const vecArray = Array.from(queryVector);
+    const limit = options.limit ?? 3;
+    const vectorFloor = options.relevanceFloor ?? 0.35;
+    const excludedTypes = new Set(options.excludedTypes ?? []);
+
+    for (let i = 0; i < searchable.length; i += concurrency) {
+      const batch = searchable.slice(i, i + concurrency);
+      await Promise.all(batch.map(async (siteId) => {
+        try {
+          const table = await db.openTable(this.tableName(siteId));
+
+          // Vector search — primary signal, cosine similarity score
+          let vecQuery = table.vectorSearch(vecArray).distanceType('cosine').limit(limit * 4);
+          if (options.postType) vecQuery = vecQuery.where(`\`postType\` = '${options.postType}'`);
+          const vecRaw = await vecQuery.toArray();
+
+          type Row = { id: string; title: string; content: string; postType: string; postId: number; metadata: string; score: number };
+          const vecMap = new Map<string, Row>();
+          for (const row of vecRaw as Record<string, unknown>[]) {
+            const score = 1 - ((row._distance as number) ?? 0);
+            if (score >= vectorFloor && !excludedTypes.has(row.postType as string)) {
+              vecMap.set(row.id as string, {
+                id: row.id as string, title: row.title as string,
+                content: row.content as string, postType: row.postType as string,
+                postId: row.postId as number, metadata: row.metadata as string, score,
+              });
+            }
+          }
+
+          // FTS keyword search — catches exact terms vector misses (e.g. 'cornstarch')
+          const ftsIds = new Set<string>();
+          const ftsExtra = new Map<string, Row>();
+          if (options.queryText) {
+            try {
+              const ftsRaw = await table.query()
+                .fullTextSearch(options.queryText, { columns: ['content', 'title'] })
+                .limit(limit * 2)
+                .toArray();
+              for (const row of ftsRaw as Record<string, unknown>[]) {
+                if (excludedTypes.has(row.postType as string)) continue;
+                ftsIds.add(row.id as string);
+                if (!vecMap.has(row.id as string)) {
+                  // FTS-only result: include with a keyword-match score
+                  ftsExtra.set(row.id as string, {
+                    id: row.id as string, title: row.title as string,
+                    content: row.content as string, postType: row.postType as string,
+                    postId: row.postId as number, metadata: row.metadata as string,
+                    score: 0.45, // fixed "keyword match" score
+                  });
+                }
+              }
+            } catch { /* FTS index not built yet — vector only */ }
+          }
+
+          // Boost vector results that also appear in FTS
+          for (const [id, row] of vecMap) {
+            if (ftsIds.has(id)) row.score = Math.min(1.0, row.score + 0.1);
+          }
+
+          // Merge vector + FTS-only results
+          const allRows = [...vecMap.values(), ...ftsExtra.values()];
+
+          // Deduplicate by postId, keep highest score per post
+          const bestByPost = new Map<number, Row>();
+          for (const row of allRows) {
+            const existing = bestByPost.get(row.postId);
+            if (!existing || row.score > existing.score) bestByPost.set(row.postId, row);
+          }
+
+          const hits = Array.from(bestByPost.values())
+            .sort((a, b) => b.score - a.score)
+            .slice(0, limit);
+
+          if (hits.length > 0) results.set(siteId, hits);
+        } catch { /* site not indexed */ }
+      }));
+    }
+
+    return results;
+  }
+
+  /**
+   * Remove documents of excluded post types from all vector tables.
+   * Returns { tablesScanned, docsRemoved }.
+   */
+  async cleanupExcludedTypes(
+    excludedTypes: string[],
+    onProgress?: (current: number, total: number, tableName: string) => void,
+  ): Promise<{ tablesScanned: number; docsRemoved: number }> {
+    const db = this.getDb();
+    const tables = await db.tableNames();
+    let docsRemoved = 0;
+
+    const typeList = excludedTypes.map((t) => `'${t}'`).join(', ');
+    const whereClause = `postType IN (${typeList})`;
+
+    for (let i = 0; i < tables.length; i++) {
+      const name = tables[i];
+      onProgress?.(i + 1, tables.length, name);
+      try {
+        const table = await db.openTable(name);
+        // Count before to know if anything was removed
+        const before = (await table.query().select(['postType']).where(whereClause).limit(10000).toArray()).length;
+        if (before > 0) {
+          await table.delete(whereClause);
+          docsRemoved += before;
+        }
+      } catch { /* table may be empty or schema mismatch */ }
+    }
+
+    return { tablesScanned: tables.length, docsRemoved };
+  }
+
+  /** Drop ALL lance tables (full reset). Returns count of tables dropped. */
+  async dropAllTables(): Promise<number> {
+    const db = this.getDb();
+    const tables = await db.tableNames();
+    for (const name of tables) {
+      try { await db.dropTable(name); } catch { /* ignore */ }
+    }
+    return tables.length;
   }
 
   async delete(siteId: string, documentIds: string[]): Promise<void> {

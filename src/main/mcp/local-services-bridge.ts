@@ -131,7 +131,7 @@ export interface LocalServicesBridge {
   resolveSiteObject(siteId: string): unknown;
 
   // Remote WP-CLI (via SSH to WP Engine)
-  remoteWpCliRun(installName: string, args: string[]): Promise<WpCliResult>;
+  remoteWpCliRun(installName: string, args: string[], opts?: { skipPlugins?: boolean }): Promise<WpCliResult>;
   resolveWpeInstall(siteId: string): Promise<WpeInstallInfo | null>;
   isSSHKeyAvailable(): boolean;
 
@@ -576,7 +576,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     // --- Remote WP-CLI (via SSH to WP Engine) ---
 
-    async remoteWpCliRun(installName: string, args: string[]): Promise<WpCliResult> {
+    async remoteWpCliRun(installName: string, args: string[], opts?: { skipPlugins?: boolean }): Promise<WpCliResult> {
       // Shell-escape each argument to prevent command injection
       const escapeShellArg = (arg: string): string => {
         // Replace single quotes with '\'' (close quote, escaped quote, open quote)
@@ -584,9 +584,11 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         return `'${arg.replace(/'/g, "'\\''")}'`;
       };
 
-      // Build WP-CLI command with individually escaped arguments
+      // Build WP-CLI command — skip plugins/themes by default for speed/safety,
+      // but allow content extraction to load plugins (needed for custom post types)
+      const skipFlags = opts?.skipPlugins === false ? '' : '--skip-plugins --skip-themes';
       const escapedArgs = args.map(escapeShellArg);
-      const wpCommand = `wp --skip-plugins --skip-themes ${escapedArgs.join(' ')}`;
+      const wpCommand = `wp ${skipFlags} ${escapedArgs.join(' ')}`.trim();
 
       // SSH key path: {userDataPath}/ssh/wpe-connect
       const userDataPath = (process as any).electronPaths?.userDataPath
@@ -606,7 +608,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         // ControlMaster: reuse SSH connections to reduce overhead
         '-o', 'ControlMaster=auto',
         '-o', 'ControlPath=/tmp/ssh-nexus-%C',
-        '-o', 'ControlPersist=10m',
+        '-o', 'ControlPersist=30s',
         '-i', sshKeyPath,
         `${username}@${host}`,
         wpCommand,
@@ -618,7 +620,11 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
         const proc = spawn('ssh', sshArgs, {
           stdio: ['ignore', 'pipe', 'pipe'],
-          timeout: 60000,
+          // 35s: WPE SSH cold-start variance is 13-30s depending on server load,
+          // DB size, and PHP process warmth. Subsequent calls via ControlMaster
+          // complete in 1-3s. Truly unreachable sites fail immediately with DNS
+          // error regardless of timeout.
+          timeout: 35000,
         });
 
         proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });

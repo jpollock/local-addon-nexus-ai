@@ -17,6 +17,37 @@ export function requireLocalServices(services: NexusServices): boolean {
 }
 
 /**
+ * Returns a stale-data warning string if the WPE sync is older than the
+ * configured threshold, or empty string if fresh. Appends to tool responses.
+ */
+export async function staleSyncWarning(services: NexusServices): Promise<string> {
+  try {
+    const graphService = (services as any).graphService;
+    if (!graphService?.getDb) return '';
+    const db = graphService.getDb();
+    if (!db) return '';
+
+    // Use MAX(last_sync_at) — when the most recent sync ran, not the oldest record
+    const row = db.prepare('SELECT MAX(last_sync_at) as latest FROM sites WHERE source = ?').get('wpe') as { latest: number | null } | undefined;
+    if (!row?.latest) return '';
+
+    const registryStorage = (services as any).registryStorage;
+    const settings = registryStorage?.get?.('nexus_settings') as { wpeSyncIntervalHours?: number } | null;
+    const thresholdHours = settings?.wpeSyncIntervalHours ?? 8;
+
+    const ageMs = Date.now() - row.latest;
+    const ageHours = Math.round(ageMs / 3600000);
+
+    if (ageMs > thresholdHours * 3600000) {
+      return `\n\n> ⚠️ WPE sync data is ${ageHours}h old (threshold: ${thresholdHours}h). Run \`wpe_sync_sites\` or wait for the next auto-sync for fresh data.`;
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Handles errors from Local's CAPI client.
  * ResponseError with status 401/403 means the OAuth token has expired —
  * return an actionable message so the agent knows to call wpe_login.

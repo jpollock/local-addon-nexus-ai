@@ -4,7 +4,7 @@
  * All Electron IPC handlers for the Nexus AI addon, extracted from index.ts
  * to keep the main entry point focused on initialization.
  */
-import { IPC_CHANNELS, STORAGE_KEYS } from '../common/constants';
+import { IPC_CHANNELS, STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../common/constants';
 import type { NexusSettings } from '../common/types';
 import type { IndexRegistry, RegistryStorage } from './content/IndexRegistry';
 import type { ContentPipeline } from './content/ContentPipeline';
@@ -1962,21 +1962,15 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           const allSearchableSiteIds = [...localSiteIds, ...wpeSiteIds];
           localLogger.info(`[NexusAI] Searching ${localSiteIds.length} local + ${wpeSiteIds.length} WPE sites for content`);
 
-          for (const siteId of allSearchableSiteIds) {
-            try {
-              const results = await vectorStore.search(siteId, queryVector, {
-                limit: 5, // Top 5 results per site
-                relevanceFloor: 0.5, // Only return good matches
-              });
-
-              // If site has matching content, add it to the set
-              if (results.length > 0) {
-                contentMatchingSiteIds.add(siteId);
-                localLogger.info('[NexusAI] Site', siteId, 'has', results.length, 'matching content (top score:', results[0].score.toFixed(3), ')');
-              }
-            } catch (err) {
-              // Site not indexed or search failed - skip it
-            }
+          // Hybrid search: vector + FTS keyword boost, single tableNames() call
+          const matchMap = await vectorStore.searchAcrossSites(
+            allSearchableSiteIds,
+            queryVector,
+            { limit: 3, relevanceFloor: 0.35, queryText: validated.contentQuery, excludedTypes: EXCLUDED_POST_TYPES },
+            5,
+          );
+          for (const siteId of matchMap.keys()) {
+            contentMatchingSiteIds!.add(siteId);
           }
 
           localLogger.info('[NexusAI] Content search found', contentMatchingSiteIds.size, 'sites with matching content');
@@ -2458,9 +2452,11 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       const validated = validateInput(WpeSyncAllSchema, options);
 
       const limit = validated?.limit;
-      localLogger.info(`[NexusAI] Starting WPE site sync${limit ? ` (limit: ${limit})` : ''}...`);
-      const result = await deps.wpeSyncService.syncAllWPESites(limit);
-      localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.failed} failed`);
+      // Manual sync always force-refreshes all installs (staleThresholdHours=0)
+      // Incremental staleness is only for scheduled/auto syncs
+      localLogger.info(`[NexusAI] Starting WPE site sync (force)${limit ? ` (limit: ${limit})` : ''}...`);
+      const result = await deps.wpeSyncService.syncAllWPESites(limit, 0);
+      localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed`);
 
       // Audit log success
       auditLogger.logSuccess(
@@ -2499,6 +2495,144 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     try {
       const progress = deps.wpeSyncService.getProgress();
       return { success: true, progress };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.WPE_DIAGNOSE, async (_event: any, params: { installName: string; args: string[] }) => {
+    const { installName, args } = params;
+    if (!installName || !args?.length) return { success: false, error: 'installName and args required' };
+    const start = Date.now();
+    try {
+      const result = await localServicesBridge.remoteWpCliRun(installName, args);
+      return { success: result.success, stdout: result.stdout, durationMs: Date.now() - start };
+    } catch (err: any) {
+      return { success: false, error: err.message, durationMs: Date.now() - start };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.RESET_AND_REFRESH, async () => {
+    try {
+      localLogger.info('[NexusAI] Starting reset and refresh...');
+
+      // 1. Clear graph data tables (preserve schema and event_queue)
+      const db = graphService.getDb();
+      if (db) {
+        db.exec(`
+          DELETE FROM content;
+          DELETE FROM plugins;
+          DELETE FROM users;
+          DELETE FROM relationships;
+          DELETE FROM themes;
+          DELETE FROM wpe_accounts;
+          DELETE FROM sites;
+        `);
+        localLogger.info('[NexusAI] Graph DB cleared');
+      }
+
+      // 2. Drop all vector store lance tables
+      const droppedTables = await vectorStore.dropAllTables();
+      localLogger.info(`[NexusAI] Dropped ${droppedTables} vector tables`);
+
+      // 3. Tier 1: CAPI sync (accounts + all installs, fast)
+      let capiResult = { accounts: 0, total: 0, newInstalls: [] as string[] };
+      if (deps.wpeSyncService && localServicesBridge.isCAPIAvailable()) {
+        capiResult = await deps.wpeSyncService.syncFromCAPI();
+        localLogger.info(`[NexusAI] CAPI sync: ${capiResult.total} installs, ${capiResult.accounts} accounts`);
+      }
+
+      // 4. Tier 2: Full SSH sync (force all, staleThresholdHours=0)
+      let syncResult = { synced: 0, skipped: 0, failed: 0 };
+      if (deps.wpeSyncService && localServicesBridge.isCAPIAvailable()) {
+        localLogger.info('[NexusAI] Starting full SSH sync...');
+        syncResult = await deps.wpeSyncService.syncAllWPESites(undefined, 0);
+        localLogger.info(`[NexusAI] SSH sync: ${syncResult.synced} synced, ${syncResult.failed} failed`);
+      }
+
+      return {
+        success: true,
+        graphCleared: true,
+        vectorTablesDropped: droppedTables,
+        capiInstalls: capiResult.total,
+        sshSynced: syncResult.synced,
+        sshFailed: syncResult.failed,
+      };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] Reset and refresh failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.WPE_CAPI_SYNC, async () => {
+    if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
+    try {
+      const result = await deps.wpeSyncService.syncFromCAPI();
+      return { success: true, ...result };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES, async () => {
+    try {
+      // Clean vector store
+      const vecResult = await vectorStore.cleanupExcludedTypes(EXCLUDED_POST_TYPES);
+
+      // Clean graph DB content table
+      const db = graphService.getDb();
+      let graphRemoved = 0;
+      if (db) {
+        const placeholders = EXCLUDED_POST_TYPES.map(() => '?').join(',');
+        const result = db.prepare(
+          `DELETE FROM content WHERE post_type IN (${placeholders})`
+        ).run(...EXCLUDED_POST_TYPES);
+        graphRemoved = result.changes;
+      }
+
+      localLogger.info(
+        `[NexusAI] Cleanup: removed ${vecResult.docsRemoved} vector docs + ${graphRemoved} graph content rows for excluded types`
+      );
+
+      return { success: true, vectorDocsRemoved: vecResult.docsRemoved, graphRowsRemoved: graphRemoved, tablesScanned: vecResult.tablesScanned };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.WPE_SYNC_STOP, () => {
+    if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
+    deps.wpeSyncService.stopSync();
+    return { success: true };
+  });
+
+  /**
+   * Get WPE sync summary stats from graph DB for dashboard display
+   */
+  safeHandle(IPC_CHANNELS.WPE_SYNC_STATS, async () => {
+    try {
+      const db = graphService.getDb();
+      if (!db) return { success: true, stats: null };
+
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncIntervalHours?: number } | null;
+      const thresholdHours = settings?.wpeSyncIntervalHours ?? 8;
+      const cutoff = Date.now() - thresholdHours * 60 * 60 * 1000;
+
+      const row = db.prepare(`
+        SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN wp_version IS NOT NULL THEN 1 ELSE 0 END) as has_wp_version,
+          SUM(CASE WHEN php_version IS NOT NULL THEN 1 ELSE 0 END) as has_php_version,
+          MAX(last_sync_at) as last_sync_at,
+          SUM(CASE WHEN last_sync_at >= ? THEN 1 ELSE 0 END) as fresh_count,
+          SUM(CASE WHEN last_sync_at IS NULL OR last_sync_at < ? THEN 1 ELSE 0 END) as stale_count
+        FROM sites WHERE source = 'wpe'
+      `).get(cutoff, cutoff) as {
+        total: number; has_wp_version: number; has_php_version: number;
+        last_sync_at: number | null; fresh_count: number; stale_count: number;
+      } | undefined;
+
+      return { success: true, stats: row ?? null, thresholdHours };
     } catch (err) {
       return { success: false, error: (err as Error).message };
     }
@@ -2594,7 +2728,23 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     try {
       // Validate input
       const validated = validateInput(WpeSyncSingleSchema, params);
-      const installId = validated.installId;
+      let installId = validated.installId;
+
+      // If looks like a name (not a UUID), resolve to UUID via graph
+      const isUuid = /^[0-9a-f-]{36}$/i.test(installId);
+      if (!isUuid) {
+        const db = graphService.getDb();
+        if (db) {
+          const row = db.prepare(
+            "SELECT remote_install_id FROM sites WHERE source='wpe' AND name=? LIMIT 1"
+          ).get(installId) as { remote_install_id: string } | undefined;
+          if (row?.remote_install_id) {
+            installId = row.remote_install_id;
+          } else {
+            return { success: false, error: `Install "${installId}" not found in graph. Run Sync All first.` };
+          }
+        }
+      }
 
       await deps.wpeSyncService.syncSingleSite(installId);
 
@@ -2737,6 +2887,14 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
         );
 
         localLogger.info(`[WpeAutoPull] SUCCESS: ${result.message}`);
+
+        // Re-sync this install's metadata so the graph reflects post-pull state
+        if (deps.wpeSyncService) {
+          deps.wpeSyncService.syncSingleSite(validated.installId).catch((err: Error) => {
+            localLogger.warn('[NexusAI] Post-pull sync failed (non-fatal):', err.message);
+          });
+        }
+
         return {
           success: true,
           siteId: result.siteId,

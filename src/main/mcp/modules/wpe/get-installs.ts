@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { ok, capiError, requireCAPI } from './helpers';
+import { ok, capiError, requireCAPI, staleSyncWarning } from './helpers';
 
 export const getInstallsHandler: McpToolHandler = {
   definition: {
@@ -23,7 +23,8 @@ export const getInstallsHandler: McpToolHandler = {
       for (const i of installs) {
         lines.push(`- **${i.name}** (ID: ${i.id}, env: ${i.environment ?? 'unknown'})`);
       }
-      return ok(lines.join('\n'));
+      const warning = await staleSyncWarning(services);
+      return ok(lines.join('\n') + warning);
     } catch (err: any) {
       return capiError(err);
     }
