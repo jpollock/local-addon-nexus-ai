@@ -398,95 +398,7 @@ describe('find_sites_with_theme', () => {
 });
 
 // ---------------------------------------------------------------------------
-// find_outdated_sites tests
-// ---------------------------------------------------------------------------
-
-describe('find_outdated_sites', () => {
-  test('identifies older WordPress versions', async () => {
-    const { services, registry } = setupThreeSites();
-    const result = await registry.call('find_outdated_sites', { component: 'wordpress' }, services);
-    const text = getText(result);
-
-    expect(text).toContain('Latest: 6.9.1');
-    expect(text).toContain('Outdated: 6.8.0');
-    expect(text).toContain('Dev Store');
-  });
-
-  test('identifies PHP version differences', async () => {
-    const { services, registry } = setupThreeSites();
-    const result = await registry.call('find_outdated_sites', { component: 'php' }, services);
-    const text = getText(result);
-
-    expect(text).toContain('Latest: 8.2');
-    expect(text).toContain('Outdated: 8.1');
-  });
-
-  test('identifies plugin version mismatches', async () => {
-    const { services, registry } = setupThreeSites();
-    const result = await registry.call('find_outdated_sites', { component: 'plugins' }, services);
-    const text = getText(result);
-
-    expect(text).toContain('woocommerce');
-    expect(text).toContain('10.0.4');
-    expect(text).toContain('9.8.2');
-  });
-
-  test('checks all components by default', async () => {
-    const { services, registry } = setupThreeSites();
-    const result = await registry.call('find_outdated_sites', {}, services);
-    const text = getText(result);
-
-    expect(text).toContain('WordPress');
-    expect(text).toContain('PHP');
-    expect(text).toContain('Plugin Version Mismatches');
-  });
-
-  test('handles single indexed site', async () => {
-    const siteData = createSiteData({
-      's1': { id: 's1', name: 'Solo', path: '/s1' },
-    });
-    const indexRegistry = new IndexRegistry(createStorage());
-    indexRegistry.update('s1', {
-      siteName: 'Solo', state: 'indexed', documentCount: 10, chunkCount: 10,
-      structure: makeStructure({ plugins: [woo] }),
-    });
-    const services = buildServices(indexRegistry, siteData);
-    const registry = new ToolRegistry();
-    registerFleetTools(registry);
-
-    const result = await registry.call('find_outdated_sites', {}, services);
-    const text = getText(result);
-
-    expect(text).toContain('Only one indexed site');
-  });
-
-  test('reports no mismatches when all plugins match', async () => {
-    const siteData = createSiteData({
-      's1': { id: 's1', name: 'Site A', path: '/a' },
-      's2': { id: 's2', name: 'Site B', path: '/b' },
-    });
-    const indexRegistry = new IndexRegistry(createStorage());
-    const sharedStructure = makeStructure({ plugins: [woo, acf] });
-    indexRegistry.update('s1', {
-      siteName: 'Site A', state: 'indexed', documentCount: 10, chunkCount: 10,
-      structure: sharedStructure,
-    });
-    indexRegistry.update('s2', {
-      siteName: 'Site B', state: 'indexed', documentCount: 10, chunkCount: 10,
-      structure: sharedStructure,
-    });
-    const services = buildServices(indexRegistry, siteData);
-    const registry = new ToolRegistry();
-    registerFleetTools(registry);
-
-    const result = await registry.call('find_outdated_sites', { component: 'plugins' }, services);
-    const text = getText(result);
-
-    expect(text).toContain('No plugin version mismatches');
-  });
-});
-
-// ---------------------------------------------------------------------------
+// compare_sites// ---------------------------------------------------------------------------
 // compare_sites tests
 // ---------------------------------------------------------------------------
 
@@ -810,16 +722,4 @@ describe('edge cases', () => {
     expect(text).toContain('No indexed sites with structure data');
   });
 
-  test('find_outdated_sites handles no indexed sites', async () => {
-    const siteData = createSiteData({});
-    const indexRegistry = new IndexRegistry(createStorage());
-    const services = buildServices(indexRegistry, siteData);
-    const registry = new ToolRegistry();
-    registerFleetTools(registry);
-
-    const result = await registry.call('find_outdated_sites', {}, services);
-    const text = getText(result);
-
-    expect(text).toContain('No indexed sites with structure data');
-  });
 });
