@@ -2512,6 +2512,58 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  safeHandle(IPC_CHANNELS.RESET_AND_REFRESH, async () => {
+    try {
+      localLogger.info('[NexusAI] Starting reset and refresh...');
+
+      // 1. Clear graph data tables (preserve schema and event_queue)
+      const db = graphService.getDb();
+      if (db) {
+        db.exec(`
+          DELETE FROM content;
+          DELETE FROM plugins;
+          DELETE FROM users;
+          DELETE FROM relationships;
+          DELETE FROM themes;
+          DELETE FROM wpe_accounts;
+          DELETE FROM sites;
+        `);
+        localLogger.info('[NexusAI] Graph DB cleared');
+      }
+
+      // 2. Drop all vector store lance tables
+      const droppedTables = await vectorStore.dropAllTables();
+      localLogger.info(`[NexusAI] Dropped ${droppedTables} vector tables`);
+
+      // 3. Tier 1: CAPI sync (accounts + all installs, fast)
+      let capiResult = { accounts: 0, total: 0, newInstalls: [] as string[] };
+      if (deps.wpeSyncService && localServicesBridge.isCAPIAvailable()) {
+        capiResult = await deps.wpeSyncService.syncFromCAPI();
+        localLogger.info(`[NexusAI] CAPI sync: ${capiResult.total} installs, ${capiResult.accounts} accounts`);
+      }
+
+      // 4. Tier 2: Full SSH sync (force all, staleThresholdHours=0)
+      let syncResult = { synced: 0, skipped: 0, failed: 0 };
+      if (deps.wpeSyncService && localServicesBridge.isCAPIAvailable()) {
+        localLogger.info('[NexusAI] Starting full SSH sync...');
+        syncResult = await deps.wpeSyncService.syncAllWPESites(undefined, 0);
+        localLogger.info(`[NexusAI] SSH sync: ${syncResult.synced} synced, ${syncResult.failed} failed`);
+      }
+
+      return {
+        success: true,
+        graphCleared: true,
+        vectorTablesDropped: droppedTables,
+        capiInstalls: capiResult.total,
+        sshSynced: syncResult.synced,
+        sshFailed: syncResult.failed,
+      };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] Reset and refresh failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.WPE_CAPI_SYNC, async () => {
     if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
     try {

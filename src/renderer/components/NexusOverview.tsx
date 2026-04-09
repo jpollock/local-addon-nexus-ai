@@ -1345,22 +1345,50 @@ renderTabBar(): React.ReactNode {
 
   renderContentMaintenance(): React.ReactNode {
     const sub: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub)' };
+    const dangerBtn: React.CSSProperties = {
+      padding: '7px 14px', borderRadius: '5px', border: '1px solid #ef4444', fontSize: '12px',
+      fontWeight: 600, cursor: 'pointer', backgroundColor: 'transparent', color: '#ef4444',
+    };
+    const grayBtn: React.CSSProperties = {
+      padding: '7px 14px', borderRadius: '5px', border: 'none', fontSize: '12px',
+      fontWeight: 600, cursor: 'pointer', backgroundColor: '#6b7280', color: '#fff',
+    };
+
     return React.createElement('div', { style: { marginBottom: '24px' } },
-      React.createElement('div', { style: { ...sub, marginBottom: '10px' } },
-        'Remove stale content (wp_block, acf-field, acf-field-group, attachment, etc.) from the vector store and graph.',
+      React.createElement('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap' as const } },
+
+        React.createElement('button', {
+          style: grayBtn,
+          onClick: async () => {
+            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES);
+            if (result.success) {
+              (window as any).showToast?.(`Cleanup: ${result.vectorDocsRemoved} vector docs + ${result.graphRowsRemoved} graph rows removed`, 'success');
+            }
+          },
+        }, 'Remove Excluded Types'),
+
+        React.createElement('button', {
+          style: dangerBtn,
+          onClick: async () => {
+            if (!(window as any).confirm?.('This will clear all graph and vector data then run a full sync. Continue?')) return;
+            (window as any).showToast?.('Resetting data — full sync starting, this will take a while...', 'info');
+            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.RESET_AND_REFRESH);
+            if (result.success) {
+              (window as any).showToast?.(
+                `Reset complete: ${result.capiInstalls} CAPI installs, ${result.sshSynced} SSH synced, ${result.vectorTablesDropped} vector tables cleared`,
+                'success',
+              );
+              await this.fetchAll();
+            } else {
+              (window as any).showToast?.(`Reset failed: ${result.error}`, 'error');
+            }
+          },
+        }, 'Reset & Refresh All Data'),
       ),
-      React.createElement('button', {
-        style: {
-          padding: '7px 14px', borderRadius: '5px', border: 'none', fontSize: '12px',
-          fontWeight: 600, cursor: 'pointer', backgroundColor: '#6b7280', color: '#fff',
-        },
-        onClick: async () => {
-          const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES);
-          if (result.success) {
-            (window as any).showToast?.(`Cleanup done: ${result.vectorDocsRemoved} vector docs + ${result.graphRowsRemoved} graph rows removed`, 'success');
-          }
-        },
-      }, 'Remove Excluded Post Types'),
+
+      React.createElement('div', { style: { ...sub, marginTop: '8px' } },
+        'Reset: clears graph + vector store, then runs full CAPI + SSH sync. Takes ~30 min for full fleet.',
+      ),
     );
   }
 

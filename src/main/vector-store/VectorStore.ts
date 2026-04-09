@@ -293,6 +293,16 @@ export class VectorStore {
     return { tablesScanned: tables.length, docsRemoved };
   }
 
+  /** Drop ALL lance tables (full reset). Returns count of tables dropped. */
+  async dropAllTables(): Promise<number> {
+    const db = this.getDb();
+    const tables = await db.tableNames();
+    for (const name of tables) {
+      try { await db.dropTable(name); } catch { /* ignore */ }
+    }
+    return tables.length;
+  }
+
   async delete(siteId: string, documentIds: string[]): Promise<void> {
     const db = this.getDb();
     const name = this.tableName(siteId);
