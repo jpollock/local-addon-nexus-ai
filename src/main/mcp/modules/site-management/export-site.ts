@@ -21,7 +21,12 @@ export const exportSiteHandler: McpToolHandler = {
     const site = resolveSite(args.site as string, services.siteData);
     if (!site) return error(`Site "${args.site}" not found.`);
 
-    const outputPath = (args.output_path as string) || require('os').homedir() + '/Downloads';
+    // outputPath must be a file path, not a directory.
+    // Construct full path: directory + site name + .zip
+    const outputDir = (args.output_path as string) || require('os').homedir() + '/Downloads';
+    const path = require('path');
+    const outputPath = path.join(outputDir, `${site.name}.zip`);
+
     const exportPath = await services.localServices!.exportSite(site.id, outputPath);
 
     return ok(`Site "${site.name}" exported to: ${exportPath}`);

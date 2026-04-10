@@ -47,13 +47,22 @@ The AI Gateway routes all AI requests through Local for centralized tracking and
 
 If you're a WP Engine customer:
 
-1. Go to **Settings → WP Engine**
-2. Add your CAPI credentials:
-   - **Username:** Your WPE portal email
-   - **Password:** Your WPE portal password
-3. **Test Connection** to verify
+**OAuth Login (for listing sites, pulling/pushing):**
+1. Open Local's Nexus AI Preferences
+2. Click **Authenticate with WP Engine** — a browser window opens
+3. Complete login and return to Local
 
-**Recommended:** Use WPE API tokens (coming soon) instead of password for better security.
+**API Credentials (required for backup creation):**
+
+WP Engine's backup endpoint requires basic auth, not OAuth. Store credentials once in Preferences:
+
+1. Go to **Nexus AI Preferences → WP Engine API Credentials**
+2. Enter your API username and password from [my.wpengine.com](https://my.wpengine.com)
+3. Click **Apply**
+
+Or via CLI: `nexus wpe set-credentials <username> <password>`
+
+**Security:** All credentials are encrypted using OS-level encryption (Keychain on macOS).
 
 ## Your First AI-Enabled Site
 

@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const createBackupHandler: McpToolHandler = {
   definition: {
     name: 'wpe_create_backup',
-    description: 'Create a backup of a WP Engine install.',
+    description: 'Create a backup of a WP Engine install. Requires WP Engine API credentials stored via wpe_set_api_credentials — the backup endpoint does not support OAuth. Get credentials from https://my.wpengine.com.',
     inputSchema: {
       type: 'object',
       properties: {

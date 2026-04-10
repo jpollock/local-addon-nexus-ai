@@ -43,7 +43,8 @@ export const pluginUpdateHandler: McpToolHandler = {
     const check = requireRunning(target.site, services);
     if (check) return check;
 
-    const result = await services.localServices!.wpCliRun(target.site.id, cliArgs);
+    // Plugin updates download from WordPress.org — allow up to 3 minutes
+    const result = await services.localServices!.wpCliRun(target.site.id, cliArgs, { timeoutMs: 180000 });
     if (!result.success) {
       return error(`Failed to update plugin "${slug}": ${result.stdout}`);
     }

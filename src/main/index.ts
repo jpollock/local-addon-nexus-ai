@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as os from 'os';
 import { IPC_CHANNELS, OLLAMA_POLL_INTERVAL_MS, STORAGE_KEYS } from '../common/constants';
+import { OperationTracker } from './operation-tracker';
 import { VectorStore } from './vector-store/VectorStore';
 import { EmbeddingService } from './embeddings/EmbeddingService';
 import { ContentPipeline } from './content/ContentPipeline';
@@ -165,6 +166,10 @@ export default function main(context: any): void {
     logger: localLogger,
   });
 
+  // Start operation tracker — intercepts Local's IPC events for push/pull/export
+  const operationTracker = new OperationTracker();
+  operationTracker.start();
+
   const nexusServices: NexusServices = {
     vectorStore,
     embeddingService,
@@ -179,6 +184,7 @@ export default function main(context: any): void {
     graphService: graphService as any,
     eventProcessor: eventProcessor as any,
     httpEventInterface: httpEventInterface as any,
+    operationTracker,
   };
 
   const registry = new ToolRegistry();

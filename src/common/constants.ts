@@ -144,6 +144,12 @@ export const IPC_CHANNELS = {
   WPE_REMOVE_SITE: `${ADDON_PREFIX}:wpe:remove-site`,
   WPE_PULL_TO_LOCAL: `${ADDON_PREFIX}:wpe:pull-to-local`,
 
+  // WPE API Credentials (for backup creation via basic auth)
+  WPE_GET_API_CREDENTIALS: `${ADDON_PREFIX}:wpe:get-api-credentials`,
+  WPE_SET_API_CREDENTIALS: `${ADDON_PREFIX}:wpe:set-api-credentials`,
+  WPE_CLEAR_API_CREDENTIALS: `${ADDON_PREFIX}:wpe:clear-api-credentials`,
+  WPE_GET_API_CREDENTIALS_STATUS: `${ADDON_PREFIX}:wpe:get-api-credentials-status`,
+
   // Database Scanner
   DB_SCAN_SITE: `${ADDON_PREFIX}:db:scan`,
   DB_GET_LAST_SCAN: `${ADDON_PREFIX}:db:get-last-scan`,

@@ -73,17 +73,37 @@ export const wpePushHandler: McpToolHandler = {
       primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
       environment = install.environment || 'production';
     } else {
-      // Use existing link
-      installName = (wpeConnection as any).remoteSiteId; // This might need adjustment
-      installId = (wpeConnection as any).remoteSiteId;
-      remoteSiteId = (wpeConnection as any).remoteSiteId;
-      primaryDomain = ''; // Will be resolved by wpePush service
+      // Resolve install from CAPI using site UUID + environment stored in hostConnections.
+      // remoteSiteId is the WPE *site* UUID — must look up the install name for SSH.
+      const wpeSiteId = (wpeConnection as any).remoteSiteId;
       environment = (wpeConnection as any).remoteSiteEnv || 'production';
+
+      const installs = (await services.localServices.capiGetInstalls()) as any[];
+      const install = installs.find(
+        (i: any) => (typeof i.site === 'object' ? i.site.id : i.site) === wpeSiteId
+          && i.environment === environment
+      );
+
+      if (!install) {
+        return error(
+          `Could not find WPE install for site ${wpeSiteId} (${environment}). ` +
+          `Try passing install_name or remote_install_id directly.`
+        );
+      }
+
+      installName = install.name;
+      installId = install.id;
+      remoteSiteId = wpeSiteId;
+      primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
     }
 
     try {
-      // Call Local's wpePush service
-      await services.localServices.wpePush.push({
+      // Register with tracker before firing (tracker also picks up Local's IPC events)
+      services.operationTracker?.register(site.id, site.name, 'push');
+
+      // Fire-and-forget: wpePush.push() is a long-running operation (1-5 min).
+      // Return immediately and let the user poll local_operation_status.
+      services.localServices.wpePush.push({
         includeSql: args.include_database === true,
         wpengineInstallName: installName,
         wpengineInstallId: installId,
@@ -92,16 +112,16 @@ export const wpePushHandler: McpToolHandler = {
         localSiteId: site.id,
         environment,
         isMagicSync: false,
-      });
+      }).catch(() => { /* errors surfaced in Local UI */ });
 
       return ok(
         JSON.stringify({
-          status: 'queued',
-          async: true,
+          status: 'in_progress',
           site: site.name,
           install: installName,
           include_database: args.include_database === true,
-          message: 'Push operation queued. Check the Local app for progress.',
+          message: `Push started from "${site.name}" to "${installName}".`,
+          next_steps: 'Poll local_operation_status every 15-30s to track progress. Operation typically takes 2-5 minutes.',
         }, null, 2),
       );
     } catch (err: any) {

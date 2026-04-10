@@ -236,11 +236,16 @@ wpeCommand
   .command('backup <target>')
   .description('Create a backup of a WPE install')
   .option('--description <text>', 'Backup description')
+  .option('--emails <addresses>', 'Comma-separated notification emails (defaults to no-reply@wpengine.com)')
   .action(async (target, options) => {
     try {
       const client = getClient({ timeout: 300000 }); // 5 min for backup
 
       console.log(`\nCreating backup for ${target}...`);
+
+      const notificationEmails = options.emails
+        ? options.emails.split(',').map((e: string) => e.trim())
+        : undefined;
 
       const result = await client.mutate<{ nexusWpeBackup: any }>(`
         mutation($input: NexusWpeBackupInput!) {
@@ -254,6 +259,7 @@ wpeCommand
         input: {
           target,
           description: options.description || null,
+          notificationEmails: notificationEmails || null,
         },
       });
 
@@ -518,6 +524,107 @@ wpeCommand
         process.exit(1);
       }
       console.log('\n✅ Logged out of WP Engine\n');
+    } catch (err: any) {
+      console.error(`\n❌ ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe set-credentials
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('set-credentials <username> <password>')
+  .description('Store WP Engine API credentials for basic authentication (required for backup creation)')
+  .action(async (username, password) => {
+    try {
+      const client = getClient({ timeout: 10000 });
+      const data = await client.mutate<{ nexusWpeSetApiCredentials: any }>(`
+        mutation($username: String!, $password: String!) {
+          nexusWpeSetApiCredentials(username: $username, password: $password) {
+            success
+            error
+          }
+        }
+      `, { username, password });
+      if (!data.nexusWpeSetApiCredentials.success) {
+        console.error(`\n❌ Failed to store credentials: ${data.nexusWpeSetApiCredentials.error || 'Unknown error'}`);
+        process.exit(1);
+      }
+      console.log('\n✅ WP Engine API credentials stored securely');
+      console.log('   Backup creation will now use basic authentication\n');
+    } catch (err: any) {
+      console.error(`\n❌ ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe clear-credentials
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('clear-credentials')
+  .description('Remove stored WP Engine API credentials')
+  .action(async () => {
+    try {
+      const client = getClient({ timeout: 10000 });
+      const data = await client.mutate<{ nexusWpeClearApiCredentials: any }>(`
+        mutation {
+          nexusWpeClearApiCredentials {
+            success
+            error
+          }
+        }
+      `, {});
+      if (!data.nexusWpeClearApiCredentials.success) {
+        console.error(`\n❌ Failed to clear credentials: ${data.nexusWpeClearApiCredentials.error || 'Unknown error'}`);
+        process.exit(1);
+      }
+      console.log('\n✅ WP Engine API credentials cleared\n');
+    } catch (err: any) {
+      console.error(`\n❌ ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe credentials-status
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('credentials-status')
+  .description('Check if WP Engine API credentials are configured')
+  .action(async () => {
+    try {
+      const client = getClient({ timeout: 10000 });
+      const data = await client.mutate<{ nexusWpeApiCredentialsStatus: any }>(`
+        mutation {
+          nexusWpeApiCredentialsStatus {
+            success
+            error
+            configured
+            username
+          }
+        }
+      `, {});
+      if (!data.nexusWpeApiCredentialsStatus.success) {
+        console.error(`\n❌ Failed to check credentials: ${data.nexusWpeApiCredentialsStatus.error || 'Unknown error'}`);
+        process.exit(1);
+      }
+      console.log('');
+      if (data.nexusWpeApiCredentialsStatus.configured) {
+        console.log(`✅ WP Engine API credentials are configured`);
+        console.log(`   Username: ${data.nexusWpeApiCredentialsStatus.username}`);
+        console.log('   Backup creation will use basic authentication\n');
+      } else {
+        console.log('⚫ WP Engine API credentials are NOT configured');
+        console.log('   Backup creation will fail (OAuth not supported by WP Engine)');
+        console.log('\nTo enable backup creation:');
+        console.log('1. Get your API credentials from https://my.wpengine.com');
+        console.log('2. Run: nexus wpe set-credentials <username> <password>\n');
+      }
     } catch (err: any) {
       console.error(`\n❌ ${err.message}`);
       process.exit(1);

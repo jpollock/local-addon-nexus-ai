@@ -58,6 +58,8 @@ export const wpePullHandler: McpToolHandler = {
     let primaryDomain: string;
     let environment: string;
 
+    let installAccountId: string | null = null;
+
     if (args.remote_install_id) {
       // Get install details from CAPI
       const installs = (await services.localServices.capiGetInstalls()) as any[];
@@ -72,18 +74,63 @@ export const wpePullHandler: McpToolHandler = {
       remoteSiteId = typeof install.site === 'object' ? install.site.id : install.site;
       primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
       environment = install.environment || 'production';
+      installAccountId = install.account?.id ?? null;
     } else {
-      // Use existing link
-      installName = (wpeConnection as any).remoteSiteId; // This might need adjustment
-      installId = (wpeConnection as any).remoteSiteId;
-      remoteSiteId = (wpeConnection as any).remoteSiteId;
-      primaryDomain = ''; // Will be resolved by wpePull service
+      // Resolve install from CAPI using site UUID + environment stored in hostConnections.
+      // remoteSiteId is the WPE *site* UUID — must look up the install name for SSH.
+      const wpeSiteId = (wpeConnection as any).remoteSiteId;
       environment = (wpeConnection as any).remoteSiteEnv || 'production';
+
+      const installs = (await services.localServices.capiGetInstalls()) as any[];
+      const install = installs.find(
+        (i: any) => (typeof i.site === 'object' ? i.site.id : i.site) === wpeSiteId
+          && i.environment === environment
+      );
+
+      if (!install) {
+        return error(
+          `Could not find WPE install for site ${wpeSiteId} (${environment}). ` +
+          `Try passing remote_install_id directly.`
+        );
+      }
+
+      installName = install.name;
+      installId = install.id;
+      remoteSiteId = wpeSiteId;
+      primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
+      installAccountId = install.account?.id ?? null;
+    }
+
+    // Prepare hostConnections object (will be saved twice to work around race condition)
+    const userId = services.localServices!.getWpeUserId();
+    const hostConnectionUpdate = {
+      hostConnections: [{
+        hostId: 'wpe' as const,
+        remoteSiteId,
+        remoteSiteEnv: environment,
+        accountId: installAccountId,
+        userId: userId || undefined,
+        magicSync: true,
+        database: true,
+      }],
+    };
+
+    // FIRST UPDATE: Before the pull starts (so UI shows it's linked)
+    if (args.remote_install_id && !wpeConnection && remoteSiteId) {
+      try {
+        services.localServices.updateSite(site.id, hostConnectionUpdate);
+      } catch {
+        // Non-fatal — pull still works without the link
+      }
     }
 
     try {
-      // Call Local's wpePull service
-      await services.localServices.wpePull.pull({
+      // Register with tracker before firing (tracker also picks up Local's IPC events)
+      services.operationTracker?.register(site.id, site.name, 'pull');
+
+      // Fire-and-forget: wpePull.pull() is a long-running operation.
+      // Return immediately and let the user poll local_operation_status.
+      const pullPromise = services.localServices.wpePull.pull({
         includeSql: args.include_database === true,
         wpengineInstallName: installName,
         wpengineInstallId: installId,
@@ -92,16 +139,29 @@ export const wpePullHandler: McpToolHandler = {
         localSiteId: site.id,
         environment,
         isMagicSync: false,
-      });
+      }).catch(() => { /* errors surfaced in Local UI */ });
+
+      // SECOND UPDATE: After pull completes, re-save hostConnections to ensure it persists
+      // (works around race condition where pull process might overwrite site.json)
+      if (args.remote_install_id && !wpeConnection && remoteSiteId) {
+        pullPromise.then(() => {
+          try {
+            services.localServices?.updateSite(site.id, hostConnectionUpdate);
+          } catch {
+            // Non-fatal
+          }
+        });
+      }
 
       return ok(
         JSON.stringify({
-          status: 'queued',
-          async: true,
+          status: 'in_progress',
           site: site.name,
           install: installName,
           include_database: args.include_database === true,
-          message: 'Pull operation queued. Check the Local app for progress. Do NOT run wp_* commands until the pull completes.',
+          linked: true,
+          message: `Pull started. The site is now linked to "${installName}" in Local.`,
+          next_steps: 'Poll local_operation_status every 15-30s to track progress. Operation typically takes 1-3 minutes.',
         }, null, 2),
       );
     } catch (err: any) {

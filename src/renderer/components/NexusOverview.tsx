@@ -38,7 +38,7 @@ interface DashboardStats {
   remoteSites: { total: number; unlinked: number; capiAvailable: boolean };
   mcpServer: { running: boolean; toolCount: number; port: number | null; version: string | null };
   embedding: { ready: boolean; model: string; quantized: boolean; dimensions: number; maxSequenceLength: number };
-  index: { sitesIndexed: number; totalSites: number; totalDocuments: number; totalChunks: number; lastIndexed: number | null };
+  index: { localIndexed: number; localTotal: number; wpeIndexed: number; wpeTotal: number; totalDocuments: number; totalChunks: number; lastIndexed: number | null };
 }
 
 interface McpInfo {
@@ -714,7 +714,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     return React.createElement('div', { style: cardStyle },
       React.createElement('div', { style: cardTitleStyle }, 'Remote Sites'),
       React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-text)' } }, remoteSites.total),
-      React.createElement('div', { style: subStatStyle }, `${remoteSites.unlinked} not linked to Local`),
+      React.createElement('div', { style: subStatStyle }, `${remoteSites.total - remoteSites.unlinked} linked · ${remoteSites.unlinked} not linked`),
     );
   }
 
@@ -759,18 +759,20 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
 
   renderIndexCard(stats: DashboardStats): React.ReactNode {
     const { index } = stats;
+    const totalIndexed = index.localIndexed + index.wpeIndexed;
+    const totalSites = index.localTotal + index.wpeTotal;
     return React.createElement('div', { style: cardStyle },
       React.createElement('div', { style: cardTitleStyle }, 'Context Index'),
       React.createElement('div', { style: { ...bigNumberStyle, color: 'var(--nxai-card-text)' } },
-        `${index.sitesIndexed}`,
+        `${totalIndexed}`,
         React.createElement('span', { style: { fontSize: '14px', fontWeight: 400, color: 'var(--nxai-card-sub)' } },
-          ` / ${index.totalSites} sites`,
+          ` / ${totalSites} sites`,
         ),
       ),
       React.createElement('div', { style: subStatStyle },
-        `${index.totalDocuments.toLocaleString()} documents`,
+        React.createElement('span', null, `${index.localIndexed} local · ${index.wpeIndexed} remote`),
         React.createElement('br'),
-        `${index.totalChunks.toLocaleString()} chunks`,
+        `${index.totalDocuments.toLocaleString()} documents`,
         React.createElement('br'),
         `Last indexed: ${index.lastIndexed ? formatTimeAgo(index.lastIndexed) : 'Never'}`,
       ),

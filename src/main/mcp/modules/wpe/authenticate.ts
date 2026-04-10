@@ -123,21 +123,24 @@ export const wpeLoginHandler = {
     inputSchema: { type: 'object' as const, properties: {} },
     isAvailable: (_services: NexusServices) => true,
   },
-  async execute(_args: unknown, _services: NexusServices): Promise<McpToolResult> {
+  async execute(_args: unknown, services: NexusServices): Promise<McpToolResult> {
     try {
-      const data = await localGql<{
-        wpeAuthenticate: { success: boolean; email: string; message: string; error: string | null };
-      }>('mutation { wpeAuthenticate { success email message error } }', 120000);
+      // CRITICAL FIX: Use services.localServices.wpeAuthenticate() instead of Local's GraphQL
+      // This ensures the SAME wpeOAuth instance that CAPI uses gets the new tokens
+      if (!services.localServices) {
+        throw new Error('Local services not available');
+      }
 
-      const { success, email, error } = data.wpeAuthenticate;
-      if (!success) {
+      const result = await services.localServices.wpeAuthenticate();
+      if (!result?.email) {
         return {
-          content: [{ type: 'text', text: `❌ WPE authentication failed: ${error || 'Unknown error'}` }],
+          content: [{ type: 'text', text: `❌ WPE authentication failed: No email returned` }],
           isError: true,
         };
       }
+
       return {
-        content: [{ type: 'text', text: `✅ Authenticated with WP Engine as ${email}` }],
+        content: [{ type: 'text', text: `✅ Authenticated with WP Engine as ${result.email}` }],
       };
     } catch (err: any) {
       return { content: [{ type: 'text', text: `Error during WPE login: ${err.message}` }], isError: true };

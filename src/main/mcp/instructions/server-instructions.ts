@@ -56,7 +56,9 @@ Route user requests to the correct tool namespace:
 | Local ↔ WPE drift | \`wpe_detect_drift\` | "are my local sites in sync with WPE?", "what's different between local and production?", "plugin differences between dev and live" |
 | WP Engine usage (single) | \`wpe_get_install_usage\`, \`wpe_get_account_usage\` | "show bandwidth for this install", "storage for my account" |
 | WP Engine ops | \`wpe_create_backup\`, \`wpe_purge_cache\` | "backup production", "clear cache" |
+| WPE API credentials | \`wpe_set_api_credentials\`, \`wpe_clear_api_credentials\`, \`wpe_credentials_status\` | "store WPE API credentials", "backup won't work" |
 | Sync with WPE | \`local_wpe_pull\`, \`local_wpe_push\`, \`local_wpe_link\` | "pull from staging", "push to dev", "link this site to WPE" |
+| Pull/push/export status | \`local_operation_status\` | "is the pull done?", "check push progress", "how far along is the export?" |
 | Sync history | \`local_get_site_changes\`, \`local_get_sync_history\` | "what changed since last pull?", "show sync history" |
 | AI setup | \`wp_setup_ai\` | "set up AI on this site" |
 | AI abilities | \`wp_list_abilities\`, \`wp_run_ability\` | "what abilities does this site have?", "run acf/list-field-groups" |
@@ -142,6 +144,29 @@ Tools are classified into three safety tiers:
 - **Tier 3 (destructive)**: Requires confirmation token. The first call returns a confirmation prompt with a token. Call again with \`_confirmationToken\` to proceed. Examples: \`local_delete_site\`, \`local_wpe_push\`.
 
 Always use \`wp_plugin_update\` with dry-run awareness — check what will change before updating. Use \`wp_search_replace\` in dry-run mode first to preview changes.
+
+## Long-Running Operations (Pull / Push / Export)
+
+\`local_wpe_pull\`, \`local_wpe_push\`, and \`local_export_site\` are **async** — they return immediately with \`status: "in_progress"\` while the operation runs in the background (typically 1-5 minutes).
+
+**Always poll \`local_operation_status\` after starting one:**
+
+1. Call \`local_wpe_pull\` / \`local_wpe_push\` → get \`status: "in_progress"\`
+2. Call \`local_operation_status({ site: "..." })\` every 15-30 seconds
+3. When \`status === "completed"\`, the operation is done — proceed with next steps
+4. The response includes \`last_message\` (current phase) and \`recent_files\` (files being transferred)
+
+Do NOT call \`local_get_site\` repeatedly as a polling mechanism — use \`local_operation_status\`.
+
+## WP Engine API Credentials (Backup Creation)
+
+\`wpe_create_backup\` requires **WP Engine API credentials** (basic auth) — the backup endpoint does not support OAuth. If backup fails with an auth error, credentials are not configured.
+
+- \`wpe_credentials_status\` — check if credentials are configured
+- \`wpe_set_api_credentials({ username, password })\` — store credentials (encrypted, one-time setup)
+- \`wpe_clear_api_credentials\` — remove stored credentials
+
+Credentials are stored with OS-level encryption. Once set, all backup operations use them automatically.
 
 ## Presentation
 
