@@ -11,7 +11,12 @@
  *   const op = tracker.getOperation(siteId);
  */
 
-import { ipcMain } from 'electron';
+// Dynamic require — this file only runs inside Local's Electron main process.
+// Static import would fail in CI where electron is not installed as a package.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { ipcMain } = require('electron') as {
+  ipcMain: { on(channel: string, listener: (event: any, ...args: any[]) => void): void };
+};
 
 // Status strings emitted by Local during operations
 const ACTIVE_STATUSES = new Set([
