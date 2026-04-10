@@ -145,6 +145,8 @@ interface NexusOverviewState {
   diagInstall: string;
   diagRunning: boolean;
   diagResults: Array<{ cmd: string; success: boolean; stdout: string; durationMs: number; error?: string }>;
+  dbScanRunning: boolean;
+  dbScanResults: Array<{ siteId: string; siteName: string; healthScore?: number; issues?: any[]; error?: string }> | null;
   wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null; fresh_count: number; stale_count: number } | null;
   wpeSyncThresholdHours: number;
   // Credential sync state
@@ -318,6 +320,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     diagInstall: '',
     diagRunning: false,
     diagResults: [],
+    dbScanRunning: false,
+    dbScanResults: null,
     wpeSyncStats: null,
     wpeSyncThresholdHours: 8,
     syncStatus: {},
@@ -857,7 +861,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
           ? React.createElement('span', { style: { color: UI_COLORS.STATUS_WARNING } }, ` · ${staleCount} stale`)
           : React.createElement('span', null, ' · all current ✓'),
         React.createElement('br'),
-        `Threshold: ${wpeSyncThresholdHours}h`,
+        `SSH sync threshold: ${wpeSyncThresholdHours}h`,
       ),
     );
   }
@@ -1324,6 +1328,10 @@ renderTabBar(): React.ReactNode {
       this.renderSectionLabel('WP Engine Sites'),
       this.renderWpeSyncSection(),
 
+      // Database Health
+      this.renderSectionLabel('Database Health'),
+      this.renderDbScanSection(),
+
       // Content Index Maintenance
       this.renderSectionLabel('Content Index'),
       this.renderContentMaintenance(),
@@ -1331,6 +1339,79 @@ renderTabBar(): React.ReactNode {
       // SSH Diagnostics
       this.renderSectionLabel('SSH Diagnostics'),
       this.renderSshDiagnostics(),
+    );
+  }
+
+  renderDbScanSection(): React.ReactNode {
+    const { dbScanRunning, dbScanResults } = this.state;
+    const sub: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub)' };
+
+    const scoreColor = (score?: number) => {
+      if (score === undefined) return '#6b7280';
+      if (score >= 90) return UI_COLORS.STATUS_RUNNING;
+      if (score >= 70) return UI_COLORS.STATUS_WARNING;
+      return UI_COLORS.STATUS_ERROR;
+    };
+
+    return React.createElement('div', { style: { marginBottom: '24px' } },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' } },
+        React.createElement('button', {
+          style: {
+            padding: '7px 14px', borderRadius: '5px', border: 'none', fontSize: '12px',
+            fontWeight: 600, cursor: dbScanRunning ? 'not-allowed' : 'pointer',
+            backgroundColor: dbScanRunning ? '#9ca3af' : '#3b82f6', color: '#fff',
+            opacity: dbScanRunning ? 0.7 : 1,
+          },
+          disabled: dbScanRunning,
+          onClick: async () => {
+            this.setState({ dbScanRunning: true, dbScanResults: null });
+            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.DB_SCAN_ALL);
+            this.setState({
+              dbScanRunning: false,
+              dbScanResults: result.success ? result.scans : null,
+            });
+            if (!result.success) {
+              (window as any).showToast?.(`DB scan failed: ${result.error}`, 'error');
+            }
+          },
+        }, dbScanRunning ? 'Scanning...' : 'Scan All Running Sites'),
+        dbScanResults
+          ? React.createElement('span', { style: sub }, `${dbScanResults.length} site${dbScanResults.length !== 1 ? 's' : ''} scanned`)
+          : React.createElement('span', { style: sub }, 'Scans all running local sites for database health issues'),
+      ),
+
+      // Results table
+      dbScanResults && dbScanResults.length > 0
+        ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '6px' } },
+            dbScanResults.map((scan) =>
+              React.createElement('div', {
+                key: scan.siteId,
+                style: {
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '8px 12px', borderRadius: '5px',
+                  backgroundColor: 'var(--nxai-card-bg, #fff)',
+                  border: '1px solid var(--nxai-card-border, #e5e7eb)',
+                },
+              },
+                React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, color: 'var(--nxai-card-text)' } },
+                  scan.siteName,
+                ),
+                scan.error
+                  ? React.createElement('span', { style: { fontSize: '12px', color: UI_COLORS.STATUS_ERROR } }, `Error: ${scan.error}`)
+                  : React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
+                      React.createElement('span', {
+                        style: { fontSize: '14px', fontWeight: 700, color: scoreColor(scan.healthScore) },
+                      }, `${scan.healthScore ?? '?'}/100`),
+                      scan.issues && scan.issues.length > 0
+                        ? React.createElement('span', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)' } },
+                            `${scan.issues.length} issue${scan.issues.length !== 1 ? 's' : ''}`,
+                          )
+                        : React.createElement('span', { style: { fontSize: '11px', color: UI_COLORS.STATUS_RUNNING } }, '✓ clean'),
+                    ),
+              ),
+            ),
+          )
+        : null,
     );
   }
 
@@ -1357,6 +1438,18 @@ renderTabBar(): React.ReactNode {
             }
           },
         }, 'Remove Excluded Types'),
+
+        React.createElement('button', {
+          style: grayBtn,
+          title: 'Remove WPE installs that no longer exist in CAPI (marked inactive after CAPI sync)',
+          onClick: async () => {
+            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS);
+            if (result.success) {
+              (window as any).showToast?.(`Removed ${result.removed} ghost install${result.removed !== 1 ? 's' : ''} from graph`, 'success');
+              await this.fetchAll();
+            }
+          },
+        }, 'Remove Ghost Installs'),
 
         React.createElement('button', {
           style: dangerBtn,

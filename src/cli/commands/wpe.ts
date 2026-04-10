@@ -784,4 +784,1171 @@ wpeCommand
     }
   });
 
+// ---------------------------------------------------------------------------
+// nexus wpe account
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('account <accountId>')
+  .description('Get details about a specific WP Engine account')
+  .option('--json', 'Output as JSON')
+  .action(async (accountId, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeAccount: any }>(`
+        mutation($accountId: String!) {
+          nexusWpeAccount(accountId: $accountId) {
+            success
+            error
+            data
+          }
+        }
+      `, { accountId });
+      const { success, error, data } = result.nexusWpeAccount;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      if (options.json) { console.log(JSON.stringify(parsed, null, 2)); return; }
+      console.log(`\nAccount: ${parsed.name || parsed.id}`);
+      console.log('─'.repeat(40));
+      console.log(`  ID:      ${parsed.id}`);
+      console.log(`  Name:    ${parsed.name}`);
+      if (parsed.created_at) console.log(`  Created: ${parsed.created_at}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe limits
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('limits <accountId>')
+  .description('Show plan limits for a WP Engine account')
+  .option('--json', 'Output as JSON')
+  .action(async (accountId, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeAccountLimits: any }>(`
+        mutation($accountId: String!) {
+          nexusWpeAccountLimits(accountId: $accountId) {
+            success
+            error
+            data
+          }
+        }
+      `, { accountId });
+      const { success, error, data } = result.nexusWpeAccountLimits;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      if (options.json) { console.log(JSON.stringify(parsed, null, 2)); return; }
+      console.log(`\nAccount Limits: ${accountId}`);
+      console.log('─'.repeat(40));
+      for (const [key, value] of Object.entries(parsed)) {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        console.log(`  ${label.padEnd(28)} ${value}`);
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe users
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('users <accountId>')
+  .description('List users for a WP Engine account')
+  .option('--json', 'Output as JSON')
+  .action(async (accountId, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeAccountUsers: any }>(`
+        mutation($accountId: String!) {
+          nexusWpeAccountUsers(accountId: $accountId) {
+            success
+            error
+            data
+          }
+        }
+      `, { accountId });
+      const { success, error, data } = result.nexusWpeAccountUsers;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      const users = parsed.results ?? parsed;
+      if (options.json) { console.log(JSON.stringify(users, null, 2)); return; }
+      console.log(`\nUsers for account ${accountId}:`);
+      console.log('─'.repeat(60));
+      console.log(`  ${'Name'.padEnd(24)} ${'Email'.padEnd(28)} Roles`);
+      console.log('─'.repeat(60));
+      for (const u of users) {
+        const name = `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.id;
+        const roles = Array.isArray(u.roles) ? u.roles.join(', ') : (u.role ?? '');
+        console.log(`  ${name.padEnd(24)} ${(u.email ?? '').padEnd(28)} ${roles}`);
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe user
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('user <accountId> <userId>')
+  .description('Get details about a specific user in a WP Engine account')
+  .option('--json', 'Output as JSON')
+  .action(async (accountId, userId, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeAccountUser: any }>(`
+        mutation($accountId: String!, $userId: String!) {
+          nexusWpeAccountUser(accountId: $accountId, userId: $userId) {
+            success
+            error
+            data
+          }
+        }
+      `, { accountId, userId });
+      const { success, error, data } = result.nexusWpeAccountUser;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const u = JSON.parse(data);
+      if (options.json) { console.log(JSON.stringify(u, null, 2)); return; }
+      const name = `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.id;
+      console.log(`\nUser: ${name}`);
+      console.log('─'.repeat(40));
+      console.log(`  ID:     ${u.id}`);
+      console.log(`  Email:  ${u.email}`);
+      if (u.role) console.log(`  Role:   ${u.role}`);
+      if (Array.isArray(u.roles)) console.log(`  Roles:  ${u.roles.join(', ')}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe user-add
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('user-add <accountId>')
+  .description('Add a user to a WP Engine account')
+  .option('--email <e>', 'User email address')
+  .option('--first <f>', 'First name')
+  .option('--last <l>', 'Last name')
+  .option('--role <r>', 'Role to assign')
+  .action(async (accountId, options) => {
+    try {
+      if (!options.email || !options.first || !options.last || !options.role) {
+        console.error('\n❌ All of --email, --first, --last, and --role are required');
+        process.exit(1);
+      }
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeUserAdd: any }>(`
+        mutation($accountId: String!, $email: String!, $firstName: String!, $lastName: String!, $role: String!) {
+          nexusWpeUserAdd(accountId: $accountId, email: $email, firstName: $firstName, lastName: $lastName, role: $role) {
+            success
+            error
+            message
+          }
+        }
+      `, { accountId, email: options.email, firstName: options.first, lastName: options.last, role: options.role });
+      const { success, error, message } = result.nexusWpeUserAdd;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      console.log(`\n✅ User added successfully`);
+      if (message) console.log(`   ${message}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe user-update
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('user-update <accountId> <userId>')
+  .description('Update a user role in a WP Engine account')
+  .option('--role <role>', 'New role to assign')
+  .action(async (accountId, userId, options) => {
+    try {
+      if (!options.role) {
+        console.error('\n❌ --role is required');
+        process.exit(1);
+      }
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeUserUpdate: any }>(`
+        mutation($accountId: String!, $userId: String!, $role: String!) {
+          nexusWpeUserUpdate(accountId: $accountId, userId: $userId, role: $role) {
+            success
+            error
+            message
+          }
+        }
+      `, { accountId, userId, role: options.role });
+      const { success, error, message } = result.nexusWpeUserUpdate;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      console.log(`\n✅ User updated successfully`);
+      if (message) console.log(`   ${message}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe user-remove
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('user-remove <accountId> <userId>')
+  .description('Remove a user from a WP Engine account')
+  .option('--confirm', 'Confirm user removal (required)')
+  .action(async (accountId, userId, options) => {
+    try {
+      if (!options.confirm) {
+        console.error('\n❌ --confirm flag is required to remove a user');
+        console.error('   This action cannot be undone. Re-run with --confirm to proceed.');
+        process.exit(1);
+      }
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeUserRemove: any }>(`
+        mutation($accountId: String!, $userId: String!, $confirm: Boolean) {
+          nexusWpeUserRemove(accountId: $accountId, userId: $userId, confirm: $confirm) {
+            success
+            error
+            message
+          }
+        }
+      `, { accountId, userId, confirm: true });
+      const { success, error, message } = result.nexusWpeUserRemove;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      console.log(`\n✅ User removed successfully`);
+      if (message) console.log(`   ${message}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe user-audit
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('user-audit')
+  .description('Audit users across WP Engine accounts')
+  .option('--account <accountId>', 'Limit audit to a specific account')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeUserAudit: any }>(`
+        mutation($accountId: String) {
+          nexusWpeUserAudit(accountId: $accountId) {
+            success
+            error
+            data
+          }
+        }
+      `, { accountId: options.account || null });
+      const { success, error, data } = result.nexusWpeUserAudit;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      if (options.json) { console.log(JSON.stringify(parsed, null, 2)); return; }
+      const entries = Array.isArray(parsed) ? parsed : [parsed];
+      for (const entry of entries) {
+        console.log(`\nAccount: ${entry.account}`);
+        console.log('─'.repeat(60));
+        console.log(`  ${'Name'.padEnd(24)} ${'Email'.padEnd(28)} Roles`);
+        console.log('─'.repeat(60));
+        const users = entry.users ?? [];
+        for (const u of users) {
+          const name = `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.id;
+          const roles = Array.isArray(u.roles) ? u.roles.join(', ') : (u.role ?? '');
+          console.log(`  ${name.padEnd(24)} ${(u.email ?? '').padEnd(28)} ${roles}`);
+        }
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe sites
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('sites')
+  .description('List WP Engine sites')
+  .option('--account <accountId>', 'Filter by account')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeSites: any }>(`
+        mutation($accountId: String) {
+          nexusWpeSites(accountId: $accountId) {
+            success
+            error
+            data
+          }
+        }
+      `, { accountId: options.account || null });
+      const { success, error, data } = result.nexusWpeSites;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      const sites = parsed.results ?? parsed;
+      if (options.json) { console.log(JSON.stringify(sites, null, 2)); return; }
+      console.log('\nWP Engine Sites:');
+      console.log('─'.repeat(70));
+      console.log(`  ${'Name'.padEnd(30)} ${'ID'.padEnd(24)} Account`);
+      console.log('─'.repeat(70));
+      for (const s of sites) {
+        console.log(`  ${(s.name ?? '').padEnd(30)} ${(s.id ?? '').padEnd(24)} ${s.account_id ?? s.account ?? ''}`);
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe site
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('site <siteId>')
+  .description('Get details about a specific WP Engine site')
+  .option('--json', 'Output as JSON')
+  .action(async (siteId, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeSite: any }>(`
+        mutation($siteId: String!) {
+          nexusWpeSite(siteId: $siteId) {
+            success
+            error
+            data
+          }
+        }
+      `, { siteId });
+      const { success, error, data } = result.nexusWpeSite;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const s = JSON.parse(data);
+      if (options.json) { console.log(JSON.stringify(s, null, 2)); return; }
+      console.log(`\nSite: ${s.name || siteId}`);
+      console.log('─'.repeat(40));
+      console.log(`  ID:      ${s.id}`);
+      console.log(`  Name:    ${s.name}`);
+      if (s.account_id) console.log(`  Account: ${s.account_id}`);
+      if (s.created_at) console.log(`  Created: ${s.created_at}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe create-site
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('create-site')
+  .description('Create a new WP Engine site')
+  .option('--name <name>', 'Site name (required)')
+  .option('--account <accountId>', 'Account ID (required)')
+  .action(async (options) => {
+    try {
+      if (!options.name || !options.account) {
+        console.error('\n❌ --name and --account are required');
+        process.exit(1);
+      }
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeCreateSite: any }>(`
+        mutation($name: String!, $accountId: String!) {
+          nexusWpeCreateSite(name: $name, accountId: $accountId) {
+            success
+            error
+            siteId
+            name
+          }
+        }
+      `, { name: options.name, accountId: options.account });
+      const { success, error, siteId, name } = result.nexusWpeCreateSite;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      console.log(`\n✅ Site created`);
+      console.log(`   ID:   ${siteId}`);
+      console.log(`   Name: ${name}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe create-install
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('create-install')
+  .description('Create a new install under a WP Engine site')
+  .option('--site <siteId>', 'Site ID (required)')
+  .option('--name <name>', 'Install name (required)')
+  .option('--env <environment>', 'Environment: production|staging|development (required)')
+  .option('--account <accountId>', 'Account ID (required)')
+  .action(async (options) => {
+    try {
+      if (!options.site || !options.name || !options.env || !options.account) {
+        console.error('\n❌ --site, --name, --env, and --account are all required');
+        process.exit(1);
+      }
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeCreateInstall: any }>(`
+        mutation($siteId: String!, $name: String!, $environment: String!, $accountId: String!) {
+          nexusWpeCreateInstall(siteId: $siteId, name: $name, environment: $environment, accountId: $accountId) {
+            success
+            error
+            installId
+            name
+            domain
+          }
+        }
+      `, { siteId: options.site, name: options.name, environment: options.env, accountId: options.account });
+      const { success, error, installId, name, domain } = result.nexusWpeCreateInstall;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      console.log(`\n✅ Install created`);
+      console.log(`   ID:     ${installId}`);
+      console.log(`   Name:   ${name}`);
+      if (domain) console.log(`   Domain: ${domain}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe update-install
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('update-install <installId>')
+  .description('Update settings for a WP Engine install')
+  .option('--php <version>', 'PHP version to set')
+  .option('--env <environment>', 'Environment to set')
+  .action(async (installId, options) => {
+    try {
+      if (!options.php && !options.env) {
+        console.error('\n❌ At least one of --php or --env must be provided');
+        process.exit(1);
+      }
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeUpdateInstall: any }>(`
+        mutation($installId: String!, $phpVersion: String, $environment: String) {
+          nexusWpeUpdateInstall(installId: $installId, phpVersion: $phpVersion, environment: $environment) {
+            success
+            error
+            message
+          }
+        }
+      `, { installId, phpVersion: options.php || null, environment: options.env || null });
+      const { success, error, message } = result.nexusWpeUpdateInstall;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      console.log(`\n✅ Install updated`);
+      if (message) console.log(`   ${message}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe delete-install
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('delete-install <installId>')
+  .description('Delete a WP Engine install')
+  .option('--confirm-name <installName>', 'Install name to confirm deletion (required)')
+  .action(async (installId, options) => {
+    try {
+      if (!options.confirmName) {
+        console.error('\n❌ --confirm-name <installName> is required to delete an install');
+        console.error('   Provide the install name to confirm this destructive action.');
+        process.exit(1);
+      }
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeDeleteInstall: any }>(`
+        mutation($installId: String!, $confirmName: String) {
+          nexusWpeDeleteInstall(installId: $installId, confirmName: $confirmName) {
+            success
+            error
+            message
+          }
+        }
+      `, { installId, confirmName: options.confirmName });
+      const { success, error, message } = result.nexusWpeDeleteInstall;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      console.log(`\n✅ Install deleted`);
+      if (message) console.log(`   ${message}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe backup-status
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('backup-status <installId> <backupId>')
+  .description('Check the status of a WP Engine backup')
+  .option('--json', 'Output as JSON')
+  .action(async (installId, backupId, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeBackupStatus: any }>(`
+        mutation($installId: String!, $backupId: String!) {
+          nexusWpeBackupStatus(installId: $installId, backupId: $backupId) {
+            success
+            error
+            data
+          }
+        }
+      `, { installId, backupId });
+      const { success, error, data } = result.nexusWpeBackupStatus;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      if (options.json) { console.log(JSON.stringify(parsed, null, 2)); return; }
+      console.log(`\nBackup Status: ${backupId}`);
+      console.log('─'.repeat(40));
+      console.log(`  Status:  ${parsed.status ?? 'unknown'}`);
+      if (parsed.created_at) console.log(`  Created: ${parsed.created_at}`);
+      if (parsed.type) console.log(`  Type:    ${parsed.type}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe backup-verify
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('backup-verify <installId>')
+  .description('Create a backup and poll until complete')
+  .option('--description <text>', 'Backup description')
+  .option('--json', 'Output as JSON')
+  .action(async (installId, options) => {
+    try {
+      const client = getClient({ timeout: 360000 }); // 6 min timeout
+      console.log('Creating backup and polling for completion...');
+      const result = await client.mutate<{ nexusWpeBackupVerify: any }>(`
+        mutation($installId: String!, $description: String) {
+          nexusWpeBackupVerify(installId: $installId, description: $description) {
+            success
+            error
+            backupId
+            status
+            createdAt
+          }
+        }
+      `, { installId, description: options.description || null });
+      const { success, error, backupId, status, createdAt } = result.nexusWpeBackupVerify;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      if (options.json) { console.log(JSON.stringify({ backupId, status, createdAt }, null, 2)); return; }
+      console.log(`\n✅ Backup ${status}`);
+      console.log(`   ID: ${backupId}`);
+      if (createdAt) console.log(`   Created: ${createdAt}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe domains
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('domains <installId>')
+  .description('List domains for a WP Engine install')
+  .option('--json', 'Output as JSON')
+  .action(async (installId, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeDomains: any }>(`
+        mutation($installId: String!) {
+          nexusWpeDomains(installId: $installId) {
+            success
+            error
+            data
+          }
+        }
+      `, { installId });
+      const { success, error, data } = result.nexusWpeDomains;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      const domains = parsed.results ?? parsed;
+      if (options.json) { console.log(JSON.stringify(domains, null, 2)); return; }
+      console.log(`\nDomains for install ${installId}:`);
+      console.log('─'.repeat(70));
+      console.log(`  ${'Domain'.padEnd(40)} ${'Primary'.padEnd(10)} Status`);
+      console.log('─'.repeat(70));
+      for (const d of domains) {
+        const primary = d.primary ? 'yes' : 'no';
+        console.log(`  ${(d.name ?? d.domain ?? '').padEnd(40)} ${primary.padEnd(10)} ${d.status ?? ''}`);
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe domain-add
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('domain-add <installId> <domain>')
+  .description('Add a domain to a WP Engine install')
+  .action(async (installId, domain) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeDomainAdd: any }>(`
+        mutation($installId: String!, $domain: String!) {
+          nexusWpeDomainAdd(installId: $installId, domain: $domain) {
+            success
+            error
+            domainId
+            name
+          }
+        }
+      `, { installId, domain });
+      const { success, error, domainId, name } = result.nexusWpeDomainAdd;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      console.log(`\n✅ Domain added`);
+      console.log(`   ID:   ${domainId}`);
+      console.log(`   Name: ${name}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe domain-remove
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('domain-remove <installId> <domainId>')
+  .description('Remove a domain from a WP Engine install')
+  .option('--confirm', 'Confirm domain removal (required)')
+  .action(async (installId, domainId, options) => {
+    try {
+      if (!options.confirm) {
+        console.error('\n❌ --confirm flag is required to remove a domain');
+        console.error('   This action cannot be undone. Re-run with --confirm to proceed.');
+        process.exit(1);
+      }
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeDomainRemove: any }>(`
+        mutation($installId: String!, $domainId: String!, $confirm: Boolean) {
+          nexusWpeDomainRemove(installId: $installId, domainId: $domainId, confirm: $confirm) {
+            success
+            error
+            message
+          }
+        }
+      `, { installId, domainId, confirm: true });
+      const { success, error, message } = result.nexusWpeDomainRemove;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      console.log(`\n✅ Domain removed`);
+      if (message) console.log(`   ${message}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe domain-check
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('domain-check <installId> <domainId>')
+  .description('Check DNS status for a domain on a WP Engine install')
+  .option('--json', 'Output as JSON')
+  .action(async (installId, domainId, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeDomainCheck: any }>(`
+        mutation($installId: String!, $domainId: String!) {
+          nexusWpeDomainCheck(installId: $installId, domainId: $domainId) {
+            success
+            error
+            data
+          }
+        }
+      `, { installId, domainId });
+      const { success, error, data } = result.nexusWpeDomainCheck;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      if (options.json) { console.log(JSON.stringify(parsed, null, 2)); return; }
+      console.log(`\nDNS Check: ${domainId}`);
+      console.log('─'.repeat(40));
+      for (const [key, value] of Object.entries(parsed)) {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        console.log(`  ${label.padEnd(20)} ${value}`);
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe ssl
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('ssl <installId>')
+  .description('List SSL certificates for a WP Engine install')
+  .option('--json', 'Output as JSON')
+  .action(async (installId, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeSslCertificates: any }>(`
+        mutation($installId: String!) {
+          nexusWpeSslCertificates(installId: $installId) {
+            success
+            error
+            data
+          }
+        }
+      `, { installId });
+      const { success, error, data } = result.nexusWpeSslCertificates;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      const certs = parsed.results ?? parsed;
+      if (options.json) { console.log(JSON.stringify(certs, null, 2)); return; }
+      console.log(`\nSSL Certificates for install ${installId}:`);
+      console.log('─'.repeat(70));
+      console.log(`  ${'Domains'.padEnd(36)} ${'Expiry'.padEnd(14)} Status`);
+      console.log('─'.repeat(70));
+      for (const c of certs) {
+        const domains = Array.isArray(c.domains) ? c.domains.join(', ') : (c.domain ?? '');
+        const expiry = c.expires_at ?? c.expiry ?? '';
+        console.log(`  ${domains.padEnd(36)} ${expiry.padEnd(14)} ${c.status ?? ''}`);
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe ssl-request
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('ssl-request <installId>')
+  .description('Request SSL certificate provisioning for a WP Engine install')
+  .option('--domains <d1,d2,...>', 'Comma-separated domain IDs (required)')
+  .action(async (installId, options) => {
+    try {
+      if (!options.domains) {
+        console.error('\n❌ --domains is required (comma-separated domain IDs)');
+        process.exit(1);
+      }
+      const domainIds = options.domains.split(',').map((d: string) => d.trim()).filter(Boolean);
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeSslRequest: any }>(`
+        mutation($installId: String!, $domainIds: [String!]!) {
+          nexusWpeSslRequest(installId: $installId, domainIds: $domainIds) {
+            success
+            error
+            message
+          }
+        }
+      `, { installId, domainIds });
+      const { success, error, message } = result.nexusWpeSslRequest;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      console.log(`\n✅ SSL certificate provisioning requested`);
+      if (message) console.log(`   ${message}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe ssh-keys
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('ssh-keys')
+  .description('List SSH keys on your WP Engine account')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeSshKeys: any }>(`
+        mutation {
+          nexusWpeSshKeys {
+            success
+            error
+            data
+          }
+        }
+      `);
+      const { success, error, data } = result.nexusWpeSshKeys;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      const keys = parsed.results ?? parsed;
+      if (options.json) { console.log(JSON.stringify(keys, null, 2)); return; }
+      console.log('\nSSH Keys:');
+      console.log('─'.repeat(60));
+      console.log(`  ${'Label'.padEnd(30)} ID`);
+      console.log('─'.repeat(60));
+      for (const k of keys) {
+        console.log(`  ${(k.label ?? k.name ?? '').padEnd(30)} ${k.uuid ?? k.id ?? ''}`);
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe ssh-key-add
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('ssh-key-add')
+  .description('Add an SSH public key to your WP Engine account')
+  .option('--label <label>', 'Label for the key (required)')
+  .option('--key <pubkey>', 'SSH public key string (required)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      if (!options.label || !options.key) {
+        console.error('\n❌ --label and --key are required');
+        process.exit(1);
+      }
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeSshKeyAdd: any }>(`
+        mutation($label: String!, $publicKey: String!) {
+          nexusWpeSshKeyAdd(label: $label, publicKey: $publicKey) {
+            success
+            error
+            keyId
+            label
+          }
+        }
+      `, { label: options.label, publicKey: options.key });
+      const { success, error, keyId, label } = result.nexusWpeSshKeyAdd;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      if (options.json) { console.log(JSON.stringify({ keyId, label }, null, 2)); return; }
+      console.log(`\n✅ SSH key added`);
+      console.log(`   ID:    ${keyId}`);
+      console.log(`   Label: ${label}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe ssh-key-remove
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('ssh-key-remove <keyId>')
+  .description('Remove an SSH key from your WP Engine account')
+  .option('--confirm', 'Confirm key removal (required)')
+  .action(async (keyId, options) => {
+    try {
+      if (!options.confirm) {
+        console.error('\n❌ --confirm flag is required to remove an SSH key');
+        console.error('   Re-run with --confirm to proceed.');
+        process.exit(1);
+      }
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeSshKeyRemove: any }>(`
+        mutation($sshKeyId: String!, $confirm: Boolean) {
+          nexusWpeSshKeyRemove(sshKeyId: $sshKeyId, confirm: $confirm) {
+            success
+            error
+            message
+          }
+        }
+      `, { sshKeyId: keyId, confirm: true });
+      const { success, error, message } = result.nexusWpeSshKeyRemove;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      console.log(`\n✅ SSH key removed`);
+      if (message) console.log(`   ${message}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe promote
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('promote <sourceInstallId> <destInstallId>')
+  .description('Promote (copy) one WP Engine install to another')
+  .option('--no-database', 'Exclude database from promotion')
+  .option('--confirm', 'Confirm promotion (required for destructive action)')
+  .action(async (sourceInstallId, destInstallId, options) => {
+    try {
+      const client = getClient();
+      const includeDatabase = options.database !== false;
+      const confirm = options.confirm ? true : undefined;
+      const result = await client.mutate<{ nexusWpePromote: any }>(`
+        mutation($sourceInstallId: String!, $destInstallId: String!, $includeDatabase: Boolean, $confirm: Boolean) {
+          nexusWpePromote(sourceInstallId: $sourceInstallId, destInstallId: $destInstallId, includeDatabase: $includeDatabase, confirm: $confirm) {
+            success
+            error
+            message
+            requiresConfirmation
+          }
+        }
+      `, { sourceInstallId, destInstallId, includeDatabase, confirm });
+      const { success, error, message, requiresConfirmation } = result.nexusWpePromote;
+      if (!success && !requiresConfirmation) { console.error(`\n❌ ${error}`); process.exit(1); }
+      if (requiresConfirmation) {
+        console.log(`\n⚠️  Confirmation required`);
+        if (message) console.log(`   ${message}`);
+        console.log('\n   Re-run with --confirm to proceed.');
+        console.log('');
+        return;
+      }
+      console.log(`\n✅ Promotion complete`);
+      if (message) console.log(`   ${message}`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe diagnose
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('diagnose <installId>')
+  .description('Run a diagnostic check on a WP Engine install')
+  .option('--json', 'Output as JSON')
+  .action(async (installId, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeDiagnose: any }>(`
+        mutation($installId: String!) {
+          nexusWpeDiagnose(installId: $installId) {
+            success
+            error
+            data
+          }
+        }
+      `, { installId });
+      const { success, error, data } = result.nexusWpeDiagnose;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      if (options.json) { console.log(JSON.stringify(parsed, null, 2)); return; }
+      const install = parsed.install ?? parsed;
+      console.log(`\nDiagnostic: ${install.name ?? installId}`);
+      console.log('─'.repeat(40));
+      if (install.domain) console.log(`  Domain:      ${install.domain}`);
+      if (install.environment) console.log(`  Environment: ${install.environment}`);
+      console.log('');
+      const hasPrimaryDomain = !!(install.primary_domain ?? install.domain);
+      console.log(`  ${hasPrimaryDomain ? '✅' : '❌'} Has primary domain`);
+      const sslResults = parsed.ssl?.results ?? parsed.ssl ?? [];
+      const hasSsl = Array.isArray(sslResults) ? sslResults.length > 0 : !!sslResults;
+      console.log(`  ${hasSsl ? '✅' : '❌'} SSL certificate`);
+      const backupResults = parsed.backups?.results ?? parsed.backups ?? [];
+      const hasBackup = Array.isArray(backupResults) ? backupResults.length > 0 : !!backupResults;
+      console.log(`  ${hasBackup ? '✅' : '❌'} Recent backup`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe go-live-check
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('go-live-check <installId> <domain>')
+  .description('Check go-live readiness for a domain on a WP Engine install')
+  .option('--json', 'Output as JSON')
+  .action(async (installId, domain, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeGoLiveCheck: any }>(`
+        mutation($installId: String!, $domain: String!) {
+          nexusWpeGoLiveCheck(installId: $installId, domain: $domain) {
+            success
+            error
+            data
+          }
+        }
+      `, { installId, domain });
+      const { success, error, data } = result.nexusWpeGoLiveCheck;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      if (options.json) { console.log(JSON.stringify(parsed, null, 2)); return; }
+      console.log(`\nGo-Live Check: ${domain}`);
+      console.log('─'.repeat(40));
+      const domainAdded = parsed.domainAdded ?? parsed.domain_added;
+      const ssl = parsed.ssl;
+      console.log(`  ${domainAdded ? '✅' : '❌'} Domain added to install`);
+      console.log(`  ${ssl ? '✅' : '❌'} SSL configured`);
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe fleet-health
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('fleet-health')
+  .description('Show health overview of all WP Engine installs')
+  .option('--account <accountId>', 'Filter by account')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpeFleetHealth: any }>(`
+        mutation($accountId: String) {
+          nexusWpeFleetHealth(accountId: $accountId) {
+            success
+            error
+            data
+          }
+        }
+      `, { accountId: options.account || null });
+      const { success, error, data } = result.nexusWpeFleetHealth;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      const installs = Array.isArray(parsed) ? parsed : (parsed.results ?? [parsed]);
+      if (options.json) { console.log(JSON.stringify(installs, null, 2)); return; }
+      console.log('\nFleet Health:');
+      console.log('─'.repeat(76));
+      console.log(`  ${'Name'.padEnd(24)} ${'Env'.padEnd(14)} ${'Domain'.padEnd(28)} SSL`);
+      console.log('─'.repeat(76));
+      for (const inst of installs) {
+        const sslStatus = inst.ssl_status ?? (inst.ssl ? 'active' : 'none');
+        console.log(
+          `  ${(inst.name ?? '').padEnd(24)} ${(inst.environment ?? '').padEnd(14)} ${(inst.domain ?? '').padEnd(28)} ${sslStatus}`,
+        );
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// nexus wpe portfolio
+// ---------------------------------------------------------------------------
+
+wpeCommand
+  .command('portfolio')
+  .description('Show a portfolio overview of your WP Engine accounts and installs')
+  .option('--month-offset <n>', 'Month offset (0 = current, 1 = last month)', '0')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      const monthOffset = parseInt(options.monthOffset ?? '0', 10);
+      const client = getClient();
+      const result = await client.mutate<{ nexusWpePortfolioOverview: any }>(`
+        mutation($monthOffset: Int) {
+          nexusWpePortfolioOverview(monthOffset: $monthOffset) {
+            success
+            error
+            data
+          }
+        }
+      `, { monthOffset });
+      const { success, error, data } = result.nexusWpePortfolioOverview;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const parsed = JSON.parse(data);
+      if (options.json) { console.log(JSON.stringify(parsed, null, 2)); return; }
+      const { accounts, installs, usage } = parsed;
+      console.log('\nPortfolio Overview:');
+      console.log('─'.repeat(40));
+      if (accounts !== undefined) console.log(`  Accounts:  ${formatNum(accounts)}`);
+      if (installs !== undefined) console.log(`  Installs:  ${formatNum(installs)}`);
+      if (usage) {
+        if (usage.bandwidth !== undefined) console.log(`  Bandwidth: ${formatBytes(usage.bandwidth)}`);
+        if (usage.storage !== undefined) console.log(`  Storage:   ${formatBytes(usage.storage)}`);
+        if (usage.visits !== undefined) console.log(`  Visits:    ${formatNum(usage.visits)}`);
+      }
+      const accountSummaries = parsed.account_summaries ?? parsed.accountSummaries ?? [];
+      if (accountSummaries.length > 0) {
+        console.log('\nPer-Account Summary:');
+        console.log('─'.repeat(60));
+        console.log(`  ${'Account'.padEnd(28)} ${'Installs'.padEnd(12)} Bandwidth`);
+        console.log('─'.repeat(60));
+        for (const a of accountSummaries) {
+          const bw = formatBytes(a.bandwidth ?? a.network_total_bytes);
+          console.log(`  ${(a.name ?? a.account ?? '').padEnd(28)} ${String(a.installs ?? '').padEnd(12)} ${bw}`);
+        }
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 export { wpeCommand };
+

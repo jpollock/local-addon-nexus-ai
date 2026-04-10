@@ -3641,6 +3641,341 @@ export function createResolvers(context: ResolverContext) {
           return { success: false, error: err.message, cached: false, cachedAgeMinutes: 0 };
         }
       },
+
+      nexusWpeAccount: async (_parent: any, { accountId }: { accountId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect(`/accounts/${accountId}`) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeAccountLimits: async (_parent: any, { accountId }: { accountId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect(`/accounts/${accountId}/limits`) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeAccountUsageSummary: async (_parent: any, { accountId, monthOffset = 0 }: { accountId: string; monthOffset?: number }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const { firstDate, lastDate } = buildDateRange(monthOffset);
+          const data = await services.localServices.capiDirect(`/accounts/${accountId}/usage/summary?first_date=${firstDate}&last_date=${lastDate}`) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeAccountUsageInsights: async (_parent: any, { accountId, monthOffset = 0 }: { accountId: string; monthOffset?: number }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const { firstDate, lastDate } = buildDateRange(monthOffset);
+          const data = await services.localServices.capiDirect(`/accounts/${accountId}/usage/insights?first_date=${firstDate}&last_date=${lastDate}`) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeAccountUsers: async (_parent: any, { accountId }: { accountId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect(`/accounts/${accountId}/account_users?limit=100`) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeAccountUser: async (_parent: any, { accountId, userId }: { accountId: string; userId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect(`/accounts/${accountId}/account_users/${userId}`) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeUserAdd: async (_parent: any, { accountId, email, firstName, lastName, role }: { accountId: string; email: string; firstName: string; lastName: string; role: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          await services.localServices.capiDirect(`/accounts/${accountId}/account_users`, 'POST', { user: { email, first_name: firstName, last_name: lastName }, roles: [role] });
+          return { success: true, message: `User ${email} added to account ${accountId} with role ${role}` };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeUserUpdate: async (_parent: any, { accountId, userId, role }: { accountId: string; userId: string; role: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          await services.localServices.capiDirect(`/accounts/${accountId}/account_users/${userId}`, 'PATCH', { roles: [role] });
+          return { success: true, message: `User ${userId} role updated to ${role}` };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeUserRemove: async (_parent: any, { accountId, userId, confirm }: { accountId: string; userId: string; confirm?: boolean }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          if (!confirm) return { success: false, error: 'Pass --confirm to remove this user' };
+          await services.localServices.capiDirect(`/accounts/${accountId}/account_users/${userId}`, 'DELETE');
+          return { success: true, message: `User ${userId} removed from account ${accountId}` };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeUserAudit: async (_parent: any, { accountId }: { accountId?: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          let accounts: any[];
+          if (accountId) {
+            accounts = [{ id: accountId, name: accountId }];
+          } else {
+            accounts = await services.localServices.capiGetAccounts() as any[];
+          }
+          const results = await Promise.all((accounts || []).map(async (a: any) => {
+            try {
+              const d = await services.localServices!.capiDirect(`/accounts/${a.id}/account_users?limit=100`) as any;
+              return { account: a.name, users: d?.results ?? [] };
+            } catch { return { account: a.name, users: [] }; }
+          }));
+          return { success: true, data: JSON.stringify(results) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeSites: async (_parent: any, { accountId }: { accountId?: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect(`/sites${accountId ? `?account_id=${accountId}` : ''}`) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeSite: async (_parent: any, { siteId }: { siteId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect(`/sites/${siteId}`) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeCreateSite: async (_parent: any, { name, accountId }: { name: string; accountId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect('/sites', 'POST', { name, account: accountId }) as any;
+          return { success: true, siteId: data?.id, name: data?.name };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeCreateInstall: async (_parent: any, { siteId, name, environment, accountId }: { siteId: string; name: string; environment: string; accountId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect('/installs', 'POST', { site: siteId, name, environment, account: accountId }) as any;
+          return { success: true, installId: data?.id, name: data?.name, domain: data?.primaryDomain || data?.cname };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeUpdateInstall: async (_parent: any, { installId, phpVersion, environment }: { installId: string; phpVersion?: string; environment?: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          if (!phpVersion && !environment) return { success: false, error: 'Provide at least one of phpVersion or environment' };
+          const body: any = {};
+          if (phpVersion) body.php_version = phpVersion;
+          if (environment) body.environment = environment;
+          await services.localServices.capiDirect(`/installs/${installId}`, 'PATCH', body);
+          return { success: true, message: `Install ${installId} updated` };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeDeleteInstall: async (_parent: any, { installId, confirmName }: { installId: string; confirmName?: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const install = await services.localServices.capiDirect(`/installs/${installId}`) as any;
+          if (!confirmName) return { success: false, error: `Pass --confirm-name "${install?.name || installId}" to confirm deletion` };
+          if (confirmName !== install?.name) return { success: false, error: `Confirmation name "${confirmName}" does not match install name "${install?.name}"` };
+          await services.localServices.capiDirect(`/installs/${installId}`, 'DELETE');
+          return { success: true, message: `Install "${install?.name}" deleted` };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeBackupStatus: async (_parent: any, { installId, backupId }: { installId: string; backupId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect(`/installs/${installId}/backups/${backupId}`) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeBackupVerify: async (_parent: any, { installId, description }: { installId: string; description?: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const createResult = await services.localServices.capiCreateBackup(installId, description || 'Backup via Nexus AI') as any;
+          const backupId = createResult?.id || createResult?.backup_id;
+          if (!backupId) return { success: true, status: 'created', message: 'Backup created — ID not returned, cannot poll status' } as any;
+          // Poll up to 60 attempts (5 min)
+          for (let i = 0; i < 60; i++) {
+            await new Promise(r => setTimeout(r, 5000));
+            try {
+              const status = await services.localServices!.capiDirect(`/installs/${installId}/backups/${backupId}`) as any;
+              if (status?.status === 'completed' || status?.status === 'success') {
+                return { success: true, backupId, status: status.status, createdAt: status.created_at };
+              }
+              if (status?.status === 'failed') return { success: false, error: 'Backup failed', backupId };
+            } catch { /* keep polling */ }
+          }
+          return { success: true, backupId, status: 'timeout', createdAt: null };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeDomains: async (_parent: any, { installId }: { installId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect(`/installs/${installId}/domains`) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeDomainAdd: async (_parent: any, { installId, domain }: { installId: string; domain: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect(`/installs/${installId}/domains`, 'POST', { name: domain }) as any;
+          return { success: true, domainId: data?.id, name: data?.name };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeDomainRemove: async (_parent: any, { installId, domainId, confirm }: { installId: string; domainId: string; confirm?: boolean }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          if (!confirm) return { success: false, error: 'Pass --confirm to remove this domain' };
+          await services.localServices.capiDirect(`/installs/${installId}/domains/${domainId}`, 'DELETE');
+          return { success: true, message: `Domain ${domainId} removed from install ${installId}` };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeDomainCheck: async (_parent: any, { installId, domainId }: { installId: string; domainId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect(`/installs/${installId}/domains/${domainId}/check_status`, 'POST', {}) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeSslCertificates: async (_parent: any, { installId }: { installId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect(`/installs/${installId}/ssl_certificates`) as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeSslRequest: async (_parent: any, { installId, domainIds }: { installId: string; domainIds: string[] }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          await services.localServices.capiDirect(`/installs/${installId}/ssl_certificates`, 'POST', { domain_ids: domainIds });
+          return { success: true, message: 'SSL certificate provisioning requested' };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeSshKeys: async () => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect('/ssh_keys') as any;
+          return { success: true, data: JSON.stringify(data) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeSshKeyAdd: async (_parent: any, { label, publicKey }: { label: string; publicKey: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const data = await services.localServices.capiDirect('/ssh_keys', 'POST', { label, public_key: publicKey }) as any;
+          return { success: true, keyId: data?.id, label: data?.label };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeSshKeyRemove: async (_parent: any, { sshKeyId, confirm }: { sshKeyId: string; confirm?: boolean }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          if (!confirm) return { success: false, error: 'Pass --confirm to remove this SSH key' };
+          await services.localServices.capiDirect(`/ssh_keys/${sshKeyId}`, 'DELETE');
+          return { success: true, message: `SSH key ${sshKeyId} removed` };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpePromote: async (_parent: any, { sourceInstallId, destInstallId, includeDatabase, confirm }: { sourceInstallId: string; destInstallId: string; includeDatabase?: boolean; confirm?: boolean }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          if (!confirm) {
+            const [src, dst] = await Promise.all([
+              services.localServices.capiDirect(`/installs/${sourceInstallId}`) as Promise<any>,
+              services.localServices.capiDirect(`/installs/${destInstallId}`) as Promise<any>,
+            ]);
+            return {
+              success: true,
+              requiresConfirmation: true,
+              message: `This will overwrite "${(dst as any)?.name}" (${(dst as any)?.environment}) with content from "${(src as any)?.name}" (${(src as any)?.environment}). Pass --confirm to proceed.`,
+            };
+          }
+          await services.localServices.capiDirect('/install_copy', 'POST', {
+            source_install_id: sourceInstallId,
+            destination_install_id: destInstallId,
+            include_database: includeDatabase !== false,
+          });
+          return { success: true, message: `Promotion started from ${sourceInstallId} to ${destInstallId}` };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeDiagnose: async (_parent: any, { installId }: { installId: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const [install, domains, ssl, backups] = await Promise.all([
+            services.localServices.capiDirect(`/installs/${installId}`) as Promise<any>,
+            services.localServices.capiDirect(`/installs/${installId}/domains`).catch(() => null) as Promise<any>,
+            services.localServices.capiDirect(`/installs/${installId}/ssl_certificates`).catch(() => null) as Promise<any>,
+            services.localServices.capiDirect(`/installs/${installId}/backups?limit=1`).catch(() => null) as Promise<any>,
+          ]);
+          return { success: true, data: JSON.stringify({ install, domains, ssl, backups }) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeGoLiveCheck: async (_parent: any, { installId, domain }: { installId: string; domain: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const [domainsData, ssl] = await Promise.all([
+            services.localServices.capiDirect(`/installs/${installId}/domains`) as Promise<any>,
+            services.localServices.capiDirect(`/installs/${installId}/ssl_certificates`).catch(() => null) as Promise<any>,
+          ]);
+          const domainEntry = ((domainsData as any)?.results ?? []).find((d: any) => d.name === domain);
+          return { success: true, data: JSON.stringify({ domain, domainAdded: !!domainEntry, domainId: domainEntry?.id, ssl }) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpeFleetHealth: async (_parent: any, { accountId }: { accountId?: string }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const installs = await services.localServices.capiGetInstalls() as any[];
+          const filtered = accountId ? installs.filter((i: any) => {
+            const aid = typeof i.account === 'object' ? i.account?.id : i.account;
+            return aid === accountId;
+          }) : installs;
+          const withSsl = await Promise.all((filtered || []).map(async (install: any) => {
+            let ssl = null;
+            try { ssl = await services.localServices!.capiDirect(`/installs/${install.id}/ssl_certificates`); } catch {}
+            return { ...install, ssl };
+          }));
+          return { success: true, data: JSON.stringify(withSsl) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
+
+      nexusWpePortfolioOverview: async (_parent: any, { monthOffset = 0 }: { monthOffset?: number }) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const { firstDate, lastDate } = buildDateRange(monthOffset);
+          const [accounts, installs] = await Promise.all([
+            services.localServices.capiGetAccounts() as Promise<any[]>,
+            services.localServices.capiGetInstalls() as Promise<any[]>,
+          ]);
+          const usage = await Promise.all((accounts || []).map(async (a: any) => {
+            try {
+              const d = await services.localServices!.capiDirect(`/accounts/${a.id}/usage?first_date=${firstDate}&last_date=${lastDate}`);
+              return { accountId: a.id, accountName: a.name, usage: d };
+            } catch { return { accountId: a.id, accountName: a.name, usage: null }; }
+          }));
+          return { success: true, data: JSON.stringify({ accounts, installs, usage, period: { firstDate, lastDate } }) };
+        } catch (err: any) { return { success: false, error: err.message }; }
+      },
     },
   };
 }

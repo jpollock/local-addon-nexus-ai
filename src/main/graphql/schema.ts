@@ -1437,6 +1437,173 @@ export const typeDefs = gql`
 
     "Get account-level bandwidth, storage, and visitor usage for a WP Engine account"
     nexusWpeAccountUsage(accountId: String!, monthOffset: Int): NexusWpeUsageResult!
+
+    # Account management
+    "Get a single WP Engine account"
+    nexusWpeAccount(accountId: String!): NexusWpeDataResult!
+
+    "Get plan limits for a WP Engine account"
+    nexusWpeAccountLimits(accountId: String!): NexusWpeDataResult!
+
+    "Get usage summary for a WP Engine account"
+    nexusWpeAccountUsageSummary(accountId: String!, monthOffset: Int): NexusWpeDataResult!
+
+    "Get usage insights breakdown for a WP Engine account"
+    nexusWpeAccountUsageInsights(accountId: String!, monthOffset: Int): NexusWpeDataResult!
+
+    "Get WP Engine portal users for an account"
+    nexusWpeAccountUsers(accountId: String!): NexusWpeDataResult!
+
+    "Get a single WP Engine portal user"
+    nexusWpeAccountUser(accountId: String!, userId: String!): NexusWpeDataResult!
+
+    "Add a user to a WP Engine account"
+    nexusWpeUserAdd(accountId: String!, email: String!, firstName: String!, lastName: String!, role: String!): NexusWpeSimpleResult!
+
+    "Update a WP Engine portal user's role"
+    nexusWpeUserUpdate(accountId: String!, userId: String!, role: String!): NexusWpeSimpleResult!
+
+    "Remove a user from a WP Engine account (requires --confirm in CLI)"
+    nexusWpeUserRemove(accountId: String!, userId: String!, confirm: Boolean): NexusWpeSimpleResult!
+
+    "Audit all users across WP Engine accounts"
+    nexusWpeUserAudit(accountId: String): NexusWpeDataResult!
+
+    # Site + Install lifecycle
+    "List WP Engine sites"
+    nexusWpeSites(accountId: String): NexusWpeDataResult!
+
+    "Get a single WP Engine site"
+    nexusWpeSite(siteId: String!): NexusWpeDataResult!
+
+    "Create a new WP Engine site"
+    nexusWpeCreateSite(name: String!, accountId: String!): NexusWpeSiteResult!
+
+    "Create a new WP Engine install"
+    nexusWpeCreateInstall(siteId: String!, name: String!, environment: String!, accountId: String!): NexusWpeCreateInstallResult!
+
+    "Update a WP Engine install"
+    nexusWpeUpdateInstall(installId: String!, phpVersion: String, environment: String): NexusWpeSimpleResult!
+
+    "Delete a WP Engine install (requires confirmName matching install name)"
+    nexusWpeDeleteInstall(installId: String!, confirmName: String): NexusWpeSimpleResult!
+
+    # Backup
+    "Get the status of a WP Engine backup"
+    nexusWpeBackupStatus(installId: String!, backupId: String!): NexusWpeDataResult!
+
+    "Create a backup and poll until complete"
+    nexusWpeBackupVerify(installId: String!, description: String): NexusWpeBackupVerifyResult!
+
+    # Domains
+    "List domains for a WP Engine install"
+    nexusWpeDomains(installId: String!): NexusWpeDataResult!
+
+    "Add a domain to a WP Engine install"
+    nexusWpeDomainAdd(installId: String!, domain: String!): NexusWpeDomainResult!
+
+    "Remove a domain from a WP Engine install (requires confirm=true)"
+    nexusWpeDomainRemove(installId: String!, domainId: String!, confirm: Boolean): NexusWpeSimpleResult!
+
+    "Check DNS status of a domain"
+    nexusWpeDomainCheck(installId: String!, domainId: String!): NexusWpeDataResult!
+
+    # SSL
+    "List SSL certificates for a WP Engine install"
+    nexusWpeSslCertificates(installId: String!): NexusWpeDataResult!
+
+    "Request an SSL certificate for domains on an install"
+    nexusWpeSslRequest(installId: String!, domainIds: [String!]!): NexusWpeSimpleResult!
+
+    # SSH Keys
+    "List SSH keys for the authenticated user"
+    nexusWpeSshKeys: NexusWpeDataResult!
+
+    "Add an SSH key to the authenticated user"
+    nexusWpeSshKeyAdd(label: String!, publicKey: String!): NexusWpeSshKeyResult!
+
+    "Remove an SSH key (requires confirm=true)"
+    nexusWpeSshKeyRemove(sshKeyId: String!, confirm: Boolean): NexusWpeSimpleResult!
+
+    # Workflow tools
+    "Promote one WP Engine environment to another"
+    nexusWpePromote(sourceInstallId: String!, destInstallId: String!, includeDatabase: Boolean, confirm: Boolean): NexusWpePromoteResult!
+
+    "Diagnose a WP Engine install"
+    nexusWpeDiagnose(installId: String!): NexusWpeDataResult!
+
+    "Check if an install is ready to go live with a domain"
+    nexusWpeGoLiveCheck(installId: String!, domain: String!): NexusWpeDataResult!
+
+    "Get fleet-wide health overview"
+    nexusWpeFleetHealth(accountId: String): NexusWpeDataResult!
+
+    "Get portfolio overview (executive summary)"
+    nexusWpePortfolioOverview(monthOffset: Int): NexusWpeDataResult!
+  }
+
+  # Generic result for WPE operations returning raw data
+  type NexusWpeDataResult {
+    success: Boolean!
+    error: String
+    data: String
+  }
+
+  # Generic result for simple WPE write operations
+  type NexusWpeSimpleResult {
+    success: Boolean!
+    error: String
+    message: String
+  }
+
+  # Result for WPE domain operations that return an ID
+  type NexusWpeDomainResult {
+    success: Boolean!
+    error: String
+    domainId: String
+    name: String
+  }
+
+  # Result for WPE install creation
+  type NexusWpeCreateInstallResult {
+    success: Boolean!
+    error: String
+    installId: String
+    name: String
+    domain: String
+  }
+
+  # Result for WPE site creation
+  type NexusWpeSiteResult {
+    success: Boolean!
+    error: String
+    siteId: String
+    name: String
+  }
+
+  # Result for SSH key creation
+  type NexusWpeSshKeyResult {
+    success: Boolean!
+    error: String
+    keyId: String
+    label: String
+  }
+
+  # Result for backup verification
+  type NexusWpeBackupVerifyResult {
+    success: Boolean!
+    error: String
+    backupId: String
+    status: String
+    createdAt: String
+  }
+
+  # Result for promote environment (Tier 3 pre-confirmation)
+  type NexusWpePromoteResult {
+    success: Boolean!
+    error: String
+    message: String
+    requiresConfirmation: Boolean
   }
 
   type NexusWpeStatusResult {

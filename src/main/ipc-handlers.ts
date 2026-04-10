@@ -2638,6 +2638,24 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  safeHandle(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS, async () => {
+    try {
+      const db = graphService.getDb();
+      if (!db) return { success: false, error: 'Graph DB not available' };
+      const result = db.prepare(
+        "DELETE FROM sites WHERE source='wpe' AND is_active=0"
+      ).run();
+      // Also clean up orphaned plugins/content/users for removed sites
+      db.prepare("DELETE FROM plugins WHERE site_id NOT IN (SELECT id FROM sites)").run();
+      db.prepare("DELETE FROM content WHERE site_id NOT IN (SELECT id FROM sites)").run();
+      db.prepare("DELETE FROM users WHERE site_id NOT IN (SELECT id FROM sites)").run();
+      localLogger.info(`[NexusAI] Cleaned up ${result.changes} ghost installs`);
+      return { success: true, removed: result.changes };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES, async () => {
     try {
       // Clean vector store
@@ -3596,6 +3614,47 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   // Database Scanner IPC handlers
+  safeHandle(IPC_CHANNELS.DB_SCAN_ALL, async () => {
+    try {
+      const allSites = Object.values(siteData.getSites() as Record<string, any>);
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      const runningSites = allSites.filter((s: any) => statuses[s.id] === 'running');
+
+      if (runningSites.length === 0) {
+        return { success: false, error: 'No running sites. Start at least one site first.' };
+      }
+
+      const results = await Promise.allSettled(
+        runningSites.map(async (site: any) => {
+          const { scanDatabase } = await import('./mcp/modules/db-scanner/db-scanner');
+          const nexusServicesForDb = {
+            siteData: {
+              getSite: (id: string) => siteData.getSite(id),
+              getSites: () => siteData.getSites(),
+            },
+            localServices: localServicesBridge,
+            logger: localLogger,
+          };
+          const result = await scanDatabase(site.id, nexusServicesForDb as any);
+          const { siteId: _sid, siteName: _sn, ...rest } = result as any;
+          return { siteId: site.id, siteName: site.name, ...rest };
+        })
+      );
+
+      const scans = results.map((r, i) => {
+        if (r.status === 'fulfilled') return r.value;
+        return { siteId: runningSites[i].id, siteName: runningSites[i].name, error: String(r.reason) };
+      });
+
+      // Sort worst first
+      scans.sort((a: any, b: any) => (a.healthScore ?? 100) - (b.healthScore ?? 100));
+
+      return { success: true, scans, scanned: runningSites.length };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.DB_SCAN_SITE, async (_event: any, siteId: string) => {
     try {
       const site = siteData.getSite(siteId);

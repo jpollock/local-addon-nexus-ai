@@ -167,7 +167,7 @@ These tools work on both local sites (pass `site`) and remote WP Engine installs
 
 See [WP Connector](wp-connector.md) for full details.
 
-### WP Engine (9 tools)
+### WP Engine (9 core tools + full fleet management)
 
 | Tool | Description |
 |------|-------------|
@@ -180,6 +180,8 @@ See [WP Connector](wp-connector.md) for full details.
 | `local_wpe_push` | Push a local site to a WPE environment (requires confirmation) |
 | `local_wpe_link` | Link a local site to a WPE install |
 | `nexus_list_sites` | Unified view of local sites + WPE installs |
+
+Additional WPE management tools cover domains, SSL certificates, user management, environment promotion, fleet health, and go-live checklists. See [WP Engine Management Guide](WPE_REMOTE_MANAGEMENT_USER_GUIDE.md) for the complete tool reference.
 
 ## Safety System
 
@@ -323,6 +325,78 @@ WooCommerce sites accumulate additional data over time:
 | Expired coupons (meta) | Meta for coupons that no longer exist |
 
 These items are surfaced separately in scan output so you can review them before cleaning.
+
+## CLI
+
+The `nexus` CLI provides terminal access to all major Nexus AI features. After installation, authenticate once and then manage local and remote WordPress sites from any terminal.
+
+### Site Commands (`nexus sites`)
+
+```bash
+nexus sites list              # list all local sites
+nexus sites start <name>      # start a site
+nexus sites stop <name>       # stop a site
+```
+
+### WordPress Commands (`nexus wp`)
+
+```bash
+nexus wp plugins <site>       # list plugins
+nexus wp db scan <site>       # scan database health
+nexus wp db clean <site>      # clean database (dry-run by default)
+nexus wp db report <site>     # print saved health report
+```
+
+### WP Engine Commands (`nexus wpe`)
+
+```bash
+# Authentication
+nexus wpe status | login | logout
+
+# Accounts & users
+nexus wpe accounts | account <id> | limits <id>
+nexus wpe users <accountId> | user-add | user-remove | user-audit
+
+# Installs & sites
+nexus wpe installs | install <id>
+nexus wpe create-install | update-install | delete-install
+
+# Domains & SSL
+nexus wpe domains <installId> | domain-add | domain-remove | domain-check
+nexus wpe ssl <installId> | ssl-request
+
+# Backups
+nexus wpe backup <target> | backup-verify <id> | backup-status <id> <backupId>
+
+# Fleet
+nexus wpe diagnose <id> | go-live-check <id> <domain>
+nexus wpe fleet-health | portfolio | promote <src> <dest>
+```
+
+See the [WP Engine Management Guide](WPE_REMOTE_MANAGEMENT_USER_GUIDE.md) for the full reference.
+
+## WP Engine Management
+
+Nexus AI provides full WP Engine fleet management via AI agents and the `nexus wpe` CLI. You can manage accounts, installs, domains, SSL certificates, users, backups, and more — directly from an AI chat or the terminal.
+
+**Quick start:**
+```bash
+nexus wpe status          # check auth
+nexus wpe login           # authenticate
+nexus wpe accounts        # list accounts
+nexus wpe installs        # list installs
+```
+
+For the complete reference, see [WP Engine Remote Management Guide](WPE_REMOTE_MANAGEMENT_USER_GUIDE.md).
+
+**Key capabilities:**
+- Account & user management (add/remove portal users, audit access)
+- Install lifecycle (create, update, delete installs and sites)
+- Domain management (add domains, check DNS, set primary)
+- SSL certificates (request Let's Encrypt, import custom, monitor expiry)
+- Environment promotion (staging → production with backup checks)
+- Fleet intelligence (health overview, diagnose installs, go-live checklist)
+- Backup creation and verification
 
 ## Production Deployment
 
