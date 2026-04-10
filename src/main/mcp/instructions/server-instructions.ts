@@ -54,6 +54,7 @@ Route user requests to the correct tool namespace:
 | Site structure | \`get_site_structure\`, \`get_index_status\`, \`reindex_site\`, \`list_indexed_sites\` | "what's installed on this site?" |
 | WP Engine auth | \`wpe_status\`, \`wpe_login\`, \`wpe_logout\` | "am I logged in to WPE?", "connect to WP Engine" |
 | WP Engine accounts | \`wpe_get_accounts\`, \`wpe_get_installs\`, \`wpe_get_install\` | "show my WPE installs" |
+| WP Engine account users | \`wpe_get_account_users\`, \`wpe_get_account_user\` | "who has access to this account?", "list WPE portal users", "what roles do users have?" |
 | WP Engine usage (fleet) | \`wpe_portfolio_usage\` | "which sites get the most traffic?", "installs with >100 visits/day", "highest bandwidth sites" |
 | WP Engine versions (fleet) | \`wpe_fleet_versions\` | "WP/PHP versions of my high-traffic sites", "which installs run old WordPress?" |
 | Local ↔ WPE drift | \`wpe_detect_drift\` | "are my local sites in sync with WPE?", "what's different between local and production?", "plugin differences between dev and live" |
