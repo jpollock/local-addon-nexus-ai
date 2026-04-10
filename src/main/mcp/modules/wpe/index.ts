@@ -1,5 +1,6 @@
 import { ToolRegistry } from '../../tool-registry';
 import { getAccountsHandler } from './get-accounts';
+import { getAccountUsersHandler } from './get-account-users';
 import { getInstallsHandler } from './get-installs';
 import { getInstallHandler } from './get-install';
 import { createBackupHandler } from './create-backup';
@@ -30,6 +31,7 @@ import {
  */
 export function registerWpeTools(registry: ToolRegistry): void {
   registry.register(getAccountsHandler);
+  registry.register(getAccountUsersHandler);
   registry.register(getInstallsHandler);
   registry.register(getInstallHandler);
   registry.register(createBackupHandler);
