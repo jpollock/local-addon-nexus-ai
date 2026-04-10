@@ -33,10 +33,17 @@ export const getAccountUsersHandler: McpToolHandler = {
         return ok(`No users found for account ${accountId}.`);
       }
 
+      // CAPI returns single-letter role codes: o=owner, b=billing, p=partial
+      const ROLE_LABELS: Record<string, string> = {
+        o: 'owner', b: 'billing', p: 'partial', full: 'full',
+        owner: 'owner', billing: 'billing', partial: 'partial',
+      };
+
       const lines = [`## WP Engine Account Users (${users.length})`];
       const byRole: Record<string, string[]> = {};
       for (const u of users) {
-        const role = u.roles?.[0] ?? 'unknown';
+        const rawRole = u.roles?.[0] ?? 'unknown';
+        const role = ROLE_LABELS[rawRole] ?? rawRole;
         if (!byRole[role]) byRole[role] = [];
         byRole[role].push(`${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.user?.email || u.id);
       }
