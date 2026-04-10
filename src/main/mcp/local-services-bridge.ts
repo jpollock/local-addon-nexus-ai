@@ -618,7 +618,8 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       const userData = svc('userData');
       if (!userData) throw new Error('User data service not available');
 
-      await userData.delete('wpeApiCredentials');
+      // Local's userData has no delete — overwrite with null to clear
+      await userData.set({ name: 'wpeApiCredentials', data: null, encrypted: false });
     },
 
     async wpeGetApiCredentialsStatus(): Promise<{ configured: boolean; username?: string }> {
