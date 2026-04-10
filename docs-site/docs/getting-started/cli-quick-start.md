@@ -12,7 +12,7 @@ Get up and running with Nexus AI CLI in 5 minutes.
 
 Before you begin, make sure you have:
 
-- **Local by Flywheel** installed ([download](https://localwp.com))
+- **Local by WP Engine** installed ([download](https://localwp.com))
 - **Node.js 18+** installed ([download](https://nodejs.org))
 - At least one WordPress site in Local (optional for first run)
 
@@ -223,22 +223,13 @@ The real power of Nexus AI comes from connecting it to AI assistants via the Mod
 
 ### Claude Desktop
 
-1. **Add to Claude Desktop config:**
+1. **Auto-configure Claude Desktop:**
 
-   Edit `~/.config/Claude/claude_desktop_config.json` (macOS/Linux) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-   ```json
-   {
-     "mcpServers": {
-       "nexus-ai": {
-         "command": "nexus",
-         "args": ["mcp"]
-       }
-     }
-   }
+   ```bash
+   nexus mcp setup --agent claude-desktop --write
    ```
 
-2. **Restart Claude Desktop**
+2. **Restart Claude Desktop completely** (quit and reopen, don't just close the window)
 
 3. **Verify connection:**
 
@@ -253,23 +244,17 @@ The real power of Nexus AI comes from connecting it to AI assistants via the Mod
    - "What plugins are installed on mysite?"
    - "Update WordPress on all my staging sites"
 
+!!! info "Local must be running"
+    The MCP server runs inside the Local addon. Local by WP Engine must be open and running for AI tools to work.
+
 [Detailed Claude Setup →](../cli/mcp-setup.md#claude-desktop)
 
 ### Cursor IDE
 
-1. **Add to Cursor MCP config:**
+1. **Auto-configure Cursor:**
 
-   Create or edit `.cursor/mcp.json` in your workspace:
-
-   ```json
-   {
-     "mcpServers": {
-       "nexus-ai": {
-         "command": "nexus",
-         "args": ["mcp"]
-       }
-     }
-   }
+   ```bash
+   nexus mcp setup --agent cursor --write
    ```
 
 2. **Restart Cursor**
@@ -284,10 +269,14 @@ The real power of Nexus AI comes from connecting it to AI assistants via the Mod
 
 ### Other AI Clients
 
-Nexus AI works with any MCP-compatible client:
+Nexus AI supports all major MCP clients via `nexus mcp setup`:
 
-- **Zed Editor** - [Setup guide](../cli/mcp-setup.md#zed-editor)
-- **Continue.dev** - [Setup guide](../cli/mcp-setup.md#continuedev)
+```bash
+nexus mcp setup --agent windsurf --write   # Windsurf
+nexus mcp setup --agent cline --write      # Cline (VS Code)
+nexus mcp setup --agent gemini --write     # Gemini CLI
+nexus mcp setup --agent claude-code --write # Claude Code
+```
 
 ## Common Tasks
 
@@ -338,7 +327,7 @@ If you have WP Engine sites, you can manage them too:
 
 ### 1. Authenticate with WP Engine
 
-In Local, go to **Connect → WP Engine** and sign in. Your credentials are automatically synced to the CLI.
+In Local by WP Engine, go to **Connect → WP Engine** and sign in, or use the CLI: `nexus wpe login`. Your credentials are automatically synced.
 
 ### 2. List WP Engine Sites
 
@@ -510,15 +499,14 @@ If `nexus scan` fails:
 
 If AI assistant doesn't see Nexus tools:
 
-1. **Verify config path:**
-   - macOS/Linux: `~/.config/Claude/claude_desktop_config.json`
-   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-2. **Check JSON syntax:**
+1. **Re-run the setup command:**
    ```bash
-   # Validate JSON
-   cat ~/.config/Claude/claude_desktop_config.json | jq
+   # Re-run the setup command
+   nexus mcp setup --agent claude-desktop --write
+   # Then restart Claude Desktop completely
    ```
+
+2. **Make sure Local by WP Engine is running** — the MCP server lives inside the Local addon and requires Local to be open.
 
 3. **Restart AI client completely:**
    - Quit the application (not just close window)
@@ -569,7 +557,7 @@ nexus config set ai.model nomic-embed-text
 
 - **[CLI Examples](../cli/examples.md)** - Real-world usage patterns
 - **[CLI Commands](../reference/cli-command-reference.md)** - Complete command reference
-- **[MCP Tools](../mcp-tools/index.md)** - All 90+ tools available to AI assistants
+- **[MCP Tools](../mcp-tools/index.md)** - All 160+ tools available to AI assistants
 - **[WP Engine Management](../cli/wpe-sites.md)** - Remote site management
 
 ### Connect AI Assistants
@@ -600,6 +588,7 @@ nexus config set ai.model nomic-embed-text
 # Scan all sites
 nexus scan
 
-# Connect to Claude Desktop (edit config, then restart)
+# Connect to Claude Desktop (auto-configure, then restart)
+nexus mcp setup --agent claude-desktop --write
 # Then ask Claude: "List all my WordPress sites"
 ```

@@ -12,25 +12,30 @@ Get up and running with the Nexus AI UI addon in 3 minutes.
 
 Before you begin, make sure you have:
 
-- **Local by Flywheel** installed ([download](https://localwp.com))
+- **Local by WP Engine** installed ([download](https://localwp.com))
 - At least one WordPress site in Local
 
 ## Installation
 
-### Method 1: Auto-Install (Recommended)
+### Install via CLI (Recommended)
 
-The easiest way to install the UI addon is via the CLI, which automatically installs it into Local:
+Install the CLI globally — the addon is auto-installed into Local on first run:
 
 ```bash
 npm install -g @local-labs-jpollock/local-addon-nexus-ai
 ```
 
-The addon will be automatically installed into Local on first run.
+Open Local by WP Engine and the Nexus AI addon activates automatically.
 
-### Method 2: Manual Install
+!!! info "No separate addon download needed"
+    The CLI (`npm install -g`) handles everything. It downloads and installs the platform-specific addon into Local automatically on first run. No manual download or ZIP installation required.
+
+### Manual Install (Advanced)
+
+If you need to install the addon separately:
 
 1. Download the latest addon ZIP from [GitHub Releases](https://github.com/jpollock/local-addon-nexus-ai/releases)
-2. Open Local
+2. Open Local by WP Engine
 3. Go to **Preferences → Addons**
 4. Click **Install from disk**
 5. Select the downloaded ZIP file
@@ -420,19 +425,12 @@ For maximum power, use both UI and CLI:
 - **Both** share the same database and settings
 
 ```bash
-# Install CLI
+# Install CLI (addon auto-installs on first run)
 npm install -g @local-labs-jpollock/local-addon-nexus-ai
 
-# Connect to AI assistant (Claude Desktop)
-# Edit ~/.config/Claude/claude_desktop_config.json
-{
-  "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
-    }
-  }
-}
+# Connect to AI assistant (auto-configure, then restart the client)
+nexus mcp setup --agent claude-desktop --write
+# or: cursor, windsurf, cline, gemini, claude-code
 ```
 
 [CLI Quick Start →](cli-quick-start.md)

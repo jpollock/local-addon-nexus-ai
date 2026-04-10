@@ -780,7 +780,7 @@ When using Nexus AI with Cursor:
 - **[Claude Desktop Integration](claude-desktop.md)** - General site management
 - **[MCP Setup](../cli/mcp-setup.md)** - Other MCP clients
 - **[CLI Examples](../cli/examples.md)** - More usage patterns
-- **[Tool Reference](../mcp-tools/index.md)** - All 90+ tools
+- **[Tool Reference](../mcp-tools/index.md)** - All 160+ tools
 
 ---
 

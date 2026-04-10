@@ -50,6 +50,9 @@ Install addon in Local app for a dashboard experience.
 
 </div>
 
+!!! info "Both Require Local"
+    Both the CLI and UI require Local by WP Engine to be running. The CLI talks to Local over a local GraphQL connection; the UI is built into the Local addon.
+
 !!! tip "Use Both"
     You can use both interfaces simultaneously. They share the same database and indexes.
 
@@ -61,19 +64,14 @@ Install addon in Local app for a dashboard experience.
 # 1. Install globally
 npm install -g @local-labs-jpollock/local-addon-nexus-ai
 
-# 2. Add to Claude Desktop config
-# Edit: ~/.config/Claude/claude_desktop_config.json
-{
-  "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
-    }
-  }
-}
+# 2. Open Local by WP Engine — addon activates automatically
+# The addon UI shows connection info and a "Connect to AI Tools" panel
 
-# 3. Restart Claude Desktop
-# Tools will appear automatically
+# 3. Auto-configure your AI client (Local must be running)
+nexus mcp setup --agent claude-desktop --write  # Claude Desktop
+# or: cursor, windsurf, cline, gemini, claude-code
+
+# 4. Restart your AI client — tools appear automatically
 ```
 
 [Detailed CLI Setup →](cli-quick-start.md)
@@ -81,14 +79,13 @@ npm install -g @local-labs-jpollock/local-addon-nexus-ai
 ### Path 2: UI Addon (3 minutes)
 
 ```bash
-# 1. Download latest release
-# https://github.com/jpollock/local-addon-nexus-ai/releases
+# 1. Install globally (addon auto-installs on first run)
+npm install -g @local-labs-jpollock/local-addon-nexus-ai
 
-# 2. Install in Local
-# Local → Preferences → Addons → Install
+# 2. Open Local by WP Engine
+# Nexus AI appears in the toolbar automatically
 
-# 3. Restart Local
-# Click "Nexus AI" in toolbar
+# 3. Click "Nexus AI" to open the fleet overview
 ```
 
 [Detailed UI Setup →](ui-quick-start.md)
@@ -111,7 +108,7 @@ This getting started guide covers:
 
 - **OS:** macOS, Windows, or Linux
 - **Node.js:** 18.x or newer
-- **Local:** 9.0.0+ (for UI addon)
+- **Local by WP Engine:** 9.0.0+
 - **Memory:** 2 GB available RAM
 - **Disk:** 500 MB for indexes (scales with content)
 
@@ -305,7 +302,7 @@ nexus local start mysite
 
 - **Explore Tools**
 
-    Browse 90+ MCP tools for WordPress operations.
+    Browse 160+ MCP tools for WordPress operations.
 
     [→ Tool Reference](../mcp-tools/index.md)
 

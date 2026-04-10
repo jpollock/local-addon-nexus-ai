@@ -956,7 +956,7 @@ When you use Nexus AI with Claude:
 - **[Cursor Integration](cursor.md)** - Use Nexus in your code editor
 - **[MCP Protocol](../architecture/mcp-protocol.md)** - Understanding MCP
 - **[CLI Examples](../cli/examples.md)** - More CLI usage patterns
-- **[Tool Reference](../mcp-tools/index.md)** - All 90+ tools
+- **[Tool Reference](../mcp-tools/index.md)** - All 160+ tools
 
 ---
 

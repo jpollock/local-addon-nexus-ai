@@ -1,12 +1,12 @@
 ---
 title: MCP Tools Reference
-description: Complete reference for all 90+ Model Context Protocol tools
+description: Complete reference for all 160+ Model Context Protocol tools
 keywords: [mcp, tools, api, wordpress, local, wpe, reference]
 ---
 
 # MCP Tools Reference
 
-Nexus AI exposes **90+ tools** via the Model Context Protocol for AI-powered WordPress management.
+Nexus AI exposes **160+ tools** via the Model Context Protocol for AI-powered WordPress management.
 
 ## Tool Categories
 

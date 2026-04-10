@@ -64,7 +64,7 @@ Standalone Node.js application that can run as:
 
 **Key Components:**
 - MCP protocol handler (stdio transport)
-- Tool registry (90+ tools)
+- Tool registry (160+ tools)
 - WP-CLI executor
 - WPE CAPI client
 - SSH connection manager

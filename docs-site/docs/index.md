@@ -36,7 +36,7 @@ Nexus AI brings enterprise-grade AI capabilities to local WordPress development,
 
 ### Ship-Ready AI Stack
 
-- **MCP Server** — 111 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
+- **MCP Server** — 161 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
 - **CLI** — Terminal commands for local and WPE site management (hosting + WordPress)
 - **Open Source AI** — Ships with LanceDB (vector database), ONNX embeddings, and Ollama integration
 - **Local AI Gateway** — Centralized credential proxy, usage tracking, and cost monitoring for your entire fleet
@@ -86,11 +86,11 @@ graph LR
 npm install -g @local-labs-jpollock/local-addon-nexus-ai
 
 # Use with Claude Desktop
-# Add to claude_desktop_config.json
+nexus mcp setup --agent claude-desktop --write
 ```
 
 **Key capabilities:**
-- 🤖 **90+ MCP tools** for WordPress operations
+- 🤖 **160+ MCP tools** for WordPress operations
 - 🔍 **Semantic search** across all sites
 - ⚡ **Bulk operations** with parallel execution
 - 🌐 **Local + WPE** unified management
@@ -233,7 +233,7 @@ nexus sites list
 
 **What you get:**
 - ✅ **CLI** — Terminal commands for all operations
-- ✅ **MCP Server** — 111 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
+- ✅ **MCP Server** — 161 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
 - ✅ **UI Addon** — Visual dashboards built into Local app
 
 **Supported platforms:** macOS (Apple Silicon/Intel), Windows, Linux
@@ -242,20 +242,14 @@ nexus sites list
 
 ### Connect to AI Assistants (Optional)
 
-Add to Claude Desktop config (`~/.config/Claude/claude_desktop_config.json`):
+Auto-configure your AI client (Local by WP Engine must be running):
 
-```json
-{
-  "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
-    }
-  }
-}
+```bash
+nexus mcp setup --agent claude-desktop --write  # Claude Desktop
+# or: cursor, windsurf, cline, gemini, claude-code
 ```
 
-Restart Claude Desktop and the tools will appear in Claude's tool list.
+Restart your AI client and the tools will appear automatically.
 
 [MCP Setup Guide →](cli/mcp-setup.md)
 
@@ -345,7 +339,7 @@ graph TB
 
     ---
 
-    Explore 90+ MCP tools for WordPress operations.
+    Explore 160+ MCP tools for WordPress operations.
 
     [Tool Reference →](mcp-tools/index.md)
 

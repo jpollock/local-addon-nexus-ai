@@ -948,5 +948,5 @@ Then use natural language in Cursor:
 
 - [CLI Command Reference](../reference/cli-command-reference.md) - Complete command list
 - [MCP Setup](mcp-setup.md) - Connect to AI assistants
-- [Tool Reference](../mcp-tools/index.md) - All 90+ MCP tools
+- [Tool Reference](../mcp-tools/index.md) - All 160+ MCP tools
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions

@@ -28,18 +28,12 @@ nexus wpe pull mysite-prod
 ```
 
 ### 2. MCP Server
-Exposes 90+ tools to AI assistants via the Model Context Protocol.
+Exposes 160+ tools to AI assistants via the Model Context Protocol.
 
-```json
-// Claude Desktop config
-{
-  "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
-    }
-  }
-}
+```bash
+# Auto-configure your AI client (Local by WP Engine must be running)
+nexus mcp setup --agent claude-desktop --write
+# or: cursor, windsurf, cline, gemini, claude-code
 ```
 
 ## Installation
@@ -146,14 +140,14 @@ nexus <command> [subcommand] [options]
 | `wp` | Execute WP-CLI commands |
 | `wpe` | WP Engine operations (pull, push, sync) |
 | `local` | Local site operations (create, start, stop) |
-| `mcp` | Start MCP server for AI assistants |
+| `mcp` | Configure MCP clients (`nexus mcp setup`) — server runs inside the Local addon |
 | `telemetry` | View/control telemetry settings |
 
 [Command Reference →](commands.md)
 
 ## MCP Tools
 
-When running as an MCP server, Nexus AI exposes 90+ tools to AI assistants.
+When running as an MCP server, Nexus AI exposes 160+ tools to AI assistants.
 
 ### Tool Categories
 
@@ -414,55 +408,35 @@ done
 
 ## MCP Client Setup
 
+Use `nexus mcp setup` to auto-configure any supported client (Local by WP Engine must be running):
+
 ### Claude Desktop
 
-`~/.config/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
-    }
-  }
-}
+```bash
+nexus mcp setup --agent claude-desktop --write
 ```
+
+Then restart Claude Desktop.
 
 [Claude Desktop Setup →](../integrations/claude-desktop.md)
 
 ### Cursor IDE
 
-`.cursor/config.json`
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "nexus-ai": {
-        "command": "nexus",
-        "args": ["mcp"]
-      }
-    }
-  }
-}
+```bash
+nexus mcp setup --agent cursor --write
 ```
+
+Then restart Cursor.
 
 [Cursor Setup →](../integrations/cursor.md)
 
-### Zed Editor
+### Other Clients
 
-`.zed/mcp.json`
-
-```json
-{
-  "servers": {
-    "nexus-ai": {
-      "command": "nexus",
-      "args": ["mcp"]
-    }
-  }
-}
+```bash
+nexus mcp setup --agent windsurf --write    # Windsurf
+nexus mcp setup --agent cline --write       # Cline (VS Code)
+nexus mcp setup --agent gemini --write      # Gemini CLI
+nexus mcp setup --agent claude-code --write # Claude Code
 ```
 
 [Other Clients →](../integrations/other-mcp-clients.md)
@@ -513,5 +487,5 @@ nexus wpe auth
 - [Installation Guide](installation.md) - Install and configure the CLI
 - [MCP Setup](mcp-setup.md) - Connect to AI assistants
 - [Command Reference](commands.md) - Complete command list
-- [Tool Reference](../mcp-tools/index.md) - All 90+ MCP tools
+- [Tool Reference](../mcp-tools/index.md) - All 160+ MCP tools
 - [Examples](examples.md) - Real-world usage examples
