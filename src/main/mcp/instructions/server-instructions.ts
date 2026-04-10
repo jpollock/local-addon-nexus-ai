@@ -20,6 +20,8 @@ When the user says "my sites" or "my fleet" they usually mean **both**. When the
 
 \`nexus_list_sites\` is the unified view — it shows both layers and marks linked pairs with ↔.
 
+WPE install content is indexed as \`wpe-{uuid}\` in the vector store — not by install name. To search a WPE install's content, pass the install name (e.g. "localwpe") directly to \`search_site_content\` — it resolves automatically. Run \`wpe_sync_sites\` first if content is missing.
+
 \`find_outdated_sites\` labels each site \`[local]\` or \`[wpe]\` and accepts a \`source\` filter (\`wpe\` or \`local\`).
 
 ## Discovery First
@@ -48,7 +50,7 @@ Route user requests to the correct tool namespace:
 | Fleet overview | \`fleet_summary\`, \`find_sites_with_plugin\`, \`find_sites_with_theme\`, \`compare_sites\`, \`detect_drift\`, \`find_outdated_sites\` | "which sites use WooCommerce?" |
 | Fleet health | \`fleet_health_summary\`, \`get_site_health\`, \`fleet_filter\`, \`fleet_search\` | "which sites have issues?", "find sites running PHP 7" |
 | Fleet plugin audit | \`nexus_plugin_audit\`, \`bulk_plugin_update\` | "audit plugins across all sites", "update Yoast everywhere" |
-| Content search | \`search_site_content\`, \`search_across_sites\` | "find posts about pricing" |
+| Content search | \`search_site_content\`, \`search_across_sites\` | "find posts about pricing", "search localwpe for documentation" |
 | Site structure | \`get_site_structure\`, \`get_index_status\`, \`reindex_site\`, \`list_indexed_sites\` | "what's installed on this site?" |
 | WP Engine auth | \`wpe_status\`, \`wpe_login\`, \`wpe_logout\` | "am I logged in to WPE?", "connect to WP Engine" |
 | WP Engine accounts | \`wpe_get_accounts\`, \`wpe_get_installs\`, \`wpe_get_install\` | "show my WPE installs" |

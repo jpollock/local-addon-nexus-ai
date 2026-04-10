@@ -857,7 +857,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
           ? React.createElement('span', { style: { color: UI_COLORS.STATUS_WARNING } }, ` · ${staleCount} stale`)
           : React.createElement('span', null, ' · all current ✓'),
         React.createElement('br'),
-        `Threshold: ${wpeSyncThresholdHours}h`,
+        `SSH sync threshold: ${wpeSyncThresholdHours}h`,
       ),
     );
   }
@@ -1357,6 +1357,18 @@ renderTabBar(): React.ReactNode {
             }
           },
         }, 'Remove Excluded Types'),
+
+        React.createElement('button', {
+          style: grayBtn,
+          title: 'Remove WPE installs that no longer exist in CAPI (marked inactive after CAPI sync)',
+          onClick: async () => {
+            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS);
+            if (result.success) {
+              (window as any).showToast?.(`Removed ${result.removed} ghost install${result.removed !== 1 ? 's' : ''} from graph`, 'success');
+              await this.fetchAll();
+            }
+          },
+        }, 'Remove Ghost Installs'),
 
         React.createElement('button', {
           style: dangerBtn,

@@ -2638,6 +2638,24 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  safeHandle(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS, async () => {
+    try {
+      const db = graphService.getDb();
+      if (!db) return { success: false, error: 'Graph DB not available' };
+      const result = db.prepare(
+        "DELETE FROM sites WHERE source='wpe' AND is_active=0"
+      ).run();
+      // Also clean up orphaned plugins/content/users for removed sites
+      db.prepare("DELETE FROM plugins WHERE site_id NOT IN (SELECT id FROM sites)").run();
+      db.prepare("DELETE FROM content WHERE site_id NOT IN (SELECT id FROM sites)").run();
+      db.prepare("DELETE FROM users WHERE site_id NOT IN (SELECT id FROM sites)").run();
+      localLogger.info(`[NexusAI] Cleaned up ${result.changes} ghost installs`);
+      return { success: true, removed: result.changes };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES, async () => {
     try {
       // Clean vector store

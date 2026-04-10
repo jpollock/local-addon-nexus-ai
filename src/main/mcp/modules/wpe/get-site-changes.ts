@@ -5,7 +5,7 @@ import { ok, error, requireLocalServices } from './helpers';
 export const getSiteChangesHandler: McpToolHandler = {
   definition: {
     name: 'local_get_site_changes',
-    description: 'Preview what files have changed between local site and WP Engine (rsync dry-run comparison). Site will be auto-started if not running.',
+    description: 'Show which files differ between a local site and its linked WP Engine environment (rsync dry-run diff). This is a DIFF tool — it compares two environments. It does NOT list or count remote files, inventory the site, or check file sizes. Use wpe_get_install_usage for storage info.',
     inputSchema: {
       type: 'object',
       properties: {
