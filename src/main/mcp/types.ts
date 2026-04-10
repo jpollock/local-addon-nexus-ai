@@ -128,6 +128,8 @@ export interface NexusServices {
   filterEngine?: any;
   bulkOpManager?: any;
   groupStorage?: any;
+  /** Tracks push/pull/export operations by intercepting Local's IPC events */
+  operationTracker?: import('../operation-tracker').OperationTracker;
 }
 
 /**

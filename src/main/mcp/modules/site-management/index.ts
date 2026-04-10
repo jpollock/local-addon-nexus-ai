@@ -16,6 +16,7 @@ import { importSiteHandler } from './import-site';
 import { listBlueprintsHandler } from './list-blueprints';
 import { saveBlueprintHandler } from './save-blueprint';
 import { getSiteLogsHandler } from './get-site-logs';
+import { operationStatusHandler } from './operation-status';
 
 /**
  * Site management module — lifecycle tools for local WordPress sites.
@@ -39,4 +40,5 @@ export function registerSiteManagementTools(registry: ToolRegistry): void {
   registry.register(listBlueprintsHandler);
   registry.register(saveBlueprintHandler);
   registry.register(getSiteLogsHandler);
+  registry.register(operationStatusHandler);
 }

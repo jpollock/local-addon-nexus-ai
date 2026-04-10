@@ -98,8 +98,12 @@ export const wpePushHandler: McpToolHandler = {
     }
 
     try {
-      // Call Local's wpePush service
-      await services.localServices.wpePush.push({
+      // Register with tracker before firing (tracker also picks up Local's IPC events)
+      services.operationTracker?.register(site.id, site.name, 'push');
+
+      // Fire-and-forget: wpePush.push() is a long-running operation (1-5 min).
+      // Return immediately and let the user poll local_operation_status.
+      services.localServices.wpePush.push({
         includeSql: args.include_database === true,
         wpengineInstallName: installName,
         wpengineInstallId: installId,
@@ -108,16 +112,16 @@ export const wpePushHandler: McpToolHandler = {
         localSiteId: site.id,
         environment,
         isMagicSync: false,
-      });
+      }).catch(() => { /* errors surfaced in Local UI */ });
 
       return ok(
         JSON.stringify({
-          status: 'queued',
-          async: true,
+          status: 'in_progress',
           site: site.name,
           install: installName,
           include_database: args.include_database === true,
-          message: 'Push operation queued. Check the Local app for progress.',
+          message: `Push started from "${site.name}" to "${installName}".`,
+          next_steps: 'Poll local_operation_status every 15-30s to track progress. Operation typically takes 2-5 minutes.',
         }, null, 2),
       );
     } catch (err: any) {

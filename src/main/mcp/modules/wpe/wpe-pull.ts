@@ -125,9 +125,11 @@ export const wpePullHandler: McpToolHandler = {
     }
 
     try {
+      // Register with tracker before firing (tracker also picks up Local's IPC events)
+      services.operationTracker?.register(site.id, site.name, 'pull');
+
       // Fire-and-forget: wpePull.pull() is a long-running operation.
-      // Awaiting it blocks Claude for 2+ minutes. Return immediately and
-      // let the user monitor progress in Local.
+      // Return immediately and let the user poll local_operation_status.
       const pullPromise = services.localServices.wpePull.pull({
         includeSql: args.include_database === true,
         wpengineInstallName: installName,
@@ -159,8 +161,7 @@ export const wpePullHandler: McpToolHandler = {
           include_database: args.include_database === true,
           linked: true,
           message: `Pull started. The site is now linked to "${installName}" in Local.`,
-          next_steps: 'The pull runs in the background (1-3 minutes). Check the Local app UI for progress. When complete, the site status will show "running".',
-          warning: 'DO NOT poll local_get_site repeatedly — this wastes tool calls. Wait for the user to confirm the site is running in Local, then continue.',
+          next_steps: 'Poll local_operation_status every 15-30s to track progress. Operation typically takes 1-3 minutes.',
         }, null, 2),
       );
     } catch (err: any) {
