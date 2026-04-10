@@ -113,6 +113,7 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
             new SupportedOption(OptionEnum::topP()),
             new SupportedOption(OptionEnum::stopSequences()),
             new SupportedOption(OptionEnum::candidateCount()),
+            new SupportedOption(OptionEnum::inputModalities()),  // required when prompt has text content
         ];
 
         // Anthropic Claude models (default)

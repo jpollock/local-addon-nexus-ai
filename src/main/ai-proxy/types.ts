@@ -25,9 +25,17 @@ export interface OpenAIChatRequest {
   stop?: string | string[];
 }
 
+/** Content part used in the array form of message content (OpenAI newer format) */
+export interface OpenAIContentPart {
+  type: 'text' | 'image_url' | string;
+  text?: string;
+  image_url?: { url: string; detail?: string };
+}
+
 export interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
+  /** string (legacy) or array of content parts (newer OpenAI format) */
+  content: string | OpenAIContentPart[] | null;
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;
   name?: string;

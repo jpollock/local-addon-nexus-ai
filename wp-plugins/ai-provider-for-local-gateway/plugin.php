@@ -51,6 +51,14 @@ function register_provider(): void
     $registry = AiClient::defaultRegistry();
 
     // Always try to register, even if already registered (might be different registry)
+    // Define LOCAL_GATEWAY_API_KEY BEFORE registerProvider() so createDefaultProviderRequestAuthentication()
+    // can find it when it runs internally during registration.
+    // The AI Client derives the constant name as: strtoupper(provider_id) + '_' + strtoupper(field) = LOCAL_GATEWAY_API_KEY
+    $gatewayToken = defined('NEXUS_AI_GATEWAY_TOKEN') ? NEXUS_AI_GATEWAY_TOKEN : 'missing-gateway-token';
+    if (!defined('LOCAL_GATEWAY_API_KEY')) {
+        define('LOCAL_GATEWAY_API_KEY', $gatewayToken);
+    }
+
     try {
         if (!$registry->hasProvider('local-gateway')) {
             $registry->registerProvider(LocalGatewayProvider::class);
@@ -61,14 +69,7 @@ function register_provider(): void
                 $registry->setHttpTransporter('local-gateway', $httpTransporter);
             }
 
-            // Read gateway token from constant (set by Nexus AI mu-plugin)
-            // If not set, use a placeholder (will fail authentication, but plugin can still load)
-            $gatewayToken = defined('NEXUS_AI_GATEWAY_TOKEN')
-                ? NEXUS_AI_GATEWAY_TOKEN
-                : 'missing-gateway-token';
-
-            // Store token as "API key" credential
-            // WordPress 7.0 uses Connectors API
+            // Also set the WordPress options as a fallback for the Connectors API
             if (!get_option('connectors_ai_local-gateway_api_key')) {
                 update_option('connectors_ai_local-gateway_api_key', $gatewayToken);
             }
@@ -90,23 +91,30 @@ add_action('init', __NAMESPACE__ . '\\register_provider', 10);
 // Prepend Local Gateway models to the preferred models list.
 // helpers.php applies 'wpai_preferred_text_models' via get_preferred_models_for_text_generation().
 add_filter('wpai_preferred_text_models', function ($models) {
+    error_log('[LG] wpai_preferred_text_models filter fired. Incoming models: ' . json_encode($models));
+
     if (!class_exists(AiClient::class)) {
+        error_log('[LG] AiClient class not found — returning unchanged');
         return $models;
     }
 
     $registry = AiClient::defaultRegistry();
 
-    // Check if provider is registered and configured
-    if (!$registry->hasProvider('local-gateway') || !$registry->isProviderConfigured('local-gateway')) {
+    $hasProvider = $registry->hasProvider('local-gateway');
+    $isConfigured = $registry->isProviderConfigured('local-gateway');
+    error_log('[LG] hasProvider(local-gateway)=' . ($hasProvider ? 'true' : 'false') . ' isProviderConfigured=' . ($isConfigured ? 'true' : 'false'));
+
+    if (!$hasProvider || !$isConfigured) {
+        error_log('[LG] Provider not ready — returning unchanged');
         return $models;
     }
 
     try {
         $modelMetadataList = LocalGatewayProvider::modelMetadataDirectory()->listModelMetadata();
+        error_log('[LG] modelMetadataDirectory returned ' . count($modelMetadataList) . ' models');
 
         $gatewayModels = [];
         foreach ($modelMetadataList as $modelMetadata) {
-            // Only add text generation models to this filter
             $hasTextGeneration = false;
             foreach ($modelMetadata->getSupportedCapabilities() as $capability) {
                 if ($capability->isTextGeneration()) {
@@ -114,25 +122,35 @@ add_filter('wpai_preferred_text_models', function ($models) {
                     break;
                 }
             }
+            error_log('[LG] Model ' . $modelMetadata->getId() . ' hasTextGeneration=' . ($hasTextGeneration ? 'true' : 'false'));
 
             if ($hasTextGeneration) {
-                // Format: [providerId, modelId] - numeric indexed array
                 $gatewayModels[] = ['local-gateway', $modelMetadata->getId()];
             }
         }
 
-        // Prepend gateway models so they're preferred over direct provider access
-        return array_merge($gatewayModels, $models);
+        error_log('[LG] Prepending ' . count($gatewayModels) . ' gateway models: ' . json_encode($gatewayModels));
+        $merged = array_merge($gatewayModels, $models);
+        error_log('[LG] Final merged model list (' . count($merged) . '): ' . json_encode($merged));
+        return $merged;
     } catch (\Exception $e) {
-        error_log('Local Gateway filter error: ' . $e->getMessage());
+        error_log('[LG] filter exception: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
         return $models;
     }
 });
 
-// Allow localhost requests to Local Gateway
+// Helper: check if a URL is targeting the Local Gateway
+function nexus_lg_is_gateway_url(string $url): bool {
+    // Match any request to the gateway host:port (127.0.0.1 or localhost + gateway port)
+    $gatewayBase = defined('NEXUS_AI_GATEWAY_URL') ? NEXUS_AI_GATEWAY_URL : 'http://127.0.0.1:13100';
+    return strpos($url, $gatewayBase) === 0
+        || strpos($url, 'http://127.0.0.1:13100') === 0
+        || strpos($url, 'http://localhost:13100') === 0;
+}
+
+// Allow localhost/127.0.0.1 requests to Local Gateway
 add_filter('http_request_host_is_external', function ($is_external, $host, $url) {
-    // Allow localhost for Local Gateway API calls
-    if ($host === 'localhost' && strpos($url, '/ai-gateway/v1') !== false) {
+    if (nexus_lg_is_gateway_url($url)) {
         return true;
     }
     return $is_external;
@@ -140,9 +158,9 @@ add_filter('http_request_host_is_external', function ($is_external, $host, $url)
 
 // Bypass WordPress localhost blocking for Local Gateway and set reasonable timeout
 add_filter('http_request_args', function ($args, $url) {
-    if (strpos($url, '/ai-gateway/v1') !== false) {
+    if (nexus_lg_is_gateway_url($url)) {
         $args['reject_unsafe_urls'] = false;
-        $args['timeout'] = 30; // 30 seconds for AI generation
+        $args['timeout'] = 30;
     }
     return $args;
 }, 10, 2);

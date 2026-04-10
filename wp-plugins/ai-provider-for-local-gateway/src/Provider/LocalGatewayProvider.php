@@ -42,20 +42,24 @@ class LocalGatewayProvider extends AbstractApiProvider
      */
     protected static function baseUrl(): string
     {
-        // Read gateway URL from constant (set by Nexus AI mu-plugin)
-        // Default to the standard webhook server URL
+        // The Local Gateway serves OpenAI-compatible endpoints under /v1/
+        // e.g. /v1/chat/completions, /v1/models, /v1/embeddings
+        // AbstractOpenAiCompatibleTextGenerationModel appends paths like 'chat/completions',
+        // so baseUrl() must end with /v1 (no trailing slash).
+
         if (defined('NEXUS_AI_GATEWAY_URL')) {
-            return NEXUS_AI_GATEWAY_URL;
+            // NEXUS_AI_GATEWAY_URL is the base URL without path (e.g. http://127.0.0.1:13100)
+            return rtrim(NEXUS_AI_GATEWAY_URL, '/') . '/v1';
         }
 
-        // Fallback: try to detect webhook URL from site options
+        // Fallback: try to detect from site options
         $webhookInfo = get_option('nexus_ai_webhook_info');
         if ($webhookInfo && isset($webhookInfo['url'])) {
-            return $webhookInfo['url'] . '/ai-gateway/v1';
+            return rtrim($webhookInfo['url'], '/') . '/v1';
         }
 
-        // Final fallback: standard localhost URL
-        return 'http://localhost:52847/ai-gateway/v1';
+        // Final fallback
+        return 'http://localhost:52847/v1';
     }
 
     /**

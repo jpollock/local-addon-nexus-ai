@@ -512,9 +512,21 @@ export class AiProxyServer {
    */
   private toOllamaMessages(messages: OpenAIMessage[]): OllamaMessage[] {
     return messages.map((m) => {
+      // Normalize content: newer OpenAI format sends array of content parts.
+      // Flatten to string by extracting text parts.
+      let content: string;
+      if (Array.isArray(m.content)) {
+        content = m.content
+          .filter((p) => p.type === 'text' && p.text)
+          .map((p) => p.text!)
+          .join('\n');
+      } else {
+        content = m.content ?? '';
+      }
+
       const msg: OllamaMessage = {
         role: m.role,
-        content: m.content ?? '',
+        content,
       };
 
       // Convert assistant tool_calls: OpenAI uses JSON string arguments, Ollama uses objects
