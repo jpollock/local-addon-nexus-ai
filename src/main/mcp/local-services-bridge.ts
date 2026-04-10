@@ -518,19 +518,15 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         return res.json();
       }
 
-      // Fall back to OAuth (will fail with helpful error message)
+      // Use OAuth via the CAPI client
       try {
         return await capi.createBackup(installId, description);
       } catch (err: any) {
-        // WP Engine's backup endpoint doesn't accept OAuth tokens (returns 401 "Bad Credentials")
-        // even though the same token works for other endpoints. This is a WP Engine API limitation.
-        // See: docs/WPE_AUTH_ROOT_CAUSE.md for full analysis.
         if (err.message?.includes('401') || err.message?.includes('Unauthorized')) {
           throw new Error(
-            'WP Engine backup creation via OAuth is not supported. ' +
-            'The backup endpoint requires basic authentication (API credentials), not OAuth tokens. ' +
-            'To enable backup creation, run: wpe_set_api_credentials\n' +
-            'Or create backups manually at https://my.wpengine.com'
+            'Backup creation failed: WP Engine returned 401 Unauthorized. ' +
+            'Your OAuth session may have expired — run: nexus wpe login\n' +
+            'Or store API credentials as a fallback: wpe_set_api_credentials'
           );
         }
         throw err;

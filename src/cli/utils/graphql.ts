@@ -59,9 +59,6 @@ export class GraphQLClient {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      console.error('[GraphQL Client] Attempting fetch to:', url);
-      console.error('[GraphQL Client] Has auth token:', !!this.connectionInfo.authToken);
-
       try {
         const response = await fetch(url, {
           method: 'POST',
@@ -99,7 +96,6 @@ export class GraphQLClient {
 
         // Success - update connection info to use working URL
         if (url !== this.connectionInfo.url) {
-          console.error('[GraphQL Client] Using fallback URL:', url);
           this.connectionInfo.url = url;
         }
 
@@ -121,16 +117,10 @@ export class GraphQLClient {
         }
 
         // Network error - try next URL
-        console.error('[GraphQL Client] Failed, trying next URL...');
       }
     }
 
     // All URLs failed - throw last error
-    console.error('[GraphQL Client] All URLs failed. Last error:', {
-      name: lastError?.name,
-      message: lastError?.message,
-      code: lastError?.code,
-    });
 
     if (lastError instanceof GraphQLClientError) {
       throw lastError;
