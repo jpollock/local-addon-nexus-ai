@@ -6,66 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  download-model:
-    runs-on: ubuntu-latest
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Try fetch model from R2 cache
-        id: r2-cache
-        run: |
-          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          MODEL_KEY="model-cache/all-MiniLM-L6-v2-quantized.tar.gz"
-          mkdir -p models
-          if aws s3 cp "s3://nexus-ai-releases/${MODEL_KEY}" /tmp/model-cache.tar.gz \
-              --endpoint-url "$ENDPOINT" --region auto --quiet 2>/dev/null; then
-            tar -xzf /tmp/model-cache.tar.gz -C models
-            echo "hit=true" >> $GITHUB_OUTPUT
-            echo "✅ Model restored from R2 cache"
-          else
-            echo "hit=false" >> $GITHUB_OUTPUT
-            echo "⬇️ Model not in R2, will download from Hugging Face"
-          fi
-
-      - name: Setup Node.js
-        if: steps.r2-cache.outputs.hit != 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        if: steps.r2-cache.outputs.hit != 'true'
-        run: npm ci --legacy-peer-deps
-
-      - name: Download ONNX model from Hugging Face
-        if: steps.r2-cache.outputs.hit != 'true'
-        run: npm run download-model
-
-      - name: Save model to R2 cache
-        if: steps.r2-cache.outputs.hit != 'true'
-        run: |
-          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          tar -czf /tmp/model-cache.tar.gz -C models .
-          aws s3 cp /tmp/model-cache.tar.gz \
-            "s3://nexus-ai-releases/model-cache/all-MiniLM-L6-v2-quantized.tar.gz" \
-            --endpoint-url "$ENDPOINT" --region auto
-          echo "✅ Model saved to R2 cache for future builds"
-
-      - name: Upload model as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: onnx-model
-          path: models
-          retention-days: 1
-
   package:
-    needs: download-model
     strategy:
       matrix:
         include:
@@ -83,6 +24,10 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
 
     steps:
       - name: Checkout
@@ -97,11 +42,25 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Download ONNX model artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: onnx-model
-          path: models
+      - name: Fetch model from R2 cache (or download from Hugging Face)
+        shell: bash
+        run: |
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          MODEL_KEY="model-cache/all-MiniLM-L6-v2-quantized.tar.gz"
+          mkdir -p models
+          if aws s3 cp "s3://nexus-ai-releases/${MODEL_KEY}" /tmp/model-cache.tar.gz \
+              --endpoint-url "$ENDPOINT" --region auto --quiet 2>/dev/null; then
+            tar -xzf /tmp/model-cache.tar.gz -C models
+            echo "✅ Model restored from R2 cache"
+          else
+            echo "⬇️ R2 cache miss — downloading from Hugging Face"
+            npm run download-model
+            tar -czf /tmp/model-cache.tar.gz -C models .
+            aws s3 cp /tmp/model-cache.tar.gz \
+              "s3://nexus-ai-releases/${MODEL_KEY}" \
+              --endpoint-url "$ENDPOINT" --region auto --quiet || true
+            echo "✅ Model downloaded and saved to R2 cache"
+          fi
 
       - name: Build
         run: npm run build
@@ -114,7 +73,7 @@ jobs:
         with:
           name: nexus-ai-${{ matrix.platform }}-${{ matrix.arch }}
           path: dist/*.tgz
-          retention-days: 30
+          retention-days: 1
 
   release:
     needs: package
@@ -159,7 +118,6 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
-          # Install AWS CLI if needed
           aws --version 2>/dev/null || pip install awscli --quiet
 
           for artifact_dir in artifacts/*/; do
@@ -177,7 +135,6 @@ jobs:
 
           echo "✅ All tarballs uploaded to releases.elasticapi.io/nexus-ai/v${VERSION}/"
 
-          # Update latest.json so nexus update can check for new versions
           echo "{\"version\":\"${VERSION}\"}" > /tmp/latest.json
           aws s3 cp /tmp/latest.json \
             "s3://nexus-ai-releases/nexus-ai/latest.json" \
@@ -192,6 +149,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
 
     steps:
       - name: Checkout
@@ -207,11 +168,16 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Download ONNX model artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: onnx-model
-          path: models
+      - name: Fetch model from R2 cache
+        shell: bash
+        run: |
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          MODEL_KEY="model-cache/all-MiniLM-L6-v2-quantized.tar.gz"
+          mkdir -p models
+          aws s3 cp "s3://nexus-ai-releases/${MODEL_KEY}" /tmp/model-cache.tar.gz \
+            --endpoint-url "$ENDPOINT" --region auto
+          tar -xzf /tmp/model-cache.tar.gz -C models
+          echo "✅ Model restored from R2 cache"
 
       - name: Build
         run: npm run build
