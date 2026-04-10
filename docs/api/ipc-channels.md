@@ -577,6 +577,52 @@ Update addon settings.
 
 ---
 
+## WP Engine API Credentials
+
+### WPE_GET_API_CREDENTIALS_STATUS
+
+Check if WP Engine API credentials are configured.
+
+**Channel:** `'nexus-ai:wpe:get-api-credentials-status'`
+
+**Returns:** `{ configured: boolean; username: string | null }`
+
+---
+
+### WPE_SET_API_CREDENTIALS
+
+Store WP Engine API credentials (encrypted). Required for backup creation.
+
+**Channel:** `'nexus-ai:wpe:set-api-credentials'`
+
+**Params:** `(username: string, password: string)`
+
+**Returns:** `{ success: true }`
+
+**Storage:** Electron `safeStorage` (Keychain on macOS, DPAPI on Windows)
+
+---
+
+### WPE_CLEAR_API_CREDENTIALS
+
+Remove stored WP Engine API credentials.
+
+**Channel:** `'nexus-ai:wpe:clear-api-credentials'`
+
+**Returns:** `{ success: true }`
+
+---
+
+### WPE_GET_API_CREDENTIALS
+
+Get stored credentials (returns username only — password stays encrypted).
+
+**Channel:** `'nexus-ai:wpe:get-api-credentials'`
+
+**Returns:** `{ username: string; password: '' }`
+
+---
+
 ## Error Handling
 
 All IPC handlers follow this pattern:

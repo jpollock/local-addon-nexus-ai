@@ -48,7 +48,22 @@ function makeLocalServices(capiAvailable = true): jest.Mocked<LocalServicesBridg
     wpeGetUserInfo: jest.fn(() => Promise.resolve({ email: 'test@example.com', accountName: 'Test Account' })),
     wpeAuthenticate: jest.fn(() => Promise.resolve()),
     wpeLogout: jest.fn(() => Promise.resolve()),
+    capiGetSites: jest.fn(() => Promise.resolve([
+      {
+        id: 'site-wpe-1',
+        name: 'My WPE Site',
+        installs: [
+          { id: 'inst-1', name: 'mysite-prod', environment: 'production', primaryDomain: 'mysite.wpengine.com' },
+          { id: 'inst-2', name: 'mysite-stg', environment: 'staging', primaryDomain: 'mysite-stg.wpengine.com' },
+        ],
+      },
+    ])),
     isCAPIAvailable: jest.fn(() => capiAvailable),
+    isWPEAuthenticated: jest.fn(() => capiAvailable),
+    getWpeUserId: jest.fn(() => null),
+    wpeSetApiCredentials: jest.fn(() => Promise.resolve()),
+    wpeClearApiCredentials: jest.fn(() => Promise.resolve()),
+    wpeGetApiCredentialsStatus: jest.fn(() => Promise.resolve({ configured: false })),
     trustCert: jest.fn(),
     getAvailablePhpVersions: jest.fn(),
     resolveSiteObject: jest.fn(() => ({
@@ -95,8 +110,8 @@ describe('WPE Integration Tools', () => {
     registerWpeTools(registry);
   });
 
-  test('registers 19 tools', () => {
-    expect(registry.allToolNames()).toHaveLength(19);
+  test('registers 22 tools', () => {
+    expect(registry.allToolNames()).toHaveLength(22);
   });
 
   describe('CAPI tool gating', () => {
@@ -184,6 +199,59 @@ describe('WPE Integration Tools', () => {
     });
   });
 
+  // --- wpe_set_api_credentials ---
+
+  describe('wpe_set_api_credentials', () => {
+    test('stores credentials', async () => {
+      const result = await registry.call(
+        'wpe_set_api_credentials',
+        { username: 'myuser', password: 'mypass' },
+        services,
+      );
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('stored securely');
+      expect(localServices.wpeSetApiCredentials).toHaveBeenCalledWith('myuser', 'mypass');
+    });
+
+    test('errors if username missing', async () => {
+      const result = await registry.call(
+        'wpe_set_api_credentials',
+        { username: '', password: 'mypass' },
+        services,
+      );
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  // --- wpe_clear_api_credentials ---
+
+  describe('wpe_clear_api_credentials', () => {
+    test('clears credentials', async () => {
+      const result = await registry.call('wpe_clear_api_credentials', {}, services);
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('cleared');
+      expect(localServices.wpeClearApiCredentials).toHaveBeenCalled();
+    });
+  });
+
+  // --- wpe_credentials_status ---
+
+  describe('wpe_credentials_status', () => {
+    test('reports not configured', async () => {
+      const result = await registry.call('wpe_credentials_status', {}, services);
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('NOT configured');
+    });
+
+    test('reports configured with username', async () => {
+      localServices.wpeGetApiCredentialsStatus.mockResolvedValue({ configured: true, username: 'myuser' });
+      const result = await registry.call('wpe_credentials_status', {}, services);
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('configured');
+      expect(result.content[0].text).toContain('myuser');
+    });
+  });
+
   // --- wpe_purge_cache ---
 
   describe('wpe_purge_cache', () => {
@@ -217,8 +285,7 @@ describe('WPE Integration Tools', () => {
       const result = await registry.call('local_wpe_pull', { site: 'My Site' }, services);
       expect(result.isError).toBeUndefined();
       const payload = JSON.parse(result.content[0].text);
-      expect(payload.status).toBe('queued');
-      expect(payload.async).toBe(true);
+      expect(payload.status).toBe('in_progress');
     });
 
     test('rejects halted site', async () => {

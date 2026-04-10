@@ -44,6 +44,14 @@ interface NexusPreferencesState {
   keyStatus: Record<string, 'valid' | 'invalid' | 'unchecked' | 'checking'>;
   keyInput: string;
   keySaved: boolean;
+  // WPE API Credentials state
+  wpeCredentialsConfigured: boolean;
+  wpeUsername: string;
+  wpePassword: string;
+  wpeUsernameInput: string;
+  wpePasswordInput: string;
+  wpePendingClear: boolean;
+  wpeCredsSaved: boolean;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -132,6 +140,13 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     keyStatus: {},
     keyInput: '',
     keySaved: false,
+    wpeCredentialsConfigured: false,
+    wpeUsername: '',
+    wpePassword: '',
+    wpeUsernameInput: '',
+    wpePasswordInput: '',
+    wpePendingClear: false,
+    wpeCredsSaved: false,
   };
 
   componentDidMount(): void {
@@ -146,11 +161,12 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   fetchData = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [settings, sites, providers, keyStatus] = await Promise.all([
+      const [settings, sites, providers, keyStatus, wpeCredsStatus] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
         ipc.invoke(IPC_CHANNELS.GET_PROVIDERS),
         ipc.invoke(IPC_CHANNELS.GET_API_KEY_STATUS),
+        ipc.invoke(IPC_CHANNELS.WPE_GET_API_CREDENTIALS_STATUS),
       ]);
       if (!this.mounted) return;
       this.setState({
@@ -158,6 +174,9 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         sites: sites ?? [],
         providers: providers ?? [],
         keyStatus: keyStatus ?? {},
+        wpeCredentialsConfigured: wpeCredsStatus?.configured ?? false,
+        wpeUsername: wpeCredsStatus?.username ?? '',
+        wpeUsernameInput: wpeCredsStatus?.username ?? '',
         loading: false,
       }, () => {
         // Load models and stored key for the current provider
@@ -313,7 +332,65 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     }
   };
 
+  // -----------------------------------------------------------------------
+  // WPE Credentials Handlers
+  // -----------------------------------------------------------------------
 
+  handleWpeUsernameChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    this.setState({ wpeUsernameInput: e.target.value, wpeCredsSaved: false, wpePendingClear: false });
+  };
+
+  handleWpePasswordChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    this.setState({ wpePasswordInput: e.target.value, wpeCredsSaved: false, wpePendingClear: false });
+  };
+
+  handleWpeClearCredentials = (): void => {
+    this.setState({
+      wpeUsernameInput: '',
+      wpePasswordInput: '',
+      wpePendingClear: true,
+      wpeCredsSaved: false,
+    });
+  };
+
+  handleWpeApplyCredentials = async (): Promise<void> => {
+    const { wpeUsernameInput, wpePasswordInput, wpePendingClear } = this.state;
+
+    try {
+      if (wpePendingClear) {
+        // Clear credentials
+        await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_CLEAR_API_CREDENTIALS);
+        if (!this.mounted) return;
+        this.setState({
+          wpeCredentialsConfigured: false,
+          wpeUsername: '',
+          wpePassword: '',
+          wpeUsernameInput: '',
+          wpePasswordInput: '',
+          wpePendingClear: false,
+          wpeCredsSaved: true,
+        });
+      } else if (wpeUsernameInput.trim() && wpePasswordInput.trim()) {
+        // Save credentials
+        await this.props.electron.ipcRenderer.invoke(
+          IPC_CHANNELS.WPE_SET_API_CREDENTIALS,
+          wpeUsernameInput.trim(),
+          wpePasswordInput.trim(),
+        );
+        if (!this.mounted) return;
+        this.setState({
+          wpeCredentialsConfigured: true,
+          wpeUsername: wpeUsernameInput.trim(),
+          wpePassword: wpePasswordInput.trim(),
+          wpeCredsSaved: true,
+        });
+      }
+    } catch (err: any) {
+      // Error handling - could show error message
+      if (!this.mounted) return;
+      this.setState({ wpeCredsSaved: false });
+    }
+  };
 
   // -----------------------------------------------------------------------
   // Chat Section Render
@@ -418,6 +495,110 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     );
   }
 
+  // -----------------------------------------------------------------------
+  // WPE Credentials Section Render
+  // -----------------------------------------------------------------------
+
+  renderWpeCredsSection(): React.ReactNode {
+    const {
+      wpeCredentialsConfigured,
+      wpeUsernameInput,
+      wpePasswordInput,
+      wpePendingClear,
+      wpeCredsSaved,
+    } = this.state;
+
+    const hasChanges = wpePendingClear ||
+      (wpeUsernameInput.trim() !== '' && wpePasswordInput.trim() !== '');
+
+    const statusColor = wpeCredentialsConfigured ? UI_COLORS.STATUS_RUNNING : '#999';
+    const statusLabel = wpeCredentialsConfigured ? 'Configured' : 'Not configured';
+
+    return React.createElement('div', { style: sectionStyle },
+      React.createElement('div', { style: labelStyle }, 'WP Engine API Credentials'),
+      React.createElement('div', { style: descStyle },
+        'Store WP Engine API credentials for backup creation. WP Engine\'s backup endpoint requires basic authentication (not OAuth). Credentials are stored encrypted using OS-level encryption.',
+      ),
+
+      // Status indicator
+      React.createElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' },
+      },
+        React.createElement('span', { style: dotStyle(statusColor) }),
+        React.createElement('span', {
+          style: { fontSize: '13px', color: statusColor, fontWeight: 500 },
+        }, statusLabel),
+      ),
+
+      // Username input
+      React.createElement('div', { style: rowStyle },
+        React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '90px' } }, 'Username'),
+        React.createElement('input', {
+          type: 'text',
+          value: wpeUsernameInput,
+          onChange: this.handleWpeUsernameChange,
+          placeholder: 'API username',
+          className: 'nexus-password-input',
+          style: {
+            ...inputStyle,
+            flex: 1,
+            maxWidth: '350px',
+          },
+        }),
+      ),
+
+      // Password input
+      React.createElement('div', { style: { ...rowStyle, marginBottom: '16px' } },
+        React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '90px' } }, 'Password'),
+        React.createElement('input', {
+          type: 'password',
+          value: wpePasswordInput,
+          onChange: this.handleWpePasswordChange,
+          placeholder: 'API password',
+          className: 'nexus-password-input',
+          style: {
+            ...inputStyle,
+            flex: 1,
+            maxWidth: '350px',
+          },
+        }),
+      ),
+
+      // Action buttons
+      React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+        React.createElement('button', {
+          style: {
+            ...btnSmallStyle,
+            ...(hasChanges && !wpeCredsSaved ? { backgroundColor: UI_COLORS.WPE_BRAND, color: '#fff', border: 'none' } : {}),
+          },
+          onClick: this.handleWpeApplyCredentials,
+          disabled: !hasChanges || wpeCredsSaved,
+        }, wpeCredsSaved ? 'Saved' : 'Apply'),
+        React.createElement('button', {
+          style: btnSmallStyle,
+          onClick: this.handleWpeClearCredentials,
+          disabled: !wpeCredentialsConfigured && wpeUsernameInput === '' && wpePasswordInput === '',
+        }, 'Clear'),
+        wpeCredsSaved ? React.createElement('span', {
+          style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginLeft: '4px' },
+        }, wpePendingClear ? '✓ Credentials cleared' : '✓ Credentials saved') : null,
+      ),
+
+      // Help text
+      React.createElement('div', {
+        style: { fontSize: '12px', opacity: 0.7, marginTop: '12px', lineHeight: 1.4 },
+      },
+        'Get your API credentials from ',
+        React.createElement('a', {
+          href: 'https://my.wpengine.com',
+          target: '_blank',
+          style: { color: UI_COLORS.WPE_BRAND, textDecoration: 'underline' },
+        }, 'my.wpengine.com'),
+        '. These are different from your WP Engine login — you must generate API credentials specifically for programmatic access.',
+      ),
+    );
+  }
+
 
   render(): React.ReactNode {
     const { settings, sites, loading } = this.state;
@@ -436,6 +617,19 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       `),
       // AI Credentials section (moved to top)
       this.renderChatSection(),
+
+      // WPE API Credentials section
+      this.renderWpeCredsSection(),
+
+      // Divider
+      React.createElement('hr', {
+        style: {
+          border: 'none',
+          borderTop: '1px solid',
+          opacity: 0.2,
+          marginBottom: '24px',
+        },
+      }),
 
       // Local AI Gateway toggle
       React.createElement('div', { style: sectionStyle },

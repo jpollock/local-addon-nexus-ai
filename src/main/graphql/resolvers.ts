@@ -53,7 +53,8 @@ function parseTarget(target: string): ParsedTarget {
   if (wpeMatch) {
     return {
       type: 'wpe',
-      installName: `${wpeMatch[1]}/${wpeMatch[2]}`,
+      account: wpeMatch[1],
+      installName: wpeMatch[2],
       environment: wpeMatch[3],
     };
   }
@@ -143,7 +144,7 @@ export function createResolvers(context: ResolverContext) {
           let wpeInstalls: any[] = [];
           let wpeAccounts: Map<string, string> = new Map(); // accountId -> accountName
 
-          if (services.localServices?.isCAPIAvailable()) {
+          if (services.localServices?.isCAPIAvailable() && services.localServices?.isWPEAuthenticated()) {
             try {
               // Fetch both installs and accounts in parallel
               const [installs, accounts] = await Promise.all([
@@ -1389,10 +1390,10 @@ export function createResolvers(context: ResolverContext) {
        */
       nexusWpeAccounts: async () => {
         try {
-          if (!services.localServices?.isCAPIAvailable()) {
+          if (!services.localServices?.isCAPIAvailable() || !services.localServices?.isWPEAuthenticated()) {
             return {
               success: false,
-              error: 'WP Engine API not available. Please authenticate in Local.',
+              error: 'Not authenticated with WP Engine. Use wpe_login or authenticate in Local.',
               accounts: [],
             };
           }
@@ -1419,11 +1420,16 @@ export function createResolvers(context: ResolverContext) {
        * List WPE installs
        */
       nexusWpeInstalls: async (_parent: any, { account }: { account?: string }) => {
+        console.log('[NEXUS DEBUG] nexusWpeInstalls resolver called, account:', account);
         try {
-          if (!services.localServices?.isCAPIAvailable()) {
+          const hasCapi = services.localServices?.isCAPIAvailable();
+          const hasAuth = services.localServices?.isWPEAuthenticated();
+          console.log('[NEXUS DEBUG] nexusWpeInstalls: hasCapi =', hasCapi, 'hasAuth =', hasAuth);
+
+          if (!hasCapi || !hasAuth) {
             return {
               success: false,
-              error: 'WP Engine API not available. Please authenticate in Local.',
+              error: 'Not authenticated with WP Engine. Use wpe_login or authenticate in Local.',
               installs: [],
             };
           }
@@ -1476,10 +1482,10 @@ export function createResolvers(context: ResolverContext) {
        */
       nexusWpeInstall: async (_parent: any, { installId }: { installId: string }) => {
         try {
-          if (!services.localServices?.isCAPIAvailable()) {
+          if (!services.localServices?.isCAPIAvailable() || !services.localServices?.isWPEAuthenticated()) {
             return {
               success: false,
-              error: 'WP Engine API not available. Please authenticate in Local.',
+              error: 'Not authenticated with WP Engine. Use wpe_login or authenticate in Local.',
             };
           }
 
@@ -1525,10 +1531,12 @@ export function createResolvers(context: ResolverContext) {
        */
       nexusWpeBackup: async (_parent: any, { input }: { input: any }) => {
         try {
+          // Don't check OAuth here - capiCreateBackup handles auth internally
+          // (uses basic auth if credentials exist, otherwise attempts OAuth)
           if (!services.localServices?.isCAPIAvailable()) {
             return {
               success: false,
-              error: 'WP Engine API not available. Please authenticate in Local.',
+              error: 'WP Engine API not available',
             };
           }
 
@@ -1540,10 +1548,31 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          // For now, return not implemented - would need CAPI backup endpoint
+          // Resolve install name to install ID
+          // Install names in CAPI are like "testjpp1prod" (base name + environment suffix)
+          // We match by checking if the install name starts with our parsed name and has the right env
+          const installs = await services.localServices.capiGetInstalls();
+          const install = installs.find((i: any) =>
+            i.name.startsWith(parsed.installName!) &&
+            i.environment === parsed.environment
+          );
+          if (!install) {
+            return {
+              success: false,
+              error: `Install "${parsed.installName}" with environment "${parsed.environment}" not found`,
+            };
+          }
+
+          const backupResult = await services.localServices.capiCreateBackup(
+            install.id,
+            input.description || 'Backup created via Nexus CLI',
+            input.notificationEmails || undefined
+          ) as any;
+
           return {
-            success: false,
-            error: 'Backup creation via CLI not yet implemented. Use WP Engine portal.',
+            success: true,
+            backupId: backupResult?.id || null,
+            message: `Backup created for ${parsed.account}/${parsed.installName}@${parsed.environment} (${install.name})`,
           };
         } catch (error: any) {
           return {
@@ -1558,10 +1587,10 @@ export function createResolvers(context: ResolverContext) {
        */
       nexusWpeCache: async (_parent: any, { target }: { target: string }) => {
         try {
-          if (!services.localServices?.isCAPIAvailable()) {
+          if (!services.localServices?.isCAPIAvailable() || !services.localServices?.isWPEAuthenticated()) {
             return {
               success: false,
-              error: 'WP Engine API not available. Please authenticate in Local.',
+              error: 'Not authenticated with WP Engine. Use wpe_login or authenticate in Local.',
             };
           }
 
@@ -1573,10 +1602,24 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          await services.localServices.capiPurgeCache(parsed.installName!);
+          // Resolve install name to install ID
+          const installs = await services.localServices.capiGetInstalls();
+          const install = installs.find((i: any) =>
+            i.name.startsWith(parsed.installName!) &&
+            i.environment === parsed.environment
+          );
+          if (!install) {
+            return {
+              success: false,
+              error: `Install "${parsed.installName}" with environment "${parsed.environment}" not found`,
+            };
+          }
+
+          await services.localServices.capiPurgeCache(install.id);
 
           return {
             success: true,
+            message: `Cache purged for ${parsed.account}/${parsed.installName}@${parsed.environment} (${install.name})`,
           };
         } catch (error: any) {
           return {
@@ -3495,6 +3538,39 @@ export function createResolvers(context: ResolverContext) {
           return { success: true };
         } catch (err: any) {
           return { success: false, error: err.message };
+        }
+      },
+
+      nexusWpeSetApiCredentials: async (
+        _parent: any,
+        { username, password }: { username: string; password: string },
+      ) => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          await services.localServices.wpeSetApiCredentials(username, password);
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      },
+
+      nexusWpeClearApiCredentials: async () => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available' };
+          await services.localServices.wpeClearApiCredentials();
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      },
+
+      nexusWpeApiCredentialsStatus: async () => {
+        try {
+          if (!services.localServices) return { success: false, error: 'Local services not available', configured: false };
+          const status = await services.localServices.wpeGetApiCredentialsStatus();
+          return { success: true, configured: status.configured, username: status.username ?? null };
+        } catch (err: any) {
+          return { success: false, error: err.message, configured: false };
         }
       },
 

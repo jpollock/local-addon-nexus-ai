@@ -15,6 +15,11 @@ import { getInstallUsageHandler, getAccountUsageHandler } from './get-install-us
 import { portfolioUsageHandler } from './portfolio-usage';
 import { fleetVersionsHandler } from './fleet-versions';
 import { detectDriftHandler } from './detect-drift';
+import {
+  setApiCredentialsHandler,
+  clearApiCredentialsHandler,
+  credentialsStatusHandler,
+} from './api-credentials';
 
 /**
  * WPE integration module — tools for WP Engine account/install management
@@ -43,4 +48,7 @@ export function registerWpeTools(registry: ToolRegistry): void {
   registry.register(portfolioUsageHandler);
   registry.register(fleetVersionsHandler);
   registry.register(detectDriftHandler);
+  registry.register(setApiCredentialsHandler);
+  registry.register(clearApiCredentialsHandler);
+  registry.register(credentialsStatusHandler);
 }
