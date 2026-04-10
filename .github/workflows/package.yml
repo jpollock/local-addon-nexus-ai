@@ -4,36 +4,9 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to release (e.g. v0.2.0)'
-        required: true
 
 jobs:
-  # Create the GitHub Release first so platform jobs can attach assets to it
-  create-release:
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
-    outputs:
-      upload_url: ${{ steps.create.outputs.upload_url }}
-    steps:
-      - name: Create GitHub Release
-        id: create
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create $GITHUB_REF_NAME \
-            --repo ${{ github.repository }} \
-            --title "Nexus AI ${GITHUB_REF_NAME}" \
-            --generate-notes \
-            --draft
-          echo "upload_url=done" >> $GITHUB_OUTPUT
-
   package:
-    needs: create-release
-    if: always() && !failure() && !cancelled()
     strategy:
       matrix:
         include:
@@ -95,29 +68,22 @@ jobs:
       - name: Package for ${{ matrix.platform }}-${{ matrix.arch }}
         run: node scripts/package-addon.js --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
 
-      - name: Upload tarball to R2 and GitHub Release
+      - name: Upload tarball to R2
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-
           for tarball in dist/*.tgz; do
             [ -f "$tarball" ] || continue
             FILENAME=$(basename "$tarball")
-
             echo "Uploading $FILENAME to R2..."
             aws s3 cp "$tarball" \
               "s3://nexus-ai-releases/nexus-ai/v${VERSION}/${FILENAME}" \
               --endpoint-url "$ENDPOINT" \
               --region auto
-
-            echo "Attaching $FILENAME to GitHub Release..."
-            gh release upload $GITHUB_REF_NAME "$tarball" \
-              --repo ${{ github.repository }}
           done
+          echo "✅ Tarballs uploaded to R2"
 
   release:
     needs: package
@@ -131,13 +97,38 @@ jobs:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
 
     steps:
-      - name: Update latest.json and publish release
+      - name: Download tarballs from R2 and create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
+          # Download all tarballs for this version from R2
+          mkdir -p dist
+          aws s3 sync \
+            "s3://nexus-ai-releases/nexus-ai/v${VERSION}/" \
+            dist/ \
+            --endpoint-url "$ENDPOINT" \
+            --region auto
+
+          echo "Downloaded tarballs:"
+          ls -la dist/
+
+          # Create GitHub Release (delete existing draft if any, then create fresh)
+          gh release delete $GITHUB_REF_NAME \
+            --repo ${{ github.repository }} \
+            --yes 2>/dev/null || true
+
+          gh release create $GITHUB_REF_NAME \
+            --repo ${{ github.repository }} \
+            --title "Nexus AI v${VERSION}" \
+            --generate-notes \
+            dist/*.tgz
+
+          echo "✅ GitHub Release created with all tarballs"
+
+          # Update latest.json
           echo "{\"version\":\"${VERSION}\"}" > /tmp/latest.json
           aws s3 cp /tmp/latest.json \
             "s3://nexus-ai-releases/nexus-ai/latest.json" \
@@ -145,11 +136,6 @@ jobs:
             --region auto \
             --cache-control "no-cache, max-age=0"
           echo "✅ latest.json updated to v${VERSION}"
-
-          gh release edit $GITHUB_REF_NAME \
-            --repo ${{ github.repository }} \
-            --draft=false
-          echo "✅ Release published"
 
   publish-npm:
     needs: release
