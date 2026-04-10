@@ -134,6 +134,29 @@ export class OperationTracker {
     return operationId;
   }
 
+  /** Mark an operation complete (used by export which doesn't emit IPC status events) */
+  complete(siteId: string, message?: string): void {
+    const op = this._ops.get(siteId);
+    if (op) {
+      op.status = 'completed';
+      op.localStatus = 'completed';
+      op.completedAt = Date.now();
+      op.durationSeconds = Math.round((op.completedAt - op.startedAt) / 1000);
+      if (message) op.lastMessage = message;
+    }
+  }
+
+  /** Mark an operation failed */
+  fail(siteId: string, message?: string): void {
+    const op = this._ops.get(siteId);
+    if (op) {
+      op.status = 'error';
+      op.localStatus = 'error';
+      op.completedAt = Date.now();
+      if (message) op.lastMessage = message;
+    }
+  }
+
   getOperation(siteId: string): TrackedOperation | undefined {
     return this._ops.get(siteId);
   }

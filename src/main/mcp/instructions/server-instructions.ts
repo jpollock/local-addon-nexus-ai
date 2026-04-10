@@ -37,6 +37,7 @@ Route user requests to the correct tool namespace:
 | Create/delete/clone sites | \`local_create_site\`, \`local_delete_site\`, \`local_clone_site\` | "make a new site", "clone my staging site" |
 | Site details & logs | \`local_get_site\`, \`local_get_site_logs\` | "show site config", "what errors are in the log?" |
 | WordPress info | \`wp_core_version\`, \`wp_plugin_list\`, \`wp_theme_list\`, \`wp_user_list\` | "what plugins?", "WP version?" |
+| WordPress core update | \`wp_core_update\` | "update WordPress", "upgrade WP core to latest" |
 | Plugin management | \`wp_plugin_install\`, \`wp_plugin_activate\`, \`wp_plugin_deactivate\`, \`wp_plugin_update\` | "install ACF", "update all plugins" |
 | Content management | \`wp_post_create\`, \`wp_post_update\`, \`wp_post_delete\` | "create a draft post", "update the homepage" |
 | Site options | \`wp_option_get\` | "what's the site title?" |
@@ -145,18 +146,22 @@ Tools are classified into three safety tiers:
 
 Always use \`wp_plugin_update\` with dry-run awareness — check what will change before updating. Use \`wp_search_replace\` in dry-run mode first to preview changes.
 
+**Plugin update blockers:** If \`wp_plugin_update\` skips plugins citing a WP version requirement, run \`wp_core_update\` to upgrade WordPress core first, then re-run \`wp_plugin_update\` with slug=--all.
+
 ## Long-Running Operations (Pull / Push / Export)
 
 \`local_wpe_pull\`, \`local_wpe_push\`, and \`local_export_site\` are **async** — they return immediately with \`status: "in_progress"\` while the operation runs in the background (typically 1-5 minutes).
 
-**Always poll \`local_operation_status\` after starting one:**
+**CRITICAL: Always poll \`local_operation_status\` after starting one. Never rely on the user to confirm completion and never move to the next step until status=completed.**
 
-1. Call \`local_wpe_pull\` / \`local_wpe_push\` → get \`status: "in_progress"\`
-2. Call \`local_operation_status({ site: "..." })\` every 15-30 seconds
-3. When \`status === "completed"\`, the operation is done — proceed with next steps
-4. The response includes \`last_message\` (current phase) and \`recent_files\` (files being transferred)
+  1. Start: \`local_wpe_pull\` / \`local_wpe_push\` / \`local_export_site\` — returns in_progress immediately
+  2. Poll: \`local_operation_status({ site: "..." })\` every 15-30 seconds
+  3. Done: status=completed — proceed to next step
+  4. Info: last_message shows current phase, recent_files shows transfer progress
 
-Do NOT call \`local_get_site\` repeatedly as a polling mechanism — use \`local_operation_status\`.
+**Push/pull timeout:** For large sites (1+ GB), the MCP connection may time out — this does NOT mean the operation failed. The transfer continues in Local. Immediately poll \`local_operation_status\` to track real progress. Do not retry.
+
+Do NOT use \`local_get_site\` as a polling mechanism — it only shows running/halted, not operation progress.
 
 ## WP Engine API Credentials (Backup Creation)
 

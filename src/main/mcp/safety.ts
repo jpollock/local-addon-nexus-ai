@@ -25,6 +25,7 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   wp_plugin_list: 1,
   wp_theme_list: 1,
   wp_core_version: 1,
+  wp_core_update: 2,
   wp_user_list: 1,
   wp_option_get: 1,
   wp_site_health: 1,
