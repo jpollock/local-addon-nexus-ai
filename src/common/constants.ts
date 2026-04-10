@@ -153,6 +153,7 @@ export const IPC_CHANNELS = {
 
   // Database Scanner
   DB_SCAN_SITE: `${ADDON_PREFIX}:db:scan`,
+  DB_SCAN_ALL: `${ADDON_PREFIX}:db:scan-all`,
   DB_GET_LAST_SCAN: `${ADDON_PREFIX}:db:get-last-scan`,
 
   // WPE Auth (fire-and-forget — keeps Express server alive in main process)
