@@ -1,0 +1,99 @@
+/* AI-optimized content styling */
+
+/* Frontmatter metadata display */
+.md-typeset .metadata {
+  background: var(--md-code-bg-color);
+  border-left: 4px solid var(--md-primary-fg-color);
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 0.2rem;
+}
+
+.md-typeset .metadata dt {
+  font-weight: bold;
+  color: var(--md-primary-fg-color);
+}
+
+.md-typeset .metadata dd {
+  margin-left: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Tool schema styling */
+.md-typeset .tool-schema {
+  background: var(--md-code-bg-color);
+  padding: 1rem;
+  border-radius: 0.2rem;
+  margin: 1rem 0;
+}
+
+/* Safety tier badges */
+.safety-tier {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.2rem;
+  font-weight: bold;
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+}
+
+.safety-tier-1 {
+  background: #10b981;
+  color: white;
+}
+
+.safety-tier-2 {
+  background: #f59e0b;
+  color: white;
+}
+
+.safety-tier-3 {
+  background: #ef4444;
+  color: white;
+}
+
+/* Access method badges */
+.access-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.2rem;
+  font-size: 0.8rem;
+  margin-right: 0.3rem;
+  background: var(--md-primary-fg-color);
+  color: white;
+}
+
+/* Code examples with context */
+.md-typeset .example-context {
+  background: var(--md-accent-bg-color);
+  padding: 0.5rem 1rem;
+  margin-bottom: -1rem;
+  border-radius: 0.2rem 0.2rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Tool grid layout */
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.tool-card {
+  background: var(--md-code-bg-color);
+  padding: 1rem;
+  border-radius: 0.2rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.tool-card h3 {
+  margin-top: 0;
+}
+
+/* Mermaid diagram styling */
+.mermaid {
+  text-align: center;
+  margin: 2rem 0;
+}
