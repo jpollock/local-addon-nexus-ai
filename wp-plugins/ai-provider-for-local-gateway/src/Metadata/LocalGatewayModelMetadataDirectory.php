@@ -38,15 +38,12 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
      */
     public function listModelMetadata(): array
     {
-        error_log('LocalGatewayModelMetadataDirectory::listModelMetadata() called');
 
         if ($this->modelCache !== null) {
-            error_log('LocalGatewayModelMetadataDirectory: Returning cached models: ' . count($this->modelCache));
             return array_values($this->modelCache);
         }
 
         $this->modelCache = $this->getAvailableModels();
-        error_log('LocalGatewayModelMetadataDirectory: Built ' . count($this->modelCache) . ' models');
         return array_values($this->modelCache);
     }
 
@@ -57,20 +54,17 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
      */
     public function getModelMetadata(string $modelId): ModelMetadata
     {
-        error_log('LocalGatewayModelMetadataDirectory::getModelMetadata() called for: ' . $modelId);
 
         if ($this->modelCache === null) {
             $this->modelCache = $this->getAvailableModels();
         }
 
         if (!isset($this->modelCache[$modelId])) {
-            error_log('LocalGatewayModelMetadataDirectory: Model not found: ' . $modelId . ' (available: ' . implode(', ', array_keys($this->modelCache)) . ')');
             throw new \InvalidArgumentException(
                 sprintf('Model "%s" not available through Local Gateway', $modelId)
             );
         }
 
-        error_log('LocalGatewayModelMetadataDirectory: Returning metadata for ' . $modelId);
         return $this->modelCache[$modelId];
     }
 
@@ -81,14 +75,12 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
      */
     public function hasModelMetadata(string $modelId): bool
     {
-        error_log('LocalGatewayModelMetadataDirectory::hasModelMetadata() called for: ' . $modelId);
 
         if ($this->modelCache === null) {
             $this->modelCache = $this->getAvailableModels();
         }
 
         $hasModel = isset($this->modelCache[$modelId]);
-        error_log('LocalGatewayModelMetadataDirectory: hasModelMetadata(' . $modelId . ') = ' . ($hasModel ? 'true' : 'false'));
 
         return $hasModel;
     }
@@ -104,7 +96,6 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
      */
     private function getAvailableModels(): array
     {
-        error_log('LocalGatewayModelMetadataDirectory::getAvailableModels() building model list');
 
         $modelMap = [];
 
@@ -121,6 +112,7 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
             new SupportedOption(OptionEnum::temperature()),
             new SupportedOption(OptionEnum::topP()),
             new SupportedOption(OptionEnum::stopSequences()),
+            new SupportedOption(OptionEnum::candidateCount()),
         ];
 
         // Anthropic Claude models (default)
@@ -139,14 +131,12 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
                 $options,
                 'local-gateway' // Provider ID
             );
-            error_log('LocalGatewayModelMetadataDirectory: Created metadata for ' . $modelId);
         }
 
         // Future: Add OpenAI models (gpt-4, gpt-4o, etc.)
         // Future: Add Google models (gemini-1.5-pro, etc.)
         // For now, focus on Anthropic Claude as the default provider
 
-        error_log('LocalGatewayModelMetadataDirectory: Returning ' . count($modelMap) . ' models');
         return $modelMap;
     }
 }

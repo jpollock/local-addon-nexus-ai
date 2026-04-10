@@ -296,7 +296,6 @@ export const WpeRemoveSiteSchema = z.object({
 });
 
 export const WpePullToLocalSchema = z.object({
-  wpeSiteId: z.string().min(1),
   installName: z.string().min(1),
   installId: z.string().min(1),
 });

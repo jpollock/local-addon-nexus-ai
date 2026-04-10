@@ -99,6 +99,7 @@ class Title_Generation extends Abstract_Ability {
 			),
 		);
 
+
 		// If a post ID is provided, ensure the post exists before using its' content.
 		if ( is_numeric( $args['context'] ) ) {
 			$post = get_post( (int) $args['context'] );
@@ -111,19 +112,28 @@ class Title_Generation extends Abstract_Ability {
 				);
 			}
 
+
 			// Get the post context.
 			$context = get_post_context( $post->ID );
 			$content = $context['content'] ?? '';
 			unset( $context['content'] );
 
+
 			// Default to the passed in content if it exists.
 			if ( $args['content'] ) {
 				$content = normalize_content( $args['content'] );
+			}
+
+			// Fallback: if content is still empty (e.g. new post or page builder),
+			// use the post title so the user can still get title suggestions.
+			if ( empty( $content ) && ! empty( $post->post_title ) ) {
+				$content = sanitize_text_field( $post->post_title );
 			}
 		} else {
 			$content = normalize_content( $args['content'] ?? '' );
 			$context = $args['context'] ?? '';
 		}
+
 
 		// If we have no content, return an error.
 		if ( empty( $content ) ) {

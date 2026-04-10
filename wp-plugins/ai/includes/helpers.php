@@ -86,15 +86,23 @@ function get_post_context( int $post_id ): array {
 
 	// Get the post details using the get-post-details ability.
 	$details_ability = wp_get_ability( 'ai/get-post-details' );
+	if ( ! $details_ability ) {
+	}
 	if ( $details_ability ) {
 		$details = $details_ability->execute( array( 'post_id' => $post_id ) );
 
+		if ( is_wp_error( $details ) ) {
+		}
+
 		if ( is_array( $details ) ) {
+			$raw_content = $details['content'] ?? '(not set)';
+
 			$context = array_merge( $context, $details );
 
 			if ( isset( $context['content'] ) ) {
+				$filtered = (string) apply_filters( 'the_content', $context['content'] );
 				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
-				$context['content'] = normalize_content( (string) apply_filters( 'the_content', $context['content'] ) );
+				$context['content'] = normalize_content( $filtered );
 			}
 
 			if ( isset( $context['type'] ) ) {

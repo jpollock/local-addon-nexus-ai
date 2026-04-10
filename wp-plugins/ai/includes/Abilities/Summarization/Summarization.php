@@ -110,6 +110,12 @@ class Summarization extends Abstract_Ability {
 			if ( $args['content'] ) {
 				$content = normalize_content( $args['content'] );
 			}
+
+			// Fallback: if content is still empty (e.g. new post or page builder),
+			// use the post title so the user can still get a summary.
+			if ( empty( $content ) && ! empty( $post->post_title ) ) {
+				$content = sanitize_text_field( $post->post_title );
+			}
 		} else {
 			$content = normalize_content( $args['content'] ?? '' );
 			$context = $args['context'] ?? '';

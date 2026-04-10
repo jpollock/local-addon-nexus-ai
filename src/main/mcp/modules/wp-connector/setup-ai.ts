@@ -799,12 +799,13 @@ export async function setupSiteForAI(
     }
   }
 
-  // Step 4: Sync credentials — only sync the key for the chosen provider
+  // Step 4: Sync credentials — only sync the key for the chosen provider.
+  // When useLocalGateway is true, the gateway MU plugin holds credentials — skip direct key sync.
   let credentials: SetupAIResult['credentials'] = 'skipped';
 
   const providerKey = storedKeys[provider];
   const entries: CredentialEntry[] = [];
-  if (providerKey && PROVIDER_TO_WP_OPTION[provider]) {
+  if (!useLocalGateway && providerKey && PROVIDER_TO_WP_OPTION[provider]) {
     entries.push({
       provider,
       key: providerKey,

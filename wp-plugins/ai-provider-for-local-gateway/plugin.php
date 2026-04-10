@@ -87,8 +87,9 @@ add_action('init', __NAMESPACE__ . '\\register_provider', 1);
 add_action('init', __NAMESPACE__ . '\\register_provider', 5);
 add_action('init', __NAMESPACE__ . '\\register_provider', 10);
 
-// Prepend Local Gateway models to the experiment preferred models list.
-add_filter('ai_experiments_preferred_models_for_text_generation', function ($models) {
+// Prepend Local Gateway models to the preferred models list.
+// helpers.php applies 'wpai_preferred_text_models' via get_preferred_models_for_text_generation().
+add_filter('wpai_preferred_text_models', function ($models) {
     if (!class_exists(AiClient::class)) {
         return $models;
     }
