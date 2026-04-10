@@ -20,15 +20,20 @@ export const nexusListSitesHandler: McpToolHandler = {
     const statuses = services.localServices!.getAllSiteStatuses();
 
     // Extract WPE linkage from hostConnections
-    const localByWpeInstall = new Map<string, string>(); // wpe install name → local site name
+    // Note: hostConnections stores remoteSiteId (WPE site UUID) + remoteSiteEnv (environment)
+    // We'll need to resolve install names from CAPI later
+    const localByWpeSite = new Map<string, { siteName: string; env: string }>(); // remoteSiteId → local site info
     for (const s of localSites) {
       const connections = (s as any).hostConnections;
       const connList = connections
         ? (Array.isArray(connections) ? connections : Object.values(connections))
         : [];
       for (const conn of connList) {
-        if (conn.host === 'wpe' && conn.installName) {
-          localByWpeInstall.set(conn.installName, s.name);
+        if (conn.hostId === 'wpe' && conn.remoteSiteId) {
+          localByWpeSite.set(conn.remoteSiteId, {
+            siteName: s.name,
+            env: conn.remoteSiteEnv || 'production',
+          });
         }
       }
     }
@@ -38,29 +43,47 @@ export const nexusListSitesHandler: McpToolHandler = {
       const connList = connections
         ? (Array.isArray(connections) ? connections : Object.values(connections))
         : [];
-      const wpeConn = connList.find((c: any) => c.host === 'wpe');
+      const wpeConn = connList.find((c: any) => c.hostId === 'wpe');
       return {
         id: s.id,
         name: s.name,
         domain: (s as any).domain ?? 'unknown',
         status: statuses[s.id] ?? 'unknown',
-        linkedWpe: wpeConn?.installName ?? null,
+        linkedWpe: wpeConn ? `${wpeConn.remoteSiteId}/${wpeConn.remoteSiteEnv || 'production'}` : null,
+        wpeConn, // Keep for later resolution
       };
     });
 
-    // WPE installs (if available)
+    // WPE sites + installs (if available)
+    // Fetch full site objects to get site.id → installs mapping
     let wpeSection: any[] = [];
     let capiError = '';
+    const wpeSites = new Map<string, { name: string; installs: any[] }>(); // siteId → site data
+
     if (services.localServices!.isCAPIAvailable()) {
       try {
-        const installs = await services.localServices!.capiGetInstalls() as any[];
-        if (installs) {
-          wpeSection = installs.map((i) => ({
-            id: i.id,
-            name: i.name,
-            environment: i.environment ?? 'unknown',
-            linkedLocal: localByWpeInstall.get(i.name) ?? null,
-          }));
+        const sites = await services.localServices!.capiGetSites() as any[];
+        if (sites) {
+          // Build map of site ID → installs
+          for (const site of sites) {
+            wpeSites.set(site.id, { name: site.name, installs: site.installs || [] });
+          }
+
+          // Flatten installs for display
+          for (const site of sites) {
+            for (const install of site.installs || []) {
+              const linkInfo = localByWpeSite.get(site.id);
+              const isLinked = linkInfo && linkInfo.env === install.environment;
+
+              wpeSection.push({
+                id: install.id,
+                name: install.name,
+                environment: install.environment ?? 'unknown',
+                siteName: site.name,
+                linkedLocal: isLinked ? linkInfo.siteName : null,
+              });
+            }
+          }
         }
       } catch (err: any) {
         capiError = err.message?.includes('error code')
@@ -83,11 +106,29 @@ export const nexusListSitesHandler: McpToolHandler = {
       const halted = localSection.filter((s) => s.status !== 'running');
 
       for (const s of running) {
-        const link = s.linkedWpe ? ` ↔ wpe:${s.linkedWpe}` : '';
+        let link = '';
+        if (s.wpeConn) {
+          const siteData = wpeSites.get(s.wpeConn.remoteSiteId);
+          if (siteData) {
+            const install = siteData.installs.find((i: any) => i.environment === s.wpeConn.remoteSiteEnv);
+            link = install ? ` ↔ wpe:${install.name}` : ` ↔ wpe:${s.wpeConn.remoteSiteId}/${s.wpeConn.remoteSiteEnv}`;
+          } else {
+            link = ` ↔ wpe:${s.wpeConn.remoteSiteId}/${s.wpeConn.remoteSiteEnv}`;
+          }
+        }
         lines.push(`- **${s.name}** (${s.domain}) [running]${link}`);
       }
       for (const s of halted) {
-        const link = s.linkedWpe ? ` ↔ wpe:${s.linkedWpe}` : '';
+        let link = '';
+        if (s.wpeConn) {
+          const siteData = wpeSites.get(s.wpeConn.remoteSiteId);
+          if (siteData) {
+            const install = siteData.installs.find((i: any) => i.environment === s.wpeConn.remoteSiteEnv);
+            link = install ? ` ↔ wpe:${install.name}` : ` ↔ wpe:${s.wpeConn.remoteSiteId}/${s.wpeConn.remoteSiteEnv}`;
+          } else {
+            link = ` ↔ wpe:${s.wpeConn.remoteSiteId}/${s.wpeConn.remoteSiteEnv}`;
+          }
+        }
         lines.push(`- ${s.name} (${s.domain}) [${s.status}]${link}`);
       }
     }
@@ -97,7 +138,7 @@ export const nexusListSitesHandler: McpToolHandler = {
       lines.push('### WP Engine Environments (live fleet)');
       for (const i of wpeSection) {
         const link = i.linkedLocal ? ` ↔ local:${i.linkedLocal}` : '';
-        lines.push(`- **${i.name}** (${i.environment})${link}`);
+        lines.push(`- **${i.name}** (${i.siteName}, ${i.environment})${link}`);
       }
     }
 
