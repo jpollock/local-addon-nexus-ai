@@ -85,28 +85,17 @@ class LocalGatewayProvider extends AbstractApiProvider
         ModelMetadata $modelMetadata,
         ProviderMetadata $providerMetadata
     ): ModelInterface {
-        error_log('LocalGatewayProvider::createModel() called for: ' . $modelMetadata->getId());
-
-        $capabilities = $modelMetadata->getSupportedCapabilities();
-        foreach ($capabilities as $capability) {
+        foreach ($modelMetadata->getSupportedCapabilities() as $capability) {
             if ($capability->isTextGeneration()) {
-                error_log('LocalGatewayProvider: Creating LocalGatewayTextGenerationModel for ' . $modelMetadata->getId());
-                try {
-                    $model = new LocalGatewayTextGenerationModel($modelMetadata, $providerMetadata);
-                    error_log('LocalGatewayProvider: Text generation model created successfully');
-                    return $model;
-                } catch (\Exception $e) {
-                    error_log('LocalGatewayProvider: ERROR creating text generation model: ' . $e->getMessage());
-                    throw $e;
-                }
+                return new LocalGatewayTextGenerationModel($modelMetadata, $providerMetadata);
             }
         }
 
-        error_log('LocalGatewayProvider: No supported capability found');
         throw new RuntimeException(
-            'Unsupported model capabilities: ' . implode(', ', array_map(function($cap) {
-                return $cap->getValue();
-            }, $capabilities))
+            'Unsupported model capabilities: ' . implode(', ', array_map(
+                fn($cap) => $cap->getValue(),
+                $modelMetadata->getSupportedCapabilities()
+            ))
         );
     }
 

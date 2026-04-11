@@ -28,20 +28,12 @@ class LocalGatewayTextGenerationModel extends AbstractOpenAiCompatibleTextGenera
      */
     public function __construct($modelMetadata, $providerMetadata)
     {
-        error_log('LocalGatewayTextGenerationModel::__construct() called');
-        try {
-            parent::__construct($modelMetadata, $providerMetadata);
+        parent::__construct($modelMetadata, $providerMetadata);
 
-            // Set 30-second timeout for gateway + provider API call
-            $options = new RequestOptions();
-            $options->setTimeout(30);
-            $this->setRequestOptions($options);
-
-            error_log('LocalGatewayTextGenerationModel: Parent constructor succeeded, timeout set to 30s');
-        } catch (\Exception $e) {
-            error_log('LocalGatewayTextGenerationModel: Parent constructor ERROR: ' . $e->getMessage());
-            throw $e;
-        }
+        // Set 30-second timeout for gateway + provider API call
+        $options = new RequestOptions();
+        $options->setTimeout(30);
+        $this->setRequestOptions($options);
     }
 
     /**

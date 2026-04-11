@@ -74,10 +74,9 @@ function register_provider(): void
                 update_option('connectors_ai_local-gateway_api_key', $gatewayToken);
             }
 
-            error_log('Local Gateway provider registered with token: ' . substr($gatewayToken, 0, 8) . '...');
         }
     } catch (\Exception $e) {
-        error_log('Local Gateway provider registration failed: ' . $e->getMessage());
+        error_log('[NexusAI] Local Gateway provider registration failed: ' . $e->getMessage());
     }
 }
 
@@ -91,50 +90,29 @@ add_action('init', __NAMESPACE__ . '\\register_provider', 10);
 // Prepend Local Gateway models to the preferred models list.
 // helpers.php applies 'wpai_preferred_text_models' via get_preferred_models_for_text_generation().
 add_filter('wpai_preferred_text_models', function ($models) {
-    error_log('[LG] wpai_preferred_text_models filter fired. Incoming models: ' . json_encode($models));
-
     if (!class_exists(AiClient::class)) {
-        error_log('[LG] AiClient class not found — returning unchanged');
         return $models;
     }
 
     $registry = AiClient::defaultRegistry();
 
-    $hasProvider = $registry->hasProvider('local-gateway');
-    $isConfigured = $registry->isProviderConfigured('local-gateway');
-    error_log('[LG] hasProvider(local-gateway)=' . ($hasProvider ? 'true' : 'false') . ' isProviderConfigured=' . ($isConfigured ? 'true' : 'false'));
-
-    if (!$hasProvider || !$isConfigured) {
-        error_log('[LG] Provider not ready — returning unchanged');
+    if (!$registry->hasProvider('local-gateway') || !$registry->isProviderConfigured('local-gateway')) {
         return $models;
     }
 
     try {
-        $modelMetadataList = LocalGatewayProvider::modelMetadataDirectory()->listModelMetadata();
-        error_log('[LG] modelMetadataDirectory returned ' . count($modelMetadataList) . ' models');
-
         $gatewayModels = [];
-        foreach ($modelMetadataList as $modelMetadata) {
-            $hasTextGeneration = false;
+        foreach (LocalGatewayProvider::modelMetadataDirectory()->listModelMetadata() as $modelMetadata) {
             foreach ($modelMetadata->getSupportedCapabilities() as $capability) {
                 if ($capability->isTextGeneration()) {
-                    $hasTextGeneration = true;
+                    $gatewayModels[] = ['local-gateway', $modelMetadata->getId()];
                     break;
                 }
             }
-            error_log('[LG] Model ' . $modelMetadata->getId() . ' hasTextGeneration=' . ($hasTextGeneration ? 'true' : 'false'));
-
-            if ($hasTextGeneration) {
-                $gatewayModels[] = ['local-gateway', $modelMetadata->getId()];
-            }
         }
-
-        error_log('[LG] Prepending ' . count($gatewayModels) . ' gateway models: ' . json_encode($gatewayModels));
-        $merged = array_merge($gatewayModels, $models);
-        error_log('[LG] Final merged model list (' . count($merged) . '): ' . json_encode($merged));
-        return $merged;
+        return array_merge($gatewayModels, $models);
     } catch (\Exception $e) {
-        error_log('[LG] filter exception: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+        error_log('[NexusAI] wpai_preferred_text_models filter error: ' . $e->getMessage());
         return $models;
     }
 });
@@ -185,7 +163,6 @@ add_filter('ai_experiments_pre_has_valid_credentials_check', function ($valid) {
     $isConfigured = $registry->isProviderConfigured('local-gateway');
 
     if ($isConfigured) {
-        error_log('Local Gateway provider configured, returning TRUE for credentials check');
         return true;
     }
 
@@ -212,6 +189,5 @@ add_action('wp_connectors_init', function ($registry) {
         $connector['logo_url'] = plugins_url('assets/local-icon.svg', __FILE__);
         $connector['description'] = __('Routes AI requests through Local for centralized credential management, usage tracking, and cost monitoring.', 'ai-provider-for-local-gateway');
         $registry->register('local-gateway', $connector);
-        error_log('Local Gateway connector re-registered with logo: ' . $connector['logo_url']);
     }
 }, 100); // Late priority to ensure it runs after auto-discovery
