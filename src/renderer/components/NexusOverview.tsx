@@ -1121,7 +1121,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     const { stats } = this.state;
     if (!stats) return null;
 
-    return React.createElement(React.Fragment, null,
+    return React.createElement('div', null,
       this.renderSetupBanner(stats),
       this.renderWpeAuthBanner(),
 
@@ -1153,17 +1153,19 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   }
 
   renderActivityTab(): React.ReactNode {
-    return React.createElement('div', null,
-      // Event Stats Cards
-      React.createElement(EventStatsCards, { electron: this.props.electron }),
+    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, flex: 1, minHeight: 0 } },
+      // Event Stats Cards (fixed height)
+      React.createElement('div', { style: { flexShrink: 0 } },
+        React.createElement(EventStatsCards, { electron: this.props.electron }),
+      ),
 
-      // Timeline + Side Panels
+      // Timeline + Side Panels (fill remaining height)
       React.createElement('div', {
-        style: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '24px' },
+        style: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', flex: 1, minHeight: 0, alignItems: 'stretch' },
       },
         React.createElement(EventTimeline, { electron: this.props.electron }),
         React.createElement('div', {
-          style: { display: 'flex', flexDirection: 'column' as const, gap: '16px' },
+          style: { display: 'flex', flexDirection: 'column' as const, gap: '16px', minHeight: 0, overflow: 'auto' },
         },
           React.createElement(TopIssuesPanel, { electron: this.props.electron }),
           React.createElement(StorageHealthPanel, { electron: this.props.electron }),
@@ -1208,7 +1210,7 @@ renderTabBar(): React.ReactNode {
 
 
   renderOperationsTab(): React.ReactNode {
-    return React.createElement('div', null,
+    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const } },
       // Fleet Operations section
       this.renderSectionLabel('Fleet Operations'),
 
@@ -1984,20 +1986,22 @@ renderTabBar(): React.ReactNode {
         this.renderTabBar(),
       ),
 
-      // Content: scrollable area
+      // Content: each tab fills remaining height and scrolls independently
       React.createElement('div', {
-        style: { flexGrow: 1, overflowY: 'auto' as const, padding: '24px 32px' },
+        style: { flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' as const },
       },
         loading
           ? React.createElement('div', {
-              style: { color: 'var(--nxai-card-sub)', padding: '40px 0', textAlign: 'center' as const },
+              style: { padding: '40px 32px', color: 'var(--nxai-card-sub)', textAlign: 'center' as const },
             }, 'Loading dashboard...')
           : error
             ? React.createElement('div', {
-                style: { color: UI_COLORS.STATUS_ERROR, padding: '40px 0', textAlign: 'center' as const },
+                style: { padding: '40px 32px', color: UI_COLORS.STATUS_ERROR, textAlign: 'center' as const },
               }, `Error: ${error}`)
             : stats
-              ? this.renderActiveTab()
+              ? React.createElement('div', {
+                  style: { flex: 1, overflowY: 'auto' as const, padding: '24px 32px', display: 'flex', flexDirection: 'column' as const },
+                }, this.renderActiveTab())
               : null,
       ),
     );
