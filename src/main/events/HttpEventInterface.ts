@@ -152,7 +152,7 @@ export class HttpEventInterface {
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-Token');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-Token, X-WP-Site-ID');
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204);
@@ -168,16 +168,17 @@ export class HttpEventInterface {
       return;
     }
 
-    // All authenticated routes require Bearer token
-    if (!this.validateAuth(req)) {
-      res.writeHead(401, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Unauthorized' }));
+    // AI Gateway routes handle their own auth via X-Auth-Token (not Bearer).
+    // Must be checked before the Bearer auth gate below.
+    if (url.startsWith('/ai-gateway/v1/')) {
+      this.handleAIGatewayRoute(url, req, res);
       return;
     }
 
-    // AI Gateway routes
-    if (url.startsWith('/ai-gateway/v1/')) {
-      this.handleAIGatewayRoute(url, req, res);
+    // All other authenticated routes require Bearer token
+    if (!this.validateAuth(req)) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
       return;
     }
 

@@ -16,6 +16,9 @@ use WordPress\AiClient\Providers\Contracts\ProviderAvailabilityInterface;
  */
 class LocalGatewayProviderAvailability implements ProviderAvailabilityInterface
 {
+    /** @var bool|null Cached per-request result to avoid repeated health pings. */
+    private static $cachedResult = null;
+
     /**
      * {@inheritDoc}
      *
@@ -23,39 +26,32 @@ class LocalGatewayProviderAvailability implements ProviderAvailabilityInterface
      */
     public function isConfigured(): bool
     {
-        // Get gateway base URL
-        $baseUrl = 'http://localhost:52847';
-
-        // Try to detect webhook URL from site options (set by Nexus AI mu-plugin)
-        $webhookInfo = get_option('nexus_ai_webhook_info');
-        if ($webhookInfo && isset($webhookInfo['url'])) {
-            $baseUrl = $webhookInfo['url'];
-        } elseif (defined('NEXUS_AI_GATEWAY_URL')) {
-            // Extract base URL from gateway URL (strip /ai-gateway/v1 suffix)
-            $baseUrl = preg_replace('#/ai-gateway/v1$#', '', NEXUS_AI_GATEWAY_URL);
+        // Cache per request — isConfigured() is called multiple times per page load
+        // (once per registered priority), and the health ping adds ~3s latency each time.
+        if (self::$cachedResult !== null) {
+            return self::$cachedResult;
         }
 
-        // Ping the webhook server health endpoint
+        // Resolve the webhook server URL — this is where /health and /ai-gateway/v1/* live.
+        // Priority: NEXUS_AI_WEBHOOK_URL constant (set by MU plugin) > wp option > fallback.
+        if (defined('NEXUS_AI_WEBHOOK_URL')) {
+            $baseUrl = rtrim(NEXUS_AI_WEBHOOK_URL, '/');
+        } else {
+            $webhookInfo = get_option('nexus_ai_webhook_info');
+            $baseUrl = ($webhookInfo && isset($webhookInfo['url']))
+                ? rtrim($webhookInfo['url'], '/')
+                : 'http://127.0.0.1:13000';
+        }
+
         $response = wp_remote_get($baseUrl . '/health', [
-            'timeout' => 3,
-            'sslverify' => false,
-            'reject_unsafe_urls' => false, // Allow localhost
+            'timeout'            => 3,
+            'sslverify'          => false,
+            'reject_unsafe_urls' => false,
         ]);
 
-        if (is_wp_error($response)) {
-            error_log('Local Gateway availability check failed: ' . $response->get_error_message());
-            return false;
-        }
+        self::$cachedResult = !is_wp_error($response)
+            && wp_remote_retrieve_response_code($response) === 200;
 
-        $status_code = wp_remote_retrieve_response_code($response);
-
-        // Health endpoint should return 200
-        if ($status_code === 200) {
-            error_log('Local Gateway is available at ' . $baseUrl);
-            return true;
-        }
-
-        error_log('Local Gateway health check returned status ' . $status_code);
-        return false;
+        return self::$cachedResult;
     }
 }

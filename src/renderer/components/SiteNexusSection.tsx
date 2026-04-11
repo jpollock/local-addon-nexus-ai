@@ -124,6 +124,7 @@ function row(label: string, ...children: React.ReactNode[]): React.ReactElement 
 
 export class SiteNexusSection extends React.Component<SiteNexusSectionProps, SiteNexusSectionState> {
   private mounted = false;
+  private _onSettingsApplied: (() => void) | null = null;
 
   state: SiteNexusSectionState = {
     indexEntry: null,
@@ -153,6 +154,8 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   componentDidMount(): void {
     this.mounted = true;
     this.fetchData();
+    this._onSettingsApplied = () => { if (this.mounted) this.fetchData(); };
+    window.addEventListener('nexus-ai:settings-applied', this._onSettingsApplied);
   }
 
   componentDidUpdate(prevProps: SiteNexusSectionProps): void {
@@ -172,6 +175,9 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
 
   componentWillUnmount(): void {
     this.mounted = false;
+    if (this._onSettingsApplied) {
+      window.removeEventListener('nexus-ai:settings-applied', this._onSettingsApplied);
+    }
   }
 
   fetchData = async (): Promise<void> => {

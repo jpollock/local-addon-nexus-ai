@@ -367,25 +367,23 @@ export class AIGatewayByCallerPanel extends React.Component<
         : React.createElement(
             'div',
             null,
-            // Table header
+            // Flex header row — widths must match data row cells exactly
             React.createElement(
-              'table',
-              { style: tableStyle },
-              React.createElement(
-                'thead',
-                null,
-                React.createElement(
-                  'tr',
-                  null,
-                  React.createElement('th', { style: { ...thStyle, width: '280px' } }, 'Caller'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '100px' } }, 'Requests'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '120px' } }, 'Tokens'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '100px' } }, 'Cost'),
-                  React.createElement('th', { style: { ...thStyle, width: '200px' } }, 'Features'),
-                ),
-              ),
+              'div',
+              {
+                style: {
+                  display: 'flex',
+                  borderBottom: '1px solid var(--dividerColor)',
+                  padding: '0 8px',
+                },
+              },
+              React.createElement('div', { style: { ...thStyle, width: '260px', flexShrink: 0 } }, 'Caller'),
+              React.createElement('div', { style: { ...thStyle, width: '90px', flexShrink: 0, textAlign: 'right' } }, 'Requests'),
+              React.createElement('div', { style: { ...thStyle, width: '110px', flexShrink: 0, textAlign: 'right' } }, 'Tokens'),
+              React.createElement('div', { style: { ...thStyle, width: '90px', flexShrink: 0, textAlign: 'right' } }, 'Cost'),
+              React.createElement('div', { style: { ...thStyle, flex: 1 } }, 'Features'),
             ),
-            // Virtual scrolling list
+            // Virtual scrolling list — flex rows align with header above
             React.createElement(List, {
               height: 500,
               itemCount: callerStats.length,
@@ -395,57 +393,64 @@ export class AIGatewayByCallerPanel extends React.Component<
               children: ({ index, style, data }: any) => {
                 const stats = data.callerStats[index];
                 return React.createElement(
-                  'table',
-                  { style: { ...tableStyle, marginTop: 0 } },
+                  'div',
+                  {
+                    style: {
+                      ...style,
+                      display: 'flex',
+                      alignItems: 'center',
+                      borderBottom: '1px solid var(--dividerColor)',
+                      padding: '0 8px',
+                      boxSizing: 'border-box',
+                    },
+                  },
                   React.createElement(
-                    'tbody',
-                    null,
+                    'div',
+                    { style: { ...data.tdStyle, border: 'none', width: '260px', flexShrink: 0, padding: '0 8px 0 0', display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' } },
                     React.createElement(
-                      'tr',
-                      { style },
-                      React.createElement(
-                        'td',
-                        { style: { ...data.tdStyle, width: '280px' } },
-                        React.createElement(
-                          'span',
-                          { style: data.badgeStyle(stats.callerType) },
-                          stats.callerType.toUpperCase(),
-                        ),
-                        stats.callerDisplay,
-                      ),
-                      React.createElement(
-                        'td',
-                        { style: { ...data.tdStyle, textAlign: 'right', fontFamily: 'monospace', width: '100px' } },
-                        stats.requests.toLocaleString(),
-                      ),
-                      React.createElement(
-                        'td',
-                        { style: { ...data.tdStyle, textAlign: 'right', fontFamily: 'monospace', width: '120px' } },
-                        stats.totalTokens.toLocaleString(),
-                      ),
-                      React.createElement(
-                        'td',
-                        {
-                          style: {
-                            ...data.tdStyle,
-                            textAlign: 'right',
-                            fontFamily: 'monospace',
-                            fontWeight: 600,
-                            color: data.UI_COLORS.WPE_BRAND,
-                            width: '100px',
-                          },
-                        },
-                        `$${stats.costUsd.toFixed(4)}`,
-                      ),
-                      React.createElement(
-                        'td',
-                        { style: { ...data.tdStyle, fontSize: '12px', color: 'var(--secondaryTextColor)', width: '200px' } },
-                        stats.features.size > 0
-                          ? Array.from(stats.features).slice(0, 3).join(', ') +
-                            (stats.features.size > 3 ? ` +${stats.features.size - 3}` : '')
-                          : '—',
-                      ),
+                      'span',
+                      { style: { ...data.badgeStyle(stats.callerType), flexShrink: 0 } },
+                      stats.callerType.toUpperCase(),
                     ),
+                    React.createElement(
+                      'span',
+                      { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+                      stats.callerDisplay,
+                    ),
+                  ),
+                  React.createElement(
+                    'div',
+                    { style: { ...data.tdStyle, border: 'none', width: '90px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace' } },
+                    stats.requests.toLocaleString(),
+                  ),
+                  React.createElement(
+                    'div',
+                    { style: { ...data.tdStyle, border: 'none', width: '110px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace' } },
+                    stats.totalTokens.toLocaleString(),
+                  ),
+                  React.createElement(
+                    'div',
+                    {
+                      style: {
+                        ...data.tdStyle,
+                        border: 'none',
+                        width: '90px',
+                        flexShrink: 0,
+                        textAlign: 'right',
+                        fontFamily: 'monospace',
+                        fontWeight: 600,
+                        color: data.UI_COLORS.WPE_BRAND,
+                      },
+                    },
+                    `$${stats.costUsd.toFixed(4)}`,
+                  ),
+                  React.createElement(
+                    'div',
+                    { style: { ...data.tdStyle, border: 'none', flex: 1, fontSize: '12px', color: 'var(--secondaryTextColor)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+                    stats.features.size > 0
+                      ? Array.from(stats.features).slice(0, 3).join(', ') +
+                        (stats.features.size > 3 ? ` +${stats.features.size - 3}` : '')
+                      : '—',
                   ),
                 );
               }

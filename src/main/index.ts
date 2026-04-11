@@ -145,11 +145,14 @@ export default function main(context: any): void {
     logger: localLogger,
   });
 
-  // Initialize HTTP event interface
+  // Initialize HTTP event interface.
+  // Reuse the same auth token across restarts so MU plugin credentials stay valid.
+  const savedWebhookToken = registryStorage.get('http_webhook_auth_token') as string | null;
   const httpEventInterface = new HttpEventInterface({
     eventProcessor,
     logger: localLogger,
     storage: registryStorage,
+    authToken: savedWebhookToken ?? undefined,
   });
 
   // Initialize WPE sync service (Phase 1-2)
@@ -261,7 +264,9 @@ export default function main(context: any): void {
       localLogger.info(`[NexusAI] WordPress webhook endpoint: ${httpInfo.url}/wp-events`);
       localLogger.info(`[NexusAI] Auth token: ${httpInfo.authToken.substring(0, 16)}...`);
 
-      // Store connection info for WordPress plugin configuration
+      // Store connection info for WordPress plugin configuration.
+      // Persist auth token so it survives Local restarts — avoids MU plugin staleness.
+      registryStorage.set('http_webhook_auth_token', httpInfo.authToken);
       registryStorage.set('http_webhook_info', httpInfo);
 
       // Signal readiness — lifecycle hooks waiting to index can now proceed

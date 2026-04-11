@@ -33,14 +33,57 @@ async function applyGatewayChange(
   const siteConfigs = (settingsStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
   const siteConfig = siteConfigs[site.id];
 
-  // Only act on sites that have been set up AND have a different gateway state
   if (!siteConfig) return;
-  if (!!siteConfig.useLocalGateway === globalUseGateway) return;
 
-  logger.info(`${tag} Gateway setting changed for "${site.name}": ${siteConfig.useLocalGateway ? 'on' : 'off'} → ${globalUseGateway ? 'on' : 'off'}`);
+  const gatewayToggleChanged = !!siteConfig.useLocalGateway !== globalUseGateway;
+  // Also detect provider change for sites already using the gateway
+  const providerChanged = globalUseGateway && siteConfig.useLocalGateway
+    && siteConfig.provider !== globalProvider;
 
-  // Use switchProviderForSite with the same provider to apply the gateway change
-  // (switch-provider handles deactivating old plugin, activating new one)
+  if (!gatewayToggleChanged && !providerChanged) return;
+
+  if (gatewayToggleChanged) {
+    logger.info(`${tag} Gateway toggle changed for "${site.name}": ${siteConfig.useLocalGateway ? 'on' : 'off'} → ${globalUseGateway ? 'on' : 'off'}`);
+  } else {
+    logger.info(`${tag} Provider changed for gateway site "${site.name}": ${siteConfig.provider} → ${globalProvider}`);
+  }
+
+  if (providerChanged && !gatewayToggleChanged) {
+    // Provider changed while gateway stays ON.
+    // The WP plugin stays as ai-provider-for-local-gateway — do NOT swap plugins.
+    // Just update the stored config and regenerate the MU plugin with the new provider.
+    siteConfigs[site.id] = { ...siteConfig, provider: globalProvider };
+    settingsStorage.set(STORAGE_KEYS.SITE_AI_CONFIG, siteConfigs);
+
+    // Regenerate MU plugin so NEXUS_AI_PROVIDER reflects the new provider
+    try {
+      const fs = require('fs') as typeof import('fs');
+      const path = require('path') as typeof import('path');
+      const webhookInfo = settingsStorage.get('http_webhook_info') as any;
+      const aiProxyInfo = settingsStorage.get('ai_proxy_info') as any;
+      if (webhookInfo?.url && webhookInfo?.authToken) {
+        const muPluginsDir = path.join(site.path, 'app', 'public', 'wp-content', 'mu-plugins');
+        const muPluginContent = generateMuPluginContent({
+          webhookUrl: webhookInfo.url,
+          webhookAuthToken: webhookInfo.authToken,
+          siteId: site.id,
+          aiGatewayUrl: aiProxyInfo?.url,
+          aiGatewayToken: aiProxyInfo?.authToken,
+          aiProvider: globalProvider,
+        });
+        fs.writeFileSync(path.join(muPluginsDir, 'nexus-ai-connector-config.php'), muPluginContent);
+        logger.info(`${tag} MU plugin updated: NEXUS_AI_PROVIDER=${globalProvider}`);
+      }
+    } catch (err) {
+      logger.error(`${tag} MU plugin update failed:`, err);
+    }
+
+    logger.info(`${tag} Provider updated for "${site.name}": gateway plugin unchanged, provider=${globalProvider}`);
+    return;
+  }
+
+  // Gateway toggle changed — use switchProviderForSite to swap the WP plugin
+  // (local-gateway ↔ direct provider plugin)
   const result = await switchProviderForSite(
     site.id,
     globalProvider as any,
@@ -50,12 +93,15 @@ async function applyGatewayChange(
   );
 
   if (result.success) {
-    // Update siteConfig to reflect new gateway state
-    siteConfigs[site.id] = { ...siteConfig, useLocalGateway: globalUseGateway };
+    siteConfigs[site.id] = {
+      ...siteConfig,
+      provider: globalProvider,
+      useLocalGateway: globalUseGateway,
+    };
     settingsStorage.set(STORAGE_KEYS.SITE_AI_CONFIG, siteConfigs);
-    logger.info(`${tag} Gateway change applied to "${site.name}"`);
+    logger.info(`${tag} Applied to "${site.name}": provider=${globalProvider}, gateway=${globalUseGateway}`);
   } else {
-    logger.error(`${tag} Gateway change failed for "${site.name}": ${result.error}`);
+    logger.error(`${tag} Failed for "${site.name}": ${result.error}`);
   }
 }
 
@@ -301,6 +347,7 @@ async function installNexusAiConnectorPlugin(
 
       // Get AI Gateway info if available
       const aiProxyInfo = settingsStorage.get('ai_proxy_info') as any;
+      const nexusSettings = (settingsStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
 
       // Generate MU plugin content with caller detection
       const muPluginContent = generateMuPluginContent({
@@ -309,6 +356,7 @@ async function installNexusAiConnectorPlugin(
         siteId: site.id,
         aiGatewayUrl: aiProxyInfo?.url,
         aiGatewayToken: aiProxyInfo?.authToken,
+        aiProvider: nexusSettings.aiProvider ?? 'anthropic',
       });
 
       // Clean up old MU plugin file if it exists (pre-unified template)

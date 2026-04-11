@@ -47,21 +47,30 @@ class LocalGatewayTextGenerationModel extends AbstractOpenAiCompatibleTextGenera
     /**
      * {@inheritDoc}
      *
-     * Adds X-Auth-Token header for gateway authentication.
+     * Adds auth headers for the Local AI Gateway.
+     *
+     * The gateway validates X-Auth-Token against the webhook auth token
+     * (NEXUS_AI_AUTH_TOKEN, set by the nexus-ai-connector-config.php MU plugin).
+     * X-WP-Site-ID tells the gateway which site is making the request.
      *
      * @since 1.0.0
      */
     protected function createRequest(HttpMethodEnum $method, string $path, array $headers = [], $data = null): Request
     {
         $url = LocalGatewayProvider::url($path);
-        error_log('LocalGatewayTextGenerationModel::createRequest() path=' . $path . ' url=' . $url);
 
-        // Add auth token header (read from constant set by Nexus AI mu-plugin)
-        if (defined('NEXUS_AI_GATEWAY_TOKEN')) {
+        // Use the webhook auth token — it's stable across Local restarts
+        // and is stored in http_webhook_info on the gateway side.
+        if (defined('NEXUS_AI_AUTH_TOKEN')) {
+            $headers['X-Auth-Token'] = NEXUS_AI_AUTH_TOKEN;
+        } elseif (defined('NEXUS_AI_GATEWAY_TOKEN')) {
+            // Fallback for older MU plugins that don't set NEXUS_AI_AUTH_TOKEN
             $headers['X-Auth-Token'] = NEXUS_AI_GATEWAY_TOKEN;
-            error_log('LocalGatewayTextGenerationModel: Added X-Auth-Token header');
-        } else {
-            error_log('LocalGatewayTextGenerationModel: WARNING - NEXUS_AI_GATEWAY_TOKEN not defined');
+        }
+
+        // Send site ID so the gateway can track usage per site
+        if (defined('NEXUS_AI_SITE_ID')) {
+            $headers['X-WP-Site-ID'] = NEXUS_AI_SITE_ID;
         }
 
         return new Request(

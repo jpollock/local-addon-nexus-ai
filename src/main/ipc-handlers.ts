@@ -583,16 +583,66 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, (_event: any, partial: Partial<NexusSettings>) => {
+  safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, async (_event: any, partial: Partial<NexusSettings>) => {
     try {
-      // Validate input
       const validated = validateInput(UpdateSettingsSchema, partial);
 
       const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
       const current: NexusSettings = raw ?? DEFAULT_SETTINGS;
       const updated = { ...current, ...validated };
       registryStorage.set(STORAGE_KEYS.SETTINGS, updated as any);
-      return updated;
+
+      // If provider or gateway toggle changed, immediately apply to all running gateway sites.
+      const providerChanged = validated.aiProvider !== undefined && validated.aiProvider !== (current as any).aiProvider;
+      const gatewayChanged  = validated.useLocalGateway !== undefined && validated.useLocalGateway !== (current as any).useLocalGateway;
+
+      if ((providerChanged || gatewayChanged) && localServicesBridge) {
+        const newProvider: string = (updated as any).aiProvider ?? 'anthropic';
+        const useGateway: boolean = !!(updated as any).useLocalGateway;
+        const siteConfigs = (registryStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+        const statuses = localServicesBridge.getAllSiteStatuses();
+
+        for (const [siteId, status] of Object.entries(statuses)) {
+          if (status !== 'running') continue;
+          const cfg = siteConfigs[siteId];
+          if (!cfg?.useLocalGateway) continue;  // Only gateway sites
+
+          // Provider-only change: update MU plugin, no plugin swap
+          if (providerChanged && !gatewayChanged) {
+            try {
+              const { generateMuPluginContent } = await import('./ai-gateway/mu-plugin-template');
+              const path = await import('path');
+              const fs = await import('fs');
+              const webhookInfo = registryStorage.get('http_webhook_info') as any;
+              const aiProxyInfo = registryStorage.get('ai_proxy_info') as any;
+              if (webhookInfo?.url) {
+                const site = localServicesBridge.resolveSiteObject(siteId) as any;
+                const muPluginsDir = path.join(site.paths.webRoot, 'wp-content', 'mu-plugins');
+                const content = generateMuPluginContent({
+                  webhookUrl: webhookInfo.url,
+                  webhookAuthToken: webhookInfo.authToken,
+                  siteId,
+                  aiGatewayUrl: aiProxyInfo?.url,
+                  aiGatewayToken: aiProxyInfo?.authToken,
+                  aiProvider: newProvider,
+                });
+                fs.writeFileSync(path.join(muPluginsDir, 'nexus-ai-connector-config.php'), content);
+                siteConfigs[siteId] = { ...cfg, provider: newProvider };
+                localLogger.info(`[NexusAI] Provider broadcast to "${site.name}": NEXUS_AI_PROVIDER=${newProvider}`);
+              }
+            } catch (err) {
+              localLogger.error(`[NexusAI] Provider broadcast failed for ${siteId}:`, err);
+            }
+          }
+        }
+
+        // Persist updated site configs
+        if (providerChanged && !gatewayChanged) {
+          registryStorage.set(STORAGE_KEYS.SITE_AI_CONFIG, siteConfigs);
+        }
+      }
+
+      return { ...updated, _providerChanged: providerChanged, _gatewayChanged: gatewayChanged };
     } catch (err) {
       localLogger.error('[NexusAI] update-settings failed:', (err as Error).message);
       return DEFAULT_SETTINGS;

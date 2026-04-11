@@ -13,6 +13,8 @@ export interface MuPluginConfig {
   siteId: string;
   aiGatewayUrl?: string;
   aiGatewayToken?: string;
+  /** The underlying AI provider routed by the gateway (e.g. 'anthropic', 'openai') */
+  aiProvider?: string;
 }
 
 export function generateMuPluginContent(config: MuPluginConfig): string {
@@ -22,6 +24,7 @@ export function generateMuPluginContent(config: MuPluginConfig): string {
     siteId,
     aiGatewayUrl,
     aiGatewayToken,
+    aiProvider,
   } = config;
 
   // Determine AI Gateway port from URL if available
@@ -66,7 +69,7 @@ if (!defined('WP_DEBUG_DISPLAY')) {
 
 ${aiGatewayUrl && aiGatewayToken ? `
 // ============================================================================
-// AI Gateway Configuration
+// AI Gateway Configuration (Ollama proxy — for local model support)
 // ============================================================================
 
 if (!defined('NEXUS_AI_GATEWAY_URL')) {
@@ -79,6 +82,11 @@ if (!defined('NEXUS_AI_GATEWAY_PORT')) {
     define('NEXUS_AI_GATEWAY_PORT', '${gatewayPort}');
 }
 ` : ''}
+// The underlying provider the gateway is currently routing to.
+// Used by ai-provider-for-local-gateway to expose the right model list.
+if (!defined('NEXUS_AI_PROVIDER')) {
+    define('NEXUS_AI_PROVIDER', '${aiProvider ?? 'anthropic'}');
+}
 
 // ============================================================================
 // AI CALLER DETECTION: Track which plugin/feature makes AI requests
@@ -215,63 +223,56 @@ function nexus_ai_detect_core_feature() {
 /**
  * Inject caller headers into AI Gateway requests.
  *
- * Hooks into all HTTP requests and adds caller tracking headers
- * for requests going to the Local AI Gateway.
+ * Uses http_request_args (not pre_http_request) because pre_http_request
+ * is for preempting requests — modifying $parsed_args there has no effect.
+ * http_request_args returns the modified args and actually affects the request.
  */
-add_filter('pre_http_request', function($preempt, $parsed_args, $url) {
-    // Only intercept requests to Local AI Gateway
-    $gateway_url = defined('NEXUS_AI_GATEWAY_URL') ? NEXUS_AI_GATEWAY_URL : null;
+add_filter('http_request_args', function($args, $url) {
+    // Only intercept requests to the AI Gateway routes.
+    // These live on the webhook server under /ai-gateway/v1/ — NOT on the Ollama proxy.
+    $webhook_url = defined('NEXUS_AI_WEBHOOK_URL') ? rtrim(NEXUS_AI_WEBHOOK_URL, '/') : null;
 
-    if (!$gateway_url) {
-        return $preempt; // Gateway not configured
+    if (!$webhook_url || strpos($url, $webhook_url . '/ai-gateway/') === false) {
+        return $args;
     }
 
-    // Check if this request is going to the gateway
-    if (strpos($url, $gateway_url) === false) {
-        return $preempt; // Not our request, ignore
+    // Initialize headers array if not set
+    if (!isset($args['headers'])) {
+        $args['headers'] = [];
     }
 
-    // Initialize headers if not set
-    if (!isset($parsed_args['headers'])) {
-        $parsed_args['headers'] = [];
-    }
-
-    // Don't override headers if already set (manual caller info)
-    $has_caller_headers = isset($parsed_args['headers']['X-WP-Caller-Plugin']) ||
-                          isset($parsed_args['headers']['X-WP-Caller-Theme']) ||
-                          isset($parsed_args['headers']['X-WP-Caller-Feature']);
+    // Don't override if caller headers are already present
+    $has_caller_headers = isset($args['headers']['X-WP-Caller-Plugin']) ||
+                          isset($args['headers']['X-WP-Caller-Theme']) ||
+                          isset($args['headers']['X-WP-Caller-Feature']);
 
     if (!$has_caller_headers) {
-        // Detect caller
         $caller = nexus_ai_detect_caller();
 
-        // Add caller headers
         if (!empty($caller['plugin'])) {
-            $parsed_args['headers']['X-WP-Caller-Plugin'] = $caller['plugin'];
+            $args['headers']['X-WP-Caller-Plugin'] = $caller['plugin'];
         }
         if (!empty($caller['theme'])) {
-            $parsed_args['headers']['X-WP-Caller-Theme'] = $caller['theme'];
+            $args['headers']['X-WP-Caller-Theme'] = $caller['theme'];
         }
         if (!empty($caller['feature'])) {
-            $parsed_args['headers']['X-WP-Caller-Feature'] = $caller['feature'];
+            $args['headers']['X-WP-Caller-Feature'] = $caller['feature'];
         }
         if (!empty($caller['source'])) {
-            $parsed_args['headers']['X-WP-Caller-Source'] = $caller['source'];
+            $args['headers']['X-WP-Caller-Source'] = $caller['source'];
         }
 
-        // Add user context
         $user_id = get_current_user_id();
         if ($user_id) {
-            $parsed_args['headers']['X-WP-User-ID'] = (string) $user_id;
-
+            $args['headers']['X-WP-User-ID'] = (string) $user_id;
             $user = wp_get_current_user();
             if ($user && !empty($user->roles)) {
-                $parsed_args['headers']['X-WP-User-Role'] = $user->roles[0];
+                $args['headers']['X-WP-User-Role'] = $user->roles[0];
             }
         }
     }
 
-    return $preempt;
-}, 10, 3);
+    return $args;
+}, 10, 2);
 `;
 }

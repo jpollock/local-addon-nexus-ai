@@ -14,8 +14,7 @@ import { StorageHealthPanel } from './StorageHealthPanel';
 import { TopIssuesPanel } from './TopIssuesPanel';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
-import { AIGatewayUsagePanel } from './AIGatewayUsagePanel';
-import { AIGatewayByCallerPanel } from './AIGatewayByCallerPanel';
+import { AIGatewayPanel } from './AIGatewayPanel';
 import { LoadingSpinner } from './LoadingSpinner';
 
 // Local's native notification components
@@ -1148,11 +1147,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         this.renderWpeSyncCard(),
       ),
 
-      // AI Gateway Usage (moved from Operations tab)
-      React.createElement(AIGatewayUsagePanel, { electron: this.props.electron }),
-
-      // AI Gateway By Caller (aggregated view)
-      React.createElement(AIGatewayByCallerPanel, { electron: this.props.electron }),
+      // AI Gateway — tabbed: Requests | By Caller
+      React.createElement(AIGatewayPanel, { electron: this.props.electron }),
     );
   }
 

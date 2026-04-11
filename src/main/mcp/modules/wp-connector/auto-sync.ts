@@ -36,7 +36,12 @@ export async function autoSyncCredentials(
     return; // Site hasn't run Setup AI yet
   }
 
-  const { provider } = siteConfig;
+  const { provider, useLocalGateway } = siteConfig;
+
+  // Local Gateway sites manage credentials in Local's Node.js process — never in WordPress DB
+  if (useLocalGateway) {
+    return;
+  }
 
   // Only sync the key for this site's configured provider
   const storedKeys = (storage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;

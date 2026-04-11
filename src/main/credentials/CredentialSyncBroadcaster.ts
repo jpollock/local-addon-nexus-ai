@@ -55,9 +55,12 @@ export class CredentialSyncBroadcaster {
     const runningSites = this.getRunningSites();
     if (runningSites.length === 0) return [];
 
-    // Only sync sites configured to use this provider
+    // Only sync sites configured to use this provider directly (not via Local Gateway)
     const siteConfigs = (this.registryStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
-    const affectedSites = runningSites.filter(site => siteConfigs[site.id]?.provider === providerId);
+    const affectedSites = runningSites.filter(site => {
+      const cfg = siteConfigs[site.id];
+      return cfg?.provider === providerId && !cfg?.useLocalGateway;
+    });
 
     if (affectedSites.length === 0) {
       this.logger.info(`[NexusAI] No running sites use provider ${providerId} — skipping broadcast`);

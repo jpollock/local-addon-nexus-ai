@@ -38,7 +38,6 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
      */
     public function listModelMetadata(): array
     {
-
         if ($this->modelCache !== null) {
             return array_values($this->modelCache);
         }
@@ -96,16 +95,14 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
      */
     private function getAvailableModels(): array
     {
-
         $modelMap = [];
 
-        // Standard capabilities for text generation models
+        // Standard capabilities and options for all text generation models
         $capabilities = [
             CapabilityEnum::textGeneration(),
             CapabilityEnum::chatHistory(),
         ];
 
-        // Standard options supported by most providers
         $options = [
             new SupportedOption(OptionEnum::systemInstruction()),
             new SupportedOption(OptionEnum::maxTokens()),
@@ -113,30 +110,39 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
             new SupportedOption(OptionEnum::topP()),
             new SupportedOption(OptionEnum::stopSequences()),
             new SupportedOption(OptionEnum::candidateCount()),
-            new SupportedOption(OptionEnum::inputModalities()),  // required when prompt has text content
+            new SupportedOption(OptionEnum::inputModalities()),
+            new SupportedOption(OptionEnum::outputModalities()),
         ];
 
-        // Anthropic Claude models (default)
-        // The gateway will route these to Anthropic API
-        $claudeModels = [
-            'claude-haiku-4-5-20251001' => 'Claude Haiku 4.5',
-            'claude-sonnet-4-5-20250514' => 'Claude Sonnet 4.5',
-            'claude-opus-4-6-20251015' => 'Claude Opus 4.6',
-        ];
+        // Models are determined by the provider the gateway is currently routing to.
+        // NEXUS_AI_PROVIDER is set by the nexus-ai-connector-config.php MU plugin
+        // and mirrors the global AI provider preference in Local.
+        $provider = defined('NEXUS_AI_PROVIDER') ? NEXUS_AI_PROVIDER : 'anthropic';
 
-        foreach ($claudeModels as $modelId => $displayName) {
-            $modelMap[$modelId] = new ModelMetadata(
-                $modelId,
-                $displayName,
-                $capabilities,
-                $options,
-                'local-gateway' // Provider ID
-            );
+        if ($provider === 'openai') {
+            $models = [
+                'gpt-4o-mini' => 'GPT-4o Mini',
+                'gpt-4o'      => 'GPT-4o',
+                'gpt-4.1'     => 'GPT-4.1',
+            ];
+        } else {
+            // Default: Anthropic Claude models
+            $models = [
+                'claude-haiku-4-5-20251001'  => 'Claude Haiku 4.5',
+                'claude-sonnet-4-5-20250514' => 'Claude Sonnet 4.5',
+                'claude-opus-4-6-20251015'   => 'Claude Opus 4.6',
+            ];
         }
 
-        // Future: Add OpenAI models (gpt-4, gpt-4o, etc.)
-        // Future: Add Google models (gemini-1.5-pro, etc.)
-        // For now, focus on Anthropic Claude as the default provider
+        foreach ($models as $modelId => $modelName) {
+            $modelMap[$modelId] = new ModelMetadata(
+                $modelId,
+                $modelName,
+                $capabilities,
+                $options,
+                'local-gateway'
+            );
+        }
 
         return $modelMap;
     }

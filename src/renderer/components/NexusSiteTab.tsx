@@ -205,6 +205,7 @@ const styles = {
 
 export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTabState> {
   private mounted = false;
+  private _onSettingsApplied: (() => void) | null = null;
 
   state: NexusSiteTabState = {
     indexEntry: null,
@@ -234,6 +235,8 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
   componentDidMount(): void {
     this.mounted = true;
     this.fetchData();
+    this._onSettingsApplied = () => { if (this.mounted) this.fetchData(); };
+    window.addEventListener('nexus-ai:settings-applied', this._onSettingsApplied);
   }
 
   componentDidUpdate(prevProps: NexusSiteTabProps): void {
@@ -251,6 +254,9 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
 
   componentWillUnmount(): void {
     this.mounted = false;
+    if (this._onSettingsApplied) {
+      window.removeEventListener('nexus-ai:settings-applied', this._onSettingsApplied);
+    }
   }
 
   fetchData = async (): Promise<void> => {

@@ -83,8 +83,12 @@ export default function renderer(context: any): void {
       }),
       onApply: async () => {
         if (pendingSettings) {
-          await electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, pendingSettings);
+          const result = await electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, pendingSettings);
           pendingSettings = null;
+          // Notify all site panels to refresh their AI config display
+          if (result?._providerChanged || result?._gatewayChanged) {
+            window.dispatchEvent(new CustomEvent('nexus-ai:settings-applied', { detail: result }));
+          }
         }
       },
     }];

@@ -139,13 +139,19 @@ add_filter('wpai_preferred_text_models', function ($models) {
     }
 });
 
-// Helper: check if a URL is targeting the Local Gateway
+// Helper: check if a URL is targeting the Local AI Gateway.
+// The real AI Gateway (/ai-gateway/v1/*) runs on the webhook server (NEXUS_AI_WEBHOOK_URL).
 function nexus_lg_is_gateway_url(string $url): bool {
-    // Match any request to the gateway host:port (127.0.0.1 or localhost + gateway port)
-    $gatewayBase = defined('NEXUS_AI_GATEWAY_URL') ? NEXUS_AI_GATEWAY_URL : 'http://127.0.0.1:13100';
-    return strpos($url, $gatewayBase) === 0
-        || strpos($url, 'http://127.0.0.1:13100') === 0
-        || strpos($url, 'http://localhost:13100') === 0;
+    // Primary: webhook server hosts the /ai-gateway/v1/ routes
+    if (defined('NEXUS_AI_WEBHOOK_URL')) {
+        $webhookBase = rtrim(NEXUS_AI_WEBHOOK_URL, '/');
+        if (strpos($url, $webhookBase . '/ai-gateway/') === 0) {
+            return true;
+        }
+    }
+    // Fallback hardcoded defaults (port 13000 = webhook server default)
+    return strpos($url, 'http://127.0.0.1:13000/ai-gateway/') === 0
+        || strpos($url, 'http://localhost:13000/ai-gateway/') === 0;
 }
 
 // Allow localhost/127.0.0.1 requests to Local Gateway

@@ -422,27 +422,25 @@ export class AIGatewayUsagePanel extends React.Component<
         : React.createElement(
             'div',
             null,
-            // Table header
+            // Flex header row — widths must match data row cells exactly
             React.createElement(
-              'table',
-              { style: tableStyle },
-              React.createElement(
-                'thead',
-                null,
-                React.createElement(
-                  'tr',
-                  null,
-                  React.createElement('th', { style: { ...thStyle, width: '100px' } }, 'Time'),
-                  React.createElement('th', { style: { ...thStyle, width: '120px' } }, 'Site'),
-                  React.createElement('th', { style: { ...thStyle, width: '150px' } }, 'Caller'),
-                  React.createElement('th', { style: { ...thStyle, width: '80px' } }, 'Model'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '140px' } }, 'Tokens'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '80px' } }, 'Cost'),
-                  React.createElement('th', { style: { ...thStyle, textAlign: 'right', width: '80px' } }, 'Duration'),
-                ),
-              ),
+              'div',
+              {
+                style: {
+                  display: 'flex',
+                  borderBottom: '1px solid var(--dividerColor)',
+                  padding: '0 8px',
+                },
+              },
+              React.createElement('div', { style: { ...thStyle, width: '110px', flexShrink: 0 } }, 'Time'),
+              React.createElement('div', { style: { ...thStyle, width: '130px', flexShrink: 0 } }, 'Site'),
+              React.createElement('div', { style: { ...thStyle, width: '160px', flexShrink: 0 } }, 'Caller'),
+              React.createElement('div', { style: { ...thStyle, width: '90px', flexShrink: 0 } }, 'Model'),
+              React.createElement('div', { style: { ...thStyle, flex: 1, textAlign: 'right' } }, 'Tokens'),
+              React.createElement('div', { style: { ...thStyle, width: '80px', flexShrink: 0, textAlign: 'right' } }, 'Cost'),
+              React.createElement('div', { style: { ...thStyle, width: '70px', flexShrink: 0, textAlign: 'right' } }, 'Duration'),
             ),
-            // Virtual scrolling list - render function in children prop
+            // Virtual scrolling list — flex rows align with header above
             React.createElement(List, {
               height: 400,
               itemCount: records.length,
@@ -451,60 +449,66 @@ export class AIGatewayUsagePanel extends React.Component<
               itemData: { records, formatTimestamp: this.formatTimestamp, formatCaller: this.formatCaller, formatModel: this.formatModel, tdStyle },
               children: ({ index, style, data }: any) => {
                 const record = data.records[index];
+                const hasCallerInfo = record.callerPlugin || record.callerTheme || record.callerSource;
                 return React.createElement(
-                  'table',
-                  { style: { ...tableStyle, marginTop: 0 } },
+                  'div',
+                  {
+                    style: {
+                      ...style,
+                      display: 'flex',
+                      alignItems: 'center',
+                      borderBottom: '1px solid var(--dividerColor)',
+                      padding: '0 8px',
+                      boxSizing: 'border-box',
+                    },
+                  },
                   React.createElement(
-                    'tbody',
-                    null,
-                    React.createElement(
-                      'tr',
-                      { style },
-                      React.createElement(
-                        'td',
-                        { style: { ...tdStyle, width: '100px' } },
-                        data.formatTimestamp(record.timestamp),
-                      ),
-                      React.createElement(
-                        'td',
-                        { style: { ...tdStyle, width: '120px' } },
-                        record.siteName || record.siteId,
-                      ),
-                      React.createElement(
-                        'td',
-                        {
-                          style: {
-                            ...tdStyle,
-                            width: '150px',
-                            fontSize: '12px',
-                            color: record.callerPlugin || record.callerTheme || record.callerSource
-                              ? 'var(--primaryTextColor)'
-                              : 'var(--secondaryTextColor)',
-                          },
-                        },
-                        data.formatCaller(record),
-                      ),
-                      React.createElement(
-                        'td',
-                        { style: { ...tdStyle, width: '80px' } },
-                        data.formatModel(record.model),
-                      ),
-                      React.createElement(
-                        'td',
-                        { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace', width: '140px' } },
-                        `${record.totalTokens.toLocaleString()} (${record.promptTokens}+${record.completionTokens})`,
-                      ),
-                      React.createElement(
-                        'td',
-                        { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace', width: '80px' } },
-                        `$${record.costUsd.toFixed(4)}`,
-                      ),
-                      React.createElement(
-                        'td',
-                        { style: { ...tdStyle, textAlign: 'right', fontFamily: 'monospace', width: '80px' } },
-                        `${(record.durationMs / 1000).toFixed(2)}s`,
-                      ),
-                    ),
+                    'div',
+                    { style: { ...data.tdStyle, border: 'none', width: '110px', flexShrink: 0, padding: '0 8px 0 0' } },
+                    data.formatTimestamp(record.timestamp),
+                  ),
+                  React.createElement(
+                    'div',
+                    { style: { ...data.tdStyle, border: 'none', width: '130px', flexShrink: 0, padding: '0 8px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+                    record.siteName || record.siteId,
+                  ),
+                  React.createElement(
+                    'div',
+                    {
+                      style: {
+                        ...data.tdStyle,
+                        border: 'none',
+                        width: '160px',
+                        flexShrink: 0,
+                        padding: '0 8px 0 0',
+                        fontSize: '12px',
+                        color: hasCallerInfo ? 'var(--primaryTextColor)' : 'var(--secondaryTextColor)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      },
+                    },
+                    data.formatCaller(record),
+                  ),
+                  React.createElement(
+                    'div',
+                    { style: { ...data.tdStyle, border: 'none', width: '90px', flexShrink: 0, padding: '0 8px 0 0' } },
+                    data.formatModel(record.model),
+                  ),
+                  React.createElement(
+                    'div',
+                    { style: { ...data.tdStyle, border: 'none', flex: 1, textAlign: 'right', fontFamily: 'monospace' } },
+                    `${record.totalTokens.toLocaleString()} (${record.promptTokens}+${record.completionTokens})`,
+                  ),
+                  React.createElement(
+                    'div',
+                    { style: { ...data.tdStyle, border: 'none', width: '80px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace' } },
+                    `$${record.costUsd.toFixed(4)}`,
+                  ),
+                  React.createElement(
+                    'div',
+                    { style: { ...data.tdStyle, border: 'none', width: '70px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace' } },
+                    `${(record.durationMs / 1000).toFixed(2)}s`,
                   ),
                 );
               }

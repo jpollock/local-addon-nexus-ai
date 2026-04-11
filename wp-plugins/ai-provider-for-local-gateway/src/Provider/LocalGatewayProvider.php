@@ -42,24 +42,22 @@ class LocalGatewayProvider extends AbstractApiProvider
      */
     protected static function baseUrl(): string
     {
-        // The Local Gateway serves OpenAI-compatible endpoints under /v1/
-        // e.g. /v1/chat/completions, /v1/models, /v1/embeddings
-        // AbstractOpenAiCompatibleTextGenerationModel appends paths like 'chat/completions',
-        // so baseUrl() must end with /v1 (no trailing slash).
+        // The AI Gateway routes (/ai-gateway/v1/*) run on the webhook server, NOT the Ollama proxy.
+        // NEXUS_AI_WEBHOOK_URL = webhook server (e.g. http://127.0.0.1:13000) — this is correct.
+        // NEXUS_AI_GATEWAY_URL = Ollama proxy (e.g. http://127.0.0.1:13100) — do NOT use this.
 
-        if (defined('NEXUS_AI_GATEWAY_URL')) {
-            // NEXUS_AI_GATEWAY_URL is the base URL without path (e.g. http://127.0.0.1:13100)
-            return rtrim(NEXUS_AI_GATEWAY_URL, '/') . '/v1';
+        if (defined('NEXUS_AI_WEBHOOK_URL')) {
+            return rtrim(NEXUS_AI_WEBHOOK_URL, '/') . '/ai-gateway/v1';
         }
 
-        // Fallback: try to detect from site options
+        // Fallback: read from WordPress option set by the connector plugin
         $webhookInfo = get_option('nexus_ai_webhook_info');
         if ($webhookInfo && isset($webhookInfo['url'])) {
-            return rtrim($webhookInfo['url'], '/') . '/v1';
+            return rtrim($webhookInfo['url'], '/') . '/ai-gateway/v1';
         }
 
         // Final fallback
-        return 'http://localhost:52847/v1';
+        return 'http://localhost:13000/ai-gateway/v1';
     }
 
     /**
