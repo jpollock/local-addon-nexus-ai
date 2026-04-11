@@ -11,7 +11,6 @@
  * Class-based — Local uses older React, no hooks allowed.
  */
 import * as React from 'react';
-import { FixedSizeList as List } from 'react-window';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 
 interface AIGatewayPanelProps {
@@ -345,61 +344,47 @@ export class AIGatewayPanel extends React.Component<AIGatewayPanelProps, AIGatew
 
     const { formatTimestamp, formatCaller, formatModel } = this;
 
+    const colTokens: React.CSSProperties = { width: '150px', flexShrink: 0, textAlign: 'right' };
+
     return React.createElement(
       'div',
-      null,
-      // Header row
+      { style: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } },
+      // Header row (fixed)
       React.createElement(
         'div',
-        { style: { display: 'flex', borderBottom: '1px solid var(--dividerColor)', padding: '0 8px' } },
+        { style: { display: 'flex', borderBottom: '1px solid var(--dividerColor)', padding: '0 8px', flexShrink: 0 } },
         React.createElement('div', { style: { ...thStyle, width: '110px', flexShrink: 0 } }, 'Time'),
         React.createElement('div', { style: { ...thStyle, width: '120px', flexShrink: 0 } }, 'Site'),
         React.createElement('div', { style: { ...thStyle, width: '170px', flexShrink: 0 } }, 'Caller'),
         React.createElement('div', { style: { ...thStyle, width: '70px', flexShrink: 0 } }, 'Model'),
-        React.createElement('div', { style: { ...thStyle, flex: 1, textAlign: 'right' } }, 'Tokens'),
+        React.createElement('div', { style: { ...thStyle, ...colTokens } }, 'Tokens'),
         React.createElement('div', { style: { ...thStyle, width: '75px', flexShrink: 0, textAlign: 'right' } }, 'Cost'),
         React.createElement('div', { style: { ...thStyle, width: '65px', flexShrink: 0, textAlign: 'right' } }, 'Duration'),
+        React.createElement('div', { style: { flex: 1 } }), // spacer
       ),
-      // Virtual rows
-      React.createElement(List, {
-        height: 360,
-        itemCount: records.length,
-        itemSize: 38,
-        width: '100%',
-        itemData: { records, formatTimestamp, formatCaller, formatModel, tdStyle },
-        children: ({ index, style, data }: any) => {
-          const r = data.records[index];
+      // Scrollable body
+      React.createElement(
+        'div',
+        { style: { overflowY: 'auto', flex: 1, minHeight: 0 } },
+        ...records.map((r, i) => {
           const hasCallerInfo = r.callerPlugin || r.callerTheme || r.callerSource;
           return React.createElement(
             'div',
             {
-              style: {
-                ...style,
-                display: 'flex',
-                alignItems: 'center',
-                borderBottom: '1px solid var(--dividerColor)',
-                padding: '0 8px',
-                boxSizing: 'border-box',
-              },
+              key: r.id || i,
+              style: { display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--dividerColor)', padding: '0 8px', minHeight: '38px', boxSizing: 'border-box' as const },
             },
-            React.createElement('div', { style: { ...data.tdStyle, width: '110px', flexShrink: 0, fontSize: '12px' } }, data.formatTimestamp(r.timestamp)),
-            React.createElement('div', { style: { ...data.tdStyle, width: '120px', flexShrink: 0 } }, r.siteName || r.siteId),
-            React.createElement('div', {
-              style: {
-                ...data.tdStyle,
-                width: '170px',
-                flexShrink: 0,
-                fontSize: '12px',
-                color: hasCallerInfo ? 'var(--primaryTextColor)' : 'var(--secondaryTextColor)',
-              },
-            }, data.formatCaller(r)),
-            React.createElement('div', { style: { ...data.tdStyle, width: '70px', flexShrink: 0, fontSize: '12px' } }, data.formatModel(r.model)),
-            React.createElement('div', { style: { ...data.tdStyle, flex: 1, textAlign: 'right', fontFamily: 'monospace', fontSize: '12px' } }, `${r.totalTokens.toLocaleString()} (${r.promptTokens}+${r.completionTokens})`),
-            React.createElement('div', { style: { ...data.tdStyle, width: '75px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace', fontSize: '12px' } }, `$${r.costUsd.toFixed(4)}`),
-            React.createElement('div', { style: { ...data.tdStyle, width: '65px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace', fontSize: '12px' } }, `${(r.durationMs / 1000).toFixed(2)}s`),
+            React.createElement('div', { style: { ...tdStyle, width: '110px', flexShrink: 0, fontSize: '12px' } }, formatTimestamp(r.timestamp)),
+            React.createElement('div', { style: { ...tdStyle, width: '120px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const } }, r.siteName || r.siteId),
+            React.createElement('div', { style: { ...tdStyle, width: '170px', flexShrink: 0, fontSize: '12px', color: hasCallerInfo ? 'var(--primaryTextColor)' : 'var(--secondaryTextColor)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const } }, formatCaller(r)),
+            React.createElement('div', { style: { ...tdStyle, width: '70px', flexShrink: 0, fontSize: '12px' } }, formatModel(r.model)),
+            React.createElement('div', { style: { ...tdStyle, ...colTokens, fontFamily: 'monospace', fontSize: '12px' } }, `${r.totalTokens.toLocaleString()} (${r.promptTokens}+${r.completionTokens})`),
+            React.createElement('div', { style: { ...tdStyle, width: '75px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace', fontSize: '12px' } }, `$${r.costUsd.toFixed(4)}`),
+            React.createElement('div', { style: { ...tdStyle, width: '65px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace', fontSize: '12px' } }, `${(r.durationMs / 1000).toFixed(2)}s`),
+            React.createElement('div', { style: { flex: 1 } }), // spacer
           );
-        },
-      }),
+        }),
+      ),
     );
   }
 
@@ -450,59 +435,45 @@ export class AIGatewayPanel extends React.Component<AIGatewayPanelProps, AIGatew
 
     return React.createElement(
       'div',
-      null,
-      // Header row
+      { style: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } },
+      // Header row (fixed)
       React.createElement(
         'div',
-        { style: { display: 'flex', borderBottom: '1px solid var(--dividerColor)', padding: '0 8px' } },
+        { style: { display: 'flex', borderBottom: '1px solid var(--dividerColor)', padding: '0 8px', flexShrink: 0 } },
         React.createElement('div', { style: { ...thStyle, width: '260px', flexShrink: 0 } }, 'Caller'),
         React.createElement('div', { style: { ...thStyle, width: '90px', flexShrink: 0, textAlign: 'right' } }, 'Requests'),
         React.createElement('div', { style: { ...thStyle, width: '110px', flexShrink: 0, textAlign: 'right' } }, 'Tokens'),
         React.createElement('div', { style: { ...thStyle, width: '85px', flexShrink: 0, textAlign: 'right' } }, 'Cost'),
         React.createElement('div', { style: { ...thStyle, flex: 1 } }, 'Features'),
       ),
-      // Virtual rows
-      React.createElement(List, {
-        height: 360,
-        itemCount: callerStats.length,
-        itemSize: 42,
-        width: '100%',
-        itemData: { callerStats, badgeStyle, tdStyle, UI_COLORS },
-        children: ({ index, style, data }: any) => {
-          const s = data.callerStats[index];
-          return React.createElement(
+      // Scrollable body
+      React.createElement(
+        'div',
+        { style: { overflowY: 'auto', flex: 1, minHeight: 0 } },
+        ...callerStats.map((s, i) =>
+          React.createElement(
             'div',
             {
-              style: {
-                ...style,
-                display: 'flex',
-                alignItems: 'center',
-                borderBottom: '1px solid var(--dividerColor)',
-                padding: '0 8px',
-                boxSizing: 'border-box',
-              },
+              key: s.callerKey || i,
+              style: { display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--dividerColor)', padding: '0 8px', minHeight: '42px', boxSizing: 'border-box' as const },
             },
-            // Caller badge + name
             React.createElement(
               'div',
-              { style: { ...data.tdStyle, width: '260px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' } },
-              React.createElement('span', { style: data.badgeStyle(s.callerType) }, s.callerType.toUpperCase()),
-              React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px' } }, s.callerDisplay),
+              { style: { ...tdStyle, width: '260px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' } },
+              React.createElement('span', { style: badgeStyle(s.callerType) }, s.callerType.toUpperCase()),
+              React.createElement('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, fontSize: '13px' } }, s.callerDisplay),
             ),
-            React.createElement('div', { style: { ...data.tdStyle, width: '90px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace', fontSize: '13px' } }, s.requests.toLocaleString()),
-            React.createElement('div', { style: { ...data.tdStyle, width: '110px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace', fontSize: '13px' } }, s.totalTokens.toLocaleString()),
-            React.createElement('div', {
-              style: { ...data.tdStyle, width: '85px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: data.UI_COLORS.WPE_BRAND, fontSize: '13px' },
-            }, `$${s.costUsd.toFixed(4)}`),
-            React.createElement('div', {
-              style: { ...data.tdStyle, flex: 1, fontSize: '12px', color: 'var(--secondaryTextColor)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-            }, s.features.size > 0
-              ? Array.from(s.features).slice(0, 3).join(', ') + (s.features.size > 3 ? ` +${s.features.size - 3}` : '')
-              : '—',
+            React.createElement('div', { style: { ...tdStyle, width: '90px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace', fontSize: '13px' } }, s.requests.toLocaleString()),
+            React.createElement('div', { style: { ...tdStyle, width: '110px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace', fontSize: '13px' } }, s.totalTokens.toLocaleString()),
+            React.createElement('div', { style: { ...tdStyle, width: '85px', flexShrink: 0, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: UI_COLORS.WPE_BRAND, fontSize: '13px' } }, `$${s.costUsd.toFixed(4)}`),
+            React.createElement('div', { style: { ...tdStyle, flex: 1, fontSize: '12px', color: 'var(--secondaryTextColor)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const } },
+              s.features.size > 0
+                ? Array.from(s.features).slice(0, 3).join(', ') + (s.features.size > 3 ? ` +${s.features.size - 3}` : '')
+                : '—',
             ),
-          );
-        },
-      }),
+          )
+        ),
+      ),
     );
   }
 
@@ -515,6 +486,10 @@ export class AIGatewayPanel extends React.Component<AIGatewayPanelProps, AIGatew
       borderRadius: '6px',
       padding: '16px',
       marginTop: '16px',
+      display: 'flex',
+      flexDirection: 'column',
+      flex: 1,
+      minHeight: 0,
     };
 
     const filterBtnStyle = (active: boolean): React.CSSProperties => ({
