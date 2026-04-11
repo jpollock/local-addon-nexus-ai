@@ -1121,7 +1121,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     const { stats } = this.state;
     if (!stats) return null;
 
-    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, flex: 1, minHeight: 0 } },
+    return React.createElement('div', null,
       this.renderSetupBanner(stats),
       this.renderWpeAuthBanner(),
 

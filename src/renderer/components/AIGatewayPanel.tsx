@@ -348,11 +348,11 @@ export class AIGatewayPanel extends React.Component<AIGatewayPanelProps, AIGatew
 
     return React.createElement(
       'div',
-      { style: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } },
-      // Header row (fixed)
+      null,
+      // Header row
       React.createElement(
         'div',
-        { style: { display: 'flex', borderBottom: '1px solid var(--dividerColor)', padding: '0 8px', flexShrink: 0 } },
+        { style: { display: 'flex', borderBottom: '1px solid var(--dividerColor)', padding: '0 8px' } },
         React.createElement('div', { style: { ...thStyle, width: '110px', flexShrink: 0 } }, 'Time'),
         React.createElement('div', { style: { ...thStyle, width: '120px', flexShrink: 0 } }, 'Site'),
         React.createElement('div', { style: { ...thStyle, width: '170px', flexShrink: 0 } }, 'Caller'),
@@ -362,10 +362,10 @@ export class AIGatewayPanel extends React.Component<AIGatewayPanelProps, AIGatew
         React.createElement('div', { style: { ...thStyle, width: '65px', flexShrink: 0, textAlign: 'right' } }, 'Duration'),
         React.createElement('div', { style: { flex: 1 } }), // spacer
       ),
-      // Scrollable body
+      // Scrollable body — minHeight so the table is visible even on short viewports
       React.createElement(
         'div',
-        { style: { overflowY: 'auto', flex: 1, minHeight: 0 } },
+        { style: { overflowY: 'auto', minHeight: '200px', maxHeight: '420px' } },
         ...records.map((r, i) => {
           const hasCallerInfo = r.callerPlugin || r.callerTheme || r.callerSource;
           return React.createElement(
@@ -435,11 +435,11 @@ export class AIGatewayPanel extends React.Component<AIGatewayPanelProps, AIGatew
 
     return React.createElement(
       'div',
-      { style: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } },
-      // Header row (fixed)
+      null,
+      // Header row
       React.createElement(
         'div',
-        { style: { display: 'flex', borderBottom: '1px solid var(--dividerColor)', padding: '0 8px', flexShrink: 0 } },
+        { style: { display: 'flex', borderBottom: '1px solid var(--dividerColor)', padding: '0 8px' } },
         React.createElement('div', { style: { ...thStyle, width: '260px', flexShrink: 0 } }, 'Caller'),
         React.createElement('div', { style: { ...thStyle, width: '90px', flexShrink: 0, textAlign: 'right' } }, 'Requests'),
         React.createElement('div', { style: { ...thStyle, width: '110px', flexShrink: 0, textAlign: 'right' } }, 'Tokens'),
@@ -449,7 +449,7 @@ export class AIGatewayPanel extends React.Component<AIGatewayPanelProps, AIGatew
       // Scrollable body
       React.createElement(
         'div',
-        { style: { overflowY: 'auto', flex: 1, minHeight: 0 } },
+        { style: { overflowY: 'auto', minHeight: '200px', maxHeight: '420px' } },
         ...callerStats.map((s, i) =>
           React.createElement(
             'div',
@@ -488,8 +488,6 @@ export class AIGatewayPanel extends React.Component<AIGatewayPanelProps, AIGatew
       marginTop: '16px',
       display: 'flex',
       flexDirection: 'column',
-      flex: 1,
-      minHeight: 0,
     };
 
     const filterBtnStyle = (active: boolean): React.CSSProperties => ({
