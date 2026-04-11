@@ -281,14 +281,11 @@ class Nexus_AI_Admin_Settings {
                 <div id="nexus-ai-test-result" class="nexus-ai-test-result"></div>
             </form>
 
-            <!-- Event Log (Future Enhancement) -->
             <h2>Event Status</h2>
             <p>
                 <strong>Plugin Version:</strong> <?php echo esc_html(NEXUS_AI_VERSION); ?>
                 <br>
-                <strong>Events Sent:</strong> <em>Coming soon</em>
-                <br>
-                <strong>Last Event:</strong> <em>Coming soon</em>
+                <strong>Event tracking:</strong> Active — view the Activity tab in the Nexus AI dashboard in Local for a real-time event timeline.
             </p>
 
             <hr>
@@ -306,8 +303,17 @@ class Nexus_AI_Admin_Settings {
                 <li>✓ Post created</li>
                 <li>✓ Post updated</li>
                 <li>✓ Post deleted</li>
-                <li>Coming soon: Plugin activated/deactivated</li>
-                <li>Coming soon: Theme changed</li>
+                <li>✓ Plugin activated</li>
+                <li>✓ Plugin deactivated</li>
+                <li>✓ Plugin installed</li>
+                <li>✓ Plugin updated</li>
+                <li>✓ Plugin deleted</li>
+                <li>✓ Theme installed</li>
+                <li>✓ Theme activated</li>
+                <li>✓ Theme deleted</li>
+                <li>✓ User created</li>
+                <li>✓ User updated</li>
+                <li>✓ User deleted</li>
             </ul>
         </div>
         <?php
