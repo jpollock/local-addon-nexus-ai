@@ -204,3 +204,63 @@ describe('CredentialSyncBroadcaster', () => {
     expect(mockedAutoSync).toHaveBeenCalledWith('site-1', 'Alpha Site', expect.anything(), expect.anything(), expect.anything());
   });
 });
+
+describe('CredentialSyncBroadcaster — gateway site exclusion', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('skips credential sync for gateway sites even when provider matches', async () => {
+    const deps = createMockDeps({
+      localServices: {
+        getAllSiteStatuses: jest.fn().mockReturnValue({
+          'site-1': 'running', // uses openai BUT has useLocalGateway: true
+          'site-2': 'running', // uses openai directly (no gateway)
+        }),
+      },
+      registryStorage: {
+        get: jest.fn().mockImplementation((key: string) => {
+          if (key === 'nexus-ai_api_keys') return { openai: 'sk-test' };
+          if (key === 'nexus-ai_site_ai_config') {
+            return {
+              'site-1': { provider: 'openai', useLocalGateway: true,  configuredAt: 0 },
+              'site-2': { provider: 'openai', useLocalGateway: false, configuredAt: 0 },
+            };
+          }
+          return null;
+        }),
+        set: jest.fn(),
+      },
+    });
+
+    const broadcaster = new CredentialSyncBroadcaster(deps as any);
+    await broadcaster.broadcastKeyChange('openai');
+
+    // Only site-2 should receive the sync — site-1 uses gateway
+    expect(mockedAutoSync).toHaveBeenCalledTimes(1);
+    expect(mockedAutoSync).toHaveBeenCalledWith('site-2', expect.any(String), expect.anything(), expect.anything(), expect.anything());
+    expect(mockedAutoSync).not.toHaveBeenCalledWith('site-1', expect.anything(), expect.anything(), expect.anything(), expect.anything());
+  });
+
+  it('autoSyncCredentials returns early when site has useLocalGateway=true', async () => {
+    // Import the actual function (not broadcaster) and test it directly
+    const { autoSyncCredentials: realAutoSync } = jest.requireActual('../../../src/main/mcp/modules/wp-connector/auto-sync');
+
+    const storage = {
+      get: (key: string) => {
+        if (key === 'nexus-ai_site_ai_config') return { 'site-1': { provider: 'anthropic', useLocalGateway: true } };
+        if (key === 'nexus-ai_api_keys') return { anthropic: 'sk-ant-test' };
+        return null;
+      },
+      set: jest.fn(),
+    };
+    const localServices = {
+      getWpVersion: jest.fn().mockResolvedValue('7.0.0'),
+      wpCliRun: jest.fn(),
+    };
+    const logger = { info: jest.fn(), error: jest.fn() };
+
+    await realAutoSync('site-1', 'Test Site', localServices, storage, logger);
+
+    // Should exit before calling wpCliRun (gateway sites skip credential sync)
+    expect(localServices.wpCliRun).not.toHaveBeenCalled();
+  });
+});

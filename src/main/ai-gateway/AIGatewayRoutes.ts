@@ -19,6 +19,27 @@ import {
   GatewayUsageRecord,
 } from './types';
 
+/**
+ * Maps known model IDs to their provider.
+ * Extend this when adding new providers or model families.
+ * Falls back to the globally configured provider for unknown models.
+ */
+const MODEL_PROVIDER_MAP: Record<string, 'anthropic' | 'openai'> = {
+  // Anthropic — Claude models
+  'claude-haiku-4-5-20251001':  'anthropic',
+  'claude-sonnet-4-5-20250514': 'anthropic',
+  'claude-opus-4-6-20251015':   'anthropic',
+  // OpenAI — GPT models
+  'gpt-4o-mini':  'openai',
+  'gpt-4o':       'openai',
+  'gpt-4.1':      'openai',
+  'gpt-4.1-mini': 'openai',
+  'o1':           'openai',
+  'o1-mini':      'openai',
+  'o3':           'openai',
+  'o3-mini':      'openai',
+};
+
 export interface AIGatewayRoutesOptions {
   storage: RegistryStorage;
   logger: {
@@ -61,11 +82,19 @@ export class AIGatewayRoutes {
     //   In that case, get the site ID from the X-WP-Site-ID header.
     let siteId = getSiteIdFromToken(this.storage, authToken);
     if (!siteId) {
+      // Fall back to validating the shared webhook auth token + X-WP-Site-ID header.
+      // The site ID from the header is validated against the index registry so callers
+      // cannot attribute requests to arbitrary sites they don't own.
       const webhookInfo = this.storage.get('http_webhook_info') as { authToken?: string } | null;
       const webhookToken = webhookInfo?.authToken;
       if (webhookToken && authToken === webhookToken) {
         const headerSiteId = req.headers['x-wp-site-id'] as string | undefined;
-        siteId = headerSiteId || null;
+        if (headerSiteId) {
+          const indexRegistry = this.storage.get(STORAGE_KEYS.INDEX_REGISTRY) as Record<string, unknown> | null;
+          if (indexRegistry && Object.prototype.hasOwnProperty.call(indexRegistry, headerSiteId)) {
+            siteId = headerSiteId;
+          }
+        }
       }
     }
     if (!siteId) {
@@ -103,19 +132,17 @@ export class AIGatewayRoutes {
       return;
     }
 
-    // 5. Determine which provider to use based on model ID.
-    //    Claude models → Anthropic. GPT/o-series → OpenAI.
-    //    Falls back to the globally configured provider for ambiguous models.
+    // 5. Determine which provider to use.
+    //    MODEL_PROVIDER_MAP gives an exact match for known models.
+    //    Unknown models fall back to the globally configured provider.
     const apiKeys = (this.storage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
     const settings = (this.storage.get(STORAGE_KEYS.SETTINGS) ?? {}) as Record<string, any>;
     const model = openAIRequest.model;
-
-    const isClaudeModel = model.startsWith('claude');
-    const isOpenAIModel = model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('o3');
     const globalProvider: string = settings.aiProvider ?? 'anthropic';
 
-    const useAnthropic = isClaudeModel || (!isOpenAIModel && globalProvider === 'anthropic');
-    const useOpenAI   = isOpenAIModel  || (!isClaudeModel && globalProvider === 'openai');
+    const resolvedProvider: string = MODEL_PROVIDER_MAP[model] ?? globalProvider;
+    const useAnthropic = resolvedProvider === 'anthropic';
+    const useOpenAI   = resolvedProvider === 'openai';
 
     const startTime = Date.now();
     let openAIResponse: any;

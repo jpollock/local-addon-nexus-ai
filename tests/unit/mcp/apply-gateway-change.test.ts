@@ -200,7 +200,7 @@ describe('applyGatewayChange (via siteStarted hook)', () => {
     await expect(hooks.siteStarted(site)).resolves.toBeUndefined();
 
     expect(logger.error).toHaveBeenCalledWith(
-      expect.stringContaining('Gateway change failed'),
+      expect.stringContaining('Failed for'),
     );
   });
 
@@ -218,5 +218,70 @@ describe('applyGatewayChange (via siteStarted hook)', () => {
 
     // Gateway is ON globally but site config has no useLocalGateway → mismatch → switch
     expect(mockedSwitchProvider).toHaveBeenCalled();
+  });
+});
+
+describe('applyGatewayChange — provider-only change', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedSwitchProvider.mockResolvedValue({ success: true });
+  });
+
+  // 8. Provider changes while gateway stays ON — must NOT call switchProviderForSite
+  it('does NOT call switchProviderForSite when only provider changes on a gateway site', async () => {
+    const { hooks } = createTestSetup({
+      [STORAGE_KEYS.SETTINGS]: { aiProvider: 'openai', useLocalGateway: true },
+      [STORAGE_KEYS.SITE_AI_CONFIG]: {
+        // Site has gateway ON with anthropic — provider changed to openai
+        'site-1': { provider: 'anthropic', useLocalGateway: true, configuredAt: 0 },
+      },
+    });
+
+    await hooks.siteStarted(site);
+
+    expect(mockedSwitchProvider).not.toHaveBeenCalled();
+  });
+
+  // 9. Provider change updates SITE_AI_CONFIG
+  it('updates SITE_AI_CONFIG.provider when provider changes on a gateway site', async () => {
+    const storage = createMockStorage({
+      [STORAGE_KEYS.SETTINGS]: { aiProvider: 'openai', useLocalGateway: true },
+      [STORAGE_KEYS.SITE_AI_CONFIG]: {
+        'site-1': { provider: 'anthropic', useLocalGateway: true, configuredAt: 0 },
+      },
+    });
+
+    const hooks: Record<string, Function> = {};
+    const context: LifecycleContext = {
+      hooks: { addAction: (name: string, cb: Function) => { hooks[name] = cb; } },
+    };
+    const pipeline = {
+      indexSite: jest.fn().mockResolvedValue({ siteId: 'site-1', documentsIndexed: 0, chunksIndexed: 0, durationMs: 10, errors: [] }),
+      removeSite: jest.fn(),
+    };
+    const indexRegistry = new IndexRegistry(createMockStorage());
+    const logger = { info: jest.fn(), error: jest.fn() };
+    const localServices = createMockLocalServices();
+
+    registerLifecycleHooks(context, pipeline as any, indexRegistry, logger, undefined, storage, localServices as any, undefined);
+
+    await hooks.siteStarted(site);
+
+    const updatedConfigs = storage.get(STORAGE_KEYS.SITE_AI_CONFIG);
+    expect(updatedConfigs?.['site-1']?.provider).toBe('openai');
+  });
+
+  // 10. Same provider, gateway stays ON — no action at all
+  it('takes no action when provider and gateway state both match', async () => {
+    const { hooks } = createTestSetup({
+      [STORAGE_KEYS.SETTINGS]: { aiProvider: 'openai', useLocalGateway: true },
+      [STORAGE_KEYS.SITE_AI_CONFIG]: {
+        'site-1': { provider: 'openai', useLocalGateway: true, configuredAt: 0 },
+      },
+    });
+
+    await hooks.siteStarted(site);
+
+    expect(mockedSwitchProvider).not.toHaveBeenCalled();
   });
 });
