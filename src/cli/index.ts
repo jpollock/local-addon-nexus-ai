@@ -18,6 +18,7 @@ import { contentCommand } from './commands/content';
 import { aiCommand } from './commands/ai';
 import { auditCommand } from './commands/audit';
 import { mcpCommand } from './commands/mcp';
+import { doctorCommand } from './commands/doctor';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
 import { setBootstrapResult } from './utils/context';
@@ -42,6 +43,7 @@ program.addCommand(contentCommand);
 program.addCommand(aiCommand);
 program.addCommand(auditCommand);
 program.addCommand(mcpCommand);
+program.addCommand(doctorCommand);
 
 // Global error handler
 process.on('unhandledRejection', (error: any) => {
@@ -67,7 +69,8 @@ async function main() {
                          process.argv.includes('-h') ||
                          process.argv.includes('help') ||
                          process.argv.includes('update') ||
-                         process.argv.includes('mcp'); // mcp reads connection-info file directly
+                         process.argv.includes('mcp') || // mcp reads connection-info file directly
+                         process.argv.includes('doctor'); // doctor handles its own connection logic
 
   if (!skipBootstrap) {
     const spinner = process.stdout.isTTY ? true : false;
