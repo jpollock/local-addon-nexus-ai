@@ -2,25 +2,67 @@
 
 Nexus AI brings AI capabilities to your Local WordPress sites with usage tracking, cost monitoring, and fleet management.
 
+## Choose Your Journey
+
+There are two ways to get value from Nexus AI — pick the one that fits:
+
+**Journey A: Connect your AI agent (Claude Code, Cursor, etc.)**
+No API key required. Takes ~2 minutes. Your AI agent gets 160+ tools to search, manage, and audit all your WordPress sites.
+→ Install → `nexus mcp setup` → done.
+
+**Journey B: AI features inside WordPress**
+Generate titles, summaries, and excerpts directly in the block editor. Requires an Anthropic or OpenAI API key. Takes ~5 minutes per site.
+→ Install → `nexus ai config` → `nexus ai setup <sitename>` → done.
+
+Both journeys use the same installation. Start with Journey A — it works immediately and makes Journey B much easier to configure.
+
 ## Installation
 
-### From Local Add-ons Marketplace (Recommended)
+```bash
+npm install -g @local-labs-jpollock/local-addon-nexus-ai
+```
 
-1. Open Local by Flywheel
-2. Click **Add-ons** in the left sidebar
-3. Search for "Nexus AI"
-4. Click **Install**
-5. Restart Local when prompted
+This installs the CLI and automatically downloads and installs the Local addon for your platform. On first run, it will:
 
-### Manual Installation (Development)
+1. Detect your platform (macOS Apple Silicon, Intel, Windows, Linux)
+2. Download the correct addon tarball
+3. Install it into Local's addons directory
+4. Prompt you to restart Local
 
-1. Clone the repository
-2. Run `npm install && npm run rebuild`
-3. In Local: **File → Add Add-on Manually**
-4. Select the addon directory
-5. Restart Local
+**Verify everything is working:**
 
-## Initial Setup
+```bash
+nexus doctor
+```
+
+Expected output on a healthy system:
+
+```
+Nexus AI v0.2.1 — System Health
+──────────────────────────────────────────────────
+  ✅  Local app           Installed
+  ✅  Local running       Running
+  ✅  Nexus AI addon      Active (v0.2.1)
+  ✅  GraphQL server      Connected (port 4000)
+  ✅  MCP server          Running · 161 tools
+  ...
+```
+
+Any `⚠️` or `❌` line includes the exact command to fix it. Run `nexus doctor` anytime you're unsure what's wrong.
+
+## Journey A: Connect Your AI Agent
+
+Once the addon is installed and `nexus doctor` shows green:
+
+```bash
+nexus mcp setup
+```
+
+Select your AI agent (Claude Code, Claude Desktop, Cursor, Windsurf, etc.) and the command writes the MCP configuration. No restart required for Claude Code — it picks up the new server immediately.
+
+**Test it:** Ask Claude "list my WordPress sites" — it should return your real site list.
+
+## Journey B: AI Features in WordPress
 
 ### 1. Configure API Keys
 
@@ -155,6 +197,17 @@ In Local's Nexus AI panel:
 2. Enter semantic search query
 3. Search across all indexed sites
 4. View results with context
+
+## Verifying Your Setup
+
+Run `nexus doctor` at any time for a full health check:
+
+```bash
+nexus doctor          # human-readable
+nexus doctor --json   # machine-readable (for scripting)
+```
+
+It checks: Local running, addon active, version match, GraphQL connected, MCP server, AI agent config, provider + API key, gateway, and site count. Every warning includes the exact next step to fix it.
 
 ## Troubleshooting
 

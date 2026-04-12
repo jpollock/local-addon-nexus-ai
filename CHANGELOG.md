@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.2.1] — 2026-04-11
 
 ### Added
+- **`nexus doctor`** — system health check and first-run orientation. Checks Local,
+  addon, GraphQL, MCP server, AI agent config, provider + API key, gateway, and site
+  count in a single command. Every warning includes the exact next step to fix it.
+  `--json` flag for machine-readable output. Run this first when anything is broken.
 - **Multi-provider AI Gateway** — the gateway now routes requests to Anthropic or OpenAI
   based on model ID (`claude-*` → Anthropic, `gpt-*` → OpenAI) with a clean `MODEL_PROVIDER_MAP`
   registry. Unknown model IDs fall back to the globally configured provider.
