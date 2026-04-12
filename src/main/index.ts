@@ -167,6 +167,7 @@ export default function main(context: any): void {
     embeddingService,
     vectorStore,
     logger: localLogger,
+    registryStorage,
   });
 
   // Start operation tracker — intercepts Local's IPC events for push/pull/export

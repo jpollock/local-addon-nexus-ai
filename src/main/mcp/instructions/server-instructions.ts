@@ -317,16 +317,17 @@ Always start with:
 
 ## Resources
 
-**Read \`nexus://fleet/state\` at the start of any workflow involving local sites.**
-It provides the cached list of local sites with site IDs, WP versions, and AI configuration
-status — so you immediately know whether a local site exists for a given name and whether
-AI is configured, without a tool call.
+**Read \`nexus://fleet/state\` before any workflow involving sites or WPE installs.**
+It provides a pre-built table from the local cache covering:
+- WPE installs: install_name, install_id, environment, domain (from CAPI sync cache)
+- Local sites: site_name, site_id, WP version, AI configured, provider (from index)
 
-Note: WPE install data (install_name, install_id) is NOT in this resource — it comes
-live from CAPI. Run nexus_list_sites to get live site+install status and WPE links.
+This tells you whether a local site exists for a given WPE install, what the install_id is,
+and which installs are dev vs production — before planning any workflow, without a tool call.
+Data reflects the last CAPI sync. Run nexus_list_sites for live running/halted status.
 
 For detailed guides, use \`resources/read\` with these URIs:
-- \`nexus://fleet/state\` — **Cached local sites: names, IDs, WP versions, AI status**
+- \`nexus://fleet/state\` — **Cached WPE installs + local sites with IDs and AI status**
 - \`nexus://guide/getting-started\` — Tool overview and orientation
 - \`nexus://guide/safety\` — Safety tier system details
 - \`nexus://guide/remote-wp-cli\` — Remote execution via SSH

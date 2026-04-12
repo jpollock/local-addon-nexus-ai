@@ -98,9 +98,26 @@ export function registerResources(
  */
 function buildFleetSnapshot(storage: RegistryStorage): string {
   const lines: string[] = ['# Fleet State (from local cache)\n'];
-  lines.push('> WPE install names and IDs are not cached. Run nexus_list_sites for live WPE data.\n');
 
   try {
+    // WPE installs from CAPI sync cache (written by WPESyncService.syncFromCAPI)
+    const wpeCache = storage.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs: any[]; syncedAt: number } | null;
+    if (wpeCache?.installs?.length) {
+      const ageMin = Math.round((Date.now() - wpeCache.syncedAt) / 60000);
+      lines.push(`## WP Engine Installs (${wpeCache.installs.length} installs, synced ${ageMin}m ago)\n`);
+      lines.push('| install_name | install_id | environment | primary_domain | account |');
+      lines.push('|---|---|---|---|---|');
+      for (const i of wpeCache.installs) {
+        lines.push(`| ${i.installName} | ${i.installId} | ${i.environment} | ${i.primaryDomain} | ${i.accountName || '—'} |`);
+      }
+      lines.push('');
+      lines.push('_Use install_name as `install_name=` in wp_* tools for remote WP-CLI execution._');
+      lines.push('_Use install_id as `remote_install_id=` in local_wpe_pull / local_wpe_push._\n');
+    } else {
+      lines.push('## WP Engine Installs\n');
+      lines.push('_Not yet cached. Run nexus_list_sites to trigger a sync._\n');
+    }
+
     // Local sites from index registry (populated by content indexing)
     const indexRegistry = (storage.get(STORAGE_KEYS.INDEX_REGISTRY) ?? {}) as Record<string, any>;
     // AI setup state per site

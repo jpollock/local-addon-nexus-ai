@@ -16,6 +16,8 @@ import { EmbeddingService } from '../embeddings/EmbeddingService';
 import { VectorStore } from '../vector-store/VectorStore';
 import { VectorDocument } from '../../common/types';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
+import type { RegistryStorage } from '../content/IndexRegistry';
+import { STORAGE_KEYS } from '../../common/constants';
 import pLimit from 'p-limit';
 
 export interface WPESyncProgress {
@@ -51,6 +53,7 @@ export interface WPESyncServiceOptions {
   embeddingService?: EmbeddingService;
   vectorStore?: VectorStore;
   logger?: any;
+  registryStorage?: RegistryStorage;
 }
 
 export class WPESyncService {
@@ -60,6 +63,7 @@ export class WPESyncService {
   private embeddingService?: EmbeddingService;
   private vectorStore?: VectorStore;
   private logger: any;
+  private registryStorage?: RegistryStorage;
   private currentProgress: WPESyncProgress | null = null;
   private abortRequested = false;
 
@@ -81,6 +85,7 @@ export class WPESyncService {
     this.embeddingService = options.embeddingService;
     this.vectorStore = options.vectorStore;
     this.logger = options.logger || console;
+    this.registryStorage = options.registryStorage;
   }
 
   /**
@@ -600,6 +605,19 @@ export class WPESyncService {
     this.logger.info(
       `[WPESyncService] CAPI sync done: ${installs.length} installs, ${newInstalls.length} new, ${updatedFields} fields updated`
     );
+
+    // Cache WPE install data so nexus://fleet/state can include it without a live CAPI call
+    if (this.registryStorage) {
+      const cache = installs.map((i: any) => ({
+        installName: i.name,
+        installId: i.id,
+        environment: i.environment ?? 'unknown',
+        primaryDomain: i.primaryDomain ?? `${i.name}.wpengine.com`,
+        accountName: accountMap.get(i.account?.id ?? '')?.name ?? null,
+      }));
+      this.registryStorage.set(STORAGE_KEYS.WPE_INSTALL_CACHE, { installs: cache, syncedAt: Date.now() });
+      this.logger.info(`[WPESyncService] Cached ${cache.length} WPE installs for fleet resource`);
+    }
 
     return { accounts: accountMap.size, total: installs.length, newInstalls, updatedFields, ghostInstalls: ghosts?.length ?? 0 };
   }
