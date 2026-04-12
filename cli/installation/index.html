@@ -3365,7 +3365,7 @@
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>Download<span class="w"> </span>and<span class="w"> </span>install<span class="w"> </span>addon<span class="w"> </span>from<span class="w"> </span>GitHub?<span class="w"> </span><span class="o">(</span>Y/n<span class="o">)</span><span class="w"> </span>Y
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>Downloading<span class="w"> </span>nexus-ai-darwin-arm64-0.1.0.tgz...
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>Downloading<span class="w"> </span>nexus-ai-darwin-arm64-0.2.1.tgz...
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>Downloading...<span class="w"> </span><span class="m">100</span>%<span class="w"> </span><span class="o">(</span><span class="m">287</span><span class="w"> </span>MB<span class="w"> </span>/<span class="w"> </span><span class="m">287</span><span class="w"> </span>MB<span class="o">)</span>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>Download<span class="w"> </span>complete.<span class="w"> </span>Installing...
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>✓<span class="w"> </span>Addon<span class="w"> </span>installed<span class="w"> </span>successfully!
@@ -3390,23 +3390,26 @@
 </ol>
 <p>Subsequent runs are instant - no bootstrap overhead.</p>
 <h2 id="verify-installation">Verify Installation<a class="headerlink" href="#verify-installation" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check version</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>nexus<span class="w"> </span>--version
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># local-addon-nexus-ai v0.1.0</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># List available commands</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>nexus<span class="w"> </span>--help
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># List your sites</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>nexus<span class="w"> </span>sites
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>nexus<span class="w"> </span>doctor
 </code></pre></div>
-<p>Expected output:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Local Sites (0 running, 0 halted):
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  No local sites found. Create one in Local or: nexus local create &lt;name&gt;
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>WP Engine Sites:
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  Not authenticated. Run: nexus wpe auth
-</code></pre></div></p>
+<p>This checks every layer of the stack and prints the exact fix for anything that's wrong:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Nexus AI v0.2.1 — System Health
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>──────────────────────────────────────────────────
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  ✅  Local app           Installed
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>  ✅  Local running       Running
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  ✅  Nexus AI addon      Active (v0.2.1)
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>  ✅  GraphQL server      Connected (port 4000)
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>  ✅  MCP server          Running · 161 tools
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  ⚠️   AI agent config    No agents configured
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>  ⚠️   AI provider        Not configured
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>  ...
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>──────────────────────────────────────────────────
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>  Getting started:
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>  1. Connect your AI agent:    nexus mcp setup
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>  2. Configure AI provider:    nexus ai config
+</code></pre></div>
+<p>Every <code>⚠️</code> or <code>❌</code> includes the exact next step. Run <code>nexus doctor</code> anytime something is broken.</p>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <p>The CLI reads configuration from Local's data directory:</p>
 <table>
@@ -3555,20 +3558,15 @@
 <h3 id="addon-installation-failed">Addon Installation Failed<a class="headerlink" href="#addon-installation-failed" title="Permanent link">&para;</a></h3>
 <p><strong>Problem:</strong> Auto-install of addon fails on first run</p>
 <p><strong>Solution:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Manually install addon</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># 1. Download addon ZIP from releases</span>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># 2. Local → Preferences → Addons → Install from disk</span>
-<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># 3. Select the ZIP file</span>
-<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># 4. Restart Local</span>
-</code></pre></div>
+<p>See <a href="../../ui-addon/installation/#method-2-manual-install-from-github-releases">Manual Install</a> for instructions on downloading and extracting the platform tarball manually.</p>
 <h3 id="node-version-too-old">Node Version Too Old<a class="headerlink" href="#node-version-too-old" title="Permanent link">&para;</a></h3>
 <p><strong>Problem:</strong> <code>requires Node.js &gt;= 18.0.0</code></p>
 <p><strong>Solution:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Install Node 18+ via nvm</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>curl<span class="w"> </span>-o-<span class="w"> </span>https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>bash
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>nvm<span class="w"> </span>install<span class="w"> </span><span class="m">18</span>
-<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>nvm<span class="w"> </span>use<span class="w"> </span><span class="m">18</span>
-<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>nvm<span class="w"> </span><span class="nb">alias</span><span class="w"> </span>default<span class="w"> </span><span class="m">18</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Install Node 18+ via nvm</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>curl<span class="w"> </span>-o-<span class="w"> </span>https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>bash
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>nvm<span class="w"> </span>install<span class="w"> </span><span class="m">18</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>nvm<span class="w"> </span>use<span class="w"> </span><span class="m">18</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>nvm<span class="w"> </span><span class="nb">alias</span><span class="w"> </span>default<span class="w"> </span><span class="m">18</span>
 </code></pre></div>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <div class="grid cards">
@@ -3602,7 +3600,7 @@
 <li><strong>Discussions:</strong> https://github.com/jpollock/local-addon-nexus-ai/discussions</li>
 </ul>
 <hr />
-<p><strong>Installation complete!</strong> Run <code>nexus --help</code> to see available commands.</p>
+<p><strong>Installation complete!</strong> Run <code>nexus doctor</code> to verify, then <code>nexus mcp setup</code> to connect your AI agent.</p>
 
 
 
