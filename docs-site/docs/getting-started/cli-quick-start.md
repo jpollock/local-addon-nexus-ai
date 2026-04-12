@@ -49,14 +49,45 @@ This installs the `nexus` CLI command. The addon is auto-downloaded from GitHub 
 **Verify installation:**
 
 ```bash
-nexus --version
+nexus doctor
 ```
 
-You should see the version number (e.g., `0.1.0`).
+This checks every layer of the stack and tells you exactly what to do next:
+
+```
+Nexus AI v0.2.1 — System Health
+──────────────────────────────────────────────────
+  ✅  Local app           Installed
+  ✅  Local running       Running
+  ✅  Nexus AI addon      Active (v0.2.1)
+  ✅  GraphQL server      Connected (port 4000)
+  ✅  MCP server          Running · 161 tools
+  ⚠️   AI agent config    No agents configured
+  ⚠️   AI provider        Not configured
+  ...
+──────────────────────────────────────────────────
+
+  Getting started:
+  1. Connect your AI agent:    nexus mcp setup
+  2. Configure AI provider:    nexus ai config
+  3. Set up a WordPress site:  nexus ai setup <sitename>
+```
+
+Any `⚠️` or `❌` line includes the exact command to fix it. Run `nexus doctor` anytime something is broken — it's the fastest way to diagnose issues.
 
 ## First Steps
 
-### 1. List Your Sites
+### 1. Connect Your AI Agent
+
+The fastest path to value — no API key required:
+
+```bash
+nexus mcp setup
+```
+
+Select your AI agent (Claude Code, Claude Desktop, Cursor, Windsurf, etc.). The command writes the MCP configuration automatically. Ask your AI agent "list my WordPress sites" to confirm it's working.
+
+### 2. List Your Sites
 
 See all your WordPress sites (local and WP Engine):
 
@@ -443,6 +474,14 @@ chmod +x morning-check.sh
 ```
 
 ## Troubleshooting
+
+### Start Here
+
+```bash
+nexus doctor
+```
+
+Run this before anything else. It checks every layer of the stack and prints the exact fix for each issue.
 
 ### CLI Not Found
 

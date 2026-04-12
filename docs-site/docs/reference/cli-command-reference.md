@@ -22,6 +22,58 @@ Available on all commands:
 
 ## Core Commands
 
+### `nexus doctor`
+
+System health check and first-run orientation.
+
+```bash
+nexus doctor [options]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output results as JSON (for scripting or CI) |
+
+**What it checks:**
+
+| Check | Notes |
+|-------|-------|
+| Local app | Installed and running |
+| Nexus AI addon | Active and version-matched to CLI |
+| GraphQL server | Connected |
+| MCP server | Running and tool count |
+| AI agent config | Claude Code, Claude Desktop, Cursor, Windsurf detected |
+| AI provider | Configured and API key present |
+| Local Gateway | Enabled or disabled |
+| Sites with AI | N / total configured · X running |
+
+Every `⚠️` or `❌` result includes the exact command to fix it. Run this first when anything is broken.
+
+**Example output:**
+
+```
+Nexus AI v0.2.1 — System Health
+──────────────────────────────────────────────────
+  ✅  Local app           Installed
+  ✅  Local running       Running
+  ✅  Nexus AI addon      Active (v0.2.1)
+  ✅  GraphQL server      Connected (port 4000)
+  ✅  MCP server          Running · 161 tools
+  ✅  AI agent config     Claude Desktop
+  ✅  AI provider         Anthropic (Claude)
+  ✅  Local Gateway       Enabled
+  ✅  Sites with AI       4 / 32 sites configured · 0 running
+──────────────────────────────────────────────────
+
+  Everything looks good. 🎉
+```
+
+**Exit codes:** `0` if all checks pass or warn, `1` if any check returns an error.
+
+---
+
 ### `nexus mcp`
 
 Command group for MCP server management and agent configuration.
