@@ -6,8 +6,15 @@ export const wpePullHandler: McpToolHandler = {
   definition: {
     name: 'local_wpe_pull',
     description:
-      'Pull a WP Engine environment to a local site. This is an async operation — ' +
-      'check the Local app for progress.',
+      'Pull a WP Engine environment down to a local site (files + optionally database). ' +
+      'PREREQUISITES: (1) local site must already exist — use local_create_site if not; ' +
+      '(2) local site must be running — use local_start_site; ' +
+      '(3) site must be linked to a WPE install, OR provide remote_install_id. ' +
+      'DESTRUCTIVE: overwrites the local site\'s files (and database if include_database=true). ' +
+      'Run local_export_site BEFORE this if the user wants a backup of the local state. ' +
+      'include_database defaults to false — set true for a full environment pull (recommended). ' +
+      'ASYNC: returns immediately. Poll local_operation_status every 20s until complete. ' +
+      'Typically takes 1–5 minutes depending on site size.',
     inputSchema: {
       type: 'object',
       properties: {

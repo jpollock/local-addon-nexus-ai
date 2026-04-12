@@ -5,7 +5,12 @@ import { resolveTarget, remoteWpCliRun } from './remote-exec';
 export const pluginUpdateHandler: McpToolHandler = {
   definition: {
     name: 'wp_plugin_update',
-    description: 'Update a WordPress plugin to its latest version.',
+    description:
+      'Update one or all WordPress plugins to their latest versions. ' +
+      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Use slug="--all" to update every plugin in one call. ' +
+      'Run wp_plugin_list first to see installed versions. ' +
+      'If a plugin fails to update, it may require a WP core update first — run wp_core_update then retry.',
     inputSchema: {
       type: 'object',
       properties: {

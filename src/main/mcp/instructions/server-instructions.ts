@@ -272,6 +272,40 @@ Do NOT use \`local_get_site\` as a polling mechanism — it only shows running/h
 
 Credentials are stored with OS-level encryption. Once set, all backup operations use them automatically.
 
+## Named Workflows
+
+Use these checklists before starting any multi-step workflow. Do not skip steps.
+
+### Pull → Update → Push (WPE site update)
+
+Pre-flight (run BEFORE proposing this workflow to the user):
+1. Call \`nexus_list_sites\` — confirm the WPE install name and whether a local site exists
+2. If no local site: tell the user, offer to create one with \`local_create_site\`
+3. Confirm with user: include database in pull? (recommend yes)
+4. Warn: \`local_wpe_push\` overwrites the live WPE environment — no automatic rollback
+
+Steps (in order):
+1. \`local_wpe_pull\` (include_database=true) → poll \`local_operation_status\`
+2. \`local_export_site\` (if user wants a backup of the pulled state) → poll \`local_operation_status\`
+3. \`local_start_site\` (if site stopped after pull)
+4. \`wp_plugin_update\` (slug="--all", site=local-name)
+5. \`wp_site_health\` — confirm no regressions
+6. \`local_wpe_push\` → poll \`local_operation_status\`
+
+### Plugin Audit (fleet-wide)
+
+1. \`nexus_plugin_audit\` — cross-site view of installed versions and available updates
+2. For a specific install: \`wp_plugin_list\` (install_name=) to confirm current state
+3. \`wp_plugin_update\` (install_name=, slug="--all") for remote updates via SSH
+4. If plugins blocked by WP version: \`wp_core_update\` (install_name=) then retry
+
+### Site Investigation (before any changes)
+
+Always start with:
+1. \`nexus_list_sites\` — get site ID, status, WPE link
+2. \`wp_plugin_list\` — confirm current state
+3. \`wp_site_health\` (local) or \`nexus_site_audit\` — baseline health
+
 ## Presentation
 
 - Format results as markdown tables or bulleted lists, not raw JSON.

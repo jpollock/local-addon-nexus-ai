@@ -6,8 +6,13 @@ export const wpePushHandler: McpToolHandler = {
   definition: {
     name: 'local_wpe_push',
     description:
-      'Push a local site to WP Engine. This is a destructive operation ' +
-      'that overwrites the remote environment.',
+      'Tier 3 (destructive) — push a local site to WP Engine, overwriting the live environment. ' +
+      'PREREQUISITES: (1) always pull first (local_wpe_pull) to ensure local copy is current; ' +
+      '(2) run wp_site_health to confirm no regressions; ' +
+      '(3) confirm user understands this overwrites the live WPE environment — no automatic rollback. ' +
+      'include_database defaults to false — set true to also push the database. ' +
+      'ASYNC: returns immediately. Poll local_operation_status every 20s until complete. ' +
+      'WPE keeps backups in the portal (my.wpengine.com) if rollback is needed.',
     inputSchema: {
       type: 'object',
       properties: {

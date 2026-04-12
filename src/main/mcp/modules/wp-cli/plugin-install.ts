@@ -5,7 +5,12 @@ import { resolveTarget, remoteWpCliRun } from './remote-exec';
 export const pluginInstallHandler: McpToolHandler = {
   definition: {
     name: 'wp_plugin_install',
-    description: 'Install a WordPress plugin from the plugin directory.',
+    description:
+      'Install a WordPress plugin from WordPress.org by slug. ' +
+      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'WordPress.org only — for premium plugins, use wp_eval on a local site to install from a zip. ' +
+      'Set activate=true to activate immediately after install. ' +
+      'Run wp_plugin_list first to confirm the plugin is not already installed.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -5,7 +5,10 @@ import { resolveTarget, remoteWpCliRun } from './remote-exec';
 export const pluginDeactivateHandler: McpToolHandler = {
   definition: {
     name: 'wp_plugin_deactivate',
-    description: 'Deactivate a WordPress plugin.',
+    description:
+      'Deactivate an active WordPress plugin without uninstalling it. ' +
+      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Deactivation is safe and reversible — use wp_plugin_activate to re-enable.',
     inputSchema: {
       type: 'object',
       properties: {

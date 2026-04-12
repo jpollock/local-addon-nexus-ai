@@ -21,7 +21,11 @@ function isValidSqlPath(sqlPath: string): boolean {
 export const importDatabaseHandler: McpToolHandler = {
   definition: {
     name: 'wp_import_database',
-    description: 'Import a SQL file into a site database',
+    description:
+      'Import a SQL dump file into a local site database. ' +
+      'LOCAL SITES ONLY. ' +
+      'DESTRUCTIVE: overwrites the existing database — export first with wp_db_export if you need a backup. ' +
+      'Site must be running. The SQL file must be accessible on the local filesystem.',
     inputSchema: {
       type: 'object',
       properties: {

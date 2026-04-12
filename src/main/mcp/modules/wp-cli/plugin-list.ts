@@ -5,7 +5,11 @@ import { resolveTarget, remoteWpCliRun } from './remote-exec';
 export const pluginListHandler: McpToolHandler = {
   definition: {
     name: 'wp_plugin_list',
-    description: 'List all installed WordPress plugins for a local site or remote WPE install.',
+    description:
+      'List all installed WordPress plugins with name, version, and status. ' +
+      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Use this before wp_plugin_update to see what needs updating, ' +
+      'or before wp_plugin_install to check if a plugin already exists.',
     inputSchema: {
       type: 'object',
       properties: {

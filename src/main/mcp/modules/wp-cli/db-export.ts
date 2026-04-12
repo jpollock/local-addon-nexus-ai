@@ -5,7 +5,10 @@ import { requireRunning, ok, error } from './preflight';
 export const dbExportHandler: McpToolHandler = {
   definition: {
     name: 'wp_db_export',
-    description: 'Export the WordPress database to a SQL dump file.',
+    description:
+      'Export the WordPress database to a SQL dump file. ' +
+      'LOCAL SITES ONLY — use wpe_create_backup for remote WPE database exports. ' +
+      'Site must be running. Output path defaults to ~/Desktop/{site}-{timestamp}.sql if not specified.',
     inputSchema: {
       type: 'object',
       properties: {
