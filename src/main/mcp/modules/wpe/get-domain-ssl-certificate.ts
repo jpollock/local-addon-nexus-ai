@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const getDomainSslCertificateHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_domain_ssl_certificate',
-    description: 'Get the SSL certificate for a specific domain on a WP Engine install.',
+    description: 'Get SSL certificate details for a specific domain — issuer, expiry date, coverage, and status. Use to confirm HTTPS is configured after wpe_request_ssl_certificate, or to check expiry. Use wpe_get_domains to find the domain_id.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const getCurrentUserHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_current_user',
-    description: 'Get the profile of the currently authenticated WP Engine user — name, email, and account associations.',
+    description: 'Get the profile of the currently authenticated WP Engine user — name, email, and associated accounts. Use to confirm which account is active after wpe_login, or to get the user email for creating SSH keys. Use wpe_status to check whether authentication is still valid.',
     inputSchema: {
       type: 'object',
       properties: {},

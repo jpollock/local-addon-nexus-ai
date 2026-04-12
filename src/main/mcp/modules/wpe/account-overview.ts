@@ -5,7 +5,7 @@ export const accountOverviewHandler: McpToolHandler = {
   definition: {
     name: 'wpe_account_overview',
     description:
-      'Get a comprehensive overview of a WP Engine account — install count by environment, ' +
+      'Get a comprehensive overview of a WP Engine account — total installs by environment type, plan info, top-level health indicators, and recent activity. Use as an account-level dashboard before diving into specific installs. For the full fleet portfolio, use wpe_portfolio_overview.' +
       'WP/PHP versions, and recent activity. ' +
       'Use this for "what does this account look like?" questions.',
     inputSchema: {

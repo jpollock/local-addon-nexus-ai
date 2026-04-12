@@ -7,7 +7,10 @@ export const changePhpVersionHandler: McpToolHandler = {
     name: 'local_change_php_version',
     description:
       'Change the PHP version for a local WordPress site. ' +
-      'The site will be restarted to apply the change.',
+      'The site is automatically restarted to apply the change (~10s downtime). ' +
+      'Common versions: 8.0, 8.1, 8.2, 8.3. ' +
+      'After changing, run wp_site_health to catch any plugin compatibility issues. ' +
+      'Match the PHP version to your WPE production install to avoid environment drift.',
     inputSchema: {
       type: 'object',
       properties: {

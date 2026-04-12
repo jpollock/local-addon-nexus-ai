@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const purgeCacheHandler: McpToolHandler = {
   definition: {
     name: 'wpe_purge_cache',
-    description: 'Purge the cache for a WP Engine install.',
+    description: 'Purge the page cache for a WP Engine install — forces all cached pages to regenerate on next request. Use after deploying content changes, plugin updates, or switching themes to ensure visitors see fresh content. Cache purge is near-instant but a full cache warm-up takes time as pages are re-cached on demand.',
     inputSchema: {
       type: 'object',
       properties: {

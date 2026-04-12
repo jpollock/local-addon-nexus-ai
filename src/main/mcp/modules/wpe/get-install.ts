@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const getInstallHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_install',
-    description: 'Get details about a specific WP Engine install.',
+    description: 'Get full details about a specific WP Engine install — name, environment type, primary domain, PHP version, and site association. Use wpe_get_installs to find the install_id. For a quick combined view including local links, use nexus_list_sites.',
     inputSchema: {
       type: 'object',
       properties: {

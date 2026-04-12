@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const updateOffloadSettingsHandler: McpToolHandler = {
   definition: {
     name: 'wpe_update_offload_settings',
-    description: 'Update LargeFS/offload storage settings for a WP Engine install.',
+    description: 'Update LargeFS (WPE offload media storage) configuration for a WP Engine install. Use to enable/disable offload storage or update connection settings. After updating, use wpe_get_largefs_validation to verify the configuration is valid.',
     inputSchema: {
       type: 'object',
       properties: {

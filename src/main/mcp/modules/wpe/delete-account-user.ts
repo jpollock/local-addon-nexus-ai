@@ -5,7 +5,7 @@ export const deleteAccountUserHandler: McpToolHandler = {
   definition: {
     name: 'wpe_delete_account_user',
     description:
-      'Remove a user from a WP Engine account, revoking their portal access. ' +
+      'Tier 3 (destructive) — remove a user from a WP Engine account, revoking all portal access. Requires confirmation token. This does NOT delete the user WP Engine account — only removes their access to this account. Use wpe_get_account_users to find the user_id and confirm before removing.' +
       'Tier 3 — requires confirmation.',
     inputSchema: {
       type: 'object',

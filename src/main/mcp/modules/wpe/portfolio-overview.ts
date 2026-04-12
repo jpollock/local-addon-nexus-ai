@@ -5,7 +5,7 @@ export const portfolioOverviewHandler: McpToolHandler = {
   definition: {
     name: 'wpe_portfolio_overview',
     description:
-      'Get an executive summary of the entire WP Engine fleet — all accounts, install counts, ' +
+      'Get an executive summary of the entire WP Engine portfolio — all accounts, total install count, environment distribution (production/staging/development), and top-level health indicators. Use for leadership reporting or a quick top-level view before drilling into specific accounts. For per-account detail, use wpe_account_overview.' +
       'traffic totals, version distribution. The highest-level fleet summary available.',
     inputSchema: {
       type: 'object',

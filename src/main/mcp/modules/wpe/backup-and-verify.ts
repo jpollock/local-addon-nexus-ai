@@ -5,7 +5,7 @@ export const backupAndVerifyHandler: McpToolHandler = {
   definition: {
     name: 'wpe_backup_and_verify',
     description:
-      'Create a WP Engine backup and poll until it completes. ' +
+      'Create a WP Engine backup and block until it is confirmed complete. Wraps wpe_create_backup + polling wpe_get_backup into a single call. REQUIRES basic auth API credentials — configure with wpe_set_api_credentials. Use this before wpe_promote_environment or wpe_delete_install so you have a verified restore point. Typically takes 2–10 minutes. Returns the completed backup details.' +
       'More reliable than wpe_create_backup alone since it confirms the backup succeeded. ' +
       'Requires API credentials (wpe_credentials_status).',
     inputSchema: {

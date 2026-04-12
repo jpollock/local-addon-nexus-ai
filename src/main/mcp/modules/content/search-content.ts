@@ -5,7 +5,10 @@ export const searchContentHandler: McpToolHandler = {
   definition: {
     name: 'search_site_content',
     description:
-      'Search indexed WordPress content using semantic similarity. ' +
+      'Search a single site\'s indexed content using semantic similarity — understands meaning, not just keywords. ' +
+      '"Optimize images" also matches posts about compression, WebP, lazy loading, and CDN. ' +
+      'The site must be indexed — run reindex_site if results are missing or stale. ' +
+      'For searching across all sites simultaneously, use search_across_sites.' +
       'Works for both local sites (by name/domain) and WPE installs (by install name, e.g. "localwpe"). ' +
       'WPE install content is indexed by wpe_sync_sites — run that first if results are missing. ' +
       'Returns ranked results with titles, excerpts, and relevance scores.',

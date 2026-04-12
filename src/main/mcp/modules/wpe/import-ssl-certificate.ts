@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const importSslCertificateHandler: McpToolHandler = {
   definition: {
     name: 'wpe_import_ssl_certificate',
-    description: 'Import a custom SSL certificate for a WP Engine install. Use PEM-encoded certificate and private key strings.',
+    description: 'Import a custom SSL certificate (e.g. extended validation or wildcard cert) for a WP Engine install. Accepts PEM-encoded certificate chain and private key. Use when you need a specific CA or certificate type that Lets Encrypt cannot provide. For standard HTTPS, use wpe_request_ssl_certificate (free, automatic) instead.',
     inputSchema: {
       type: 'object',
       properties: {

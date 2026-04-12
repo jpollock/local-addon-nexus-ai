@@ -5,7 +5,7 @@ export const nexusListSitesHandler: McpToolHandler = {
   definition: {
     name: 'nexus_list_sites',
     description:
-      'Unified site discovery. Lists all local sites and WP Engine environments ' +
+      'Unified site discovery — lists all local sites and WP Engine environments in a single view, marking linked pairs with ↔. The FIRST tool to call before any workflow involving sites. Returns: local site names (used as site= in wp_* tools), WPE install names (used as install_name= in wp_* tools), running/halted status, and linked pairs. Never ask the user for a site name or ID — discover them here first.' +
       'in a single view, linking local sites to their WPE counterparts.',
     inputSchema: {
       type: 'object',

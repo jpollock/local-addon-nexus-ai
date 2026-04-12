@@ -8,7 +8,7 @@ export const exportSiteHandler: McpToolHandler = {
   definition: {
     name: 'local_export_site',
     description:
-      'Export a local WordPress site to a zip archive. ' +
+      'Export a local WordPress site to a zip archive (files + database). ASYNC: returns immediately. Poll local_operation_status every 20s until complete. The zip path is returned when done — it goes to ~/Downloads by default or the specified output_path. Use this BEFORE local_wpe_pull (to backup the current local state) or before bulk plugin updates (as a rollback point). The zip is compatible with local_import_site for restoration.' +
       'Returns immediately with status "in_progress" — the zip is created in the background. ' +
       'Poll local_operation_status to track progress and get the final file path when done.',
     inputSchema: {

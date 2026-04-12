@@ -21,7 +21,7 @@ import {
 export const getInstallUsageHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_install_usage',
-    description: 'Get bandwidth, storage, and visitor usage data for a WP Engine install.',
+    description: 'Get visit, bandwidth, and storage consumption metrics for a specific WP Engine install. Month defaults to current (0), use month=1 for last month. Use for chargebacks, monitoring, or identifying high-traffic installs. For account-level totals, use wpe_get_account_usage_summary. For traffic tiers across the full fleet, use wpe_fleet_health.',
     inputSchema: {
       type: 'object',
       properties: {

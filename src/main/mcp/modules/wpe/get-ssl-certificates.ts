@@ -20,7 +20,7 @@ function formatExpiry(expiryDate: string | undefined): string {
 export const getSslCertificatesHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_ssl_certificates',
-    description: 'List SSL certificates for a WP Engine install. Shows expiry dates and which domains are covered. Use this to monitor certificate health across your installs.',
+    description: 'List all SSL certificates for a WP Engine install — type (Lets Encrypt or custom), expiry dates, covered domains, and status. Use to audit certificate health, identify expiring certs, or confirm HTTPS is active after wpe_request_ssl_certificate. For a specific domain cert, use wpe_get_domain_ssl_certificate.',
     inputSchema: {
       type: 'object',
       properties: {

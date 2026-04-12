@@ -19,7 +19,7 @@ export const userAuditHandler: McpToolHandler = {
   definition: {
     name: 'wpe_user_audit',
     description:
-      'Audit all WP Engine portal users across accounts — who has access to what with what roles. ' +
+      'Audit all WP Engine portal users across all accounts — who has access, their role (full/billing/partial), and which installs partial-role users can access. Use for security reviews, before offboarding staff, or to identify over-privileged accounts. For a single account users, use wpe_get_account_users.' +
       'Highlights users with elevated permissions or access to multiple accounts.',
     inputSchema: {
       type: 'object',

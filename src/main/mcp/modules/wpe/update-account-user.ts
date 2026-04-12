@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const updateAccountUserHandler: McpToolHandler = {
   definition: {
     name: 'wpe_update_account_user',
-    description: 'Update the role of a WP Engine portal user on an account.',
+    description: 'Update the role of an existing WP Engine portal user on an account. Role options: full, billing, or partial (partial requires install_ids to specify access). Use wpe_get_account_users to find the user_id and confirm current role before updating.',
     inputSchema: {
       type: 'object',
       properties: {

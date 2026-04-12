@@ -5,7 +5,7 @@ export const listSitesHandler: McpToolHandler = {
   definition: {
     name: 'local_list_sites',
     description:
-      'List all WordPress sites in Local. Returns name, domain, status (running/halted), ' +
+      'List all WordPress sites in Local. Returns name, domain, status (running/halted), PHP version, and content index status. Use this for a quick overview of local sites, or before any operation that requires a site name or ID. For the unified view that includes WP Engine installs, use nexus_list_sites instead.' +
       'PHP version, and content index status for each site. Sites are grouped by status.',
     inputSchema: {
       type: 'object',

@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const createAccountUserHandler: McpToolHandler = {
   definition: {
     name: 'wpe_create_account_user',
-    description: 'Add a user to a WP Engine account, granting them portal access.',
+    description: 'Add a new user to a WP Engine account, granting portal access. Role options: full (complete access), billing (billing only), partial (specific installs only — requires install_ids). An invitation email is sent to the user. Use wpe_get_account_users to confirm the user was added successfully.',
     inputSchema: {
       type: 'object',
       properties: {

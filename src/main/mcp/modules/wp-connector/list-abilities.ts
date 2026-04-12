@@ -101,7 +101,7 @@ export const listAbilitiesHandler: McpToolHandler = {
   definition: {
     name: 'wp_list_abilities',
     description:
-      'Discover all registered WordPress Abilities on a site. ' +
+      'Discover all registered WordPress Abilities on a site — title generation, summarization, alt text generation, etc. Abilities are the AI-powered writing tools in the WordPress block editor. Returns ability name, description, and input parameters. Use wp_run_ability to execute a specific ability. The site must be running and have AI set up via wp_setup_ai.' +
       'Abilities are machine-readable capabilities registered by plugins (e.g., ACF, Jetpack) and WordPress core via the Abilities API (WP 6.9+). ' +
       'Returns ability names, descriptions, categories, and input/output schemas. ' +
       'Local-only (not remote).',

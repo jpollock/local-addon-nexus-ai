@@ -14,7 +14,7 @@ export const fleetVersionsHandler: McpToolHandler = {
   definition: {
     name: 'wpe_fleet_versions',
     description:
-      'Get WordPress and PHP versions for WP Engine installs from locally-synced data. ' +
+      'Get WordPress core and PHP version data for WP Engine installs from the locally-synced cache — no live CAPI call needed. Use for fast fleet version audits without API rate limits. Synced data may be up to the configured sync interval old — use nexus_list_sites or wpe_get_install for live data.' +
       'Returns results instantly from the local graph — no API calls per install. ' +
       'Run after wpe_portfolio_usage to get versions for high-traffic installs without ' +
       'making individual wpe_get_install calls. ' +

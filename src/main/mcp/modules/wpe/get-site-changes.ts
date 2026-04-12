@@ -5,7 +5,7 @@ import { ok, error, requireLocalServices } from './helpers';
 export const getSiteChangesHandler: McpToolHandler = {
   definition: {
     name: 'local_get_site_changes',
-    description: 'Show which files differ between a local site and its linked WP Engine environment (rsync dry-run diff). This is a DIFF tool — it compares two environments. It does NOT list or count remote files, inventory the site, or check file sizes. Use wpe_get_install_usage for storage info.',
+    description: 'Show which files differ between a local site and its linked WP Engine environment — runs an rsync dry-run diff to identify additions, modifications, and deletions. Use before local_wpe_push to understand exactly what will change on the live site. This is a comparison tool only — it makes no changes. Does NOT provide file sizes or storage info — use wpe_get_install_usage for that. The local site must be linked to a WPE install — check with local_wpe_link.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const deleteSshKeyHandler: McpToolHandler = {
   definition: {
     name: 'wpe_delete_ssh_key',
-    description: 'Remove an SSH key from the authenticated WP Engine account. Tier 3 — requires confirmation.',
+    description: 'Tier 3 (destructive) — remove an SSH key from the authenticated WP Engine account. After removal, the corresponding private key can no longer be used for SSH/SFTP access. Requires confirmation token. Use wpe_get_ssh_keys to find the ssh_key_id.',
     inputSchema: {
       type: 'object',
       properties: {

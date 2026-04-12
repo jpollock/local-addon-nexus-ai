@@ -15,9 +15,10 @@ export const syncCredentialsHandler: McpToolHandler = {
   definition: {
     name: 'wp_sync_ai_credentials',
     description:
-      'Sync AI provider API keys from Local\'s Nexus AI settings into a WordPress site\'s Connector Screen and AI Experiments plugin. ' +
-      'Writes keys to both connectors_ai_* options (WP 7.0 Core) and wp_ai_client_provider_credentials (AI plugin). ' +
-      'Only syncs providers that have a key configured in Local. Local-only (not remote).',
+      'Sync AI provider API keys from Local secure storage to a WordPress site database. ' +
+      'Run after adding or changing an API key in Nexus AI Preferences to push the new key to the WordPress Connector Screen. ' +
+      'The site must be running. ' +
+      'Not needed for Local Gateway sites — gateway credentials are managed by Local, not stored in WordPress.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -11,7 +11,7 @@ export const detectDriftHandler: McpToolHandler = {
   definition: {
     name: 'detect_drift',
     description:
-      'Compare a baseline site against other indexed sites to detect configuration drift. ' +
+      'Compare a baseline site against other indexed sites to detect configuration drift — plugin version differences, missing or extra plugins, WordPress/PHP version mismatches. Use to ensure multiple sites (e.g. a network of similar sites) stay in sync. For local-vs-WPE drift detection, use wpe_detect_drift instead.' +
       'Reports plugin version mismatches, missing/extra plugins, and WordPress/PHP version differences. ' +
       'Works even when sites are stopped.',
     inputSchema: {

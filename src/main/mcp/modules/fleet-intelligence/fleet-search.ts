@@ -8,7 +8,7 @@ export const fleetSearchHandler: McpToolHandler = {
   definition: {
     name: 'fleet_search',
     description:
-      'Search across all indexed sites for content, plugins, themes, and users. ' +
+      'Search across all indexed sites for content, plugins, themes, and users in a single query. Accepts natural language queries — semantic search understands meaning, not just keywords. Use when you need to find something across the entire fleet without knowing which site has it. For a single site, use search_site_content.' +
       'Uses semantic search (vector similarity) combined with metadata matching.',
     inputSchema: {
       type: 'object',

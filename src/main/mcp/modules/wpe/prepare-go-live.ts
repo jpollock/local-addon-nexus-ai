@@ -5,7 +5,7 @@ export const prepareGoLiveHandler: McpToolHandler = {
   definition: {
     name: 'wpe_prepare_go_live',
     description:
-      'Prepare a WP Engine install for go-live with a domain — adds the domain, sets it as primary, ' +
+      'Automated go-live preparation for a WP Engine install — adds the domain, sets it as primary, optionally configures www redirect, requests SSL certificate, and purges cache. Tier 2 (modifying) — confirms the intended changes before proceeding. Prerequisites: DNS must be pointing to WPE. Run wpe_go_live_checklist first to verify readiness. After completion, use wpe_diagnose_site to confirm everything is working.' +
       'optionally adds www redirect, requests SSL, and purges cache. Tier 2 (modifying).',
     inputSchema: {
       type: 'object',

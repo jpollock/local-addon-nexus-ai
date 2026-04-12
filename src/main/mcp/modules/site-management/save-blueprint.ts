@@ -5,7 +5,7 @@ import { ok, error as err, requireLocalServices } from './helpers';
 export const saveBlueprintHandler: McpToolHandler = {
   definition: {
     name: 'local_save_blueprint',
-    description: 'Save a site as a blueprint (template) for creating new sites',
+    description: 'Save a local WordPress site as a reusable blueprint (template). Blueprints capture the current state of the site — plugins, themes, configuration, and database. Use to create a standard starting point for new projects (e.g. a company starter theme, common plugins pre-installed). After saving, use local_list_blueprints to confirm, and reference by name when creating new sites.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -17,7 +17,7 @@ export const portfolioUsageHandler: McpToolHandler = {
   definition: {
     name: 'wpe_portfolio_usage',
     description:
-      'Get visit, bandwidth, and storage metrics for ALL WP Engine installs across all accounts ' +
+      'Get aggregated visit, bandwidth, and storage metrics across all WP Engine installs in all accounts. Use for total fleet consumption reporting, identifying high-traffic installs, or billing analysis. Month defaults to current (0), use month=1 for last month. For a single account, use wpe_get_account_usage_summary.' +
       'in a single efficient operation (one API call per account, not per install). ' +
       'Use this for questions like "which sites get the most traffic?", ' +
       '"filter installs with more than N visits per day", or ' +

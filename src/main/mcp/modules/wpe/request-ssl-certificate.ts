@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const requestSslCertificateHandler: McpToolHandler = {
   definition: {
     name: 'wpe_request_ssl_certificate',
-    description: "Request a new SSL certificate for domains on a WP Engine install. WP Engine will automatically provision a Let's Encrypt certificate. Domains must already be added to the install and DNS must be resolving.",
+    description: "Request a Let's Encrypt SSL certificate for domains on a WP Engine install. PREREQUISITES: (1) domains must be added via wpe_create_domain; (2) DNS must be resolving to WPE — verify with wpe_check_domain_status. Certificate provisioning typically takes 1–5 minutes. Use wpe_get_ssl_certificates to confirm the certificate is active after requesting.'s Encrypt certificate. Domains must already be added to the install and DNS must be resolving.",
     inputSchema: {
       type: 'object',
       properties: {

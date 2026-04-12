@@ -24,7 +24,7 @@ import type { ToolRegistry } from '../tool-registry';
 const getTelemetryStatusTool: McpToolHandler = {
   definition: {
     name: 'get_telemetry_status',
-    description: 'Get anonymous usage analytics status and settings',
+    description: 'Get the current telemetry (anonymous usage analytics) status — whether it is enabled, the installation ID, and the number of queued events. Nexus AI collects anonymous usage data to improve the product. Use set_telemetry_enabled to opt in or out.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -70,7 +70,7 @@ const setTelemetryEnabledTool: McpToolHandler = {
   definition: {
     name: 'set_telemetry_enabled',
     description:
-      'Enable or disable anonymous usage analytics. Opt-out model: enabled by default.',
+      'Enable or disable anonymous usage analytics (telemetry). Telemetry is enabled by default — set enabled=false to opt out. When disabled, no usage data is collected or transmitted. Can also be disabled permanently with NEXUS_TELEMETRY=0 environment variable.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -120,7 +120,7 @@ const setTelemetryEnabledTool: McpToolHandler = {
 const clearTelemetryEventsTool: McpToolHandler = {
   definition: {
     name: 'clear_telemetry_events',
-    description: 'Clear all queued telemetry events from local storage',
+    description: 'Clear all queued telemetry events from local storage without transmitting them. Use when you want to discard accumulated events, such as after testing or development work. Does not disable telemetry — use set_telemetry_enabled(false) to stop future collection.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -161,7 +161,7 @@ const resetTelemetryTool: McpToolHandler = {
   definition: {
     name: 'reset_telemetry',
     description:
-      'Reset telemetry completely: clear events, regenerate installation ID and secret key, disable telemetry',
+      'Reset telemetry completely — clears all queued events, regenerates the installation ID and secret key, and disables telemetry. Use when you want a completely fresh telemetry state, such as when sharing a machine or handing off to another user. This cannot be undone — the previous installation ID is permanently discarded.',
     inputSchema: {
       type: 'object',
       properties: {

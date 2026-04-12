@@ -8,7 +8,7 @@ export const fleetFilterHandler: McpToolHandler = {
   definition: {
     name: 'fleet_filter',
     description:
-      'Apply a smart filter to find sites matching specific criteria. ' +
+      'Filter the fleet by specific criteria — PHP version, WordPress version, active plugins, themes, or health score range. Returns matching sites with their details. Use to identify subsets of the fleet for targeted operations (e.g. all sites on PHP 7.4, all sites with WooCommerce active).' +
       'Available filters: security-updates, outdated-php, no-ssl, not-indexed, ' +
       'large-db, low-disk, no-events, low-health.',
     inputSchema: {

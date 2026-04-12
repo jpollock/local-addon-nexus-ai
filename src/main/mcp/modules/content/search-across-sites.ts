@@ -4,8 +4,11 @@ export const searchAcrossSitesHandler: McpToolHandler = {
   definition: {
     name: 'search_across_sites',
     description:
-      'Search indexed WordPress content across ALL indexed sites using semantic similarity. ' +
-      'Returns results grouped by site. Useful for finding content patterns across a fleet.',
+      'Search across ALL indexed sites simultaneously using semantic similarity — finds relevant content regardless of which site has it. ' +
+      'Returns results ranked by relevance with site name, post title, and excerpt. ' +
+      'Use when you do not know which site has the content you are looking for. ' +
+      'For a single site, use search_site_content. ' +
+      'Sites must be indexed — run bulk_reindex if results are missing.',
     inputSchema: {
       type: 'object',
       properties: {

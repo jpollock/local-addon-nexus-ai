@@ -5,7 +5,7 @@ export const promoteEnvironmentHandler: McpToolHandler = {
   definition: {
     name: 'wpe_promote_environment',
     description:
-      'Copy one WP Engine install to another (e.g., staging → production). ' +
+      'Tier 3 (destructive) — copy one WP Engine install to another (typically staging → production). Overwrites the destination install completely — ensure a recent backup exists via wpe_backup_and_verify. Run wpe_environment_diff beforehand to confirm staging is ready. Requires confirmation token. After promoting, purge the cache on the destination with wpe_purge_cache and verify with wpe_diagnose_site.' +
       'Tier 3 — requires confirmation. ' +
       'Always verify the destination has a recent backup before promoting.',
     inputSchema: {

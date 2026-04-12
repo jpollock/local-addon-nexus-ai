@@ -6,7 +6,7 @@ export const reindexSiteHandler: McpToolHandler = {
   definition: {
     name: 'reindex_site',
     description:
-      'Trigger re-indexing for a site. Drops existing index data and rebuilds from scratch. ' +
+      'Trigger a complete re-index for a site — drops existing index data and rebuilds from the current content. Use after major content migrations, large plugin changes, or when search results are outdated. The site must be running for indexing to work (reads directly from the database). ASYNC: indexing runs in the background. Check progress with get_index_status.' +
       'The site must be running for content extraction to work.',
     inputSchema: {
       type: 'object',

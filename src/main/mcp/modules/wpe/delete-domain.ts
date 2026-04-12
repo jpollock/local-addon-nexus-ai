@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const deleteDomainHandler: McpToolHandler = {
   definition: {
     name: 'wpe_delete_domain',
-    description: 'Remove a domain from a WP Engine install. Tier 3 — requires confirmation. Live traffic to this domain will stop working.',
+    description: 'Tier 3 (destructive) — remove a custom domain from a WP Engine install. Live traffic to this domain will immediately stop resolving to WPE after removal. Cannot remove the primary domain — use wpe_update_domain to set a different primary first. Requires confirmation token. Use wpe_get_domains to find the domain_id.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -5,7 +5,7 @@ export const environmentDiffHandler: McpToolHandler = {
   definition: {
     name: 'wpe_environment_diff',
     description:
-      'Compare two WP Engine installs side by side — WP version, PHP version, domains, and install settings. ' +
+      'Compare two WP Engine installs side by side — WP core version, PHP version, primary domain, environment type, and install settings. Use before promoting staging to production (wpe_promote_environment) to confirm environments are in sync. For file-level diff between local and WPE, use local_get_site_changes.' +
       'Useful for understanding what differs between staging and production.',
     inputSchema: {
       type: 'object',

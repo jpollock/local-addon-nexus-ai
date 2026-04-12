@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI, staleSyncWarning } from './helpers';
 export const getInstallsHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_installs',
-    description: 'List all WP Engine installs (environments) accessible to the authenticated user.',
+    description: 'List all WP Engine installs (environments) accessible to the authenticated user. An install is a single environment: production, staging, or development. Optionally filter by account_id. Returns install name, ID, environment type, and primary domain. The install name (e.g. mysite) is used as install_name in wp_* tools for remote WP-CLI execution.',
     inputSchema: {
       type: 'object',
       properties: {},

@@ -5,7 +5,7 @@ export const getAccountUsageSummaryHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_account_usage_summary',
     description:
-      'Get usage summary (visits, bandwidth, storage) for a WP Engine account. ' +
+      'Get aggregate usage metrics for a WP Engine account — total visits, bandwidth consumed, and storage used, summed across all installs. Month defaults to current (0). Use month=1 for last month. Compare with wpe_get_account_limits to see consumption vs plan capacity. For per-install breakdown, use wpe_get_install_usage.' +
       'More detailed than wpe_get_account_usage.',
     inputSchema: {
       type: 'object',

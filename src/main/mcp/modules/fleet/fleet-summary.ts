@@ -6,7 +6,7 @@ export const fleetSummaryHandler: McpToolHandler = {
   definition: {
     name: 'fleet_summary',
     description:
-      'Aggregate overview across all indexed WordPress sites. Shows WordPress/PHP version distribution, ' +
+      'Aggregate overview across all indexed WordPress sites — WordPress/PHP version distribution, most common plugins, content totals, and integration presence (WooCommerce, ACF, etc.). Works even when sites are stopped — reads from the content index. Use for a quick fleet health snapshot or to find version distribution before a bulk update. For a real-time view including WPE installs, use nexus_list_sites or wpe_fleet_health.' +
       'most common plugins, content totals, and key integrations. Works even when sites are stopped.',
     inputSchema: {
       type: 'object',

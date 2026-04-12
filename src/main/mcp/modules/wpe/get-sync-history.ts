@@ -5,7 +5,7 @@ import { ok, error, requireLocalServices } from './helpers';
 export const getSyncHistoryHandler: McpToolHandler = {
   definition: {
     name: 'local_get_sync_history',
-    description: 'Get sync history (push/pull operations) for a local site',
+    description: 'Get the history of push and pull sync operations for a local site linked to WPE — shows operation type, timestamp, and status for recent syncs. Use to audit when a site was last synced, or to verify that a push or pull completed successfully.',
     inputSchema: {
       type: 'object',
       properties: {

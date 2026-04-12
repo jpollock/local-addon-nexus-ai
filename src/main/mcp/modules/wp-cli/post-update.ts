@@ -6,9 +6,10 @@ export const wpPostUpdateHandler: McpToolHandler = {
   definition: {
     name: 'wp_post_update',
     description:
-      'Update an existing WordPress post. ' +
-      'Local sites: requires site running. ' +
-      'Remote WPE: pass install_name instead of site.',
+      'Update an existing WordPress post, page, or custom post type by ID. ' +
+      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Only provided fields are updated — omitted fields are left unchanged. ' +
+      'Use wp_eval on local sites (or wp_option_get) to find post IDs if unknown.',
     inputSchema: {
       type: 'object',
       properties: {

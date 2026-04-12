@@ -5,7 +5,7 @@ export const diagnoseSiteHandler: McpToolHandler = {
   definition: {
     name: 'wpe_diagnose_site',
     description:
-      'Run a comprehensive diagnostic on a single WP Engine install — checks domains, SSL, ' +
+      'Run a comprehensive diagnostic on a WP Engine install — checks domain configuration, SSL status, cache health, PHP version, and common misconfigurations. Use when a site is behaving unexpectedly, after domain changes, or as part of a pre-launch checklist. Returns actionable findings with recommended next steps. For fleet-wide health, use wpe_fleet_health.' +
       'recent backup, and disk usage. Returns actionable findings.',
     inputSchema: {
       type: 'object',

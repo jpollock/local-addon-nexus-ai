@@ -6,9 +6,10 @@ export const wpPostCreateHandler: McpToolHandler = {
   definition: {
     name: 'wp_post_create',
     description:
-      'Create a new WordPress post. ' +
-      'Local sites: requires site running. ' +
-      'Remote WPE: pass install_name instead of site.',
+      'Create a new WordPress post, page, or custom post type. ' +
+      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Status defaults to draft — set status=publish to make it live immediately. ' +
+      'Returns the new post ID on success.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -35,7 +35,7 @@ export const setupAIToolHandler: McpToolHandler = {
   definition: {
     name: 'wp_setup_ai',
     description:
-      'Set up a WordPress site for AI: installs the AI Experiments plugin, ' +
+      'Set up a WordPress site for AI features — installs the WordPress AI Experiments plugin (requires WP 7.0+), activates AI experiments, syncs API credentials, and installs the configured provider plugin or Local Gateway plugin. Run once per site after initial Local setup. The site must be running. Use nexus_get_site_ai_config to check current AI configuration. Use nexus_switch_provider to change providers after initial setup.' +
       'installs provider plugins (WP 7.0+), enables all experiments, syncs API keys, ' +
       'and optionally enables ACF abilities. Local-only.',
     inputSchema: {

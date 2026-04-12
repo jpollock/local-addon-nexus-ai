@@ -5,7 +5,7 @@ import { resolveTarget, remoteWpCliRun } from './remote-exec';
 export const optionGetHandler: McpToolHandler = {
   definition: {
     name: 'wp_option_get',
-    description: 'Get a WordPress option value (e.g. blogname, siteurl).',
+    description: 'Get a single WordPress option value by key from the wp_options table. Works on local sites (site=) and remote WPE installs via SSH (install_name=). Common keys: blogname (site title), siteurl, home, admin_email, blogdescription. Use wp_search_replace to change option values like domain URLs.',
     inputSchema: {
       type: 'object',
       properties: {

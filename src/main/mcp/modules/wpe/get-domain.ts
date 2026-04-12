@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const getDomainHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_domain',
-    description: 'Get details for a single domain on a WP Engine install.',
+    description: 'Get details for a specific domain on a WP Engine install — DNS status, SSL status, primary flag, and redirect configuration. Use wpe_get_domains to find the domain_id. After adding a domain, use wpe_check_domain_status to verify DNS propagation before requesting SSL.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -5,7 +5,7 @@ import { ok, error as err, requireLocalServices } from './helpers';
 export const toggleXdebugHandler: McpToolHandler = {
   definition: {
     name: 'local_toggle_xdebug',
-    description: 'Enable or disable Xdebug for a site (requires site restart to take effect)',
+    description: 'Enable or disable Xdebug PHP debugging extension for a local site. Requires a site restart to take effect — local_restart_site is called automatically. Enable when debugging PHP code; disable in normal use as Xdebug adds significant performance overhead. LOCAL SITES ONLY — WPE environments have their own debugging settings in the portal.',
     inputSchema: {
       type: 'object',
       properties: {

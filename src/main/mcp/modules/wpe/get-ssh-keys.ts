@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const getSshKeysHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_ssh_keys',
-    description: 'List SSH keys associated with the authenticated WP Engine user. These keys are used for SSH/SFTP access to WP Engine environments.',
+    description: 'List all SSH public keys associated with the authenticated WP Engine user. These keys enable SSH/SFTP access to WPE environments. Use to audit registered keys or find the ssh_key_id needed for wpe_delete_ssh_key.',
     inputSchema: {
       type: 'object',
       properties: {},

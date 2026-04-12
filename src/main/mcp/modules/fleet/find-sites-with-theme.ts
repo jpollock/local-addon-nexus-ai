@@ -4,7 +4,7 @@ export const findSitesWithThemeHandler: McpToolHandler = {
   definition: {
     name: 'find_sites_with_theme',
     description:
-      'Find all indexed sites that have a specific theme installed. ' +
+      'Find all indexed sites that have a specific theme installed — matches by theme name or slug. Works even when sites are stopped — reads from the content index. Returns site names, theme version, and active/inactive status. Use for theme migration planning or to identify sites using a specific theme before updates.' +
       'Matches by slug (exact) or name (case-insensitive substring). ' +
       'Shows active status and child theme info. Works even when sites are stopped.',
     inputSchema: {

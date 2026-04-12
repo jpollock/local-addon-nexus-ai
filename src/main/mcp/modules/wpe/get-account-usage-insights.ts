@@ -5,7 +5,7 @@ export const getAccountUsageInsightsHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_account_usage_insights',
     description:
-      'Get usage breakdown by environment type (production, staging, development) for a WP Engine account.',
+      'Get usage metrics broken down by environment type (production, staging, development) for a WP Engine account. Useful for understanding which environment tier is consuming the most resources. Month defaults to current (0). For total account usage, use wpe_get_account_usage_summary. For individual install usage, use wpe_get_install_usage.',
     inputSchema: {
       type: 'object',
       properties: {

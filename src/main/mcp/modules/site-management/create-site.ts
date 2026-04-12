@@ -5,8 +5,11 @@ export const createSiteHandler: McpToolHandler = {
   definition: {
     name: 'local_create_site',
     description:
-      'Create a new local WordPress site. Installs WordPress automatically with ' +
-      'default admin credentials (admin/admin).',
+      'Create a new local WordPress site with WordPress pre-installed. ' +
+      'Default admin credentials are admin/admin — change immediately for any site that will be pushed to WPE. ' +
+      'Optionally specify PHP version; defaults to Local current default. ' +
+      'Site is created and started automatically. ' +
+      'After creation, run wp_plugin_update --all to ensure plugins are current before doing any WPE pull.',
     inputSchema: {
       type: 'object',
       properties: {

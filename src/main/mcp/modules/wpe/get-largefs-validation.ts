@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const getLargeFsValidationHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_largefs_validation',
-    description: 'Validate LargeFS configuration for a WP Engine install. Returns any configuration issues that need to be resolved.',
+    description: 'Validate LargeFS (WPE offload storage) configuration for a WP Engine install. Returns any misconfigurations, missing permissions, or connection errors. Run after wpe_update_offload_settings to confirm the new settings work correctly. Resolve issues before enabling offload in production.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -5,7 +5,7 @@ import { resolveTarget, remoteWpCliRun } from './remote-exec';
 export const themeListHandler: McpToolHandler = {
   definition: {
     name: 'wp_theme_list',
-    description: 'List all installed WordPress themes for a local site or remote WPE install.',
+    description: 'List all installed WordPress themes with name, version, and active/inactive status. Works on local sites (site=) and remote WPE installs via SSH (install_name=). Use to confirm which theme is active, find outdated themes, or audit installed themes before removal.',
     inputSchema: {
       type: 'object',
       properties: {

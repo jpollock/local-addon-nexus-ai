@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const createSiteHandler: McpToolHandler = {
   definition: {
     name: 'wpe_create_site',
-    description: 'Create a new WP Engine site. A site is a container for installs (environments). After creating a site, use wpe_create_install to add production/staging/development environments.',
+    description: 'Create a new WP Engine site — a site is a logical container for environments. After creating the site, use wpe_create_install to add production, staging, or development installs. A site with no installs has no hosting capacity — always follow with wpe_create_install. Requires account_id — get from wpe_get_accounts.',
     inputSchema: {
       type: 'object',
       properties: {

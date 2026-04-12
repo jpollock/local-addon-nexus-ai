@@ -5,7 +5,7 @@ export const accountSslStatusHandler: McpToolHandler = {
   definition: {
     name: 'wpe_account_ssl_status',
     description:
-      'Check SSL certificate status across all installs in a WP Engine account. ' +
+      'Check SSL certificate status across all installs in a WP Engine account — identifies installs with missing, expiring, or expired certificates. Use for security audits or before go-live to confirm HTTPS is active everywhere. For a specific install SSL details, use wpe_get_ssl_certificates.' +
       'Highlights expiring, expired, or missing certificates.',
     inputSchema: {
       type: 'object',

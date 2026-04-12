@@ -22,7 +22,7 @@ function error(text: string): McpToolResult {
 export const setApiCredentialsHandler: McpToolHandler = {
   definition: {
     name: 'wpe_set_api_credentials',
-    description: 'Store WP Engine API credentials for basic authentication. Required for backup creation since the backup endpoint does not support OAuth. Credentials are stored encrypted.',
+    description: 'Store WP Engine API credentials (username + password) for basic auth endpoints that do not support OAuth. Required for wpe_create_backup — the backup endpoint only accepts basic auth. Credentials are stored encrypted with OS-level encryption (macOS Keychain). Get credentials from my.wpengine.com under Profile and API Access. Only needs to be done once — credentials persist across sessions.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -69,7 +69,7 @@ export const setApiCredentialsHandler: McpToolHandler = {
 export const clearApiCredentialsHandler: McpToolHandler = {
   definition: {
     name: 'wpe_clear_api_credentials',
-    description: 'Remove stored WP Engine API credentials. After clearing, backup creation will attempt to use OAuth (which will fail).',
+    description: 'Remove stored WP Engine API basic auth credentials. After clearing, wpe_create_backup will fail (it requires basic auth, not OAuth). Use when rotating credentials or switching accounts. Re-configure with wpe_set_api_credentials.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -99,7 +99,7 @@ export const clearApiCredentialsHandler: McpToolHandler = {
 export const credentialsStatusHandler: McpToolHandler = {
   definition: {
     name: 'wpe_credentials_status',
-    description: 'Check if WP Engine API credentials are configured for basic authentication.',
+    description: 'Check whether WP Engine API basic auth credentials are stored and ready for backup creation. Returns configured=true if credentials exist, false if not. Run this before wpe_create_backup to confirm credentials are set. Configure with wpe_set_api_credentials if not set.',
     inputSchema: {
       type: 'object',
       properties: {},
