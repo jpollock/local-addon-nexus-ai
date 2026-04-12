@@ -69,8 +69,9 @@ async function main() {
                          process.argv.includes('-h') ||
                          process.argv.includes('help') ||
                          process.argv.includes('update') ||
-                         process.argv.includes('mcp') || // mcp reads connection-info file directly
-                         process.argv.includes('doctor'); // doctor handles its own connection logic
+                         process.argv.includes('mcp'); // mcp reads connection-info file directly
+  // NOTE: doctor is NOT skipped — it runs bootstrap so it installs the addon if missing,
+  // then reports the full health status. That's the correct first-run experience.
 
   if (!skipBootstrap) {
     const spinner = process.stdout.isTTY ? true : false;
