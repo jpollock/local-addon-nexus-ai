@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="CLI vs UI addon comparison">
+        <meta name="description" content="Two ways to get value from Nexus AI — pick the one that fits you">
       
       
         <meta name="author" content="Jeremy Pollock">
@@ -29,7 +29,7 @@
     
     
       
-        <title>Choose Your Interface - Nexus AI Documentation</title>
+        <title>Choose Your Path - Nexus AI Documentation</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#choose-your-interface" class="md-skip">
+        <a href="#choose-your-path" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Choose Your Interface
+              Choose Your Path
             
           </span>
         </div>
@@ -652,10 +652,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#path-a-connect-your-ai-agent" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Path A — Connect Your AI Agent
       
     </span>
   </a>
@@ -663,10 +663,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#path-b-ai-features-inside-wordpress" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        Path B — AI Features Inside WordPress
       
     </span>
   </a>
@@ -674,10 +674,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
+  <a href="#not-sure" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Next Steps
+        Not Sure?
       
     </span>
   </a>
@@ -2867,10 +2867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#path-a-connect-your-ai-agent" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Path A — Connect Your AI Agent
       
     </span>
   </a>
@@ -2878,10 +2878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#path-b-ai-features-inside-wordpress" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        Path B — AI Features Inside WordPress
       
     </span>
   </a>
@@ -2889,10 +2889,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
+  <a href="#not-sure" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Next Steps
+        Not Sure?
       
     </span>
   </a>
@@ -2919,20 +2919,37 @@
   
 
 
-<h1 id="choose-your-interface">Choose Your Interface<a class="headerlink" href="#choose-your-interface" title="Permanent link">&para;</a></h1>
-<div class="admonition warning">
-<p class="admonition-title">Work in Progress</p>
-<p>This page is under construction. Check back soon for complete documentation.</p>
+<h1 id="choose-your-path">Choose Your Path<a class="headerlink" href="#choose-your-path" title="Permanent link">&para;</a></h1>
+<p>Nexus AI does two distinct things. You don't need both to get started — pick the one that fits right now.</p>
+<h2 id="path-a-connect-your-ai-agent">Path A — Connect Your AI Agent<a class="headerlink" href="#path-a-connect-your-ai-agent" title="Permanent link">&para;</a></h2>
+<p><strong>Who it's for:</strong> Anyone using Claude Code, Cursor, Claude Desktop, Windsurf, or another MCP-compatible AI assistant.</p>
+<p><strong>What you get:</strong> 160+ tools that let your AI agent search, manage, and audit your entire WordPress fleet — local sites and WP Engine — with natural language.</p>
+<p><strong>What you need:</strong> Nothing. No API key. Just Local running with the addon installed.</p>
+<p><strong>Time to value:</strong> ~2 minutes.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>nexus<span class="w"> </span>mcp<span class="w"> </span>setup
+</code></pre></div>
+<p>Then ask your AI agent: <em>"List my WordPress sites"</em> or <em>"Which of my sites need plugin updates?"</em></p>
+<p><a href="../cli-quick-start/">→ CLI Quick Start</a></p>
+<hr />
+<h2 id="path-b-ai-features-inside-wordpress">Path B — AI Features Inside WordPress<a class="headerlink" href="#path-b-ai-features-inside-wordpress" title="Permanent link">&para;</a></h2>
+<p><strong>Who it's for:</strong> WordPress developers who want AI-powered title generation, summarization, and excerpt writing directly in the block editor.</p>
+<p><strong>What you need:</strong> An Anthropic or OpenAI API key.</p>
+<p><strong>Time to value:</strong> ~5 minutes per site.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>nexus<span class="w"> </span>ai<span class="w"> </span>config<span class="w">        </span><span class="c1"># set your provider and API key</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>nexus<span class="w"> </span>ai<span class="w"> </span>setup<span class="w"> </span>mysite<span class="w">  </span><span class="c1"># install AI features on a site</span>
+</code></pre></div>
+<p>Then open the block editor and use the AI writing tools in the post toolbar.</p>
+<p><a href="../ui-quick-start/">→ UI Quick Start</a></p>
+<hr />
+<h2 id="not-sure">Not Sure?<a class="headerlink" href="#not-sure" title="Permanent link">&para;</a></h2>
+<p>Start with <strong>Path A</strong>. It works immediately, requires no API key, and gives you a feel for what Nexus AI can do. You can add Path B at any time.</p>
+<hr />
+<div class="admonition tip">
+<p class="admonition-title">Check your setup anytime</p>
+<p><div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>nexus<span class="w"> </span>doctor
+</code></pre></div>
+Shows the health of every layer and tells you exactly what to do next.</p>
 </div>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>TODO: Add overview content</p>
-<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<p>TODO: Add quick start guide</p>
-<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../../">Home</a></li>
-<li><a href="../">Getting Started</a></li>
-</ul>
 
 
 
