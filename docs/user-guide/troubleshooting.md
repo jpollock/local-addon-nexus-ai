@@ -2,6 +2,16 @@
 
 Common issues and solutions for Nexus AI addon.
 
+## Start Here
+
+Before digging into specific errors, run the health check:
+
+```bash
+nexus doctor
+```
+
+It checks every layer of the stack (Local, addon, GraphQL, MCP server, AI provider, gateway) and prints the exact command to fix anything that's wrong. Most issues are diagnosed and resolved in one step.
+
 ## Installation & Setup
 
 ### Addon Not Appearing in Local

@@ -237,17 +237,27 @@ Install the CLI, which automatically downloads and installs the addon for your p
 # Install CLI globally
 npm install -g @local-labs-jpollock/local-addon-nexus-ai
 
-# Run any command to trigger auto-install
-nexus sites list
+# Verify everything is working
+nexus doctor
 ```
 
-**What happens:**
+`nexus doctor` checks Local, the addon, MCP server, AI provider, and site configuration — and prints the exact next step for anything that needs attention.
+
+**What the first run does:**
 1. CLI detects the addon is missing
 2. Prompts: "Download and install addon for macOS (Apple Silicon)? (Y/n)"
 3. Downloads the correct platform-specific addon from GitHub Releases
 4. Extracts to Local's addon directory
 5. Activates the addon automatically
 6. Prompts you to restart Local
+
+**After restarting Local, connect your AI agent:**
+
+```bash
+nexus mcp setup   # configure Claude Code, Cursor, Claude Desktop, etc.
+```
+
+This is the fastest path to value — no API key required.
 
 **Supported platforms:**
 - macOS (Apple Silicon) - `darwin-arm64`
