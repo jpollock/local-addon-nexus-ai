@@ -34,12 +34,17 @@ Open Local by WP Engine and the Nexus AI addon activates automatically.
 
 If you need to install the addon separately:
 
-1. Download the latest addon ZIP from [GitHub Releases](https://github.com/jpollock/local-addon-nexus-ai/releases)
-2. Open Local by WP Engine
-3. Go to **Preferences → Addons**
-4. Click **Install from disk**
-5. Select the downloaded ZIP file
-6. Restart Local
+1. Download the platform tarball from [GitHub Releases](https://github.com/jpollock/local-addon-nexus-ai/releases) (`.tgz` file for your platform)
+2. Extract it to Local's addon directory — see [full instructions](../ui-addon/installation.md#method-2-manual-install-from-github-releases)
+3. Restart Local
+
+### Verify
+
+```bash
+nexus doctor
+```
+
+Every `⚠️` or `❌` includes the exact command to fix it.
 
 ## First Launch
 

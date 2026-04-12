@@ -61,7 +61,7 @@ Detected platform: macOS (Apple Silicon)
 
 Download and install addon from GitHub? (Y/n) Y
 
-Downloading nexus-ai-darwin-arm64-0.1.0.tgz...
+Downloading nexus-ai-darwin-arm64-0.2.1.tgz...
 Downloading... 100% (287 MB / 287 MB)
 Download complete. Installing...
 ✓ Addon installed successfully!
@@ -90,25 +90,30 @@ Subsequent runs are instant - no bootstrap overhead.
 ## Verify Installation
 
 ```bash
-# Check version
-nexus --version
-# local-addon-nexus-ai v0.1.0
-
-# List available commands
-nexus --help
-
-# List your sites
-nexus sites
+nexus doctor
 ```
 
-Expected output:
-```
-Local Sites (0 running, 0 halted):
-  No local sites found. Create one in Local or: nexus local create <name>
+This checks every layer of the stack and prints the exact fix for anything that's wrong:
 
-WP Engine Sites:
-  Not authenticated. Run: nexus wpe auth
 ```
+Nexus AI v0.2.1 — System Health
+──────────────────────────────────────────────────
+  ✅  Local app           Installed
+  ✅  Local running       Running
+  ✅  Nexus AI addon      Active (v0.2.1)
+  ✅  GraphQL server      Connected (port 4000)
+  ✅  MCP server          Running · 161 tools
+  ⚠️   AI agent config    No agents configured
+  ⚠️   AI provider        Not configured
+  ...
+──────────────────────────────────────────────────
+
+  Getting started:
+  1. Connect your AI agent:    nexus mcp setup
+  2. Configure AI provider:    nexus ai config
+```
+
+Every `⚠️` or `❌` includes the exact next step. Run `nexus doctor` anytime something is broken.
 
 ## Configuration
 
@@ -251,13 +256,7 @@ open -a Local
 
 **Solution:**
 
-```bash
-# Manually install addon
-# 1. Download addon ZIP from releases
-# 2. Local → Preferences → Addons → Install from disk
-# 3. Select the ZIP file
-# 4. Restart Local
-```
+See [Manual Install](../ui-addon/installation.md#method-2-manual-install-from-github-releases) for instructions on downloading and extracting the platform tarball manually.
 
 ### Node Version Too Old
 
@@ -311,4 +310,4 @@ nvm alias default 18
 
 ---
 
-**Installation complete!** Run `nexus --help` to see available commands.
+**Installation complete!** Run `nexus doctor` to verify, then `nexus mcp setup` to connect your AI agent.

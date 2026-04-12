@@ -32,7 +32,7 @@ Nexus AI brings enterprise-grade AI capabilities to local WordPress development,
 
 ### Ship-Ready AI Stack
 
-- **MCP Server** — 111 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
+- **MCP Server** — ~160 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
 - **CLI** — Terminal commands for local and WPE site management (hosting + WordPress)
 - **Open Source AI** — Ships with LanceDB (vector database), ONNX embeddings, and Ollama integration
 - **Local AI Gateway** — Centralized credential proxy, usage tracking, and cost monitoring for your entire fleet
@@ -65,7 +65,7 @@ Leverages Local's secure channels to WP Engine:
 ## Features
 
 - **CLI** — Terminal commands for all operations. Works with any AI that can write shell commands. No MCP setup required. Scriptable, automatable, transparent.
-- **MCP Server** — 111 tools for AI assistants (Claude Desktop, Cursor, etc.)
+- **MCP Server** — ~160 tools for AI assistants (Claude Desktop, Cursor, etc.)
 - **WP Engine Remote Management** — Sync and manage WPE sites alongside local sites (see below)
 - **Database Health** — Scans WordPress databases for bloat (revisions, orphaned postmeta with plugin attribution, expired transients, autoload bloat, ghost plugin tables, auto-drafts, trash). Shows a 0–100 health score with advisor-voice recommendations and prevention tips. Safe cleanup via `nexus wp db clean` (dry-run default). Available via site card UI, CLI, and MCP tools. Local-only.
 - **Production-Ready Security** — Input validation, audit logging, credential redaction
@@ -202,7 +202,7 @@ See full CLI reference: [CLI Commands](docs-site/docs/cli/commands.md)
 
 ### MCP
 
-Nexus AI exposes **111 MCP tools** for AI assistants to manage WordPress sites. Use with Claude Desktop, Cursor, or any MCP-compatible client.
+Nexus AI exposes **~160 MCP tools** for AI assistants to manage WordPress sites. Use with Claude Desktop, Cursor, or any MCP-compatible client.
 
 **Tool Categories:**
 
@@ -223,7 +223,7 @@ Nexus AI exposes **111 MCP tools** for AI assistants to manage WordPress sites. 
 ## Requirements
 
 - [Local](https://localwp.com/) 9.0.0 or later
-- Node.js 20+
+- Node.js 18+
 - ~200 MB disk space (ONNX model + LanceDB binaries)
 - [Ollama](https://ollama.com/) (optional, for local AI chat)
 
@@ -364,7 +364,7 @@ src/
 │   │   └── BulkOperationManager.ts
 │   ├── audit/           # Audit logger
 │   │   └── AuditLogger.ts
-│   └── mcp/             # MCP server + tool modules (111 tools)
+│   └── mcp/             # MCP server + tool modules (~160 tools)
 │       ├── McpServer.ts
 │       ├── tool-registry.ts
 │       ├── site-resolver.ts

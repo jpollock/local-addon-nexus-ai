@@ -46,11 +46,11 @@ See [CLI Installation](../cli/installation.md) for full CLI setup.
 
 ### Method 2: Manual Install from GitHub Releases
 
-If you prefer manual installation or auto-install fails:
+If you prefer manual installation or auto-install fails. Releases are distributed as `.tgz` tarballs — not ZIP files.
 
 #### Step 1: Download Platform Tarball
 
-Visit [GitHub Releases](https://github.com/jpollock/local-addon-nexus-ai/releases/latest) and download the tarball for your platform:
+Visit [GitHub Releases](https://github.com/jpollock/local-addon-nexus-ai/releases/latest) and download the `.tgz` file for your platform:
 
 - **macOS (Apple Silicon):** `nexus-ai-darwin-arm64-{version}.tgz`
 - **macOS (Intel):** `nexus-ai-darwin-x64-{version}.tgz`
