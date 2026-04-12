@@ -6,19 +6,15 @@ export const evalHandler: McpToolHandler = {
   definition: {
     name: 'wp_eval',
     description:
-      'Execute arbitrary PHP code in WordPress context. ' +
-      'Local sites: requires site running. ' +
-      'Remote WPE: pass install_name instead of site.',
+      'Execute arbitrary PHP code in WordPress context. LOCAL SITES ONLY — ' +
+      'wp_eval is blocked on remote WPE installs for security. ' +
+      'For remote WPE sites use wp_plugin_list, wp_plugin_update, wp_core_version, etc.',
     inputSchema: {
       type: 'object',
       properties: {
         site: {
           type: 'string',
-          description: 'Site name/ID/domain (local sites)',
-        },
-        install_name: {
-          type: 'string',
-          description: 'WPE install name (remote sites)',
+          description: 'Local site name, ID, or domain. Do NOT use for remote WPE installs.',
         },
         code: {
           type: 'string',
