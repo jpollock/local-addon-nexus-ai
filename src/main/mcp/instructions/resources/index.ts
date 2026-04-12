@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { InstructionRegistry } from '../index';
+import type { RegistryStorage } from '../../../content/IndexRegistry';
+import { STORAGE_KEYS } from '../../../../common/constants';
 
 interface ResourceDef {
   uri: string;
@@ -48,12 +50,15 @@ const RESOURCES: ResourceDef[] = [
   },
 ];
 
-export function registerResources(registry: InstructionRegistry): void {
+export function registerResources(
+  registry: InstructionRegistry,
+  storage?: RegistryStorage,
+): void {
   const resourceDir = __dirname;
 
+  // Static markdown guide resources
   for (const def of RESOURCES) {
     const filePath = path.join(resourceDir, def.file);
-
     registry.registerResource({
       uri: def.uri,
       name: def.name,
@@ -65,4 +70,79 @@ export function registerResources(registry: InstructionRegistry): void {
       },
     });
   }
+
+  // Dynamic fleet state resource — reads from WPE sync cache at request time.
+  // Use this before any WPE workflow to get install names, IDs, and local links
+  // without making tool calls.
+  if (storage) {
+    registry.registerResource({
+      uri: 'nexus://fleet/state',
+      name: 'Fleet State',
+      description: 'Current WPE installs and local sites with IDs and links — read before any WPE workflow',
+      mimeType: 'text/markdown',
+      read: async () => {
+        const text = buildFleetSnapshot(storage);
+        return { text, mimeType: 'text/markdown' };
+      },
+    });
+  }
+}
+
+/**
+ * Build a compact fleet snapshot from cached storage.
+ * Used by the nexus://fleet/state resource.
+ *
+ * NOTE: WPE install data (install_name, install_id, environment) is not cached
+ * in our storage — it comes live from CAPI via nexus_list_sites. This resource
+ * provides local site data only (name, AI config, WP version).
+ */
+function buildFleetSnapshot(storage: RegistryStorage): string {
+  const lines: string[] = ['# Fleet State (from local cache)\n'];
+  lines.push('> WPE install names and IDs are not cached. Run nexus_list_sites for live WPE data.\n');
+
+  try {
+    // Local sites from index registry (populated by content indexing)
+    const indexRegistry = (storage.get(STORAGE_KEYS.INDEX_REGISTRY) ?? {}) as Record<string, any>;
+    // AI setup state per site
+    const siteAiConfig = (storage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+    // Site metadata (WP version, active theme)
+    const siteMetadata = (storage.get(STORAGE_KEYS.SITE_METADATA) ?? {}) as Record<string, any>;
+
+    const localEntries = Object.entries(indexRegistry)
+      .filter(([, v]: [string, any]) => v?.siteName && v.siteName !== '')
+      .map(([siteId, v]: [string, any]) => {
+        const meta = siteMetadata[siteId] ?? {};
+        const aiCfg = siteAiConfig[siteId] ?? null;
+        return {
+          siteId,
+          siteName: v.siteName as string,
+          wpVersion: meta.wpVersion || '—',
+          hasAI: !!aiCfg,
+          provider: aiCfg?.provider || '—',
+          useGateway: aiCfg?.useLocalGateway ? 'yes' : '—',
+          docCount: v.documentCount ?? 0,
+        };
+      })
+      .sort((a, b) => a.siteName.localeCompare(b.siteName));
+
+    if (localEntries.length > 0) {
+      lines.push('## Local Sites (indexed)\n');
+      lines.push('| site_name | site_id | wp_version | ai_configured | provider | gateway |');
+      lines.push('|---|---|---|---|---|---|');
+      for (const e of localEntries) {
+        lines.push(`| ${e.siteName} | ${e.siteId} | ${e.wpVersion} | ${e.hasAI ? 'yes' : 'no'} | ${e.provider} | ${e.useGateway} |`);
+      }
+      lines.push('');
+      lines.push(`_${localEntries.length} local sites indexed. Use site_name as \`site=\` in wp_* tools._`);
+      lines.push('_Run nexus_list_sites for running/halted status and WPE environment links._');
+    } else {
+      lines.push('## Local Sites\n');
+      lines.push('_No indexed sites. Run nexus_list_sites to discover sites._');
+    }
+
+  } catch {
+    lines.push('_Fleet state unavailable — run nexus_list_sites._');
+  }
+
+  return lines.join('\n');
 }

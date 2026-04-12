@@ -273,7 +273,7 @@ export default function main(context: any): void {
       resolveReady!();
 
       const instructionRegistry = new InstructionRegistry();
-      registerAllInstructions(instructionRegistry);
+      registerAllInstructions(instructionRegistry, registryStorage);
 
       // Reuse token and preferred port from previous run so HTTP configs stay stable
       const previousConnectionInfo = loadConnectionInfo();
