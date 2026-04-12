@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.2] — 2026-04-12
+
+### Fixed
+- `nexus doctor` now runs bootstrap on first run — if the addon is missing it downloads and
+  installs it before reporting health status. Previously doctor was in the bootstrap skip list,
+  so `npm install -g` + `nexus doctor` would report the addon as missing but never install it.
+
 ## [0.2.1] — 2026-04-11
 
 ### Added

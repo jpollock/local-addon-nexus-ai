@@ -238,7 +238,7 @@ export class McpServer {
         const result: McpInitializeResult = {
           protocolVersion: MCP_PROTOCOL_VERSION,
           capabilities: { tools: {}, resources: {} },
-          serverInfo: { name: 'nexus-ai', version: '0.2.1' },
+          serverInfo: { name: 'nexus-ai', version: '0.2.2' },
         };
         if (instructions) result.instructions = instructions;
         return this.jsonRpcResult(id, result);
