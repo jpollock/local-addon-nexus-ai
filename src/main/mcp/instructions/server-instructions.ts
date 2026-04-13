@@ -92,7 +92,7 @@ Route user requests to the correct tool namespace:
 | Plugin management | \`wp_plugin_install\`, \`wp_plugin_activate\`, \`wp_plugin_deactivate\`, \`wp_plugin_update\` | "install ACF", "update all plugins" |
 | Content management | \`wp_post_create\`, \`wp_post_update\`, \`wp_post_delete\` | "create a draft post", "update the homepage" |
 | Site options | \`wp_option_get\` | "what's the site title?" |
-| Arbitrary PHP | \`wp_eval\` | "run this PHP snippet", "check if a function exists" |
+| Arbitrary PHP (last resort) | \`wp_eval\` | Only when NO dedicated tool exists. Check wp_post_create, wp_plugin_install, wp_option_get, wp_search_replace first. LOCAL ONLY. |
 | Site health | \`wp_site_health\` | "is the site healthy?" |
 | Site audit (local only) | \`nexus_site_audit\` | "audit my blog", "check everything on test-site" — local sites only; for remote WPE use \`wp_plugin_list\` + \`wp_core_version\` with install_name= |
 | Database | \`wp_db_export\`, \`wp_import_database\`, \`wp_search_replace\` | "export the database", "change domain" |

@@ -6,9 +6,15 @@ export const evalHandler: McpToolHandler = {
   definition: {
     name: 'wp_eval',
     description:
-      'Execute arbitrary PHP code in WordPress context. LOCAL SITES ONLY — ' +
-      'wp_eval is blocked on remote WPE installs for security. ' +
-      'For remote WPE sites use wp_plugin_list, wp_plugin_update, wp_core_version, etc.',
+      'LAST RESORT — execute arbitrary PHP code in a WordPress context. ' +
+      'Use this ONLY when no dedicated tool exists for the operation. ' +
+      'Before reaching for wp_eval, check whether these cover your need: ' +
+      'wp_post_create / wp_post_update / wp_post_delete (content), ' +
+      'wp_plugin_install / wp_plugin_update / wp_plugin_activate (plugins), ' +
+      'wp_option_get / wp_search_replace (options/data), ' +
+      'wp_core_update / wp_core_version (WordPress core), ' +
+      'wp_user_list (users). ' +
+      'LOCAL SITES ONLY — blocked on remote WPE installs for security.',
     inputSchema: {
       type: 'object',
       properties: {
