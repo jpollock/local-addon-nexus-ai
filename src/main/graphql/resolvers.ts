@@ -467,19 +467,13 @@ export function createResolvers(context: ResolverContext) {
             return { success: false, error: 'Local services not available' };
           }
 
-          const parsed = parseTarget(input.target);
-          if (parsed.type !== 'local') {
-            return {
-              success: false,
-              error: 'Only local sites can be exported. Use target format: mysite@local',
-            };
-          }
-
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          // Accept both 'mysite@local' (from UI/MCP) and 'mysite' (from CLI after stripping @local)
+          const siteName = (input.target as string).replace(/@local$/, '');
+          const site = resolveSite(siteName, services.siteData);
           if (!site) {
             return {
               success: false,
-              error: `Site "${parsed.siteName}" not found`,
+              error: `Site "${siteName}" not found`,
             };
           }
 
