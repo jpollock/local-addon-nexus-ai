@@ -341,7 +341,9 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       if (!blueprints?.saveBlueprint) {
         return Promise.resolve(undefined);
       }
-      return blueprints.saveBlueprint(site, opts);
+      // filter: '__noop__' avoids the ignoredPatterns.split('') → picomatch('') crash
+      // that occurs when filter is undefined or empty string (same bug as local_export_site)
+      return blueprints.saveBlueprint({ siteId: site.id, name: opts.name, filter: '__noop__' });
     },
 
     // --- WPE Connect ---
