@@ -285,6 +285,7 @@ export default function main(context: any): void {
         services: nexusServices,
         registry,
         instructionRegistry,
+        registryStorage,
         existingToken: previousConnectionInfo?.authToken,
         preferredPort: previousConnectionInfo?.port,
       });

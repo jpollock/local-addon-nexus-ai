@@ -5,6 +5,7 @@ import { McpAuth } from './McpAuth';
 import { ToolRegistry } from './tool-registry';
 import { McpSafetyWrapper } from './mcp-safety-wrapper';
 import { InstructionRegistry } from './instructions';
+import { buildFleetSnapshotForInstructions } from './instructions/resources/index';
 import {
   JsonRpcRequest,
   JsonRpcResponse,
@@ -12,6 +13,7 @@ import {
   NexusServices,
   ConnectionInfo,
 } from './types';
+import type { RegistryStorage } from '../content/IndexRegistry';
 import {
   MCP_PORT_RANGE_START,
   MCP_PORT_RANGE_END,
@@ -24,6 +26,8 @@ export interface McpServerOptions {
   registry: ToolRegistry;
   /** Instruction, prompt, and resource registry */
   instructionRegistry?: InstructionRegistry;
+  /** Storage for reading fleet state to inject into initialize instructions */
+  registryStorage?: RegistryStorage;
   /** Pre-existing auth token to reuse across restarts */
   existingToken?: string;
   /** Try this port first before scanning the range (reuses last-known port) */
@@ -51,6 +55,7 @@ export class McpServer {
   private sseClients = new Map<string, http.ServerResponse>();
 
   private preferredPort?: number;
+  private registryStorage?: RegistryStorage;
 
   constructor(options: McpServerOptions) {
     this.auth = new McpAuth(options.existingToken);
@@ -58,6 +63,7 @@ export class McpServer {
     this.safetyWrapper = new McpSafetyWrapper(this.registry);
     this.instructionRegistry = options.instructionRegistry ?? new InstructionRegistry();
     this.services = options.services;
+    this.registryStorage = options.registryStorage;
     if (options.port) this.port = options.port;
     this.preferredPort = options.preferredPort;
   }
@@ -240,7 +246,20 @@ export class McpServer {
           capabilities: { tools: {}, resources: {} },
           serverInfo: { name: 'nexus-ai', version: '0.2.2' },
         };
-        if (instructions) result.instructions = instructions;
+        // Inject live fleet snapshot so Claude knows WPE install IDs and local
+        // site names from message 1 — no discovery tool calls needed.
+        let sessionInstructions = instructions;
+        if (this.registryStorage) {
+          try {
+            const fleetSnapshot = buildFleetSnapshotForInstructions(this.registryStorage);
+            if (fleetSnapshot) {
+              sessionInstructions = (instructions || '') + '\n\n' + fleetSnapshot;
+            }
+          } catch {
+            // Non-fatal — fall back to base instructions
+          }
+        }
+        if (sessionInstructions) result.instructions = sessionInstructions;
         return this.jsonRpcResult(id, result);
       }
 

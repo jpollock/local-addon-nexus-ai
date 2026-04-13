@@ -89,12 +89,24 @@ export function registerResources(
 }
 
 /**
+ * Build a compact fleet snapshot string suitable for injecting into MCP
+ * initialize instructions. Returns null if no useful data is available.
+ * Called by McpServer at session-connect time so Claude has fleet context
+ * from message 1 without any discovery tool calls.
+ */
+export function buildFleetSnapshotForInstructions(storage: RegistryStorage): string | null {
+  const snapshot = buildFleetSnapshot(storage);
+  // Only inject if there's real data (not just the fallback message)
+  if (snapshot.includes('Not yet cached') && !snapshot.includes('|')) return null;
+  return snapshot;
+}
+
+/**
  * Build a compact fleet snapshot from cached storage.
- * Used by the nexus://fleet/state resource.
+ * Used by the nexus://fleet/state resource AND injected into initialize instructions.
  *
- * NOTE: WPE install data (install_name, install_id, environment) is not cached
- * in our storage — it comes live from CAPI via nexus_list_sites. This resource
- * provides local site data only (name, AI config, WP version).
+ * NOTE: WPE install data (install_name, install_id, environment) is cached
+ * after CAPI sync runs. Local site data comes from the index registry.
  */
 function buildFleetSnapshot(storage: RegistryStorage): string {
   const lines: string[] = ['# Fleet State (from local cache)\n'];
