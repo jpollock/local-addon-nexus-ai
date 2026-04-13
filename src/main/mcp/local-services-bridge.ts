@@ -443,6 +443,8 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     capiDirect: async (path: string, method = 'GET', body?: unknown) => {
       const wpeOAuth = svc('wpeOAuth');
       if (!wpeOAuth) throw new Error('WPE OAuth service not available');
+      // Load stored token into memory first — _accessToken is null after restart
+      try { (wpeOAuth as any)._loadFromUserData?.(); } catch { /* non-fatal */ }
       const token = await wpeOAuth.getAccessToken();
       if (!token) throw new Error('Not authenticated with WP Engine. Run: nexus wpe login');
       const url = `https://api.wpengineapi.com/v1${path}`;
@@ -588,7 +590,8 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     async wpeGetUserInfo(): Promise<{ email?: string; accountName?: string } | null> {
       const wpeOAuth = svc('wpeOAuth');
       if (!wpeOAuth) return null;
-      // Only check in-memory token - do NOT access userData (causes decryption crashes)
+      // Load stored token into memory first — _accessToken is null after restart
+      try { (wpeOAuth as any)._loadFromUserData?.(); } catch { /* non-fatal */ }
       const hasToken = !!(wpeOAuth as any)._accessToken;
       if (!hasToken) return null;
       // Try to get user info — _getUserInfo is private but accessible at runtime
