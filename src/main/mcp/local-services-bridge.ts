@@ -558,7 +558,10 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       const wpeOAuth = svc('wpeOAuth');
       if (!wpeOAuth) return false;
 
-      // ONLY check in-memory token - never access userData (can crash due to decryption)
+      // Load stored token into memory first — _accessToken is null after restart
+      // even when valid credentials exist in userData.
+      try { (wpeOAuth as any)._loadFromUserData?.(); } catch { /* non-fatal */ }
+
       return !!(wpeOAuth as any)._accessToken;
     },
 
