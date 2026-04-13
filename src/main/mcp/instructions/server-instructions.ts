@@ -26,7 +26,17 @@ WPE install content is indexed as \`wpe-{uuid}\` in the vector store — not by 
 
 ## Discovery First
 
-ALWAYS call \`local_list_sites\` or \`nexus_list_sites\` before using any other tool. These return site IDs, names, domains, and statuses needed by all other tools. Never ask the user for a site ID or name — discover them.
+**Step 0 — read the fleet cache before any workflow:**
+\`\`\`
+resources/read nexus://fleet/state
+\`\`\`
+This returns the cached WPE install table (install_name, install_id, environment) and local site list (site_name, AI config). Use it to answer: does a local site exist for this WPE install? What is the install_id? This costs zero tool calls and prevents mid-workflow surprises.
+
+**Step 1 — then call \`nexus_list_sites\`** for live running/halted status and WPE environment links.
+
+Never ask the user for a site ID or name — discover them from the cache or nexus_list_sites.
+
+**NEVER call \`local_get_site_changes\`, \`local_wpe_pull\`, or \`local_wpe_push\` without first confirming a local site exists.** If nexus://fleet/state shows no local site for the target WPE install, tell the user and offer to create one before proceeding.
 
 ## Tool Routing
 
