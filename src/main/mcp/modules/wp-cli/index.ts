@@ -5,6 +5,7 @@ import { pluginActivateHandler } from './plugin-activate';
 import { pluginDeactivateHandler } from './plugin-deactivate';
 import { pluginUpdateHandler } from './plugin-update';
 import { themeListHandler } from './theme-list';
+import { themeActivateHandler } from './theme-activate';
 import { coreVersionHandler } from './core-version';
 import { coreUpdateHandler } from './core-update';
 import { userListHandler } from './user-list';
@@ -29,6 +30,7 @@ export function registerWpCliTools(registry: ToolRegistry): void {
   registry.register(pluginDeactivateHandler);
   registry.register(pluginUpdateHandler);
   registry.register(themeListHandler);
+  registry.register(themeActivateHandler);
   registry.register(coreVersionHandler);
   registry.register(coreUpdateHandler);
   registry.register(userListHandler);

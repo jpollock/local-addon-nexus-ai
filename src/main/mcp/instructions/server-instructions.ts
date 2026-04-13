@@ -89,7 +89,8 @@ Route user requests to the correct tool namespace:
 | Site details & logs | \`local_get_site\`, \`local_get_site_logs\` | "show site config", "what errors are in the log?" |
 | WordPress info | \`wp_core_version\`, \`wp_plugin_list\`, \`wp_theme_list\`, \`wp_user_list\` | "what plugins?", "WP version?" |
 | WordPress core update | \`wp_core_update\` | "update WordPress", "upgrade WP core to latest" |
-| Plugin management | \`wp_plugin_install\`, \`wp_plugin_activate\`, \`wp_plugin_deactivate\`, \`wp_plugin_update\` | "install ACF", "update all plugins" |
+| Plugin management | \`wp_plugin_install\`, \`wp_plugin_activate\`, \`wp_plugin_deactivate\`, \`wp_plugin_update\` | "install ACF", "update all plugins", "install woocommerce version 7.4.0" |
+| Theme activation / crash recovery | \`wp_theme_activate\` | "switch to twentytwentyone", "active theme crashes WP, switch to older theme" — works even when active theme breaks bootstrap |
 | Content management | \`wp_post_create\`, \`wp_post_update\`, \`wp_post_delete\` | "create a draft post", "update the homepage" |
 | Site options | \`wp_option_get\` | "what's the site title?" |
 | Arbitrary PHP (last resort) | \`wp_eval\` | Only when NO dedicated tool exists. Check wp_post_create, wp_plugin_install, wp_option_get, wp_search_replace first. LOCAL ONLY. |

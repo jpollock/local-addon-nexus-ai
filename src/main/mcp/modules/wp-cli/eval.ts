@@ -11,10 +11,12 @@ export const evalHandler: McpToolHandler = {
       'Before reaching for wp_eval, check whether these cover your need: ' +
       'wp_post_create / wp_post_update / wp_post_delete (content), ' +
       'wp_plugin_install / wp_plugin_update / wp_plugin_activate (plugins), ' +
+      'wp_theme_activate (theme switching, including crash recovery), ' +
       'wp_option_get / wp_search_replace (options/data), ' +
-      'wp_core_update / wp_core_version (WordPress core), ' +
-      'wp_user_list (users). ' +
-      'LOCAL SITES ONLY — blocked on remote WPE installs for security.',
+      'wp_core_update / wp_core_version (WordPress core). ' +
+      'LOCAL SITES ONLY — blocked on remote WPE installs for security. ' +
+      'Use skip_themes=true when the active theme crashes WordPress on bootstrap (e.g. theme requires newer WP API). ' +
+      'Use skip_plugins=true when a plugin conflict prevents WordPress from loading.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -25,6 +27,14 @@ export const evalHandler: McpToolHandler = {
         code: {
           type: 'string',
           description: 'PHP code to execute (without <?php tags)',
+        },
+        skip_themes: {
+          type: 'boolean',
+          description: 'Skip loading the active theme. Use when a theme incompatibility crashes WordPress (e.g. theme requires WP 6.5 but site runs 6.3). Defaults to false.',
+        },
+        skip_plugins: {
+          type: 'boolean',
+          description: 'Skip loading all plugins. Use when a plugin conflict prevents WordPress from loading. Defaults to false.',
         },
       },
       required: ['code'],
@@ -51,10 +61,9 @@ export const evalHandler: McpToolHandler = {
     const check = requireRunning(target.site, services);
     if (check) return check;
 
-    // Load plugins and themes so eval code can access plugin functions
     const result = await services.localServices!.wpCliRun(target.site.id, ['eval', code], {
-      skipPlugins: false,
-      skipThemes: false,
+      skipPlugins: !!(args.skip_plugins),
+      skipThemes: !!(args.skip_themes),
     });
 
     if (!result.success) {
