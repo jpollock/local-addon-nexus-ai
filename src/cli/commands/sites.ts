@@ -179,7 +179,7 @@ sitesCommand
         }
       `, {
         input: {
-          target,
+          target: target.replace(/@local$/, ''),
           newName,
         },
       });
@@ -327,7 +327,7 @@ sitesCommand
         }
       `, {
         input: {
-          target,
+          target: target.replace(/@local$/, ''),
           tail: parseInt(options.tail, 10),
           follow: options.follow || false,
         },
@@ -720,7 +720,7 @@ sitesCommand
         }
       `, {
         input: {
-          target,
+          target: target.replace(/@local$/, ''),
           version,
         },
       });
@@ -770,7 +770,7 @@ sitesCommand
         }
       `, {
         input: {
-          target,
+          target: target.replace(/@local$/, ''),
         },
       });
 
@@ -825,7 +825,7 @@ sitesCommand
         }
       `, {
         input: {
-          target,
+          target: target.replace(/@local$/, ''),
           enable,
         },
       });
