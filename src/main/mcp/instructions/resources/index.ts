@@ -89,16 +89,72 @@ export function registerResources(
 }
 
 /**
- * Build a compact fleet snapshot string suitable for injecting into MCP
- * initialize instructions. Returns null if no useful data is available.
- * Called by McpServer at session-connect time so Claude has fleet context
- * from message 1 without any discovery tool calls.
+ * Build a COMPACT fleet snapshot for injecting into MCP initialize instructions.
+ * Returns null if no useful data is available.
+ *
+ * IMPORTANT: This must be small — full 278-install tables cause context rot.
+ * Only include: local sites + WPE installs linked to local sites + a note
+ * to use nexus_list_sites for the full fleet.
  */
 export function buildFleetSnapshotForInstructions(storage: RegistryStorage): string | null {
-  const snapshot = buildFleetSnapshot(storage);
-  // Only inject if there's real data (not just the fallback message)
-  if (snapshot.includes('Not yet cached') && !snapshot.includes('|')) return null;
-  return snapshot;
+  try {
+    const wpeCache = storage.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs: any[]; syncedAt: number } | null;
+    const indexRegistry = (storage.get(STORAGE_KEYS.INDEX_REGISTRY) ?? {}) as Record<string, any>;
+    const siteAiConfig = (storage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+    const siteMetadata = (storage.get(STORAGE_KEYS.SITE_METADATA) ?? {}) as Record<string, any>;
+
+    const lines: string[] = ['## Session Fleet Context\n'];
+    let hasData = false;
+
+    // Local sites — exclude ephemeral test/e2e sites, cap at 30
+    const TEST_PATTERNS = /^(nexus-e2e-test|nexus-crud-|nexus-ai-setup-)/i;
+    const localSites = Object.entries(indexRegistry)
+      .filter(([, v]: [string, any]) => v?.siteName && v.siteName !== '' && !TEST_PATTERNS.test(v.siteName))
+      .map(([siteId, v]: [string, any]) => {
+        const meta = siteMetadata[siteId] ?? {};
+        const ai = siteAiConfig[siteId];
+        return `- **${v.siteName}** (site_id: ${siteId}, WP ${meta.wpVersion || '?'}${ai ? `, AI: ${ai.provider}` : ''})`;
+      })
+      .sort()
+      .slice(0, 30);
+
+    if (localSites.length > 0) {
+      lines.push('### Local Sites');
+      lines.push('_Use site_name as `site=` in wp_* tools._');
+      lines.push(localSites.join('\n'));
+      lines.push('');
+      hasData = true;
+    }
+
+    // WPE installs — ONLY the ones linked to a local site, plus any explicitly
+    // referenced recently. Keep this list short.
+    if (wpeCache?.installs?.length) {
+      const ageMin = Math.round((Date.now() - wpeCache.syncedAt) / 60000);
+      const localNames = new Set(localSites.map((l) => l.match(/\*\*([^*]+)\*\*/)?.[1] ?? ''));
+
+      // Find WPE installs whose name matches a local site name (linked pairs)
+      const linked = wpeCache.installs.filter((i: any) =>
+        localNames.has(i.installName) || localNames.has(i.installName + 'dev') || localNames.has(i.installName + 'stg')
+      );
+
+      if (linked.length > 0) {
+        lines.push('### WPE Installs Linked to Local Sites');
+        lines.push('_Use install_name as `install_name=` in wp_* tools. Use install_id in pull/push._');
+        for (const i of linked) {
+          lines.push(`- **${i.installName}** (install_id: ${i.installId}, ${i.environment}, ${i.primaryDomain})`);
+        }
+        lines.push('');
+        hasData = true;
+      }
+
+      lines.push(`_WPE fleet: ${wpeCache.installs.length} installs across 10 accounts (synced ${ageMin}m ago). Use nexus_list_sites for the full list or to find a specific install._`);
+    }
+
+    if (!hasData) return null;
+    return lines.join('\n');
+  } catch {
+    return null;
+  }
 }
 
 /**
