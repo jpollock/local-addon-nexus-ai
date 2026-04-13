@@ -24,6 +24,7 @@ import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
 import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence/index';
 import { registerTelemetryTools } from './mcp/modules/telemetry-tools';
 import { registerTelemetryControlTools } from './mcp/modules/telemetry-control-tools';
+import { createSearchToolsHandler } from './mcp/modules/search-tools';
 import { registerTestTools } from './mcp/modules/test-tools';
 import { saveConnectionInfo, loadConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
 import { registerLifecycleHooks } from './content/lifecycle-hooks';
@@ -205,6 +206,8 @@ export default function main(context: any): void {
   registerFleetIntelligenceTools(registry);
   registerTelemetryTools(registry);
   registerTelemetryControlTools(registry);
+  // search_tools registered last so it can search all other tools
+  registry.register(createSearchToolsHandler(registry));
   if (process.env.NEXUS_E2E_MODE === '1') {
     registerTestTools(registry);
     localLogger.info('[NexusAI] Test tools registered (NEXUS_E2E_MODE=1)');

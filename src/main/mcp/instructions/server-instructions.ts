@@ -34,6 +34,13 @@ This returns the cached WPE install table (install_name, install_id, environment
 
 **Step 1 — then call \`nexus_list_sites\`** for live running/halted status and WPE environment links.
 
+**Step 2 — if unsure which tool to use for an operation, call \`search_tools(query)\`** before guessing. With 160+ tools available, searching is faster and more accurate than scanning descriptions mentally.
+
+Examples:
+- search_tools("backup wpe install")
+- search_tools("update plugins remote site")
+- search_tools("domain ssl certificate")
+
 Never ask the user for a site ID or name — discover them from the cache or nexus_list_sites.
 
 Before calling \`local_get_site_changes\`, \`local_wpe_pull\`, or \`local_wpe_push\`, confirm a local site exists by reading \`nexus://fleet/state\`. If no local site is found, tell the user and offer to create one with \`local_create_site\` before proceeding.
