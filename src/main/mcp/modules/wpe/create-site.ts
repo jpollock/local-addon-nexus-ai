@@ -27,7 +27,8 @@ export const createSiteHandler: McpToolHandler = {
       if (!name) return error('Site name is required.');
       if (!accountId) return error('Account ID is required.');
 
-      const site = await services.localServices!.capiDirect('/sites', 'POST', { name, account: accountId }) as any;
+      // CAPI expects account_id as a query param, name in the POST body
+      const site = await services.localServices!.capiDirect(`/sites?account_id=${encodeURIComponent(accountId)}`, 'POST', { name }) as any;
 
 
       return ok(
