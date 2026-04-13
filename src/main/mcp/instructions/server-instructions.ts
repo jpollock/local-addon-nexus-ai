@@ -36,7 +36,39 @@ This returns the cached WPE install table (install_name, install_id, environment
 
 Never ask the user for a site ID or name — discover them from the cache or nexus_list_sites.
 
-**NEVER call \`local_get_site_changes\`, \`local_wpe_pull\`, or \`local_wpe_push\` without first confirming a local site exists.** If nexus://fleet/state shows no local site for the target WPE install, tell the user and offer to create one before proceeding.
+Before calling \`local_get_site_changes\`, \`local_wpe_pull\`, or \`local_wpe_push\`, confirm a local site exists by reading \`nexus://fleet/state\`. If no local site is found, tell the user and offer to create one with \`local_create_site\` before proceeding.
+
+## Safety
+
+Tools are classified into three safety tiers:
+
+- **Tier 1 (read-only)**: Execute immediately. No side effects. Examples: \`local_list_sites\`, \`wp_plugin_list\`, \`wpe_status\`.
+- **Tier 2 (modifying)**: Execute and log. Changes state but is recoverable. Examples: \`local_start_site\`, \`wp_plugin_install\`, \`wpe_login\`.
+- **Tier 3 (destructive)**: Requires confirmation token. The first call returns a confirmation prompt with a token. Call again with \`_confirmationToken\` to proceed. Examples: \`local_delete_site\`, \`local_wpe_push\`.
+
+Always use \`wp_plugin_update\` with dry-run awareness — check what will change before updating. Use \`wp_search_replace\` in dry-run mode first to preview changes.
+
+**Plugin update blockers:** If \`wp_plugin_update\` skips plugins citing a WP version requirement, run \`wp_core_update\` to upgrade WordPress core first, then re-run \`wp_plugin_update\` with slug=--all.
+
+**WPE destructive operations** (\`wpe_delete_install\`, \`wpe_delete_site\`, \`wpe_delete_domain\`, \`wpe_delete_account_user\`, \`wpe_delete_ssh_key\`, \`wpe_promote_environment\`) have additional guards beyond the standard token:
+- \`wpe_delete_install\`: requires \`confirm_install_name\` matching the install name exactly, and warns if no backup within 7 days
+- \`wpe_delete_site\`: requires \`confirm_site_name\` matching the site name exactly, shows all installs that will be deleted
+- \`wpe_promote_environment\`: fetches both installs and checks destination backup recency before issuing token
+
+## Long-Running Operations (Pull / Push / Export)
+
+\`local_wpe_pull\`, \`local_wpe_push\`, and \`local_export_site\` are **async** — they return immediately with \`status: "in_progress"\` while the operation runs in the background (typically 1-5 minutes).
+
+**Always poll \`local_operation_status\` after starting one. Proceed to the next step only when status=completed.**
+
+  1. Start: \`local_wpe_pull\` / \`local_wpe_push\` / \`local_export_site\` — returns in_progress immediately
+  2. Poll: \`local_operation_status({ site: "..." })\` every 15-30 seconds
+  3. Done: status=completed — proceed to next step
+  4. Info: last_message shows current phase, recent_files shows transfer progress
+
+**Push/pull timeout:** For large sites (1+ GB), the MCP connection may time out — this does NOT mean the operation failed. The transfer continues in Local. Immediately poll \`local_operation_status\` to track real progress. Do not retry.
+
+For pull/push/export progress, use \`local_operation_status\` — not \`local_get_site\` (which only shows running/halted, not operation progress).
 
 ## Tool Routing
 
@@ -55,7 +87,7 @@ Route user requests to the correct tool namespace:
 | Site options | \`wp_option_get\` | "what's the site title?" |
 | Arbitrary PHP | \`wp_eval\` | "run this PHP snippet", "check if a function exists" |
 | Site health | \`wp_site_health\` | "is the site healthy?" |
-| Site audit | \`nexus_site_audit\` | "audit my blog", "check everything on test-site" |
+| Site audit (local only) | \`nexus_site_audit\` | "audit my blog", "check everything on test-site" — local sites only; for remote WPE use \`wp_plugin_list\` + \`wp_core_version\` with install_name= |
 | Database | \`wp_db_export\`, \`wp_import_database\`, \`wp_search_replace\` | "export the database", "change domain" |
 | Fleet overview | \`fleet_summary\`, \`find_sites_with_plugin\`, \`find_sites_with_theme\`, \`compare_sites\`, \`detect_drift\`, \`find_outdated_sites\` | "which sites use WooCommerce?" |
 | Fleet health | \`fleet_health_summary\`, \`get_site_health\`, \`fleet_filter\`, \`fleet_search\` | "which sites have issues?", "find sites running PHP 7" |
@@ -71,7 +103,7 @@ Route user requests to the correct tool namespace:
 | WP Engine usage (fleet) | \`wpe_portfolio_usage\` | "which sites get the most traffic?", "installs with >100 visits/day", "highest bandwidth sites" |
 | WP Engine versions (fleet) | \`wpe_fleet_versions\` | "WP/PHP versions of my high-traffic sites", "which installs run old WordPress?" |
 | Local ↔ WPE drift | \`wpe_detect_drift\` | "are my local sites in sync with WPE?", "what's different between local and production?", "plugin differences between dev and live" |
-| WP Engine usage (single) | \`wpe_get_install_usage\`, \`wpe_get_account_usage\` | "show bandwidth for this install", "storage for my account" |
+| WP Engine usage (single install) | \`wpe_get_install_usage\` | "show bandwidth for this install" — use \`wpe_portfolio_usage\` for fleet-wide questions, NOT this |
 | WP Engine sites | \`wpe_get_sites\`, \`wpe_get_site\`, \`wpe_create_site\`, \`wpe_update_site\`, \`wpe_delete_site\` | "list sites", "create a new site" |
 | WP Engine install lifecycle | \`wpe_create_install\`, \`wpe_update_install\`, \`wpe_delete_install\`, \`wpe_get_backup\` | "create staging environment", "delete dev install", "check backup status" |
 | WP Engine environment promotion | \`wpe_promote_environment\` | "promote staging to production", "copy install" |
@@ -88,7 +120,7 @@ Route user requests to the correct tool namespace:
 | Current WPE user | \`wpe_get_current_user\` | "who am I logged in as?" |
 | WPE API credentials | \`wpe_set_api_credentials\`, \`wpe_clear_api_credentials\`, \`wpe_credentials_status\` | "store WPE API credentials", "backup won't work" |
 | Sync with WPE | \`local_wpe_pull\`, \`local_wpe_push\`, \`local_wpe_link\` | "pull from staging", "push to dev", "link this site to WPE" |
-| Pull/push/export status | \`local_operation_status\` | "is the pull done?", "check push progress", "how far along is the export?" |
+| Pull/push/export progress | \`local_operation_status\` | "is the pull done?", "check push progress" — use this, NOT \`local_get_site\` which only shows running/halted |
 | Sync history | \`local_get_site_changes\`, \`local_get_sync_history\` | "what changed since last pull?", "show sync history" |
 | AI setup | \`wp_setup_ai\` | "set up AI on this site" |
 | AI abilities | \`wp_list_abilities\`, \`wp_run_ability\` | "what abilities does this site have?", "run acf/list-field-groups" |
@@ -96,6 +128,41 @@ Route user requests to the correct tool namespace:
 | AI provider config | \`nexus_get_site_ai_config\`, \`nexus_switch_provider\` | "what AI provider is this site using?", "switch to OpenAI" |
 | Local LLM | \`ask_ollama\`, \`list_ollama_models\` | "ask Ollama about this code" |
 | Site groups | \`list_site_groups\`, \`manage_site_group\` | "show my site groups", "add site to production group" |
+
+## Named Workflows
+
+Use these checklists before starting any multi-step workflow. Do not skip steps.
+
+### Pull → Update → Push (WPE site update)
+
+Pre-flight (run BEFORE proposing this workflow to the user):
+1. Read \`nexus://fleet/state\` — confirm the WPE install name and whether a local site exists
+2. If no local site: tell the user, offer to create one with \`local_create_site\`
+3. Confirm with user: include database in pull? (recommend yes)
+4. Warn: \`local_wpe_push\` overwrites the live WPE environment — no automatic rollback
+
+Steps (in order):
+1. \`local_wpe_pull\` (include_database=true) → poll \`local_operation_status\`
+2. \`local_export_site\` (if user wants a backup of the pulled state) → poll \`local_operation_status\`
+3. \`local_start_site\` (if site stopped after pull)
+4. \`wp_plugin_update\` (slug="--all", site=local-name)
+5. \`wp_site_health\` — confirm no regressions
+6. \`local_wpe_push\` → poll \`local_operation_status\`
+
+### Plugin Audit (fleet-wide)
+
+1. \`nexus_plugin_audit\` — cross-site view of installed versions and available updates
+2. For a specific install: \`wp_plugin_list\` (install_name=) to confirm current state
+3. \`wp_plugin_update\` (install_name=, slug="--all") for remote updates via SSH
+4. If plugins blocked by WP version: \`wp_core_update\` (install_name=) then retry
+
+### Site Investigation (before any changes)
+
+Always start with:
+1. Read \`nexus://fleet/state\` — get site IDs, WPE links, AI config without a tool call
+2. \`nexus_list_sites\` — get live running/halted status
+3. \`wp_plugin_list\` — confirm current plugin state
+4. \`wp_site_health\` (local) or \`nexus_site_audit\` — baseline health
 
 ## WP Engine Authentication
 
@@ -145,7 +212,7 @@ Add domains, verify DNS, and set primary domain before going live.
 - \`wpe_go_live_checklist\` — read-only: checks domain added, DNS resolved, SSL valid (use this FIRST)
 - \`wpe_prepare_go_live\` — action: adds domain + sets primary + requests SSL + purges cache in one call
 
-Never use \`wpe_prepare_go_live\` without running \`wpe_go_live_checklist\` first to understand current state.
+Before \`wpe_prepare_go_live\`, run \`wpe_go_live_checklist\` to understand current domain, DNS, and SSL state.
 
 ## SSL Management
 
@@ -240,38 +307,6 @@ Some commands are blocked remotely for safety: \`eval\`, \`eval-file\`, \`shell\
 
 Three tools are local-only and do not support \`install_name\`: \`wp_db_export\`, \`wp_search_replace\`, \`wp_site_health\`.
 
-## Safety
-
-Tools are classified into three safety tiers:
-
-- **Tier 1 (read-only)**: Execute immediately. No side effects. Examples: \`local_list_sites\`, \`wp_plugin_list\`, \`wpe_status\`.
-- **Tier 2 (modifying)**: Execute and log. Changes state but is recoverable. Examples: \`local_start_site\`, \`wp_plugin_install\`, \`wpe_login\`.
-- **Tier 3 (destructive)**: Requires confirmation token. The first call returns a confirmation prompt with a token. Call again with \`_confirmationToken\` to proceed. Examples: \`local_delete_site\`, \`local_wpe_push\`.
-
-Always use \`wp_plugin_update\` with dry-run awareness — check what will change before updating. Use \`wp_search_replace\` in dry-run mode first to preview changes.
-
-**Plugin update blockers:** If \`wp_plugin_update\` skips plugins citing a WP version requirement, run \`wp_core_update\` to upgrade WordPress core first, then re-run \`wp_plugin_update\` with slug=--all.
-
-**WPE destructive operations** (\`wpe_delete_install\`, \`wpe_delete_site\`, \`wpe_delete_domain\`, \`wpe_delete_account_user\`, \`wpe_delete_ssh_key\`, \`wpe_promote_environment\`) have additional guards beyond the standard token:
-- \`wpe_delete_install\`: requires \`confirm_install_name\` matching the install name exactly, and warns if no backup within 7 days
-- \`wpe_delete_site\`: requires \`confirm_site_name\` matching the site name exactly, shows all installs that will be deleted
-- \`wpe_promote_environment\`: fetches both installs and checks destination backup recency before issuing token
-
-## Long-Running Operations (Pull / Push / Export)
-
-\`local_wpe_pull\`, \`local_wpe_push\`, and \`local_export_site\` are **async** — they return immediately with \`status: "in_progress"\` while the operation runs in the background (typically 1-5 minutes).
-
-**CRITICAL: Always poll \`local_operation_status\` after starting one. Never rely on the user to confirm completion and never move to the next step until status=completed.**
-
-  1. Start: \`local_wpe_pull\` / \`local_wpe_push\` / \`local_export_site\` — returns in_progress immediately
-  2. Poll: \`local_operation_status({ site: "..." })\` every 15-30 seconds
-  3. Done: status=completed — proceed to next step
-  4. Info: last_message shows current phase, recent_files shows transfer progress
-
-**Push/pull timeout:** For large sites (1+ GB), the MCP connection may time out — this does NOT mean the operation failed. The transfer continues in Local. Immediately poll \`local_operation_status\` to track real progress. Do not retry.
-
-Do NOT use \`local_get_site\` as a polling mechanism — it only shows running/halted, not operation progress.
-
 ## WP Engine API Credentials (Backup Creation)
 
 \`wpe_create_backup\` requires **WP Engine API credentials** (basic auth) — the backup endpoint does not support OAuth. If backup fails with an auth error, credentials are not configured.
@@ -281,40 +316,6 @@ Do NOT use \`local_get_site\` as a polling mechanism — it only shows running/h
 - \`wpe_clear_api_credentials\` — remove stored credentials
 
 Credentials are stored with OS-level encryption. Once set, all backup operations use them automatically.
-
-## Named Workflows
-
-Use these checklists before starting any multi-step workflow. Do not skip steps.
-
-### Pull → Update → Push (WPE site update)
-
-Pre-flight (run BEFORE proposing this workflow to the user):
-1. Call \`nexus_list_sites\` — confirm the WPE install name and whether a local site exists
-2. If no local site: tell the user, offer to create one with \`local_create_site\`
-3. Confirm with user: include database in pull? (recommend yes)
-4. Warn: \`local_wpe_push\` overwrites the live WPE environment — no automatic rollback
-
-Steps (in order):
-1. \`local_wpe_pull\` (include_database=true) → poll \`local_operation_status\`
-2. \`local_export_site\` (if user wants a backup of the pulled state) → poll \`local_operation_status\`
-3. \`local_start_site\` (if site stopped after pull)
-4. \`wp_plugin_update\` (slug="--all", site=local-name)
-5. \`wp_site_health\` — confirm no regressions
-6. \`local_wpe_push\` → poll \`local_operation_status\`
-
-### Plugin Audit (fleet-wide)
-
-1. \`nexus_plugin_audit\` — cross-site view of installed versions and available updates
-2. For a specific install: \`wp_plugin_list\` (install_name=) to confirm current state
-3. \`wp_plugin_update\` (install_name=, slug="--all") for remote updates via SSH
-4. If plugins blocked by WP version: \`wp_core_update\` (install_name=) then retry
-
-### Site Investigation (before any changes)
-
-Always start with:
-1. \`nexus_list_sites\` — get site ID, status, WPE link
-2. \`wp_plugin_list\` — confirm current state
-3. \`wp_site_health\` (local) or \`nexus_site_audit\` — baseline health
 
 ## Presentation
 
@@ -327,17 +328,8 @@ Always start with:
 
 ## Resources
 
-**Read \`nexus://fleet/state\` before any workflow involving sites or WPE installs.**
-It provides a pre-built table from the local cache covering:
-- WPE installs: install_name, install_id, environment, domain (from CAPI sync cache)
-- Local sites: site_name, site_id, WP version, AI configured, provider (from index)
-
-This tells you whether a local site exists for a given WPE install, what the install_id is,
-and which installs are dev vs production — before planning any workflow, without a tool call.
-Data reflects the last CAPI sync. Run nexus_list_sites for live running/halted status.
-
 For detailed guides, use \`resources/read\` with these URIs:
-- \`nexus://fleet/state\` — **Cached WPE installs + local sites with IDs and AI status**
+- \`nexus://fleet/state\` — Cached WPE installs + local sites (see Discovery First for usage)
 - \`nexus://guide/getting-started\` — Tool overview and orientation
 - \`nexus://guide/safety\` — Safety tier system details
 - \`nexus://guide/remote-wp-cli\` — Remote execution via SSH
