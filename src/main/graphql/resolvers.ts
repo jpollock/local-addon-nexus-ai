@@ -3689,7 +3689,8 @@ export function createResolvers(context: ResolverContext) {
       nexusWpeUserAdd: async (_parent: any, { accountId, email, firstName, lastName, role }: { accountId: string; email: string; firstName: string; lastName: string; role: string }) => {
         try {
           if (!services.localServices) return { success: false, error: 'Local services not available' };
-          await services.localServices.capiDirect(`/accounts/${accountId}/account_users`, 'POST', { user: { email, first_name: firstName, last_name: lastName }, roles: [role] });
+          // Swagger: user object requires account_id; roles is a comma-separated string, not array
+          await services.localServices.capiDirect(`/accounts/${accountId}/account_users`, 'POST', { user: { account_id: accountId, email, first_name: firstName, last_name: lastName, roles: role } });
           return { success: true, message: `User ${email} added to account ${accountId} with role ${role}` };
         } catch (err: any) { return { success: false, error: err.message }; }
       },
@@ -3697,7 +3698,8 @@ export function createResolvers(context: ResolverContext) {
       nexusWpeUserUpdate: async (_parent: any, { accountId, userId, role }: { accountId: string; userId: string; role: string }) => {
         try {
           if (!services.localServices) return { success: false, error: 'Local services not available' };
-          await services.localServices.capiDirect(`/accounts/${accountId}/account_users/${userId}`, 'PATCH', { roles: [role] });
+          // Swagger: roles is a comma-separated string, not array
+          await services.localServices.capiDirect(`/accounts/${accountId}/account_users/${userId}`, 'PATCH', { roles: role });
           return { success: true, message: `User ${userId} role updated to ${role}` };
         } catch (err: any) { return { success: false, error: err.message }; }
       },
@@ -3749,7 +3751,7 @@ export function createResolvers(context: ResolverContext) {
       nexusWpeCreateSite: async (_parent: any, { name, accountId }: { name: string; accountId: string }) => {
         try {
           if (!services.localServices) return { success: false, error: 'Local services not available' };
-          const data = await services.localServices.capiDirect('/sites', 'POST', { name, account: accountId }) as any;
+          const data = await services.localServices.capiDirect('/sites', 'POST', { name, account_id: accountId }) as any;
           return { success: true, siteId: data?.id, name: data?.name };
         } catch (err: any) { return { success: false, error: err.message }; }
       },
@@ -3757,7 +3759,7 @@ export function createResolvers(context: ResolverContext) {
       nexusWpeCreateInstall: async (_parent: any, { siteId, name, environment, accountId }: { siteId: string; name: string; environment: string; accountId: string }) => {
         try {
           if (!services.localServices) return { success: false, error: 'Local services not available' };
-          const data = await services.localServices.capiDirect('/installs', 'POST', { site: siteId, name, environment, account: accountId }) as any;
+          const data = await services.localServices.capiDirect('/installs', 'POST', { name, account_id: accountId, site_id: siteId, environment }) as any;
           return { success: true, installId: data?.id, name: data?.name, domain: data?.primaryDomain || data?.cname };
         } catch (err: any) { return { success: false, error: err.message }; }
       },
@@ -3874,7 +3876,8 @@ export function createResolvers(context: ResolverContext) {
       nexusWpeSshKeyAdd: async (_parent: any, { label, publicKey }: { label: string; publicKey: string }) => {
         try {
           if (!services.localServices) return { success: false, error: 'Local services not available' };
-          const data = await services.localServices.capiDirect('/ssh_keys', 'POST', { label, public_key: publicKey }) as any;
+          // Swagger: only accepts public_key, no label field
+          const data = await services.localServices.capiDirect('/ssh_keys', 'POST', { public_key: publicKey }) as any;
           return { success: true, keyId: data?.id, label: data?.label };
         } catch (err: any) { return { success: false, error: err.message }; }
       },
