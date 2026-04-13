@@ -210,6 +210,7 @@ When WPE tools fail with auth errors: call \`wpe_status\` → if not authenticat
 To create a new hosted environment on WP Engine:
 1. \`wpe_create_site\` — create a site container (required first)
 2. \`wpe_create_install\` — add an environment (production/staging/development) to the site
+3. **WAIT for provisioning** — the install returns \`status: "pending"\` immediately. Poll \`wpe_get_install\` every 30–60 seconds until \`status === "active"\`. This takes 3–5 minutes. **Do NOT attempt to push, link, configure, or run WP-CLI until the install is active.**
 
 To update an install (PHP version, environment type): \`wpe_update_install\`
 

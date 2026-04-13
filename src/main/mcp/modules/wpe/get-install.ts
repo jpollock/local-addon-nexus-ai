@@ -23,7 +23,19 @@ export const getInstallHandler: McpToolHandler = {
       const install = await services.localServices!.capiGetInstall(installId) as any;
       if (!install) return error(`Install "${installId}" not found.`);
 
-      return ok(JSON.stringify(install, null, 2));
+      const status = install?.status ?? 'unknown';
+      const isReady = status === 'active';
+
+      return ok(
+        `## Install: ${install.name}\n\n` +
+        `**Status:** ${status}${isReady ? ' ✅ Ready' : ' ⏳ Still provisioning — wait and poll again'}\n` +
+        `**ID:** \`${install.id}\`\n` +
+        `**Environment:** ${install.environment ?? 'unknown'}\n` +
+        `**Domain:** ${install.primaryDomain ?? install.cname ?? 'pending'}\n` +
+        `**PHP:** ${install.phpVersion ?? 'unknown'}\n\n` +
+        (isReady ? 'Safe to push, link, and run WP-CLI.' : 'Do NOT push or link until status is "active".') +
+        `\n\n<details>\n${JSON.stringify(install, null, 2)}\n</details>`,
+      );
     } catch (err: any) {
       return capiError(err);
     }

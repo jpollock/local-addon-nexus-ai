@@ -53,13 +53,19 @@ export const createInstallHandler: McpToolHandler = {
       const install = await services.localServices!.capiDirect('/installs', 'POST', { name, account_id: accountId, site_id: siteId, environment }) as any;
 
       const domain = install?.primaryDomain ?? install?.cname ?? `${install?.name ?? name}.wpengine.com`;
+      const status = install?.status ?? 'pending';
 
       return ok(
-        `## Install Created\n\n` +
+        `## Install Created — Status: ${status.toUpperCase()}\n\n` +
         `**Name:** ${install?.name ?? name}\n` +
         `**ID:** \`${install?.id}\`\n` +
         `**Environment:** ${install?.environment ?? environment}\n` +
-        `**Domain:** ${domain}`,
+        `**Domain:** ${domain}\n\n` +
+        (status !== 'active'
+          ? `⏳ **The install is provisioning and NOT ready yet.**\n\n` +
+            `Call \`wpe_get_install\` with \`install_id: "${install?.id}"\` every 30–60 seconds until \`status\` returns \`"active"\`. ` +
+            `Do NOT attempt to push, link, or use SSH until the install is active. Provisioning typically takes 3–5 minutes.`
+          : `✅ Install is active and ready to use.`),
       );
     } catch (err: any) {
       return capiError(err);
