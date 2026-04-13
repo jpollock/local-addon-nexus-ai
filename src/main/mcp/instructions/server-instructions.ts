@@ -141,6 +141,25 @@ Route user requests to the correct tool namespace:
 
 Use these checklists before starting any multi-step workflow. Do not skip steps.
 
+### Push Local Site to a NEW WPE environment (first-time deploy)
+
+Use this when the local site has never been on WPE, or the user wants a fresh WPE environment.
+
+**Naming rules — CRITICAL:**
+- \`wpe_create_site\` name: can have spaces and caps (display name). E.g. "Faker Incorporated".
+- \`wpe_create_install\` name: SSH slug — lowercase, numbers, hyphens ONLY, no spaces, max ~20 chars.
+  Bad: "Faker Incorporated", "faker_inc". Good: "fakerinc", "faker-demo".
+  If the user gives a display name, derive the slug automatically before calling the tool.
+
+Steps:
+1. \`wpe_get_accounts\` — get account_id (or ask user which account)
+2. \`wpe_create_site\` (name=display name, account_id=) → save the returned site_id
+3. \`wpe_create_install\` (site_id=, name=slug, environment="production", account_id=) → save install_id
+4. Wait ~2 minutes for provisioning (inform user)
+5. \`local_wpe_push\` (site=local-site-name, remote_install_id=install_id from step 3, include_database=true)
+6. Poll \`local_get_site\` until status="running"
+7. \`wpe_create_backup\` (install_id=, description="post-deploy baseline") — create restore point
+
 ### Pull → Update → Push (WPE site update)
 
 Pre-flight (run BEFORE proposing this workflow to the user):

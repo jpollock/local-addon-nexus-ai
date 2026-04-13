@@ -63,5 +63,15 @@ export function capiError(err: any): McpToolResult {
       'then retry this tool.',
     );
   }
-  return error(`WP Engine API error: ${msg}`);
+
+  // Try to surface the CAPI response body for 400 errors — these usually contain
+  // a useful validation message (e.g. "name already taken", "invalid characters")
+  const bodyDetail = err?.responseJson?.message ?? err?.body?.message ?? err?.data?.message ?? null;
+  const status = err?.status ?? err?.statusCode ?? null;
+
+  if (status === 400 && bodyDetail) {
+    return error(`WP Engine API error (400): ${bodyDetail}`);
+  }
+
+  return error(`WP Engine API error: ${msg}${bodyDetail ? ` — ${bodyDetail}` : ''}`);
 }
