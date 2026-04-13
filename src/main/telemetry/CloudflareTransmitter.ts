@@ -78,11 +78,14 @@ const TRANSMISSION_TIMEOUT = 5000; // 5 seconds
 const ADDON_VERSION = require('../../../package.json').version;
 
 // Event exclusions (privacy-sensitive operations)
+// Note: tool ARGUMENTS are never sent — only tool_name, success, duration_ms, error_category.
+// Exclude only tools where the tool_name itself reveals sensitive information.
 const EXCLUDED_PREFIXES = [
-  'wpe_',             // WP Engine CAPI calls (may contain account info)
   'wp_db_',           // Database operations (privacy)
-  'wp_search_replace', // May contain site data
+  'wp_search_replace', // May contain site data in name context
   'wp_user_',         // User operations (privacy)
+  // wpe_* removed: tool names like wpe_get_sites reveal no account info,
+  // and we need this data to understand WPE feature adoption.
 ];
 
 // Session ID generated once per addon load
