@@ -155,10 +155,13 @@ Steps:
 1. \`wpe_get_accounts\` — get account_id (or ask user which account)
 2. \`wpe_create_site\` (name=display name, account_id=) → save the returned site_id
 3. \`wpe_create_install\` (site_id=, name=slug, environment="production", account_id=) → save install_id
-4. Wait ~2 minutes for provisioning (inform user)
-5. \`local_wpe_push\` (site=local-site-name, remote_install_id=install_id from step 3, include_database=true)
-6. Poll \`local_get_site\` until status="running"
-7. \`wpe_create_backup\` (install_id=, description="post-deploy baseline") — create restore point
+4. \`local_export_site\` (site=local-site-name) → creates a zip backup **before** pushing (rollback point)
+5. Wait ~2 minutes for WPE provisioning (inform user)
+6. \`local_wpe_push\` (site=local-site-name, remote_install_id=install_id from step 3, include_database=true)
+7. Poll \`local_get_site\` until status="running"
+8. \`wpe_create_backup\` (install_id=, description="post-deploy baseline") — remote restore point on WPE
+
+**Backup/restore note:** \`local_export_site\` produces a portable zip in ~/Downloads that can be restored via \`local_import_site\`. This is the preferred local backup method — more reliable than blueprints for programmatic use.
 
 ### Pull → Update → Push (WPE site update)
 

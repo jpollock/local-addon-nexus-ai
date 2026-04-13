@@ -14,7 +14,8 @@ import { toggleXdebugHandler } from './toggle-xdebug';
 import { renameSiteHandler } from './rename-site';
 import { importSiteHandler } from './import-site';
 import { listBlueprintsHandler } from './list-blueprints';
-import { saveBlueprintHandler } from './save-blueprint';
+// saveBlueprintHandler removed — unreliable in MCP context (worker process, silent failures)
+// Use local_export_site instead for programmatic backups
 import { getSiteLogsHandler } from './get-site-logs';
 import { operationStatusHandler } from './operation-status';
 
@@ -38,7 +39,6 @@ export function registerSiteManagementTools(registry: ToolRegistry): void {
   registry.register(renameSiteHandler);
   registry.register(importSiteHandler);
   registry.register(listBlueprintsHandler);
-  registry.register(saveBlueprintHandler);
   registry.register(getSiteLogsHandler);
   registry.register(operationStatusHandler);
 }
