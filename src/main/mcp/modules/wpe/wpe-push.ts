@@ -125,8 +125,9 @@ export const wpePushHandler: McpToolHandler = {
           site: site.name,
           install: installName,
           include_database: args.include_database === true,
-          message: `Push started from "${site.name}" to "${installName}".`,
-          next_steps: 'Poll local_operation_status every 15-30s to track progress. Operation typically takes 2-5 minutes.',
+          message: `Push started. This takes 2–10 minutes for files + database.`,
+          IMPORTANT: 'Do NOT proceed with backups, WP-CLI commands, or any follow-up steps until the push is confirmed complete.',
+          how_to_check: `Call local_get_site with site="${site.name}" every 30 seconds. Status will be "pushing" while in progress and return to "running" when complete. Only proceed once status is "running".`,
         }, null, 2),
       );
     } catch (err: any) {
