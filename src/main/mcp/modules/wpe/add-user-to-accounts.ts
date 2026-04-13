@@ -62,10 +62,8 @@ export const addUserToAccountsHandler: McpToolHandler = {
           await services.localServices!.capiDirect(
             `/accounts/${accountId}/account_users`,
             'POST',
-            {
-              user: { email, first_name: firstName, last_name: lastName },
-              roles: [role],
-            },
+            // Swagger: roles is a string inside user object; account_id required in user
+            { user: { account_id: accountId, email, first_name: firstName, last_name: lastName, roles: role } },
           );
           return { accountId, success: true, message: null };
         } catch (err: any) {

@@ -31,7 +31,7 @@ export const updateAccountUserHandler: McpToolHandler = {
     try {
       const accountId = args.account_id as string;
       const userId = args.user_id as string;
-      const roles = args.roles as string[];
+      const roles = args.roles as string; // Swagger: roles is a string, not array
 
       await services.localServices!.capiDirect(
         `/accounts/${accountId}/account_users/${userId}`,
@@ -41,7 +41,7 @@ export const updateAccountUserHandler: McpToolHandler = {
 
       return ok(
         `## Role Updated Successfully\n` +
-        `User \`${userId}\` now has role(s): ${roles.join(', ')}.`,
+        `User \`${userId}\` now has role: ${roles}.`,
       );
     } catch (err: any) {
       return capiError(err);

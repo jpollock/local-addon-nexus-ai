@@ -13,11 +13,11 @@ export const promoteEnvironmentHandler: McpToolHandler = {
       properties: {
         source_install_id: {
           type: 'string',
-          description: 'ID of the install to copy from (source)',
+          description: 'ID of the install to copy from (source). Maps to source_environment_id in CAPI.',
         },
         destination_install_id: {
           type: 'string',
-          description: 'ID of the install to copy to (destination)',
+          description: 'ID of the install to copy to (destination). Maps to destination_environment_id in CAPI.',
         },
         include_database: {
           type: 'boolean',
@@ -124,10 +124,12 @@ export const promoteEnvironmentHandler: McpToolHandler = {
 
     // Proceed with the copy
     try {
+      // Swagger: source_environment_id / destination_environment_id (not install_id)
+      // include_db goes inside custom_options, not at top level
       const result = await services.localServices!.capiDirect('/install_copy', 'POST', {
-        source_install_id: sourceId,
-        destination_install_id: destId,
-        include_database: includeDatabase,
+        source_environment_id: sourceId,
+        destination_environment_id: destId,
+        custom_options: { include_files: true, include_db: includeDatabase },
       }) as any;
 
       const lines = [
