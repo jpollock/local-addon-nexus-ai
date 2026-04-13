@@ -49,8 +49,8 @@ export const createInstallHandler: McpToolHandler = {
         return error(`Install name "${name}" is too long (${name.length} chars). WPE limits install names to ~20 characters.`);
       }
 
-      // CAPI body: site_id, name, environment, account_id (all in body for installs)
-      const install = await services.localServices!.capiDirect('/installs', 'POST', { site: siteId, name, environment, account_id: accountId }) as any;
+      // Swagger: field names are site_id and account_id (not site/account)
+      const install = await services.localServices!.capiDirect('/installs', 'POST', { name, account_id: accountId, site_id: siteId, environment }) as any;
 
       const domain = install?.primaryDomain ?? install?.cname ?? `${install?.name ?? name}.wpengine.com`;
 
