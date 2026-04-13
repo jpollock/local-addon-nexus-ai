@@ -283,17 +283,25 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         throw new Error('Export service not available');
       }
 
+      // Expand ~ to home directory (Node does not do this automatically)
+      const expandedPath = outputPath.startsWith('~')
+        ? path.join(os.homedir(), outputPath.slice(1))
+        : outputPath;
+
+      // Create the output directory if it doesn't exist
+      try {
+        fs.mkdirSync(expandedPath, { recursive: true });
+      } catch { /* ignore if already exists */ }
+
       // filter='' causes picomatch to fail on empty string pattern.
       // Pass a valid but no-op pattern so ignoredPatterns.split(',') produces
       // ['__noop__'] — a glob that matches nothing in a WP install.
 
       // ExportSiteService.exportSite() returns Promise<void>, not the path.
-      // The export path is constructed as: outputPath.replace('.zip', '') + '.zip'
-      // (see Exporter.ts line 46). Construct it here and return after export completes.
-      const exportPath = outputPath.replace(/\.zip$/i, '') + '.zip';
+      const exportPath = expandedPath.replace(/\.zip$/i, '') + '.zip';
 
       // Fire the export (this is async and uses a worker process)
-      await exportService.exportSite({ site, outputPath, filter: '__noop__' });
+      await exportService.exportSite({ site, outputPath: expandedPath, filter: '__noop__' });
 
       // Return the path where the export will be saved
       return exportPath;

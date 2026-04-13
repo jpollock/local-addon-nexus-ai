@@ -26,7 +26,9 @@ export const exportSiteHandler: McpToolHandler = {
     const site = resolveSite(args.site as string, services.siteData);
     if (!site) return error(`Site "${args.site}" not found.`);
 
-    const outputDir = (args.output_path as string) || path.join(os.homedir(), 'Downloads');
+    const rawDir = (args.output_path as string) || path.join(os.homedir(), 'Downloads');
+    // Expand ~ — agents often pass ~/Desktop/... which Node won't expand automatically
+    const outputDir = rawDir.startsWith('~') ? path.join(os.homedir(), rawDir.slice(1)) : rawDir;
     const outputFile = path.join(outputDir, `${site.name}.zip`);
 
     // Register with tracker so local_operation_status can report progress
