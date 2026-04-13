@@ -288,9 +288,10 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         ? path.join(os.homedir(), outputPath.slice(1))
         : outputPath;
 
-      // Create the output directory if it doesn't exist
+      // Create the parent directory if it doesn't exist
+      // Use path.dirname() — expandedPath is the full file path, not a directory
       try {
-        fs.mkdirSync(expandedPath, { recursive: true });
+        fs.mkdirSync(path.dirname(expandedPath), { recursive: true });
       } catch { /* ignore if already exists */ }
 
       // filter='' causes picomatch to fail on empty string pattern.
