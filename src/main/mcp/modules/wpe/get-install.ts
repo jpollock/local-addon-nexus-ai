@@ -26,14 +26,25 @@ export const getInstallHandler: McpToolHandler = {
       const status = install?.status ?? 'unknown';
       const isReady = status === 'active';
 
+      // Check if install was recently created (within last 5 minutes) — SSH may not be ready yet
+      const createdAt = install.created_at ? new Date(install.created_at).getTime() : 0;
+      const ageMinutes = createdAt ? (Date.now() - createdAt) / 60000 : 999;
+      const sshReady = isReady && ageMinutes >= 3;
+
       return ok(
         `## Install: ${install.name}\n\n` +
-        `**Status:** ${status}${isReady ? ' ✅ Ready' : ' ⏳ Still provisioning — wait and poll again'}\n` +
+        `**Status:** ${status}${isReady ? ' ✅' : ' ⏳ Still provisioning — wait and poll again'}\n` +
         `**ID:** \`${install.id}\`\n` +
         `**Environment:** ${install.environment ?? 'unknown'}\n` +
         `**Domain:** ${install.primaryDomain ?? install.cname ?? 'pending'}\n` +
         `**PHP:** ${install.phpVersion ?? 'unknown'}\n\n` +
-        (isReady ? 'Safe to push, link, and run WP-CLI.' : 'Do NOT push or link until status is "active".') +
+        (!isReady
+          ? '⏳ Do NOT push or link until status is "active".'
+          : sshReady
+            ? '✅ Install is active and SSH-ready. Safe to push.'
+            : `⚠️ Status is active but install is only ${Math.round(ageMinutes)} minutes old. ` +
+              `Wait until at least 3 minutes after creation before pushing — ` +
+              `SSH/rsync infrastructure needs additional warmup time after CAPI shows active.`) +
         `\n\n<details>\n${JSON.stringify(install, null, 2)}\n</details>`,
       );
     } catch (err: any) {

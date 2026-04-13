@@ -62,10 +62,12 @@ export const createInstallHandler: McpToolHandler = {
         `**Environment:** ${install?.environment ?? environment}\n` +
         `**Domain:** ${domain}\n\n` +
         (status !== 'active'
-          ? `⏳ **The install is provisioning and NOT ready yet.**\n\n` +
-            `Call \`wpe_get_install\` with \`install_id: "${install?.id}"\` every 30–60 seconds until \`status\` returns \`"active"\`. ` +
-            `Do NOT attempt to push, link, or use SSH until the install is active. Provisioning typically takes 3–5 minutes.`
-          : `✅ Install is active and ready to use.`),
+          ? `⏳ **The install is provisioning — NOT ready.**\n\n` +
+            `Poll \`wpe_get_install\` with \`install_id: "${install?.id}"\` every 60 seconds until \`status\` returns \`"active"\`.\n\n` +
+            `⚠️ CRITICAL: Even after status shows "active", wait an additional 3 minutes before attempting any push or SSH. ` +
+            `WPE's CAPI marks installs active before SSH/rsync infrastructure is fully ready. ` +
+            `Attempting to push immediately after "active" will fail with rsync connection errors.`
+          : `✅ Install is active. Wait 3 more minutes before pushing to allow SSH infrastructure to fully initialize.`),
       );
     } catch (err: any) {
       return capiError(err);
