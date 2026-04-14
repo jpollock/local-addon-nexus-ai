@@ -17,7 +17,7 @@ import { getSiteIdFromToken } from './token-manager';
 import { translateToAnthropic, translateFromAnthropic } from './format-translator';
 import { callAnthropicAPI, calculateAnthropicCost } from './anthropic-client';
 import { callOpenAIAPI, calculateOpenAICost } from './openai-client';
-import { callGoogleAPI, calculateGoogleCost } from './google-client';
+import { callGoogleAPI, calculateGoogleCost, callGoogleImageAPI, calculateGoogleImageCost, GOOGLE_IMAGE_MODELS } from './google-client';
 import { callImageAPI, calculateImageCost, IMAGE_MODELS, ImageGenerationRequest } from './image-client';
 import { checkRateLimit } from './rate-limiter';
 import {
@@ -102,6 +102,11 @@ const CATALOG = {
     { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite', tier: 'fast'     },
     { id: 'gemini-1.5-pro',        label: 'Gemini 1.5 Pro',        tier: 'powerful' },
     { id: 'gemini-1.5-flash',      label: 'Gemini 1.5 Flash',      tier: 'balanced' },
+  ],
+  google_image: [
+    { id: 'imagen-4.0-generate-001',       label: 'Imagen 4',       tier: 'image' },
+    { id: 'imagen-4.0-ultra-generate-001', label: 'Imagen 4 Ultra', tier: 'image' },
+    { id: 'imagen-4.0-fast-generate-001',  label: 'Imagen 4 Fast',  tier: 'image' },
   ],
 };
 
@@ -269,17 +274,16 @@ export class AIGatewayRoutes {
       return;
     }
 
-    if (!IMAGE_MODELS.has(imageRequest.model)) {
-      this.sendError(res, 400, `Unsupported image model: ${imageRequest.model}. Supported: ${[...IMAGE_MODELS].join(', ')}`);
+    const isGoogleImage = GOOGLE_IMAGE_MODELS.has(imageRequest.model);
+    const isOpenAIImage = IMAGE_MODELS.has(imageRequest.model);
+
+    if (!isGoogleImage && !isOpenAIImage) {
+      const all = [...IMAGE_MODELS, ...GOOGLE_IMAGE_MODELS].join(', ');
+      this.sendError(res, 400, `Unsupported image model: ${imageRequest.model}. Supported: ${all}`);
       return;
     }
 
     const apiKeys = (this.storage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-    const openaiKey = apiKeys.openai;
-    if (!openaiKey) {
-      this.sendError(res, 503, 'OpenAI API key not configured in Local (required for image generation)');
-      return;
-    }
 
     this.logger.info(
       `[AIGateway] Image request from site ${siteId}: model=${imageRequest.model}, prompt="${imageRequest.prompt.substring(0, 60)}..."`,
@@ -287,16 +291,39 @@ export class AIGatewayRoutes {
 
     const startTime = Date.now();
     let imageResponse;
-    try {
-      imageResponse = await callImageAPI(imageRequest, { apiKey: openaiKey, logger: this.logger });
-    } catch (err) {
-      this.logger.error('[AIGateway] Image API call failed:', err);
-      this.sendError(res, 502, `Image API error: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      return;
+    let costUsd: number;
+
+    if (isGoogleImage) {
+      const googleKey = apiKeys.google;
+      if (!googleKey) {
+        this.sendError(res, 503, 'Google API key not configured in Local (required for Imagen)');
+        return;
+      }
+      try {
+        imageResponse = await callGoogleImageAPI(imageRequest, { apiKey: googleKey, logger: this.logger });
+      } catch (err) {
+        this.logger.error('[AIGateway] Imagen API call failed:', err);
+        this.sendError(res, 502, `Imagen API error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        return;
+      }
+      costUsd = calculateGoogleImageCost(imageRequest.model, imageRequest.n ?? 1);
+    } else {
+      const openaiKey = apiKeys.openai;
+      if (!openaiKey) {
+        this.sendError(res, 503, 'OpenAI API key not configured in Local (required for image generation)');
+        return;
+      }
+      try {
+        imageResponse = await callImageAPI(imageRequest, { apiKey: openaiKey, logger: this.logger });
+      } catch (err) {
+        this.logger.error('[AIGateway] Image API call failed:', err);
+        this.sendError(res, 502, `Image API error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        return;
+      }
+      costUsd = calculateImageCost(imageRequest.model, imageRequest.n ?? 1, imageRequest.size ?? '1024x1024');
     }
 
     const durationMs = Date.now() - startTime;
-    const costUsd = calculateImageCost(imageRequest.model, imageRequest.n ?? 1, imageRequest.size ?? '1024x1024');
 
     this.logger.info(
       `[AIGateway] Image success: site=${siteId}, model=${imageRequest.model}, n=${imageRequest.n ?? 1}, cost=$${costUsd.toFixed(4)}, duration=${durationMs}ms`,
@@ -344,7 +371,7 @@ export class AIGatewayRoutes {
       }
     }
     if (apiKeys.google) {
-      for (const m of CATALOG.google) {
+      for (const m of [...CATALOG.google, ...CATALOG.google_image]) {
         models.push({ id: m.id, object: 'model', created: ts, owned_by: 'google' });
       }
     }
@@ -353,7 +380,7 @@ export class AIGatewayRoutes {
     if (models.length === 0) {
       for (const m of CATALOG.anthropic) models.push({ id: m.id, object: 'model', created: ts, owned_by: 'anthropic' });
       for (const m of CATALOG.openai) models.push({ id: m.id, object: 'model', created: ts, owned_by: 'openai' });
-      for (const m of CATALOG.google) models.push({ id: m.id, object: 'model', created: ts, owned_by: 'google' });
+      for (const m of [...CATALOG.google, ...CATALOG.google_image]) models.push({ id: m.id, object: 'model', created: ts, owned_by: 'google' });
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
