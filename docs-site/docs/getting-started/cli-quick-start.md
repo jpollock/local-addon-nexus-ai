@@ -20,7 +20,7 @@ Before you begin, make sure you have:
     The CLI handles everything automatically:
 
     - ✅ Auto-starts Local if not running
-    - ✅ Auto-downloads platform-specific addon from GitHub Releases (~300 MB)
+    - ✅ Auto-downloads platform-specific addon from releases.elasticapi.io (~300 MB)
     - ✅ Auto-installs and activates addon
     - ✅ No manual setup required!
 
@@ -34,7 +34,7 @@ Install Nexus AI globally via npm:
 npm install -g @local-labs-jpollock/local-addon-nexus-ai
 ```
 
-This installs the `nexus` CLI command. The addon is auto-downloaded from GitHub Releases on first run.
+This installs the `nexus` CLI command. The addon is auto-downloaded from releases.elasticapi.io on first run.
 
 !!! info "Auto-Install on First Run"
     When you run your first command, the CLI:

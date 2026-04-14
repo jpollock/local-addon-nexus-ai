@@ -32,7 +32,7 @@ ls -la /Applications/Local.app  # macOS
 
     - Detects if Local is installed (prompts to download if not)
     - Starts Local if it's not running
-    - Downloads the addon for your platform from GitHub Releases (~300 MB)
+    - Downloads the addon for your platform from releases.elasticapi.io (~300 MB)
     - Extracts and installs the Nexus AI addon
     - Activates the addon
     - Waits for GraphQL server to be ready
@@ -80,7 +80,7 @@ Local Sites (0 running, 0 halted):
 
 1. ✅ Detected missing addon
 2. ✅ Prompted for confirmation
-3. ✅ Downloaded platform-specific tarball from GitHub Releases (~300 MB)
+3. ✅ Downloaded platform-specific tarball from releases.elasticapi.io (~300 MB)
 4. ✅ Extracted to Local's addon directory
 5. ✅ Activated the addon
 6. ✅ Prompted you to restart Local
