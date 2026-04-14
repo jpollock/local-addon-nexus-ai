@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Manage WP Engine sites via CLI">
+        <meta name="description" content="Manage WP Engine accounts, installs, domains, SSL, backups, and syncing via the Nexus CLI">
       
       
         <meta name="author" content="Jeremy Pollock">
@@ -29,7 +29,7 @@
     
     
       
-        <title>WPE Sites CLI - Nexus AI Documentation</title>
+        <title>WP Engine Site Management - Nexus AI Documentation</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#wpe-sites-cli" class="md-skip">
+        <a href="#wp-engine-site-management" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              WPE Sites CLI
+              WP Engine Site Management
             
           </span>
         </div>
@@ -1077,10 +1077,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Prerequisites
       
     </span>
   </a>
@@ -1088,10 +1088,754 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#sites-vs-installs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        Sites vs. Installs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accounts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Accounts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-accounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe accounts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-account-accountid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe account &lt;accountId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-limits-accountid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe limits &lt;accountId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-users-accountid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe users &lt;accountId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-user-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe user-audit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-user-add-accountid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe user-add &lt;accountId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-user-update-accountid-userid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe user-update &lt;accountId&gt; &lt;userId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-user-remove-accountid-userid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe user-remove &lt;accountId&gt; &lt;userId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sites
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-sites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe sites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-site-siteid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe site &lt;siteId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-create-site" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe create-site
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Installs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-installs-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe installs [account]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-install-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe install &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-create-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe create-install
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-update-install-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe update-install &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-delete-install-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe delete-install &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage Metrics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage Metrics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-usage-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe usage &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-account-usage-accountid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe account-usage &lt;accountId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-portfolio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe portfolio
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backups
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backups">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-backup-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe backup &lt;target&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-backup-status-installid-backupid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe backup-status &lt;installId&gt; &lt;backupId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-backup-verify-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe backup-verify &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#domains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Domains
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Domains">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-domains-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe domains &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-domain-add-installid-domain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe domain-add &lt;installId&gt; &lt;domain&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-domain-remove-installid-domainid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe domain-remove &lt;installId&gt; &lt;domainId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-domain-check-installid-domainid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe domain-check &lt;installId&gt; &lt;domainId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ssl-certificates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SSL Certificates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SSL Certificates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-ssl-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe ssl &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-ssl-request-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe ssl-request &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ssh-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SSH Keys
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SSH Keys">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-ssh-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe ssh-keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-ssh-key-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe ssh-key-add
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-ssh-key-remove-keyid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe ssh-key-remove &lt;keyId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pull-and-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pull and Push
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pull and Push">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-sync-pull-localsitelocal-from-wpetarget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus sync pull &lt;localSite&gt;@local --from &lt;wpeTarget&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-sync-push-localsitelocal-to-wpetarget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus sync push &lt;localSite&gt;@local --to &lt;wpeTarget&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-sync-history-localsitelocal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus sync history &lt;localSite&gt;@local
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#promote" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Promote
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Promote">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-promote-sourceinstallid-destinstallid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe promote &lt;sourceInstallId&gt; &lt;destInstallId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Diagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-diagnose-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe diagnose &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-go-live-check-installid-domain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe go-live-check &lt;installId&gt; &lt;domain&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-fleet-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe fleet-health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-changes-localsitelocal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe changes &lt;localSite&gt;@local
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linking-sites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linking Sites
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Linking Sites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-link-localsitelocal-wpetarget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe link &lt;localSite&gt;@local &lt;wpeTarget&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cache">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-cache-target-purge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe cache &lt;target&gt; --purge
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Workflows
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Workflows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#create-a-backup-before-deploying" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Create a backup before deploying
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pull-production-to-local-for-debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pull production to local for debugging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add-a-domain-and-provision-ssl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add a domain and provision SSL
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#promote-staging-to-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Promote staging to production
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
       
     </span>
   </a>
@@ -2867,10 +3611,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Prerequisites
       
     </span>
   </a>
@@ -2878,10 +3622,754 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#sites-vs-installs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        Sites vs. Installs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accounts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Accounts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-accounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe accounts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-account-accountid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe account &lt;accountId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-limits-accountid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe limits &lt;accountId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-users-accountid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe users &lt;accountId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-user-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe user-audit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-user-add-accountid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe user-add &lt;accountId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-user-update-accountid-userid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe user-update &lt;accountId&gt; &lt;userId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-user-remove-accountid-userid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe user-remove &lt;accountId&gt; &lt;userId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sites
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-sites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe sites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-site-siteid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe site &lt;siteId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-create-site" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe create-site
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Installs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-installs-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe installs [account]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-install-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe install &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-create-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe create-install
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-update-install-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe update-install &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-delete-install-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe delete-install &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage Metrics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage Metrics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-usage-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe usage &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-account-usage-accountid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe account-usage &lt;accountId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-portfolio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe portfolio
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backups
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backups">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-backup-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe backup &lt;target&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-backup-status-installid-backupid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe backup-status &lt;installId&gt; &lt;backupId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-backup-verify-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe backup-verify &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#domains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Domains
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Domains">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-domains-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe domains &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-domain-add-installid-domain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe domain-add &lt;installId&gt; &lt;domain&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-domain-remove-installid-domainid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe domain-remove &lt;installId&gt; &lt;domainId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-domain-check-installid-domainid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe domain-check &lt;installId&gt; &lt;domainId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ssl-certificates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SSL Certificates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SSL Certificates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-ssl-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe ssl &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-ssl-request-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe ssl-request &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ssh-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SSH Keys
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SSH Keys">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-ssh-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe ssh-keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-ssh-key-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe ssh-key-add
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-ssh-key-remove-keyid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe ssh-key-remove &lt;keyId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pull-and-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pull and Push
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pull and Push">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-sync-pull-localsitelocal-from-wpetarget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus sync pull &lt;localSite&gt;@local --from &lt;wpeTarget&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-sync-push-localsitelocal-to-wpetarget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus sync push &lt;localSite&gt;@local --to &lt;wpeTarget&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-sync-history-localsitelocal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus sync history &lt;localSite&gt;@local
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#promote" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Promote
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Promote">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-promote-sourceinstallid-destinstallid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe promote &lt;sourceInstallId&gt; &lt;destInstallId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Diagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-diagnose-installid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe diagnose &lt;installId&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-go-live-check-installid-domain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe go-live-check &lt;installId&gt; &lt;domain&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-fleet-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe fleet-health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-changes-localsitelocal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe changes &lt;localSite&gt;@local
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linking-sites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linking Sites
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Linking Sites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-link-localsitelocal-wpetarget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe link &lt;localSite&gt;@local &lt;wpeTarget&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Cache">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nexus-wpe-cache-target-purge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wpe cache &lt;target&gt; --purge
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Workflows
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Workflows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#create-a-backup-before-deploying" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Create a backup before deploying
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pull-production-to-local-for-debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pull production to local for debugging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add-a-domain-and-provision-ssl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add a domain and provision SSL
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#promote-staging-to-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Promote staging to production
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
       
     </span>
   </a>
@@ -2919,19 +4407,559 @@
   
 
 
-<h1 id="wpe-sites-cli">WPE Sites CLI<a class="headerlink" href="#wpe-sites-cli" title="Permanent link">&para;</a></h1>
-<div class="admonition warning">
-<p class="admonition-title">Work in Progress</p>
-<p>This page is under construction. Check back soon for complete documentation.</p>
-</div>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>TODO: Add overview content</p>
-<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<p>TODO: Add quick start guide</p>
+<h1 id="wp-engine-site-management">WP Engine Site Management<a class="headerlink" href="#wp-engine-site-management" title="Permanent link">&para;</a></h1>
+<p>Manage WP Engine hosting from the CLI: list installs, create backups, manage domains and SSL, sync content to and from local sites, and promote between environments.</p>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Authenticated with WP Engine: <code>nexus wpe login</code></li>
+<li>API credentials stored for backup creation: <code>nexus wpe set-credentials</code></li>
+</ul>
+<p>See <a href="../authentication/">Authentication</a> for setup details.</p>
+<hr />
+<h2 id="sites-vs-installs">Sites vs. Installs<a class="headerlink" href="#sites-vs-installs" title="Permanent link">&para;</a></h2>
+<p>WP Engine uses two levels of organization:</p>
+<ul>
+<li><strong>Site</strong> — a logical grouping (e.g., "Acme Corp"). One site can have multiple installs.</li>
+<li><strong>Install</strong> — a running WordPress environment. Each install has one environment type: <code>production</code>, <code>staging</code>, or <code>development</code>.</li>
+</ul>
+<p>Most CLI commands operate on installs, not sites. When a command asks for an <code>installId</code>, use the install name (e.g., <code>acmecorp</code>, <code>acmecorp-staging</code>), not a UUID.</p>
+<p><strong>Target syntax for WPE installs:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>wpe:account/install@environment
+</code></pre></div>
+<p>Example: <code>wpe:acmeco/myblog@production</code></p>
+<hr />
+<h2 id="accounts">Accounts<a class="headerlink" href="#accounts" title="Permanent link">&para;</a></h2>
+<h3 id="nexus-wpe-accounts"><code>nexus wpe accounts</code><a class="headerlink" href="#nexus-wpe-accounts" title="Permanent link">&para;</a></h3>
+<p>List all WP Engine accounts you have access to.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>accounts
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>WP Engine Accounts:
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  Acme Agency
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    ID: a1b2c3d4-e5f6-...
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  Personal
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    ID: f9e8d7c6-b5a4-...
+</code></pre></div>
+<hr />
+<h3 id="nexus-wpe-account-accountid"><code>nexus wpe account &lt;accountId&gt;</code><a class="headerlink" href="#nexus-wpe-account-accountid" title="Permanent link">&para;</a></h3>
+<p>Get details about a specific account.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>account<span class="w"> </span>a1b2c3d4-e5f6-...
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<hr />
+<h3 id="nexus-wpe-limits-accountid"><code>nexus wpe limits &lt;accountId&gt;</code><a class="headerlink" href="#nexus-wpe-limits-accountid" title="Permanent link">&para;</a></h3>
+<p>Show plan limits for an account (bandwidth, storage, installs).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>limits<span class="w"> </span>a1b2c3d4-e5f6-...
+</code></pre></div>
+<hr />
+<h3 id="nexus-wpe-users-accountid"><code>nexus wpe users &lt;accountId&gt;</code><a class="headerlink" href="#nexus-wpe-users-accountid" title="Permanent link">&para;</a></h3>
+<p>List all users on an account.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>users<span class="w"> </span>a1b2c3d4-e5f6-...
+</code></pre></div>
+<hr />
+<h3 id="nexus-wpe-user-audit"><code>nexus wpe user-audit</code><a class="headerlink" href="#nexus-wpe-user-audit" title="Permanent link">&para;</a></h3>
+<p>Audit users across all accounts (or a specific account).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>user-audit
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>user-audit<span class="w"> </span>--account<span class="w"> </span>a1b2c3d4-e5f6-...
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--account &lt;accountId&gt;</code>, <code>--json</code></p>
+<hr />
+<h3 id="nexus-wpe-user-add-accountid"><code>nexus wpe user-add &lt;accountId&gt;</code><a class="headerlink" href="#nexus-wpe-user-add-accountid" title="Permanent link">&para;</a></h3>
+<p>Add a user to an account.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>user-add<span class="w"> </span>a1b2c3d4-e5f6-...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--email<span class="w"> </span>jane@example.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--first<span class="w"> </span>Jane<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--last<span class="w"> </span>Doe<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span>--role<span class="w"> </span>owner
+</code></pre></div>
+<p>All four flags (<code>--email</code>, <code>--first</code>, <code>--last</code>, <code>--role</code>) are required.</p>
+<hr />
+<h3 id="nexus-wpe-user-update-accountid-userid"><code>nexus wpe user-update &lt;accountId&gt; &lt;userId&gt;</code><a class="headerlink" href="#nexus-wpe-user-update-accountid-userid" title="Permanent link">&para;</a></h3>
+<p>Change a user's role.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>user-update<span class="w"> </span>a1b2c3d4<span class="w"> </span>u9f8e7d6<span class="w"> </span>--role<span class="w"> </span>billing
+</code></pre></div>
+<p><strong>Required flag:</strong> <code>--role &lt;role&gt;</code></p>
+<hr />
+<h3 id="nexus-wpe-user-remove-accountid-userid"><code>nexus wpe user-remove &lt;accountId&gt; &lt;userId&gt;</code><a class="headerlink" href="#nexus-wpe-user-remove-accountid-userid" title="Permanent link">&para;</a></h3>
+<p>Remove a user from an account. Requires <code>--confirm</code> to proceed.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>user-remove<span class="w"> </span>a1b2c3d4<span class="w"> </span>u9f8e7d6<span class="w"> </span>--confirm
+</code></pre></div>
+<hr />
+<h2 id="sites">Sites<a class="headerlink" href="#sites" title="Permanent link">&para;</a></h2>
+<h3 id="nexus-wpe-sites"><code>nexus wpe sites</code><a class="headerlink" href="#nexus-wpe-sites" title="Permanent link">&para;</a></h3>
+<p>List all WP Engine sites (the top-level grouping objects, not installs).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>sites
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>sites<span class="w"> </span>--account<span class="w"> </span>a1b2c3d4-e5f6-...
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--account &lt;accountId&gt;</code>, <code>--json</code></p>
+<hr />
+<h3 id="nexus-wpe-site-siteid"><code>nexus wpe site &lt;siteId&gt;</code><a class="headerlink" href="#nexus-wpe-site-siteid" title="Permanent link">&para;</a></h3>
+<p>Get details about a specific WP Engine site.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>site<span class="w"> </span>s3t4u5v6-w7x8-...
+</code></pre></div>
+<hr />
+<h3 id="nexus-wpe-create-site"><code>nexus wpe create-site</code><a class="headerlink" href="#nexus-wpe-create-site" title="Permanent link">&para;</a></h3>
+<p>Create a new WP Engine site (the logical grouping, not an install).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>create-site<span class="w"> </span>--name<span class="w"> </span><span class="s2">&quot;Acme Blog&quot;</span><span class="w"> </span>--account<span class="w"> </span>a1b2c3d4-e5f6-...
+</code></pre></div>
+<p>Both <code>--name</code> and <code>--account</code> are required.</p>
+<hr />
+<h2 id="installs">Installs<a class="headerlink" href="#installs" title="Permanent link">&para;</a></h2>
+<h3 id="nexus-wpe-installs-account"><code>nexus wpe installs [account]</code><a class="headerlink" href="#nexus-wpe-installs-account" title="Permanent link">&para;</a></h3>
+<p>List installs, optionally filtered by account name.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># All installs across all accounts</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>installs
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Installs for a specific account</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>installs<span class="w"> </span>acmeco
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>WP Engine Installs:
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>  myblog (production)
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    Account: Acme Agency
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    Domain:  myblog.wpengine.com
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    Target:  wpe:acmeco/myblog@production
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>  myblog-staging (staging)
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>    Account: Acme Agency
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>    Domain:  myblogstaging.wpengine.com
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>    Target:  wpe:acmeco/myblog-staging@staging
+</code></pre></div>
+<p>Use the <code>Target</code> value when other commands ask for a WPE target string.</p>
+<hr />
+<h3 id="nexus-wpe-install-installid"><code>nexus wpe install &lt;installId&gt;</code><a class="headerlink" href="#nexus-wpe-install-installid" title="Permanent link">&para;</a></h3>
+<p>Get details about a specific install.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>install<span class="w"> </span>myblog
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>myblog
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>────────────────────────────────────────
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>Environment:  production
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>Account:      Acme Agency
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>Domain:       myblog.wpengine.com
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>WordPress:    6.5.2
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>PHP:          8.2
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>Target:       wpe:acmeco/myblog@production
+</code></pre></div>
+<hr />
+<h3 id="nexus-wpe-create-install"><code>nexus wpe create-install</code><a class="headerlink" href="#nexus-wpe-create-install" title="Permanent link">&para;</a></h3>
+<p>Create a new install under an existing WP Engine site.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>create-install<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span>--site<span class="w"> </span>s3t4u5v6-...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span>--name<span class="w"> </span>myblog-dev<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span>--env<span class="w"> </span>development<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span>--account<span class="w"> </span>a1b2c3d4-...
+</code></pre></div>
+<p>All four flags are required. Valid environments: <code>production</code>, <code>staging</code>, <code>development</code>.</p>
+<hr />
+<h3 id="nexus-wpe-update-install-installid"><code>nexus wpe update-install &lt;installId&gt;</code><a class="headerlink" href="#nexus-wpe-update-install-installid" title="Permanent link">&para;</a></h3>
+<p>Update install settings such as PHP version.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>update-install<span class="w"> </span>myblog<span class="w"> </span>--php<span class="w"> </span><span class="m">8</span>.3
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>update-install<span class="w"> </span>myblog<span class="w"> </span>--env<span class="w"> </span>staging
+</code></pre></div>
+<p>At least one of <code>--php</code> or <code>--env</code> is required.</p>
+<hr />
+<h3 id="nexus-wpe-delete-install-installid"><code>nexus wpe delete-install &lt;installId&gt;</code><a class="headerlink" href="#nexus-wpe-delete-install-installid" title="Permanent link">&para;</a></h3>
+<p>Delete a WP Engine install. Requires the install name as confirmation.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>delete-install<span class="w"> </span>myblog-dev<span class="w"> </span>--confirm-name<span class="w"> </span>myblog-dev
+</code></pre></div>
+<p><code>--confirm-name</code> must match the install's name exactly. This is permanent.</p>
+<hr />
+<h2 id="usage-metrics">Usage Metrics<a class="headerlink" href="#usage-metrics" title="Permanent link">&para;</a></h2>
+<h3 id="nexus-wpe-usage-installid"><code>nexus wpe usage &lt;installId&gt;</code><a class="headerlink" href="#nexus-wpe-usage-installid" title="Permanent link">&para;</a></h3>
+<p>Show bandwidth, storage, and visitor counts for the current month.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>usage<span class="w"> </span>myblog
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>usage<span class="w"> </span>myblog<span class="w"> </span>--month-offset<span class="w"> </span><span class="m">1</span><span class="w">  </span><span class="c1"># last month</span>
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--month-offset &lt;n&gt;</code> (0 = current, 1 = last), <code>--json</code></p>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>Install: myblog — April 2026
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>──────────────────────────────────────────
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>  Visits (total):    48,231
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>  Billable visits:   46,890
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>  Bandwidth:         12.45 GB
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>  File storage:      2.34 GB
+<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>  DB storage:        456.78 MB
+<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>──────────────────────────────────────────
+<a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>  Period:  2026-04-01 → 2026-04-13
+</code></pre></div>
+<hr />
+<h3 id="nexus-wpe-account-usage-accountid"><code>nexus wpe account-usage &lt;accountId&gt;</code><a class="headerlink" href="#nexus-wpe-account-usage-accountid" title="Permanent link">&para;</a></h3>
+<p>Show rolled-up usage for all installs under an account.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>account-usage<span class="w"> </span>a1b2c3d4-e5f6-...
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>account-usage<span class="w"> </span>a1b2c3d4-e5f6-...<span class="w"> </span>--month-offset<span class="w"> </span><span class="m">1</span>
+</code></pre></div>
+<hr />
+<h3 id="nexus-wpe-portfolio"><code>nexus wpe portfolio</code><a class="headerlink" href="#nexus-wpe-portfolio" title="Permanent link">&para;</a></h3>
+<p>Show a high-level overview of all accounts and their combined metrics.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>portfolio
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>portfolio<span class="w"> </span>--month-offset<span class="w"> </span><span class="m">1</span>
+</code></pre></div>
+<hr />
+<h2 id="backups">Backups<a class="headerlink" href="#backups" title="Permanent link">&para;</a></h2>
+<p>Backup creation requires API credentials. See <a href="../authentication/#api-credentials-for-backups">Authentication</a>.</p>
+<h3 id="nexus-wpe-backup-target"><code>nexus wpe backup &lt;target&gt;</code><a class="headerlink" href="#nexus-wpe-backup-target" title="Permanent link">&para;</a></h3>
+<p>Create a backup for an install.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>backup<span class="w"> </span>myblog
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>backup<span class="w"> </span>myblog<span class="w"> </span>--description<span class="w"> </span><span class="s2">&quot;Before plugin update&quot;</span>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>backup<span class="w"> </span>myblog<span class="w"> </span>--emails<span class="w"> </span>ops@example.com,dev@example.com
+</code></pre></div>
+<p><strong>Flags:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--description &lt;text&gt;</code></td>
+<td>Description stored with the backup</td>
+</tr>
+<tr>
+<td><code>--emails &lt;addresses&gt;</code></td>
+<td>Comma-separated notification emails</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>Creating backup for myblog...
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>Backup created
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>  ID: bk-abc123def456
+</code></pre></div>
+<hr />
+<h3 id="nexus-wpe-backup-status-installid-backupid"><code>nexus wpe backup-status &lt;installId&gt; &lt;backupId&gt;</code><a class="headerlink" href="#nexus-wpe-backup-status-installid-backupid" title="Permanent link">&para;</a></h3>
+<p>Check the status of a backup.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>backup-status<span class="w"> </span>myblog<span class="w"> </span>bk-abc123def456
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<hr />
+<h3 id="nexus-wpe-backup-verify-installid"><code>nexus wpe backup-verify &lt;installId&gt;</code><a class="headerlink" href="#nexus-wpe-backup-verify-installid" title="Permanent link">&para;</a></h3>
+<p>Create a backup and poll until it reaches a completed state (up to 6 minutes).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>backup-verify<span class="w"> </span>myblog
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>backup-verify<span class="w"> </span>myblog<span class="w"> </span>--description<span class="w"> </span><span class="s2">&quot;Pre-deploy snapshot&quot;</span>
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--description &lt;text&gt;</code>, <code>--json</code></p>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>Backup complete
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>  ID: bk-xyz789
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>  Created: 2026-04-13T09:15:00Z
+</code></pre></div>
+<hr />
+<h2 id="domains">Domains<a class="headerlink" href="#domains" title="Permanent link">&para;</a></h2>
+<h3 id="nexus-wpe-domains-installid"><code>nexus wpe domains &lt;installId&gt;</code><a class="headerlink" href="#nexus-wpe-domains-installid" title="Permanent link">&para;</a></h3>
+<p>List all domains on an install.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>domains<span class="w"> </span>myblog
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>Domains for install myblog:
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>──────────────────────────────────────────────────────────────────────
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>  Domain                                   Primary    Status
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>──────────────────────────────────────────────────────────────────────
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>  myblog.com                               yes        active
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>  www.myblog.com                           no         active
+<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>  myblog.wpengine.com                      no         active
+</code></pre></div>
+<hr />
+<h3 id="nexus-wpe-domain-add-installid-domain"><code>nexus wpe domain-add &lt;installId&gt; &lt;domain&gt;</code><a class="headerlink" href="#nexus-wpe-domain-add-installid-domain" title="Permanent link">&para;</a></h3>
+<p>Add a domain to an install.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>domain-add<span class="w"> </span>myblog<span class="w"> </span>store.myblog.com
+</code></pre></div>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>Domain added
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>  ID:   dom-abc123
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>  Name: store.myblog.com
+</code></pre></div>
+<hr />
+<h3 id="nexus-wpe-domain-remove-installid-domainid"><code>nexus wpe domain-remove &lt;installId&gt; &lt;domainId&gt;</code><a class="headerlink" href="#nexus-wpe-domain-remove-installid-domainid" title="Permanent link">&para;</a></h3>
+<p>Remove a domain from an install. Requires <code>--confirm</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>domain-remove<span class="w"> </span>myblog<span class="w"> </span>dom-abc123<span class="w"> </span>--confirm
+</code></pre></div>
+<p><code>--confirm</code> is required. This action cannot be undone.</p>
+<hr />
+<h3 id="nexus-wpe-domain-check-installid-domainid"><code>nexus wpe domain-check &lt;installId&gt; &lt;domainId&gt;</code><a class="headerlink" href="#nexus-wpe-domain-check-installid-domainid" title="Permanent link">&para;</a></h3>
+<p>Check DNS propagation status for a domain.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>domain-check<span class="w"> </span>myblog<span class="w"> </span>dom-abc123
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<hr />
+<h2 id="ssl-certificates">SSL Certificates<a class="headerlink" href="#ssl-certificates" title="Permanent link">&para;</a></h2>
+<h3 id="nexus-wpe-ssl-installid"><code>nexus wpe ssl &lt;installId&gt;</code><a class="headerlink" href="#nexus-wpe-ssl-installid" title="Permanent link">&para;</a></h3>
+<p>List SSL certificates on an install.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>ssl<span class="w"> </span>myblog
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<hr />
+<h3 id="nexus-wpe-ssl-request-installid"><code>nexus wpe ssl-request &lt;installId&gt;</code><a class="headerlink" href="#nexus-wpe-ssl-request-installid" title="Permanent link">&para;</a></h3>
+<p>Request SSL provisioning for one or more domain IDs.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>ssl-request<span class="w"> </span>myblog<span class="w"> </span>--domains<span class="w"> </span>dom-abc123,dom-def456
+</code></pre></div>
+<p><code>--domains</code> is required and accepts comma-separated domain IDs (as returned by <code>nexus wpe domains</code>).</p>
+<hr />
+<h2 id="ssh-keys">SSH Keys<a class="headerlink" href="#ssh-keys" title="Permanent link">&para;</a></h2>
+<h3 id="nexus-wpe-ssh-keys"><code>nexus wpe ssh-keys</code><a class="headerlink" href="#nexus-wpe-ssh-keys" title="Permanent link">&para;</a></h3>
+<p>List SSH public keys on your WP Engine account.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>ssh-keys
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<hr />
+<h3 id="nexus-wpe-ssh-key-add"><code>nexus wpe ssh-key-add</code><a class="headerlink" href="#nexus-wpe-ssh-key-add" title="Permanent link">&para;</a></h3>
+<p>Add an SSH public key to your WP Engine account.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>ssh-key-add<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="w">  </span>--label<span class="w"> </span><span class="s2">&quot;My MacBook&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="w">  </span>--key<span class="w"> </span><span class="s2">&quot;ssh-ed25519 AAAAC3Nza...&quot;</span>
+</code></pre></div>
+<p>Both <code>--label</code> and <code>--key</code> are required.</p>
+<hr />
+<h3 id="nexus-wpe-ssh-key-remove-keyid"><code>nexus wpe ssh-key-remove &lt;keyId&gt;</code><a class="headerlink" href="#nexus-wpe-ssh-key-remove-keyid" title="Permanent link">&para;</a></h3>
+<p>Remove an SSH key. Requires <code>--confirm</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>ssh-key-remove<span class="w"> </span>k-abc123<span class="w"> </span>--confirm
+</code></pre></div>
+<hr />
+<h2 id="pull-and-push">Pull and Push<a class="headerlink" href="#pull-and-push" title="Permanent link">&para;</a></h2>
+<p>Pull and push sync content between local sites and WP Engine installs. These operations run in the background inside Local — the CLI queues the operation and displays progress in the Local app.</p>
+<h3 id="nexus-sync-pull-localsitelocal-from-wpetarget"><code>nexus sync pull &lt;localSite&gt;@local --from &lt;wpeTarget&gt;</code><a class="headerlink" href="#nexus-sync-pull-localsitelocal-from-wpetarget" title="Permanent link">&para;</a></h3>
+<p>Pull files (and optionally database) from a WP Engine install to a local site.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="c1"># Pull everything (files only by default)</span>
+<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>nexus<span class="w"> </span>sync<span class="w"> </span>pull<span class="w"> </span>mysite@local<span class="w"> </span>--from<span class="w"> </span>wpe:acmeco/myblog@production
+<a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a>
+<a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a><span class="c1"># Pull database only</span>
+<a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a>nexus<span class="w"> </span>sync<span class="w"> </span>pull<span class="w"> </span>mysite@local<span class="w"> </span>--from<span class="w"> </span>wpe:acmeco/myblog@production<span class="w"> </span>--db-only
+<a id="__codelineno-40-6" name="__codelineno-40-6" href="#__codelineno-40-6"></a>
+<a id="__codelineno-40-7" name="__codelineno-40-7" href="#__codelineno-40-7"></a><span class="c1"># Pull files only (explicit)</span>
+<a id="__codelineno-40-8" name="__codelineno-40-8" href="#__codelineno-40-8"></a>nexus<span class="w"> </span>sync<span class="w"> </span>pull<span class="w"> </span>mysite@local<span class="w"> </span>--from<span class="w"> </span>wpe:acmeco/myblog@production<span class="w"> </span>--files-only
+</code></pre></div>
+<p><strong>Flags:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--from &lt;wpeTarget&gt;</code></td>
+<td>WPE target to pull from (required)</td>
+</tr>
+<tr>
+<td><code>--db-only</code></td>
+<td>Pull database only</td>
+</tr>
+<tr>
+<td><code>--files-only</code></td>
+<td>Pull files only</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>Pulling wpe:acmeco/myblog@production → mysite@local...
+<a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a>
+<a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a>Pull operation queued successfully
+<a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a>
+<a id="__codelineno-41-5" name="__codelineno-41-5" href="#__codelineno-41-5"></a>Check the Local app for pull progress.
+<a id="__codelineno-41-6" name="__codelineno-41-6" href="#__codelineno-41-6"></a>The pull operation runs in the background.
+<a id="__codelineno-41-7" name="__codelineno-41-7" href="#__codelineno-41-7"></a>
+<a id="__codelineno-41-8" name="__codelineno-41-8" href="#__codelineno-41-8"></a>Do NOT run wp-cli commands on mysite until the pull completes.
+<a id="__codelineno-41-9" name="__codelineno-41-9" href="#__codelineno-41-9"></a>Wait for Local to show &quot;Pull complete&quot; before using the site.
+</code></pre></div>
+<p><strong>Important:</strong> Do not run WP-CLI commands on the local site while a pull is in progress.</p>
+<hr />
+<h3 id="nexus-sync-push-localsitelocal-to-wpetarget"><code>nexus sync push &lt;localSite&gt;@local --to &lt;wpeTarget&gt;</code><a class="headerlink" href="#nexus-sync-push-localsitelocal-to-wpetarget" title="Permanent link">&para;</a></h3>
+<p>Push files (and optionally database) from a local site to a WP Engine install.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="c1"># Push files only (default)</span>
+<a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a>nexus<span class="w"> </span>sync<span class="w"> </span>push<span class="w"> </span>mysite@local<span class="w"> </span>--to<span class="w"> </span>wpe:acmeco/myblog@staging
+<a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a>
+<a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="c1"># Push files and database</span>
+<a id="__codelineno-42-5" name="__codelineno-42-5" href="#__codelineno-42-5"></a>nexus<span class="w"> </span>sync<span class="w"> </span>push<span class="w"> </span>mysite@local<span class="w"> </span>--to<span class="w"> </span>wpe:acmeco/myblog@staging<span class="w"> </span>--db
+<a id="__codelineno-42-6" name="__codelineno-42-6" href="#__codelineno-42-6"></a>
+<a id="__codelineno-42-7" name="__codelineno-42-7" href="#__codelineno-42-7"></a><span class="c1"># Push database only</span>
+<a id="__codelineno-42-8" name="__codelineno-42-8" href="#__codelineno-42-8"></a>nexus<span class="w"> </span>sync<span class="w"> </span>push<span class="w"> </span>mysite@local<span class="w"> </span>--to<span class="w"> </span>wpe:acmeco/myblog@staging<span class="w"> </span>--db-only
+<a id="__codelineno-42-9" name="__codelineno-42-9" href="#__codelineno-42-9"></a>
+<a id="__codelineno-42-10" name="__codelineno-42-10" href="#__codelineno-42-10"></a><span class="c1"># Create the install if it doesn&#39;t exist</span>
+<a id="__codelineno-42-11" name="__codelineno-42-11" href="#__codelineno-42-11"></a>nexus<span class="w"> </span>sync<span class="w"> </span>push<span class="w"> </span>mysite@local<span class="w"> </span>--to<span class="w"> </span>wpe:acmeco/myblog-new@staging<span class="w"> </span>--create
+</code></pre></div>
+<p><strong>Flags:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--to &lt;wpeTarget&gt;</code></td>
+<td>WPE target to push to (required)</td>
+</tr>
+<tr>
+<td><code>--db</code></td>
+<td>Include database in push (requires confirmation)</td>
+</tr>
+<tr>
+<td><code>--db-only</code></td>
+<td>Push database only</td>
+</tr>
+<tr>
+<td><code>--files-only</code></td>
+<td>Push files only</td>
+</tr>
+<tr>
+<td><code>--create</code></td>
+<td>Create the WPE install if it doesn't exist</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Database push confirmation:</strong> When <code>--db</code> or <code>--db-only</code> is used, the CLI prompts: <code>Type 'yes' to confirm database push</code>. This prompt is doubled when pushing to a <code>production</code> environment.</p>
+<hr />
+<h3 id="nexus-sync-history-localsitelocal"><code>nexus sync history &lt;localSite&gt;@local</code><a class="headerlink" href="#nexus-sync-history-localsitelocal" title="Permanent link">&para;</a></h3>
+<p>View the sync history for a local site.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>nexus<span class="w"> </span>sync<span class="w"> </span><span class="nb">history</span><span class="w"> </span>mysite@local
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>Sync History for mysite@local:
+<a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a>  ✅ 4/13/2026, 9:00:00 AM ← pull
+<a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a>     Files: 432
+<a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a>  ✅ 4/12/2026, 4:30:00 PM → push
+<a id="__codelineno-44-5" name="__codelineno-44-5" href="#__codelineno-44-5"></a>     Files: 12
+<a id="__codelineno-44-6" name="__codelineno-44-6" href="#__codelineno-44-6"></a>     Database: included
+</code></pre></div>
+<hr />
+<h2 id="promote">Promote<a class="headerlink" href="#promote" title="Permanent link">&para;</a></h2>
+<h3 id="nexus-wpe-promote-sourceinstallid-destinstallid"><code>nexus wpe promote &lt;sourceInstallId&gt; &lt;destInstallId&gt;</code><a class="headerlink" href="#nexus-wpe-promote-sourceinstallid-destinstallid" title="Permanent link">&para;</a></h3>
+<p>Copy one WP Engine install to another (e.g., staging to production).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="c1"># Preview what would happen (no --confirm = dry run mode)</span>
+<a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>promote<span class="w"> </span>myblog-staging<span class="w"> </span>myblog
+<a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a>
+<a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a><span class="c1"># Execute the promotion</span>
+<a id="__codelineno-45-5" name="__codelineno-45-5" href="#__codelineno-45-5"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>promote<span class="w"> </span>myblog-staging<span class="w"> </span>myblog<span class="w"> </span>--confirm
+<a id="__codelineno-45-6" name="__codelineno-45-6" href="#__codelineno-45-6"></a>
+<a id="__codelineno-45-7" name="__codelineno-45-7" href="#__codelineno-45-7"></a><span class="c1"># Promote files only (exclude database)</span>
+<a id="__codelineno-45-8" name="__codelineno-45-8" href="#__codelineno-45-8"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>promote<span class="w"> </span>myblog-staging<span class="w"> </span>myblog<span class="w"> </span>--no-database<span class="w"> </span>--confirm
+</code></pre></div>
+<p><strong>Flags:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--confirm</code></td>
+<td>Required to execute the promotion</td>
+</tr>
+<tr>
+<td><code>--no-database</code></td>
+<td>Exclude database from promotion</td>
+</tr>
+</tbody>
+</table>
+<p>Without <code>--confirm</code>, the command explains what would happen and exits. Re-run with <code>--confirm</code> to proceed.</p>
+<hr />
+<h2 id="diagnostics">Diagnostics<a class="headerlink" href="#diagnostics" title="Permanent link">&para;</a></h2>
+<h3 id="nexus-wpe-diagnose-installid"><code>nexus wpe diagnose &lt;installId&gt;</code><a class="headerlink" href="#nexus-wpe-diagnose-installid" title="Permanent link">&para;</a></h3>
+<p>Run a diagnostic check on a WP Engine install. Checks primary domain, SSL, and recent backups.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>diagnose<span class="w"> </span>myblog
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>Diagnostic: myblog
+<a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a>────────────────────────────────────────
+<a id="__codelineno-47-3" name="__codelineno-47-3" href="#__codelineno-47-3"></a>  Domain:      myblog.wpengine.com
+<a id="__codelineno-47-4" name="__codelineno-47-4" href="#__codelineno-47-4"></a>  Environment: production
+<a id="__codelineno-47-5" name="__codelineno-47-5" href="#__codelineno-47-5"></a>
+<a id="__codelineno-47-6" name="__codelineno-47-6" href="#__codelineno-47-6"></a>  Has primary domain
+<a id="__codelineno-47-7" name="__codelineno-47-7" href="#__codelineno-47-7"></a>  SSL certificate
+<a id="__codelineno-47-8" name="__codelineno-47-8" href="#__codelineno-47-8"></a>  Recent backup
+</code></pre></div>
+<hr />
+<h3 id="nexus-wpe-go-live-check-installid-domain"><code>nexus wpe go-live-check &lt;installId&gt; &lt;domain&gt;</code><a class="headerlink" href="#nexus-wpe-go-live-check-installid-domain" title="Permanent link">&para;</a></h3>
+<p>Check whether a domain is ready to go live (domain added, SSL configured).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>go-live-check<span class="w"> </span>myblog<span class="w"> </span>myblog.com
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--json</code></p>
+<hr />
+<h3 id="nexus-wpe-fleet-health"><code>nexus wpe fleet-health</code><a class="headerlink" href="#nexus-wpe-fleet-health" title="Permanent link">&para;</a></h3>
+<p>Show SSL status and environment for all WP Engine installs.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>fleet-health
+<a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>fleet-health<span class="w"> </span>--account<span class="w"> </span>a1b2c3d4-e5f6-...
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--account &lt;accountId&gt;</code>, <code>--json</code></p>
+<hr />
+<h3 id="nexus-wpe-changes-localsitelocal"><code>nexus wpe changes &lt;localSite&gt;@local</code><a class="headerlink" href="#nexus-wpe-changes-localsitelocal" title="Permanent link">&para;</a></h3>
+<p>View file differences between a local site and its linked WPE install.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>changes<span class="w"> </span>mysite@local
+<a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>changes<span class="w"> </span>mysite@local<span class="w"> </span>--since<span class="w"> </span><span class="m">2026</span>-04-01
+</code></pre></div>
+<p><strong>Flags:</strong> <code>--since &lt;date&gt;</code></p>
+<p>The local site must be linked to a WPE install. See <code>nexus wpe link</code>.</p>
+<hr />
+<h2 id="linking-sites">Linking Sites<a class="headerlink" href="#linking-sites" title="Permanent link">&para;</a></h2>
+<h3 id="nexus-wpe-link-localsitelocal-wpetarget"><code>nexus wpe link &lt;localSite&gt;@local &lt;wpeTarget&gt;</code><a class="headerlink" href="#nexus-wpe-link-localsitelocal-wpetarget" title="Permanent link">&para;</a></h3>
+<p>Link a local site to a WP Engine install. Required for <code>nexus wpe changes</code> and shorthand <code>@environment</code> targeting.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>link<span class="w"> </span>mysite@local<span class="w"> </span>wpe:acmeco/myblog@production
+</code></pre></div>
+<p>After linking, <code>nexus sites list</code> shows the connection in the local site's output.</p>
+<hr />
+<h2 id="cache">Cache<a class="headerlink" href="#cache" title="Permanent link">&para;</a></h2>
+<h3 id="nexus-wpe-cache-target-purge"><code>nexus wpe cache &lt;target&gt; --purge</code><a class="headerlink" href="#nexus-wpe-cache-target-purge" title="Permanent link">&para;</a></h3>
+<p>Purge the WP Engine cache for an install.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>cache<span class="w"> </span>myblog<span class="w"> </span>--purge
+</code></pre></div>
+<p><code>--purge</code> is required to confirm the operation.</p>
+<hr />
+<h2 id="common-workflows">Common Workflows<a class="headerlink" href="#common-workflows" title="Permanent link">&para;</a></h2>
+<h3 id="create-a-backup-before-deploying">Create a backup before deploying<a class="headerlink" href="#create-a-backup-before-deploying" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>backup-verify<span class="w"> </span>myblog-staging<span class="w"> </span>--description<span class="w"> </span><span class="s2">&quot;Pre-deploy </span><span class="k">$(</span>date<span class="k">)</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="pull-production-to-local-for-debugging">Pull production to local for debugging<a class="headerlink" href="#pull-production-to-local-for-debugging" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a><span class="c1"># Pull files and database from production</span>
+<a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a>nexus<span class="w"> </span>sync<span class="w"> </span>pull<span class="w"> </span>mysite@local<span class="w"> </span>--from<span class="w"> </span>wpe:acmeco/myblog@production<span class="w"> </span>--db-only
+<a id="__codelineno-54-3" name="__codelineno-54-3" href="#__codelineno-54-3"></a>
+<a id="__codelineno-54-4" name="__codelineno-54-4" href="#__codelineno-54-4"></a><span class="c1"># Wait for pull to complete in Local app, then inspect</span>
+<a id="__codelineno-54-5" name="__codelineno-54-5" href="#__codelineno-54-5"></a>nexus<span class="w"> </span>wp<span class="w"> </span>core<span class="w"> </span>version<span class="w"> </span>mysite@local
+</code></pre></div>
+<h3 id="add-a-domain-and-provision-ssl">Add a domain and provision SSL<a class="headerlink" href="#add-a-domain-and-provision-ssl" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a><span class="c1"># Add the domain</span>
+<a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>domain-add<span class="w"> </span>myblog<span class="w"> </span>store.myblog.com
+<a id="__codelineno-55-3" name="__codelineno-55-3" href="#__codelineno-55-3"></a>
+<a id="__codelineno-55-4" name="__codelineno-55-4" href="#__codelineno-55-4"></a><span class="c1"># Get the new domain ID from the list</span>
+<a id="__codelineno-55-5" name="__codelineno-55-5" href="#__codelineno-55-5"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>domains<span class="w"> </span>myblog
+<a id="__codelineno-55-6" name="__codelineno-55-6" href="#__codelineno-55-6"></a>
+<a id="__codelineno-55-7" name="__codelineno-55-7" href="#__codelineno-55-7"></a><span class="c1"># Request SSL</span>
+<a id="__codelineno-55-8" name="__codelineno-55-8" href="#__codelineno-55-8"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>ssl-request<span class="w"> </span>myblog<span class="w"> </span>--domains<span class="w"> </span>dom-newid
+<a id="__codelineno-55-9" name="__codelineno-55-9" href="#__codelineno-55-9"></a>
+<a id="__codelineno-55-10" name="__codelineno-55-10" href="#__codelineno-55-10"></a><span class="c1"># Check go-live readiness</span>
+<a id="__codelineno-55-11" name="__codelineno-55-11" href="#__codelineno-55-11"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>go-live-check<span class="w"> </span>myblog<span class="w"> </span>store.myblog.com
+</code></pre></div>
+<h3 id="promote-staging-to-production">Promote staging to production<a class="headerlink" href="#promote-staging-to-production" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a><span class="c1"># Backup production first</span>
+<a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>backup-verify<span class="w"> </span>myblog<span class="w"> </span>--description<span class="w"> </span><span class="s2">&quot;Pre-promotion backup&quot;</span>
+<a id="__codelineno-56-3" name="__codelineno-56-3" href="#__codelineno-56-3"></a>
+<a id="__codelineno-56-4" name="__codelineno-56-4" href="#__codelineno-56-4"></a><span class="c1"># Promote staging → production (files only)</span>
+<a id="__codelineno-56-5" name="__codelineno-56-5" href="#__codelineno-56-5"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>promote<span class="w"> </span>myblog-staging<span class="w"> </span>myblog<span class="w"> </span>--no-database<span class="w"> </span>--confirm
+</code></pre></div>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<p><strong>"Not authenticated"</strong> — Run <code>nexus wpe login</code> and complete the browser flow.</p>
+<p><strong>Backup fails</strong> — Run <code>nexus wpe credentials-status</code>. If credentials are not configured, run <code>nexus wpe set-credentials</code>.</p>
+<p><strong>Pull/push hangs</strong> — These operations run inside Local and may take 10+ minutes for large sites. Check the Local app for progress. Do not close Local during the operation.</p>
+<p><strong>"Invalid target syntax"</strong> — WPE targets require the full format <code>wpe:account/install@environment</code>. Use <code>nexus wpe installs</code> to see the exact target string for each install.</p>
+<hr />
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../../">Home</a></li>
-<li><a href="../../getting-started/">Getting Started</a></li>
+<li><a href="../authentication/">Authentication</a> — log in and set up API credentials</li>
+<li><a href="../local-sites/">Local Site Management</a> — create and manage local sites</li>
+<li><a href="../commands/">Command Reference</a> — full command tree</li>
 </ul>
 
 
