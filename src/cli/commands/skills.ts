@@ -19,11 +19,26 @@ import * as os from 'os';
 
 /**
  * Resolve the skills directory bundled with this package.
- * Works whether installed globally (npm -g) or linked locally (npm link).
- * process.argv[1] is always bin/nexus.js → package root is two levels up.
+ *
+ * Works for global installs (npm -g) AND npm link (symlinked bin).
+ *
+ * process.argv[1] points to the symlink when npm link is used, so
+ * path.resolve() stays at the symlink location (wrong). We use
+ * fs.realpathSync() to follow the symlink to the actual file, then
+ * navigate up to the package root. Falls back to __dirname which Node.js
+ * always resolves to the real file location regardless of symlinks.
  */
 function resolvePackageSkillsDir(): string {
-  const packageRoot = path.dirname(path.dirname(path.resolve(process.argv[1])));
+  // Primary: follow symlinks from process.argv[1] → bin/nexus.js → package root
+  try {
+    const realBin = fs.realpathSync(path.resolve(process.argv[1]));
+    const packageRoot = path.dirname(path.dirname(realBin));
+    const candidate = path.join(packageRoot, '.claude', 'skills');
+    if (fs.existsSync(candidate)) return candidate;
+  } catch { /* fall through */ }
+
+  // Fallback: __dirname is always the real path (lib/cli/commands/) → up 3 levels
+  const packageRoot = path.resolve(__dirname, '..', '..', '..');
   return path.join(packageRoot, '.claude', 'skills');
 }
 
