@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Exit codes, error output formats, common failure patterns, and retry guidance for the Nexus CLI">
+        <meta name="description" content="Error codes and recovery">
       
       
         <meta name="author" content="Jeremy Pollock">
@@ -1161,10 +1161,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#exit-codes" class="md-nav__link">
+  <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Exit Codes
+        Overview
       
     </span>
   </a>
@@ -1172,126 +1172,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#error-output-format" class="md-nav__link">
+  <a href="#quick-start" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Error Output Format
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#json-error-format" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        JSON Error Format
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-error-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common Error Patterns
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Common Error Patterns">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#not-authenticated-to-wp-engine" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Not authenticated to WP Engine
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#site-not-found" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Site not found
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#local-not-running" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Local not running
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#network-or-timeout-errors" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Network or timeout errors
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#native-module-version-mismatch-node_module_version" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Native module version mismatch (NODE_MODULE_VERSION)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-debug-flag" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The --debug Flag
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#retry-guidance-for-ai-agents" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Retry Guidance for AI Agents
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
+        Quick Start
       
     </span>
   </a>
@@ -2983,10 +2867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#exit-codes" class="md-nav__link">
+  <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Exit Codes
+        Overview
       
     </span>
   </a>
@@ -2994,126 +2878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#error-output-format" class="md-nav__link">
+  <a href="#quick-start" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Error Output Format
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#json-error-format" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        JSON Error Format
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-error-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common Error Patterns
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Common Error Patterns">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#not-authenticated-to-wp-engine" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Not authenticated to WP Engine
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#site-not-found" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Site not found
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#local-not-running" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Local not running
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#network-or-timeout-errors" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Network or timeout errors
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#native-module-version-mismatch-node_module_version" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Native module version mismatch (NODE_MODULE_VERSION)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-debug-flag" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The --debug Flag
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#retry-guidance-for-ai-agents" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Retry Guidance for AI Agents
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
+        Quick Start
       
     </span>
   </a>
@@ -3152,195 +2920,18 @@
 
 
 <h1 id="error-handling">Error Handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h1>
-<p>The Nexus CLI uses standard Unix exit codes, writes errors to stderr, and supports structured JSON output for scripted error handling.</p>
-<h2 id="exit-codes">Exit Codes<a class="headerlink" href="#exit-codes" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Code</th>
-<th>Meaning</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>0</code></td>
-<td>Success</td>
-</tr>
-<tr>
-<td><code>1</code></td>
-<td>Any failure — command error, site not found, Local not running, unexpected exception</td>
-</tr>
-</tbody>
-</table>
-<p>The CLI uses only <code>0</code> and <code>1</code>. Every <code>process.exit(1)</code> in the source corresponds to a printed error message. A cancelled interactive prompt (for example, answering "N" to a delete confirmation) exits with <code>0</code>.</p>
-<p><code>nexus doctor</code> exits <code>1</code> if any check has status <code>error</code>. Checks with status <code>warn</code> or <code>skip</code> do not affect the exit code.</p>
-<hr />
-<h2 id="error-output-format">Error Output Format<a class="headerlink" href="#error-output-format" title="Permanent link">&para;</a></h2>
-<p>Errors are printed to <strong>stderr</strong> using the prefix <code>❌</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>❌ Site not found: mysite
-</code></pre></div>
-<p>Bootstrap failures (Local not running, GraphQL unreachable) use a slightly different format:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>❌ Timed out waiting for Local. Is Local running?
-</code></pre></div>
-<p>Unhandled exceptions surface as:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>❌ Unexpected error: &lt;message&gt;
-</code></pre></div>
-<p>Success messages go to <strong>stdout</strong> and use the prefix <code>✅</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>✅ Site started: mysite
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>   Status: running
-</code></pre></div>
-<hr />
-<h2 id="json-error-format">JSON Error Format<a class="headerlink" href="#json-error-format" title="Permanent link">&para;</a></h2>
-<p>When you pass <code>--json</code>, successful output is a JSON object or array on stdout. Errors still print to stderr as plain text and exit <code>1</code> — they are not wrapped in JSON. Check the exit code in scripts, not the output text:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nv">result</span><span class="o">=</span><span class="k">$(</span>nexus<span class="w"> </span>sites<span class="w"> </span>list<span class="w"> </span>--json<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="k">)</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="nv">$?</span><span class="w"> </span>-ne<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Command failed&quot;</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nb">exit</span><span class="w"> </span><span class="m">1</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">fi</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$result</span><span class="s2">&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">&#39;.local[].name&#39;</span>
-</code></pre></div>
-<p>For <code>nexus doctor --json</code>, the output is always a JSON object regardless of health status:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0.2.0&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">&quot;healthy&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">&quot;checks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Local running&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;warn&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;detail&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Not running&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Open the Local app&quot;</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;GraphQL server&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;warn&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;detail&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;No connection info — Local may not be running&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="p">]</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="p">}</span>
-</code></pre></div>
-<p>The <code>healthy</code> field is <code>true</code> only when all checks are <code>ok</code>, <code>disabled</code>, or <code>skip</code>. Use this as the machine-readable pass/fail signal.</p>
-<hr />
-<h2 id="common-error-patterns">Common Error Patterns<a class="headerlink" href="#common-error-patterns" title="Permanent link">&para;</a></h2>
-<h3 id="not-authenticated-to-wp-engine">Not authenticated to WP Engine<a class="headerlink" href="#not-authenticated-to-wp-engine" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>❌ Not authenticated with WP Engine
-</code></pre></div>
-<p><strong>Fix:</strong> Run <code>nexus wpe login</code> and complete the browser flow. Then retry the original command.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>login
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>nexus<span class="w"> </span>wpe<span class="w"> </span>list-installs
-</code></pre></div>
-<h3 id="site-not-found">Site not found<a class="headerlink" href="#site-not-found" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>❌ Site not found: mysite
-</code></pre></div>
-<p>This happens when the site name does not match any site in Local, or when the <code>@local</code> suffix is missing where required.</p>
-<p><strong>Fix:</strong> List available sites first, then use the exact name:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>nexus<span class="w"> </span>sites<span class="w"> </span>list<span class="w"> </span>--local-only
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>nexus<span class="w"> </span>sites<span class="w"> </span>get<span class="w"> </span>mysite@local
-</code></pre></div>
-<p>For commands that require <code>@local</code>, the error will say so:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>❌ Target site must be local.
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>   Use: nexus sites start mysite@local
-</code></pre></div>
-<h3 id="local-not-running">Local not running<a class="headerlink" href="#local-not-running" title="Permanent link">&para;</a></h3>
-<p>Bootstrap runs before most commands. If Local is not open, the CLI prints:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>❌ Timed out waiting for Local. Is Local running?
-</code></pre></div>
-<p><strong>Fix:</strong> Open the Local app, wait for it to finish loading, then retry. To diagnose what is wrong:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>nexus<span class="w"> </span>doctor
-</code></pre></div>
-<h3 id="network-or-timeout-errors">Network or timeout errors<a class="headerlink" href="#network-or-timeout-errors" title="Permanent link">&para;</a></h3>
-<p>Long operations (site creation, export, reindex, bulk updates) have per-command timeouts:</p>
-<table>
-<thead>
-<tr>
-<th>Operation</th>
-<th>Timeout</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Site create / start / stop / restart</td>
-<td>2 minutes</td>
-</tr>
-<tr>
-<td>Site clone / export / import</td>
-<td>5–10 minutes</td>
-</tr>
-<tr>
-<td>Content reindex</td>
-<td>10 minutes</td>
-</tr>
-<tr>
-<td>Bulk operations</td>
-<td>10 minutes</td>
-</tr>
-<tr>
-<td>Database export / import</td>
-<td>5 minutes</td>
-</tr>
-<tr>
-<td>Pull / push to WP Engine</td>
-<td>10 minutes</td>
-</tr>
-</tbody>
-</table>
-<p>If a command exceeds its timeout, you will see:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>Error: socket hang up
-</code></pre></div>
-<p>or</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>Error: connect ECONNREFUSED 127.0.0.1:4000
-</code></pre></div>
-<p><strong>Fix:</strong> Check that Local is still running and the site is in the expected state. For large exports, use the Local app directly if the CLI timeout is insufficient.</p>
-<h3 id="native-module-version-mismatch-node_module_version">Native module version mismatch (NODE_MODULE_VERSION)<a class="headerlink" href="#native-module-version-mismatch-node_module_version" title="Permanent link">&para;</a></h3>
-<p>If the addon uses <code>better-sqlite3</code> compiled for the wrong Node version, you will see Local crash or the addon fail to load. This is a developer issue, not a runtime error for end users.</p>
-<p><strong>Fix (developers only):</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>npm<span class="w"> </span>run<span class="w"> </span>rebuild
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># Then restart Local and reload the addon</span>
-</code></pre></div>
-<hr />
-<h2 id="the-debug-flag">The <code>--debug</code> Flag<a class="headerlink" href="#the-debug-flag" title="Permanent link">&para;</a></h2>
-<p>The Nexus CLI uses the <code>DEBUG</code> environment variable (not a <code>--debug</code> flag) to enable verbose output:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nv">DEBUG</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>nexus<span class="w"> </span>sites<span class="w"> </span>list
-</code></pre></div>
-<p>With <code>DEBUG=true</code>:
-- Bootstrap actions are printed to stdout as they execute
-- Unhandled exceptions include a full stack trace instead of just the message</p>
-<p>Without <code>DEBUG</code>:
-- Bootstrap actions are hidden (spinner is shown in TTY, nothing in non-TTY)
-- Exceptions show only the message</p>
-<hr />
-<h2 id="retry-guidance-for-ai-agents">Retry Guidance for AI Agents<a class="headerlink" href="#retry-guidance-for-ai-agents" title="Permanent link">&para;</a></h2>
-<p>When scripting with the CLI or calling it from an AI agent, apply the following patterns:</p>
-<p><strong>1. Check exit code before processing output.</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>nexus<span class="w"> </span>sites<span class="w"> </span>get<span class="w"> </span>mysite@local<span class="w"> </span>--json
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Exit: </span><span class="nv">$?</span><span class="s2">&quot;</span>
-</code></pre></div>
-<p><strong>2. Use <code>nexus doctor --json</code> as a preflight check.</strong></p>
-<p>Before running a sequence of commands, verify the system is healthy:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nv">health</span><span class="o">=</span><span class="k">$(</span>nexus<span class="w"> </span>doctor<span class="w"> </span>--json<span class="k">)</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="k">if</span><span class="w"> </span>!<span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$health</span><span class="s2">&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-e<span class="w"> </span><span class="s1">&#39;.healthy&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
-<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;System not healthy — check nexus doctor output&quot;</span>
-<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span><span class="nb">exit</span><span class="w"> </span><span class="m">1</span>
-<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="k">fi</span>
-</code></pre></div>
-<p><strong>3. Treat exit <code>1</code> as non-retryable unless the error is transient.</strong></p>
-<p>Retryable errors (transient):
-- <code>socket hang up</code> — retry once after a 5-second delay
-- <code>connect ECONNREFUSED</code> — wait for Local to start, then retry</p>
-<p>Non-retryable errors (do not retry):
-- <code>Site not found</code> — fix the site name
-- <code>Not authenticated</code> — run <code>nexus wpe login</code>
-- <code>Must specify</code> or <code>Target site must be local</code> — fix the command syntax</p>
-<p><strong>4. For destructive operations, check <code>--dry-run</code> output first.</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Preview what clean would remove</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>clean<span class="w"> </span>mysite@local
-<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
-<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Apply only after confirming dry-run output</span>
-<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>clean<span class="w"> </span>mysite@local<span class="w"> </span>--no-dry-run
-</code></pre></div>
-<p><strong>5. Prefer <code>--json</code> in all scripted contexts.</strong></p>
-<p>JSON output is stable across versions. Human-readable output formatting may change between releases.</p>
-<hr />
-<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<p><strong>"Could not read GraphQL connection info"</strong> — Local is running but the addon has not written its connection file yet. Wait a few seconds for the addon to finish loading, then retry.</p>
-<p><strong>Commands hang indefinitely</strong> — The CLI connects to Local's internal GraphQL server. If Local is unresponsive (spinning beachball, stuck on a site operation), the CLI will block until its timeout expires. Force-quit Local and reopen it.</p>
-<p><strong><code>nexus doctor</code> shows all checks as "skip"</strong> — Local is not running. Open the Local app first.</p>
-<hr />
+<div class="admonition warning">
+<p class="admonition-title">Work in Progress</p>
+<p>This page is under construction. Check back soon for complete documentation.</p>
+</div>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>TODO: Add overview content</p>
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<p>TODO: Add quick start guide</p>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../commands/">Command Reference</a> — full command tree</li>
-<li><a href="../local-sites/">Local Site Management</a> — common site operations</li>
-<li><a href="../wp-cli/">WP-CLI Commands</a> — run WordPress commands on sites</li>
+<li><a href="../../">Home</a></li>
+<li><a href="../../getting-started/">Getting Started</a></li>
 </ul>
 
 

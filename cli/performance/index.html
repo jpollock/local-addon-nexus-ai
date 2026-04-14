@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Timing expectations, indexing characteristics, concurrency behavior, and scripting guidance for the Nexus CLI">
+        <meta name="description" content="Performance optimization guide">
       
       
         <meta name="author" content="Jeremy Pollock">
@@ -29,7 +29,7 @@
     
     
       
-        <title>Performance - Nexus AI Documentation</title>
+        <title>CLI Performance - Nexus AI Documentation</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#performance" class="md-skip">
+        <a href="#cli-performance" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Performance
+              CLI Performance
             
           </span>
         </div>
@@ -1189,10 +1189,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        Overview
       
     </span>
   </a>
@@ -1200,87 +1200,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#operation-speed-reference" class="md-nav__link">
+  <a href="#quick-start" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Operation Speed Reference
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#indexing-performance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Indexing Performance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#content-search-latency" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Content Search Latency
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#how-nexus-doctor-identifies-performance-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How nexus doctor Identifies Performance Issues
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#concurrency" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Concurrency
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#-quiet-and-json-for-scripting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        --quiet and --json for Scripting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#large-fleet-considerations-50-sites" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Large Fleet Considerations (50+ Sites)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-use-json-vs-interactive-output" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to Use --json vs Interactive Output
+        Quick Start
       
     </span>
   </a>
@@ -2944,10 +2867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        Overview
       
     </span>
   </a>
@@ -2955,87 +2878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#operation-speed-reference" class="md-nav__link">
+  <a href="#quick-start" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Operation Speed Reference
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#indexing-performance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Indexing Performance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#content-search-latency" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Content Search Latency
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#how-nexus-doctor-identifies-performance-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How nexus doctor Identifies Performance Issues
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#concurrency" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Concurrency
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#-quiet-and-json-for-scripting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        --quiet and --json for Scripting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#large-fleet-considerations-50-sites" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Large Fleet Considerations (50+ Sites)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-use-json-vs-interactive-output" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to Use --json vs Interactive Output
+        Quick Start
       
     </span>
   </a>
@@ -3073,223 +2919,19 @@
   
 
 
-<h1 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">&para;</a></h1>
-<p>This page describes what to expect from each category of CLI operation — which are fast, which are slow, why, and how to work with that in scripts.</p>
-<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Local by WP Engine is installed and running</li>
-<li>The Nexus AI addon is active in Local</li>
-</ul>
-<hr />
-<h2 id="operation-speed-reference">Operation Speed Reference<a class="headerlink" href="#operation-speed-reference" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Operation</th>
-<th>Typical Duration</th>
-<th>Notes</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>nexus sites list</code></td>
-<td>&lt; 1 second</td>
-<td>Reads Local's in-memory site list</td>
-</tr>
-<tr>
-<td><code>nexus sites get</code></td>
-<td>&lt; 1 second</td>
-<td>Single site lookup</td>
-</tr>
-<tr>
-<td><code>nexus fleet health</code></td>
-<td>2–5 seconds</td>
-<td>Queries all running sites</td>
-</tr>
-<tr>
-<td><code>nexus fleet filter</code></td>
-<td>1–3 seconds</td>
-<td>Filters cached site data</td>
-</tr>
-<tr>
-<td><code>nexus wp plugin list</code></td>
-<td>1–3 seconds</td>
-<td>Runs <code>wp plugin list</code> via WP-CLI</td>
-</tr>
-<tr>
-<td><code>nexus wp core version</code></td>
-<td>1–2 seconds</td>
-<td>Single WP-CLI call</td>
-</tr>
-<tr>
-<td><code>nexus sites start / stop / restart</code></td>
-<td>15–90 seconds</td>
-<td>Local starts the site process</td>
-</tr>
-<tr>
-<td><code>nexus sites create</code></td>
-<td>30–120 seconds</td>
-<td>Creates site + installs WordPress</td>
-</tr>
-<tr>
-<td><code>nexus sites clone</code></td>
-<td>60–300 seconds</td>
-<td>Copies files + database</td>
-</tr>
-<tr>
-<td><code>nexus sites export</code></td>
-<td>60–600 seconds</td>
-<td>Depends on site size</td>
-</tr>
-<tr>
-<td><code>nexus sites import</code></td>
-<td>60–600 seconds</td>
-<td>Depends on archive size</td>
-</tr>
-<tr>
-<td><code>nexus content reindex</code></td>
-<td>30–600 seconds</td>
-<td>Depends on post count + file count</td>
-</tr>
-<tr>
-<td><code>nexus bulk reindex &lt;3 sites&gt;</code></td>
-<td>60–600 seconds</td>
-<td>Serial per site</td>
-</tr>
-<tr>
-<td><code>nexus bulk plugin-update</code></td>
-<td>60–600 seconds</td>
-<td>Serial per site</td>
-</tr>
-<tr>
-<td><code>nexus wp db export</code></td>
-<td>10–300 seconds</td>
-<td>Depends on database size</td>
-</tr>
-<tr>
-<td><code>nexus wp db scan</code></td>
-<td>5–30 seconds</td>
-<td>Runs multiple <code>wp eval</code> calls</td>
-</tr>
-<tr>
-<td><code>nexus sync pull / push</code></td>
-<td>Queued in Local</td>
-<td>CLI returns after queuing</td>
-</tr>
-</tbody>
-</table>
-<p>"Fast" operations (&lt; 5 seconds) read from Local's GraphQL server or call a single WP-CLI command. "Slow" operations involve file I/O, WordPress installation, or processing many sites.</p>
-<hr />
-<h2 id="indexing-performance">Indexing Performance<a class="headerlink" href="#indexing-performance" title="Permanent link">&para;</a></h2>
-<p><code>nexus content reindex</code> builds the vector search index for a site. The addon processes each WordPress post as a document, splits it into chunks (max 500 words each), and embeds it using an on-device ONNX model.</p>
-<p><strong>What affects indexing time:</strong></p>
-<ul>
-<li><strong>Post count</strong> — sites with thousands of posts take proportionally longer</li>
-<li><strong>Post length</strong> — long posts split into more chunks, each requiring an embedding</li>
-<li><strong>Custom post types</strong> — additional post types increase volume</li>
-<li><strong>File indexing</strong> — theme and plugin files add to the document count</li>
-<li><strong>CPU speed</strong> — embedding runs on the CPU; faster hardware speeds this up</li>
-</ul>
-<p><strong>Typical rates:</strong></p>
-<ul>
-<li>Small site (&lt; 500 posts): 30–90 seconds</li>
-<li>Medium site (500–2,000 posts): 2–5 minutes</li>
-<li>Large site (2,000+ posts): 5–10 minutes</li>
-</ul>
-<p>Check index status after reindexing:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>nexus<span class="w"> </span>content<span class="w"> </span>index-status<span class="w"> </span>mysite@local
-</code></pre></div>
-<p><strong>Output:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Index Status: mysite@local
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>──────────────────────────────────────────────────
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>State:         ✅ indexed
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>Documents:     5,432
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>Chunks:        21,804
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>Last Indexed:  4/13/2026, 9:12:04 AM
-</code></pre></div>
-<hr />
-<h2 id="content-search-latency">Content Search Latency<a class="headerlink" href="#content-search-latency" title="Permanent link">&para;</a></h2>
-<p><code>nexus content search</code> and <code>nexus fleet search</code> query the pre-built vector index — they do not re-embed at query time. Expect:</p>
-<ul>
-<li><strong>Single-site search</strong>: &lt; 1 second for most queries</li>
-<li><strong>Fleet search</strong> (across all sites): 1–3 seconds</li>
-</ul>
-<p>Search latency is consistent regardless of post count because the vector index scales efficiently. The bottleneck is network round-trip to Local's GraphQL server.</p>
-<hr />
-<h2 id="how-nexus-doctor-identifies-performance-issues">How <code>nexus doctor</code> Identifies Performance Issues<a class="headerlink" href="#how-nexus-doctor-identifies-performance-issues" title="Permanent link">&para;</a></h2>
-<p><code>nexus doctor</code> runs a fixed set of checks:</p>
-<ul>
-<li>Local installed</li>
-<li>Local running</li>
-<li>Addon active and version matched</li>
-<li>GraphQL server reachable</li>
-<li>MCP server running and responding</li>
-<li>AI agent configured</li>
-<li>AI provider set with API key</li>
-<li>Sites with AI configured</li>
-</ul>
-<p>It does not measure indexing speed or query latency. Use it to confirm the system is connected, not to benchmark operations.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>nexus<span class="w"> </span>doctor
-</code></pre></div>
-<p>If the GraphQL server is slow to respond, <code>nexus doctor</code> will report a longer than usual runtime. This is a signal that Local is under load.</p>
-<hr />
-<h2 id="concurrency">Concurrency<a class="headerlink" href="#concurrency" title="Permanent link">&para;</a></h2>
-<p><strong>Serial execution</strong> — <code>nexus bulk</code> commands process sites one at a time, not in parallel. This avoids overloading Local's internal server, which is single-threaded for most operations.</p>
-<p>For <code>nexus bulk reindex</code> across three sites, the total time is roughly the sum of each site's reindex time, not the maximum.</p>
-<p><strong>No parallelism flags</strong> — there is no <code>--concurrency</code> or <code>--parallel</code> option. If you need parallel execution, run multiple <code>nexus</code> processes in shell background jobs:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>nexus<span class="w"> </span>content<span class="w"> </span>reindex<span class="w"> </span>mysite@local<span class="w"> </span><span class="p">&amp;</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>nexus<span class="w"> </span>content<span class="w"> </span>reindex<span class="w"> </span>blog@local<span class="w"> </span><span class="p">&amp;</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">wait</span>
-</code></pre></div>
-<p>This is faster but uses more CPU, which may slow down individual reindex operations.</p>
-<hr />
-<h2 id="-quiet-and-json-for-scripting"><code>--quiet</code> and <code>--json</code> for Scripting<a class="headerlink" href="#-quiet-and-json-for-scripting" title="Permanent link">&para;</a></h2>
-<p>The CLI does not have a <code>--quiet</code> flag. To suppress human-readable progress output in scripts, redirect stderr:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Suppress &quot;Starting bulk reindex...&quot; progress messages</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>nexus<span class="w"> </span>bulk<span class="w"> </span>reindex<span class="w"> </span>mysite@local<span class="w"> </span>blog@local<span class="w"> </span><span class="m">2</span>&gt;/dev/null
-</code></pre></div>
-<p>Progress lines (like <code>Starting bulk reindex of 2 sites...</code>) go to stdout, so use <code>--json</code> to get clean output:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># JSON output contains only structured results, not progress text</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>nexus<span class="w"> </span>bulk<span class="w"> </span>health-check<span class="w"> </span>mysite@local<span class="w"> </span>blog@local<span class="w"> </span>--json
-</code></pre></div>
-<p>The bootstrap spinner (<code>🔧 Connecting to Local...</code>) is only shown in interactive terminals (TTY). In scripts and CI, it is suppressed automatically.</p>
-<hr />
-<h2 id="large-fleet-considerations-50-sites">Large Fleet Considerations (50+ Sites)<a class="headerlink" href="#large-fleet-considerations-50-sites" title="Permanent link">&para;</a></h2>
-<p>The CLI does not enforce a site count limit, but performance degrades at scale:</p>
-<ul>
-<li><code>nexus fleet health</code> queries all running sites. With 50+ running sites, this can take 10–30 seconds.</li>
-<li><code>nexus bulk health-check</code> with 50 targets will run serially and may take 15–30 minutes total.</li>
-<li><code>nexus audit plugins</code> scans all running sites and is limited to a 5-minute timeout.</li>
-</ul>
-<p><strong>Strategies for large fleets:</strong></p>
-<ol>
-<li>Use <code>nexus fleet filter</code> to narrow the target set before bulk operations.</li>
-<li>Use site groups (<code>nexus fleet groups</code>) to manage named subsets.</li>
-<li>Run operations during off-hours when sites are not actively being developed.</li>
-<li>Check <code>nexus content list-indexed</code> to skip already-indexed sites in reindex scripts.</li>
-</ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Only reindex sites that are not yet indexed</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>nexus<span class="w"> </span>content<span class="w"> </span>list-indexed<span class="w"> </span>--json<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.[] | select(.state != &quot;indexed&quot;) | .target&#39;</span>
-</code></pre></div>
-<hr />
-<h2 id="when-to-use-json-vs-interactive-output">When to Use <code>--json</code> vs Interactive Output<a class="headerlink" href="#when-to-use-json-vs-interactive-output" title="Permanent link">&para;</a></h2>
-<p>Use <code>--json</code> when:
-- Processing output in a shell pipeline
-- Parsing results in a script or AI agent
-- Storing results for later comparison
-- Passing output to <code>jq</code></p>
-<p>Use interactive output (default) when:
-- Running commands manually to check status
-- Reviewing health reports or audit results
-- Following along with a multi-step workflow</p>
-<p><code>--json</code> output is stable across patch releases. Interactive output formatting may change between versions.</p>
-<hr />
+<h1 id="cli-performance">CLI Performance<a class="headerlink" href="#cli-performance" title="Permanent link">&para;</a></h1>
+<div class="admonition warning">
+<p class="admonition-title">Work in Progress</p>
+<p>This page is under construction. Check back soon for complete documentation.</p>
+</div>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>TODO: Add overview content</p>
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<p>TODO: Add quick start guide</p>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../bulk-operations/">Bulk Operations</a> — fleet and bulk command reference</li>
-<li><a href="../local-sites/">Local Site Management</a> — start, stop, and manage sites</li>
-<li><a href="../error-handling/">Error Handling</a> — timeouts and recovery</li>
+<li><a href="../../">Home</a></li>
+<li><a href="../../getting-started/">Getting Started</a></li>
 </ul>
 
 
