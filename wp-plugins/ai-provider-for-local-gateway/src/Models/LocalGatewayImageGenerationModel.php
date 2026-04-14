@@ -9,7 +9,7 @@ use WordPress\AiClient\Common\Exception\RuntimeException;
 use WordPress\AiClient\Files\DTO\File;
 use WordPress\AiClient\Files\Enums\FileTypeEnum;
 use WordPress\AiClient\Messages\DTO\Message;
-use WordPress\AiClient\Messages\DTO\TextMessagePart;
+use WordPress\AiClient\Messages\DTO\MessagePart;
 use WordPress\AiClient\Messages\Enums\MessageRoleEnum;
 use WordPress\AiClient\Providers\ApiBasedImplementation\AbstractApiBasedModel;
 use WordPress\AiClient\Providers\Http\DTO\Request;
@@ -164,7 +164,7 @@ class LocalGatewayImageGenerationModel extends AbstractApiBasedModel implements 
         }
 
         foreach ($prompt[0]->getParts() as $part) {
-            if ($part instanceof TextMessagePart) {
+            if ($part->getType()->isText() && $part->getText() !== null) {
                 return $part->getText();
             }
         }
