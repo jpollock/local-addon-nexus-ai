@@ -208,7 +208,16 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     try {
       const models = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_MODELS, providerId);
       if (!this.mounted) return;
-      this.setState({ models: models ?? [], loadingModels: false });
+      // Auto-select the first model if none is currently chosen
+      if (models?.length && !this.state.settings.aiModel) {
+        this.setState((prev) => {
+          const next = { ...prev.settings, aiModel: models[0] };
+          this.notifyChange(next);
+          return { models, loadingModels: false, settings: next };
+        });
+      } else {
+        this.setState({ models: models ?? [], loadingModels: false });
+      }
     } catch {
       if (!this.mounted) return;
       this.setState({ models: [], loadingModels: false });

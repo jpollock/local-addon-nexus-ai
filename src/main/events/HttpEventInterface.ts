@@ -7,6 +7,7 @@ import { EventProcessor } from './EventProcessor';
 import { WordPressEvent, EventType } from './types';
 import { AIGatewayRoutes } from '../ai-gateway/AIGatewayRoutes';
 import type { RegistryStorage } from '../content/IndexRegistry';
+import { IPC_CHANNELS } from '../../common/constants';
 
 const EVENT_TYPES: EventType[] = [
   'post_created',
@@ -64,6 +65,19 @@ export class HttpEventInterface {
     this.aiGatewayRoutes = new AIGatewayRoutes({
       storage: options.storage,
       logger: options.logger,
+      onUsageRecorded: () => {
+        // Push a lightweight notification to the renderer so the dashboard refreshes
+        try {
+          const { BrowserWindow } = require('electron');
+          for (const win of BrowserWindow.getAllWindows()) {
+            if (!win.isDestroyed()) {
+              win.webContents.send(IPC_CHANNELS.AI_GATEWAY_USAGE_UPDATED);
+            }
+          }
+        } catch {
+          // Non-fatal — dashboard will pick it up on next manual refresh
+        }
+      },
     });
   }
 
@@ -195,7 +209,13 @@ export class HttpEventInterface {
   private handleAIGatewayRoute(url: string, req: http.IncomingMessage, res: http.ServerResponse): void {
     if (url === '/ai-gateway/v1/chat/completions' && req.method === 'POST') {
       this.aiGatewayRoutes.handleChatCompletions(req, res).catch((err) => {
-        this.logger.error('[HttpEventInterface] AI Gateway error:', err);
+        this.logger.error('[HttpEventInterface] AI Gateway chat error:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'Internal server error' } }));
+      });
+    } else if (url === '/ai-gateway/v1/images/generations' && req.method === 'POST') {
+      this.aiGatewayRoutes.handleImageGenerations(req, res).catch((err) => {
+        this.logger.error('[HttpEventInterface] AI Gateway image error:', err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: { message: 'Internal server error' } }));
       });

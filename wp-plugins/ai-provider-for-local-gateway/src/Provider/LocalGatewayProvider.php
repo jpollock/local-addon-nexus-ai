@@ -16,6 +16,7 @@ use WordPress\AiClient\Providers\Models\DTO\ModelMetadata;
 use WordPress\LocalGatewayAiProvider\Availability\LocalGatewayProviderAvailability;
 use WordPress\LocalGatewayAiProvider\Metadata\LocalGatewayModelMetadataDirectory;
 use WordPress\LocalGatewayAiProvider\Models\LocalGatewayTextGenerationModel;
+use WordPress\LocalGatewayAiProvider\Models\LocalGatewayImageGenerationModel;
 
 /**
  * Class for the Local AI Gateway provider.
@@ -86,6 +87,9 @@ class LocalGatewayProvider extends AbstractApiProvider
         ProviderMetadata $providerMetadata
     ): ModelInterface {
         foreach ($modelMetadata->getSupportedCapabilities() as $capability) {
+            if ($capability->isImageGeneration()) {
+                return new LocalGatewayImageGenerationModel($modelMetadata, $providerMetadata);
+            }
             if ($capability->isTextGeneration()) {
                 return new LocalGatewayTextGenerationModel($modelMetadata, $providerMetadata);
             }

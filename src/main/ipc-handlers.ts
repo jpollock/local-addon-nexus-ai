@@ -2231,8 +2231,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const apiKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
 
-      const aiProvider = settings?.aiProvider ?? 'ollama';
-      const aiModel = settings?.aiModel ?? 'llama3.2';
+      // Use || not ?? — settings fields can be empty strings which ?? won't catch
+      const aiProvider = settings?.aiProvider || 'anthropic';
+      const defaultModel = aiProvider === 'anthropic' ? 'claude-haiku-4-5-20251001'
+        : aiProvider === 'openai' ? 'gpt-4o-mini'
+        : aiProvider === 'google' ? 'gemini-1.5-flash'
+        : 'llama3.2';
+      const aiModel = settings?.aiModel || defaultModel;
       const apiKey = apiKeys[aiProvider];
 
       localLogger.info('[NexusAI] AI parse request - provider:', aiProvider, 'model:', aiModel, 'hasKey:', !!apiKey);

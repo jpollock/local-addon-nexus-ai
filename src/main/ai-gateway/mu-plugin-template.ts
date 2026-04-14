@@ -274,5 +274,35 @@ add_filter('http_request_args', function($args, $url) {
 
     return $args;
 }, 10, 2);
+
+// ============================================================================
+// IMAGE GENERATION: Prepend local-gateway image models to the preferred list.
+// Without this, the WP AI client looks for openai/google providers directly
+// and finds none (since only local-gateway is registered).
+// ============================================================================
+
+add_filter('wpai_preferred_image_models', function($models) {
+    $provider = defined('NEXUS_AI_PROVIDER') ? NEXUS_AI_PROVIDER : 'anthropic';
+    $gateway_image_models = [];
+
+    if ($provider === 'openai') {
+        $gateway_image_models = [
+            ['local-gateway', 'gpt-image-1'],
+            ['local-gateway', 'gpt-image-1.5'],
+            ['local-gateway', 'gpt-image-1-mini'],
+            ['local-gateway', 'dall-e-3'],
+            ['local-gateway', 'dall-e-2'],
+        ];
+    } elseif ($provider === 'google') {
+        $gateway_image_models = [
+            ['local-gateway', 'imagen-4.0-generate-001'],
+            ['local-gateway', 'imagen-4.0-ultra-generate-001'],
+            ['local-gateway', 'imagen-4.0-fast-generate-001'],
+        ];
+    }
+
+    // Prepend gateway models so they are tried first
+    return array_merge($gateway_image_models, (array) $models);
+});
 `;
 }

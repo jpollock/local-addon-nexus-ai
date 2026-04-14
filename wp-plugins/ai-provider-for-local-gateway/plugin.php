@@ -140,11 +140,12 @@ add_filter('http_request_host_is_external', function ($is_external, $host, $url)
     return $is_external;
 }, 10, 3);
 
-// Bypass WordPress localhost blocking for Local Gateway and set reasonable timeout
+// Bypass WordPress localhost blocking for Local Gateway and set appropriate timeouts.
+// Image generation can take 60+ seconds — use a longer timeout for those endpoints.
 add_filter('http_request_args', function ($args, $url) {
     if (nexus_lg_is_gateway_url($url)) {
         $args['reject_unsafe_urls'] = false;
-        $args['timeout'] = 30;
+        $args['timeout'] = (strpos($url, '/images/') !== false) ? 120 : 30;
     }
     return $args;
 }, 10, 2);

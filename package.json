@@ -24,6 +24,7 @@
     "build": "npm run clean && npm run compile && npm run create-entry-points",
     "compile": "tsc -p .",
     "create-entry-points": "node scripts/create-entry-points.js",
+    "sync-wp-plugins": "node scripts/create-entry-points.js",
     "clean": "rm -rf lib",
     "watch": "tsc -p . --watch",
     "pretest": "npm rebuild better-sqlite3 --silent",

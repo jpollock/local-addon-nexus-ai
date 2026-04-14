@@ -39,6 +39,8 @@ interface SidebarSearchPanelState {
   localResults: LocalSiteResult[];
   wpeResults: WpeSiteResult[];
   expandedWpeId: string | null;
+  pullingInstallId: string | null;
+  pullResult: { installId: string; success: boolean; message: string } | null;
   // Manual filters
   searchText: string;
   selectedPlugins: string[];
@@ -210,6 +212,8 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     localResults: [],
     wpeResults: [],
     expandedWpeId: null,
+    pullingInstallId: null,
+    pullResult: null,
     searchText: '',
     selectedPlugins: [],
     selectedThemes: [],
@@ -392,11 +396,33 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     this.props.onClose();
   };
 
-  handlePullToLocal = (site: WpeSiteResult): void => {
-    this.props.electron.ipcRenderer.invoke(
-      IPC_CHANNELS.WPE_PULL_TO_LOCAL,
-      { installId: site.installId, installName: site.name },
-    );
+  handlePullToLocal = async (site: WpeSiteResult): Promise<void> => {
+    this.setState({ pullingInstallId: site.installId, pullResult: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.WPE_PULL_TO_LOCAL,
+        { installId: site.installId, installName: site.name },
+      );
+      this.setState({
+        pullingInstallId: null,
+        pullResult: {
+          installId: site.installId,
+          success: result?.success ?? false,
+          message: result?.success
+            ? `✅ "${site.name}" pulled successfully — check Local's site list.`
+            : `❌ ${result?.error || result?.message || 'Pull failed.'}`,
+        },
+      });
+    } catch (err: any) {
+      this.setState({
+        pullingInstallId: null,
+        pullResult: {
+          installId: site.installId,
+          success: false,
+          message: `❌ ${err?.message || 'Pull failed.'}`,
+        },
+      });
+    }
   };
 
 
@@ -693,6 +719,8 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
         React.createElement('div', { style: sectionHeaderStyle }, `🌐 WPE Sites (${wpeResults.length})`),
         wpeResults.map((site: WpeSiteResult) => {
           const isExpanded = expandedWpeId === site.id;
+          const isPulling = this.state.pullingInstallId === site.installId;
+          const thisResult = this.state.pullResult?.installId === site.installId ? this.state.pullResult : null;
           return React.createElement('div', { key: site.id },
             // Row
             React.createElement('div', {
@@ -718,12 +746,27 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
               React.createElement('div', {
                 style: { fontSize: '11px', color: '#666', marginBottom: '8px', fontFamily: 'monospace' },
               }, site.installId),
+              // Status message (pulling in progress or result)
+              isPulling ? React.createElement('div', {
+                style: { fontSize: '11px', color: '#51BB7B', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' },
+              }, '⏳ Pulling from WP Engine… this takes 1–5 minutes.') : null,
+              thisResult && !isPulling ? React.createElement('div', {
+                style: {
+                  fontSize: '11px',
+                  marginBottom: '8px',
+                  padding: '6px 8px',
+                  borderRadius: '4px',
+                  backgroundColor: thisResult.success ? '#1a3a2a' : '#3a1a1a',
+                  color: thisResult.success ? '#51BB7B' : '#ff6b6b',
+                },
+              }, thisResult.message) : null,
               React.createElement('div', { style: { display: 'flex', gap: '8px' } },
                 React.createElement('button', {
-                  style: { ...actionBtnStyle, backgroundColor: '#51BB7B', color: '#fff' },
-                  onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handlePullToLocal(site); },
-                  title: 'Pull this WPE site to Local',
-                }, '⬇ Pull to Local'),
+                  style: { ...actionBtnStyle, backgroundColor: isPulling ? '#2d5a3d' : '#51BB7B', color: '#fff', opacity: isPulling ? 0.7 : 1 },
+                  onClick: (e: React.MouseEvent) => { e.stopPropagation(); if (!isPulling) this.handlePullToLocal(site); },
+                  disabled: isPulling,
+                  title: isPulling ? 'Pull in progress…' : 'Pull this WPE site to Local',
+                }, isPulling ? '⏳ Pulling…' : '⬇ Pull to Local'),
                 React.createElement('button', {
                   style: { ...actionBtnStyle, backgroundColor: '#2d2d2d', color: '#ccc', border: '1px solid #3d3d3d' },
                   onClick: (e: React.MouseEvent) => {

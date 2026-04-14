@@ -116,16 +116,25 @@ export function calculateOpenAICost(
   let inputCostPer1M = 0.15;   // gpt-4o-mini default
   let outputCostPer1M = 0.60;
 
-  if (model.includes('gpt-4o') && !model.includes('mini')) {
-    inputCostPer1M = 2.50;
-    outputCostPer1M = 10.00;
-  } else if (model.includes('gpt-4.1') && !model.includes('mini')) {
-    inputCostPer1M = 2.00;
-    outputCostPer1M = 8.00;
-  } else if (model.includes('gpt-4.1-mini') || model.includes('gpt-4o-mini')) {
+  if (model === 'gpt-4.1-nano') {
+    inputCostPer1M = 0.10;
+    outputCostPer1M = 0.40;
+  } else if (model === 'gpt-4.1-mini' || model === 'gpt-4o-mini') {
     inputCostPer1M = 0.40;
     outputCostPer1M = 1.60;
-  } else if (model.includes('o1') || model.includes('o3')) {
+  } else if (model.startsWith('gpt-4.1')) {
+    inputCostPer1M = 2.00;
+    outputCostPer1M = 8.00;
+  } else if (model.startsWith('gpt-4o')) {
+    inputCostPer1M = 2.50;
+    outputCostPer1M = 10.00;
+  } else if (model === 'o4-mini' || model === 'o3-mini' || model === 'o1-mini') {
+    inputCostPer1M = 1.10;
+    outputCostPer1M = 4.40;
+  } else if (model === 'o3') {
+    inputCostPer1M = 10.00;
+    outputCostPer1M = 40.00;
+  } else if (model === 'o1') {
     inputCostPer1M = 15.00;
     outputCostPer1M = 60.00;
   }
