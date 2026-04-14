@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Execute WP-CLI commands">
+        <meta name="description" content="Run WP-CLI commands on local and WP Engine sites using nexus wp">
       
       
         <meta name="author" content="Jeremy Pollock">
@@ -29,7 +29,7 @@
     
     
       
-        <title>WP-CLI Integration - Nexus AI Documentation</title>
+        <title>WP-CLI Commands - Nexus AI Documentation</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#wp-cli-integration" class="md-skip">
+        <a href="#wp-cli-commands" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              WP-CLI Integration
+              WP-CLI Commands
             
           </span>
         </div>
@@ -1105,10 +1105,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Prerequisites
       
     </span>
   </a>
@@ -1116,10 +1116,365 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#target-syntax" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        Target Syntax
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Plugin Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List plugins
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#install-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install plugins
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#activate-and-deactivate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Activate and deactivate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update plugins
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#theme-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Theme Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Theme Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-themes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List themes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#activate-a-theme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Activate a theme
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#check-wordpress-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check WordPress version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-wordpress-core" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update WordPress core
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#database-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Database Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#export-the-database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Export the database
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#import-a-database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Import a database
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search-and-replace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search and replace
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scan-database-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scan database health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clean-database-bloat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clean database bloat
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-database-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fleet database report
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#post-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Post Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#create-a-post" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Create a post
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-a-post" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update a post
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-a-post" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delete a post
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#user-and-option-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User and Option Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="User and Option Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-users" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List users
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-an-option-value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get an option value
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#site-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Site Health
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-wp-cli-commands-fail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When WP-CLI Commands Fail
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chaining-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chaining Commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nexus-wp-vs-running-wp-cli-directly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wp vs Running WP-CLI Directly
       
     </span>
   </a>
@@ -2867,10 +3222,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Prerequisites
       
     </span>
   </a>
@@ -2878,10 +3233,365 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#target-syntax" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        Target Syntax
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Plugin Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List plugins
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#install-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install plugins
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#activate-and-deactivate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Activate and deactivate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update plugins
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#theme-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Theme Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Theme Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-themes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List themes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#activate-a-theme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Activate a theme
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#check-wordpress-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check WordPress version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-wordpress-core" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update WordPress core
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#database-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Database Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#export-the-database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Export the database
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#import-a-database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Import a database
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search-and-replace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search and replace
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scan-database-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scan database health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clean-database-bloat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clean database bloat
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-database-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fleet database report
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#post-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Post Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#create-a-post" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Create a post
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-a-post" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update a post
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-a-post" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delete a post
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#user-and-option-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User and Option Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="User and Option Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-users" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List users
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-an-option-value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get an option value
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#site-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Site Health
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-wp-cli-commands-fail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When WP-CLI Commands Fail
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chaining-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chaining Commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nexus-wp-vs-running-wp-cli-directly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nexus wp vs Running WP-CLI Directly
       
     </span>
   </a>
@@ -2919,19 +3629,392 @@
   
 
 
-<h1 id="wp-cli-integration">WP-CLI Integration<a class="headerlink" href="#wp-cli-integration" title="Permanent link">&para;</a></h1>
-<div class="admonition warning">
-<p class="admonition-title">Work in Progress</p>
-<p>This page is under construction. Check back soon for complete documentation.</p>
-</div>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>TODO: Add overview content</p>
-<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<p>TODO: Add quick start guide</p>
+<h1 id="wp-cli-commands">WP-CLI Commands<a class="headerlink" href="#wp-cli-commands" title="Permanent link">&para;</a></h1>
+<p><code>nexus wp</code> runs WP-CLI commands on local sites and remote WP Engine installs through Local's addon layer. You do not need WP-CLI installed separately — the addon invokes it on the correct site automatically.</p>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Local by WP Engine is installed and running</li>
+<li>The Nexus AI addon is active in Local</li>
+<li>The target local site must be <strong>running</strong> for all <code>nexus wp</code> commands</li>
+</ul>
+<hr />
+<h2 id="target-syntax">Target Syntax<a class="headerlink" href="#target-syntax" title="Permanent link">&para;</a></h2>
+<p>Local sites use the <code>@local</code> suffix:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span>mysite@local
+</code></pre></div>
+<p>Remote WP Engine installs use the <code>--install</code> flag with the install name (not yet implemented as a separate flag — use the WPE target string directly where supported):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span>mysite-prod
+</code></pre></div>
+<p>For most commands, the target is the first positional argument. See each subcommand section for the exact form.</p>
+<hr />
+<h2 id="plugin-commands">Plugin Commands<a class="headerlink" href="#plugin-commands" title="Permanent link">&para;</a></h2>
+<h3 id="list-plugins">List plugins<a class="headerlink" href="#list-plugins" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span>mysite@local
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span>mysite@local<span class="w"> </span>--status<span class="w"> </span>active
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span>mysite@local<span class="w"> </span>--json
+</code></pre></div>
+<p><strong>Flags:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--status &lt;status&gt;</code></td>
+<td>Filter by <code>active</code>, <code>inactive</code>, or <code>all</code></td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Output as JSON</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Plugins on mysite@local:
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  Name                          Status          Version      Update
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  ──────────────────────────────────────────────────────────────────
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  WooCommerce                   ✅ active        8.9.0        → 9.0.1
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  Contact Form 7                ✅ active        5.9.3
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>  Hello Dolly                   ⚫ inactive      1.7.2
+</code></pre></div>
+<hr />
+<h3 id="install-plugins">Install plugins<a class="headerlink" href="#install-plugins" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Install and activate</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>install<span class="w"> </span>mysite@local<span class="w"> </span>woocommerce<span class="w"> </span>--activate
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Install multiple plugins</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>install<span class="w"> </span>mysite@local<span class="w"> </span>contact-form-7<span class="w"> </span>akismet
+</code></pre></div>
+<hr />
+<h3 id="activate-and-deactivate">Activate and deactivate<a class="headerlink" href="#activate-and-deactivate" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>activate<span class="w"> </span>mysite@local<span class="w"> </span>woocommerce
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>deactivate<span class="w"> </span>mysite@local<span class="w"> </span>hello-dolly
+</code></pre></div>
+<p>Multiple slugs are accepted in a single command and processed in sequence.</p>
+<hr />
+<h3 id="update-plugins">Update plugins<a class="headerlink" href="#update-plugins" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Update a specific plugin</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>update<span class="w"> </span>mysite@local<span class="w"> </span>woocommerce
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Update all plugins (preview first)</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>update<span class="w"> </span>mysite@local<span class="w"> </span>--all<span class="w"> </span>--dry-run
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Apply the update</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>update<span class="w"> </span>mysite@local<span class="w"> </span>--all
+</code></pre></div>
+<p><strong>Flags:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--all</code></td>
+<td>Update all plugins</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Show what would be updated without making changes</td>
+</tr>
+</tbody>
+</table>
+<p>Specify one or more slugs, or use <code>--all</code>. The command exits <code>1</code> if neither is provided.</p>
+<hr />
+<h2 id="theme-commands">Theme Commands<a class="headerlink" href="#theme-commands" title="Permanent link">&para;</a></h2>
+<h3 id="list-themes">List themes<a class="headerlink" href="#list-themes" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>theme<span class="w"> </span>list<span class="w"> </span>mysite@local
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>theme<span class="w"> </span>list<span class="w"> </span>mysite@local<span class="w"> </span>--json
+</code></pre></div>
+<p>Output is the raw WP-CLI theme list output.</p>
+<h3 id="activate-a-theme">Activate a theme<a class="headerlink" href="#activate-a-theme" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>theme<span class="w"> </span>activate<span class="w"> </span>mysite@local<span class="w"> </span>twentytwentyfour
+</code></pre></div>
+<hr />
+<h2 id="core-commands">Core Commands<a class="headerlink" href="#core-commands" title="Permanent link">&para;</a></h2>
+<h3 id="check-wordpress-version">Check WordPress version<a class="headerlink" href="#check-wordpress-version" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>core<span class="w"> </span>version<span class="w"> </span>mysite@local
+</code></pre></div>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>WordPress 6.5.2
+</code></pre></div>
+<h3 id="update-wordpress-core">Update WordPress core<a class="headerlink" href="#update-wordpress-core" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Update to latest</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>core<span class="w"> </span>update<span class="w"> </span>mysite@local
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Update to a specific version</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>nexus<span class="w"> </span>wp<span class="w"> </span>core<span class="w"> </span>update<span class="w"> </span>mysite@local<span class="w"> </span>--version<span class="w"> </span><span class="m">6</span>.4.3
+</code></pre></div>
+<p><strong>Flags:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--version &lt;version&gt;</code></td>
+<td>Target WordPress version</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="database-commands">Database Commands<a class="headerlink" href="#database-commands" title="Permanent link">&para;</a></h2>
+<h3 id="export-the-database">Export the database<a class="headerlink" href="#export-the-database" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Export to a default filename in the current directory</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span><span class="nb">export</span><span class="w"> </span>mysite@local
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Export to a specific file path</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span><span class="nb">export</span><span class="w"> </span>mysite@local<span class="w"> </span>/Users/jane/Backups/mysite.sql
+</code></pre></div>
+<p>Database export has a 5-minute timeout.</p>
+<h3 id="import-a-database">Import a database<a class="headerlink" href="#import-a-database" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>import<span class="w"> </span>mysite@local<span class="w"> </span>/Users/jane/Backups/mysite.sql
+</code></pre></div>
+<p>Database import has a 5-minute timeout.</p>
+<h3 id="search-and-replace">Search and replace<a class="headerlink" href="#search-and-replace" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Preview replacements</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>search-replace<span class="w"> </span>mysite@local<span class="w"> </span>http://mysite.local<span class="w"> </span>https://mysite.local<span class="w"> </span>--dry-run
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Apply (searches WordPress post tables by default)</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>search-replace<span class="w"> </span>mysite@local<span class="w"> </span>http://mysite.local<span class="w"> </span>https://mysite.local
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Include all tables</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>search-replace<span class="w"> </span>mysite@local<span class="w"> </span>http://mysite.local<span class="w"> </span>https://mysite.local<span class="w"> </span>--all-tables
+</code></pre></div>
+<p><strong>Flags:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Show what would be replaced without making changes</td>
+</tr>
+<tr>
+<td><code>--all-tables</code></td>
+<td>Search all database tables, not just post tables</td>
+</tr>
+</tbody>
+</table>
+<p>Search-replace has a 5-minute timeout. Use <code>--dry-run</code> first for any production database.</p>
+<h3 id="scan-database-health">Scan database health<a class="headerlink" href="#scan-database-health" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>scan<span class="w"> </span>mysite@local
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>scan<span class="w"> </span>mysite@local<span class="w"> </span>--json
+</code></pre></div>
+<p>Analyzes the database for bloat and health issues. Reports a health score (0–100), expired transients, post revisions, orphaned metadata, ghost plugin tables, and autoload size.</p>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>Database Health: mysite@local
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>  Health Score: 74/100
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>  WordPress:    6.5.2
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>  WooCommerce:  active
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>  Autoload:     1.4 MB
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>  Issues:
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    - 12,450 expired transients (est. 45 MB)
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>    - 3,200 post revisions (est. 12 MB)
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>    - 2 ghost plugin tables: wp_redirection_items (Redirection)
+<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>
+<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>  Scan completed in 4382ms
+</code></pre></div>
+<p>A health score of 80 or above is considered healthy. Below 50 is critical.</p>
+<h3 id="clean-database-bloat">Clean database bloat<a class="headerlink" href="#clean-database-bloat" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Dry run (default — shows what would be deleted)</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>clean<span class="w"> </span>mysite@local
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Apply — requires confirmation prompt</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>clean<span class="w"> </span>mysite@local<span class="w"> </span>--no-dry-run
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1"># Clean specific item types only</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>clean<span class="w"> </span>mysite@local<span class="w"> </span>--items<span class="w"> </span><span class="s2">&quot;transients,revisions&quot;</span><span class="w"> </span>--no-dry-run
+</code></pre></div>
+<p><strong>Flags:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--no-dry-run</code></td>
+<td>Actually delete rows (default is dry run)</td>
+</tr>
+<tr>
+<td><code>--items &lt;list&gt;</code></td>
+<td>Comma-separated item types to clean</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Output as JSON</td>
+</tr>
+</tbody>
+</table>
+<p><code>--no-dry-run</code> requires interactive confirmation. The command prompts:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>⚠️  This will permanently delete database rows from &quot;mysite@local&quot;.
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>Are you sure? [y/N]
+</code></pre></div>
+<p>Clean is local-only. It does not run on WP Engine installs.</p>
+<h3 id="fleet-database-report">Fleet database report<a class="headerlink" href="#fleet-database-report" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>report
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span>report<span class="w"> </span>--json
+</code></pre></div>
+<p>Scans all running sites and produces a combined health report. Has a 5-minute timeout.</p>
+<p><strong>Output:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>Fleet Database Health Report
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>Sites scanned: 3
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>  Site            Score  WP Version   Top Issue
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>  ────────────────────────────────────────────────────────────
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>  mysite          95/100  6.5.2        —
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>  blog            74/100  6.5.2        12,450 expired transients
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>  store           51/100  6.4.3        3,200 post revisions
+</code></pre></div>
+<hr />
+<h2 id="post-commands">Post Commands<a class="headerlink" href="#post-commands" title="Permanent link">&para;</a></h2>
+<h3 id="create-a-post">Create a post<a class="headerlink" href="#create-a-post" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>post<span class="w"> </span>create<span class="w"> </span>mysite@local<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Hello World&quot;</span><span class="w"> </span>--status<span class="w"> </span>publish
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>post<span class="w"> </span>create<span class="w"> </span>mysite@local<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Draft Post&quot;</span><span class="w"> </span>--content<span class="w"> </span><span class="s2">&quot;Post body here&quot;</span>
+</code></pre></div>
+<p><strong>Flags:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--title &lt;title&gt;</code></td>
+<td>(required)</td>
+<td>Post title</td>
+</tr>
+<tr>
+<td><code>--content &lt;content&gt;</code></td>
+<td></td>
+<td>Post content</td>
+</tr>
+<tr>
+<td><code>--status &lt;status&gt;</code></td>
+<td><code>draft</code></td>
+<td>Post status: <code>publish</code>, <code>draft</code>, <code>private</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="update-a-post">Update a post<a class="headerlink" href="#update-a-post" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>post<span class="w"> </span>update<span class="w"> </span>mysite@local<span class="w"> </span><span class="m">42</span><span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Updated Title&quot;</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>post<span class="w"> </span>update<span class="w"> </span>mysite@local<span class="w"> </span><span class="m">42</span><span class="w"> </span>--status<span class="w"> </span>publish
+</code></pre></div>
+<p>The second argument is the post ID.</p>
+<h3 id="delete-a-post">Delete a post<a class="headerlink" href="#delete-a-post" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Move to trash</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>post<span class="w"> </span>delete<span class="w"> </span>mysite@local<span class="w"> </span><span class="m">42</span>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># Permanently delete (bypass trash)</span>
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>nexus<span class="w"> </span>wp<span class="w"> </span>post<span class="w"> </span>delete<span class="w"> </span>mysite@local<span class="w"> </span><span class="m">42</span><span class="w"> </span>--force
+</code></pre></div>
+<hr />
+<h2 id="user-and-option-commands">User and Option Commands<a class="headerlink" href="#user-and-option-commands" title="Permanent link">&para;</a></h2>
+<h3 id="list-users">List users<a class="headerlink" href="#list-users" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>user-list<span class="w"> </span>mysite@local
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>user-list<span class="w"> </span>mysite@local<span class="w"> </span>--json
+</code></pre></div>
+<p>Output is the raw WP-CLI user list table.</p>
+<h3 id="get-an-option-value">Get an option value<a class="headerlink" href="#get-an-option-value" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>option-get<span class="w"> </span>mysite@local<span class="w"> </span>siteurl
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>option-get<span class="w"> </span>mysite@local<span class="w"> </span>blogname
+</code></pre></div>
+<hr />
+<h2 id="site-health">Site Health<a class="headerlink" href="#site-health" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>nexus<span class="w"> </span>wp<span class="w"> </span>health<span class="w"> </span>mysite@local
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>health<span class="w"> </span>mysite@local<span class="w"> </span>--json
+</code></pre></div>
+<p>Runs WP-CLI's <code>site health</code> command and returns the output. Useful for a quick WordPress-native health check without the full Nexus fleet scan.</p>
+<hr />
+<h2 id="when-wp-cli-commands-fail">When WP-CLI Commands Fail<a class="headerlink" href="#when-wp-cli-commands-fail" title="Permanent link">&para;</a></h2>
+<p><strong>"Site is not running"</strong> — Start the site first:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>nexus<span class="w"> </span>sites<span class="w"> </span>start<span class="w"> </span>mysite@local
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span>mysite@local
+</code></pre></div>
+<p><strong>"Site not found"</strong> — Check the exact site name and add <code>@local</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>nexus<span class="w"> </span>sites<span class="w"> </span>list<span class="w"> </span>--local-only
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span>mysite@local<span class="w">   </span><span class="c1"># not: nexus wp plugin list mysite</span>
+</code></pre></div>
+<p><strong>WP-CLI itself fails</strong> — The error from WP-CLI is passed through directly. For example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>❌ Error: No such file or directory.
+</code></pre></div>
+<p>This means WP-CLI ran but reported an error. Check the site's WordPress installation is intact.</p>
+<hr />
+<h2 id="chaining-commands">Chaining Commands<a class="headerlink" href="#chaining-commands" title="Permanent link">&para;</a></h2>
+<p>Get site details, run a WP-CLI command, then process the result:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># 1. Confirm the site is running</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>nexus<span class="w"> </span>sites<span class="w"> </span>get<span class="w"> </span>mysite@local<span class="w"> </span>--json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.status&#39;</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># 2. List plugins with updates available</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span>mysite@local<span class="w"> </span>--json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">&#39;[.[] | select(.update != null)] | map({name: .name, version: .version, update: .update})&#39;</span>
+<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>
+<a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a><span class="c1"># 3. Update them</span>
+<a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>nexus<span class="w"> </span>wp<span class="w"> </span>plugin<span class="w"> </span>update<span class="w"> </span>mysite@local<span class="w"> </span>--all
+<a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>
+<a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a><span class="c1"># 4. Export a database backup after updating</span>
+<a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a>nexus<span class="w"> </span>wp<span class="w"> </span>db<span class="w"> </span><span class="nb">export</span><span class="w"> </span>mysite@local<span class="w"> </span>~/Backups/mysite-post-update.sql
+</code></pre></div>
+<hr />
+<h2 id="nexus-wp-vs-running-wp-cli-directly"><code>nexus wp</code> vs Running WP-CLI Directly<a class="headerlink" href="#nexus-wp-vs-running-wp-cli-directly" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><code>nexus wp</code></th>
+<th><code>wp</code> (direct)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Requires WP-CLI installed</td>
+<td>No</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Works on any running local site</td>
+<td>Yes — by site name</td>
+<td>No — requires <code>cd</code> to site root</td>
+</tr>
+<tr>
+<td>Works on remote WPE installs</td>
+<td>Future</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Supports <code>--skip-plugins</code> / <code>--skip-themes</code></td>
+<td>Pass-through via raw command</td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table>
+<p>To pass WP-CLI flags like <code>--skip-plugins</code>, use the underlying <code>nexus wp</code> subcommands that accept raw WP-CLI commands. For example, <code>plugin update</code> passes its argument list directly to <code>wp plugin update</code>, so WP-CLI flags that the Nexus CLI does not model explicitly are not available through <code>nexus wp</code> subcommands.</p>
+<hr />
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../../">Home</a></li>
-<li><a href="../../getting-started/">Getting Started</a></li>
+<li><a href="../local-sites/">Local Site Management</a> — start, stop, clone, and manage sites</li>
+<li><a href="../bulk-operations/">Bulk Operations</a> — update plugins across multiple sites at once</li>
+<li><a href="../error-handling/">Error Handling</a> — exit codes and recovery</li>
+<li><a href="../commands/">Command Reference</a> — full command tree</li>
 </ul>
 
 
