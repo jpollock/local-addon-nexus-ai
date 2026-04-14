@@ -123,6 +123,7 @@ export const IPC_CHANNELS = {
   AI_GATEWAY_GET_RATE_LIMIT: `${ADDON_PREFIX}:ai-gateway:get-rate-limit`,
   AI_GATEWAY_SET_RATE_LIMIT: `${ADDON_PREFIX}:ai-gateway:set-rate-limit`,
   AI_GATEWAY_CHECK_RATE_LIMIT: `${ADDON_PREFIX}:ai-gateway:check-rate-limit`,
+  AI_GATEWAY_USAGE_UPDATED: `${ADDON_PREFIX}:ai-gateway:usage-updated`,
 
   // AI Context File Generation
   AI_CONTEXT_GENERATE: `${ADDON_PREFIX}:ai-context:generate`,

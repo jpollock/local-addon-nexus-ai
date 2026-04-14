@@ -60,13 +60,22 @@ export class AIGatewayUsagePanel extends React.Component<
     timeFilter: '24h',
   };
 
+  private pollInterval: ReturnType<typeof setInterval> | null = null;
+  private usageUpdatedHandler = (): void => { this.fetchUsage(); };
+
   componentDidMount(): void {
     this.mounted = true;
     this.fetchUsage();
+    // Listen for push notifications from the main process (fired after each gateway call)
+    this.props.electron.ipcRenderer.on(IPC_CHANNELS.AI_GATEWAY_USAGE_UPDATED, this.usageUpdatedHandler);
+    // Fallback poll every 30s in case IPC push is missed
+    this.pollInterval = setInterval(() => { if (this.mounted) this.fetchUsage(); }, 30000);
   }
 
   componentWillUnmount(): void {
     this.mounted = false;
+    this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.AI_GATEWAY_USAGE_UPDATED, this.usageUpdatedHandler);
+    if (this.pollInterval) clearInterval(this.pollInterval);
   }
 
   fetchUsage = async (): Promise<void> => {
@@ -371,7 +380,17 @@ export class AIGatewayUsagePanel extends React.Component<
           React.createElement(
             'button',
             {
-              style: { ...buttonStyle, marginLeft: '16px' },
+              style: { ...filterButtonStyle(false), marginLeft: 'auto' },
+              onClick: () => this.fetchUsage(),
+              disabled: loading,
+              title: 'Refresh usage data',
+            },
+            loading ? '↻ ...' : '↻ Refresh',
+          ),
+          React.createElement(
+            'button',
+            {
+              style: { ...buttonStyle, marginLeft: '8px' },
               onClick: this.handleClearUsage,
               disabled: clearing || records.length === 0,
             },

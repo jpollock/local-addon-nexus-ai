@@ -7,6 +7,7 @@ import { EventProcessor } from './EventProcessor';
 import { WordPressEvent, EventType } from './types';
 import { AIGatewayRoutes } from '../ai-gateway/AIGatewayRoutes';
 import type { RegistryStorage } from '../content/IndexRegistry';
+import { IPC_CHANNELS } from '../../common/constants';
 
 const EVENT_TYPES: EventType[] = [
   'post_created',
@@ -64,6 +65,19 @@ export class HttpEventInterface {
     this.aiGatewayRoutes = new AIGatewayRoutes({
       storage: options.storage,
       logger: options.logger,
+      onUsageRecorded: () => {
+        // Push a lightweight notification to the renderer so the dashboard refreshes
+        try {
+          const { BrowserWindow } = require('electron');
+          for (const win of BrowserWindow.getAllWindows()) {
+            if (!win.isDestroyed()) {
+              win.webContents.send(IPC_CHANNELS.AI_GATEWAY_USAGE_UPDATED);
+            }
+          }
+        } catch {
+          // Non-fatal — dashboard will pick it up on next manual refresh
+        }
+      },
     });
   }
 
