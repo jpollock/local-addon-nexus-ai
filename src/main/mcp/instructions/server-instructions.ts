@@ -211,7 +211,7 @@ To create a new hosted environment on WP Engine:
 1. \`wpe_create_site\` — create a site container (required first)
 2. \`wpe_create_install\` — add an environment (production/staging/development) to the site
 3. **WAIT for provisioning** — the install returns \`status: "pending"\` immediately. Poll \`wpe_get_install\` every 60 seconds until \`status === "active"\`. This takes 3–5 minutes.
-4. **WAIT 3 more minutes after active** — CAPI marks installs active before SSH/rsync infrastructure is ready. Pushing immediately after \`status: "active"\` will fail with rsync "Failed to create shell" errors. Wait a full 3 minutes after active before any push or SSH operation.
+4. **Verify SSH with \`wpe_wait_for_ssh\`** — pass the install slug (e.g. "nexusdemo24"). This probes SSH every 30s until it succeeds (typically 3–8 min after creation). Only proceed with push or WP-CLI after this returns success. Do NOT rely on CAPI's status="active" alone — SSH infrastructure needs additional warmup.
 
 To update an install (PHP version, environment type): \`wpe_update_install\`
 
