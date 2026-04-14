@@ -80,8 +80,13 @@ async function main(): Promise<void> {
   const modelIdx = args.indexOf('--model');
   const model = modelIdx >= 0 ? args[modelIdx + 1] : 'claude-sonnet-4-6';
 
+  // Non-interactive mode: --scores "y,90,85,90" --notes "reviewer notes"
+  const scoresIdx = args.indexOf('--scores');
+  const notesIdx = args.indexOf('--notes');
+  const nonInteractive = scoresIdx >= 0;
+
   if (!transcriptFile || !fs.existsSync(transcriptFile)) {
-    console.error('Usage: score-eval.ts <transcript-file> [--model <model-id>]');
+    console.error('Usage: score-eval.ts <transcript-file> [--model <model>] [--scores "y,90,85,90"] [--notes "text"]');
     process.exit(1);
   }
 
@@ -123,14 +128,30 @@ async function main(): Promise<void> {
     evalCase.expected.must_not.forEach((s, i) => console.log(`  ${i + 1}. ${s}`));
   }
 
-  console.log('');
-  const taskCompleted = await prompt(rl, 'Did the task complete successfully? (y/n): ');
-  const stepsScore = await prompt(rl, 'Steps correct (0-100): ');
-  const frictionScore = await prompt(rl, 'Friction score 0-100 (100=zero friction, 0=total failure): ');
-  const clarityScore = await prompt(rl, 'Output clarity (0-100): ');
-  const reviewerNotes = await prompt(rl, 'Reviewer notes (what worked, what broke, surprises): ');
+  let taskCompleted: string;
+  let stepsScore: string;
+  let frictionScore: string;
+  let clarityScore: string;
+  let reviewerNotes: string;
 
-  rl.close();
+  if (nonInteractive) {
+    // --scores "y,90,85,90" --notes "text"
+    const scoresParts = (args[scoresIdx + 1] || 'y,80,80,80').split(',');
+    taskCompleted = scoresParts[0] || 'y';
+    stepsScore = scoresParts[1] || '80';
+    frictionScore = scoresParts[2] || '80';
+    clarityScore = scoresParts[3] || '80';
+    reviewerNotes = notesIdx >= 0 ? args[notesIdx + 1] : '_Non-interactive run_';
+    rl.close();
+  } else {
+    console.log('');
+    taskCompleted = await prompt(rl, 'Did the task complete successfully? (y/n): ');
+    stepsScore = await prompt(rl, 'Steps correct (0-100): ');
+    frictionScore = await prompt(rl, 'Friction score 0-100 (100=zero friction, 0=total failure): ');
+    clarityScore = await prompt(rl, 'Output clarity (0-100): ');
+    reviewerNotes = await prompt(rl, 'Reviewer notes (what worked, what broke, surprises): ');
+    rl.close();
+  }
 
   // Calculate weighted score
   const weights = evalCase?.scoring_weights ?? { task_completed: 40, steps_correct: 30, friction_count: 20, output_clarity: 10 };
