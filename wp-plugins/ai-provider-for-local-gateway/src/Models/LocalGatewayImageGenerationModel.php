@@ -7,7 +7,6 @@ namespace WordPress\LocalGatewayAiProvider\Models;
 use WordPress\AiClient\Common\Exception\InvalidArgumentException;
 use WordPress\AiClient\Common\Exception\RuntimeException;
 use WordPress\AiClient\Files\DTO\File;
-use WordPress\AiClient\Files\Enums\FileTypeEnum;
 use WordPress\AiClient\Messages\DTO\Message;
 use WordPress\AiClient\Messages\DTO\MessagePart;
 use WordPress\AiClient\Messages\Enums\MessageRoleEnum;
@@ -101,16 +100,12 @@ class LocalGatewayImageGenerationModel extends AbstractApiBasedModel implements 
             throw new RuntimeException('No image data in gateway response.');
         }
 
-        $file = File::fromArray([
-            'fileType'  => FileTypeEnum::inline()->value,
-            'base64Data' => $b64,
-            'mimeType'  => 'image/png',
-        ]);
-
-        $message = Message::fromArray([
-            'role'  => MessageRoleEnum::model()->value,
-            'parts' => [$file->toArray()],
-        ]);
+        // Build result using direct constructors — fromArray() chains fail because
+        // File::toArray() returns {fileType,base64Data,mimeType} but MessagePart::fromArray()
+        // expects the file nested under the 'file' key: {'file': {...}}.
+        $file    = new File($b64, 'image/png');
+        $part    = new MessagePart($file);
+        $message = new Message(MessageRoleEnum::model(), [$part]);
 
         $candidate = Candidate::fromArray([
             'message'      => $message->toArray(),
