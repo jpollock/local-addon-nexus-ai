@@ -18,6 +18,7 @@ import { contentCommand } from './commands/content';
 import { aiCommand } from './commands/ai';
 import { auditCommand } from './commands/audit';
 import { mcpCommand } from './commands/mcp';
+import { skillsCommand } from './commands/skills';
 import { doctorCommand } from './commands/doctor';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
@@ -43,6 +44,7 @@ program.addCommand(contentCommand);
 program.addCommand(aiCommand);
 program.addCommand(auditCommand);
 program.addCommand(mcpCommand);
+program.addCommand(skillsCommand);
 program.addCommand(doctorCommand);
 
 // Global error handler
