@@ -11,31 +11,43 @@ Arguments: `$ARGUMENTS`
 - Local site: `$0`
 - WPE install: `$1`
 
+## Target syntax — required format
+
+| Target | Format | Example |
+|--------|--------|---------|
+| Local site | `<name>@local` | `frostscape@local` |
+| WPE source | `wpe:<account>/<install>@<env>` | `wpe:jpollock911/testblankjpp1@production` |
+
+- `@local` suffix is **required** on the local site — bare names are rejected
+- Account is the WPE account **slug** (e.g. `jpollock911`, `w7579`), not the UUID
+- Environment: `production`, `staging`, or `development`
+
 ## Step 1: Discover available sites
 
 ```!
 nexus sites list
 ```
 
-## Step 2: Validate and pull
+Use this output to confirm the local site name and find the correct WPE account slug + install name.
 
-1. Confirm `$0` exists as a local site and is running (start it if halted)
-2. Confirm `$1` exists as a WPE install in the list above
-3. If either argument is missing, ask the user to pick from the lists above
-4. Run the pull:
+## Step 2: Build the command and pull
+
+1. Confirm `$0` exists locally — if halted, start it first: `nexus sites start $0@local`
+2. From the list above, identify the WPE account slug and install name for `$1`
+3. If either argument is missing or ambiguous, ask the user before proceeding
+4. Run the pull with the correct target format:
 
 ```
-nexus sync pull $0 --from $1 --db
+nexus sync pull <name>@local --from wpe:<account>/<install>@production --db
 ```
 
 The `--db` flag includes the database. Remove it for files-only.
 
-**Pull is async** — it runs in Local's background. After starting, check progress in Local's UI or watch the logs. Do not run WP-CLI commands on the site until the pull completes (status returns to "running").
+**Pull is async** — runs in Local's background. Do not run WP-CLI on the site until it completes (status returns to "running").
 
 ## Step 3: Verify
 
-After pull completes, confirm with:
 ```
-nexus sites get $0
-nexus wp health --site $0
+nexus sites get <name>@local
+nexus wp health --site <name>@local
 ```

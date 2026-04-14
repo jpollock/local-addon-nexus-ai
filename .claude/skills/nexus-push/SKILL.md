@@ -14,6 +14,17 @@ Arguments: `$ARGUMENTS`
 - Local site: `$0`
 - WPE install: `$1`
 
+## Target syntax — required format
+
+| Target | Format | Example |
+|--------|--------|---------|
+| Local site | `<name>@local` | `frostscape@local` |
+| WPE destination | `wpe:<account>/<install>@<env>` | `wpe:jpollock911/testblankjpp1@production` |
+
+- `@local` suffix is **required** on the local site
+- Account is the WPE account **slug**, not the UUID
+- Environment: `production`, `staging`, or `development`
+
 ## Step 1: Pre-flight check
 
 ```!
@@ -40,7 +51,7 @@ Only proceed after explicit "yes".
 ## Step 3: Push
 
 ```
-nexus sync push $0 --to $1
+nexus sync push <name>@local --to wpe:<account>/<install>@production
 ```
 
 Add `--db` to also push the database. Do not include `--db` for files-only.

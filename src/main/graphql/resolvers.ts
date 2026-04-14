@@ -1195,8 +1195,8 @@ export function createResolvers(context: ResolverContext) {
           }
 
           // Get WPE install ID from install name
-          // The install name in wpeTarget is "account/install" format, we need to find the actual install ID
-          const [accountName, installName] = wpeParsed.installName!.split('/');
+          // installName is already just the install name (account was parsed separately by parseTarget)
+          const installName = wpeParsed.installName!;
 
           // Get all WPE installs to find the one matching our target
           const installs = await services.localServices.capiGetInstalls();
@@ -1299,7 +1299,8 @@ export function createResolvers(context: ResolverContext) {
           }
 
           // Get WPE install ID from install name
-          const [accountName, installName] = wpeParsed.installName!.split('/');
+          // installName is already just the install name (account was parsed separately by parseTarget)
+          const installName = wpeParsed.installName!;
 
           // Get all WPE installs to find the one matching our target
           const installs = await services.localServices.capiGetInstalls();
