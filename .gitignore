@@ -9,6 +9,8 @@ models/all-MiniLM-L6-v2-quantized/tokenizer_config.json
 .DS_Store
 .data/
 .claude/
+!.claude/skills/
+!.claude/skills/**
 wp-plugins/advanced-custom-fields-pro
 # Test database files
 tests/unit/events/test-graph-*.db*
