@@ -11,99 +11,72 @@ use WordPress\AiClient\Providers\Models\Enums\CapabilityEnum;
 use WordPress\AiClient\Providers\Models\Enums\OptionEnum;
 
 /**
- * Class for the Local Gateway model metadata directory.
+ * Model metadata directory for the Local AI Gateway.
  *
- * Lists the AI models available through the Local Gateway. Initially supports
- * Anthropic Claude models, with potential for OpenAI, Google, and others.
+ * Exposes text generation and image generation models available through the
+ * Local Gateway. Models are determined by the NEXUS_AI_PROVIDER constant
+ * (set by the nexus-ai-connector-config.php MU plugin) which mirrors the
+ * global AI provider preference in Local.
  *
- * The Local Gateway routes requests to the appropriate provider based on the
- * model ID (e.g., "claude-haiku-4-5" routes to Anthropic, "gpt-4" to OpenAI).
+ * The gateway routes requests to the underlying provider (Anthropic, OpenAI,
+ * Google) based on the model ID via MODEL_PROVIDER_MAP in AIGatewayRoutes.ts.
  *
  * @since 1.0.0
  */
 class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterface
 {
-    /**
-     * Cached models to avoid repeated lookups.
-     *
-     * @since 1.0.0
-     * @var array<string, ModelMetadata>|null
-     */
+    /** @var array<string, ModelMetadata>|null */
     private $modelCache = null;
 
-    /**
-     * {@inheritDoc}
-     *
-     * @since 1.0.0
-     */
+    /** {@inheritDoc} */
     public function listModelMetadata(): array
     {
         if ($this->modelCache !== null) {
             return array_values($this->modelCache);
         }
-
         $this->modelCache = $this->getAvailableModels();
         return array_values($this->modelCache);
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @since 1.0.0
-     */
+    /** {@inheritDoc} */
     public function getModelMetadata(string $modelId): ModelMetadata
     {
-
         if ($this->modelCache === null) {
             $this->modelCache = $this->getAvailableModels();
         }
-
         if (!isset($this->modelCache[$modelId])) {
             throw new \InvalidArgumentException(
                 sprintf('Model "%s" not available through Local Gateway', $modelId)
             );
         }
-
         return $this->modelCache[$modelId];
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @since 1.0.0
-     */
+    /** {@inheritDoc} */
     public function hasModelMetadata(string $modelId): bool
     {
-
         if ($this->modelCache === null) {
             $this->modelCache = $this->getAvailableModels();
         }
-
-        $hasModel = isset($this->modelCache[$modelId]);
-
-        return $hasModel;
+        return isset($this->modelCache[$modelId]);
     }
 
     /**
-     * Get the list of available models.
+     * Build the model map for the currently configured provider.
      *
-     * Initially supports Anthropic Claude models. Can be extended to support
-     * other providers (OpenAI, Google, etc.) as the gateway implementation expands.
-     *
-     * @since 1.0.0
      * @return array<string, ModelMetadata>
      */
     private function getAvailableModels(): array
     {
+        $provider = defined('NEXUS_AI_PROVIDER') ? NEXUS_AI_PROVIDER : 'anthropic';
         $modelMap = [];
 
-        // Standard capabilities and options for all text generation models
-        $capabilities = [
+        // --- Text generation capabilities / options (shared) ---
+        $textCaps = [
             CapabilityEnum::textGeneration(),
             CapabilityEnum::chatHistory(),
         ];
-
-        $options = [
+        $textOpts = [
             new SupportedOption(OptionEnum::systemInstruction()),
             new SupportedOption(OptionEnum::maxTokens()),
             new SupportedOption(OptionEnum::temperature()),
@@ -114,32 +87,78 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
             new SupportedOption(OptionEnum::outputModalities()),
         ];
 
-        // Models are determined by the provider the gateway is currently routing to.
-        // NEXUS_AI_PROVIDER is set by the nexus-ai-connector-config.php MU plugin
-        // and mirrors the global AI provider preference in Local.
-        $provider = defined('NEXUS_AI_PROVIDER') ? NEXUS_AI_PROVIDER : 'anthropic';
+        // --- Image generation capabilities / options ---
+        $imageCaps = [
+            CapabilityEnum::imageGeneration(),
+        ];
+        $imageOpts = [];
 
+        // -----------------------------------------------------------------------
+        // Text models
+        // -----------------------------------------------------------------------
         if ($provider === 'openai') {
-            $models = [
-                'gpt-4o-mini' => 'GPT-4o Mini',
-                'gpt-4o'      => 'GPT-4o',
-                'gpt-4.1'     => 'GPT-4.1',
+            $textModels = [
+                'gpt-4.1'      => 'GPT-4.1',
+                'gpt-4.1-mini' => 'GPT-4.1 Mini',
+                'gpt-4.1-nano' => 'GPT-4.1 Nano',
+                'gpt-4o'       => 'GPT-4o',
+                'gpt-4o-mini'  => 'GPT-4o Mini',
+            ];
+        } elseif ($provider === 'google') {
+            $textModels = [
+                'gemini-2.5-pro'        => 'Gemini 2.5 Pro',
+                'gemini-2.5-flash'      => 'Gemini 2.5 Flash',
+                'gemini-2.0-flash'      => 'Gemini 2.0 Flash',
+                'gemini-2.0-flash-lite' => 'Gemini 2.0 Flash Lite',
+                'gemini-1.5-pro'        => 'Gemini 1.5 Pro',
+                'gemini-1.5-flash'      => 'Gemini 1.5 Flash',
             ];
         } else {
-            // Default: Anthropic Claude models
-            $models = [
-                'claude-haiku-4-5-20251001'  => 'Claude Haiku 4.5',
-                'claude-sonnet-4-5-20250514' => 'Claude Sonnet 4.5',
-                'claude-opus-4-6-20251015'   => 'Claude Opus 4.6',
+            // Default: Anthropic Claude models (current IDs)
+            $textModels = [
+                'claude-opus-4-6'           => 'Claude Opus 4.6',
+                'claude-sonnet-4-6'         => 'Claude Sonnet 4.6',
+                'claude-haiku-4-5-20251001' => 'Claude Haiku 4.5',
             ];
         }
 
-        foreach ($models as $modelId => $modelName) {
+        foreach ($textModels as $modelId => $modelName) {
             $modelMap[$modelId] = new ModelMetadata(
                 $modelId,
                 $modelName,
-                $capabilities,
-                $options,
+                $textCaps,
+                $textOpts,
+                'local-gateway'
+            );
+        }
+
+        // -----------------------------------------------------------------------
+        // Image generation models (only for providers that support it)
+        // -----------------------------------------------------------------------
+        if ($provider === 'openai') {
+            $imageModels = [
+                'gpt-image-1'      => 'GPT Image 1',
+                'gpt-image-1.5'    => 'GPT Image 1.5',
+                'gpt-image-1-mini' => 'GPT Image 1 Mini',
+                'dall-e-3'         => 'DALL·E 3',
+                'dall-e-2'         => 'DALL·E 2',
+            ];
+        } elseif ($provider === 'google') {
+            $imageModels = [
+                'imagen-4.0-generate-001'       => 'Imagen 4',
+                'imagen-4.0-ultra-generate-001' => 'Imagen 4 Ultra',
+                'imagen-4.0-fast-generate-001'  => 'Imagen 4 Fast',
+            ];
+        } else {
+            $imageModels = []; // Anthropic has no image generation
+        }
+
+        foreach ($imageModels as $modelId => $modelName) {
+            $modelMap[$modelId] = new ModelMetadata(
+                $modelId,
+                $modelName,
+                $imageCaps,
+                $imageOpts,
                 'local-gateway'
             );
         }
