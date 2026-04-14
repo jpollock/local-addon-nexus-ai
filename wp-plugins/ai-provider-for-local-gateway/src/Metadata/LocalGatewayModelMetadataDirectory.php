@@ -91,7 +91,13 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
         $imageCaps = [
             CapabilityEnum::imageGeneration(),
         ];
-        $imageOpts = [];
+        // inputModalities is required by ModelRequirements when the prompt contains text.
+        // outputModalities is required because generateImageResult() sets image output modality.
+        // SupportedOption with no value restriction (null) accepts any value — see isSupportedValue().
+        $imageOpts = [
+            new SupportedOption(OptionEnum::inputModalities()),
+            new SupportedOption(OptionEnum::outputModalities()),
+        ];
 
         // -----------------------------------------------------------------------
         // Text models
