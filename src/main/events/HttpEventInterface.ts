@@ -195,7 +195,13 @@ export class HttpEventInterface {
   private handleAIGatewayRoute(url: string, req: http.IncomingMessage, res: http.ServerResponse): void {
     if (url === '/ai-gateway/v1/chat/completions' && req.method === 'POST') {
       this.aiGatewayRoutes.handleChatCompletions(req, res).catch((err) => {
-        this.logger.error('[HttpEventInterface] AI Gateway error:', err);
+        this.logger.error('[HttpEventInterface] AI Gateway chat error:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'Internal server error' } }));
+      });
+    } else if (url === '/ai-gateway/v1/images/generations' && req.method === 'POST') {
+      this.aiGatewayRoutes.handleImageGenerations(req, res).catch((err) => {
+        this.logger.error('[HttpEventInterface] AI Gateway image error:', err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: { message: 'Internal server error' } }));
       });

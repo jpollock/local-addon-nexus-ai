@@ -8,7 +8,7 @@ export class GoogleProvider implements AIProvider {
   readonly id = 'google';
   readonly displayName = 'Google Gemini';
   readonly requiresApiKey = true;
-  readonly defaultModels = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash'];
+  readonly defaultModels = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash'];
 
   async *streamChat(
     messages: ChatMessage[],

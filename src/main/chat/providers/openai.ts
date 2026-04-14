@@ -8,7 +8,7 @@ export class OpenAIProvider implements AIProvider {
   readonly id = 'openai';
   readonly displayName = 'OpenAI';
   readonly requiresApiKey = true;
-  readonly defaultModels = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'];
+  readonly defaultModels = ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o4-mini', 'o3', 'o3-mini', 'o1', 'o1-mini'];
 
   async *streamChat(
     messages: ChatMessage[],
@@ -147,7 +147,8 @@ export class OpenAIProvider implements AIProvider {
       const data = JSON.parse(response);
       const models = (data.data ?? [])
         .map((m: any) => m.id as string)
-        .filter((id: string) => id.startsWith('gpt-'))
+        .filter((id: string) => id.startsWith('gpt-') || id.startsWith('o') || id.startsWith('dall-e'))
+        .filter((id: string) => !id.includes('instruct') && !id.includes('vision-preview') && !id.includes('0301') && !id.includes('0613') && !id.includes('32k'))
         .sort();
       return models.length > 0 ? models : this.defaultModels;
     } catch {

@@ -107,25 +107,25 @@ export async function callAnthropicAPI(
 /**
  * Calculate cost for Anthropic API usage
  *
- * Pricing (as of March 2025):
- * - Claude Haiku 4.5: $0.80/1M input, $4.00/1M output
- * - Claude Sonnet 4.5: $3.00/1M input, $15.00/1M output
- * - Claude Opus 4.6: $15.00/1M input, $75.00/1M output
+ * Pricing (as of April 2025, from platform.claude.com/docs):
+ * - Claude Haiku 4.5: $1.00/1M input, $5.00/1M output
+ * - Claude Sonnet 4.6: $3.00/1M input, $15.00/1M output
+ * - Claude Opus 4.6: $5.00/1M input, $25.00/1M output
  */
 export function calculateAnthropicCost(
   model: string,
   inputTokens: number,
   outputTokens: number,
 ): number {
-  let inputCostPer1M = 0.8;
-  let outputCostPer1M = 4.0;
+  let inputCostPer1M = 1.0;   // Haiku default
+  let outputCostPer1M = 5.0;
 
-  if (model.includes('sonnet')) {
+  if (model.includes('opus')) {
+    inputCostPer1M = 5.0;
+    outputCostPer1M = 25.0;
+  } else if (model.includes('sonnet')) {
     inputCostPer1M = 3.0;
     outputCostPer1M = 15.0;
-  } else if (model.includes('opus')) {
-    inputCostPer1M = 15.0;
-    outputCostPer1M = 75.0;
   }
 
   const inputCost = (inputTokens / 1_000_000) * inputCostPer1M;
