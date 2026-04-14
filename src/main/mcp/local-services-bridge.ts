@@ -608,10 +608,15 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     },
 
     getWpeUserId(): string | null {
-      // Do NOT access userData - it causes decryption crashes
-      // User ID is not available from in-memory tokens, so return null
-      // This is acceptable - userId is only used for hostConnections metadata
-      return null;
+      // Read from CAPIService._wpeUserInfo which is populated after OAuth login.
+      // This is safe — _wpeUserInfo is an in-memory cache, not userData (no decryption risk).
+      const capi = svc('capi');
+      if (!capi) return null;
+      try {
+        return (capi as any)._wpeUserInfo?.userId ?? null;
+      } catch {
+        return null;
+      }
     },
 
     // --- WPE API Credentials (for basic auth fallback) ---

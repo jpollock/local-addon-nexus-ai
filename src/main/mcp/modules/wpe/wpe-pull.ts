@@ -25,7 +25,7 @@ export const wpePullHandler: McpToolHandler = {
         },
         remote_install_id: {
           type: 'string',
-          description: 'WP Engine install ID to pull from directly. If omitted, site must be linked.',
+          description: 'WP Engine install to pull from. Accepts the install UUID OR the install name/slug (e.g. "jpp0413p"). If omitted, site must already be linked.',
         },
       },
       required: ['site'],
@@ -68,17 +68,20 @@ export const wpePullHandler: McpToolHandler = {
     let installAccountId: string | null = null;
 
     if (args.remote_install_id) {
-      // Get install details from CAPI
+      // Get install details from CAPI — accept UUID or install name slug
       const installs = (await services.localServices.capiGetInstalls()) as any[];
-      const install = installs.find((i: any) => i.id === args.remote_install_id);
+      const query = args.remote_install_id as string;
+      const install = installs.find((i: any) => i.id === query || i.name === query);
 
       if (!install) {
-        return error(`WPE install not found: ${args.remote_install_id}`);
+        return error(`WPE install not found: "${query}". Use nexus_list_sites to see available installs.`);
       }
 
       installName = install.name;
       installId = install.id;
-      remoteSiteId = typeof install.site === 'object' ? install.site.id : install.site;
+      // install.site is {id: string} | null. typeof null === 'object' in JS, so check for null explicitly.
+      // If site is null (legacy installs not attached to a Site), Local uses the install.id as the "site" ID.
+      remoteSiteId = (install.site && install.site.id) ? install.site.id : install.id;
       primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
       environment = install.environment || 'production';
       installAccountId = install.account?.id ?? null;
@@ -90,8 +93,10 @@ export const wpePullHandler: McpToolHandler = {
 
       const installs = (await services.localServices.capiGetInstalls()) as any[];
       const install = installs.find(
-        (i: any) => (typeof i.site === 'object' ? i.site.id : i.site) === wpeSiteId
-          && i.environment === environment
+        (i: any) => {
+          const siteId = (i.site && i.site.id) ? i.site.id : i.id;
+          return siteId === wpeSiteId && i.environment === environment;
+        }
       );
 
       if (!install) {
@@ -108,17 +113,16 @@ export const wpePullHandler: McpToolHandler = {
       installAccountId = install.account?.id ?? null;
     }
 
-    // Prepare hostConnections object (will be saved twice to work around race condition)
+    // Prepare hostConnections object (will be saved twice to work around race condition).
+    // Match the exact shape Local's own push/pull saves so the Connect Drawer pre-populates correctly.
     const userId = services.localServices!.getWpeUserId();
     const hostConnectionUpdate = {
       hostConnections: [{
         hostId: 'wpe' as const,
         remoteSiteId,
         remoteSiteEnv: environment,
-        accountId: installAccountId,
+        accountId: installAccountId || undefined,
         userId: userId || undefined,
-        magicSync: true,
-        database: true,
       }],
     };
 

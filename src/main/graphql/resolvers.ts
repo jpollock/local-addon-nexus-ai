@@ -192,7 +192,7 @@ export function createResolvers(context: ResolverContext) {
 
             // Find the install by matching site ID and environment
             const install = wpeInstalls.find((i: any) => {
-              const siteId = typeof i.site === 'object' ? i.site?.id : i.site;
+              const siteId = (i.site && i.site.id) ? i.site.id : i.id;
               return siteId === remoteSiteId && (!remoteSiteEnv || i.environment === remoteSiteEnv);
             });
 
