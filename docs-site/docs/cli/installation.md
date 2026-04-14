@@ -51,17 +51,17 @@ After installation, the `nexus` command is available globally.
 
 ### First Run
 
-On first run, the CLI automatically handles all setup:
+On first run, the CLI automatically handles all setup. Run either `nexus doctor` (recommended — verifies everything) or any other command to trigger the bootstrap:
 
 ```bash
-$ nexus sites list
+$ nexus doctor
 
 Nexus AI addon not found.
 Detected platform: macOS (Apple Silicon)
 
-Download and install addon from GitHub? (Y/n) Y
+Download and install addon from releases.elasticapi.io? (Y/n) Y
 
-Downloading nexus-ai-darwin-arm64-0.2.1.tgz...
+Downloading nexus-ai-darwin-arm64-{version}.tgz...
 Downloading... 100% (287 MB / 287 MB)
 Download complete. Installing...
 ✓ Addon installed successfully!
@@ -70,10 +70,13 @@ Please restart Local for the addon to appear.
 
 (After restarting Local)
 
-$ nexus sites list
+$ nexus doctor
 
-Local Sites (0 running, 0 halted):
-  No local sites found. Create one in Local or: nexus local create <name>
+Nexus AI v{version} — System Health
+  ✅  Local             Running (v9.x.x)
+  ✅  Nexus AI addon    Active (v{version})
+  ✅  GraphQL           Connected
+  ✅  MCP server        Ready
 ```
 
 **What just happened:**
@@ -96,11 +99,11 @@ nexus doctor
 This checks every layer of the stack and prints the exact fix for anything that's wrong:
 
 ```
-Nexus AI v0.2.1 — System Health
+Nexus AI v{version} — System Health
 ──────────────────────────────────────────────────
   ✅  Local app           Installed
   ✅  Local running       Running
-  ✅  Nexus AI addon      Active (v0.2.1)
+  ✅  Nexus AI addon      Active (v{version})
   ✅  GraphQL server      Connected (port 4000)
   ✅  MCP server          Running · 161 tools
   ⚠️   AI agent config    No agents configured
@@ -175,7 +178,7 @@ Add to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to persist.
 ## Updating
 
 ```bash
-npm update -g local-addon-nexus-ai
+npm update -g @local-labs-jpollock/local-addon-nexus-ai
 
 # Or force reinstall latest
 npm install -g @local-labs-jpollock/local-addon-nexus-ai@latest
@@ -187,7 +190,7 @@ The addon in Local will auto-update on next CLI run if a new version is detected
 
 ```bash
 # Remove CLI
-npm uninstall -g local-addon-nexus-ai
+npm uninstall -g @local-labs-jpollock/local-addon-nexus-ai
 
 # Remove addon from Local (optional)
 # Local → Preferences → Addons → Nexus AI → Remove

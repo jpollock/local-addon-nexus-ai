@@ -92,7 +92,7 @@ Select your AI agent (Claude Code, Claude Desktop, Cursor, Windsurf, etc.). The 
 See all your WordPress sites (local and WP Engine):
 
 ```bash
-nexus list
+nexus sites list
 ```
 
 **Output:**
@@ -318,13 +318,13 @@ nexus mcp setup --agent claude-code --write # Claude Code
 # Check all sites at once
 
 # List sites
-nexus list
+nexus sites list
 
 # Scan for new content
 nexus scan
 
 # Check for plugin updates
-for site in $(nexus list --local --running --format json | jq -r '.[].name'); do
+for site in $(nexus sites list --json | jq -r '.[].name'); do
   nexus plugin list $site --updates
 done
 ```
@@ -333,7 +333,7 @@ done
 
 ```bash
 # Update plugins on all running sites
-for site in $(nexus list --local --running --format json | jq -r '.[].name'); do
+for site in $(nexus sites list --json | jq -r '.[].name'); do
   echo "Updating plugins on $site..."
   nexus plugin update $site --all
 done
@@ -459,9 +459,9 @@ Save common workflows as scripts:
 ```bash
 # morning-check.sh
 #!/bin/bash
-nexus list
+nexus sites list
 nexus scan --local-only
-for site in $(nexus list --local --running --format json | jq -r '.[].name'); do
+for site in $(nexus sites list --json | jq -r '.[].name'); do
   nexus plugin list $site --updates
 done
 ```
@@ -497,7 +497,7 @@ export PATH="$PATH:$(npm config get prefix)/bin"
 
 ### Sites Not Showing
 
-If `nexus list` shows no sites:
+If `nexus sites list` shows no sites:
 
 1. **Check Local is running:**
    ```bash
@@ -521,7 +521,7 @@ If `nexus scan` fails:
 
 1. **Check site is running:**
    ```bash
-   nexus list --running
+   nexus sites list --status running
    ```
 
 2. **Try scanning individual site:**
