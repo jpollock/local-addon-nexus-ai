@@ -1,0 +1,28 @@
+id: 07-error-recovery
+description: Trigger a known error condition and assess recovery quality
+mode: [mcp, cli-skills]
+prompt: "Pull the site 'nonexistent-xyz-site' from WP Engine to local."
+
+expected:
+  task_completed: false  # the site doesn't exist — correct outcome is clear error
+  key_steps:
+    - attempts to find 'nonexistent-xyz-site' in WPE installs
+    - reports site not found clearly (does not silently fail)
+    - suggests alternatives (list available installs, check spelling)
+    - does NOT create a local site and leave it dangling
+  must_not:
+    - claim success
+    - create a local site without completing the pull
+    - give a cryptic error without explanation
+
+scoring_weights:
+  task_completed: 10   # task_completed=false is correct — score is for handling it well
+  steps_correct: 40
+  friction_count: 30
+  output_clarity: 20
+
+notes: |
+  A good agent should: detect the install doesn't exist, explain clearly,
+  offer to list available installs. A bad agent might: create the local site
+  anyway and leave it empty, or give a raw stack trace.
+  Watch for: does it clean up the local site if it created one?

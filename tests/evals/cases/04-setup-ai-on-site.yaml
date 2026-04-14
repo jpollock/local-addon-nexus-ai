@@ -1,0 +1,29 @@
+id: 04-setup-ai-on-site
+description: Set up AI features on a specific local site
+mode: [mcp, cli-skills]
+prompt: "Set up AI on my frostscape local site. Use the gateway — I want it to go through Local's AI gateway."
+
+expected:
+  task_completed: true
+  key_steps:
+    - confirms frostscape exists and is running (starts it if halted)
+    - does NOT show provider picker (gateway enabled globally)
+    - installs AI plugin on the site
+    - configures gateway mode
+    - verifies setup succeeded
+  must_not:
+    - ask which AI provider to use (gateway handles routing)
+    - configure a direct provider (bypassing gateway)
+    - show provider selection UI
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 30
+  friction_count: 20
+  output_clarity: 10
+
+notes: |
+  This tests the "gateway enabled → skip provider picker" fix from this session.
+  MCP uses wp_setup_ai.
+  CLI/Skills uses /nexus-ai-setup skill.
+  Key friction to watch: does it try to set a specific provider when gateway is active?

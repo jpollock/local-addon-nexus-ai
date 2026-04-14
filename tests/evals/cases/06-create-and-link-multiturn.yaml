@@ -1,0 +1,35 @@
+id: 06-create-and-link-multiturn
+description: Multi-turn — create a new local site, link it to WPE, pull, verify
+mode: [mcp, cli-skills]
+conversation:
+  - turn: 1
+    prompt: "Create a new local WordPress site called 'eval-test-site'."
+  - turn: 2
+    prompt: "Good. Now link it to the jppblank WP Engine install and pull the files and database."
+  - turn: 3
+    prompt: "Is it healthy? Check the WordPress version and that plugins loaded correctly."
+
+expected:
+  task_completed: true
+  key_steps:
+    - turn 1: creates site, reports success with domain
+    - turn 2: identifies jppblank in w7579 account, starts site, executes pull with --db
+    - turn 2: warns pull is async, does not claim completion immediately
+    - turn 3: checks WP version and plugin list after confirming pull done
+    - maintains context across turns (knows eval-test-site = the site we just created)
+  must_not:
+    - forget which site was created in turn 1
+    - claim pull is complete before checking
+    - push instead of pull
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 30
+  friction_count: 20
+  output_clarity: 10
+
+notes: |
+  Key test of context retention across turns.
+  MCP maintains context via conversation history.
+  CLI/Skills: reviewer must keep same Claude Code session open across all turns.
+  Watch for: does it remember eval-test-site in turn 3 without being reminded?

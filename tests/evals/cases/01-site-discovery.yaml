@@ -1,0 +1,27 @@
+id: 01-site-discovery
+description: Basic site discovery — what environments exist?
+mode: [mcp, cli-skills]
+prompt: "What WordPress sites do I have? Show me everything — local and WP Engine."
+
+expected:
+  task_completed: true
+  key_steps:
+    - discovers local sites with status (running/halted)
+    - discovers WPE environments by account
+    - groups or distinguishes local vs cloud
+    - shows domain and linkage info
+  must_not:
+    - ask the user for site names
+    - claim no sites exist if Local has sites
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 30
+  friction_count: 20
+  output_clarity: 10
+
+notes: |
+  This is the entry point to every workflow. Both MCP and CLI/Skills
+  should discover everything in one call. MCP uses nexus_list_sites.
+  CLI/Skills uses /nexus-sites skill which runs nexus sites list.
+  Friction to watch for: asking for credentials, asking which account.
