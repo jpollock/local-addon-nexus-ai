@@ -750,12 +750,19 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
         React.createElement('span', { style: { marginRight: 6 } }, 'Not configured'),
         !showProviderPicker && !settingUpAI
           ? this.btn({
-              onClick: canSetupAI ? () => this.setState({ showProviderPicker: true, pickerProvider: '' }) : undefined,
+              onClick: canSetupAI
+                ? (useLocalGateway
+                    // Gateway enabled: skip provider picker — use global provider directly
+                    ? () => this.handleSetupAI()
+                    // Gateway disabled: show provider picker
+                    : () => this.setState({ showProviderPicker: true, pickerProvider: '' }))
+                : undefined,
               disabled: !canSetupAI,
               children: setupText,
             })
           : (settingUpAI ? React.createElement('span', { style: { fontSize: 11, opacity: 0.7 } }, 'Setting up...') : null),
-        providerPickerEl,
+        // Only show provider picker when gateway is not active
+        !useLocalGateway ? providerPickerEl : null,
       );
     }
 
