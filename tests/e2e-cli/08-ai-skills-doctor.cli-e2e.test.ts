@@ -28,10 +28,12 @@ describe('nexus doctor', () => {
 });
 
 describe('nexus ai config', () => {
-  it('returns current AI configuration', async () => {
-    const r = await runCli('ai config');
+  it('returns current AI configuration (send n to skip interactive prompt)', async () => {
+    // ai config shows current settings then prompts to reconfigure — send 'n' to exit
+    const r = await runCli('ai config', { stdin: 'n', timeout: 15000 });
     expect([0, 1]).toContain(r.exitCode);
-    expect(r.output.length).toBeGreaterThan(0);
+    // Should show at least the current provider/model before prompting
+    expect(r.output.toLowerCase()).toMatch(/provider|model|ai|openai|anthropic|google|ollama/);
   });
 });
 

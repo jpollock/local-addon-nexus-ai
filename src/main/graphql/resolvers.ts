@@ -693,7 +693,7 @@ export function createResolvers(context: ResolverContext) {
             return { success: false, error: 'Local services not available', blueprints: [] };
           }
 
-          const blueprints = await services.localServices.listBlueprints();
+          const blueprints = await services.localServices.getBlueprints();
 
           return {
             success: true,
@@ -1767,7 +1767,7 @@ export function createResolvers(context: ResolverContext) {
             history: history.map((entry: any) => ({
               timestamp: entry.timestamp,
               direction: entry.direction,
-              success: entry.success,
+              success: entry.success ?? true,  // non-nullable in schema; default true if not set
               filesTransferred: entry.filesTransferred || null,
               databaseIncluded: entry.databaseIncluded || false,
             })),

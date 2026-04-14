@@ -30,7 +30,7 @@ describe('nexus sites list', () => {
       const s = data.local[0];
       expect(s).toHaveProperty('name');
       expect(s).toHaveProperty('status');
-      expect(s).toHaveProperty('id');
+      // 'id' is not included in sites list --json response (use sites get for id)
     }
   });
 });

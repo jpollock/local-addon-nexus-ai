@@ -61,31 +61,32 @@ describe('nexus fleet compare', () => {
   });
 });
 
+// fleet groups are subcommands of `nexus fleet groups`, not `nexus fleet` directly
 describe('nexus fleet groups', () => {
   it('list returns exit 0', async () => {
-    const r = await runCli('fleet list');
+    const r = await runCli('fleet groups list');
     expect(r.exitCode).toBe(0);
     expect(r.output.length).toBeGreaterThan(0);
   });
 
   it('create makes a group', async () => {
-    const r = await runCli(`fleet create ${TEST_GROUP}`);
+    const r = await runCli(`fleet groups create ${TEST_GROUP}`);
     expect(r.exitCode).toBe(0);
     expect(r.output.toLowerCase()).toMatch(/created|group/);
   });
 
   it('add requires group and site', async () => {
-    const r = await runCli('fleet add');
+    const r = await runCli('fleet groups add');
     expect(r.exitCode).toBe(1);
   });
 
   it('remove requires group and site', async () => {
-    const r = await runCli('fleet remove');
+    const r = await runCli('fleet groups remove');
     expect(r.exitCode).toBe(1);
   });
 
   it('delete removes the group', async () => {
-    const r = await runCli(`fleet delete ${TEST_GROUP}`);
+    const r = await runCli(`fleet groups delete ${TEST_GROUP}`);
     expect([0, 1]).toContain(r.exitCode); // May not exist if create failed
     if (r.exitCode === 0) {
       expect(r.output.toLowerCase()).toMatch(/deleted|removed/);
