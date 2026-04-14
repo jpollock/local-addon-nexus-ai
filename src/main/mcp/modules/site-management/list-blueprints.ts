@@ -4,7 +4,7 @@ import { ok, error as err, requireLocalServices } from './helpers';
 export const listBlueprintsHandler: McpToolHandler = {
   definition: {
     name: 'local_list_blueprints',
-    description: 'List all available site blueprints (templates)',
+    description: 'List all available site blueprints (templates) that can be used to create new sites. Blueprints are saved via local_save_blueprint. Returns blueprint name and description. Use when the user wants to create a new site from a template rather than a blank WordPress install.',
     inputSchema: {
       type: 'object',
       properties: {},

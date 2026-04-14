@@ -11,7 +11,7 @@ export const getSiteAiConfigToolHandler: McpToolHandler = {
   definition: {
     name: 'nexus_get_site_ai_config',
     description:
-      'Get the AI configuration stored for a specific site (provider, model, gateway setting). ' +
+      'Get the AI configuration stored for a specific site — provider (anthropic/openai/google/ollama/local-gateway), configured model, whether the Local Gateway is enabled, and when it was last configured. Use to confirm a site is set up correctly before running AI abilities, or to check which provider a site uses before switching.' +
       'Returns null if the site has not been configured with Setup AI.',
     inputSchema: {
       type: 'object',

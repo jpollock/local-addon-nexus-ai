@@ -8,7 +8,7 @@ export const listSiteGroupsHandler: McpToolHandler = {
   definition: {
     name: 'list_site_groups',
     description:
-      'List all site groups. Groups organize sites into named collections ' +
+      'List all site groups — named collections used to organize sites for bulk operations or reporting. Returns group name, description, and member site list. Use manage_site_group to create, rename, delete groups, or add/remove sites.' +
       '(e.g., "Sites", "Starred"). Shows group name, site count, and member sites.',
     inputSchema: {
       type: 'object',

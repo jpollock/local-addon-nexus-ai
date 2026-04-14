@@ -4,7 +4,7 @@ export const listIndexedSitesHandler: McpToolHandler = {
   definition: {
     name: 'list_indexed_sites',
     description:
-      'List all sites with their index status, document counts, and last indexed time. ' +
+      'List all sites with their content index status — document count, chunk count, last indexed timestamp, and whether the index is fresh or stale. Use to identify sites that need reindexing before a search or audit. For a single site detailed index status, use get_index_status.' +
       'Shows which sites have been indexed and are searchable.',
     inputSchema: {
       type: 'object',

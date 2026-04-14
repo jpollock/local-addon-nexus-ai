@@ -96,7 +96,7 @@ export const getDatabaseRecommendationsHandler: McpToolHandler = {
   definition: {
     name: 'get_database_recommendations',
     description:
-      'Return markdown recommendations with WP-CLI fix commands for database issues on a local WordPress site. Uses cached scan if available, or runs a fresh scan.',
+      'Return actionable recommendations for database issues found by scan_database_health — formatted as markdown with specific WP-CLI commands to fix each issue. Run scan_database_health first to get the issue report, then call this for the fix commands. Use clean_database_items to execute the cleanup directly without running WP-CLI manually.',
     inputSchema: {
       type: 'object',
       properties: {

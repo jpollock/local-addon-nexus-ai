@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { InstructionRegistry } from '../index';
+import type { RegistryStorage } from '../../../content/IndexRegistry';
+import { STORAGE_KEYS } from '../../../../common/constants';
 
 interface ResourceDef {
   uri: string;
@@ -48,12 +50,15 @@ const RESOURCES: ResourceDef[] = [
   },
 ];
 
-export function registerResources(registry: InstructionRegistry): void {
+export function registerResources(
+  registry: InstructionRegistry,
+  storage?: RegistryStorage,
+): void {
   const resourceDir = __dirname;
 
+  // Static markdown guide resources
   for (const def of RESOURCES) {
     const filePath = path.join(resourceDir, def.file);
-
     registry.registerResource({
       uri: def.uri,
       name: def.name,
@@ -65,4 +70,164 @@ export function registerResources(registry: InstructionRegistry): void {
       },
     });
   }
+
+  // Dynamic fleet state resource — reads from WPE sync cache at request time.
+  // Use this before any WPE workflow to get install names, IDs, and local links
+  // without making tool calls.
+  if (storage) {
+    registry.registerResource({
+      uri: 'nexus://fleet/state',
+      name: 'Fleet State',
+      description: 'Current WPE installs and local sites with IDs and links — read before any WPE workflow',
+      mimeType: 'text/markdown',
+      read: async () => {
+        const text = buildFleetSnapshot(storage);
+        return { text, mimeType: 'text/markdown' };
+      },
+    });
+  }
+}
+
+/**
+ * Build a COMPACT fleet snapshot for injecting into MCP initialize instructions.
+ * Returns null if no useful data is available.
+ *
+ * IMPORTANT: This must be small — full 278-install tables cause context rot.
+ * Only include: local sites + WPE installs linked to local sites + a note
+ * to use nexus_list_sites for the full fleet.
+ */
+export function buildFleetSnapshotForInstructions(storage: RegistryStorage): string | null {
+  try {
+    const wpeCache = storage.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs: any[]; syncedAt: number } | null;
+    const indexRegistry = (storage.get(STORAGE_KEYS.INDEX_REGISTRY) ?? {}) as Record<string, any>;
+    const siteAiConfig = (storage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+    const siteMetadata = (storage.get(STORAGE_KEYS.SITE_METADATA) ?? {}) as Record<string, any>;
+
+    const lines: string[] = ['## Session Fleet Context\n'];
+    let hasData = false;
+
+    // Local sites — exclude ephemeral test/e2e sites, cap at 30
+    const TEST_PATTERNS = /^(nexus-e2e-test|nexus-crud-|nexus-ai-setup-)/i;
+    const localSites = Object.entries(indexRegistry)
+      .filter(([, v]: [string, any]) => v?.siteName && v.siteName !== '' && !TEST_PATTERNS.test(v.siteName))
+      .map(([siteId, v]: [string, any]) => {
+        const meta = siteMetadata[siteId] ?? {};
+        const ai = siteAiConfig[siteId];
+        return `- **${v.siteName}** (site_id: ${siteId}, WP ${meta.wpVersion || '?'}${ai ? `, AI: ${ai.provider}` : ''})`;
+      })
+      .sort()
+      .slice(0, 30);
+
+    if (localSites.length > 0) {
+      lines.push('### Local Sites');
+      lines.push('_Use site_name as `site=` in wp_* tools._');
+      lines.push(localSites.join('\n'));
+      lines.push('');
+      hasData = true;
+    }
+
+    // WPE installs — ONLY the ones linked to a local site, plus any explicitly
+    // referenced recently. Keep this list short.
+    if (wpeCache?.installs?.length) {
+      const ageMin = Math.round((Date.now() - wpeCache.syncedAt) / 60000);
+      const localNames = new Set(localSites.map((l) => l.match(/\*\*([^*]+)\*\*/)?.[1] ?? ''));
+
+      // Find WPE installs whose name matches a local site name (linked pairs)
+      const linked = wpeCache.installs.filter((i: any) =>
+        localNames.has(i.installName) || localNames.has(i.installName + 'dev') || localNames.has(i.installName + 'stg')
+      );
+
+      if (linked.length > 0) {
+        lines.push('### WPE Installs Linked to Local Sites');
+        lines.push('_Use install_name as `install_name=` in wp_* tools. Use install_id in pull/push._');
+        for (const i of linked) {
+          lines.push(`- **${i.installName}** (install_id: ${i.installId}, ${i.environment}, ${i.primaryDomain})`);
+        }
+        lines.push('');
+        hasData = true;
+      }
+
+      lines.push(`_WPE fleet: ${wpeCache.installs.length} installs across 10 accounts (synced ${ageMin}m ago). Use nexus_list_sites for the full list or to find a specific install._`);
+    }
+
+    if (!hasData) return null;
+    return lines.join('\n');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build a compact fleet snapshot from cached storage.
+ * Used by the nexus://fleet/state resource AND injected into initialize instructions.
+ *
+ * NOTE: WPE install data (install_name, install_id, environment) is cached
+ * after CAPI sync runs. Local site data comes from the index registry.
+ */
+function buildFleetSnapshot(storage: RegistryStorage): string {
+  const lines: string[] = ['# Fleet State (from local cache)\n'];
+
+  try {
+    // WPE installs from CAPI sync cache (written by WPESyncService.syncFromCAPI)
+    const wpeCache = storage.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs: any[]; syncedAt: number } | null;
+    if (wpeCache?.installs?.length) {
+      const ageMin = Math.round((Date.now() - wpeCache.syncedAt) / 60000);
+      lines.push(`## WP Engine Installs (${wpeCache.installs.length} installs, synced ${ageMin}m ago)\n`);
+      lines.push('| install_name | install_id | environment | primary_domain | account |');
+      lines.push('|---|---|---|---|---|');
+      for (const i of wpeCache.installs) {
+        lines.push(`| ${i.installName} | ${i.installId} | ${i.environment} | ${i.primaryDomain} | ${i.accountName || '—'} |`);
+      }
+      lines.push('');
+      lines.push('_Use install_name as `install_name=` in wp_* tools for remote WP-CLI execution._');
+      lines.push('_Use install_id as `remote_install_id=` in local_wpe_pull / local_wpe_push._\n');
+    } else {
+      lines.push('## WP Engine Installs\n');
+      lines.push('_Not yet cached. Run nexus_list_sites to trigger a sync._\n');
+    }
+
+    // Local sites from index registry (populated by content indexing)
+    const indexRegistry = (storage.get(STORAGE_KEYS.INDEX_REGISTRY) ?? {}) as Record<string, any>;
+    // AI setup state per site
+    const siteAiConfig = (storage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+    // Site metadata (WP version, active theme)
+    const siteMetadata = (storage.get(STORAGE_KEYS.SITE_METADATA) ?? {}) as Record<string, any>;
+
+    const localEntries = Object.entries(indexRegistry)
+      .filter(([, v]: [string, any]) => v?.siteName && v.siteName !== '')
+      .map(([siteId, v]: [string, any]) => {
+        const meta = siteMetadata[siteId] ?? {};
+        const aiCfg = siteAiConfig[siteId] ?? null;
+        return {
+          siteId,
+          siteName: v.siteName as string,
+          wpVersion: meta.wpVersion || '—',
+          hasAI: !!aiCfg,
+          provider: aiCfg?.provider || '—',
+          useGateway: aiCfg?.useLocalGateway ? 'yes' : '—',
+          docCount: v.documentCount ?? 0,
+        };
+      })
+      .sort((a, b) => a.siteName.localeCompare(b.siteName));
+
+    if (localEntries.length > 0) {
+      lines.push('## Local Sites (indexed)\n');
+      lines.push('| site_name | site_id | wp_version | ai_configured | provider | gateway |');
+      lines.push('|---|---|---|---|---|---|');
+      for (const e of localEntries) {
+        lines.push(`| ${e.siteName} | ${e.siteId} | ${e.wpVersion} | ${e.hasAI ? 'yes' : 'no'} | ${e.provider} | ${e.useGateway} |`);
+      }
+      lines.push('');
+      lines.push(`_${localEntries.length} local sites indexed. Use site_name as \`site=\` in wp_* tools._`);
+      lines.push('_Run nexus_list_sites for running/halted status and WPE environment links._');
+    } else {
+      lines.push('## Local Sites\n');
+      lines.push('_No indexed sites. Run nexus_list_sites to discover sites._');
+    }
+
+  } catch {
+    lines.push('_Fleet state unavailable — run nexus_list_sites._');
+  }
+
+  return lines.join('\n');
 }

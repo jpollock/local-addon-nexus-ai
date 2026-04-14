@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const createDomainsBulkHandler: McpToolHandler = {
   definition: {
     name: 'wpe_create_domains_bulk',
-    description: 'Add multiple domains to a WP Engine install at once.',
+    description: 'Add multiple custom domains to a WP Engine install in a single API call. More efficient than calling wpe_create_domain repeatedly when adding many domains. After adding: configure DNS for each domain, verify with wpe_check_domain_status, then request SSL with wpe_request_ssl_certificate.',
     inputSchema: {
       type: 'object',
       properties: {

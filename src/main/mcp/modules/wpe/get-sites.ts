@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const getSitesHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_sites',
-    description: 'List all WP Engine sites across all accounts. Sites contain one or more installs (environments). Use wpe_get_installs for install-level details.',
+    description: 'List all WP Engine sites across all accounts — a site is a container that holds one or more installs (production/staging/development). Returns site name, ID, and account association. Use wpe_get_installs to list the individual environments within a site. For a combined local+WPE view, use nexus_list_sites.',
     inputSchema: {
       type: 'object',
       properties: {},

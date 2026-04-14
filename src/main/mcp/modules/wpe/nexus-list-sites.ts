@@ -5,8 +5,7 @@ export const nexusListSitesHandler: McpToolHandler = {
   definition: {
     name: 'nexus_list_sites',
     description:
-      'Unified site discovery. Lists all local sites and WP Engine environments ' +
-      'in a single view, linking local sites to their WPE counterparts.',
+      'Unified site discovery — lists all local sites and WP Engine environments in a single view, marking linked pairs with ↔. The FIRST tool to call before any workflow involving sites. Returns: local site IDs (used as site= in wp_* tools), WPE install names/IDs (used as remote_install_id= in local_wpe_pull/local_wpe_push — both name and UUID accepted). Never ask the user for a site name or ID — discover them here first.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -136,9 +135,10 @@ export const nexusListSitesHandler: McpToolHandler = {
     if (wpeSection.length > 0) {
       lines.push('');
       lines.push('### WP Engine Environments (live fleet)');
+      lines.push('Use install name OR id as remote_install_id= in local_wpe_pull/local_wpe_push.');
       for (const i of wpeSection) {
         const link = i.linkedLocal ? ` ↔ local:${i.linkedLocal}` : '';
-        lines.push(`- **${i.name}** (${i.siteName}, ${i.environment})${link}`);
+        lines.push(`- **${i.name}** (${i.siteName}, ${i.environment}, id:${i.id})${link}`);
       }
     }
 

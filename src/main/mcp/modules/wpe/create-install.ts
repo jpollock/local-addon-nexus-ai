@@ -4,12 +4,15 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const createInstallHandler: McpToolHandler = {
   definition: {
     name: 'wpe_create_install',
-    description: 'Create a new WP Engine install (environment) within an existing site. Use wpe_create_site first if you need a new site container.',
+    description: 'Create a new WP Engine install (environment) within an existing site. Environment types: production, staging, or development. Each site can have one of each. Requires an existing site_id from wpe_create_site. After creation the install takes a few minutes to provision.',
     inputSchema: {
       type: 'object',
       properties: {
-        site_id: { type: 'string', description: 'WP Engine site ID. Get from wpe_get_sites.' },
-        name: { type: 'string', description: 'Install name (lowercase, hyphens allowed)' },
+        site_id: { type: 'string', description: 'WP Engine site ID from wpe_create_site or wpe_get_sites.' },
+        name: {
+          type: 'string',
+          description: 'Install slug — used as the SSH hostname and WP Engine subdomain (e.g. "fakerinc" → fakerinc.wpengine.com). Rules: lowercase letters, numbers, hyphens only. No spaces. No special characters. Max ~20 chars. Must be globally unique across all WP Engine. Bad: "Faker Incorporated", "faker_inc". Good: "fakerinc", "faker-demo".',
+        },
         environment: { type: 'string', description: 'Environment type: production, staging, or development' },
         account_id: { type: 'string', description: 'Account ID' },
       },
@@ -35,16 +38,36 @@ export const createInstallHandler: McpToolHandler = {
         return error(`Invalid environment "${environment}". Must be one of: production, staging, development.`);
       }
 
-      const install = await services.localServices!.capiDirect('/installs', 'POST', { site: siteId, name, environment, account: accountId }) as any;
+      // Validate install name before calling CAPI — invalid names return unhelpful 400 errors
+      if (!/^[a-z0-9-]+$/.test(name)) {
+        return error(
+          `Invalid install name "${name}". WPE install names must be lowercase letters, numbers, and hyphens only — no spaces or special characters. ` +
+          `Try: "${name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}"`
+        );
+      }
+      if (name.length > 20) {
+        return error(`Install name "${name}" is too long (${name.length} chars). WPE limits install names to ~20 characters.`);
+      }
+
+      // Swagger: field names are site_id and account_id (not site/account)
+      const install = await services.localServices!.capiDirect('/installs', 'POST', { name, account_id: accountId, site_id: siteId, environment }) as any;
 
       const domain = install?.primaryDomain ?? install?.cname ?? `${install?.name ?? name}.wpengine.com`;
+      const status = install?.status ?? 'pending';
 
       return ok(
-        `## Install Created\n\n` +
+        `## Install Created — Status: ${status.toUpperCase()}\n\n` +
         `**Name:** ${install?.name ?? name}\n` +
         `**ID:** \`${install?.id}\`\n` +
         `**Environment:** ${install?.environment ?? environment}\n` +
-        `**Domain:** ${domain}`,
+        `**Domain:** ${domain}\n\n` +
+        (status !== 'active'
+          ? `⏳ **The install is provisioning — NOT ready.**\n\n` +
+            `Poll \`wpe_get_install\` with \`install_id: "${install?.id}"\` every 60 seconds until \`status\` returns \`"active"\`.\n\n` +
+            `⚠️ CRITICAL: Even after status shows "active", wait an additional 3 minutes before attempting any push or SSH. ` +
+            `WPE's CAPI marks installs active before SSH/rsync infrastructure is fully ready. ` +
+            `Attempting to push immediately after "active" will fail with rsync connection errors.`
+          : `✅ Install is active. Wait 3 more minutes before pushing to allow SSH infrastructure to fully initialize.`),
       );
     } catch (err: any) {
       return capiError(err);

@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const deleteSiteHandler: McpToolHandler = {
   definition: {
     name: 'wpe_delete_site',
-    description: 'Delete a WP Engine site and ALL its installs. Tier 3 — requires confirmation. This permanently deletes production, staging, and development environments.',
+    description: 'Tier 3 (destructive) — permanently delete a WP Engine site and ALL its installs (production, staging, development). This is irreversible. Create backups for all installs first with wpe_create_backup before proceeding. Requires confirmation token: call once to see the list of installs that will be deleted, then call again with _confirmationToken to proceed. Use wpe_delete_install to remove a single environment without deleting the site.',
     inputSchema: {
       type: 'object',
       properties: {

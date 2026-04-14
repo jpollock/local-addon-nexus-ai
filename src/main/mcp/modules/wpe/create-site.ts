@@ -4,11 +4,14 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const createSiteHandler: McpToolHandler = {
   definition: {
     name: 'wpe_create_site',
-    description: 'Create a new WP Engine site. A site is a container for installs (environments). After creating a site, use wpe_create_install to add production/staging/development environments.',
+    description: 'Create a new WP Engine site container. Always follow immediately with wpe_create_install to add an environment — a site with no installs has no hosting capacity. Requires account_id from wpe_get_accounts.',
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Site name' },
+        name: {
+          type: 'string',
+          description: 'Site display name. WPE accepts spaces and mixed case here (e.g. "Faker Incorporated"). This is NOT the install/SSH name — that is set separately in wpe_create_install.',
+        },
         account_id: { type: 'string', description: 'Account ID. Get from wpe_get_accounts.' },
       },
       required: ['name', 'account_id'],
@@ -24,7 +27,9 @@ export const createSiteHandler: McpToolHandler = {
       if (!name) return error('Site name is required.');
       if (!accountId) return error('Account ID is required.');
 
-      const site = await services.localServices!.capiDirect('/sites', 'POST', { name, account: accountId }) as any;
+      // Swagger: both name and account_id go in the POST body, not query string
+      const site = await services.localServices!.capiDirect('/sites', 'POST', { name, account_id: accountId }) as any;
+
 
       return ok(
         `## Site Created\n\n` +

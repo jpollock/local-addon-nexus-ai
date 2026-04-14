@@ -8,7 +8,7 @@ export const bulkReindexHandler: McpToolHandler = {
   definition: {
     name: 'bulk_reindex',
     description:
-      'Reindex multiple sites at once. Queues a bulk reindex operation that processes ' +
+      'Reindex multiple sites at once — queues a bulk reindex that processes sites in parallel. ASYNC: returns immediately. Each site is indexed independently; check individual site status with get_index_status. Use when sites have stale indexes after bulk content migrations or when search results are outdated. For a single site, use reindex_site.' +
       'sites concurrently (max 3 at a time). Returns an operation ID to track progress.',
     inputSchema: {
       type: 'object',

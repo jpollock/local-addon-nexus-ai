@@ -80,8 +80,12 @@ export class InstructionRegistry {
 /**
  * Register all instructions and resources.
  * Called once at startup from main/index.ts.
+ * Pass registryStorage so dynamic resources (e.g. fleet state) can read live data.
  */
-export function registerAllInstructions(registry: InstructionRegistry): void {
+export function registerAllInstructions(
+  registry: InstructionRegistry,
+  registryStorage?: import('../../content/IndexRegistry').RegistryStorage,
+): void {
   registry.setInstructions(INSTRUCTIONS);
-  registerResources(registry);
+  registerResources(registry, registryStorage);
 }

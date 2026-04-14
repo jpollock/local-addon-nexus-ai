@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const getSiteHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_site',
-    description: 'Get details for a single WP Engine site.',
+    description: 'Get details for a single WP Engine site — name, ID, account, and its installs. A site is a container; individual environments (production, staging, development) are installs. Use wpe_get_installs to list all installs for a site, or wpe_get_install for a specific one.',
     inputSchema: {
       type: 'object',
       properties: {

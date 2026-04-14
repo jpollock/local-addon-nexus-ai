@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const updateInstallHandler: McpToolHandler = {
   definition: {
     name: 'wpe_update_install',
-    description: 'Update a WP Engine install. Can change PHP version or environment type.',
+    description: 'Update a WP Engine install — can change PHP version or environment type. PHP version changes take effect immediately after a server restart. Match PHP version to your local site (local_change_php_version) to avoid environment drift. Use wpe_get_install to confirm current settings before updating.',
     inputSchema: {
       type: 'object',
       properties: {

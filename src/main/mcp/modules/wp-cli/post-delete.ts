@@ -6,9 +6,10 @@ export const wpPostDeleteHandler: McpToolHandler = {
   definition: {
     name: 'wp_post_delete',
     description:
-      'Delete a WordPress post. ' +
-      'Local sites: requires site running. ' +
-      'Remote WPE: pass install_name instead of site.',
+      'Delete a WordPress post, page, or custom post type by ID. ' +
+      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Default (force=false) moves to trash — recoverable from WP Admin. ' +
+      'Set force=true to permanently delete, bypassing trash.',
     inputSchema: {
       type: 'object',
       properties: {

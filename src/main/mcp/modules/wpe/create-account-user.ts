@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const createAccountUserHandler: McpToolHandler = {
   definition: {
     name: 'wpe_create_account_user',
-    description: 'Add a user to a WP Engine account, granting them portal access.',
+    description: 'Add a new user to a WP Engine account, granting portal access. Role options: full (complete access), billing (billing only), partial (specific installs only — requires install_ids). An invitation email is sent to the user. Use wpe_get_account_users to confirm the user was added successfully.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -25,9 +25,8 @@ export const createAccountUserHandler: McpToolHandler = {
           description: 'Last name of the user.',
         },
         roles: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Array of roles to grant. Common values: "full", "billing", "partial".',
+          type: 'string',
+          description: 'Role to grant. Swagger accepts: "owner", "full", "full,billing", "partial", "partial,billing".',
         },
       },
       required: ['account_id', 'email', 'first_name', 'last_name', 'roles'],
@@ -41,17 +40,18 @@ export const createAccountUserHandler: McpToolHandler = {
       const email = args.email as string;
       const firstName = args.first_name as string;
       const lastName = args.last_name as string;
-      const roles = args.roles as string[];
+      const roles = args.roles as string;
 
+      // Swagger: roles is a string inside the user object; account_id required in user
       await services.localServices!.capiDirect(
         `/accounts/${accountId}/account_users`,
         'POST',
-        { user: { email, first_name: firstName, last_name: lastName }, roles },
+        { user: { account_id: accountId, email, first_name: firstName, last_name: lastName, roles } },
       );
 
       return ok(
         `## User Added Successfully\n` +
-        `**${firstName} ${lastName}** (${email}) has been added to the account with role(s): ${roles.join(', ')}.`,
+        `**${firstName} ${lastName}** (${email}) has been added to the account with role: ${roles}.`,
       );
     } catch (err: any) {
       return capiError(err);

@@ -24,6 +24,7 @@ import { getInstallUsageHandler, getAccountUsageHandler } from './get-install-us
 import { portfolioUsageHandler } from './portfolio-usage';
 import { fleetVersionsHandler } from './fleet-versions';
 import { detectDriftHandler } from './detect-drift';
+import { waitForSshHandler } from './wait-for-ssh';
 import {
   setApiCredentialsHandler,
   clearApiCredentialsHandler,
@@ -110,6 +111,7 @@ export function registerWpeTools(registry: ToolRegistry): void {
   registry.register(portfolioUsageHandler);
   registry.register(fleetVersionsHandler);
   registry.register(detectDriftHandler);
+  registry.register(waitForSshHandler);
   registry.register(setApiCredentialsHandler);
   registry.register(clearApiCredentialsHandler);
   registry.register(credentialsStatusHandler);

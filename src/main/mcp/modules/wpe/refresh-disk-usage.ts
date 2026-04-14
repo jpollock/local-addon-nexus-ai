@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const refreshInstallDiskUsageHandler: McpToolHandler = {
   definition: {
     name: 'wpe_refresh_install_disk_usage',
-    description: 'Trigger a disk usage recalculation for a WP Engine install. Usage data may be up to an hour stale; use this to force a fresh calculation.',
+    description: 'Trigger a fresh disk usage calculation for a WP Engine install. WPE disk usage data can be up to an hour stale — use this to get current numbers after large file operations. Calculation runs asynchronously; check wpe_get_install_usage for the updated values after a few minutes.',
     inputSchema: {
       type: 'object',
       properties: {

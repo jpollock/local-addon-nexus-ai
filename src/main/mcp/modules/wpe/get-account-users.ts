@@ -5,7 +5,7 @@ export const getAccountUsersHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_account_users',
     description:
-      'List WP Engine portal users for an account — who has platform access and their roles. ' +
+      'List all users who have access to a WP Engine account portal — name, email, and role (full/billing/partial). Use for access audits or to find the user_id needed for wpe_update_account_user or wpe_delete_account_user. For a cross-account user audit, use wpe_user_audit instead.' +
       'These are WP Engine account-level users (portal login), NOT WordPress site users. ' +
       'For WordPress users within a site use wp_user_list instead.',
     inputSchema: {

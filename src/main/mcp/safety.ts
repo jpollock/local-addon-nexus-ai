@@ -35,6 +35,7 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   wpe_portfolio_usage: 1,
   wpe_fleet_versions: 1,
   wpe_detect_drift: 1,
+  wpe_wait_for_ssh: 1,
   wpe_login: 1,
   wpe_logout: 2,
   wpe_get_accounts: 1,
@@ -140,7 +141,7 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   // Tier 3 — Destructive (existing)
   local_delete_site: 3,
   local_wpe_push: 3,
-  wp_eval: 3,
+  wp_eval: 2,
   clean_database_items: 3,
 
   // Tier 3 — Destructive (new WPE ops)
@@ -160,7 +161,7 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
 export const CONFIRMATION_MESSAGES: Record<string, string> = {
   local_delete_site: 'This will permanently delete the site and all its files.',
   local_wpe_push: 'This will overwrite the remote WP Engine environment with local site data.',
-  wp_eval: 'This will execute arbitrary PHP code on the WordPress site.',
+  // wp_eval is Tier 2 — logged but no confirmation required on local sites
   clean_database_items: 'This will permanently delete database rows. Always run with dry_run=true first.',
   wpe_delete_account_user: 'This will revoke WP Engine portal access for this user.',
   wpe_delete_site: 'This will delete the WP Engine site and ALL its installs (production, staging, development).',
@@ -179,10 +180,7 @@ export const PRE_CHECKS: Record<string, string[]> = {
     'Verify the target environment is correct',
     'Confirm the remote environment has a recent backup',
   ],
-  wp_eval: [
-    'Review the PHP code carefully before execution',
-    'Ensure the code does not perform destructive database operations',
-  ],
+  // wp_eval pre-checks removed — Tier 2 (local only, no confirmation needed)
   clean_database_items: [
     'Run scan_database_health first',
     'Run clean_database_items with dry_run=true to preview',

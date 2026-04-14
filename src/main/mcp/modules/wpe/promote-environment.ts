@@ -5,7 +5,7 @@ export const promoteEnvironmentHandler: McpToolHandler = {
   definition: {
     name: 'wpe_promote_environment',
     description:
-      'Copy one WP Engine install to another (e.g., staging → production). ' +
+      'Tier 3 (destructive) — copy one WP Engine install to another (typically staging → production). Overwrites the destination install completely — ensure a recent backup exists via wpe_backup_and_verify. Run wpe_environment_diff beforehand to confirm staging is ready. Requires confirmation token. After promoting, purge the cache on the destination with wpe_purge_cache and verify with wpe_diagnose_site.' +
       'Tier 3 — requires confirmation. ' +
       'Always verify the destination has a recent backup before promoting.',
     inputSchema: {
@@ -13,11 +13,11 @@ export const promoteEnvironmentHandler: McpToolHandler = {
       properties: {
         source_install_id: {
           type: 'string',
-          description: 'ID of the install to copy from (source)',
+          description: 'ID of the install to copy from (source). Maps to source_environment_id in CAPI.',
         },
         destination_install_id: {
           type: 'string',
-          description: 'ID of the install to copy to (destination)',
+          description: 'ID of the install to copy to (destination). Maps to destination_environment_id in CAPI.',
         },
         include_database: {
           type: 'boolean',
@@ -124,10 +124,12 @@ export const promoteEnvironmentHandler: McpToolHandler = {
 
     // Proceed with the copy
     try {
+      // Swagger: source_environment_id / destination_environment_id (not install_id)
+      // include_db goes inside custom_options, not at top level
       const result = await services.localServices!.capiDirect('/install_copy', 'POST', {
-        source_install_id: sourceId,
-        destination_install_id: destId,
-        include_database: includeDatabase,
+        source_environment_id: sourceId,
+        destination_environment_id: destId,
+        custom_options: { include_files: true, include_db: includeDatabase },
       }) as any;
 
       const lines = [

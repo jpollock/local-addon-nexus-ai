@@ -5,7 +5,7 @@ export const fleetHealthHandler: McpToolHandler = {
   definition: {
     name: 'wpe_fleet_health',
     description:
-      'Get a health overview of all WP Engine installs — traffic tiers, WP/PHP versions, SSL status, disk usage. ' +
+      'Get a health overview of all WP Engine installs — traffic tiers, WP/PHP version distribution, SSL coverage, and disk usage summary. Useful for fleet-wide audits: identifying installs on old PHP, missing SSL, or high disk usage. For a deeper per-install diagnostic, use wpe_diagnose_site.' +
       'Flags installs that need attention.',
     inputSchema: {
       type: 'object',

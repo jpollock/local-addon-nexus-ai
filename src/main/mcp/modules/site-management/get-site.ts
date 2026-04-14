@@ -6,7 +6,7 @@ export const getSiteHandler: McpToolHandler = {
   definition: {
     name: 'local_get_site',
     description:
-      'Get detailed information about a specific local WordPress site. ' +
+      'Get detailed information about a specific local WordPress site — name, domain, filesystem path, status, PHP version, WP version, and content index state. Use nexus_list_sites to discover site names if unknown. For full plugin/theme/health details, use nexus_site_audit.' +
       'Returns name, domain, path, status, PHP version, and content index status.',
     inputSchema: {
       type: 'object',

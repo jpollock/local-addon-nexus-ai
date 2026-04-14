@@ -6,8 +6,13 @@ export const wpePushHandler: McpToolHandler = {
   definition: {
     name: 'local_wpe_push',
     description:
-      'Push a local site to WP Engine. This is a destructive operation ' +
-      'that overwrites the remote environment.',
+      'Tier 3 (destructive) — push a local site to WP Engine, overwriting the live environment. ' +
+      'PREREQUISITES: (1) always pull first (local_wpe_pull) to ensure local copy is current; ' +
+      '(2) run wp_site_health to confirm no regressions; ' +
+      '(3) confirm user understands this overwrites the live WPE environment — no automatic rollback. ' +
+      'include_database defaults to false — set true to also push the database. ' +
+      'ASYNC: returns immediately. Poll local_operation_status every 20s until complete. ' +
+      'WPE keeps backups in the portal (my.wpengine.com) if rollback is needed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -18,7 +23,7 @@ export const wpePushHandler: McpToolHandler = {
         },
         remote_install_id: {
           type: 'string',
-          description: 'WP Engine install ID to push to directly. If omitted, site must be linked.',
+          description: 'WP Engine install to push to. Accepts the install UUID OR the install name/slug (e.g. "jpp0413p"). If omitted, site must already be linked.',
         },
       },
       required: ['site'],
@@ -59,17 +64,19 @@ export const wpePushHandler: McpToolHandler = {
     let environment: string;
 
     if (args.remote_install_id) {
-      // Get install details from CAPI
+      // Get install details from CAPI — accept UUID or install name slug
       const installs = (await services.localServices.capiGetInstalls()) as any[];
-      const install = installs.find((i: any) => i.id === args.remote_install_id);
+      const query = args.remote_install_id as string;
+      const install = installs.find((i: any) => i.id === query || i.name === query);
 
       if (!install) {
-        return error(`WPE install not found: ${args.remote_install_id}`);
+        return error(`WPE install not found: "${query}". Use nexus_list_sites to see available installs.`);
       }
 
       installName = install.name;
       installId = install.id;
-      remoteSiteId = typeof install.site === 'object' ? install.site.id : install.site;
+      // install.site is {id: string} | null. typeof null === 'object' in JS, so check for null explicitly.
+      remoteSiteId = (install.site && install.site.id) ? install.site.id : install.id;
       primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
       environment = install.environment || 'production';
     } else {
@@ -80,8 +87,10 @@ export const wpePushHandler: McpToolHandler = {
 
       const installs = (await services.localServices.capiGetInstalls()) as any[];
       const install = installs.find(
-        (i: any) => (typeof i.site === 'object' ? i.site.id : i.site) === wpeSiteId
-          && i.environment === environment
+        (i: any) => {
+          const siteId = (i.site && i.site.id) ? i.site.id : i.id;
+          return siteId === wpeSiteId && i.environment === environment;
+        }
       );
 
       if (!install) {
@@ -120,8 +129,9 @@ export const wpePushHandler: McpToolHandler = {
           site: site.name,
           install: installName,
           include_database: args.include_database === true,
-          message: `Push started from "${site.name}" to "${installName}".`,
-          next_steps: 'Poll local_operation_status every 15-30s to track progress. Operation typically takes 2-5 minutes.',
+          message: `Push started. This takes 2–10 minutes for files + database.`,
+          IMPORTANT: 'Do NOT proceed with backups, WP-CLI commands, or any follow-up steps until the push is confirmed complete.',
+          how_to_check: `Call local_get_site with site="${site.name}" every 30 seconds. Status will be "pushing" while in progress and return to "running" when complete. Only proceed once status is "running".`,
         }, null, 2),
       );
     } catch (err: any) {

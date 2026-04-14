@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const refreshAccountDiskUsageHandler: McpToolHandler = {
   definition: {
     name: 'wpe_refresh_account_disk_usage',
-    description: 'Trigger a disk usage recalculation for all installs in a WP Engine account.',
+    description: 'Trigger a disk usage recalculation for all installs in a WP Engine account. Refreshes storage metrics that may be up to an hour stale. Use before checking account limits (wpe_get_account_limits) after large deployments or content migrations.',
     inputSchema: {
       type: 'object',
       properties: {

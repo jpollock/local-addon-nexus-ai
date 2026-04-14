@@ -22,9 +22,12 @@ export const operationStatusHandler: McpToolHandler = {
   definition: {
     name: 'local_operation_status',
     description:
-      'Check the live status of a push, pull, or export operation on a local site. ' +
-      'Call this after local_wpe_pull, local_wpe_push, or local_export_site to monitor progress. ' +
-      'Poll every 15-30 seconds — operations typically take 1-5 minutes.',
+      'Poll the live status of a push, pull, or export operation on a local site. ' +
+      'Call every 15–30 seconds after starting local_wpe_pull, local_wpe_push, or local_export_site. ' +
+      'Returns status (in_progress / completed / failed), last_message (current phase), and recent_files (transfer progress). ' +
+      'Do NOT move to the next step until status=completed. ' +
+      'Do NOT use local_get_site for this — it only shows running/halted, not operation progress. ' +
+      'If the MCP connection times out mid-transfer, that does NOT mean the operation failed — poll here to check real state.',
     inputSchema: {
       type: 'object',
       properties: {

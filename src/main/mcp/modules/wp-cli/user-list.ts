@@ -5,7 +5,7 @@ import { resolveTarget, remoteWpCliRun } from './remote-exec';
 export const userListHandler: McpToolHandler = {
   definition: {
     name: 'wp_user_list',
-    description: 'List WordPress users for a local site or remote WPE install.',
+    description: 'List WordPress users with their ID, login, email, display name, and roles. Works on local sites (site=) and remote WPE installs via SSH (install_name=). Useful for auditing access, finding admin accounts, or identifying test users before cleanup.',
     inputSchema: {
       type: 'object',
       properties: {

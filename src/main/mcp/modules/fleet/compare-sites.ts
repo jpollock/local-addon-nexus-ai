@@ -6,7 +6,7 @@ export const compareSitesHandler: McpToolHandler = {
   definition: {
     name: 'compare_sites',
     description:
-      'Side-by-side comparison of two sites. Shows shared and unique plugins, version differences, ' +
+      'Side-by-side comparison of two indexed sites — shared and unique plugins, version differences, WordPress/PHP version, and theme differences. Use to synchronize environments (e.g. confirm local matches WPE production), identify configuration drift, or plan migrations. Both sites must be indexed — run reindex_site if data is stale.' +
       'theme differences, user counts, and content volume. Works even when sites are stopped.',
     inputSchema: {
       type: 'object',

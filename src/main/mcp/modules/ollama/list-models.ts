@@ -9,8 +9,10 @@ export const listOllamaModelsHandler: McpToolHandler = {
   definition: {
     name: 'list_ollama_models',
     description:
-      'List available Ollama models on the local machine. Returns model names, sizes, and ' +
-      'parameter counts. Requires Ollama to be installed and running.',
+      'List available Ollama models installed on the local machine — model name, size, and last modified date. ' +
+      'Use before ask_ollama to confirm a model is available, or to choose between models based on size and capability. ' +
+      'Requires Ollama to be installed and running. ' +
+      'Download new models with "ollama pull modelname" in terminal.',
     inputSchema: {
       type: 'object',
       properties: {},

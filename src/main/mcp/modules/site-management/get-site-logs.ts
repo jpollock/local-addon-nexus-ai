@@ -42,7 +42,7 @@ function findLogFiles(logsDir: string, serviceType: string): string[] {
 export const getSiteLogsHandler: McpToolHandler = {
   definition: {
     name: 'local_get_site_logs',
-    description: 'Get log file contents for a site (PHP errors, access logs, etc.)',
+    description: 'Get log file contents for a local WordPress site — PHP errors, nginx access logs, or MySQL logs. Use logType=php (default) for WordPress/PHP errors, logType=nginx for HTTP request logs, logType=mysql for database errors. Returns the last N lines (default: 100). Use when a site crashes on start, returns errors after plugin updates, or throws 500 errors.',
     inputSchema: {
       type: 'object',
       properties: {

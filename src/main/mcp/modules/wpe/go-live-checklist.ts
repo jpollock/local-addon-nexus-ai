@@ -5,7 +5,7 @@ export const goLiveChecklistHandler: McpToolHandler = {
   definition: {
     name: 'wpe_go_live_checklist',
     description:
-      'Check if a WP Engine install is ready to go live with a specific domain. ' +
+      'Read-only diagnostic: check whether a WP Engine install is ready to go live with a specific domain. Verifies domain configuration, DNS propagation, SSL status, and common go-live blockers. Does NOT make changes — use wpe_prepare_go_live to take action on any issues found.' +
       'Read-only diagnostic — use wpe_prepare_go_live to take action.',
     inputSchema: {
       type: 'object',

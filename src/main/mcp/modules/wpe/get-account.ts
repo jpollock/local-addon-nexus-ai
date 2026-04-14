@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const getAccountHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_account',
-    description: 'Get details for a single WP Engine account. Returns account name, ID, and creation date.',
+    description: 'Get details for a single WP Engine account — name, ID, creation date, and plan information. Use wpe_get_accounts first to list available accounts and their IDs. For a higher-level overview, use wpe_account_overview.',
     inputSchema: {
       type: 'object',
       properties: {

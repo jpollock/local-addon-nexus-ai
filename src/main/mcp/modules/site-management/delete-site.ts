@@ -6,7 +6,7 @@ export const deleteSiteHandler: McpToolHandler = {
   definition: {
     name: 'local_delete_site',
     description:
-      'Delete a local WordPress site. This is a Tier 3 (destructive) operation ' +
+      'Tier 3 (destructive) — permanently delete a local WordPress site including all files and database. Requires confirmation token: call once to get the token, call again with _confirmationToken to proceed. trash_files=true (default) sends files to the OS trash; trash_files=false deletes immediately. WPE links are removed — this does NOT affect the linked WPE install. Export the site first with local_export_site if you need a backup.' +
       'and requires confirmation.',
     inputSchema: {
       type: 'object',

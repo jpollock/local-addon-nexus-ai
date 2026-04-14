@@ -24,7 +24,7 @@ export const pluginAuditHandler: McpToolHandler = {
   definition: {
     name: 'nexus_plugin_audit',
     description:
-      'Fleet-wide plugin audit across all running local sites. Lists installed plugins and available updates for every running site in a single call.',
+      'Fleet-wide plugin audit across all running local sites — lists installed plugins with current and latest versions, available updates, and update availability counts per site. Runs in a single call, more efficient than calling wp_plugin_list on each site individually. LOCAL SITES ONLY — runs on currently running sites. For WPE remote installs, use wp_plugin_list with install_name= for each install.',
     inputSchema: {
       type: 'object',
       properties: {},

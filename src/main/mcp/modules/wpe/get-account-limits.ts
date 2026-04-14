@@ -5,7 +5,7 @@ export const getAccountLimitsHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_account_limits',
     description:
-      'Get plan limits for a WP Engine account — visitor quotas, storage limits, bandwidth limits. ' +
+      'Get the plan limits for a WP Engine account — visitor quotas, storage caps, bandwidth limits, and site/install counts. Use to understand capacity constraints before creating new installs or sites. Compare with wpe_get_account_usage_summary to see current consumption vs limits.' +
       'Use this to answer "am I near my plan limits?"',
     inputSchema: {
       type: 'object',

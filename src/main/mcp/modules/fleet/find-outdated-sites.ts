@@ -30,7 +30,7 @@ export const findOutdatedSitesHandler: McpToolHandler = {
   definition: {
     name: 'find_outdated_sites',
     description:
-      'Identify sites running older versions of WordPress, PHP, or plugins compared to ' +
+      'Identify sites running older versions of WordPress, PHP, or plugins compared to the latest available versions. Labels each result as [local] or [wpe] and accepts a source filter (wpe or local). Use for prioritizing update work, or to identify sites that need maintenance before go-live. For remote WPE plugin updates, use wp_plugin_update with install_name=.' +
       'the rest of your fleet. Reads from the local graph DB — works for both local sites ' +
       '(after WordPress connector events) and WP Engine installs (after WPE sync). ' +
       'Each site labeled [local] or [wpe]. Filter by source to focus on live WPE environments.',

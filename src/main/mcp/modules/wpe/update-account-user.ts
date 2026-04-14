@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const updateAccountUserHandler: McpToolHandler = {
   definition: {
     name: 'wpe_update_account_user',
-    description: 'Update the role of a WP Engine portal user on an account.',
+    description: 'Update the role of an existing WP Engine portal user on an account. Role options: full, billing, or partial (partial requires install_ids to specify access). Use wpe_get_account_users to find the user_id and confirm current role before updating.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -31,7 +31,7 @@ export const updateAccountUserHandler: McpToolHandler = {
     try {
       const accountId = args.account_id as string;
       const userId = args.user_id as string;
-      const roles = args.roles as string[];
+      const roles = args.roles as string; // Swagger: roles is a string, not array
 
       await services.localServices!.capiDirect(
         `/accounts/${accountId}/account_users/${userId}`,
@@ -41,7 +41,7 @@ export const updateAccountUserHandler: McpToolHandler = {
 
       return ok(
         `## Role Updated Successfully\n` +
-        `User \`${userId}\` now has role(s): ${roles.join(', ')}.`,
+        `User \`${userId}\` now has role: ${roles}.`,
       );
     } catch (err: any) {
       return capiError(err);

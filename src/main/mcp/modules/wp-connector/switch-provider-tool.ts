@@ -13,7 +13,7 @@ export const switchProviderToolHandler: McpToolHandler = {
   definition: {
     name: 'nexus_switch_provider',
     description:
-      'Switch the AI provider for an already-configured WordPress site. ' +
+      'Switch the AI provider for an already-configured WordPress site — swaps the provider plugin, syncs new API credentials, and updates the site AI config. The site must be running and already set up via wp_setup_ai. Use nexus_get_site_ai_config to see the current provider before switching. When the Local Gateway is enabled, switching provider updates the gateway routing — the WordPress plugin stays the same.' +
       'Deactivates the old provider plugin, installs/activates the new one, ' +
       'and syncs the new provider\'s credentials. Local-only.',
     inputSchema: {

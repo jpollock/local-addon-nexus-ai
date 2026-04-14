@@ -61,7 +61,7 @@ async function localGql<T>(query: string, timeoutMs = 120000): Promise<T> {
 export const wpeStatusHandler = {
   definition: {
     name: 'wpe_status',
-    description: 'Check WP Engine authentication status. Validates the token is still active against the live API.',
+    description: 'Check whether the current WP Engine OAuth session is valid. Validates the token against the live API — returns authenticated user details if valid, or an error if the session has expired. Run this before any wpe_* operation if you are unsure whether auth is current. Re-authenticate with wpe_login if this returns an error.',
     inputSchema: { type: 'object' as const, properties: {} },
     isAvailable: (_services: NexusServices) => true,
   },
@@ -119,7 +119,7 @@ export const wpeStatusHandler = {
 export const wpeLoginHandler = {
   definition: {
     name: 'wpe_login',
-    description: 'Authenticate with WP Engine. Opens a browser window for OAuth login. The user must complete the login in their browser. This may take up to 2 minutes.',
+    description: 'Authenticate with WP Engine via OAuth — opens a browser window for the user to log in. The user must complete login in their browser; this tool waits up to 2 minutes. Run wpe_status first to check if already authenticated. After successful login, all wpe_* tools will work. Authentication persists across sessions until the token expires or wpe_logout is called.',
     inputSchema: { type: 'object' as const, properties: {} },
     isAvailable: (_services: NexusServices) => true,
   },
@@ -155,7 +155,7 @@ export const wpeLoginHandler = {
 export const wpeLogoutHandler = {
   definition: {
     name: 'wpe_logout',
-    description: 'Log out of WP Engine.',
+    description: 'Log out of WP Engine by revoking the current OAuth session. After logout, all wpe_* API calls will fail until wpe_login is called again. Use when switching accounts or when prompted to re-authenticate after a permission change.',
     inputSchema: { type: 'object' as const, properties: {} },
     isAvailable: (_services: NexusServices) => true,
   },

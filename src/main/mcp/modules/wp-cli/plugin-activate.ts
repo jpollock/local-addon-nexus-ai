@@ -5,7 +5,10 @@ import { resolveTarget, remoteWpCliRun } from './remote-exec';
 export const pluginActivateHandler: McpToolHandler = {
   definition: {
     name: 'wp_plugin_activate',
-    description: 'Activate an installed WordPress plugin.',
+    description:
+      'Activate an installed but inactive WordPress plugin. ' +
+      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Plugin must already be installed — use wp_plugin_install first if not.',
     inputSchema: {
       type: 'object',
       properties: {

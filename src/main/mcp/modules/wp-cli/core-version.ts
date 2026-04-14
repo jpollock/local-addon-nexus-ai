@@ -5,7 +5,7 @@ import { resolveTarget, remoteWpCliRun } from './remote-exec';
 export const coreVersionHandler: McpToolHandler = {
   definition: {
     name: 'wp_core_version',
-    description: 'Get the WordPress core version for a local site or remote WPE install.',
+    description: 'Get the current WordPress core version. Works on local sites (site=) and remote WPE installs via SSH (install_name=). Use this before wp_core_update to see if an upgrade is available, or to confirm a version after updating. Also returns whether core update is available when site is running.',
     inputSchema: {
       type: 'object',
       properties: {

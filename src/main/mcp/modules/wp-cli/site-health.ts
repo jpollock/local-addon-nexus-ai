@@ -5,7 +5,11 @@ import { requireRunning, ok, error } from './preflight';
 export const siteHealthHandler: McpToolHandler = {
   definition: {
     name: 'wp_site_health',
-    description: 'Run WordPress site health check. Returns core version, database status, active theme, plugin/theme counts, and basic diagnostics.',
+    description:
+      'Run WordPress site health check — returns core version, database status, active theme, ' +
+      'plugin/theme counts, and basic diagnostics. ' +
+      'LOCAL SITES ONLY — use nexus_site_audit or wp_plugin_list for remote WPE installs. ' +
+      'Run this after plugin updates or before local_wpe_push to confirm no regressions.',
     inputSchema: {
       type: 'object',
       properties: {

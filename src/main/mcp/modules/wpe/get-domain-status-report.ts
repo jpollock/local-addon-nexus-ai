@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const getDomainStatusReportHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_domain_status_report',
-    description: 'Get a detailed DNS status report for a domain on a WP Engine install.',
+    description: 'Get a detailed DNS resolution report for a domain — shows NS records, A records, CNAME resolution, and propagation status across multiple DNS resolvers. Use when wpe_check_domain_status shows issues, to get more detail on what DNS records are resolving. Requires both the domain_id and an existing report_id from a previous check.',
     inputSchema: {
       type: 'object',
       properties: {

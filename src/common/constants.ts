@@ -210,6 +210,7 @@ export const STORAGE_KEYS = {
   SITE_METADATA: `${ADDON_PREFIX}_site_metadata`, // Digital twin: cached site state (WP version, plugins, themes)
   SITE_AI_CONFIG: `${ADDON_PREFIX}_site_ai_config`, // Per-site AI provider configuration
   DB_SCAN_CACHE: `${ADDON_PREFIX}_db_scan_cache`,
+  WPE_INSTALL_CACHE: `${ADDON_PREFIX}_wpe_install_cache`, // WPE install names/IDs cached after CAPI sync
 } as const;
 
 // ---------------------------------------------------------------------------

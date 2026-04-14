@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const checkDomainStatusHandler: McpToolHandler = {
   definition: {
     name: 'wpe_check_domain_status',
-    description: 'Check DNS propagation and resolution status for a domain on a WP Engine install. Use after adding a domain to verify it is resolving correctly.',
+    description: 'Check whether a domain DNS has propagated and is resolving correctly for a WP Engine install. Use after wpe_create_domain and after updating DNS records at the registrar. DNS propagation typically takes minutes to hours — poll this every few minutes until status is active. Once DNS is confirmed, proceed with wpe_request_ssl_certificate to provision HTTPS.',
     inputSchema: {
       type: 'object',
       properties: {

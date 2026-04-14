@@ -5,7 +5,7 @@ export const installsByAccountHandler: McpToolHandler = {
   definition: {
     name: 'wpe_installs_by_account',
     description:
-      'List all WP Engine installs grouped by account with environment counts. ' +
+      'List all WP Engine installs grouped by account — shows install name, environment type, and primary domain for each install across all accounts. More structured than wpe_get_installs when working across multiple accounts. Use for fleet-wide inventory or when the user asks to show all their WPE sites.' +
       'Useful for fleet overview when you have multiple accounts.',
     inputSchema: {
       type: 'object',

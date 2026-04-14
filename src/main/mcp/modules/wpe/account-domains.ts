@@ -5,7 +5,7 @@ export const accountDomainsHandler: McpToolHandler = {
   definition: {
     name: 'wpe_account_domains',
     description:
-      'List all domains across all installs in a WP Engine account, grouped by install. ' +
+      'List all custom domains across every install in a WP Engine account, grouped by install. Use for a complete domain inventory, identifying unused domains, or auditing primary domain configuration across the fleet.' +
       'Useful for domain inventory and finding where domains are configured.',
     inputSchema: {
       type: 'object',

@@ -5,7 +5,7 @@ import { ok, error, requireLocalServices } from './helpers';
 export const stopSiteHandler: McpToolHandler = {
   definition: {
     name: 'local_stop_site',
-    description: 'Stop a running local WordPress site.',
+    description: 'Stop a local WordPress site and shut down its services. Frees system resources (RAM, ports) when the site is not needed. The site data and database are preserved — use local_start_site to bring it back. Do NOT stop a site mid-pull or mid-push — wait for operations to complete first.',
     inputSchema: {
       type: 'object',
       properties: {

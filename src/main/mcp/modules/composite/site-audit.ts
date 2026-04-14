@@ -11,7 +11,7 @@ export const siteAuditHandler: McpToolHandler = {
   definition: {
     name: 'nexus_site_audit',
     description:
-      'Comprehensive audit of a local WordPress site. Checks WP version, plugins (with update availability), themes, and site health in a single call.',
+      'Comprehensive single-call audit of a local WordPress site — WP core version (with update availability), all plugins (version + update status), themes, and site health diagnostics. More efficient than calling wp_core_version + wp_plugin_list + wp_site_health separately. LOCAL SITES ONLY — for remote WPE installs, use wp_plugin_list with install_name= + wp_core_version.',
     inputSchema: {
       type: 'object',
       properties: {

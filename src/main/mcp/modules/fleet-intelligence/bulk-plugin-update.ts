@@ -9,7 +9,7 @@ export const bulkPluginUpdateHandler: McpToolHandler = {
   definition: {
     name: 'bulk_plugin_update',
     description:
-      'Update a specific plugin across multiple sites. This is a destructive operation ' +
+      'Update a specific plugin across multiple running sites in one call. DESTRUCTIVE: updates are applied immediately to live sites — not reversible without restoring backups. Only runs on currently running sites — start halted sites first with local_start_site. Run nexus_plugin_audit first to see which sites need the update. For a single site, use wp_plugin_update.' +
       'that modifies site files — requires confirmation. Processes sites concurrently (max 3).',
     inputSchema: {
       type: 'object',

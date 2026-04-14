@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const createSshKeyHandler: McpToolHandler = {
   definition: {
     name: 'wpe_create_ssh_key',
-    description: 'Add an SSH public key to the authenticated WP Engine account for SSH/SFTP access to environments.',
+    description: 'Add an SSH public key to the authenticated WP Engine account. Once added, the corresponding private key can be used for SSH/SFTP access to all installs on the account. Provide the full public key string (e.g. contents of ~/.ssh/id_ed25519.pub). Use wpe_get_ssh_keys to verify the key was added successfully.',
     inputSchema: {
       type: 'object',
       properties: {

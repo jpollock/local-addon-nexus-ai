@@ -283,17 +283,26 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         throw new Error('Export service not available');
       }
 
+      // Expand ~ to home directory (Node does not do this automatically)
+      const expandedPath = outputPath.startsWith('~')
+        ? path.join(os.homedir(), outputPath.slice(1))
+        : outputPath;
+
+      // Create the parent directory if it doesn't exist
+      // Use path.dirname() — expandedPath is the full file path, not a directory
+      try {
+        fs.mkdirSync(path.dirname(expandedPath), { recursive: true });
+      } catch { /* ignore if already exists */ }
+
       // filter='' causes picomatch to fail on empty string pattern.
       // Pass a valid but no-op pattern so ignoredPatterns.split(',') produces
       // ['__noop__'] — a glob that matches nothing in a WP install.
 
       // ExportSiteService.exportSite() returns Promise<void>, not the path.
-      // The export path is constructed as: outputPath.replace('.zip', '') + '.zip'
-      // (see Exporter.ts line 46). Construct it here and return after export completes.
-      const exportPath = outputPath.replace(/\.zip$/i, '') + '.zip';
+      const exportPath = expandedPath.replace(/\.zip$/i, '') + '.zip';
 
       // Fire the export (this is async and uses a worker process)
-      await exportService.exportSite({ site, outputPath, filter: '__noop__' });
+      await exportService.exportSite({ site, outputPath: expandedPath, filter: '__noop__' });
 
       // Return the path where the export will be saved
       return exportPath;
@@ -341,7 +350,9 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       if (!blueprints?.saveBlueprint) {
         return Promise.resolve(undefined);
       }
-      return blueprints.saveBlueprint(site, opts);
+      // filter: '__noop__' avoids the ignoredPatterns.split('') → picomatch('') crash
+      // that occurs when filter is undefined or empty string (same bug as local_export_site)
+      return blueprints.saveBlueprint({ siteId: site.id, name: opts.name, filter: '__noop__' });
     },
 
     // --- WPE Connect ---
@@ -432,6 +443,8 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     capiDirect: async (path: string, method = 'GET', body?: unknown) => {
       const wpeOAuth = svc('wpeOAuth');
       if (!wpeOAuth) throw new Error('WPE OAuth service not available');
+      // Load stored token into memory first — _accessToken is null after restart
+      try { (wpeOAuth as any)._loadFromUserData?.(); } catch { /* non-fatal */ }
       const token = await wpeOAuth.getAccessToken();
       if (!token) throw new Error('Not authenticated with WP Engine. Run: nexus wpe login');
       const url = `https://api.wpengineapi.com/v1${path}`;
@@ -547,7 +560,10 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       const wpeOAuth = svc('wpeOAuth');
       if (!wpeOAuth) return false;
 
-      // ONLY check in-memory token - never access userData (can crash due to decryption)
+      // Load stored token into memory first — _accessToken is null after restart
+      // even when valid credentials exist in userData.
+      try { (wpeOAuth as any)._loadFromUserData?.(); } catch { /* non-fatal */ }
+
       return !!(wpeOAuth as any)._accessToken;
     },
 
@@ -574,7 +590,8 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     async wpeGetUserInfo(): Promise<{ email?: string; accountName?: string } | null> {
       const wpeOAuth = svc('wpeOAuth');
       if (!wpeOAuth) return null;
-      // Only check in-memory token - do NOT access userData (causes decryption crashes)
+      // Load stored token into memory first — _accessToken is null after restart
+      try { (wpeOAuth as any)._loadFromUserData?.(); } catch { /* non-fatal */ }
       const hasToken = !!(wpeOAuth as any)._accessToken;
       if (!hasToken) return null;
       // Try to get user info — _getUserInfo is private but accessible at runtime
@@ -591,10 +608,15 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     },
 
     getWpeUserId(): string | null {
-      // Do NOT access userData - it causes decryption crashes
-      // User ID is not available from in-memory tokens, so return null
-      // This is acceptable - userId is only used for hostConnections metadata
-      return null;
+      // Read from CAPIService._wpeUserInfo which is populated after OAuth login.
+      // This is safe — _wpeUserInfo is an in-memory cache, not userData (no decryption risk).
+      const capi = svc('capi');
+      if (!capi) return null;
+      try {
+        return (capi as any)._wpeUserInfo?.userId ?? null;
+      } catch {
+        return null;
+      }
     },
 
     // --- WPE API Credentials (for basic auth fallback) ---

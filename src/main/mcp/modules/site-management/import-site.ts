@@ -16,7 +16,7 @@ function isValidFilePath(filePath: string): boolean {
 export const importSiteHandler: McpToolHandler = {
   definition: {
     name: 'local_import_site',
-    description: 'Import a WordPress site from a zip file (Local export, generic archive, or backup)',
+    description: 'Import a WordPress site from a zip file into Local. Accepts Local export zips, WP Engine backup zips, and generic WordPress archives. Creates a new local site with the imported files and database. Provide siteName to override the name derived from the zip. After import, run local_start_site then wp_search_replace to update domain references if needed.',
     inputSchema: {
       type: 'object',
       properties: {

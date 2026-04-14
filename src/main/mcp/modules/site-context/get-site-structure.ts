@@ -5,7 +5,7 @@ export const getSiteStructureHandler: McpToolHandler = {
   definition: {
     name: 'get_site_structure',
     description:
-      'Get deep structural context for a WordPress site. Returns themes (active/installed), ' +
+      'Get deep structural context for a WordPress site — active and installed themes, active and inactive plugins with versions, PHP/WP versions, user/role summary, REST API namespaces, permalink structure, site health indicators, and custom table detection. DB-backed details (users, custom tables) are available when the site is running. Use before making structural changes, or to give an AI agent full site context. For a lighter overview, use local_get_site.' +
       'plugins (active/inactive), PHP/WP versions, user/role summary, REST API namespaces, ' +
       'permalink structure, site health indicators, custom tables, and key plugin detection ' +
       '(WooCommerce, ACF). DB-backed details available when site is running.',

@@ -40,7 +40,7 @@ export const runAbilityHandler: McpToolHandler = {
   definition: {
     name: 'wp_run_ability',
     description:
-      'Execute a WordPress Ability by name. ' +
+      'Execute a WordPress Ability (AI writing feature) on a site — generate a title, summary, excerpt, or alt text for a post or image. Use wp_list_abilities first to see available abilities and their required parameters. The site must be running, have AI set up via wp_setup_ai, and have a working API key or Local Gateway configured.' +
       'Abilities are registered by plugins (ACF, Jetpack, etc.) and WordPress core via the Abilities API (WP 6.9+). ' +
       'Use `wp_list_abilities` first to discover available abilities and their input schemas. ' +
       'Local-only (not remote).',

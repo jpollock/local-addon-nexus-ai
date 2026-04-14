@@ -179,7 +179,7 @@ sitesCommand
         }
       `, {
         input: {
-          target,
+          target: target.replace(/@local$/, ''),
           newName,
         },
       });
@@ -215,8 +215,10 @@ sitesCommand
       }
 
       const client = getClient({ timeout: 600000 }); // 10 min for export
+      // Strip @local suffix — the resolver expects just the site name
+      const siteName = target.replace(/@local$/, '');
 
-      console.log(`\nExporting ${target}...`);
+      console.log(`\nExporting ${siteName}...`);
 
       const result = await client.mutate<{ nexusSitesExport: any }>(`
         mutation($input: NexusExportSiteInput!) {
@@ -228,7 +230,7 @@ sitesCommand
         }
       `, {
         input: {
-          target,
+          target: siteName,
           outputPath,
         },
       });
@@ -325,7 +327,7 @@ sitesCommand
         }
       `, {
         input: {
-          target,
+          target: target.replace(/@local$/, ''),
           tail: parseInt(options.tail, 10),
           follow: options.follow || false,
         },
@@ -718,7 +720,7 @@ sitesCommand
         }
       `, {
         input: {
-          target,
+          target: target.replace(/@local$/, ''),
           version,
         },
       });
@@ -768,7 +770,7 @@ sitesCommand
         }
       `, {
         input: {
-          target,
+          target: target.replace(/@local$/, ''),
         },
       });
 
@@ -823,7 +825,7 @@ sitesCommand
         }
       `, {
         input: {
-          target,
+          target: target.replace(/@local$/, ''),
           enable,
         },
       });

@@ -6,7 +6,7 @@ export const searchReplaceHandler: McpToolHandler = {
   definition: {
     name: 'wp_search_replace',
     description:
-      'Run search-replace on the WordPress database. Defaults to dry-run mode for safety. ' +
+      'Run search-replace across the entire WordPress database — essential for domain migrations. LOCAL SITES ONLY. Defaults to dry_run=true (preview only, no changes made) — always run in dry-run first to confirm the replacement count. Set dry_run=false to apply changes. Handles serialized data correctly. Common use: after pulling a WPE site locally, replace the production domain with the local domain.' +
       'Set dry_run=false to apply changes.',
     inputSchema: {
       type: 'object',

@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const getBackupHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_backup',
-    description: 'Get the status of a WP Engine backup. Use after wpe_create_backup to check if it completed.',
+    description: 'Get the status of a WP Engine backup by backup_id. Returns status (pending/running/complete/failed), started/completed timestamps, and size. Use after wpe_create_backup to poll completion. For a blocking wait, use wpe_backup_and_verify instead.',
     inputSchema: {
       type: 'object',
       properties: {

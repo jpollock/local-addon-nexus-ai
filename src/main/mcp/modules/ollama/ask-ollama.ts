@@ -8,7 +8,7 @@ export const askOllamaHandler: McpToolHandler = {
   definition: {
     name: 'ask_ollama',
     description:
-      'Send a prompt to a locally running Ollama instance. Requires Ollama to be installed and running. ' +
+      'Send a prompt to a locally running Ollama model for on-device AI inference — no API key required. Requires Ollama installed and running (download from ollama.com). Optionally inject site context (site=) to give the model awareness of a site theme, plugins, and WP version. Use list_ollama_models to see available models. For cloud AI (Anthropic/OpenAI), configure in Nexus AI Preferences and use the AI Gateway.' +
       'Supports optional model selection, system prompts, and site context injection.',
     inputSchema: {
       type: 'object',

@@ -4,7 +4,7 @@ import { ok, capiError, requireCAPI } from './helpers';
 export const getAccountUserHandler: McpToolHandler = {
   definition: {
     name: 'wpe_get_account_user',
-    description: 'Get details for a single WP Engine portal user on an account.',
+    description: 'Get details for a specific WP Engine portal user — name, email, role, and install access. Requires both account_id and user_id. Use wpe_get_account_users to find the user_id if unknown.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -43,7 +43,7 @@ export const detectDriftHandler: McpToolHandler = {
   definition: {
     name: 'wpe_detect_drift',
     description:
-      'Compare local development sites against their linked WP Engine production installs. ' +
+      'Detect configuration drift between local development sites and their linked WP Engine production environments. Compares plugin versions, WP core version, and PHP version between the local copy and the live install. Use before pushing local changes to production to identify unexpected differences. Shows which environment is ahead for each dimension.' +
       'Shows WP version drift and plugin differences (version mismatches, plugins only on one side). ' +
       'Reads from the local graph — no live API calls required. ' +
       'Run wpe_sync_sites first to ensure WPE data is current.',

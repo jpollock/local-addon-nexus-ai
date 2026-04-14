@@ -14,8 +14,10 @@ export const syncCredentialsMcpToolHandler: McpToolHandler = {
   definition: {
     name: 'nexus_sync_credentials',
     description:
-      'Sync AI credentials to a WordPress site. Uses the site\'s configured provider ' +
-      '(set via Setup AI) to determine which key to sync. Local-only.',
+      'Sync AI credentials from Local to a specific WordPress site — pushes the configured provider API key to the site WordPress database. ' +
+      'Use after wp_setup_ai or when API credentials change. ' +
+      'Equivalent to clicking Sync Credentials in the site info panel. ' +
+      'Not needed for Local Gateway sites — gateway auth is handled by Local.',
     inputSchema: {
       type: 'object',
       properties: {

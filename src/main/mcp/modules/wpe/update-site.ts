@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const updateSiteHandler: McpToolHandler = {
   definition: {
     name: 'wpe_update_site',
-    description: 'Update a WP Engine site name.',
+    description: 'Rename a WP Engine site. Only the site name can be changed — not the account or installs it contains. Use wpe_get_sites to find the site_id if unknown.',
     inputSchema: {
       type: 'object',
       properties: {

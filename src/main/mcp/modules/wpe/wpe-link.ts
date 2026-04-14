@@ -5,7 +5,12 @@ import { ok, error, requireLocalServices } from './helpers';
 export const wpeLinkHandler: McpToolHandler = {
   definition: {
     name: 'local_wpe_link',
-    description: 'Check if a local site is linked to a WP Engine environment.',
+    description:
+      'Check whether a local site is linked to a WP Engine install. ' +
+      'A link enables local_wpe_pull and local_wpe_push between the two environments. ' +
+      'Read-only — does not create or modify links. ' +
+      'To link a site: use Local\'s Connect UI or provide remote_install_id when calling local_wpe_pull. ' +
+      'Use nexus_list_sites to see all linked pairs at a glance.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -8,7 +8,7 @@ export const fleetHealthSummaryHandler: McpToolHandler = {
   definition: {
     name: 'fleet_health_summary',
     description:
-      'Get health scores for all indexed sites in the fleet. Returns per-site scores ' +
+      'Get health scores for all indexed sites in the fleet — per-site score (0-100), top issues, and fleet average. Scores are computed from database health, index freshness, and plugin/core currency. Use to identify which sites need the most attention. For a specific site breakdown, use get_site_health. For database-specific health, use scan_database_health.' +
       'and fleet-wide statistics (healthy/warning/critical counts, average score).',
     inputSchema: {
       type: 'object',

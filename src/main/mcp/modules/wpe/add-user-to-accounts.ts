@@ -5,7 +5,7 @@ export const addUserToAccountsHandler: McpToolHandler = {
   definition: {
     name: 'wpe_add_user_to_accounts',
     description:
-      'Add a user to multiple WP Engine accounts at once. ' +
+      'Add a user to multiple WP Engine accounts in one call — useful for agency workflows where a user needs access across many accounts. The user receives an invitation email. Role options: full, billing, or partial (partial requires install_ids). Requires confirmation token for Tier 3 accounts. Use wpe_create_account_user for adding to a single account.' +
       'Creates the user on each account with the specified role.',
     inputSchema: {
       type: 'object',
@@ -62,10 +62,8 @@ export const addUserToAccountsHandler: McpToolHandler = {
           await services.localServices!.capiDirect(
             `/accounts/${accountId}/account_users`,
             'POST',
-            {
-              user: { email, first_name: firstName, last_name: lastName },
-              roles: [role],
-            },
+            // Swagger: roles is a string inside user object; account_id required in user
+            { user: { account_id: accountId, email, first_name: firstName, last_name: lastName, roles: role } },
           );
           return { accountId, success: true, message: null };
         } catch (err: any) {

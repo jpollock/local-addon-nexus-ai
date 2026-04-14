@@ -18,7 +18,7 @@ function success(data: any): McpToolResult {
 export const getSystemHealthTool: McpToolHandler = {
   definition: {
     name: 'get_system_health',
-    description: 'Get system health status and key metrics',
+    description: 'Get system health status and key operational metrics — MCP server status, GraphQL connectivity, active tool count, and error rates. Use when diagnosing MCP connectivity issues or confirming the addon is functioning correctly. For a user-facing health check, use nexus doctor from the CLI.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -34,7 +34,7 @@ export const getSystemHealthTool: McpToolHandler = {
 export const getMetricsTool: McpToolHandler = {
   definition: {
     name: 'get_metrics',
-    description: 'Get all collected metrics (counters, gauges, histograms, tool metrics)',
+    description: 'Get all collected operational metrics — tool call counts, error rates, latency histograms, and system gauges. Use for monitoring addon performance or diagnosing which tools are being called most frequently. For a specific tool metrics, use get_tool_metrics.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -80,7 +80,7 @@ export const getMetricsTool: McpToolHandler = {
 export const getToolMetricsTool: McpToolHandler = {
   definition: {
     name: 'get_tool_metrics',
-    description: 'Get detailed metrics for a specific MCP tool',
+    description: 'Get detailed performance metrics for a specific MCP tool — call count, success/error rates, and latency percentiles. Use to identify slow or error-prone tools. Use get_metrics for a full overview of all tools.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -108,7 +108,7 @@ export const getToolMetricsTool: McpToolHandler = {
 export const resetMetricsTool: McpToolHandler = {
   definition: {
     name: 'reset_metrics',
-    description: 'Reset all collected metrics (for testing/debugging)',
+    description: 'Reset all collected operational metrics to zero — useful for starting fresh measurements after a configuration change or for testing. Metrics begin accumulating again immediately after reset.',
     inputSchema: {
       type: 'object',
       properties: {},

@@ -4,7 +4,7 @@ import { ok, error, capiError, requireCAPI } from './helpers';
 export const updateDomainHandler: McpToolHandler = {
   definition: {
     name: 'wpe_update_domain',
-    description: 'Update a domain on a WP Engine install. Can set it as primary or configure a redirect.',
+    description: 'Update a domain on a WP Engine install — set it as the primary domain, configure a redirect to another domain, or enable/disable HTTPS enforcement. Use to change the primary domain or set up www → non-www (or vice versa) redirects. Use wpe_get_domains to find the domain_id before updating.',
     inputSchema: {
       type: 'object',
       properties: {

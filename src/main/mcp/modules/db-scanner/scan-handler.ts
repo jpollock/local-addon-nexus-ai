@@ -7,7 +7,10 @@ export const scanDatabaseHealthHandler: McpToolHandler = {
   definition: {
     name: 'scan_database_health',
     description:
-      'Scan a local WordPress site\'s database for bloat and issues. Returns structured JSON with revisions, transients, orphaned rows, plugin leftover tables, and a health score (0–100).',
+      'Scan a local WordPress site database for bloat and health issues — post revisions, auto-drafts, trashed items, expired transients, orphaned postmeta, plugin leftover tables, and autoload bloat. ' +
+      'Returns a structured health report with a score (0-100) and per-category breakdown. ' +
+      'LOCAL SITES ONLY — site must be running. ' +
+      'Use get_database_recommendations for actionable WP-CLI commands to fix issues found, and clean_database_items to execute cleanup.',
     inputSchema: {
       type: 'object',
       properties: {

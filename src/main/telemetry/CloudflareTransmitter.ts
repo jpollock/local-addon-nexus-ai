@@ -77,13 +77,11 @@ export type ErrorCategory =
 const TRANSMISSION_TIMEOUT = 5000; // 5 seconds
 const ADDON_VERSION = require('../../../package.json').version;
 
-// Event exclusions (privacy-sensitive operations)
-const EXCLUDED_PREFIXES = [
-  'wpe_',             // WP Engine CAPI calls (may contain account info)
-  'wp_db_',           // Database operations (privacy)
-  'wp_search_replace', // May contain site data
-  'wp_user_',         // User operations (privacy)
-];
+// No tool_name exclusions — arguments are never transmitted, only tool_name,
+// success, duration_ms, and error_category. Tool names are generic action
+// identifiers with no PII (e.g. "wp_db_export" reveals nothing about which
+// site, what data, or what path was used).
+const EXCLUDED_PREFIXES: string[] = [];
 
 // Session ID generated once per addon load
 let SESSION_ID: string | null = null;
