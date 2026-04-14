@@ -3357,15 +3357,15 @@
 </code></pre></div>
 <p>After installation, the <code>nexus</code> command is available globally.</p>
 <h3 id="first-run">First Run<a class="headerlink" href="#first-run" title="Permanent link">&para;</a></h3>
-<p>On first run, the CLI automatically handles all setup:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>$<span class="w"> </span>nexus<span class="w"> </span>sites<span class="w"> </span>list
+<p>On first run, the CLI automatically handles all setup. Run either <code>nexus doctor</code> (recommended — verifies everything) or any other command to trigger the bootstrap:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>$<span class="w"> </span>nexus<span class="w"> </span>doctor
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>Nexus<span class="w"> </span>AI<span class="w"> </span>addon<span class="w"> </span>not<span class="w"> </span>found.
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>Detected<span class="w"> </span>platform:<span class="w"> </span>macOS<span class="w"> </span><span class="o">(</span>Apple<span class="w"> </span>Silicon<span class="o">)</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>Download<span class="w"> </span>and<span class="w"> </span>install<span class="w"> </span>addon<span class="w"> </span>from<span class="w"> </span>GitHub?<span class="w"> </span><span class="o">(</span>Y/n<span class="o">)</span><span class="w"> </span>Y
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>Download<span class="w"> </span>and<span class="w"> </span>install<span class="w"> </span>addon<span class="w"> </span>from<span class="w"> </span>releases.elasticapi.io?<span class="w"> </span><span class="o">(</span>Y/n<span class="o">)</span><span class="w"> </span>Y
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>Downloading<span class="w"> </span>nexus-ai-darwin-arm64-0.2.1.tgz...
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>Downloading<span class="w"> </span>nexus-ai-darwin-arm64-<span class="o">{</span>version<span class="o">}</span>.tgz...
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>Downloading...<span class="w"> </span><span class="m">100</span>%<span class="w"> </span><span class="o">(</span><span class="m">287</span><span class="w"> </span>MB<span class="w"> </span>/<span class="w"> </span><span class="m">287</span><span class="w"> </span>MB<span class="o">)</span>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>Download<span class="w"> </span>complete.<span class="w"> </span>Installing...
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>✓<span class="w"> </span>Addon<span class="w"> </span>installed<span class="w"> </span>successfully!
@@ -3374,10 +3374,13 @@
 <a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
 <a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="o">(</span>After<span class="w"> </span>restarting<span class="w"> </span>Local<span class="o">)</span>
 <a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
-<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>$<span class="w"> </span>nexus<span class="w"> </span>sites<span class="w"> </span>list
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>$<span class="w"> </span>nexus<span class="w"> </span>doctor
 <a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
-<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>Local<span class="w"> </span>Sites<span class="w"> </span><span class="o">(</span><span class="m">0</span><span class="w"> </span>running,<span class="w"> </span><span class="m">0</span><span class="w"> </span>halted<span class="o">)</span>:
-<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">  </span>No<span class="w"> </span><span class="nb">local</span><span class="w"> </span>sites<span class="w"> </span>found.<span class="w"> </span>Create<span class="w"> </span>one<span class="w"> </span><span class="k">in</span><span class="w"> </span>Local<span class="w"> </span>or:<span class="w"> </span>nexus<span class="w"> </span><span class="nb">local</span><span class="w"> </span>create<span class="w"> </span>&lt;name&gt;
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>Nexus<span class="w"> </span>AI<span class="w"> </span>v<span class="o">{</span>version<span class="o">}</span><span class="w"> </span>—<span class="w"> </span>System<span class="w"> </span>Health
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">  </span>✅<span class="w">  </span>Local<span class="w">             </span>Running<span class="w"> </span><span class="o">(</span>v9.x.x<span class="o">)</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">  </span>✅<span class="w">  </span>Nexus<span class="w"> </span>AI<span class="w"> </span>addon<span class="w">    </span>Active<span class="w"> </span><span class="o">(</span>v<span class="o">{</span>version<span class="o">})</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">  </span>✅<span class="w">  </span>GraphQL<span class="w">           </span>Connected
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">  </span>✅<span class="w">  </span>MCP<span class="w"> </span>server<span class="w">        </span>Ready
 </code></pre></div>
 <p><strong>What just happened:</strong></p>
 <ol>
@@ -3393,11 +3396,11 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>nexus<span class="w"> </span>doctor
 </code></pre></div>
 <p>This checks every layer of the stack and prints the exact fix for anything that's wrong:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Nexus AI v0.2.1 — System Health
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Nexus AI v{version} — System Health
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>──────────────────────────────────────────────────
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  ✅  Local app           Installed
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>  ✅  Local running       Running
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  ✅  Nexus AI addon      Active (v0.2.1)
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  ✅  Nexus AI addon      Active (v{version})
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>  ✅  GraphQL server      Connected (port 4000)
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>  ✅  MCP server          Running · 161 tools
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  ⚠️   AI agent config    No agents configured
@@ -3501,7 +3504,7 @@
 </tbody>
 </table>
 <h2 id="updating">Updating<a class="headerlink" href="#updating" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>npm<span class="w"> </span>update<span class="w"> </span>-g<span class="w"> </span>local-addon-nexus-ai
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>npm<span class="w"> </span>update<span class="w"> </span>-g<span class="w"> </span>@local-labs-jpollock/local-addon-nexus-ai
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
 <a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Or force reinstall latest</span>
 <a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>npm<span class="w"> </span>install<span class="w"> </span>-g<span class="w"> </span>@local-labs-jpollock/local-addon-nexus-ai@latest
@@ -3509,7 +3512,7 @@
 <p>The addon in Local will auto-update on next CLI run if a new version is detected.</p>
 <h2 id="uninstalling">Uninstalling<a class="headerlink" href="#uninstalling" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Remove CLI</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>npm<span class="w"> </span>uninstall<span class="w"> </span>-g<span class="w"> </span>local-addon-nexus-ai
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>npm<span class="w"> </span>uninstall<span class="w"> </span>-g<span class="w"> </span>@local-labs-jpollock/local-addon-nexus-ai
 <a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
 <a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Remove addon from Local (optional)</span>
 <a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># Local → Preferences → Addons → Nexus AI → Remove</span>

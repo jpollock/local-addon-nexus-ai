@@ -3940,7 +3940,7 @@
 <p>Select your AI agent (Claude Code, Claude Desktop, Cursor, Windsurf, etc.). The command writes the MCP configuration automatically. Ask your AI agent "list my WordPress sites" to confirm it's working.</p>
 <h3 id="2-list-your-sites">2. List Your Sites<a class="headerlink" href="#2-list-your-sites" title="Permanent link">&para;</a></h3>
 <p>See all your WordPress sites (local and WP Engine):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>nexus<span class="w"> </span>list
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>nexus<span class="w"> </span>sites<span class="w"> </span>list
 </code></pre></div>
 <p><strong>Output:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Local Sites (3 running, 1 halted)
@@ -4128,19 +4128,19 @@
 <a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># Check all sites at once</span>
 <a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
 <a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># List sites</span>
-<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>nexus<span class="w"> </span>list
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>nexus<span class="w"> </span>sites<span class="w"> </span>list
 <a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>
 <a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="c1"># Scan for new content</span>
 <a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>nexus<span class="w"> </span>scan
 <a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>
 <a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="c1"># Check for plugin updates</span>
-<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="k">for</span><span class="w"> </span>site<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>nexus<span class="w"> </span>list<span class="w"> </span>--local<span class="w"> </span>--running<span class="w"> </span>--format<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.[].name&#39;</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="k">for</span><span class="w"> </span>site<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>nexus<span class="w"> </span>sites<span class="w"> </span>list<span class="w"> </span>--json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.[].name&#39;</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
 <a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="w">  </span>nexus<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span><span class="nv">$site</span><span class="w"> </span>--updates
 <a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="k">done</span>
 </code></pre></div>
 <h3 id="update-all-plugins">Update All Plugins<a class="headerlink" href="#update-all-plugins" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Update plugins on all running sites</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="k">for</span><span class="w"> </span>site<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>nexus<span class="w"> </span>list<span class="w"> </span>--local<span class="w"> </span>--running<span class="w"> </span>--format<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.[].name&#39;</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="k">for</span><span class="w"> </span>site<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>nexus<span class="w"> </span>sites<span class="w"> </span>list<span class="w"> </span>--json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.[].name&#39;</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
 <a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Updating plugins on </span><span class="nv">$site</span><span class="s2">...&quot;</span>
 <a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span>nexus<span class="w"> </span>plugin<span class="w"> </span>update<span class="w"> </span><span class="nv">$site</span><span class="w"> </span>--all
 <a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="k">done</span>
@@ -4231,9 +4231,9 @@
 <p>Save common workflows as scripts:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># morning-check.sh</span>
 <a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1">#!/bin/bash</span>
-<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>nexus<span class="w"> </span>list
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>nexus<span class="w"> </span>sites<span class="w"> </span>list
 <a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>nexus<span class="w"> </span>scan<span class="w"> </span>--local-only
-<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="k">for</span><span class="w"> </span>site<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>nexus<span class="w"> </span>list<span class="w"> </span>--local<span class="w"> </span>--running<span class="w"> </span>--format<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.[].name&#39;</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="k">for</span><span class="w"> </span>site<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>nexus<span class="w"> </span>sites<span class="w"> </span>list<span class="w"> </span>--json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.[].name&#39;</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
 <a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="w">  </span>nexus<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span><span class="nv">$site</span><span class="w"> </span>--updates
 <a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="k">done</span>
 </code></pre></div>
@@ -4255,7 +4255,7 @@
 <a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$PATH</span><span class="s2">:</span><span class="k">$(</span>npm<span class="w"> </span>config<span class="w"> </span>get<span class="w"> </span>prefix<span class="k">)</span><span class="s2">/bin&quot;</span>
 </code></pre></div>
 <h3 id="sites-not-showing">Sites Not Showing<a class="headerlink" href="#sites-not-showing" title="Permanent link">&para;</a></h3>
-<p>If <code>nexus list</code> shows no sites:</p>
+<p>If <code>nexus sites list</code> shows no sites:</p>
 <ol>
 <li>
 <p><strong>Check Local is running:</strong>
@@ -4282,7 +4282,7 @@
 <ol>
 <li>
 <p><strong>Check site is running:</strong>
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>nexus<span class="w"> </span>list<span class="w"> </span>--running
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>nexus<span class="w"> </span>sites<span class="w"> </span>list<span class="w"> </span>--status<span class="w"> </span>running
 </code></pre></div></p>
 </li>
 <li>
