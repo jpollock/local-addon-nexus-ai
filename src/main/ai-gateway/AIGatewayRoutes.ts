@@ -352,35 +352,53 @@ export class AIGatewayRoutes {
 
   /**
    * Handle /ai-gateway/v1/models endpoint.
-   * Returns all models for which API keys are configured.
+   *
+   * Returns ONLY models for the globally configured provider — this ensures
+   * WordPress plugins surface the right model list and don't accidentally pick
+   * a model from a different provider than what the user configured.
    */
   handleModels(_req: http.IncomingMessage, res: http.ServerResponse): void {
     const apiKeys = (this.storage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+    const settings = (this.storage.get(STORAGE_KEYS.SETTINGS) ?? {}) as Record<string, any>;
+    const globalProvider: string = settings.aiProvider || 'anthropic';
 
     const models: Array<{ id: string; object: string; created: number; owned_by: string }> = [];
     const ts = 1700000000;
 
-    if (apiKeys.anthropic) {
-      for (const m of CATALOG.anthropic) {
-        models.push({ id: m.id, object: 'model', created: ts, owned_by: 'anthropic' });
-      }
-    }
-    if (apiKeys.openai) {
-      for (const m of [...CATALOG.openai, ...CATALOG.openai_image]) {
-        models.push({ id: m.id, object: 'model', created: ts, owned_by: 'openai' });
-      }
-    }
-    if (apiKeys.google) {
-      for (const m of [...CATALOG.google, ...CATALOG.google_image]) {
-        models.push({ id: m.id, object: 'model', created: ts, owned_by: 'google' });
-      }
+    switch (globalProvider) {
+      case 'openai':
+        if (apiKeys.openai) {
+          for (const m of [...CATALOG.openai, ...CATALOG.openai_image]) {
+            models.push({ id: m.id, object: 'model', created: ts, owned_by: 'openai' });
+          }
+        }
+        break;
+      case 'google':
+        if (apiKeys.google) {
+          for (const m of [...CATALOG.google, ...CATALOG.google_image]) {
+            models.push({ id: m.id, object: 'model', created: ts, owned_by: 'google' });
+          }
+        }
+        break;
+      case 'anthropic':
+      default:
+        if (apiKeys.anthropic) {
+          for (const m of CATALOG.anthropic) {
+            models.push({ id: m.id, object: 'model', created: ts, owned_by: 'anthropic' });
+          }
+        }
+        break;
     }
 
-    // Fallback: if no keys configured, return all models so UI isn't empty
+    // Fallback: no key for global provider — return that provider's catalog anyway
+    // so the plugin at least sees what models are expected (user needs to add the key)
     if (models.length === 0) {
-      for (const m of CATALOG.anthropic) models.push({ id: m.id, object: 'model', created: ts, owned_by: 'anthropic' });
-      for (const m of CATALOG.openai) models.push({ id: m.id, object: 'model', created: ts, owned_by: 'openai' });
-      for (const m of [...CATALOG.google, ...CATALOG.google_image]) models.push({ id: m.id, object: 'model', created: ts, owned_by: 'google' });
+      const fallback = globalProvider === 'openai' ? CATALOG.openai
+        : globalProvider === 'google' ? CATALOG.google
+        : CATALOG.anthropic;
+      for (const m of fallback) {
+        models.push({ id: m.id, object: 'model', created: ts, owned_by: globalProvider });
+      }
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
