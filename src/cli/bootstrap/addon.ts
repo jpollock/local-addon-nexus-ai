@@ -203,7 +203,7 @@ async function promptAutoDownload(platformName: string): Promise<boolean> {
   });
 
   return new Promise<boolean>((resolve) => {
-    rl.question('Download and install addon from GitHub? (Y/n) ', (answer) => {
+    rl.question('Download and install addon from releases.elasticapi.io? (Y/n) ', (answer) => {
       rl.close();
       resolve(answer.toLowerCase() !== 'n');
     });
@@ -211,7 +211,7 @@ async function promptAutoDownload(platformName: string): Promise<boolean> {
 }
 
 /**
- * Auto-download addon from GitHub Releases
+ * Auto-download addon from releases.elasticapi.io
  */
 async function autoDownloadAddon(
   options: {
@@ -358,7 +358,7 @@ export async function installAddon(
         fs.symlinkSync(devAddonPath, addonPath);
         log(`Created symlink: ${addonPath} -> ${devAddonPath}`);
       } else {
-        // Try auto-download from GitHub Releases
+        // Try auto-download from releases.elasticapi.io
         log('Bundled addon not found. Attempting auto-download...');
 
         const downloadResult = await autoDownloadAddon({ onStatus: log });

@@ -35,7 +35,7 @@ Open Local by WP Engine and the Nexus AI addon activates automatically.
 If you need to install the addon separately:
 
 1. Download the platform tarball from [releases.elasticapi.io](https://releases.elasticapi.io/nexus-ai/latest.json) (`.tgz` file for your platform)
-2. Extract it to Local's addon directory — see [full instructions](../ui-addon/installation.md#method-2-manual-install-from-github-releases)
+2. Extract it to Local's addon directory — see [full instructions](../ui-addon/installation.md#method-2-manual-install-from-releases)
 3. Restart Local
 
 ### Verify

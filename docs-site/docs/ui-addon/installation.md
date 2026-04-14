@@ -59,9 +59,9 @@ Get the latest version number from [latest.json](https://releases.elasticapi.io/
 | Windows | `https://releases.elasticapi.io/nexus-ai/v{version}/nexus-ai-win32-x64-{version}.tgz` |
 | Linux | `https://releases.elasticapi.io/nexus-ai/v{version}/nexus-ai-linux-x64-{version}.tgz` |
 
-For example, for v0.2.4 on macOS Apple Silicon:
+For the current version on macOS Apple Silicon:
 ```
-https://releases.elasticapi.io/nexus-ai/v0.2.4/nexus-ai-darwin-arm64-0.2.4.tgz
+https://releases.elasticapi.io/nexus-ai/v{version}/nexus-ai-darwin-arm64-{version}.tgz
 ```
 
 #### Step 2: Extract to Addon Directory
@@ -288,7 +288,7 @@ rm -rf ~/Library/Application\ Support/Local/nexus-ai
 ### Remove CLI
 
 ```bash
-npm uninstall -g local-addon-nexus-ai
+npm uninstall -g @local-labs-jpollock/local-addon-nexus-ai
 ```
 
 ## Troubleshooting

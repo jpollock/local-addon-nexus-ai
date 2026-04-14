@@ -97,12 +97,12 @@ Addon not found. Please reinstall the CLI package.
 
 1. **Reinstall the CLI:**
    ```bash
-   npm install -g @local/nexus-cli --force
+   npm install -g @local-labs-jpollock/local-addon-nexus-ai --force
    ```
 
 2. **Check npm package integrity:**
    ```bash
-   npm list -g @local/nexus-cli
+   npm list -g @local-labs-jpollock/local-addon-nexus-ai
    ```
 
 3. **Dev mode: Verify monorepo structure**
@@ -120,7 +120,7 @@ The CLI addon is installed but needs to be activated.
 Please activate from Local desktop app:
   1. Open Local
   2. Go to Addons
-  3. Enable "@local/nexus-ai"
+  3. Enable "local-addon-nexus-ai"
 ```
 
 **Cause:**
@@ -154,14 +154,14 @@ nexus update --check
 **Symptoms:**
 ```
 ❌ Update failed
-Try running: npm update -g @local/nexus-cli
+Try running: npm update -g @local-labs-jpollock/local-addon-nexus-ai
 ```
 
 **Solutions:**
 
 1. **Run npm update manually:**
    ```bash
-   npm update -g @local/nexus-cli
+   npm update -g @local-labs-jpollock/local-addon-nexus-ai
    ```
 
 2. **Check npm permissions:**
@@ -172,7 +172,7 @@ Try running: npm update -g @local/nexus-cli
 
 3. **Use sudo (if necessary):**
    ```bash
-   sudo npm update -g @local/nexus-cli
+   sudo npm update -g @local-labs-jpollock/local-addon-nexus-ai
    ```
 
 ## Performance Issues
