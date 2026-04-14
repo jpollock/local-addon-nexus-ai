@@ -44,15 +44,31 @@ export const IMAGE_MODELS = new Set([
   'dall-e-2',
 ]);
 
+/** Models that support response_format (dall-e only). gpt-image-* never accepts it. */
+const DALLE_MODELS = new Set(['dall-e-3', 'dall-e-2']);
+
 /**
  * Call OpenAI Images API.
+ *
+ * gpt-image-1 and newer models do NOT support response_format — they always
+ * return b64_json natively. Only dall-e-2/3 accept response_format.
  */
 export async function callImageAPI(
   request: ImageGenerationRequest,
   options: ImageClientOptions,
 ): Promise<ImageGenerationResponse> {
   const { apiKey, logger } = options;
-  const body = JSON.stringify(request);
+
+  // Strip response_format for models that don't support it
+  const payload: ImageGenerationRequest = { ...request };
+  if (!DALLE_MODELS.has(payload.model)) {
+    delete payload.response_format;
+  } else if (!payload.response_format) {
+    // Default dall-e to b64_json so we always get image data, not a URL
+    payload.response_format = 'b64_json';
+  }
+
+  const body = JSON.stringify(payload);
 
   const requestOptions = {
     hostname: 'api.openai.com',
