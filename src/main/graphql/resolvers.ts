@@ -930,11 +930,15 @@ export function createResolvers(context: ResolverContext) {
           }
 
           const siteName = site.name;
-          await services.localServices.deleteSite(site.id);
+          const sitePath = (site as any).path || (site as any).longPath;
+          // trashFiles: true moves site files to trash (recoverable).
+          // Without this, wp-config.php stays on disk and blocks re-creating a same-named site.
+          await services.localServices.deleteSite(site.id, true);
 
           return {
             success: true,
             siteName,
+            sitePath,
             status: 'deleted',
           };
         } catch (error: any) {
@@ -1236,7 +1240,8 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          if (pullResult.status !== 'queued') {
+          // MCP tool returns 'in_progress' (fire-and-forget async pull)
+          if (pullResult.status !== 'queued' && pullResult.status !== 'in_progress') {
             return {
               success: false,
               error: pullResult.message || 'Pull failed',
@@ -1244,7 +1249,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          // Success - pull queued
+          // Success - pull started
           return {
             success: true,
             error: null,
@@ -1352,7 +1357,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          if (pushResult.status !== 'queued') {
+          if (pushResult.status !== 'queued' && pushResult.status !== 'in_progress') {
             return {
               success: false,
               error: pushResult.message || pushResult.error || 'Push failed',
