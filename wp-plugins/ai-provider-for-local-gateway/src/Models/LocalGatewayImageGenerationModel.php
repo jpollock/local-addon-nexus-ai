@@ -115,6 +115,7 @@ class LocalGatewayImageGenerationModel extends AbstractApiBasedModel implements 
         return GenerativeAiResult::fromArray([
             'id'               => uniqid('gateway-img-'),
             'candidates'       => [$candidate->toArray()],
+            'tokenUsage'       => ['promptTokens' => 0, 'completionTokens' => 0, 'totalTokens' => 0],
             'providerMetadata' => $this->providerMetadata()->toArray(),
             'modelMetadata'    => $this->metadata()->toArray(),
         ]);
