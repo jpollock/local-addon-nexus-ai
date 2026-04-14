@@ -232,8 +232,8 @@ async function autoDownloadAddon(
       console.log('');
       console.log('Skipping auto-install. To install manually:');
       console.log('1. Download the addon for your platform from:');
-      console.log('   https://github.com/jpollock/local-addon-nexus-ai/releases');
-      console.log(`2. Look for: ${platform.assetName}`);
+      console.log('   https://releases.elasticapi.io/nexus-ai/latest.json');
+      console.log(`2. Download: https://releases.elasticapi.io/nexus-ai/v{version}/${platform.assetName}`);
       console.log('3. Extract to your Local addons directory');
       console.log('4. Restart Local');
       console.log('');
@@ -312,7 +312,7 @@ async function autoDownloadAddon(
     console.error('Auto-install failed:', error.message);
     console.error('');
     console.error('Please install manually:');
-    console.error('https://github.com/jpollock/local-addon-nexus-ai/releases');
+    console.error('https://releases.elasticapi.io/nexus-ai/latest.json');
     console.error('');
 
     return { success: false, error: error.message };

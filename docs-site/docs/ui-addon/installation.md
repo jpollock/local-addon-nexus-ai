@@ -26,7 +26,7 @@ nexus sites list
 
 1. CLI detects addon is missing
 2. Prompts: "Download and install addon for macOS (Apple Silicon)? (Y/n)"
-3. Downloads platform-specific addon from GitHub Releases (~300 MB)
+3. Downloads platform-specific addon from `releases.elasticapi.io` (~300 MB)
 4. Extracts to Local's addon directory
 5. Activates addon in `enabled-addons.json`
 6. Prompts you to restart Local
@@ -44,18 +44,25 @@ After restarting Local, the addon appears in:
 
 See [CLI Installation](../cli/installation.md) for full CLI setup.
 
-### Method 2: Manual Install from GitHub Releases
+### Method 2: Manual Install from Releases
 
 If you prefer manual installation or auto-install fails. Releases are distributed as `.tgz` tarballs — not ZIP files.
 
 #### Step 1: Download Platform Tarball
 
-Visit [GitHub Releases](https://github.com/jpollock/local-addon-nexus-ai/releases/latest) and download the `.tgz` file for your platform:
+Get the latest version number from [latest.json](https://releases.elasticapi.io/nexus-ai/latest.json), then download your platform's tarball directly from the release CDN:
 
-- **macOS (Apple Silicon):** `nexus-ai-darwin-arm64-{version}.tgz`
-- **macOS (Intel):** `nexus-ai-darwin-x64-{version}.tgz`
-- **Windows:** `nexus-ai-win32-x64-{version}.tgz`
-- **Linux:** `nexus-ai-linux-x64-{version}.tgz`
+| Platform | URL |
+|----------|-----|
+| macOS (Apple Silicon) | `https://releases.elasticapi.io/nexus-ai/v{version}/nexus-ai-darwin-arm64-{version}.tgz` |
+| macOS (Intel) | `https://releases.elasticapi.io/nexus-ai/v{version}/nexus-ai-darwin-x64-{version}.tgz` |
+| Windows | `https://releases.elasticapi.io/nexus-ai/v{version}/nexus-ai-win32-x64-{version}.tgz` |
+| Linux | `https://releases.elasticapi.io/nexus-ai/v{version}/nexus-ai-linux-x64-{version}.tgz` |
+
+For example, for v0.2.4 on macOS Apple Silicon:
+```
+https://releases.elasticapi.io/nexus-ai/v0.2.4/nexus-ai-darwin-arm64-0.2.4.tgz
+```
 
 #### Step 2: Extract to Addon Directory
 
@@ -241,9 +248,10 @@ nexus sites list
 
 ### Manual Update
 
-1. Download latest tarball from [Releases](https://github.com/jpollock/local-addon-nexus-ai/releases/latest)
-2. Extract to addon directory (overwrites existing files)
-3. Restart Local
+1. Check the latest version at [releases.elasticapi.io/nexus-ai/latest.json](https://releases.elasticapi.io/nexus-ai/latest.json)
+2. Download your platform's tarball: `https://releases.elasticapi.io/nexus-ai/v{version}/nexus-ai-{platform}-{version}.tgz`
+3. Extract to addon directory (overwrites existing files)
+4. Restart Local
 
 **Note:** Your data (vector database, settings) is preserved during updates.
 
