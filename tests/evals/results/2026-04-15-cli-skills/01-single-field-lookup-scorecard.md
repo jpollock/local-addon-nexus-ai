@@ -11,7 +11,7 @@
 |--------|-------|
 | Tool calls | 0 |
 | Error events | 0 |
-| Duration | 15.4s |
+| Duration | 23.3s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
@@ -19,10 +19,10 @@
 | Metric | Value |
 |--------|-------|
 | Input tokens | 7 |
-| Output tokens | 308 |
-| Cache creation | 38,448 |
-| Cache read | 76,155 |
-| **Total cost** | **$0.1717** |
+| Output tokens | 427 |
+| Cache creation | 46,344 |
+| Cache read | 132,336 |
+| **Total cost** | **$0.2199** |
 
 ## Human Scores Needed
 
@@ -39,5 +39,5 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-I need permission to list sites. Could you approve the `nexus_list_sites` tool call? Once I have the site ID for jppblank, I can check its WordPress version.
+jppblank is running **WordPress 7.0-RC2-62197**.
 ```

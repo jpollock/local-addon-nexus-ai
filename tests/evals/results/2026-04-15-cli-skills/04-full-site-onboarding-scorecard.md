@@ -11,18 +11,18 @@
 |--------|-------|
 | Tool calls | 0 |
 | Error events | 2 |
-| Duration | 24.1s |
+| Duration | 84.2s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 7 |
-| Output tokens | 358 |
-| Cache creation | 38,658 |
-| Cache read | 76,661 |
-| **Total cost** | **$0.1734** |
+| Input tokens | 8 |
+| Output tokens | 1,605 |
+| Cache creation | 74,062 |
+| Cache read | 148,604 |
+| **Total cost** | **$0.3464** |
 
 ## Human Scores Needed
 

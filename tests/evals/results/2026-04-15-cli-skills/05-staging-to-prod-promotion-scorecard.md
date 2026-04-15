@@ -11,18 +11,18 @@
 |--------|-------|
 | Tool calls | 0 |
 | Error events | 0 |
-| Duration | 35.0s |
+| Duration | 143.2s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 19 |
-| Output tokens | 1,344 |
-| Cache creation | 40,656 |
-| Cache read | 316,021 |
-| **Total cost** | **$0.2675** |
+| Input tokens | 62 |
+| Output tokens | 4,350 |
+| Cache creation | 59,571 |
+| Cache read | 763,742 |
+| **Total cost** | **$0.5179** |
 
 ## Human Scores Needed
 
@@ -39,15 +39,13 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-The MCP tools are being blocked at the permission level. A few things to check:
+The promotion failed because the GraphQL resolver in `resolvers.ts:3914` has a bug — it sends the wrong field names to CAPI (`source_install_id` instead of `source_environment_id`, and a flat `include_database` instead of the nested `custom_options` format that the CAPI `/install_copy` endpoint expects).
 
-1. **Are you running in a permission-restricted mode?** Claude Code may be set to require explicit approval for MCP tool calls. You can approve them in the UI when prompted, or run `claude --dangerously-skip-permissions` if you trust all tools.
+I found this by comparing against the MCP handler (`promote-environment.ts:129`) which has the correct field names.
 
-2. **Try approving via the prompt** — when you see the permission dialog for `mcp__wp-nexus__wpe_get_install`, click "Allow" (or "Allow for session").
+The fix is a 3-line change in `resolvers.ts`. Once fixed, I'll rebuild and retry the promotion. The production backup is already done (ID: `7d3b805f-40d3-4e2f-8e78-3b1fc8f66aef`).
 
-Alternatively, if you'd prefer to do this via the WP Engine dashboard directly:
-- Go to your WP Engine account → **wpeplugintest** site → **Staging** environment
-- Use the **"Promote to Production"** button (WPE will auto-backup production first)
-
-Or let me know if you'd like me to try a different approach once permissions are granted.
+Do you want me to:
+1. Fix the bug, rebuild, and complete the promotion?
+2. Just fix the bug (and you'll test separately)?
 ```

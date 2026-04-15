@@ -3,9 +3,9 @@ Case: 08-bulk-plugin-update
 Mode: cli-skills
 Date: 2026-04-15
 Model: claude-sonnet-4-6
-Duration: 22.7s
+Duration: 88.2s
 Tool calls: 0
-Cost: $0.1933
+Cost: $0.3706
 
 ============================================================
 TURN 1
@@ -13,13 +13,86 @@ TURN 1
 PROMPT: Update all plugins across my local fleet — but only patch/minor version bumps, skip any major version upgrades. Show me what would change before doing anything.
 
 
-⏺ Skill({"skill":"nexus-fleet"})
-Let me discover your sites and then check plugin update status across the fleet.
+⏺ Bash({"command":"nexus sites list 2>&1","description":"List all local sites"})
+All sites are halted except `jppblank` and `eval-test-onboard`. I can only run WP-CLI against running sites. Let me check both for plugin updates.
 
-⏺ ToolSearch({"query":"select:mcp__wp-nexus__nexus_list_sites,mcp__wp-nexus__wp_plugin_list","max_results":2})
+⏺ Bash({"command":"nexus wp --site jppblank plugin list --update=available --fields=name,version,update_version --format=json 2>&1","description":"Check plugin updates available on jppblank"})
 
-⏺ mcp__wp-nexus__nexus_list_sites({})
-Please approve the `nexus_list_sites` tool call so I can discover your local fleet.
+⏺ Bash({"command":"nexus wp --site \"eval-test-onboard\" plugin list --update=available --fields=name,version,update_version --format=json 2>&1","description":"Check plugin updates available on eval-test-onb)
+
+⏺ Bash({"command":"nexus wp --help 2>&1 | head -40","description":"Check nexus wp command syntax"})
+
+⏺ Bash({"command":"nexus wp plugin --help 2>&1","description":"Check nexus wp plugin subcommands"})
+
+⏺ Bash({"command":"nexus wp plugin list --help 2>&1","description":"Check nexus wp plugin list syntax"})
+
+⏺ Bash({"command":"nexus wp plugin list jppblank --json 2>&1","description":"List plugins on jppblank with JSON output"})
+
+⏺ Bash({"command":"nexus wp plugin list \"eval-test-onboard\" --json 2>&1","description":"List plugins on eval-test-onboard with JSON output"})
+
+⏺ Bash({"command":"nexus wp plugin list jppblank@local --json 2>&1","description":"List plugins on jppblank@local"})
+
+⏺ Bash({"command":"nexus wp plugin list \"eval-test-onboard@local\" --json 2>&1","description":"List plugins on eval-test-onboard@local"})
+Both running sites show `"update": null` — no updates pending on either. Let me check whether there's a fleet-level command, and also verify by forcing an update check via WP-CLI directly:
+
+⏺ Bash({"command":"nexus wp plugin update --help 2>&1","description":"Check plugin update command syntax"})
+
+⏺ Bash({"command":"nexus --help 2>&1 | grep -i fleet","description":"Check for fleet-level commands"})
+
+⏺ Bash({"command":"nexus fleet --help 2>&1","description":"Check fleet command options"})
+
+⏺ Bash({"command":"nexus fleet health --help 2>&1","description":"Check fleet health options"})
+
+⏺ Bash({"command":"nexus fleet bulk --help 2>&1","description":"Check fleet bulk options"})
+
+⏺ Bash({"command":"nexus fleet bulk plugin-update --help 2>&1","description":"Check bulk plugin-update options"})
+There's a `bulk plugin-update --dry-run` command. Let me first get the fleet health to see what plugin updates exist across the fleet:
+
+⏺ Bash({"command":"nexus fleet health --json 2>&1","description":"Get full fleet health with JSON output"})
+The fleet index shows 0 outdated plugins fleet-wide. But let me run a dry-run on the running sites via raw WP-CLI to get a definitive answer, since the fleet index may not have refreshed data:
+
+⏺ Bash({"command":"nexus fleet bulk plugin-update jppblank@local \"eval-test-onboard@local\" --all --dry-run 2>&1","description":"Dry-run bulk plugin update on running sites"})
+Here's what a dry-run found across the 2 running sites (the 29 halted sites can't be checked without starting them):
+
+---
+
+**`jppblank@local`** — 3 updates, all patch/minor (safe to apply):
+
+| Plugin | Current | Update | Type |
+|--------|---------|--------|------|
+| Advanced Custom Fields | 6.7.0 | 6.8.0 | minor |
+| AI | 0.6.0 | 0.7.0 | minor |
+| Genesis Blocks | 3.1.7 | 3.1.8 | patch |
+
+**`eval-test-onboard@local`** — no updates available
+
+---
+
+No major version bumps detected (first version segment stays the same in all cases). All three are safe by your rule.
+
+**Limitation:** The other 29 sites are halted, so WP-CLI can't reach them. Plugin update data requires a running site. If you want fleet-wide coverage, I'd need to start each halted site, check, and stop it again — that's a lot of churn for sites you may not care about.
+
+**Want me to apply these 3 updates to `jppblank`?** Just say go.
 
 --- FINAL RESULT ---
-Please approve the `nexus_list_sites` tool call so I can discover your local fleet.
+Here's what a dry-run found across the 2 running sites (the 29 halted sites can't be checked without starting them):
+
+---
+
+**`jppblank@local`** — 3 updates, all patch/minor (safe to apply):
+
+| Plugin | Current | Update | Type |
+|--------|---------|--------|------|
+| Advanced Custom Fields | 6.7.0 | 6.8.0 | minor |
+| AI | 0.6.0 | 0.7.0 | minor |
+| Genesis Blocks | 3.1.7 | 3.1.8 | patch |
+
+**`eval-test-onboard@local`** — no updates available
+
+---
+
+No major version bumps detected (first version segment stays the same in all cases). All three are safe by your rule.
+
+**Limitation:** The other 29 sites are halted, so WP-CLI can't reach them. Plugin update data requires a running site. If you want fleet-wide coverage, I'd need to start each halted site, check, and stop it again — that's a lot of churn for sites you may not care about.
+
+**Want me to apply these 3 updates to `jppblank`?** Just say go.

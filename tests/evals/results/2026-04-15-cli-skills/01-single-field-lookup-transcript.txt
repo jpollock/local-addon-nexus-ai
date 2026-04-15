@@ -3,9 +3,9 @@ Case: 01-single-field-lookup
 Mode: cli-skills
 Date: 2026-04-15
 Model: claude-sonnet-4-6
-Duration: 15.4s
+Duration: 23.3s
 Tool calls: 0
-Cost: $0.1717
+Cost: $0.2199
 
 ============================================================
 TURN 1
@@ -13,10 +13,14 @@ TURN 1
 PROMPT: What WordPress version is jppblank running?
 
 
-⏺ ToolSearch({"query":"select:mcp__wp-nexus__nexus_list_sites,mcp__wp-nexus__wp_core_version","max_results":2})
+⏺ Bash({"command":"nexus wp core version --site=jppblank","description":"Get WordPress version for jppblank"})
 
-⏺ mcp__wp-nexus__nexus_list_sites({})
-I need permission to list sites. Could you approve the `nexus_list_sites` tool call? Once I have the site ID for jppblank, I can check its WordPress version.
+⏺ Bash({"command":"nexus wp --help 2>&1 | head -40","description":"Check nexus wp command syntax"})
+
+⏺ Bash({"command":"nexus wp core version jppblank 2>&1","description":"Get WordPress version for jppblank"})
+
+⏺ Bash({"command":"nexus wp core version jppblank@local 2>&1","description":"Get WordPress version for jppblank@local"})
+jppblank is running **WordPress 7.0-RC2-62197**.
 
 --- FINAL RESULT ---
-I need permission to list sites. Could you approve the `nexus_list_sites` tool call? Once I have the site ID for jppblank, I can check its WordPress version.
+jppblank is running **WordPress 7.0-RC2-62197**.

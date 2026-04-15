@@ -326,8 +326,9 @@ function runClaudeP(
       }
     }
 
-    if (d.type === 'tool') {
-      for (const block of d.content ?? []) {
+    // Tool results come back as 'user' messages (not 'tool') in Claude Code stream-json
+    if (d.type === 'user') {
+      for (const block of d.message?.content ?? []) {
         if (block.type === 'tool_result') {
           const toolId = block.tool_use_id;
           const pending = pendingToolById.get(toolId);

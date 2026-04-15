@@ -11,18 +11,18 @@
 |--------|-------|
 | Tool calls | 0 |
 | Error events | 0 |
-| Duration | 17.0s |
-| Has result | yes |
+| Duration | 300.4s |
+| Has result | no |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 9 |
-| Output tokens | 376 |
-| Cache creation | 39,118 |
-| Cache read | 154,813 |
-| **Total cost** | **$0.1988** |
+| Input tokens | 0 |
+| Output tokens | 0 |
+| Cache creation | 0 |
+| Cache read | 0 |
+| **Total cost** | **$0.0000** |
 
 ## Human Scores Needed
 
@@ -30,14 +30,14 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 
 | Dimension | Score | Weight | Notes |
 |-----------|-------|--------|-------|
-| Task completed (auto) | 100 | 10% | Got a result |
+| Task completed (auto) | 0 | 10% | No result |
 | Steps correct | TBD | 45% | Human review |
 | Friction | TBD | 25% | Human review |
 | Output clarity | TBD | 20% | Human review |
-| **Auto partial** | **10.0** | | Steps/friction/clarity = TBD |
+| **Auto partial** | **0.0** | | Steps/friction/clarity = TBD |
 
 ## Result Preview
 
 ```
-It looks like the MCP tool permissions aren't granted yet. Can you approve the `mcp__local__list_sites` tool call so I can discover the jppblank site and investigate?
+[no result]
 ```

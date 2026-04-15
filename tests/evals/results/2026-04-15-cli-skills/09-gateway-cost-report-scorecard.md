@@ -11,7 +11,7 @@
 |--------|-------|
 | Tool calls | 0 |
 | Error events | 0 |
-| Duration | 205.4s |
+| Duration | 58.7s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
@@ -19,10 +19,10 @@
 | Metric | Value |
 |--------|-------|
 | Input tokens | 11 |
-| Output tokens | 4,273 |
-| Cache creation | 44,269 |
-| Cache read | 332,060 |
-| **Total cost** | **$0.6761** |
+| Output tokens | 2,052 |
+| Cache creation | 50,405 |
+| Cache read | 296,888 |
+| **Total cost** | **$0.3089** |
 
 ## Human Scores Needed
 
@@ -39,16 +39,21 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-I'm hitting a wall — the gateway usage data lives in Local's app storage (`~/Library/Application Support/Local/`), which I don't have filesystem access to read, and there's no CLI command to query it yet.
+The nexus CLI doesn't currently have a command for AI gateway spending or usage breakdowns. There's no `nexus ai usage`, `nexus gateway stats`, or equivalent command in the CLI today.
+
+**What the CLI can't do (yet):**
+- No command to query AI gateway token usage or cost
+- No per-site or per-model breakdown of gateway traffic
+- No billing/spend reporting
 
 **What does exist:**
-- The data IS tracked — every gateway request is logged with `siteId`, `siteName`, `model`, `provider`, `costUsd`, `promptTokens`, `completionTokens`, and timestamp
-- It's accessible in the **Local app UI** — look for the "Gateway Usage" panel in the Nexus AI addon tab
-- Records are capped at the last 1,000 requests
+- The Local UI has a gateway usage dashboard (auto-refreshes in the app UI)
+- Telemetry is reported to a Cloudflare Worker (`nexus-analytics.jeremy7746.workers.dev`), but there's no CLI command to query it back
 
-**Two options to get you this data:**
+**Options to actually get this data:**
+1. **Local app UI** — open Local, go to the Nexus AI addon, and check the gateway usage dashboard there
+2. **Query the telemetry worker directly** — if you expose a stats endpoint on `nexus-analytics.jeremy7746.workers.dev`, a `nexus ai usage` CLI command could surface this
+3. **Build `nexus ai usage`** — this is a clear gap worth adding to the WPE Full Coverage plan
 
-1. **Quickest now:** Open the Local app → find your Nexus AI addon tab → the Gateway Usage dashboard shows cost by site/model with time filters (1h / 24h / 7d / all)
 
-2. **I can build a `nexus gateway usage` CLI command** that reads the storage file and prints a breakdown by site and model — similar to how the UI dashboard works. This would let you query it from the terminal going forward. Want me to do that?
 ```
