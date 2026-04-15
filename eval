@@ -141,6 +141,7 @@ check_prereqs() {
     echo "  nexus sites start frostscape@local"
     echo ""
     read -p "Continue anyway? (y/N) → " ans
+    ans="${ans%$'\r'}"   # strip carriage return (^M) from terminal input
     [[ "$ans" =~ ^[Yy]$ ]] || exit 0
   else
     echo -e "  ${GREEN}✅ $running local site(s) running${RESET}"
