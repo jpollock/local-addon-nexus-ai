@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 19 |
+| Tool calls | 14 |
 | Error events | 0 |
-| Duration | 171.6s |
+| Duration | 223.6s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 22 |
-| Output tokens | 3,221 |
-| Cache creation | 79,818 |
-| Cache read | 722,407 |
-| **Total cost** | **$0.5644** |
+| Input tokens | 17 |
+| Output tokens | 3,378 |
+| Cache creation | 77,913 |
+| Cache read | 511,573 |
+| **Total cost** | **$0.4964** |
 
 ## Human Scores Needed
 
@@ -39,15 +39,21 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-The CLI can't reach the addon right now — `nexus doctor` showed the MCP server isn't responding, and CLI commands that require addon connectivity are timing out.
+The nexus CLI is running into two blockers here:
 
-Here's the situation:
+1. **Version mismatch** — CLI is v0.2.1, addon is v0.2.4. The CLI times out on most commands that require Local connectivity.
+2. **No `gateway usage` CLI command exists yet** — there's no `nexus gateway` or `nexus ai usage` subcommand in the current CLI. The usage dashboard exists in the **Local addon UI** (auto-refreshes via IPC + 30s poll), not exposed as a CLI command.
 
-**Gateway usage data exists but isn't reachable right now.** The addon stores `nexus_ai_gateway_usage` records (per-request: site ID, model, prompt/completion tokens, cost in USD) in its electron store and exposes them via IPC (`ai-gateway-get-usage`). The usage dashboard in Local's UI reads this data, but the CLI doesn't have a `nexus gateway usage` command to pull it directly.
+Here's how to get the data right now:
 
-**To get the breakdown you want, two things need to happen:**
+**Option 1 — Addon UI**
+Open Local → click the Nexus AI section on any site → look for the "Gateway Usage" panel. It shows usage broken down by model and request.
 
-1. **Fix the connectivity issue first** — run `nexus update` to bring the CLI up from v0.2.1 to v0.2.4 (matching the installed addon), then restart Local. `nexus doctor` should show all green.
+**Option 2 — Fix the CLI first**
+```bash
+nexus update      # bring CLI to v0.2.4
+```
+Then restart Local to get the MCP server responding. After that, more commands will work.
 
-2. **Either** check the usage dashboard in the Local addon UI (it already shows per-site and per-model breakdowns with costs), **or** I can add a `nexus gateway usage` CLI co
+**Option 3 — Query the gateway DB directly** (the usage is in better-sqlite3 at `~/Library/Application Support/Local/nexus-ai/`) — but that requires file tools which I can't use under current con
 ```

@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 10 |
+| Tool calls | 1 |
 | Error events | 0 |
-| Duration | 79.5s |
+| Duration | 47.4s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 13 |
-| Output tokens | 848 |
-| Cache creation | 39,239 |
-| Cache read | 377,960 |
-| **Total cost** | **$0.2733** |
+| Input tokens | 4 |
+| Output tokens | 172 |
+| Cache creation | 36,218 |
+| Cache read | 35,992 |
+| **Total cost** | **$0.1492** |
 
 ## Human Scores Needed
 
@@ -39,5 +39,5 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-`jppblank` is running **WordPress 6.9.4**.
+Local isn't running. Start Local and then I can check the WordPress version on jppblank.
 ```

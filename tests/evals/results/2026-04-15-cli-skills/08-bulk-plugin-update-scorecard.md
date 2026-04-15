@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 19 |
+| Tool calls | 1 |
 | Error events | 0 |
-| Duration | 300.3s |
-| Has result | no |
+| Duration | 51.9s |
+| Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 0 |
-| Output tokens | 0 |
-| Cache creation | 0 |
-| Cache read | 0 |
-| **Total cost** | **$0.0000** |
+| Input tokens | 4 |
+| Output tokens | 303 |
+| Cache creation | 46,622 |
+| Cache read | 25,605 |
+| **Total cost** | **$0.1871** |
 
 ## Human Scores Needed
 
@@ -30,14 +30,16 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 
 | Dimension | Score | Weight | Notes |
 |-----------|-------|--------|-------|
-| Task completed (auto) | 0 | 35% | No result |
+| Task completed (auto) | 100 | 35% | Got a result |
 | Steps correct | TBD | 35% | Human review |
 | Friction | TBD | 20% | Human review |
 | Output clarity | TBD | 10% | Human review |
-| **Auto partial** | **0.0** | | Steps/friction/clarity = TBD |
+| **Auto partial** | **35.0** | | Steps/friction/clarity = TBD |
 
 ## Result Preview
 
 ```
-[no result]
+Local isn't running. Please start Local by WP Engine, then run this command again — I can't reach any sites until the app is up.
+
+Also, there's a CLI update available (`0.2.1 → 0.2.4`). Want me to run `nexus update` once Local is running, or skip it for now?
 ```

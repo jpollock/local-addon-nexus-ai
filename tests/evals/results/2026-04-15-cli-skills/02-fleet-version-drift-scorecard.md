@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 42 |
+| Tool calls | 20 |
 | Error events | 0 |
-| Duration | 266.8s |
+| Duration | 321.9s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 77 |
-| Output tokens | 8,289 |
-| Cache creation | 86,931 |
-| Cache read | 1,700,993 |
-| **Total cost** | **$0.9609** |
+| Input tokens | 23 |
+| Output tokens | 5,434 |
+| Cache creation | 77,817 |
+| Cache read | 746,227 |
+| **Total cost** | **$0.5973** |
 
 ## Human Scores Needed
 
@@ -39,32 +39,26 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-Here's what I found — and there's an important limitation to explain:
+I've hit a blocker I can't work around from here. Here's the situation:
 
-**The problem: All 31 sites are halted.**
+**Root cause:** Two `nexus` issues are preventing WordPress version data from loading:
 
-Nexus gets WordPress version data via WP-CLI, which requires a site to be running. With all sites halted, `wpVersion` returns `null` for every site — so the CLI can't report which ones are behind.
+1. **Version mismatch** — The `nexus` binary your shell uses (`~/node_modules/.bin/nexus`) is v0.2.1, but `nexus update` updated a *different* global installation. The running binary is still 0.2.1 while the addon is v0.2.4.
 
-```
-nexus fleet filter --json  →  31 sites, all wpVersion: null
-```
+2. **MCP server not responding** — `nexus sites list`, `nexus fleet health`, and all site-querying commands route through the MCP server on port 10800. While Local *is* listening there, the CLI can't communicate with it (likely due to the version mismatch).
 
-**To get WP version data, you have two options:**
+**To fix this and answer your question:**
 
-**Option 1 — Start sites individually and check:**
 ```bash
-nexus sites start <site-name>
-nexus wp <site-name> "core version"
+# Option 1: Update the local nexus package that your shell uses
+cd ~ && npm install @local-labs-jpollock/local-addon-nexus-ai@latest
+
+# Option 2: Restart Local to clear any hung MCP connections
+# (then reopen this terminal to pick up fresh PATH)
 ```
 
-**Option 2 — Start all and run a fleet health sweep:**
+After either fix, run:
 ```bash
-nexus sites start <site-name>  # for each site you care about
-nexus fleet filter --json       # will now show wpVersion
-```
-
-**What I can tell you right now:**
-- You have **31 local sites**, all halted
-- Fleet health reports **1 warning + 5 critical** issues, but those appear to be connectivity/health checks, not WP version flags (since versions can't be read)
-- The latest
+nexus fleet health
+``
 ```
