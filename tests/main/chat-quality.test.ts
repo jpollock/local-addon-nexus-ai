@@ -71,10 +71,11 @@ describe('Provider configuration quality', () => {
     }
   });
 
-  test('openai default models start with "gpt-"', () => {
+  test('openai default models are valid openai model names', () => {
     const openai = new OpenAIProvider();
+    // OpenAI models include gpt- series and o-series (o1, o3, o4-mini, etc.)
     for (const m of openai.defaultModels) {
-      expect(m).toMatch(/^gpt-/);
+      expect(m).toMatch(/^(gpt-|o\d)/);
     }
   });
 

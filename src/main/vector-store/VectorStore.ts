@@ -378,6 +378,9 @@ export class VectorStore {
   }
 
   async close(): Promise<void> {
-    this.db = null;
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
   }
 }

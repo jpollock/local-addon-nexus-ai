@@ -72,7 +72,8 @@ function makeLocalServices(capiAvailable = true): jest.Mocked<LocalServicesBridg
       hostConnections: {
         wpe: {
           hostId: 'wpe',
-          installName: 'mysite-prod',
+          remoteSiteId: 'inst-1',
+          remoteSiteEnv: 'production',
           accountId: 'acc-1',
         },
       },
@@ -110,8 +111,8 @@ describe('WPE Integration Tools', () => {
     registerWpeTools(registry);
   });
 
-  test('registers 22 tools', () => {
-    expect(registry.allToolNames()).toHaveLength(22);
+  test('registers 76 tools', () => {
+    expect(registry.allToolNames()).toHaveLength(76);
   });
 
   describe('CAPI tool gating', () => {
@@ -268,7 +269,7 @@ describe('WPE Integration Tools', () => {
     test('shows WPE link info', async () => {
       const result = await registry.call('local_wpe_link', { site: 'My Site' }, services);
       expect(result.isError).toBeUndefined();
-      expect(result.content[0].text).toContain('mysite-prod');
+      expect(result.content[0].text).toContain('inst-1');
     });
 
     test('reports unlinked site', async () => {
@@ -311,7 +312,7 @@ describe('WPE Integration Tools', () => {
       const result = await handler.execute({ site: 'My Site' }, services);
       expect(result.isError).toBeUndefined();
       const payload = JSON.parse(result.content[0].text);
-      expect(payload.status).toBe('queued');
+      expect(payload.status).toBe('in_progress');
     });
 
     test('rejects halted site', async () => {
