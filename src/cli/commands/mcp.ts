@@ -236,9 +236,14 @@ mcpCommand
       const cmd = `claude mcp add local-nexus-ai -- node "${stdioPath}"`;
       if (options.write) {
         console.log(`\nRunning: ${cmd}\n`);
-        const result = spawnSync('claude', ['mcp', 'add', 'local-nexus-ai', '--', 'node', stdioPath], {
+        // claude is often an alias — resolve to full path
+        const claudeBin = [
+          `${process.env.HOME}/.claude/local/claude`,
+          '/usr/local/bin/claude',
+        ].find((p) => { try { return require('fs').existsSync(p); } catch { return false; } }) ?? 'claude';
+        const result = spawnSync(claudeBin, ['mcp', 'add', 'local-nexus-ai', '--', 'node', stdioPath], {
           stdio: 'inherit',
-          shell: true,
+          shell: false,
         });
         if (result.status !== 0) {
           console.error('\n❌ Failed to run `claude mcp add`. Is Claude Code installed?');
