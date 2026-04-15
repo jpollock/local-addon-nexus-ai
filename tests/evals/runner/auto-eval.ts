@@ -260,23 +260,33 @@ function runClaudeP(
   caseId: string,
   sessionId?: string,
 ): TurnData {
-  const allowedTools = mode === 'mcp'
-    ? (MCP_TOOLS[caseId] ?? []).join(',')
-    : 'Bash(nexus *)';
+  // allowedTools set after nexusPath is resolved below
+
+  // Resolve the absolute nexus path — Claude's Bash tool uses a non-interactive
+  // shell that doesn't source .zshrc, so fnm PATH injection is absent.
+  const nexusPath = (() => {
+    try {
+      const r = spawnSync('which', ['nexus'], { encoding: 'utf-8', env: process.env });
+      return r.stdout.trim() || 'nexus';
+    } catch { return 'nexus'; }
+  })();
 
   // For CLI/Skills mode, prefix the prompt to force Bash-only execution.
-  // Critical: also prohibit Read/Write/Edit/Glob/Grep which are auto-available
-  // in the project context and cause Claude to read source files instead of
-  // running nexus commands, leading to timeouts.
+  // Use the absolute nexus path — Claude's Bash tool uses a non-interactive shell
+  // that doesn't source .zshrc, so fnm PATH injection doesn't happen inside claude -p.
   const cliPrefix = mode === 'cli-skills'
     ? 'IMPORTANT CONSTRAINTS:\n' +
-      '- You MUST use ONLY the Bash tool to run nexus CLI commands\n' +
-      '- Do NOT use Read, Write, Edit, Glob, Grep, or any file tools\n' +
-      '- Do NOT use any MCP tools\n' +
-      '- Run nexus commands like: nexus sites list, nexus wpe portfolio, nexus wp health <site>@local\n' +
+      `- The nexus CLI is at: ${nexusPath} (use this exact path in all commands)\n` +
+      `- Run commands like: ${nexusPath} sites list, ${nexusPath} wpe portfolio, ${nexusPath} wp health jppblank@local\n` +
+      '- You MUST use ONLY the Bash tool — do NOT use Read, Write, Edit, Glob, Grep, or any MCP tools\n' +
       '- If you need information, get it by running nexus CLI commands, not by reading files\n\n'
     : '';
   const actualPrompt = cliPrefix + prompt;
+
+  // Build allowedTools after resolving nexusPath
+  const allowedTools = mode === 'mcp'
+    ? (MCP_TOOLS[caseId] ?? []).join(',')
+    : `Bash(${nexusPath} *)`;
 
   const args = [
     '-p', actualPrompt,
