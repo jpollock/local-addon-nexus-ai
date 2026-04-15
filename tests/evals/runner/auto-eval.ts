@@ -241,6 +241,7 @@ function checkMcpStatus(): 'connected' | 'disconnected' | 'unknown' {
 }
 
 function promptUser(rl: readline.Interface, q: string): Promise<string> {
+  if (!process.stdin.isTTY) return Promise.resolve(''); // non-interactive: default empty
   return new Promise(resolve => rl.question(q, resolve));
 }
 
@@ -585,7 +586,13 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  // Only create readline if stdin is a TTY — non-interactive mode (piped/CI) skips prompts
+  const isTTY = process.stdin.isTTY;
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: isTTY ? process.stdout : undefined,
+    terminal: isTTY,
+  });
   const line = '═'.repeat(60);
 
   console.log('\n' + line);
@@ -689,4 +696,6 @@ async function main(): Promise<void> {
   rl.close();
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+main()
+  .catch(err => { console.error(err); process.exit(1); })
+  .finally(() => { process.exit(0); }); // force exit — spawnSync leaves event loop pending

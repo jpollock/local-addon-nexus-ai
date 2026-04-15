@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 14 |
+| Tool calls | 21 |
 | Error events | 0 |
-| Duration | 223.6s |
+| Duration | 150.1s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 17 |
-| Output tokens | 3,378 |
-| Cache creation | 77,913 |
-| Cache read | 511,573 |
-| **Total cost** | **$0.4964** |
+| Input tokens | 26 |
+| Output tokens | 6,259 |
+| Cache creation | 46,603 |
+| Cache read | 843,378 |
+| **Total cost** | **$0.5217** |
 
 ## Human Scores Needed
 
@@ -39,21 +39,20 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-The nexus CLI is running into two blockers here:
+The sandbox is blocking all outbound network connections (curl, node, python all require approval), and the nexus CLI (v0.2.1) doesn't have a command for this.
 
-1. **Version mismatch** — CLI is v0.2.1, addon is v0.2.4. The CLI times out on most commands that require Local connectivity.
-2. **No `gateway usage` CLI command exists yet** — there's no `nexus gateway` or `nexus ai usage` subcommand in the current CLI. The usage dashboard exists in the **Local addon UI** (auto-refreshes via IPC + 30s poll), not exposed as a CLI command.
+**The short answer: gateway spending by site and model isn't exposed through the CLI yet.**
 
-Here's how to get the data right now:
+Here's what I found:
 
-**Option 1 — Addon UI**
-Open Local → click the Nexus AI section on any site → look for the "Gateway Usage" panel. It shows usage broken down by model and request.
+- The gateway is running at `127.0.0.1:13000`, but its usage endpoints require network access the sandbox won't approve
+- The nexus CLI has no `nexus ai usage`, `nexus ai gateway`, or equivalent command
+- Gateway usage data IS tracked — the Local addon UI has a "gateway usage dashboard" that shows this, auto-refreshed via IPC
 
-**Option 2 — Fix the CLI first**
-```bash
-nexus update      # bring CLI to v0.2.4
-```
-Then restart Local to get the MCP server responding. After that, more commands will work.
+**Where you can get this today:**
+1. **Local addon UI** — the addon panel in Local shows gateway usage data per site, refreshed every 30s
+2. **Local app data** — the underlying SQLite DB at `~/Library/Application Support/Local/nexus-ai/` holds the raw records, but I can't query it from this sandbox
 
-**Option 3 — Query the gateway DB directly** (the usage is in better-sqlite3 at `~/Library/Application Support/Local/nexus-ai/`) — but that requires file tools which I can't use under current con
+**Two things worth noting:**
+- There's a CLI update to **v0.2.4** available (`nexus update`) —
 ```

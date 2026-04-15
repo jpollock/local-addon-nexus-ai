@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 5 |
+| Tool calls | 38 |
 | Error events | 0 |
-| Duration | 226.8s |
+| Duration | 202.5s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 8 |
-| Output tokens | 1,527 |
-| Cache creation | 48,080 |
-| Cache read | 173,983 |
-| **Total cost** | **$0.2554** |
+| Input tokens | 25 |
+| Output tokens | 8,164 |
+| Cache creation | 85,602 |
+| Cache read | 900,683 |
+| **Total cost** | **$0.7137** |
 
 ## Human Scores Needed
 
@@ -39,21 +39,15 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-Here's what I can see:
+Here's what I found:
 
-**The immediate problem:** The MCP server (port 10800) is not responding, which is why every nexus command hangs. This is unrelated to Local itself being up — Local and GraphQL (port 4000) are both running fine.
+**Root cause: broken WPE link + CLI version mismatch**
 
-**Likely connection to your push:** The failed push to WPE may have left the MCP server in a stuck state.
+The push left the local `jppblank` site in a partially-linked state. The evidence:
 
-**What to do:**
+1. **`@unknown` environment in WPE link** — `nexus sites get jppblank@local` shows `WPE Link: 8dba401b-e003-4de2-9905-4c2f6181c440@unknown`. The Site UUID is correct, but the environment should be `@production`, not `@unknown`. This happened when the push started linking the site but didn't complete.
 
-1. **Restart Local** (quit and reopen the app) — this will reset the MCP server and addon state
-2. After restart, run `nexus update` to fix the version mismatch (CLI v0.2.1 vs addon v0.2.4)
-3. Then I can check the sync history for `jppblank` to see what actually happened with the push
+2. **Multiple CLI commands failing with `is not a function`** — `nexus wpe changes`, `nexus wpe link`, `nexus wp health` all fail with errors like `services.localServices.getSiteChanges is not a function`. This is a v0.2.1 bug — you're running v0.2.1, latest is **v0.2.4**. These functions were added or changed and the old binary doesn't have them.
 
-There's also a version mismatch worth knowing about:
-- CLI: `v0.2.1`
-- Addon: `v0.2.4` (dev)
-
-This mismatch alone shouldn't break things, but it's worth cleaning up. After you restart Local, let me know and I'll pull the sync history and WPE status for `jppblank` to figure out where that push stands.
+3. **WPE install itself is fine** — the production install exists (`3beb5d13-1ef2-4732-b626-4832a1991da8`), has the correct primary domain (`jppblank.wpenginepowered.com`), PHP 8.2. No
 ```

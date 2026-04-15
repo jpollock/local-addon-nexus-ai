@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 1 |
+| Tool calls | 10 |
 | Error events | 0 |
-| Duration | 51.9s |
+| Duration | 67.2s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 4 |
-| Output tokens | 303 |
-| Cache creation | 46,622 |
-| Cache read | 25,605 |
-| **Total cost** | **$0.1871** |
+| Input tokens | 12 |
+| Output tokens | 2,435 |
+| Cache creation | 41,996 |
+| Cache read | 351,368 |
+| **Total cost** | **$0.2995** |
 
 ## Human Scores Needed
 
@@ -39,7 +39,26 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-Local isn't running. Please start Local by WP Engine, then run this command again — I can't reach any sites until the app is up.
+Here's what's available across your running fleet:
 
-Also, there's a CLI update available (`0.2.1 → 0.2.4`). Want me to run `nexus update` once Local is running, or skip it for now?
+**frostscape** (2 updates)
+
+| Plugin | Current | Available | Type |
+|--------|---------|-----------|------|
+| AI | 0.6.0 | 0.7.0 | minor |
+| WPGraphQL | 2.11.1 | 2.11.2 | **patch** |
+
+**jppblank** (3 updates)
+
+| Plugin | Current | Available | Type |
+|--------|---------|-----------|------|
+| Advanced Custom Fields | 6.7.0 | 6.8.0 | minor |
+| AI | 0.6.0 | 0.7.0 | minor |
+| Genesis Blocks | 3.1.7 | 3.1.8 | **patch** |
+
+**Summary:** 5 updates across 2 sites — all are minor or patch bumps. No major version upgrades to skip.
+
+Your other 28 sites are halted (not running), so they can't be updated right now without starting them first.
+
+Ready to apply all 5? Or do you want to be selective about any of them?
 ```
