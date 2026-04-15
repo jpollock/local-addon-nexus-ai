@@ -2,6 +2,9 @@
   "name": "@local-labs-jpollock/local-addon-nexus-ai",
   "productName": "Nexus AI",
   "version": "0.2.4",
+  "engines": {
+    "node": "22.x"
+  },
   "main": "lib/main.js",
   "renderer": "lib/renderer.js",
   "bin": {
@@ -22,7 +25,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "npm run clean && npm run compile && npm run create-entry-points",
+    "build": "npm run clean && npm run compile && npm run create-entry-points && npm run download-model",
     "compile": "tsc -p .",
     "create-entry-points": "node scripts/create-entry-points.js",
     "sync-wp-plugins": "node scripts/create-entry-points.js",
