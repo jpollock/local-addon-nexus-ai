@@ -1,0 +1,35 @@
+id: 09-gateway-cost-report
+description: Internal analytics — gateway usage and cost breakdown
+mode: [mcp, cli-skills]
+prompt: "How much have I spent through the AI gateway this month? Break it down by site and model, and tell me which site is using it most."
+
+guardrails:
+  reads_only: true
+  source: local_gateway_logs    # data lives in Local, not WPE
+
+expected:
+  task_completed: true
+  key_steps:
+    - identifies this is a Local addon data source (not WPE CAPI)
+    - fetches gateway usage records for current month
+    - aggregates cost by site and by model
+    - identifies the highest-usage site
+    - presents totals clearly
+  must_not:
+    - query WPE CAPI for this data
+    - confuse gateway cost with WPE hosting cost
+    - make up numbers if data is unavailable
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 30
+  friction_count: 20
+  output_clarity: 10
+
+notes: |
+  Tests whether the agent knows the data source. Gateway usage lives in
+  Local's registry storage, not in WPE. MCP has telemetry tools and
+  ai-gateway-get-usage. CLI has nexus gateway usage (if it exists).
+  Coverage gap test: does CLI mode even have access to gateway analytics?
+  If not, this is a case where MCP wins on capability, not just quality.
+  If gateway has no usage yet, agent should say so rather than returning zeros.

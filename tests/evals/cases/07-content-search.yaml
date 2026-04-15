@@ -1,0 +1,35 @@
+id: 07-content-search
+description: Semantic content search across indexed local sites
+mode: [mcp, cli-skills]
+prompt: "Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts."
+
+guardrails:
+  reads_only: true
+  requires_indexed_sites: true   # at least 2 sites must be indexed
+  scope: local_sites_only
+
+expected:
+  task_completed: true
+  key_steps:
+    - searches across all indexed sites (not just one)
+    - uses semantic/content search (not just plugin list)
+    - returns relevant posts/pages with site attribution
+    - handles unindexed sites gracefully (skip or note)
+    - presents results grouped by site
+  must_not:
+    - search only one site
+    - confuse "has WooCommerce plugin" with "has WooCommerce content"
+    - reindex sites without being asked
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 30
+  friction_count: 20
+  output_clarity: 10
+
+notes: |
+  Tests the content indexing pipeline, not just WPE/site metadata.
+  MCP: search_across_sites. CLI: nexus fleet search / nexus content search-all.
+  Quality question: does it distinguish semantic content from plugin presence?
+  If no sites are indexed, the agent should suggest indexing rather than failing silently.
+  Coverage gap test: CLI and MCP may return different results from same index.
