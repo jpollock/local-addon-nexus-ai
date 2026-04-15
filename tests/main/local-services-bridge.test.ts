@@ -159,6 +159,13 @@ describe('LocalServicesBridge', () => {
   // --- WP-CLI ---
 
   describe('wpCliRun', () => {
+    // wpCliRun races the WP-CLI call against a 120s timeout setTimeout.
+    // The mock resolves synchronously so the race completes immediately, but
+    // the real setTimeout handle would linger for 120s keeping Jest alive.
+    // Fake timers prevent that handle from entering the real event loop.
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
     test('returns stdout on success', async () => {
       const result = await bridge.wpCliRun('site-1', ['plugin', 'list']);
       expect(result).toEqual({ stdout: 'cli output', success: true });

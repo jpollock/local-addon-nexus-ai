@@ -48,3 +48,19 @@ npm run rebuild    # For Local (recompiles for Electron)
 - better-sqlite3: 11.10.0 (don't change this)
 - Electron (Local): 37.8.0
 - System Node: 22.16.0
+
+---
+
+## Jest & Open Handles
+
+**`npm test` exits cleanly.** `jest.config.js` has `forceExit: true` intentionally.
+
+After every test run you'll see:
+```
+Jest has detected the following 1 open handle potentially keeping Jest from exiting:
+  ●  CustomGC  (from @lancedb/lancedb)
+```
+
+This is **expected and unfixable at the app level.** LanceDB's Rust native module registers a background GC thread with Node's event loop on import. There is no API to shut it down. `forceExit: true` is the correct fix — `detectOpenHandles: true` keeps it visible so new handles don't get silently masked.
+
+**See:** `docs/NATIVE_MODULES.md#lancedb-customgc-open-handle` for details.

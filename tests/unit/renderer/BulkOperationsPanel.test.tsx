@@ -95,6 +95,13 @@ function spySetState(instance: any): void {
 describe('BulkOperationsPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Prevent componentDidMount's poll setInterval from registering a real
+    // event-loop handle. None of these tests exercise the polling path.
+    jest.spyOn(global, 'setInterval').mockImplementation((() => 0) as any);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   test('should render loading state initially', () => {
