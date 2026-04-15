@@ -1,0 +1,12 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 10-recover-bad-state
+Mode: cli-skills
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 0.0s
+
+--- Turn 1 ---
+PROMPT: I tried to push jppblank to WPE earlier and something went wrong. The site seems to be in a weird state. Can you figure out what happened and what I should do?
+
+RESULT:
+[no result]

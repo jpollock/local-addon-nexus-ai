@@ -1,0 +1,12 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 08-bulk-plugin-update
+Mode: cli-skills
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 0.0s
+
+--- Turn 1 ---
+PROMPT: Update all plugins across my local fleet — but only patch/minor version bumps, skip any major version upgrades. Show me what would change before doing anything.
+
+RESULT:
+[no result]

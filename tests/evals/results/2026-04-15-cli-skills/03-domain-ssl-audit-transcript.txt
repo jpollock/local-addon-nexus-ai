@@ -1,0 +1,12 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 03-domain-ssl-audit
+Mode: cli-skills
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 0.0s
+
+--- Turn 1 ---
+PROMPT: Check all domains across my WP Engine accounts — which ones have SSL issues or certificates expiring in the next 30 days?
+
+RESULT:
+[no result]

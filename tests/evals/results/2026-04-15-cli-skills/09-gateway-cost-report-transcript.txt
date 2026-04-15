@@ -1,0 +1,12 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 09-gateway-cost-report
+Mode: cli-skills
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 0.0s
+
+--- Turn 1 ---
+PROMPT: How much have I spent through the AI gateway this month? Break it down by site and model, and tell me which site is using it most.
+
+RESULT:
+[no result]

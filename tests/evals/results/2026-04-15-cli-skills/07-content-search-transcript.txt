@@ -1,0 +1,12 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 07-content-search
+Mode: cli-skills
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 0.0s
+
+--- Turn 1 ---
+PROMPT: Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts.
+
+RESULT:
+[no result]
