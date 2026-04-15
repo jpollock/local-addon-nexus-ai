@@ -8,10 +8,41 @@
  * Defaults to the current platform and architecture.
  */
 
-const { execSync } = require('child_process');
+const { execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a command with an explicit argument array (no shell interpolation).
+ * Throws if the process exits non-zero, mirroring execSync behaviour.
+ */
+function run(cmd, args, opts = {}) {
+  const result = spawnSync(cmd, args, { stdio: 'inherit', shell: false, ...opts });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`Command failed (exit ${result.status}): ${cmd} ${args.join(' ')}`);
+  }
+}
+
+/**
+ * Validate --platform and --arch CLI args against known-good values.
+ * Prevents shell metacharacters from reaching argument lists.
+ */
+function validatePlatformArch(platform, arch) {
+  const validPlatforms = ['darwin', 'linux', 'win32'];
+  const validArchs = ['arm64', 'x64', 'ia32'];
+  if (!validPlatforms.includes(platform)) {
+    throw new Error(`Invalid --platform "${platform}". Must be one of: ${validPlatforms.join(', ')}`);
+  }
+  if (!validArchs.includes(arch)) {
+    throw new Error(`Invalid --arch "${arch}". Must be one of: ${validArchs.join(', ')}`);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Parse arguments
@@ -28,6 +59,8 @@ for (let i = 0; i < args.length; i++) {
     arch = args[++i];
   }
 }
+
+validatePlatformArch(platform, arch);
 
 const projectRoot = path.join(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
@@ -104,10 +137,8 @@ execSync('npm install --omit=dev', { cwd: stagingDir, stdio: 'inherit' });
 console.log('Rebuilding native modules for Electron...');
 // Run from project root (where electron-rebuild is installed as devDep)
 // but target the staging directory
-execSync(
-  `npx electron-rebuild -v 37.8.0 -f -w better-sqlite3 --module-dir "${stagingDir}"`,
-  { cwd: projectRoot, stdio: 'inherit' }
-);
+run('npx', ['electron-rebuild', '-v', '37.8.0', '-f', '-w', 'better-sqlite3', '--module-dir', stagingDir],
+  { cwd: projectRoot });
 
 // ---------------------------------------------------------------------------
 // Step 5: Strip non-target platform binaries
@@ -116,9 +147,7 @@ execSync(
 const stripScript = path.join(projectRoot, 'scripts', 'strip-platforms.sh');
 if (fs.existsSync(stripScript)) {
   console.log(`\nStripping non-${platform}-${arch} binaries...`);
-  execSync(`bash "${stripScript}" ${platform} ${arch} "${stagingDir}"`, {
-    stdio: 'inherit',
-  });
+  run('bash', [stripScript, platform, arch, stagingDir]);
 }
 
 // ---------------------------------------------------------------------------
@@ -129,10 +158,7 @@ const archivePath = path.join(distDir, archiveName);
 console.log(`\nCreating ${archiveName}...`);
 
 // Create tarball with contents at root level (not nested in a directory)
-execSync(
-  `tar -czf "${archivePath}" -C "${stagingDir}" .`,
-  { stdio: 'inherit' },
-);
+run('tar', ['-czf', archivePath, '-C', stagingDir, '.']);
 
 // ---------------------------------------------------------------------------
 // Step 7: Report and clean up
