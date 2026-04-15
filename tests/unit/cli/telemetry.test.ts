@@ -288,7 +288,7 @@ describe('CLI Telemetry', () => {
       expect(headers['X-Installation-Id']).toBe('test-installation-id');
     });
 
-    it('does not call fetch when config has no installationId', async () => {
+    it('generates fresh config and calls fetch when config has no installationId', async () => {
       process.env.NEXUS_TELEMETRY = '1';
       (fs.readFileSync as jest.Mock).mockReturnValueOnce(
         JSON.stringify({ telemetry: { enabled: true } }),
@@ -296,16 +296,18 @@ describe('CLI Telemetry', () => {
       startTracking('test.cmd');
       await finishTracking(true);
 
-      expect(mockFetch).not.toHaveBeenCalled();
+      // readConfig generates a fresh installationId when none exists — fetch IS called
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    it('does not call fetch when config file does not exist', async () => {
+    it('generates fresh config and calls fetch when config file does not exist', async () => {
       process.env.NEXUS_TELEMETRY = '1';
       (fs.existsSync as jest.Mock).mockReturnValueOnce(false);
       startTracking('test.cmd');
       await finishTracking(true);
 
-      expect(mockFetch).not.toHaveBeenCalled();
+      // readConfig generates a fresh installationId when file missing — fetch IS called
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   });
 });

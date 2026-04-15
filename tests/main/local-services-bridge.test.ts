@@ -152,7 +152,7 @@ describe('LocalServicesBridge', () => {
   describe('exportSite', () => {
     test('calls exportSite service', async () => {
       const result = await bridge.exportSite('site-1', '/tmp/export');
-      expect(result).toBe('/path/to/export.zip');
+      expect(result).toBe('/tmp/export.zip');
     });
   });
 

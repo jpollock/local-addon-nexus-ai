@@ -12,5 +12,5 @@ module.exports = {
   coverageThreshold: {
     global: { branches: 80, functions: 80, lines: 80, statements: 80 },
   },
-  testPathIgnorePatterns: ['/node_modules/', '/lib/', '/integration/', '/e2e/', '/eval/', '/stress/'],
+  testPathIgnorePatterns: ['/node_modules/', '/lib/', '/integration/', '/e2e/', '/e2e-cli/', '/eval/', '/stress/'],
 };

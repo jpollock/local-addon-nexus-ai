@@ -102,7 +102,7 @@ describe('Tarball Extractor', () => {
     // Valid
     fs.writeFileSync(
       path.join(addonDir, 'package.json'),
-      JSON.stringify({ name: 'local-addon-nexus-ai' })
+      JSON.stringify({ name: '@local-labs-jpollock/local-addon-nexus-ai' })
     );
     expect(verifyExtractedAddon(addonDir)).toBe(true);
   });

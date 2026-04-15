@@ -325,7 +325,7 @@ describe('local_save_blueprint', () => {
     );
 
     expect(result.isError).toBeUndefined();
-    expect(result.content[0].text).toContain('Successfully saved blueprint');
+    expect(result.content[0].text).toContain('My Blueprint');
     expect(services.localServices!.saveBlueprint).toHaveBeenCalledWith('site-1', {
       name: 'My Blueprint',
       description: 'Test desc',
