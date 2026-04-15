@@ -67,6 +67,7 @@
     "apache-arrow": ">=13.0.0 <=17.0.0",
     "better-sqlite3": "^11.10.0",
     "commander": "^11.1.0",
+    "graphql": "^16.13.2",
     "graphql-tag": "^2.12.6",
     "lodash": "^4.17.21",
     "mysql2": "^3.11.0",

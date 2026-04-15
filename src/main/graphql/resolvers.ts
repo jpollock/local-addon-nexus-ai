@@ -1926,24 +1926,62 @@ export function createResolvers(context: ResolverContext) {
 
       nexusFleetSearch: async (_parent: any, { query, limit }: { query: string; limit?: number }) => {
         try {
-          if (!services.vectorStore) {
+          if (!services.vectorStore || !services.embeddingService) {
             return {
               success: false,
-              error: 'Vector store not available',
+              error: 'Vector store or embedding service not available',
               results: [],
             };
           }
 
-          const searchResults = await services.vectorStore.search(query, limit || 20);
+          const queryVector = await services.embeddingService.embed(query);
+
+          const indexEntries = services.indexRegistry.listAll();
+          const graphService = (services as any).graphService;
+          let wpeSiteIds: string[] = [];
+          if (graphService?.getDb?.()) {
+            try {
+              const rows = graphService.getDb().prepare("SELECT id FROM sites WHERE source='wpe'").all() as Array<{ id: string }>;
+              wpeSiteIds = rows.map((r) => r.id);
+            } catch { /* skip wpe */ }
+          }
+          const allSiteIds = [
+            ...indexEntries.map((e: any) => e.siteId),
+            ...wpeSiteIds,
+          ];
+          const siteNames = new Map(indexEntries.map((e: any) => [e.siteId, e.siteName || e.siteId]));
+
+          const matchMap = await services.vectorStore.searchAcrossSites(
+            allSiteIds,
+            queryVector,
+            { limit: 3, relevanceFloor: 0.35, queryText: query, excludedTypes: EXCLUDED_POST_TYPES },
+            5,
+          );
+
+          interface Hit { siteName: string; postType: string; score: number; title: string; content: string }
+          const hits: Hit[] = [];
+          for (const [siteId, results] of matchMap) {
+            for (const r of results) {
+              hits.push({
+                siteName: siteNames.get(siteId) || siteId,
+                postType: r.postType || 'post',
+                score: r.score,
+                title: r.title || '',
+                content: r.content || '',
+              });
+            }
+          }
+          hits.sort((a, b) => b.score - a.score);
+          const topHits = hits.slice(0, limit || 20);
 
           return {
             success: true,
-            results: searchResults.map((r: any) => ({
-              target: `${r.siteName}@local`,
-              siteName: r.siteName || 'unknown',
-              type: r.type || 'content',
-              score: r.score || 0,
-              snippet: r.text?.substring(0, 200) || '',
+            results: topHits.map((h) => ({
+              target: `${h.siteName}@local`,
+              siteName: h.siteName,
+              type: h.postType,
+              score: h.score,
+              snippet: h.title ? `${h.title} — ${h.content.substring(0, 160)}` : h.content.substring(0, 200),
             })),
           };
         } catch (error: any) {
@@ -2473,26 +2511,28 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          if (!services.vectorStore) {
+          if (!services.vectorStore || !services.embeddingService) {
             return {
               success: false,
-              error: 'Vector store not available',
+              error: 'Vector store or embedding service not available',
               results: [],
             };
           }
 
-          const searchResults = await services.vectorStore.search(query, limit || 10, {
-            siteId: site.id,
+          const queryVector = await services.embeddingService.embed(query);
+          const searchResults = await services.vectorStore.search(site.id, queryVector, {
+            limit: limit || 10,
+            relevanceFloor: 0.3,
           });
 
           return {
             success: true,
             results: searchResults.map((r: any) => ({
-              path: r.metadata?.filePath || r.metadata?.path || 'unknown',
-              type: r.metadata?.type || 'content',
-              score: r.score || 0,
-              snippet: r.text?.substring(0, 200) || '',
-              lineNumber: r.metadata?.lineNumber || null,
+              path: r.title || `${r.postType}/${r.postId}`,
+              type: r.postType || 'post',
+              score: r.score,
+              snippet: (r.content || '').substring(0, 200),
+              lineNumber: null,
             })),
           };
         } catch (error: any) {
