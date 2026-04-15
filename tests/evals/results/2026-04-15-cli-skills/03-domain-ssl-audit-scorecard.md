@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 5 |
+| Tool calls | 33 |
 | Error events | 0 |
-| Duration | 92.7s |
+| Duration | 324.3s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 7 |
-| Output tokens | 777 |
-| Cache creation | 47,901 |
-| Cache read | 136,825 |
-| **Total cost** | **$0.2324** |
+| Input tokens | 15 |
+| Output tokens | 2,779 |
+| Cache creation | 80,667 |
+| Cache read | 451,169 |
+| **Total cost** | **$1.3026** |
 
 ## Human Scores Needed
 
@@ -39,15 +39,34 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-Local isn't running — the nexus CLI requires Local to be running since it routes WPE API calls through the addon.
+Here's the full SSL health picture across your WPE fleet:
 
-**Fix:** Start Local by WP Engine, then re-run this check. Once Local is up:
+---
 
-```bash
-nexus wpe installs --json
-```
+## SSL Certificate Health — 287 Installs
 
-This will pull all installs, and then I can loop through each one to run `nexus wpe ssl <installId>` and flag any certs expiring within 30 days or in an error state.
+### CRITICAL — Expired Certs (action needed)
 
-Want me to run the full SSL audit automatically as soon as Local is up? Just let me know when it's running and I'll kick it off.
+**`qwerky`** (esmy9dign4hoqz account)
+- `qwerky.tech` and `www.qwerky.tech` — both expired **2022-03-08** (4+ years ago)
+- WPE still shows them as `ENABLED` — stale record. Verify if that custom domain is still active; if so, trigger new Let's Encrypt issuance from the WPE portal.
+
+---
+
+### Watch — Expiring Within 43 Days (outside 30-day window, but close)
+
+**`localwpe`** (getflywheel account — `localwp.com`)
+- 9 Let's Encrypt certs all expire **2026-05-28** (43 days out)
+- Covers: `localwp.com`, `www.localwp.com`, `local.getflywheel.com`, `pressmatic.io`, `localbyflywheel.com`, `locallaboratory.io`, etc.
+- Auto-renewal should handle this, but check again on **2026-04-28** when they enter the 30-day window.
+
+---
+
+### Healthy
+
+**`frostwpe`** (devrel account — `frostwp.com`) — expires **2026-06-28** (74 days). No action needed.
+
+---
+
+### 
 ```

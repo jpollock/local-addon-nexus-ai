@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 20 |
+| Tool calls | 12 |
 | Error events | 0 |
-| Duration | 321.9s |
+| Duration | 70.2s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 23 |
-| Output tokens | 5,434 |
-| Cache creation | 77,817 |
-| Cache read | 746,227 |
-| **Total cost** | **$0.5973** |
+| Input tokens | 15 |
+| Output tokens | 2,706 |
+| Cache creation | 40,843 |
+| Cache read | 462,449 |
+| **Total cost** | **$0.3325** |
 
 ## Human Scores Needed
 
@@ -39,26 +39,24 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-I've hit a blocker I can't work around from here. Here's the situation:
+Here's what I found:
 
-**Root cause:** Two `nexus` issues are preventing WordPress version data from loading:
+---
 
-1. **Version mismatch** — The `nexus` binary your shell uses (`~/node_modules/.bin/nexus`) is v0.2.1, but `nexus update` updated a *different* global installation. The running binary is still 0.2.1 while the addon is v0.2.4.
+**Fleet Overview: 29 local sites, 2 running, 27 halted**
 
-2. **MCP server not responding** — `nexus sites list`, `nexus fleet health`, and all site-querying commands route through the MCP server on port 10800. While Local *is* listening there, the CLI can't communicate with it (likely due to the version mismatch).
+## Running Sites (version-checked)
 
-**To fix this and answer your question:**
+| Site | WordPress Version | Status |
+|------|-------------------|--------|
+| frostscape | **7.0-RC2-62197** | Pre-release |
+| jppblank | **7.0-RC2-62197** | Pre-release |
 
-```bash
-# Option 1: Update the local nexus package that your shell uses
-cd ~ && npm install @local-labs-jpollock/local-addon-nexus-ai@latest
+Both running sites are on **7.0-RC2** — a release candidate, not a stable build. Once WordPress 7.0 goes GA, both will need updating to the stable release.
 
-# Option 2: Restart Local to clear any hung MCP connections
-# (then reopen this terminal to pick up fresh PATH)
-```
+## Halted Sites (27 sites — versions unknown)
 
-After either fix, run:
-```bash
-nexus fleet health
-``
+WP-CLI can't be run on halted sites, so their WordPress versions aren't checkable without starting them:
+
+`jeremypollock.blog`, `nexus`, `mu-plugin`, `offload-media-clean`, `nitropack-1`, `pm-toolkit-hub`, `wp-events-analyzer`, `nitropack-2`, `wp-archaeologist`, `wp-archaeologist-saas`, `migrate`, `cli-test`, `cli-target`, `wp-migrate-receiver-new`, `wp-migrate-pusher`, `newsroom-admin-columns-poc`, `The Curated Shelf`, `nexus-test-site`, `acflikebutton`, `test-cli-poc`, `another-test`, `sync-test
 ```

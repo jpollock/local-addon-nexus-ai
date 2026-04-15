@@ -3,9 +3,9 @@ Case: 01-single-field-lookup
 Mode: cli-skills
 Date: 2026-04-15
 Model: claude-sonnet-4-6
-Duration: 47.4s
-Tool calls: 1
-Cost: $0.1492
+Duration: 22.2s
+Tool calls: 5
+Cost: $0.2027
 
 ============================================================
 TURN 1
@@ -13,15 +13,51 @@ TURN 1
 PROMPT: What WordPress version is jppblank running?
 
 
-⏺ Bash({"command":"nexus wp core version jppblank@local","description":"Check WordPress version on jppblank"})
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp health jppblank@local 2>&1 | grep -i wordpress","description":"Check WordPress version for jppblank"})
+  ⎿  (Bash completed with no output)
+
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp health jppblank@local 2>&1","description":"Get full health output for jppblank"})
   ⎿  Exit code 1
 
 [33mUpdate available: 0.2.1 → 0.2.4[0m
 Run: [36mnexus update[0m
 
 
-❌ Timed out waiting for Local. Is Local running?
-Local isn't running. Start Local and then I can check the WordPress version on jppblank.
+❌ Command failed
+
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp jppblank@local core version 2>&1","description":"Get WordPress core version for jppblank"})
+  ⎿  Exit code 1
+
+[33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
+
+error: unknown command 'jppblank@local'
+
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp --help 2>&1 | head -40","description":"Check nexus wp command syntax"})
+  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
+
+Usage: nexus wp [options] [command]
+
+Run WP-CLI commands on sites
+
+Options:
+  -h, --help                    display help for command
+
+Commands:
+  user-list [options] <target>  List WordPress users
+  option-get <target> <key>     Get WordPress option value
+  health [options] <target>     Check site health
+  plugin                        Manage WordPress plugins
+  theme                         Manage WordPress themes
+  core      
+
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp core version jppblank@local 2>&1","description":"Get WordPress core version for jppblank"})
+  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
+
+WordPress 7.0-RC2-62197
+jppblank is running **WordPress 7.0-RC2-62197**.
 
 --- FINAL RESULT ---
-Local isn't running. Start Local and then I can check the WordPress version on jppblank.
+jppblank is running **WordPress 7.0-RC2-62197**.

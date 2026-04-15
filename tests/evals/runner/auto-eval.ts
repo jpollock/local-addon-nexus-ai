@@ -380,6 +380,30 @@ function runClaudeP(
   };
 }
 
+/** Clean up any eval-test-* local sites left from previous runs. */
+function cleanupEvalSites(nexusPath: string): void {
+  try {
+    const result = spawnSync(nexusPath, ['sites', 'list', '--json'], {
+      encoding: 'utf-8', timeout: 30000,
+      env: { ...process.env, CI: '1', NO_COLOR: '1' },
+    });
+    const data = JSON.parse(result.stdout || '{}');
+    const evalSites: string[] = (data.local ?? [])
+      .filter((s: any) => String(s.name ?? '').startsWith('eval-test'))
+      .map((s: any) => s.name);
+
+    for (const name of evalSites) {
+      console.log(`    🧹 Cleaning up leftover site: ${name}`);
+      spawnSync(nexusPath, ['sites', 'delete', `${name}@local`], {
+        encoding: 'utf-8', timeout: 30000,
+        input: 'y\n',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, CI: '1', NO_COLOR: '1' },
+      });
+    }
+  } catch { /* non-fatal */ }
+}
+
 async function runCase(
   evalCase: EvalCase,
   mode: 'mcp' | 'cli-skills',
@@ -388,6 +412,12 @@ async function runCase(
 ): Promise<RunResult> {
   const isMultiTurn = !!evalCase.conversation;
   const turns = evalCase.conversation ?? [{ turn: 1, prompt: evalCase.prompt! }];
+
+  // Clean up eval-test-* sites before any case that creates local sites
+  if (evalCase.id.includes('onboarding') || evalCase.id.includes('full-site')) {
+    const nexusPath = spawnSync('which', ['nexus'], { encoding: 'utf-8', env: process.env }).stdout.trim() || 'nexus';
+    cleanupEvalSites(nexusPath);
+  }
 
   const result: RunResult = {
     caseId: evalCase.id,

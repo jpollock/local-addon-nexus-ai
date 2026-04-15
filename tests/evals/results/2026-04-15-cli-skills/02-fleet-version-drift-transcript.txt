@@ -3,9 +3,9 @@ Case: 02-fleet-version-drift
 Mode: cli-skills
 Date: 2026-04-15
 Model: claude-sonnet-4-6
-Duration: 321.9s
-Tool calls: 20
-Cost: $0.5973
+Duration: 70.2s
+Tool calls: 12
+Cost: $0.3325
 
 ============================================================
 TURN 1
@@ -13,170 +13,23 @@ TURN 1
 PROMPT: Which of my local WordPress sites are behind on the latest WordPress version? Give me a summary of what needs updating.
 
 
-⏺ Bash({"command":"nexus sites list 2>&1","description":"List all local WordPress sites"})
-  ⎿  Exit code 1
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus sites list 2>&1","description":"List all local WordPress sites"})
+  ⎿  <persisted-output>
+Output too large (35.6KB). Full output saved to: /Users/jeremy.pollock/.claude/projects/-Users-jeremy-pollock-development-wpengine-local-addon-nexus-ai/2d262da4-6066-4b18-822d-84baaeadab19/tool-results/btx01fwc5.txt
 
+Preview (first 2KB):
 [33mUpdate available: 0.2.1 → 0.2.4[0m
 Run: [36mnexus update[0m
 
 
-❌ Timed out waiting for Local. Is Local running?
-Local doesn't appear to be running. Let me check if it's actually up another way:
+Local Sites:
+  ⚫ jeremypollock.blog (halted) → not linked
+  ⚫ nexus (halted) → not linked
+  ⚫ mu-plugin (halted) → not linked
+  ⚫ offload-media-clean (halted) → not linked
+ 
 
-⏺ Bash({"command":"nexus doctor 2>&1","description":"Run nexus diagnostics to check status"})
-  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
-Run: [36mnexus update[0m
-
-
-Nexus AI v0.2.1 — System Health
-──────────────────────────────────────────────────
-  ✅  Local app           Installed
-  ✅  Local running       Running
-  ✅  Nexus AI addon      Active (v0.2.4) · dev
-  ⚠️   Version match       CLI v0.2.1 ≠ addon v0.2.4
-  ✅  GraphQL server      Connected (port 4000)
-  ⚠️   MCP server          Configured (port 10800) but not responding
-  ✅  AI agent config     Claude Desktop
-  ⚪  AI provider      
-Local is running but the MCP server isn't responding (CLI/addon version mismatch). Let me try the fleet check directly:
-
-⏺ Bash({"command":"nexus fleet 2>&1","description":"Check fleet health across all sites"})
-  ⎿  Exit code 1
-
-[33mUpdate available: 0.2.1 → 0.2.4[0m
-Run: [36mnexus update[0m
-
-
-❌ Timed out waiting for Local. Is Local running?
-
-⏺ Bash({"command":"nexus update 2>&1","description":"Update nexus CLI to match addon version"})
-  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
-Run: [36mnexus update[0m
-
-Updating CLI...
-
-up to date in 2s
-
-272 packages are looking for funding
-  run `npm fund` for details
-✅ CLI updated successfully
-
-Updated to version 0.2.4
-
-⏺ Bash({"command":"nexus sites list 2>&1","description":"List all local WordPress sites after update"})
-  ⎿  Exit code 1
-
-[33mUpdate available: 0.2.1 → 0.2.4[0m
-Run: [36mnexus update[0m
-
-
-❌ Timed out waiting for Local. Is Local running?
-
-⏺ Bash({"command":"nexus doctor 2>&1","description":"Re-check diagnostics after CLI update"})
-  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
-Run: [36mnexus update[0m
-
-
-Nexus AI v0.2.1 — System Health
-──────────────────────────────────────────────────
-  ✅  Local app           Installed
-  ✅  Local running       Running
-  ✅  Nexus AI addon      Active (v0.2.4) · dev
-  ⚠️   Version match       CLI v0.2.1 ≠ addon v0.2.4
-  ✅  GraphQL server      Connected (port 4000)
-  ⚠️   MCP server          Configured (port 10800) but not responding
-  ✅  AI agent config     Claude Desktop
-  ⚪  AI provider      
-The MCP server on port 10800 isn't responding, which is why `nexus sites list` times out. GraphQL is up on port 4000 though — let me query it directly:
-
-⏺ Bash({"command":"curl -s -X POST http://localhost:4000/graphql \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"query\":\"{ sites { id name status phpVersion path } }\"}' 2>&1 | python3 -m json.too)
-  ⎿  This Bash command contains multiple operations. The following parts require approval: curl -s -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ sites { id name status phpVersion path } }"}' 2>&1, python3 -m json.tool 2>&1
-
-⏺ Bash({"command":"curl -s -X POST http://localhost:4000/graphql -H \"Content-Type: application/json\" -d '{\"query\":\"{ sites { id name status phpVersion path } }\"}'","description":"Query GraphQL for all )
-  ⎿  This command requires approval
-
-⏺ Bash({"command":"nexus --help 2>&1","description":"Check available nexus commands"})
-  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
-Run: [36mnexus update[0m
-
-Usage: nexus [options] [command]
-
-Nexus AI CLI - WordPress site management with AI superpowers
-
-Options:
-  -V, --version     output the version number
-  -h, --help        display help for command
-
-Commands:
-  sites             Manage Local and WPE sites
-  wp                Run WP-CLI commands on sites
-  sync              Sync sites between local and WPE
-  wpe               Manage WP Engine accounts and installs
-  blueprints    
-
-⏺ Bash({"command":"nexus mcp --help 2>&1","description":"Check MCP subcommands"})
-  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
-Run: [36mnexus update[0m
-
-Usage: nexus mcp [options] [command]
-
-MCP server management and agent setup
-
-Options:
-  -h, --help       display help for command
-
-Commands:
-  status           Show MCP server status and connection info
-  setup [options]  Generate or write MCP config for your AI agent
-  help [command]   display help for command
-
-⏺ Bash({"command":"nexus mcp status 2>&1","description":"Check MCP server status"})
-  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
-Run: [36mnexus update[0m
-
-
-Nexus AI MCP Server
-────────────────────────────────────────────────
-  Status:  ⚠️  Configured but not responding
-  URL:     http://127.0.0.1:10800
-  Port:    10800
-  Tools:   163
-  Version: 0.1.0
-────────────────────────────────────────────────
-
-  Is Local running with the Nexus AI addon enabled?
-
-⏺ Bash({"command":"lsof -i :10800 2>&1 | head -20","description":"Check what's listening on MCP port 10800"})
-  ⎿  lsof: WARNING: can't stat() hfs file system /private/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/F042BCB9-EAE8-4F09-A5DB-77B223618CDA
-      Output information may be incomplete.
-      assuming "dev=100001e" from mount table
-COMMAND   PID           USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
-Local    6968 jeremy.pollock   50u  IPv4 0x2d08ce9d1f347d07      0t0  TCP localhost:gap (LISTEN)
-curl    36933 jeremy.pollock    5u  IPv4 0x539d23b2f5ba3c76      0t0  TCP localhost:63036->local
-
-⏺ Bash({"command":"which nexus && nexus --version 2>&1","description":"Check nexus binary location and version"})
-  ⎿  /Users/jeremy.pollock/node_modules/.bin/nexus
-
-[33mUpdate available: 0.2.1 → 0.2.4[0m
-Run: [36mnexus update[0m
-
-0.2.1
-
-⏺ Bash({"command":"npm root -g 2>&1 && ls $(npm root -g)/.bin/nexus 2>&1","description":"Find global nexus installation"})
-  ⎿  Contains command_substitution
-
-⏺ Bash({"command":"npm root -g 2>&1","description":"Find global npm root"})
-  ⎿  This command requires approval
-
-⏺ Bash({"command":"/usr/local/bin/nexus --version 2>&1 || /opt/homebrew/bin/nexus --version 2>&1 || echo \"not found in standard paths\"","description":"Check nexus in common global paths"})
-  ⎿  This Bash command contains multiple operations. The following parts require approval: /usr/local/bin/nexus --version, /opt/homebrew/bin/nexus --version
-
-⏺ Bash({"command":"/usr/local/bin/nexus sites list 2>&1","description":"Try global nexus for sites list"})
-  ⎿  This command requires approval
-
-⏺ Bash({"command":"nexus fleet --help 2>&1","description":"Check fleet subcommands"})
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus fleet 2>&1 | head -100","description":"Get fleet status including WordPress versions"})
   ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
 Run: [36mnexus update[0m
 
@@ -193,7 +46,19 @@ Commands:
   search [options] <query>               Search across all sites
   filter [options]                       Filter sites by criteri
 
-⏺ Bash({"command":"nexus fleet filter --help 2>&1","description":"Check filter options for fleet"})
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus fleet health 2>&1","description":"Get fleet health summary with WordPress versions"})
+  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
+
+
+Fleet Health Summary
+──────────────────────────────────────────────────
+Sites:         29 total (2 running, 27 halted)
+Health:        0 healthy, 2 warnings, 4 critical
+Plugins:       0 total (0 outdated)
+Themes:        0 total (0 outdated)
+
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus fleet filter --help 2>&1","description":"Check fleet filter options"})
   ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
 Run: [36mnexus update[0m
 
@@ -209,71 +74,181 @@ Options:
   --json                  Output as JSON
   -h, --help              display help for command
 
-⏺ Bash({"command":"nexus fleet health --json 2>&1","description":"Get fleet health as JSON"})
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp health frostscape 2>&1 &\n/Users/jeremy.pollock/node_modules/.bin/nexus wp health jppblank 2>&1","description":"Check WordPress health on b)
+  ⎿  Exit code 1
+
+[33mUpdate available: 0.2.1 → 0.2.4[0m
+
+[33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
+
+Run: [36mnexus update[0m
+
+Error: Invalid target syntax: jppblank
+
+Expected formats:
+  Local:  mysite@local
+  WPE:    wpe:account/install@environment
+  Linked: mysite@environment (after linking)
+
+Environments: production, staging, development
+Error: Invalid target syntax: frostscape
+
+Expected formats:
+  Local:  mysite@local
+  WPE:    wpe:account/install@environment
+  Linke
+
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp health jppblank@local 2>&1 &\n/Users/jeremy.pollock/node_modules/.bin/nexus wp health frostscape@local 2>&1","description":"Check WordPress)
   ⎿  Exit code 1
 
 [33mUpdate available: 0.2.1 → 0.2.4[0m
 Run: [36mnexus update[0m
 
 
-❌ Timed out waiting for Local. Is Local running?
-I've hit a blocker I can't work around from here. Here's the situation:
+[33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
 
-**Root cause:** Two `nexus` issues are preventing WordPress version data from loading:
 
-1. **Version mismatch** — The `nexus` binary your shell uses (`~/node_modules/.bin/nexus`) is v0.2.1, but `nexus update` updated a *different* global installation. The running binary is still 0.2.1 while the addon is v0.2.4.
+❌ Command failed
 
-2. **MCP server not responding** — `nexus sites list`, `nexus fleet health`, and all site-querying commands route through the MCP server on port 10800. While Local *is* listening there, the CLI can't communicate with it (likely due to the version mismatch).
+❌ Command failed
 
-**To fix this and answer your question:**
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp health --help 2>&1","description":"Check wp health command syntax"})
+  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
 
-```bash
-# Option 1: Update the local nexus package that your shell uses
-cd ~ && npm install @local-labs-jpollock/local-addon-nexus-ai@latest
+Usage: nexus wp health [options] <target>
 
-# Option 2: Restart Local to clear any hung MCP connections
-# (then reopen this terminal to pick up fresh PATH)
-```
+Check site health
 
-After either fix, run:
-```bash
-nexus fleet health
-```
+Options:
+  --json      Output as JSON
+  -h, --help  display help for command
 
-That will give you WP version drift across all your sites, flagging anything behind the latest WordPress release.
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp --help 2>&1","description":"List wp subcommands"})
+  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
 
-You can also check individual sites once the MCP is responding:
-```bash
-nexus wp health <site-name>@local
-```
+Usage: nexus wp [options] [command]
+
+Run WP-CLI commands on sites
+
+Options:
+  -h, --help                    display help for command
+
+Commands:
+  user-list [options] <target>  List WordPress users
+  option-get <target> <key>     Get WordPress option value
+  health [options] <target>     Check site health
+  plugin                        Manage WordPress plugins
+  theme                         Manage WordPress themes
+  core      
+
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp core --help 2>&1","description":"Check wp core subcommands"})
+  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
+
+Usage: nexus wp core [options] [command]
+
+Manage WordPress core
+
+Options:
+  -h, --help                 display help for command
+
+Commands:
+  version <target>           Get WordPress version
+  update [options] <target>  Update WordPress core
+  help [command]             display help for command
+
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp core version jppblank@local 2>&1 &\n/Users/jeremy.pollock/node_modules/.bin/nexus wp core version frostscape@local 2>&1","description":"Get)
+  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
+
+
+[33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
+
+WordPress 7.0-RC2-62197
+
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus wp core version jppblank@local 2>&1","description":"Get WordPress version for jppblank"})
+  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
+
+WordPress 7.0-RC2-62197
+
+⏺ Bash({"command":"/Users/jeremy.pollock/node_modules/.bin/nexus fleet site-health frostscape@local 2>&1 &\n/Users/jeremy.pollock/node_modules/.bin/nexus fleet site-health jppblank@local 2>&1","description":)
+  ⎿  [33mUpdate available: 0.2.1 → 0.2.4[0m
+
+[33mUpdate available: 0.2.1 → 0.2.4[0m
+Run: [36mnexus update[0m
+
+Run: [36mnexus update[0m
+
+
+Site Health: frostscape@local
+──────────────────────────────────────────────────
+Status:        ⚠️ warning (score: 51/100)
+WordPress:     unknown
+Plugins:       0/0 active (0 outdated)
+Themes:        0/0 active (0 outdated)
+
+
+Site Health: jppblank@local
+──────────────────────────────────────────────────
+Status:        ⚠️ warning (score: 61/100)
+WordPress:   
+Here's what I found:
+
+---
+
+**Fleet Overview: 29 local sites, 2 running, 27 halted**
+
+## Running Sites (version-checked)
+
+| Site | WordPress Version | Status |
+|------|-------------------|--------|
+| frostscape | **7.0-RC2-62197** | Pre-release |
+| jppblank | **7.0-RC2-62197** | Pre-release |
+
+Both running sites are on **7.0-RC2** — a release candidate, not a stable build. Once WordPress 7.0 goes GA, both will need updating to the stable release.
+
+## Halted Sites (27 sites — versions unknown)
+
+WP-CLI can't be run on halted sites, so their WordPress versions aren't checkable without starting them:
+
+`jeremypollock.blog`, `nexus`, `mu-plugin`, `offload-media-clean`, `nitropack-1`, `pm-toolkit-hub`, `wp-events-analyzer`, `nitropack-2`, `wp-archaeologist`, `wp-archaeologist-saas`, `migrate`, `cli-test`, `cli-target`, `wp-migrate-receiver-new`, `wp-migrate-pusher`, `newsroom-admin-columns-poc`, `The Curated Shelf`, `nexus-test-site`, `acflikebutton`, `test-cli-poc`, `another-test`, `sync-test`, `e2e-test-fresh`, `nexus-e2e-test`, `heath.biz`, `local-copy-jpp`, `jpp0413p`
+
+## Recommendations
+
+1. **Immediate:** When WordPress 7.0 stable ships, update `frostscape` and `jppblank` via `nexus wp core update frostscape@local` / `jppblank@local`
+2. **To audit halted sites:** Start them one at a time and run `nexus wp core version <site>@local` — or start the ones you care about and do a batch check
+3. **Note:** `nexus update` is also available — you're on v0.2.1 and v0.2.4 is current
 
 --- FINAL RESULT ---
-I've hit a blocker I can't work around from here. Here's the situation:
+Here's what I found:
 
-**Root cause:** Two `nexus` issues are preventing WordPress version data from loading:
+---
 
-1. **Version mismatch** — The `nexus` binary your shell uses (`~/node_modules/.bin/nexus`) is v0.2.1, but `nexus update` updated a *different* global installation. The running binary is still 0.2.1 while the addon is v0.2.4.
+**Fleet Overview: 29 local sites, 2 running, 27 halted**
 
-2. **MCP server not responding** — `nexus sites list`, `nexus fleet health`, and all site-querying commands route through the MCP server on port 10800. While Local *is* listening there, the CLI can't communicate with it (likely due to the version mismatch).
+## Running Sites (version-checked)
 
-**To fix this and answer your question:**
+| Site | WordPress Version | Status |
+|------|-------------------|--------|
+| frostscape | **7.0-RC2-62197** | Pre-release |
+| jppblank | **7.0-RC2-62197** | Pre-release |
 
-```bash
-# Option 1: Update the local nexus package that your shell uses
-cd ~ && npm install @local-labs-jpollock/local-addon-nexus-ai@latest
+Both running sites are on **7.0-RC2** — a release candidate, not a stable build. Once WordPress 7.0 goes GA, both will need updating to the stable release.
 
-# Option 2: Restart Local to clear any hung MCP connections
-# (then reopen this terminal to pick up fresh PATH)
-```
+## Halted Sites (27 sites — versions unknown)
 
-After either fix, run:
-```bash
-nexus fleet health
-```
+WP-CLI can't be run on halted sites, so their WordPress versions aren't checkable without starting them:
 
-That will give you WP version drift across all your sites, flagging anything behind the latest WordPress release.
+`jeremypollock.blog`, `nexus`, `mu-plugin`, `offload-media-clean`, `nitropack-1`, `pm-toolkit-hub`, `wp-events-analyzer`, `nitropack-2`, `wp-archaeologist`, `wp-archaeologist-saas`, `migrate`, `cli-test`, `cli-target`, `wp-migrate-receiver-new`, `wp-migrate-pusher`, `newsroom-admin-columns-poc`, `The Curated Shelf`, `nexus-test-site`, `acflikebutton`, `test-cli-poc`, `another-test`, `sync-test`, `e2e-test-fresh`, `nexus-e2e-test`, `heath.biz`, `local-copy-jpp`, `jpp0413p`
 
-You can also check individual sites once the MCP is responding:
-```bash
-nexus wp health <site-name>@local
-```
+## Recommendations
+
+1. **Immediate:** When WordPress 7.0 stable ships, update `frostscape` and `jppblank` via `nexus wp core update frostscape@local` / `jppblank@local`
+2. **To audit halted sites:** Start them one at a time and run `nexus wp core version <site>@local` — or start the ones you care about and do a batch check
+3. **Note:** `nexus update` is also available — you're on v0.2.1 and v0.2.4 is current
