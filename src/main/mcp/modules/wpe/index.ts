@@ -1,16 +1,17 @@
 import { ToolRegistry } from '../../tool-registry';
 import { getAccountsHandler } from './get-accounts';
-import { getAccountHandler } from './get-account';
-import { getAccountLimitsHandler } from './get-account-limits';
-import { getAccountUsageSummaryHandler } from './get-account-usage-summary';
-import { getAccountUsageInsightsHandler } from './get-account-usage-insights';
-import { getAccountUsersHandler } from './get-account-users';
+// Consolidated: wpe_account replaces wpe_get_account, wpe_get_account_limits,
+// wpe_get_account_usage_summary, wpe_get_account_usage_insights, wpe_get_account_users
+import { getAccountCombinedHandler } from './get-account-combined';
 import { getAccountUserHandler } from './get-account-user';
 import { createAccountUserHandler } from './create-account-user';
 import { updateAccountUserHandler } from './update-account-user';
 import { deleteAccountUserHandler } from './delete-account-user';
 import { getInstallsHandler } from './get-installs';
-import { getInstallHandler } from './get-install';
+// Consolidated: wpe_install replaces wpe_get_install, wpe_get_install_usage,
+// wpe_get_domains, wpe_get_ssl_certificates, wpe_get_offload_settings
+import { getInstallCombinedHandler } from './get-install-combined';
+import { getUserInfoHandler } from './get-user-info';
 import { createBackupHandler } from './create-backup';
 import { purgeCacheHandler } from './purge-cache';
 import { wpeLinkHandler } from './wpe-link';
@@ -84,17 +85,14 @@ import { addUserToAccountsHandler } from './add-user-to-accounts';
  */
 export function registerWpeTools(registry: ToolRegistry): void {
   registry.register(getAccountsHandler);
-  registry.register(getAccountHandler);
-  registry.register(getAccountLimitsHandler);
-  registry.register(getAccountUsageSummaryHandler);
-  registry.register(getAccountUsageInsightsHandler);
-  registry.register(getAccountUsersHandler);
-  registry.register(getAccountUserHandler);
+  registry.register(getAccountCombinedHandler);   // wpe_account (replaces 5 separate read tools)
+  registry.register(getAccountUserHandler);        // wpe_get_account_user (kept — needs user_id)
   registry.register(createAccountUserHandler);
   registry.register(updateAccountUserHandler);
   registry.register(deleteAccountUserHandler);
   registry.register(getInstallsHandler);
-  registry.register(getInstallHandler);
+  registry.register(getInstallCombinedHandler);   // wpe_install (replaces 5 separate read tools)
+  registry.register(getUserInfoHandler);           // wpe_user_info (replaces current_user + ssh_keys)
   registry.register(createBackupHandler);
   registry.register(purgeCacheHandler);
   registry.register(wpeLinkHandler);
@@ -106,8 +104,7 @@ export function registerWpeTools(registry: ToolRegistry): void {
   registry.register(wpeStatusHandler);
   registry.register(wpeLoginHandler);
   registry.register(wpeLogoutHandler);
-  registry.register(getInstallUsageHandler);
-  registry.register(getAccountUsageHandler);
+  // getInstallUsageHandler, getAccountUsageHandler → merged into wpe_install and wpe_account
   registry.register(portfolioUsageHandler);
   registry.register(fleetVersionsHandler);
   registry.register(detectDriftHandler);
@@ -126,27 +123,21 @@ export function registerWpeTools(registry: ToolRegistry): void {
   registry.register(getBackupHandler);
   registry.register(refreshInstallDiskUsageHandler);
   registry.register(refreshAccountDiskUsageHandler);
-  // Domain management
-  registry.register(getDomainsHandler);
-  registry.register(getDomainHandler);
+  // Domain management (getDomains/getSslCertificates/getOffload → wpe_install include=[])
+  registry.register(getDomainHandler);             // still needed: specific domain by ID
   registry.register(createDomainHandler);
   registry.register(createDomainsBulkHandler);
   registry.register(updateDomainHandler);
   registry.register(deleteDomainHandler);
   registry.register(checkDomainStatusHandler);
   registry.register(getDomainStatusReportHandler);
-  // SSL management
-  registry.register(getSslCertificatesHandler);
-  registry.register(getDomainSslCertificateHandler);
+  // SSL management (getSslCertificates → wpe_install include=['ssl'])
+  registry.register(getDomainSslCertificateHandler); // still needed: specific domain cert
   registry.register(requestSslCertificateHandler);
   registry.register(importSslCertificateHandler);
-  // SSH keys
-  registry.register(getSshKeysHandler);
+  // SSH keys (getSshKeys/getCurrentUser → wpe_user_info)
   registry.register(createSshKeyHandler);
   registry.register(deleteSshKeyHandler);
-  // Misc
-  registry.register(getCurrentUserHandler);
-  registry.register(getOffloadSettingsHandler);
   registry.register(updateOffloadSettingsHandler);
   registry.register(getLargeFsValidationHandler);
   // Composite / workflow tools
