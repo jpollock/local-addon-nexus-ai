@@ -27,6 +27,8 @@ import { spawnSync, execSync } from 'child_process';
 const CASES_DIR   = path.join(__dirname, '..', 'cases');
 const RESULTS_DIR = path.join(__dirname, '..', 'results');
 const MCP_SERVER  = 'local-nexus-ai';
+// All servers with nexus/WPE tools — all must be down for CLI/Skills mode
+const NEXUS_MCP_SERVERS = ['local-nexus-ai', 'wp-nexus', 'nexus-ai'];
 
 // ---------------------------------------------------------------------------
 // MCP tool allowlist per case (auto-approval in non-interactive mode)
@@ -173,6 +175,26 @@ function findClaudeBin(): string {
   return 'claude'; // fallback — let shell resolve
 }
 
+/** Returns list of nexus MCP server names that are currently connected. */
+function getConnectedNexusMcps(): string[] {
+  try {
+    const bin = findClaudeBin();
+    const result = spawnSync(bin, ['mcp', 'list'], {
+      encoding: 'utf-8',
+      timeout: 15000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
+    });
+    const output = String(result.stdout || '') + String(result.stderr || '');
+    return NEXUS_MCP_SERVERS.filter(server => {
+      const line = output.split('\n').find(l => l.toLowerCase().includes(server.toLowerCase())) ?? '';
+      return line.toLowerCase().includes('connected') && !line.toLowerCase().includes('failed');
+    });
+  } catch {
+    return [];
+  }
+}
+
 function checkMcpStatus(): 'connected' | 'disconnected' | 'unknown' {
   try {
     const bin = findClaudeBin();
@@ -218,8 +240,15 @@ function runClaudeP(
     ? (MCP_TOOLS[caseId] ?? []).join(',')
     : 'Bash(nexus *)';
 
+  // For CLI/Skills mode, prefix the prompt to force Bash usage.
+  // Without this, Claude tries MCP tools even when they're not in allowedTools.
+  const cliPrefix = mode === 'cli-skills'
+    ? 'You MUST use only the Bash tool to run nexus CLI commands (e.g. `nexus sites list`, `nexus wpe portfolio`). Do NOT call any MCP tools. Only Bash is available.\n\n'
+    : '';
+  const actualPrompt = cliPrefix + prompt;
+
   const args = [
-    '-p', prompt,
+    '-p', actualPrompt,
     '--output-format', 'stream-json',
     '--verbose',
     '--no-session-persistence',
@@ -498,17 +527,20 @@ async function main(): Promise<void> {
     console.log(`\nNexus MCP status: ${mcpStatus === 'connected' ? '✅ Connected' : '❌ Disconnected'}`);
 
     if (mode === 'cli-skills') {
-      if (mcpStatus === 'connected') {
-        console.log('\n⚠️  CLI/Skills mode requires MCP to be DISCONNECTED.');
-        console.log('   When MCP is connected, Claude prefers MCP tools over nexus CLI skills.');
-        console.log('\n   To disconnect: claude mcp remove local-nexus-ai');
+      const connectedNexusMcps = getConnectedNexusMcps();
+      if (connectedNexusMcps.length > 0) {
+        console.log(`\n⚠️  CLI/Skills mode requires ALL nexus MCP servers to be DISCONNECTED.`);
+        console.log('   When any nexus MCP is connected, Claude prefers MCP tools over the nexus CLI.');
+        console.log(`\n   Currently connected: ${connectedNexusMcps.join(', ')}`);
         console.log('   To reconnect later: nexus mcp setup --agent claude-code --write\n');
-        const ans = await promptUser(rl, 'Disconnect MCP now and continue? (y/N) → ');
+        const ans = await promptUser(rl, 'Disconnect all nexus MCPs now and continue? (y/N) → ');
         if (ans.toLowerCase() === 'y') {
-          spawnSync(findClaudeBin(), ['mcp', 'remove', MCP_SERVER], { stdio: 'inherit' });
-          console.log('✅ MCP disconnected. Continuing...');
+          for (const server of connectedNexusMcps) {
+            spawnSync(findClaudeBin(), ['mcp', 'remove', server], { stdio: 'inherit' });
+          }
+          console.log(`✅ Disconnected: ${connectedNexusMcps.join(', ')}. Continuing...`);
         } else {
-          console.log('Aborted. Disconnect MCP and re-run.');
+          console.log('Aborted. Disconnect all nexus MCPs and re-run.');
           rl.close(); process.exit(0);
         }
       }

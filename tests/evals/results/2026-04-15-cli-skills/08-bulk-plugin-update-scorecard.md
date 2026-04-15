@@ -11,18 +11,18 @@
 |--------|-------|
 | Tool calls | 0 |
 | Error events | 0 |
-| Duration | 0.0s |
-| Has result | no |
+| Duration | 22.7s |
+| Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 0 |
-| Output tokens | 0 |
-| Cache creation | 0 |
-| Cache read | 0 |
-| **Total cost** | **$0.0000** |
+| Input tokens | 8 |
+| Output tokens | 663 |
+| Cache creation | 39,524 |
+| Cache read | 116,907 |
+| **Total cost** | **$0.1933** |
 
 ## Human Scores Needed
 
@@ -30,14 +30,14 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 
 | Dimension | Score | Weight | Notes |
 |-----------|-------|--------|-------|
-| Task completed (auto) | 0 | 35% | No result |
+| Task completed (auto) | 100 | 35% | Got a result |
 | Steps correct | TBD | 35% | Human review |
 | Friction | TBD | 20% | Human review |
 | Output clarity | TBD | 10% | Human review |
-| **Auto partial** | **0.0** | | Steps/friction/clarity = TBD |
+| **Auto partial** | **35.0** | | Steps/friction/clarity = TBD |
 
 ## Result Preview
 
 ```
-[no result]
+Please approve the `nexus_list_sites` tool call so I can discover your local fleet.
 ```

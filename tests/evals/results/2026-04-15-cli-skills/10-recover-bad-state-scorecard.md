@@ -11,18 +11,18 @@
 |--------|-------|
 | Tool calls | 0 |
 | Error events | 0 |
-| Duration | 0.0s |
-| Has result | no |
+| Duration | 24.5s |
+| Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 0 |
-| Output tokens | 0 |
-| Cache creation | 0 |
-| Cache read | 0 |
-| **Total cost** | **$0.0000** |
+| Input tokens | 12 |
+| Output tokens | 678 |
+| Cache creation | 39,924 |
+| Cache read | 195,672 |
+| **Total cost** | **$0.2186** |
 
 ## Human Scores Needed
 
@@ -30,14 +30,20 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 
 | Dimension | Score | Weight | Notes |
 |-----------|-------|--------|-------|
-| Task completed (auto) | 0 | 10% | No result |
+| Task completed (auto) | 100 | 10% | Got a result |
 | Steps correct | TBD | 45% | Human review |
 | Friction | TBD | 25% | Human review |
 | Output clarity | TBD | 20% | Human review |
-| **Auto partial** | **0.0** | | Steps/friction/clarity = TBD |
+| **Auto partial** | **10.0** | | Steps/friction/clarity = TBD |
 
 ## Result Preview
 
 ```
-[no result]
+It looks like the MCP tools need your permission to run. Can you approve the tool calls? Once you do, I'll:
+
+1. List all local sites to find `jppblank`
+2. Pull its sync history to see what happened during the push
+3. Check the site's current state
+
+You can approve individual tool calls as they come up, or if you want to grant broader access, you can do that in your Local settings.
 ```
