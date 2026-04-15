@@ -1,0 +1,29 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 04-full-site-onboarding
+Mode: mcp
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 35.4s
+
+--- Turn 1 ---
+PROMPT: Create a new local WordPress site called 'eval-test-onboard'.
+
+RESULT:
+Site created successfully:
+
+- **Name:** eval-test-onboard
+- **Domain:** eval-test-onboard.local
+- **Site ID:** X-sHqsnr5
+- **Admin credentials:** admin / admin
+
+--- Turn 2 ---
+PROMPT: Good. Now pull jpp0413p from WP Engine into it — files and database.
+
+RESULT:
+
+
+--- Turn 3 ---
+PROMPT: Set up AI on it using the gateway. Then tell me if it's healthy.
+
+RESULT:
+

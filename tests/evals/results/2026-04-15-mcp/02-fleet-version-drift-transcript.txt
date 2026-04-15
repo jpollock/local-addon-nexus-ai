@@ -1,0 +1,18 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 02-fleet-version-drift
+Mode: mcp
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 38.0s
+
+--- Turn 1 ---
+PROMPT: Which of my local WordPress sites are behind on the latest WordPress version? Give me a summary of what needs updating.
+
+RESULT:
+The MCP tools need permission approval before they can run. You should see permission prompts in your Claude Code UI — please approve them, or if you'd prefer, you can grant broader MCP permissions so they run automatically.
+
+Once approved, I'll use:
+- `find_outdated_sites` (component: wordpress, source: local) — to see which local sites are behind
+- `fleet_summary` — to get the WP version distribution across your fleet
+
+Would you like to approve those tools, or would you prefer I help you configure auto-approval for the `mcp__local-nexus-ai__*` tools?

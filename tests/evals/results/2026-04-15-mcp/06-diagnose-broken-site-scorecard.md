@@ -1,0 +1,57 @@
+# Eval Scorecard: 06-diagnose-broken-site (PARTIAL — auto-scored)
+
+**Date:** 2026-04-15  
+**Mode:** mcp  
+**Model:** claude-sonnet-4-6  
+**Run type:** Automated via claude -p  
+
+## Auto-Scored Metrics
+
+| Metric | Value |
+|--------|-------|
+| Tool calls | 27 |
+| Error events | 0 |
+| Duration | 206.4s |
+| Has result | yes |
+
+## Token Cost (Exact from API)
+
+| Metric | Value |
+|--------|-------|
+| Input tokens | 51 |
+| Output tokens | 8,611 |
+| Cache creation | 60,220 |
+| Cache read | 1,212,698 |
+| **Total cost** | **$0.7190** |
+
+## Human Scores Needed
+
+Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15-mcp/06-diagnose-broken-site-transcript.txt
+
+| Dimension | Score | Weight | Notes |
+|-----------|-------|--------|-------|
+| Task completed (auto) | 100 | 10% | Got a result |
+| Steps correct | TBD | 45% | Human review |
+| Friction | TBD | 25% | Human review |
+| Output clarity | TBD | 20% | Human review |
+| **Auto partial** | **10.0** | | Steps/friction/clarity = TBD |
+
+## Result Preview
+
+```
+I'm hitting permission walls on the diagnostic tools I need to see the actual error. Let me share what I've found so far and ask a targeted question.
+
+Here's the picture:
+
+- **WP core was auto-updated to 7.0-RC2 last night** (Apr 15 at 02:49 UTC) — this is the biggest change
+- **WP-CLI still works** (bootstraps fine, plugins load) — not a complete crash
+- **PHP logs are clean** — no fatal errors
+- **Nginx error log is empty** — no server-level failures
+- **3 plugin updates pending**: ACF 6.7.0, the `ai` plugin 0.6.0, genesis-blocks 3.1.7 — any of these could have compatibility issues with WP 7.0-RC2
+
+**What exactly are you seeing when you try to load it?** (e.g., blank white screen, a specific error message, 500 page, something looks broken visually)
+
+That'll tell me whether it's a PHP fatal, a plugin conflict, a theme issue, or something else. In the meantime, the most likely culprits are:
+1. A plugin incompatible with WP 7.0-RC2 (especially the `ai` plugin at v0.6.0)
+2. Stale PHP opc
+```

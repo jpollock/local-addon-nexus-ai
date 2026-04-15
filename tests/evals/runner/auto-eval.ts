@@ -198,12 +198,22 @@ function promptUser(rl: readline.Interface, q: string): Promise<string> {
   return new Promise(resolve => rl.question(q, resolve));
 }
 
+interface TurnData {
+  prompt: string;
+  transcript: string;   // human-readable tool calls + reasoning + result
+  rawStream: string;    // full stream-json for re-analysis
+  finalResult: string;  // the last text result
+  toolCalls: Array<{ name: string; input: any; result?: string }>;
+  errorCount: number;
+  parsed: any;          // the stream-json result object (has cost/tokens)
+}
+
 function runClaudeP(
   prompt: string,
   mode: 'mcp' | 'cli-skills',
   caseId: string,
   sessionId?: string,
-): { raw: string; parsed: any } {
+): TurnData {
   const allowedTools = mode === 'mcp'
     ? (MCP_TOOLS[caseId] ?? []).join(',')
     : 'Bash(nexus *)';
@@ -215,57 +225,88 @@ function runClaudeP(
     '--no-session-persistence',
   ];
 
-  if (allowedTools) {
-    args.push('--allowedTools', allowedTools);
-  }
+  if (allowedTools) args.push('--allowedTools', allowedTools);
 
   if (sessionId) {
-    // Remove --no-session-persistence for resume
     const idx = args.indexOf('--no-session-persistence');
     if (idx >= 0) args.splice(idx, 1);
     args.push('--resume', sessionId);
   }
 
-  const start = Date.now();
   const result = spawnSync(findClaudeBin(), args, {
     encoding: 'utf-8',
-    timeout: 300000, // 5 minutes
-    maxBuffer: 10 * 1024 * 1024,
+    timeout: 300000,
+    maxBuffer: 20 * 1024 * 1024,
     stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
   });
 
-  const raw = result.stdout || '';
-  const lines = raw.split('\n').filter(Boolean);
+  const rawStream = result.stdout || '';
+  const lines = rawStream.split('\n').filter(Boolean);
 
-  // Parse stream-json lines
-  let finalResult: any = null;
-  let toolCalls = 0;
-  let errors = 0;
-  const transcript: string[] = [];
+  let finalResultObj: any = null;
+  let finalResultText = '';
+  const toolCalls: Array<{ name: string; input: any; result?: string }> = [];
+  const transcriptLines: string[] = [`PROMPT: ${prompt}`, ''];
+  let errorCount = 0;
+  const pendingToolById: Map<string, { name: string; input: any }> = new Map();
 
   for (const line of lines) {
-    try {
-      const d = JSON.parse(line);
-      if (d.type === 'result') finalResult = d;
-      if (d.type === 'assistant') {
-        for (const block of d.message?.content ?? []) {
-          if (block.type === 'tool_use') {
-            toolCalls++;
-            transcript.push(`⏺ Tool: ${block.name}(${JSON.stringify(block.input ?? {}).slice(0, 100)})`);
-          }
-          if (block.type === 'text' && block.text) {
-            transcript.push(block.text.slice(0, 500));
+    let d: any;
+    try { d = JSON.parse(line); } catch { continue; }
+
+    if (d.type === 'result') {
+      finalResultObj = d;
+      finalResultText = d.result ?? '';
+    }
+
+    if (d.type === 'assistant') {
+      for (const block of d.message?.content ?? []) {
+        if (block.type === 'text' && block.text?.trim()) {
+          transcriptLines.push(block.text.trim());
+        }
+        if (block.type === 'tool_use') {
+          const inputPreview = JSON.stringify(block.input ?? {}).slice(0, 200);
+          transcriptLines.push(`\n⏺ ${block.name}(${inputPreview})`);
+          pendingToolById.set(block.id, { name: block.name, input: block.input });
+        }
+      }
+    }
+
+    if (d.type === 'tool') {
+      for (const block of d.content ?? []) {
+        if (block.type === 'tool_result') {
+          const toolId = block.tool_use_id;
+          const pending = pendingToolById.get(toolId);
+          const resultText = Array.isArray(block.content)
+            ? block.content.map((c: any) => c.text ?? '').join('').slice(0, 500)
+            : String(block.content ?? '').slice(0, 500);
+          transcriptLines.push(`  ⎿  ${resultText}`);
+          if (pending) {
+            toolCalls.push({ name: pending.name, input: pending.input, result: resultText });
+            pendingToolById.delete(toolId);
           }
         }
       }
-      if (d.type === 'tool' && d.content?.some((c: any) => c.type === 'tool_result')) {
-        transcript.push(`  ⎿ [result]`);
-      }
-    } catch { /* not json */ }
+    }
+
+    if (d.is_error || (d.type === 'result' && d.is_error)) errorCount++;
   }
 
-  return { raw, parsed: finalResult };
+  if (finalResultText) {
+    transcriptLines.push('\n--- FINAL RESULT ---');
+    transcriptLines.push(finalResultText);
+  }
+
+  return {
+    prompt,
+    transcript: transcriptLines.join('\n'),
+    rawStream,
+    finalResult: finalResultText,
+    toolCalls,
+    errorCount,
+    parsed: finalResultObj,
+  };
 }
 
 async function runCase(
@@ -295,48 +336,37 @@ async function runCase(
 
   const start = Date.now();
   let sessionId: string | undefined;
+  const allTurnData: TurnData[] = [];
 
   for (const turn of turns) {
     console.log(`    Turn ${turn.turn}: "${turn.prompt.slice(0, 60)}..."`);
 
-    const { raw, parsed } = runClaudeP(turn.prompt, mode, evalCase.id, sessionId);
+    const turnData = runClaudeP(turn.prompt, mode, evalCase.id, sessionId);
+    allTurnData.push(turnData);
 
-    if (parsed) {
-      const u = parsed.usage ?? {};
-      result.totalCost += parsed.total_cost_usd ?? 0;
+    if (turnData.parsed) {
+      const u = turnData.parsed.usage ?? {};
+      result.totalCost += turnData.parsed.total_cost_usd ?? 0;
       result.totalInputTokens += u.input_tokens ?? 0;
       result.totalOutputTokens += u.output_tokens ?? 0;
       result.totalCacheCreation += u.cache_creation_input_tokens ?? 0;
       result.totalCacheRead += u.cache_read_input_tokens ?? 0;
-      sessionId = parsed.session_id;
-
-      result.turns.push({
-        prompt: turn.prompt,
-        result: parsed.result ?? '',
-        rawJson: parsed,
-      });
-    } else {
-      result.turns.push({ prompt: turn.prompt, result: '[no result]', rawJson: null });
+      sessionId = turnData.parsed.session_id;
     }
 
-    // Count tool calls and errors from raw stream
-    const lines = raw.split('\n').filter(Boolean);
-    for (const line of lines) {
-      try {
-        const d = JSON.parse(line);
-        if (d.type === 'assistant') {
-          for (const block of d.message?.content ?? []) {
-            if (block.type === 'tool_use') result.toolCallCount++;
-          }
-        }
-        if (d.is_error || (d.type === 'result' && d.is_error)) result.errorCount++;
-      } catch { /* skip */ }
-    }
+    result.toolCallCount += turnData.toolCalls.length;
+    result.errorCount += turnData.errorCount;
+
+    result.turns.push({
+      prompt: turn.prompt,
+      result: turnData.finalResult || '[no result]',
+      rawJson: turnData.parsed,
+    });
   }
 
   result.durationMs = Date.now() - start;
 
-  // Save transcript
+  // Save full transcript — tool calls, results, reasoning, final answer
   const transcriptFile = path.join(runDir, `${evalCase.id}-transcript.txt`);
   const transcriptContent = [
     `EVAL TRANSCRIPT (AUTOMATED)`,
@@ -345,19 +375,24 @@ async function runCase(
     `Date: ${new Date().toISOString().slice(0, 10)}`,
     `Model: ${model}`,
     `Duration: ${(result.durationMs / 1000).toFixed(1)}s`,
+    `Tool calls: ${result.toolCallCount}`,
+    `Cost: $${result.totalCost.toFixed(4)}`,
     '',
-    ...result.turns.map((t, i) => [
-      `--- Turn ${i + 1} ---`,
-      `PROMPT: ${t.prompt}`,
-      '',
-      `RESULT:`,
-      t.result,
+    ...allTurnData.map((t, i) => [
+      `${'='.repeat(60)}`,
+      `TURN ${i + 1}`,
+      `${'='.repeat(60)}`,
+      t.transcript,
       '',
     ].join('\n')),
   ].join('\n');
 
   fs.writeFileSync(transcriptFile, transcriptContent);
   result.transcriptPath = transcriptFile;
+
+  // Save raw stream-json for re-analysis (tool inputs/outputs, exact costs)
+  const rawFile = path.join(runDir, `${evalCase.id}-raw.jsonl`);
+  fs.writeFileSync(rawFile, allTurnData.map(t => t.rawStream).join('\n--- TURN BREAK ---\n'));
 
   // Save partial scorecard (auto-scored parts only)
   const scorecardFile = path.join(runDir, `${evalCase.id}-scorecard.md`);

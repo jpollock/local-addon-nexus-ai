@@ -1,0 +1,30 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 09-gateway-cost-report
+Mode: mcp
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 176.5s
+
+--- Turn 1 ---
+PROMPT: How much have I spent through the AI gateway this month? Break it down by site and model, and tell me which site is using it most.
+
+RESULT:
+The AI gateway usage data is tracked and stored (per-site, per-model, with USD cost), but it's **not currently exposed as an MCP tool** — it only lives in Local's IPC/renderer layer, which powers the in-app Gateway Usage Dashboard.
+
+Here's what exists and where to find your data today:
+
+**In the Local UI:**
+Open Local → your site → the Nexus AI section → "Gateway Usage" dashboard. It shows cost by time window (last hour/day/week), requests, tokens, and most active site.
+
+**What's tracked per request:**
+- `siteId` / `siteName`
+- `model` (e.g., `claude-3-5-sonnet-20241022`)
+- `provider` (`anthropic` / `openai` / `google`)
+- `promptTokens`, `completionTokens`, `totalTokens`
+- `costUsd` (calculated using provider-specific pricing)
+- `callerPlugin` / `callerTheme` / `callerFeature` (which WordPress plugin made the call)
+
+**Why it's not in MCP:**
+The IPC handlers (`AI_GATEWAY_GET_COST`, `AI_GATEWAY_GET_STATS`) are wired to the renderer/UI but nothing in the MCP server reads `nexus_ai_gateway_usage` from `registryStorage`.
+
+**Want me to add an MCP tool for this?** I can wire up something like `get_gateway_usage` that reads the same `registryStorage` key and returns a breakdown by site + model for a given date range — same data the dashboard shows, but accessible from Claude/MCP. That would let you ask questions like this in the future without needing to open Local.

@@ -1,0 +1,33 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 10-recover-bad-state
+Mode: mcp
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 225.7s
+
+--- Turn 1 ---
+PROMPT: I tried to push jppblank to WPE earlier and something went wrong. The site seems to be in a weird state. Can you figure out what happened and what I should do?
+
+RESULT:
+Found the root cause. In the unified fleet view, `jppblank` shows **no ↔ link** between the local site and the WPE install — they're two separate, unconnected things. Every other connected pair shows ↔; jppblank doesn't.
+
+**What happened:** The local `jppblank` site and the WPE `jppblank` install both exist independently. Without an established WPE connection in Local, Magic Sync can't push — which explains the zero sync history (no push was ever recorded because the link was never set up).
+
+**The state of things:**
+- Local `jppblank` (edqY1Hhb0) — running, no WPE connection
+- WPE `jppblank` (3beb5d13, production) — healthy, PHP 8.2, untouched
+
+**To fix it — connect the sites first:**
+
+In the Local UI:
+1. Click `jppblank` in the site list
+2. Find the **"WP Engine"** tab or **"Connect"** button
+3. Select the `jppblank` WPE install to link them
+4. Then run the push
+
+Or via CLI if you prefer:
+```bash
+nexus wpe link jppblank --install jppblank
+```
+
+Once linked, retry the push. The WPE install is clean and ready — nothing was pushed to it, so there's no partial/corrupted state to worry about.

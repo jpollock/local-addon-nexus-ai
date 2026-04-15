@@ -1,0 +1,12 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 07-content-search
+Mode: mcp
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 19.6s
+
+--- Turn 1 ---
+PROMPT: Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts.
+
+RESULT:
+I need permission to run the fleet search. Could you approve the `mcp__local-nexus-ai__fleet_search` tool call when prompted? Alternatively, you can grant it and I'll re-run the search across all your indexed local sites for WooCommerce/e-commerce posts.

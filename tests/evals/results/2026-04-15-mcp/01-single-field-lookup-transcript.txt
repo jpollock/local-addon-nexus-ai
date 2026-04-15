@@ -1,0 +1,12 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: mcp
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 23.4s
+
+--- Turn 1 ---
+PROMPT: What WordPress version is jppblank running?
+
+RESULT:
+**jppblank** is running WordPress **7.0-RC2-62197**.

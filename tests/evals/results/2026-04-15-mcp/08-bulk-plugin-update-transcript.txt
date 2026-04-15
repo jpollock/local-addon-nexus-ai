@@ -1,0 +1,17 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 08-bulk-plugin-update
+Mode: mcp
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 30.6s
+
+--- Turn 1 ---
+PROMPT: Update all plugins across my local fleet — but only patch/minor version bumps, skip any major version upgrades. Show me what would change before doing anything.
+
+RESULT:
+It looks like you need to grant permission for the MCP tools. Could you approve `mcp__local-nexus-ai__nexus_plugin_audit`? That single call does a fleet-wide plugin audit across all your running local sites — showing current vs latest versions — which is exactly what we need to identify patch/minor updates before touching anything.
+
+Once you approve that, I'll:
+1. Parse the results and filter out any major version bumps
+2. Show you the full before/after table
+3. Wait for your go-ahead before running any updates

@@ -1,0 +1,14 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 05-staging-to-prod-promotion
+Mode: mcp
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 115.3s
+
+--- Turn 1 ---
+PROMPT: Promote the jppwpeplugistg (staging) install to jppwpeplugin (production) in the wpeplugintest site. Make sure production has a backup first.
+
+RESULT:
+Needs your approval to use `mcp__wp-nexus__wpe_promote_to_production` — can you grant it? Once approved, it will handle the full promote flow (backup already verified).
+
+Alternatively, for the `local-nexus-ai` version, the issue is that its two-step token expires between my LLM calls. We could work around this by using the WP Engine portal directly to do the promote, given the backup (ID: `6bfa32ef-55d2-4b0e-892c-5f8c95050835`) is already in place.
