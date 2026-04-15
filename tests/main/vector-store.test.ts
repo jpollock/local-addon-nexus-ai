@@ -155,4 +155,55 @@ describe('VectorStore', () => {
     const stats = await store.getSiteStats('site1');
     expect(stats.documentCount).toBe(0);
   });
+
+  // --- postType injection guard (regression tests for issue #8) ---
+
+  test('accepts valid postType slugs', async () => {
+    const validTypes = ['post', 'page', 'attachment', 'custom-post-type', 'my_type', 'CPT123'];
+    for (const postType of validTypes) {
+      await store.upsert('site1', [makeDoc('site1', 1, { postType })]);
+      // Should not throw
+      const results = await store.search('site1', makeVector(1), {
+        limit: 1,
+        postType,
+        relevanceFloor: 0,
+      });
+      expect(results.length).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  test('rejects injection payloads in postType for search()', async () => {
+    await store.upsert('site1', [makeDoc('site1', 1)]);
+    const malicious = [
+      "x' OR '1'='1",
+      "post'; DROP TABLE nexus_site1_content; --",
+      'post" OR "1"="1',
+      'post\'; SELECT * FROM nexus_site1_content; --',
+      '<script>alert(1)</script>',
+      'post type',  // space
+      'post/page',  // slash
+    ];
+    for (const payload of malicious) {
+      await expect(
+        store.search('site1', makeVector(1), { limit: 1, postType: payload }),
+      ).rejects.toThrow('Invalid postType');
+    }
+  });
+
+  test('rejects injection payloads in postType for searchAcrossSites()', async () => {
+    await store.upsert('site1', [makeDoc('site1', 1)]);
+    await expect(
+      store.searchAcrossSites(['site1'], makeVector(1), {
+        limit: 1,
+        postType: "post' OR 'x'='x",
+      }),
+    ).rejects.toThrow('Invalid postType');
+  });
+
+  test('rejects injection payloads in excludedTypes for cleanupExcludedTypes()', async () => {
+    await store.upsert('site1', [makeDoc('site1', 1)]);
+    await expect(
+      store.cleanupExcludedTypes(["post'; DROP TABLE nexus_site1_content; --"]),
+    ).rejects.toThrow('Invalid postType');
+  });
 });
