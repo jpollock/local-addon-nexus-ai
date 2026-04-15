@@ -20,6 +20,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import * as yaml from 'js-yaml';
 import * as readline from 'readline';
 import { spawnSync, execSync } from 'child_process';
@@ -175,9 +176,30 @@ function findClaudeBin(): string {
   return 'claude'; // fallback — let shell resolve
 }
 
-/** Returns list of nexus MCP server names that are currently connected. */
+/** Returns list of nexus MCP server names that are disabled for the current project. */
+function getProjectDisabledMcps(): Set<string> {
+  try {
+    const claudeJson = path.join(os.homedir(), '.claude.json');
+    const data = JSON.parse(fs.readFileSync(claudeJson, 'utf-8'));
+    const cwd = process.cwd();
+    // Check current directory and parent directories for project config
+    const projects: Record<string, any> = data.projects ?? {};
+    for (const [dir, config] of Object.entries(projects)) {
+      if (cwd === dir || cwd.startsWith(dir + '/')) {
+        const disabled: string[] = (config as any).disabledMcpServers ?? [];
+        return new Set(disabled);
+      }
+    }
+    return new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+/** Returns list of nexus MCP server names that are currently connected AND enabled. */
 function getConnectedNexusMcps(): string[] {
   try {
+    const disabled = getProjectDisabledMcps();
     const bin = findClaudeBin();
     const result = spawnSync(bin, ['mcp', 'list'], {
       encoding: 'utf-8',
@@ -187,10 +209,9 @@ function getConnectedNexusMcps(): string[] {
     });
     const output = String(result.stdout || '') + String(result.stderr || '');
     return NEXUS_MCP_SERVERS.filter(server => {
+      if (disabled.has(server)) return false; // disabled in project config
       const line = output.split('\n').find(l => l.toLowerCase().includes(server.toLowerCase())) ?? '';
       const l = line.toLowerCase();
-      // Skip if disabled in Claude Code UI — disabled servers won't be used by Claude
-      if (l.includes('disabled') || l.includes('◯')) return false;
       return l.includes('connected') && !l.includes('failed');
     });
   } catch {
