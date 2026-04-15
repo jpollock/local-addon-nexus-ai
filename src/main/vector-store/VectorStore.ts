@@ -14,6 +14,21 @@ export class VectorStore {
     this.dbPath = dbPath;
   }
 
+  /**
+   * Validate a post type string before interpolating it into a LanceDB
+   * WHERE/DELETE clause. WordPress post types are ASCII slugs (letters,
+   * digits, hyphens, underscores). Anything else is rejected to prevent
+   * query injection via malicious MCP tool arguments.
+   */
+  private static validatePostType(postType: string): string {
+    if (!/^[a-z0-9_-]+$/i.test(postType)) {
+      throw new Error(
+        `Invalid postType "${postType}": must contain only letters, numbers, hyphens, and underscores.`,
+      );
+    }
+    return postType;
+  }
+
   async initialize(): Promise<void> {
     fs.mkdirSync(this.dbPath, { recursive: true });
     this.db = await lancedb.connect(this.dbPath);
@@ -120,7 +135,7 @@ export class VectorStore {
       .limit(fetchLimit);
 
     if (options.postType) {
-      query = query.where(`\`postType\` = '${options.postType}'`);
+      query = query.where(`\`postType\` = '${VectorStore.validatePostType(options.postType)}'`);
     }
 
     const rawResults = await query.toArray();
@@ -175,6 +190,11 @@ export class VectorStore {
     options: SearchOptions & { queryText?: string; excludedTypes?: string[] },
     concurrency = 5,
   ): Promise<Map<string, SearchResult[]>> {
+    // Validate before entering the per-site try/catch loop, which would
+    // otherwise swallow the error as a "site not indexed" failure.
+    if (options.postType) VectorStore.validatePostType(options.postType);
+    (options.excludedTypes ?? []).forEach((t) => VectorStore.validatePostType(t));
+
     const db = this.getDb();
     const existingNames = new Set(await db.tableNames());
     const searchable = siteIds.filter((id) => existingNames.has(this.tableName(id)));
@@ -193,7 +213,7 @@ export class VectorStore {
 
           // Vector search — primary signal, cosine similarity score
           let vecQuery = table.vectorSearch(vecArray).distanceType('cosine').limit(limit * 4);
-          if (options.postType) vecQuery = vecQuery.where(`\`postType\` = '${options.postType}'`);
+          if (options.postType) vecQuery = vecQuery.where(`\`postType\` = '${VectorStore.validatePostType(options.postType)}'`);
           const vecRaw = await vecQuery.toArray();
 
           type Row = { id: string; title: string; content: string; postType: string; postId: number; metadata: string; score: number };
@@ -273,7 +293,7 @@ export class VectorStore {
     const tables = await db.tableNames();
     let docsRemoved = 0;
 
-    const typeList = excludedTypes.map((t) => `'${t}'`).join(', ');
+    const typeList = excludedTypes.map((t) => `'${VectorStore.validatePostType(t)}'`).join(', ');
     const whereClause = `postType IN (${typeList})`;
 
     for (let i = 0; i < tables.length; i++) {
