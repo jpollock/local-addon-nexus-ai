@@ -9,7 +9,7 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 0 |
+| Tool calls | 25 |
 | Error events | 0 |
 | Duration | 300.4s |
 | Has result | no |

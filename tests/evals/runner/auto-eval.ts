@@ -264,10 +264,17 @@ function runClaudeP(
     ? (MCP_TOOLS[caseId] ?? []).join(',')
     : 'Bash(nexus *)';
 
-  // For CLI/Skills mode, prefix the prompt to force Bash usage.
-  // Without this, Claude tries MCP tools even when they're not in allowedTools.
+  // For CLI/Skills mode, prefix the prompt to force Bash-only execution.
+  // Critical: also prohibit Read/Write/Edit/Glob/Grep which are auto-available
+  // in the project context and cause Claude to read source files instead of
+  // running nexus commands, leading to timeouts.
   const cliPrefix = mode === 'cli-skills'
-    ? 'You MUST use only the Bash tool to run nexus CLI commands (e.g. `nexus sites list`, `nexus wpe portfolio`). Do NOT call any MCP tools. Only Bash is available.\n\n'
+    ? 'IMPORTANT CONSTRAINTS:\n' +
+      '- You MUST use ONLY the Bash tool to run nexus CLI commands\n' +
+      '- Do NOT use Read, Write, Edit, Glob, Grep, or any file tools\n' +
+      '- Do NOT use any MCP tools\n' +
+      '- Run nexus commands like: nexus sites list, nexus wpe portfolio, nexus wp health <site>@local\n' +
+      '- If you need information, get it by running nexus CLI commands, not by reading files\n\n'
     : '';
   const actualPrompt = cliPrefix + prompt;
 
@@ -288,7 +295,7 @@ function runClaudeP(
 
   const result = spawnSync(findClaudeBin(), args, {
     encoding: 'utf-8',
-    timeout: 300000,
+    timeout: 600000, // 10 minutes — complex tasks need more time
     maxBuffer: 20 * 1024 * 1024,
     stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' },

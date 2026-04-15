@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 0 |
+| Tool calls | 19 |
 | Error events | 0 |
-| Duration | 58.7s |
+| Duration | 171.6s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 11 |
-| Output tokens | 2,052 |
-| Cache creation | 50,405 |
-| Cache read | 296,888 |
-| **Total cost** | **$0.3089** |
+| Input tokens | 22 |
+| Output tokens | 3,221 |
+| Cache creation | 79,818 |
+| Cache read | 722,407 |
+| **Total cost** | **$0.5644** |
 
 ## Human Scores Needed
 
@@ -39,21 +39,15 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-The nexus CLI doesn't currently have a command for AI gateway spending or usage breakdowns. There's no `nexus ai usage`, `nexus gateway stats`, or equivalent command in the CLI today.
+The CLI can't reach the addon right now — `nexus doctor` showed the MCP server isn't responding, and CLI commands that require addon connectivity are timing out.
 
-**What the CLI can't do (yet):**
-- No command to query AI gateway token usage or cost
-- No per-site or per-model breakdown of gateway traffic
-- No billing/spend reporting
+Here's the situation:
 
-**What does exist:**
-- The Local UI has a gateway usage dashboard (auto-refreshes in the app UI)
-- Telemetry is reported to a Cloudflare Worker (`nexus-analytics.jeremy7746.workers.dev`), but there's no CLI command to query it back
+**Gateway usage data exists but isn't reachable right now.** The addon stores `nexus_ai_gateway_usage` records (per-request: site ID, model, prompt/completion tokens, cost in USD) in its electron store and exposes them via IPC (`ai-gateway-get-usage`). The usage dashboard in Local's UI reads this data, but the CLI doesn't have a `nexus gateway usage` command to pull it directly.
 
-**Options to actually get this data:**
-1. **Local app UI** — open Local, go to the Nexus AI addon, and check the gateway usage dashboard there
-2. **Query the telemetry worker directly** — if you expose a stats endpoint on `nexus-analytics.jeremy7746.workers.dev`, a `nexus ai usage` CLI command could surface this
-3. **Build `nexus ai usage`** — this is a clear gap worth adding to the WPE Full Coverage plan
+**To get the breakdown you want, two things need to happen:**
 
+1. **Fix the connectivity issue first** — run `nexus update` to bring the CLI up from v0.2.1 to v0.2.4 (matching the installed addon), then restart Local. `nexus doctor` should show all green.
 
+2. **Either** check the usage dashboard in the Local addon UI (it already shows per-site and per-model breakdowns with costs), **or** I can add a `nexus gateway usage` CLI co
 ```

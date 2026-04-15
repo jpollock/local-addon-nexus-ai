@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 0 |
+| Tool calls | 10 |
 | Error events | 0 |
-| Duration | 23.3s |
+| Duration | 79.5s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 7 |
-| Output tokens | 427 |
-| Cache creation | 46,344 |
-| Cache read | 132,336 |
-| **Total cost** | **$0.2199** |
+| Input tokens | 13 |
+| Output tokens | 848 |
+| Cache creation | 39,239 |
+| Cache read | 377,960 |
+| **Total cost** | **$0.2733** |
 
 ## Human Scores Needed
 
@@ -39,5 +39,5 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-jppblank is running **WordPress 7.0-RC2-62197**.
+`jppblank` is running **WordPress 6.9.4**.
 ```

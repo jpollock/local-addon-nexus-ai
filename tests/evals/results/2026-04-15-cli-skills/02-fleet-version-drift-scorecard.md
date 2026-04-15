@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 0 |
+| Tool calls | 42 |
 | Error events | 0 |
-| Duration | 83.5s |
+| Duration | 266.8s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 19 |
-| Output tokens | 2,924 |
-| Cache creation | 41,360 |
-| Cache read | 623,655 |
-| **Total cost** | **$0.3861** |
+| Input tokens | 77 |
+| Output tokens | 8,289 |
+| Cache creation | 86,931 |
+| Cache read | 1,700,993 |
+| **Total cost** | **$0.9609** |
 
 ## Human Scores Needed
 
@@ -39,22 +39,32 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-Here's what I found. The nexus CLI can only run WP-CLI commands against **running** sites — all 28 halted sites can't be queried without starting them first.
+Here's what I found — and there's an important limitation to explain:
 
-**Running sites (2 of 30):**
+**The problem: All 31 sites are halted.**
 
-| Site | WordPress Version | Status |
-|------|------------------|--------|
-| `jppblank` | 7.0-RC2 | Pre-release (not final) |
-| `eval-test-onboard` | 6.9.4 | Behind — needs update |
+Nexus gets WordPress version data via WP-CLI, which requires a site to be running. With all sites halted, `wpVersion` returns `null` for every site — so the CLI can't report which ones are behind.
 
-**`eval-test-onboard` is definitively behind** — it's on 6.9.4 while 7.0 is in RC. You could update it with:
-
-```bash
-nexus wp core update eval-test-onboard@local
+```
+nexus fleet filter --json  →  31 sites, all wpVersion: null
 ```
 
-**`jppblank` is on 7.0-RC2** — technically behind the final 7.0 once it ships, but intentionally on a pre-release build.
+**To get WP version data, you have two options:**
 
-**The 28 halted sites are a blind spot** — the fleet health index doesn't track WP versions for halted sites. To check them, you'd need to start each one. If you want a bulk WP version audit across all sites, starting a few at a time and running `nexus wp core version <site>@local` is the path forward. Want me to help script that or pri
+**Option 1 — Start sites individually and check:**
+```bash
+nexus sites start <site-name>
+nexus wp <site-name> "core version"
+```
+
+**Option 2 — Start all and run a fleet health sweep:**
+```bash
+nexus sites start <site-name>  # for each site you care about
+nexus fleet filter --json       # will now show wpVersion
+```
+
+**What I can tell you right now:**
+- You have **31 local sites**, all halted
+- Fleet health reports **1 warning + 5 critical** issues, but those appear to be connectivity/health checks, not WP version flags (since versions can't be read)
+- The latest
 ```
