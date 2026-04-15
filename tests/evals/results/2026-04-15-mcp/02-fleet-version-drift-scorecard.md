@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 4 |
+| Tool calls | 5 |
 | Error events | 0 |
-| Duration | 38.0s |
+| Duration | 24.1s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 9 |
-| Output tokens | 1,373 |
-| Cache creation | 82,578 |
-| Cache read | 124,567 |
-| **Total cost** | **$0.3677** |
+| Input tokens | 14 |
+| Output tokens | 686 |
+| Cache creation | 41,756 |
+| Cache read | 201,995 |
+| **Total cost** | **$0.2275** |
 
 ## Human Scores Needed
 
@@ -39,11 +39,5 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-The MCP tools need permission approval before they can run. You should see permission prompts in your Claude Code UI — please approve them, or if you'd prefer, you can grant broader MCP permissions so they run automatically.
-
-Once approved, I'll use:
-- `find_outdated_sites` (component: wordpress, source: local) — to see which local sites are behind
-- `fleet_summary` — to get the WP version distribution across your fleet
-
-Would you like to approve those tools, or would you prefer I help you configure auto-approval for the `mcp__local-nexus-ai__*` tools?
+I need permission to use the `find_outdated_sites` tool. Could you approve the MCP tool call? Once approved, it will check your local sites against the latest WordPress version and report what's behind.
 ```

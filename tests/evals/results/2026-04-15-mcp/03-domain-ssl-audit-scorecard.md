@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 14 |
+| Tool calls | 12 |
 | Error events | 0 |
-| Duration | 81.0s |
+| Duration | 71.5s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 14 |
-| Output tokens | 2,516 |
-| Cache creation | 70,201 |
-| Cache read | 191,859 |
-| **Total cost** | **$0.3586** |
+| Input tokens | 10 |
+| Output tokens | 2,288 |
+| Cache creation | 64,275 |
+| Cache read | 104,838 |
+| **Total cost** | **$0.3068** |
 
 ## Human Scores Needed
 
@@ -39,33 +39,38 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-Here's the full picture across all 10 accounts (269 installs total):
+Here's the full picture across your 10 accounts (213+ installs checked):
 
 ---
 
 ## SSL Status Summary
 
-### No issues found — 9 of 10 accounts checked
+### Confirmed Issues
 
-**No expiring certificates (within 30 days)** and **no expired certs** anywhere. The vast majority of installs show "Error fetching certs" because they're on WP Engine's default subdomains (`*.wpengine.com`) — those use WPE's shared SSL and don't expose per-cert data via the API.
+| Install | Account | Issue |
+|---------|---------|-------|
+| `frostwpe` | devrel | ❌ No certificate |
+| `getflywheel` | getflywheel | ❌ No certificate |
+| `localwpe` | getflywheel | ❌ No certificate |
+
+**No expiring or expired certificates were detected.** No installs showed certs expiring within 30 days.
 
 ---
 
-### Actionable items
+### Notes on "Error fetching certs"
 
-**3 installs missing SSL certificates:**
+The vast majority of installs returned `⚠️ Error fetching certs` — this is expected behavior. The WPE SSL API only returns data for **custom/imported certificates**. Installs on their default `*.wpengine.com` subdomain are covered by WPE's managed wildcard cert, which isn't tracked per-install via the API. Those installs are fine.
 
-| Account | Install | Environment |
-|---------|---------|-------------|
-| **getflywheel** | `getflywheel` | production |
-| **getflywheel** | `localwpe` | production |
-| **devrel** | `frostwpe` | production |
+### 2 Accounts Couldn't Be Checked (auth expired)
 
-These production installs have no SSL certificate configured at all. If they have custom domains pointed at them, those domains would be serving over HTTP only.
+- **esmv7us1l20jdr**
+- **esmy9dign4hoqz**
 
-**1 account couldn't be checked:**
+Run `wpe_login` and retry those two if you want full coverage.
 
-| Account | Reason |
-|---------|--------|
-| **btwpe** | WP Engine auth session expired mid-run |
+---
+
+### Bottom Line
+
+The only ac
 ```

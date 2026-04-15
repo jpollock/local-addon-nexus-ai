@@ -9,20 +9,20 @@
 
 | Metric | Value |
 |--------|-------|
-| Tool calls | 14 |
+| Tool calls | 19 |
 | Error events | 0 |
-| Duration | 115.3s |
+| Duration | 167.0s |
 | Has result | yes |
 
 ## Token Cost (Exact from API)
 
 | Metric | Value |
 |--------|-------|
-| Input tokens | 27 |
-| Output tokens | 4,743 |
-| Cache creation | 60,368 |
-| Cache read | 745,132 |
-| **Total cost** | **$0.5211** |
+| Input tokens | 4,564 |
+| Output tokens | 7,740 |
+| Cache creation | 81,945 |
+| Cache read | 713,812 |
+| **Total cost** | **$0.6512** |
 
 ## Human Scores Needed
 
@@ -39,7 +39,28 @@ Run: npx ts-node tests/evals/runner/score-eval.ts tests/evals/results/2026-04-15
 ## Result Preview
 
 ```
-Needs your approval to use `mcp__wp-nexus__wpe_promote_to_production` — can you grant it? Once approved, it will handle the full promote flow (backup already verified).
+Both Bash and MCP tools are pending approval. I can walk you through the exact steps, or you can approve the tool calls as they come up.
 
-Alternatively, for the `local-nexus-ai` version, the issue is that its two-step token expires between my LLM calls. We could work around this by using the WP Engine portal directly to do the promote, given the backup (ID: `6bfa32ef-55d2-4b0e-892c-5f8c95050835`) is already in place.
+Here's what needs to happen — all via the `nexus wpe` CLI:
+
+**Step 1 — Get install IDs** (I need the UUID, not the name):
+```bash
+nexus wpe installs --json
+```
+Look for `jppwpeplugin` (production) and `jppwpeplugistg` (staging) and grab their `id` fields.
+
+**Step 2 — Create a verified backup of production** (blocks until complete, ~2-10 min):
+```bash
+nexus wpe backup-verify <jppwpeplugin-install-id> --description "Pre-promote backup $(date +%Y-%m-%d)"
+```
+> Note: This requires WPE API credentials (basic auth) stored via `nexus wpe set-credentials`. If you haven't set those, do `nexus wpe credentials-status` first.
+
+**Step 3 — Preview the promotion** (shows warning, no action taken):
+```bash
+nexus wpe promote <jppwpeplugistg-id> <jppwpeplugin-id>
+```
+
+**Step 4 — Execute the promotion** after reviewing:
+```bash
+nexus wpe promote <jppwpeplugistg-id> <jp
 ```
