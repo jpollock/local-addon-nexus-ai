@@ -188,7 +188,10 @@ function getConnectedNexusMcps(): string[] {
     const output = String(result.stdout || '') + String(result.stderr || '');
     return NEXUS_MCP_SERVERS.filter(server => {
       const line = output.split('\n').find(l => l.toLowerCase().includes(server.toLowerCase())) ?? '';
-      return line.toLowerCase().includes('connected') && !line.toLowerCase().includes('failed');
+      const l = line.toLowerCase();
+      // Skip if disabled in Claude Code UI — disabled servers won't be used by Claude
+      if (l.includes('disabled') || l.includes('◯')) return false;
+      return l.includes('connected') && !l.includes('failed');
     });
   } catch {
     return [];
