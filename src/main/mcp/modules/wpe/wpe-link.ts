@@ -35,7 +35,8 @@ export const wpeLinkHandler: McpToolHandler = {
 
     const lines = [`## WPE Link for "${site.name}"`];
     for (const [key, conn] of Object.entries(connections) as [string, any][]) {
-      lines.push(`- **${key}:** ${conn?.installName ?? conn?.name ?? JSON.stringify(conn)}`);
+      const label = conn?.installName ?? conn?.remoteSiteId ?? conn?.name ?? JSON.stringify(conn);
+      lines.push(`- **${key}:** ${label}`);
     }
 
     return ok(lines.join('\n'));

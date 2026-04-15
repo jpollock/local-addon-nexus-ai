@@ -265,9 +265,9 @@ describe('wpe_promote_environment — Tier 3 flow', () => {
     expect(text).toContain('Environment Copy Started');
     expect(text).toContain('op-xyz');
     expect(mockCapiDirect).toHaveBeenCalledWith('/install_copy', 'POST', {
-      source_install_id: 'inst-src',
-      destination_install_id: 'inst-dst',
-      include_database: true,
+      source_environment_id: 'inst-src',
+      destination_environment_id: 'inst-dst',
+      custom_options: { include_files: true, include_db: true },
     });
   });
 

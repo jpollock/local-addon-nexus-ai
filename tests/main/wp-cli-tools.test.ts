@@ -66,8 +66,8 @@ describe('WP-CLI Tools', () => {
     registerWpCliTools(registry);
   });
 
-  test('registers 17 tools', () => {
-    expect(registry.allToolNames()).toHaveLength(17);
+  test('registers 19 tools', () => {
+    expect(registry.allToolNames()).toHaveLength(19);
   });
 
   test('all tools require localServices', () => {
@@ -153,12 +153,12 @@ describe('WP-CLI Tools', () => {
     test('updates a plugin', async () => {
       const result = await registry.call('wp_plugin_update', { site: 'Test Site', slug: 'akismet' }, services);
       expect(result.isError).toBeUndefined();
-      expect(localServices.wpCliRun).toHaveBeenCalledWith('site-1', ['plugin', 'update', 'akismet']);
+      expect(localServices.wpCliRun).toHaveBeenCalledWith('site-1', ['plugin', 'update', 'akismet'], { timeoutMs: 180000 });
     });
 
     test('supports --all', async () => {
       await registry.call('wp_plugin_update', { site: 'Test Site', slug: '--all' }, services);
-      expect(localServices.wpCliRun).toHaveBeenCalledWith('site-1', ['plugin', 'update', '--all']);
+      expect(localServices.wpCliRun).toHaveBeenCalledWith('site-1', ['plugin', 'update', '--all'], { timeoutMs: 180000 });
     });
   });
 
