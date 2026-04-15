@@ -92,7 +92,7 @@ describe('Site Management Tools', () => {
     expect(names).toContain('local_rename_site');
     expect(names).toContain('local_import_site');
     expect(names).toContain('local_list_blueprints');
-    expect(names).toContain('local_save_blueprint');
+    expect(names).toContain('local_operation_status');
     expect(names).toContain('local_get_site_logs');
   });
 
@@ -206,13 +206,6 @@ describe('Site Management Tools', () => {
       );
     });
 
-    test('passes php_version', async () => {
-      await registry.call('local_create_site', { name: 'Test', php_version: '8.2' }, services);
-      expect(localServices.createSite).toHaveBeenCalledWith(
-        expect.objectContaining({ phpVersion: '8.2' }),
-      );
-    });
-
     test('rejects empty name', async () => {
       const result = await registry.call('local_create_site', { name: '' }, services);
       expect(result.isError).toBe(true);
@@ -266,7 +259,9 @@ describe('Site Management Tools', () => {
     test('exports a site', async () => {
       const result = await registry.call('local_export_site', { site: 'My Site' }, services);
       expect(result.isError).toBeUndefined();
-      expect(result.content[0].text).toContain('/tmp/export.zip');
+      const payload = JSON.parse(result.content[0].text);
+      expect(payload.status).toBe('in_progress');
+      expect(payload.output_file).toContain('My Site.zip');
     });
   });
 

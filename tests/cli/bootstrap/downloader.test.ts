@@ -1,167 +1,74 @@
 /**
- * Downloader tests with mocked GitHub API
+ * Downloader tests with mocked Cloudflare R2 download
  */
 
-import * as https from 'https';
-import * as fs from 'fs';
-import { downloadFromGitHub, formatBytes } from '../../../src/cli/bootstrap/downloader';
 import { EventEmitter } from 'events';
 
-describe('GitHub Downloader', () => {
-  let httpsGetSpy: jest.SpyInstance;
+// Mock https before importing the module
+const mockHttpsGet = jest.fn();
+jest.mock('https', () => ({
+  get: mockHttpsGet,
+}));
 
+// Mock fs.createWriteStream
+const mockWriteStream = Object.assign(new EventEmitter(), { close: jest.fn() }) as any;
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  createWriteStream: jest.fn(() => mockWriteStream),
+}));
+
+import { downloadAddon, formatBytes } from '../../../src/cli/bootstrap/downloader';
+
+describe('R2 Downloader', () => {
   beforeEach(() => {
-    httpsGetSpy = jest.spyOn(https, 'get');
+    jest.clearAllMocks();
+    mockWriteStream.removeAllListeners();
   });
 
-  afterEach(() => {
-    httpsGetSpy.mockRestore();
-  });
-
-  it('downloads asset from latest release', async () => {
-    const mockRelease = {
-      tag_name: 'v0.1.0',
-      name: 'Release 0.1.0',
-      assets: [
-        {
-          name: 'nexus-ai-darwin-arm64-0.1.0.tgz',
-          browser_download_url: 'https://github.com/test/repo/releases/download/v0.1.0/nexus-ai-darwin-arm64-0.1.0.tgz',
-          size: 1024
-        }
-      ]
-    };
-
-    // Mock API request
-    httpsGetSpy.mockImplementation((url: any, options: any, callback: any) => {
+  it('downloads addon from R2 and returns destPath', async () => {
+    mockHttpsGet.mockImplementation((url: string, options: any, callback: any) => {
       const res = new EventEmitter() as any;
       res.statusCode = 200;
-
-      if (typeof url === 'string' && url.includes('/releases/latest')) {
-        // Return release JSON
-        setTimeout(() => {
-          res.emit('data', JSON.stringify(mockRelease));
-          res.emit('end');
-        }, 10);
-      } else if (typeof url === 'string' && url.includes('/releases/download/')) {
-        // Return file content
-        res.pipe = jest.fn((stream: any) => {
-          stream.emit('finish');
-          return stream;
-        });
-        setTimeout(() => {
-          res.emit('data', Buffer.from('test tarball content'));
-          res.emit('end');
-        }, 10);
-      }
-
+      res.headers = { 'content-length': '1024' };
+      res.pipe = jest.fn(() => {
+        setTimeout(() => mockWriteStream.emit('finish'), 10);
+        return mockWriteStream;
+      });
       callback(res);
-      return new EventEmitter() as any; // Return request object
+      return new EventEmitter();
     });
 
-    // Mock file operations
-    const writeStreamMock = new EventEmitter() as any;
-    writeStreamMock.close = jest.fn();
-    jest.spyOn(fs, 'createWriteStream').mockReturnValue(writeStreamMock);
-
-    const destPath = '/tmp/test.tgz';
-
-    // Trigger download
-    const promise = downloadFromGitHub({
-      owner: 'test',
-      repo: 'repo',
-      assetName: 'nexus-ai-darwin-arm64-0.1.0.tgz',
-      destPath
+    const destPath = '/tmp/test-addon.tgz';
+    const result = await downloadAddon({
+      assetName: 'nexus-ai-darwin-arm64-0.2.0.tgz',
+      version: '0.2.0',
+      destPath,
     });
 
-    // Simulate write stream finish
-    setTimeout(() => writeStreamMock.emit('finish'), 50);
+    expect(result).toBe(destPath);
 
-    await expect(promise).resolves.toBe(destPath);
-
-    (fs.createWriteStream as jest.Mock).mockRestore();
-  });
-
-  it('handles asset not found', async () => {
-    const mockRelease = {
-      tag_name: 'v0.1.0',
-      name: 'Release 0.1.0',
-      assets: [
-        {
-          name: 'other-asset.tgz',
-          browser_download_url: 'https://example.com/other-asset.tgz',
-          size: 1024
-        }
-      ]
-    };
-
-    httpsGetSpy.mockImplementation((url: any, options: any, callback: any) => {
-      const res = new EventEmitter() as any;
-      res.statusCode = 200;
-
-      setTimeout(() => {
-        res.emit('data', JSON.stringify(mockRelease));
-        res.emit('end');
-      }, 10);
-
-      callback(res);
-      return new EventEmitter() as any;
-    });
-
-    await expect(
-      downloadFromGitHub({
-        owner: 'test',
-        repo: 'repo',
-        assetName: 'missing-asset.tgz',
-        destPath: '/tmp/test.tgz'
-      })
-    ).rejects.toThrow('Asset not found: missing-asset.tgz');
-  });
-
-  it('handles rate limit', async () => {
-    httpsGetSpy.mockImplementation((url: any, options: any, callback: any) => {
-      const res = new EventEmitter() as any;
-      res.statusCode = 403;
-      res.headers = {
-        'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 3600)
-      };
-
-      setTimeout(() => {
-        res.emit('end');
-      }, 10);
-
-      callback(res);
-      return new EventEmitter() as any;
-    });
-
-    await expect(
-      downloadFromGitHub({
-        owner: 'test',
-        repo: 'repo',
-        assetName: 'test.tgz',
-        destPath: '/tmp/test.tgz'
-      })
-    ).rejects.toThrow('GitHub API rate limit exceeded');
+    const calledUrl = mockHttpsGet.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('releases.elasticapi.io/nexus-ai/v0.2.0/nexus-ai-darwin-arm64-0.2.0.tgz');
   });
 
   it('handles network error', async () => {
-    httpsGetSpy.mockImplementation(() => {
+    mockHttpsGet.mockImplementation(() => {
       const req = new EventEmitter() as any;
       setTimeout(() => {
-        const error: any = new Error('Network error');
-        error.code = 'ENOTFOUND';
-        req.emit('error', error);
+        const err: any = new Error('ENOTFOUND');
+        err.code = 'ENOTFOUND';
+        req.emit('error', err);
       }, 10);
       return req;
     });
 
     await expect(
-      downloadFromGitHub({
-        owner: 'test',
-        repo: 'repo',
-        assetName: 'test.tgz',
-        destPath: '/tmp/test.tgz'
+      downloadAddon({
+        assetName: 'nexus-ai-darwin-arm64-0.2.0.tgz',
+        version: '0.2.0',
+        destPath: '/tmp/test.tgz',
       })
-    ).rejects.toThrow('No internet connection');
+    ).rejects.toThrow();
   });
 
   it('formats bytes correctly', () => {

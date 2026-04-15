@@ -142,7 +142,69 @@ If `npm install` tries to run electron-rebuild and fails:
 
 ---
 
-**Last Updated:** 2026-03-19
+## LanceDB CustomGC Open Handle
+
+### What you'll see
+
+After every `npm test` run:
+
+```
+Jest has detected the following 1 open handle potentially keeping Jest from exiting:
+
+  ●  CustomGC
+
+    > 1 | import * as lancedb from '@lancedb/lancedb';
+        | ^
+      at Runtime._loadModule (node_modules/jest-runtime/build/index.js)
+      at Object.<anonymous> (node_modules/@lancedb/lancedb/dist/native.js:145:41)
+```
+
+### Why it happens
+
+LanceDB ships a native Rust binary (via napi-rs). When Node.js `require()`s the module,
+the Rust layer registers a background garbage-collector thread with Node's event loop.
+This thread (`CustomGC`) is responsible for running Rust destructors when JS objects
+that wrap Rust values get garbage collected.
+
+The thread is registered **at module import time** — not when a connection is opened —
+and lives for the **entire lifetime of the process**. There is no public API to shut it
+down. Node.js does not support unloading native modules once they are loaded.
+
+### Why Jest hangs without `forceExit`
+
+Jest uses `async_hooks` (`--detectOpenHandles`) to track resources that keep the event
+loop alive. `CustomGC` is registered as an async_hooks resource, so Jest sees it as an
+open handle and waits for it to close before exiting. Since it never closes, Jest hangs
+indefinitely.
+
+### The fix (already applied)
+
+`jest.config.js` has three settings that together solve this:
+
+```js
+testTimeout: 30000,      // individual tests can't hang indefinitely
+detectOpenHandles: true, // keep CustomGC visible — don't silently mask it
+forceExit: true,         // exit after tests complete regardless of open handles
+```
+
+`forceExit` is the direct fix. `detectOpenHandles` is kept so that if any *new* handles
+appear in the future (ones that ARE fixable), they show up in output rather than being
+silently swallowed.
+
+### What "fixed" looks like
+
+After a clean test run you'll see exactly one handle — `CustomGC` from LanceDB. If you
+ever see additional handles (e.g. `Timeout`, `TCPSERVERWRAP`), those are real bugs worth
+fixing.
+
+### Upstream
+
+There is no LanceDB issue filed for this yet. If a `shutdown()` or `close()` API is
+added to `@lancedb/lancedb` that deregisters the GC thread, `forceExit` can be removed.
+
+---
+
+**Last Updated:** 2026-04-15
 **Status:** ✅ Working (tests + Local)
 **Action Required:** Run `npm run rebuild` after `npm install` before loading in Local
 

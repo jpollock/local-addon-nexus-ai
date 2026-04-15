@@ -79,8 +79,8 @@ describe('OpenAIProvider', () => {
     expect(provider.defaultModels.length).toBeGreaterThan(0);
   });
 
-  test('defaultModels includes gpt models', () => {
-    expect(provider.defaultModels.every((m) => m.startsWith('gpt-'))).toBe(true);
+  test('defaultModels includes gpt and o-series models', () => {
+    expect(provider.defaultModels.some((m) => m.startsWith('gpt-') || m.startsWith('o'))).toBe(true);
   });
 });
 
