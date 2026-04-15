@@ -158,10 +158,12 @@ interface RunResult {
 function checkMcpStatus(): 'connected' | 'disconnected' | 'unknown' {
   try {
     const result = spawnSync('claude', ['mcp', 'list'], { encoding: 'utf-8', timeout: 10000 });
-    const output = result.stdout + result.stderr;
-    if (output.includes(`${MCP_SERVER}: `) && output.includes('✓ Connected')) return 'connected';
-    if (output.includes(`${MCP_SERVER}: `) && output.includes('✗ Failed')) return 'disconnected';
-    if (!output.includes(MCP_SERVER)) return 'disconnected';
+    const output = (result.stdout + result.stderr).toLowerCase();
+    // Match regardless of checkmark character (✓ vs ✔) or case (Connected vs connected)
+    const hasServer = output.includes(MCP_SERVER.toLowerCase());
+    if (!hasServer) return 'disconnected';
+    if (output.includes('connected') && !output.includes('failed to connect') && !output.includes('disconnected')) return 'connected';
+    if (output.includes('failed') || output.includes('error') || output.includes('disconnected')) return 'disconnected';
     return 'unknown';
   } catch {
     return 'unknown';
