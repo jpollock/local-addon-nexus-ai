@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+# =============================================================================
+# eval — Nexus AI Evaluation Runner
+#
+# Usage:
+#   ./eval                     Show current status and next step
+#   ./eval run mcp             Run all 10 cases in MCP mode
+#   ./eval run cli             Run all 10 cases in CLI/Skills mode
+#   ./eval analyze             Auto-analyze latest results (no human input)
+#   ./eval score <case-id>     Score one case side-by-side (CLI vs MCP)
+#   ./eval score               List scoreable cases
+#   ./eval open                Open results folder in Finder
+#
+# Examples:
+#   ./eval
+#   ./eval run mcp
+#   ./eval run cli
+#   ./eval analyze
+#   ./eval score 05-staging-to-prod-promotion
+# =============================================================================
+
+set -e
+RUNNER="npx ts-node tests/evals/runner"
+RESULTS="tests/evals/results"
+RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; BOLD='\033[1m'; RESET='\033[0m'
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+latest_run() {
+  local mode=$1
+  ls "$RESULTS" 2>/dev/null | grep "\-${mode}$" | sort | tail -1
+}
+
+count_scored() {
+  local dir="$RESULTS/$1"
+  [ -d "$dir" ] || { echo 0; return; }
+  grep -l "Weighted Score:" "$dir"/*-scorecard.md 2>/dev/null | wc -l | tr -d ' '
+}
+
+show_status() {
+  echo ""
+  echo -e "${BOLD}═══════════════════════════════════════════${RESET}"
+  echo -e "${BOLD}  NEXUS AI EVAL STATUS${RESET}"
+  echo -e "${BOLD}═══════════════════════════════════════════${RESET}"
+  echo ""
+
+  # Latest runs
+  local mcp_run=$(latest_run "mcp")
+  local cli_run=$(latest_run "cli-skills")
+
+  echo -e "${BOLD}Latest runs:${RESET}"
+  if [ -n "$mcp_run" ]; then
+    local mcp_scored=$(count_scored "$mcp_run")
+    echo -e "  MCP:        ${GREEN}$mcp_run${RESET} ($mcp_scored/10 scored)"
+  else
+    echo -e "  MCP:        ${RED}no run yet${RESET}"
+  fi
+  if [ -n "$cli_run" ]; then
+    local cli_scored=$(count_scored "$cli_run")
+    echo -e "  CLI/Skills: ${GREEN}$cli_run${RESET} ($cli_scored/10 scored)"
+  else
+    echo -e "  CLI/Skills: ${RED}no run yet${RESET}"
+  fi
+
+  # Analysis
+  local latest_analysis=$(ls "$RESULTS"/analysis-*.md 2>/dev/null | sort | tail -1)
+  echo ""
+  if [ -n "$latest_analysis" ]; then
+    echo -e "${BOLD}Latest analysis:${RESET} $(basename $latest_analysis)"
+  else
+    echo -e "${BOLD}Latest analysis:${RESET} ${RED}none — run ./eval analyze${RESET}"
+  fi
+
+  # Comparison table
+  if [ -f "$RESULTS/comparison-table.md" ]; then
+    local rows=$(grep -c "^|" "$RESULTS/comparison-table.md" 2>/dev/null || echo 0)
+    echo -e "${BOLD}Scored cases:${RESET} $(($rows - 2)) in comparison-table.md"
+  fi
+
+  # Improvements
+  if [ -f "$RESULTS/improvements.md" ]; then
+    local ideas=$(grep -c "^- " "$RESULTS/improvements.md" 2>/dev/null || echo 0)
+    echo -e "${BOLD}Improvement ideas:${RESET} $ideas in improvements.md"
+  fi
+
+  # Next step
+  echo ""
+  echo -e "${BOLD}═══════════════════════════════════════════${RESET}"
+  echo -e "${BOLD}  NEXT STEP${RESET}"
+  echo -e "${BOLD}═══════════════════════════════════════════${RESET}"
+  echo ""
+
+  if [ -z "$mcp_run" ] && [ -z "$cli_run" ]; then
+    echo -e "  ${YELLOW}No runs yet. Start with:${RESET}"
+    echo "  ./eval run mcp"
+  elif [ -z "$mcp_run" ]; then
+    echo -e "  ${YELLOW}CLI run exists but no MCP run. Run:${RESET}"
+    echo "  ./eval run mcp"
+  elif [ -z "$cli_run" ]; then
+    echo -e "  ${YELLOW}MCP run exists but no CLI run. Run:${RESET}"
+    echo "  ./eval run cli"
+  elif [ -z "$latest_analysis" ]; then
+    echo -e "  ${YELLOW}Both runs exist. Generate analysis:${RESET}"
+    echo "  ./eval analyze"
+  else
+    local total_scored=$(( $(count_scored "$mcp_run") + $(count_scored "$cli_run") ))
+    if [ "$total_scored" -lt 6 ]; then
+      echo -e "  ${YELLOW}Analysis done. Score cases (start with HIGH priority):${RESET}"
+      echo "  ./eval score"
+    else
+      echo -e "  ${GREEN}All good! Re-run after making improvements:${RESET}"
+      echo "  ./eval run mcp && ./eval run cli && ./eval analyze"
+    fi
+  fi
+  echo ""
+}
+
+list_cases() {
+  echo ""
+  echo -e "${BOLD}Available cases:${RESET}"
+  for f in tests/evals/cases/*.yaml; do
+    local id=$(basename "$f" .yaml)
+    local desc=$(grep "^description:" "$f" | head -1 | sed 's/description: //')
+    echo "  $id"
+    echo "    $desc"
+  done
+  echo ""
+  echo -e "Usage: ${BOLD}./eval score <case-id>${RESET}"
+  echo ""
+}
+
+check_prereqs() {
+  echo -e "${BOLD}Checking prerequisites...${RESET}"
+  if ! nexus doctor 2>/dev/null | grep -q "✅"; then
+    echo -e "${YELLOW}⚠  Run 'nexus doctor' to check Local and addon status${RESET}"
+  fi
+  local running=$(nexus sites list --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len([s for s in d.get('local',[]) if s.get('status')=='running']))" 2>/dev/null || echo "?")
+  if [ "$running" = "0" ] || [ "$running" = "?" ]; then
+    echo -e "${YELLOW}⚠  No running local sites. Start some first:${RESET}"
+    echo "  nexus sites start jppblank@local"
+    echo "  nexus sites start frostscape@local"
+    echo ""
+    read -p "Continue anyway? (y/N) → " ans
+    [[ "$ans" =~ ^[Yy]$ ]] || exit 0
+  else
+    echo -e "  ${GREEN}✅ $running local site(s) running${RESET}"
+  fi
+}
+
+# ── commands ─────────────────────────────────────────────────────────────────
+
+cmd=${1:-""}
+shift 2>/dev/null || true
+
+case "$cmd" in
+
+  "run")
+    mode=${1:-""}
+    if [ "$mode" = "mcp" ]; then
+      check_prereqs
+      echo -e "\n${BOLD}Running MCP eval (10 cases)...${RESET}\n"
+      $RUNNER/auto-eval.ts --mode mcp
+    elif [ "$mode" = "cli" ]; then
+      check_prereqs
+      echo -e "\n${BOLD}Running CLI/Skills eval (10 cases)...${RESET}\n"
+      $RUNNER/auto-eval.ts --mode cli-skills
+    else
+      echo "Usage: ./eval run mcp | cli"
+    fi
+    ;;
+
+  "analyze")
+    echo -e "\n${BOLD}Analyzing latest runs...${RESET}\n"
+    $RUNNER/analyze-runs.ts
+    ;;
+
+  "score")
+    case_id=${1:-""}
+    if [ -z "$case_id" ]; then
+      list_cases
+    else
+      $RUNNER/compare-eval.ts --case "$case_id"
+    fi
+    ;;
+
+  "open")
+    open "$RESULTS"
+    ;;
+
+  "" | "status")
+    show_status
+    ;;
+
+  *)
+    echo ""
+    echo "Unknown command: $cmd"
+    echo "Usage: ./eval [status|run mcp|run cli|analyze|score <case>|open]"
+    echo ""
+    ;;
+
+esac
