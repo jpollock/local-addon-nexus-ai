@@ -155,10 +155,34 @@ interface RunResult {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+/** Resolve the claude binary — it may be an alias or on a non-standard PATH. */
+function findClaudeBin(): string {
+  // Common install locations
+  const candidates = [
+    process.env.CLAUDE_BIN,
+    `${process.env.HOME}/.claude/local/claude`,
+    '/usr/local/bin/claude',
+    '/usr/bin/claude',
+  ].filter(Boolean) as string[];
+
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch { /* skip */ }
+  }
+  return 'claude'; // fallback — let shell resolve
+}
+
 function checkMcpStatus(): 'connected' | 'disconnected' | 'unknown' {
   try {
-    const result = spawnSync('claude', ['mcp', 'list'], { encoding: 'utf-8', timeout: 10000 });
-    const output = result.stdout + result.stderr;
+    const bin = findClaudeBin();
+    const result = spawnSync(bin, ['mcp', 'list'], {
+      encoding: 'utf-8',
+      timeout: 15000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
+    });
+    const output = String(result.stdout || '') + String(result.stderr || '');
     // Find the line for our specific server and check only that line
     const serverLine = output.split('\n').find(l => l.toLowerCase().includes(MCP_SERVER.toLowerCase()));
     if (!serverLine) return 'disconnected';
@@ -203,10 +227,12 @@ function runClaudeP(
   }
 
   const start = Date.now();
-  const result = spawnSync('claude', args, {
+  const result = spawnSync(findClaudeBin(), args, {
     encoding: 'utf-8',
     timeout: 300000, // 5 minutes
     maxBuffer: 10 * 1024 * 1024,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
   });
 
   const raw = result.stdout || '';
@@ -444,7 +470,7 @@ async function main(): Promise<void> {
         console.log('   To reconnect later: nexus mcp setup --agent claude-code --write\n');
         const ans = await promptUser(rl, 'Disconnect MCP now and continue? (y/N) → ');
         if (ans.toLowerCase() === 'y') {
-          spawnSync('claude', ['mcp', 'remove', MCP_SERVER], { stdio: 'inherit' });
+          spawnSync(findClaudeBin(), ['mcp', 'remove', MCP_SERVER], { stdio: 'inherit' });
           console.log('✅ MCP disconnected. Continuing...');
         } else {
           console.log('Aborted. Disconnect MCP and re-run.');
