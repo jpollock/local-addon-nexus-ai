@@ -187,13 +187,12 @@ export function registerLifecycleHooks(
             localServices.getThemes(site.id),
             localServices.getOption(site.id, 'siteurl'),
             localServices.getOption(site.id, 'admin_email'),
-            // MySQL version via wp eval
-            localServices.wpCliRun(site.id, ['eval', 'global $wpdb; echo $wpdb->db_version();', '--skip-wordpress=false']),
-            // Post counts via wp eval — one round-trip for all types
+            // MySQL version via wp eval (WordPress already loaded — no flags needed)
+            localServices.wpCliRun(site.id, ['eval', 'global $wpdb; echo $wpdb->db_version();']),
+            // Post counts via wp eval — one round-trip for all post types
             localServices.wpCliRun(site.id, [
               'eval',
               'global $wpdb; $r=$wpdb->get_results("SELECT post_type,COUNT(*) c,MAX(post_date_gmt) ld FROM {$wpdb->posts} WHERE post_status=\'publish\' GROUP BY post_type",ARRAY_A); echo json_encode($r);',
-              '--skip-wordpress=false',
             ]),
           ]);
 
