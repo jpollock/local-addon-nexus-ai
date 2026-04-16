@@ -39,7 +39,7 @@ interface RunStats {
 }
 
 function prompt(rl: readline.Interface, q: string): Promise<string> {
-  return new Promise(r => rl.question(q, r));
+  return new Promise(r => rl.question(q, (ans) => r(ans.replace(/\r$/, ''))));
 }
 
 function findResultDir(date: string, mode: string): string | null {

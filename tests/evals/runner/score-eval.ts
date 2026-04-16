@@ -71,7 +71,7 @@ function extractAutoMetrics(content: string): {
 }
 
 async function prompt(rl: readline.Interface, question: string): Promise<string> {
-  return new Promise(resolve => rl.question(question, resolve));
+  return new Promise(resolve => rl.question(question, (ans) => resolve(ans.replace(/\r$/, ''))));
 }
 
 async function main(): Promise<void> {

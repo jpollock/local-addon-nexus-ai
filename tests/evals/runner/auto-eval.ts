@@ -242,7 +242,7 @@ function checkMcpStatus(): 'connected' | 'disconnected' | 'unknown' {
 
 function promptUser(rl: readline.Interface, q: string): Promise<string> {
   if (!process.stdin.isTTY) return Promise.resolve(''); // non-interactive: default empty
-  return new Promise(resolve => rl.question(q, resolve));
+  return new Promise(resolve => rl.question(q, (ans) => resolve(ans.replace(/\r$/, ''))));
 }
 
 interface TurnData {
