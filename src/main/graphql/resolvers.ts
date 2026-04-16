@@ -834,7 +834,7 @@ export function createResolvers(context: ResolverContext) {
             return { success: false, error: 'Local services not available', blueprints: [] };
           }
 
-          const blueprints = await services.localServices.listBlueprints();
+          const blueprints = await services.localServices.getBlueprints();
 
           return {
             success: true,
@@ -2314,14 +2314,16 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const changes = await services.localServices.getSiteChanges(site.id, input.since);
+          // getSiteChanges doesn't exist in the bridge — use getSyncHistory instead
+          // which returns the history of push/pull operations for this site
+          const history = await services.localServices.getSyncHistory?.(site.id) ?? [];
 
           return {
             success: true,
-            changes: changes.map((c: any) => ({
-              type: c.type,
-              path: c.path,
-              status: c.status || null,
+            changes: history.map((c: any) => ({
+              type: c.direction ?? 'unknown',
+              path: c.installName ?? '',
+              status: c.success ? 'completed' : 'failed',
             })),
           };
         } catch (error: any) {
@@ -2371,7 +2373,7 @@ export function createResolvers(context: ResolverContext) {
             history: history.map((entry: any) => ({
               timestamp: entry.timestamp,
               direction: entry.direction,
-              success: entry.success,
+              success: entry.success ?? true,  // non-nullable in schema; default true if not set
               filesTransferred: entry.filesTransferred || null,
               databaseIncluded: entry.databaseIncluded || false,
             })),

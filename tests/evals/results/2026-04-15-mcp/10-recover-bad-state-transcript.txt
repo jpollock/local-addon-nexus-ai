@@ -1,0 +1,30 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 10-recover-bad-state
+Mode: mcp
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 18.2s
+Tool calls: 4
+Cost: $0.1927
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I tried to push jppblank to WPE earlier and something went wrong. The site seems to be in a weird state. Can you figure out what happened and what I should do?
+
+
+⏺ ToolSearch({"query":"select:TodoWrite","max_results":1})
+  ⎿  
+
+⏺ ToolSearch({"query":"select:mcp__local__get_site,mcp__local__get_sync_history,mcp__local__list_sites","max_results":3})
+  ⎿  
+
+⏺ mcp__local__get_site({"site":"jppblank"})
+
+⏺ mcp__local__get_sync_history({"site":"jppblank","limit":5})
+  ⎿  Claude requested permissions to use mcp__local__get_site, but you haven't granted it yet.
+  ⎿  Claude requested permissions to use mcp__local__get_sync_history, but you haven't granted it yet.
+These tools need your permission. Can you approve them? Once you do, I'll fetch the site info and sync history simultaneously to diagnose what happened with the push.
+
+--- FINAL RESULT ---
+These tools need your permission. Can you approve them? Once you do, I'll fetch the site info and sync history simultaneously to diagnose what happened with the push.

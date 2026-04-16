@@ -1,0 +1,235 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 05-staging-to-prod-promotion
+Mode: mcp
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 167.0s
+Tool calls: 19
+Cost: $0.6512
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Promote the jppwpeplugistg (staging) install to jppwpeplugin (production) in the wpeplugintest site. Make sure production has a backup first.
+
+
+⏺ Skill({"skill":"nexus-wpe","args":"Promote the staging install jppwpeplugistg to production install jppwpeplugin on the wpeplugintest site. Make sure production has a backup first before promoting."})
+  ⎿  Execute skill: nexus-wpe
+Let me handle this directly using the available MCP tools. I'll start by verifying the installs and creating a production backup first.
+
+⏺ ToolSearch({"query":"select:mcp__local__list_wpe_sites,mcp__local__create_backup,mcp__local__backup_status,mcp__local__list_backups","max_results":5})
+  ⎿  
+
+⏺ ToolSearch({"query":"wpe backup promote copy install","max_results":5})
+  ⎿  
+The available Local MCP tools don't have WPE-specific backup or promote operations. Let me check the nexus CLI for WPE capabilities.
+
+⏺ Glob({"pattern":"src/cli/commands/wpe/**/*.ts"})
+
+⏺ Glob({"pattern":"src/main/mcp/modules/wpe/**/*.ts"})
+  ⎿  src/main/mcp/modules/wpe/usage-cache.ts
+src/main/mcp/modules/wpe/account-domains.ts
+src/main/mcp/modules/wpe/account-overview.ts
+src/main/mcp/modules/wpe/account-ssl-status.ts
+src/main/mcp/modules/wpe/add-user-to-accounts.ts
+src/main/mcp/modules/wpe/api-credentials.ts
+src/main/mcp/modules/wpe/authenticate.ts
+src/main/mcp/modules/wpe/backup-and-verify.ts
+src/main/mcp/modules/wpe/check-domain-status.ts
+src/main/mcp/modules/wpe/create-account-user.ts
+src/main/mcp/modules/wpe/create-backup.ts
+src/ma
+  ⎿  No files found
+There's a `promote-environment.ts` module. Let me read it along with `create-backup.ts` and `backup-and-verify.ts`.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/modules/wpe/promote-environment.ts"})
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/modules/wpe/backup-and-verify.ts"})
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/modules/wpe/create-backup.ts"})
+  ⎿  1	import { McpToolHandler, McpToolResult } from '../../types';
+2	import { ok, error, capiError, requireCAPI } from './helpers';
+3	
+4	export const createBackupHandler: McpToolHandler = {
+5	  definition: {
+6	    name: 'wpe_create_backup',
+7	    description: 'Create a WP Engine backup checkpoint for an install. REQUIRES basic auth API credentials (not OAuth) — configure once with wpe_set_api_credentials. Get credentials from my.wpengine.com → Profile → API Access. Returns a backup_id — use wpe_get_
+  ⎿  1	import { McpToolHandler } from '../../types';
+2	import { ok, error, capiError, requireCAPI } from './helpers';
+3	
+4	export const backupAndVerifyHandler: McpToolHandler = {
+5	  definition: {
+6	    name: 'wpe_backup_and_verify',
+7	    description:
+8	      'Create a WP Engine backup and block until it is confirmed complete. Wraps wpe_create_backup + polling wpe_get_backup into a single call. REQUIRES basic auth API credentials — configure with wpe_set_api_credentials. Use this before wpe_promote_
+  ⎿  1	import { McpToolHandler } from '../../types';
+2	import { ok, error, capiError, requireCAPI } from './helpers';
+3	
+4	export const promoteEnvironmentHandler: McpToolHandler = {
+5	  definition: {
+6	    name: 'wpe_promote_environment',
+7	    description:
+8	      'Tier 3 (destructive) — copy one WP Engine install to another (typically staging → production). Overwrites the destination install completely — ensure a recent backup exists via wpe_backup_and_verify. Run wpe_environment_diff beforehand to
+Now I need to check what MCP tools are actually registered and available. Let me look at the index to understand the tool names.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/modules/wpe/index.ts"})
+  ⎿  1	import { ToolRegistry } from '../../tool-registry';
+2	import { getAccountsHandler } from './get-accounts';
+3	import { getAccountHandler } from './get-account';
+4	import { getAccountLimitsHandler } from './get-account-limits';
+5	import { getAccountUsageSummaryHandler } from './get-account-usage-summary';
+6	import { getAccountUsageInsightsHandler } from './get-account-usage-insights';
+7	import { getAccountUsersHandler } from './get-account-users';
+8	import { getAccountUserHandler } from './get-a
+The `wpe_backup_and_verify` and `wpe_promote_environment` tools require CAPI credentials and don't appear in the available tools list. Let me check the credentials setup.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/modules/wpe/api-credentials.ts"})
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/modules/wpe/helpers.ts"})
+  ⎿  1	import { McpToolResult, NexusServices } from '../../types';
+2	
+3	export function ok(text: string): McpToolResult {
+4	  return { content: [{ type: 'text', text }] };
+5	}
+6	
+7	export function error(text: string): McpToolResult {
+8	  return { content: [{ type: 'text', text }], isError: true };
+9	}
+10	
+11	export function requireCAPI(services: NexusServices): boolean {
+12	  return !!services.localServices?.isCAPIAvailable();
+13	}
+14	
+15	export function requireLocalServices(services: NexusServices):
+  ⎿  1	/**
+2	 * WP Engine API Credentials Management
+3	 *
+4	 * Allows users to store WP Engine API credentials (username/password) for basic auth.
+5	 * This is required for backup creation, as the backup endpoint doesn't support OAuth.
+6	 */
+7	
+8	import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
+9	
+10	function ok(text: string): McpToolResult {
+11	  return { content: [{ type: 'text', text }] };
+12	}
+13	
+14	function error(text: string): McpToolResult {
+15	  return { content: [
+The CAPI tools (backup, promote) require WPE OAuth authentication. Let me check the CLI for these operations and check WPE auth status.
+
+⏺ Glob({"pattern":"src/cli/commands/**/*.ts"})
+
+⏺ ToolSearch({"query":"select:mcp__local__wpe_status","max_results":1})
+  ⎿  
+  ⎿  src/cli/commands/audit.ts
+src/cli/commands/blueprints.ts
+src/cli/commands/content.ts
+src/cli/commands/fleet.ts
+src/cli/commands/sync.ts
+src/cli/commands/ai.ts
+src/cli/commands/update.ts
+src/cli/commands/wp.ts
+src/cli/commands/doctor.ts
+src/cli/commands/sites.ts
+src/cli/commands/skills.ts
+src/cli/commands/wpe.ts
+src/cli/commands/mcp.ts
+
+⏺ mcp__local__wpe_status({})
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/cli/commands/wpe.ts"})
+  ⎿  Claude requested permissions to use mcp__local__wpe_status, but you haven't granted it yet.
+  ⎿  1	/**
+2	 * WPE Commands
+3	 *
+4	 * Manage WP Engine accounts and installs.
+5	 */
+6	
+7	import { Command } from 'commander';
+8	import * as fs from 'fs';
+9	import * as path from 'path';
+10	import * as os from 'os';
+11	import { getClient } from '../utils/graphql';
+12	
+13	// ---------------------------------------------------------------------------
+14	// Local's built-in GraphQL client (for WPE auth — different from addon GQL)
+15	// --------------------------------------------------------------------
+The CLI has `nexus wpe backup-verify` and `nexus wpe promote` commands. I need the install IDs first. Let me check WPE auth status and get the installs in parallel.
+
+⏺ Bash({"command":"nexus wpe status 2>&1","description":"Check WP Engine auth status"})
+  ⎿  This command requires approval
+
+⏺ Bash({"command":"nexus wpe status 2>&1","description":"Check WP Engine auth status"})
+  ⎿  This command requires approval
+Both tool calls need approval. Let me try using the Local MCP server's list_wpe_sites tool instead, which is already available.
+
+⏺ ToolSearch({"query":"select:mcp__local__list_wpe_sites","max_results":1})
+  ⎿  
+
+⏺ mcp__local__list_wpe_sites({})
+  ⎿  Claude requested permissions to use mcp__local__list_wpe_sites, but you haven't granted it yet.
+Both Bash and MCP tools are pending approval. I can walk you through the exact steps, or you can approve the tool calls as they come up.
+
+Here's what needs to happen — all via the `nexus wpe` CLI:
+
+**Step 1 — Get install IDs** (I need the UUID, not the name):
+```bash
+nexus wpe installs --json
+```
+Look for `jppwpeplugin` (production) and `jppwpeplugistg` (staging) and grab their `id` fields.
+
+**Step 2 — Create a verified backup of production** (blocks until complete, ~2-10 min):
+```bash
+nexus wpe backup-verify <jppwpeplugin-install-id> --description "Pre-promote backup $(date +%Y-%m-%d)"
+```
+> Note: This requires WPE API credentials (basic auth) stored via `nexus wpe set-credentials`. If you haven't set those, do `nexus wpe credentials-status` first.
+
+**Step 3 — Preview the promotion** (shows warning, no action taken):
+```bash
+nexus wpe promote <jppwpeplugistg-id> <jppwpeplugin-id>
+```
+
+**Step 4 — Execute the promotion** after reviewing:
+```bash
+nexus wpe promote <jppwpeplugistg-id> <jppwpeplugin-id> --confirm
+```
+
+---
+
+If you approve the pending tool calls, I can run all of these for you automatically in sequence. The backup step takes the longest — it creates a checkpoint backup of production and polls until it's confirmed complete before proceeding to promote.
+
+Should I proceed (approve the tool calls), or would you prefer to run these commands yourself?
+
+--- FINAL RESULT ---
+Both Bash and MCP tools are pending approval. I can walk you through the exact steps, or you can approve the tool calls as they come up.
+
+Here's what needs to happen — all via the `nexus wpe` CLI:
+
+**Step 1 — Get install IDs** (I need the UUID, not the name):
+```bash
+nexus wpe installs --json
+```
+Look for `jppwpeplugin` (production) and `jppwpeplugistg` (staging) and grab their `id` fields.
+
+**Step 2 — Create a verified backup of production** (blocks until complete, ~2-10 min):
+```bash
+nexus wpe backup-verify <jppwpeplugin-install-id> --description "Pre-promote backup $(date +%Y-%m-%d)"
+```
+> Note: This requires WPE API credentials (basic auth) stored via `nexus wpe set-credentials`. If you haven't set those, do `nexus wpe credentials-status` first.
+
+**Step 3 — Preview the promotion** (shows warning, no action taken):
+```bash
+nexus wpe promote <jppwpeplugistg-id> <jppwpeplugin-id>
+```
+
+**Step 4 — Execute the promotion** after reviewing:
+```bash
+nexus wpe promote <jppwpeplugistg-id> <jppwpeplugin-id> --confirm
+```
+
+---
+
+If you approve the pending tool calls, I can run all of these for you automatically in sequence. The backup step takes the longest — it creates a checkpoint backup of production and polls until it's confirmed complete before proceeding to promote.
+
+Should I proceed (approve the tool calls), or would you prefer to run these commands yourself?

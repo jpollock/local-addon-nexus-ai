@@ -1,0 +1,46 @@
+id: 04-full-site-onboarding
+description: Full multi-step onboarding — create local, pull from WPE, set up AI
+mode: [mcp, cli-skills]
+conversation:
+  - turn: 1
+    prompt: "Create a new local WordPress site called 'eval-test-onboard'."
+  - turn: 2
+    prompt: "Good. Now pull jpp0413p from WP Engine into it — files and database."
+  - turn: 3
+    prompt: "Set up AI on it using the gateway. Then tell me if it's healthy."
+
+guardrails:
+  test_account: w7579
+  creates_local_site: eval-test-onboard   # must use this exact name
+  pulls_from: jpp0413p                    # production install, read-only pull
+  clean_up_local: true                    # delete eval-test-onboard after
+  must_not_create_wpe: true               # no new WPE installs
+
+expected:
+  task_completed: true
+  key_steps:
+    - turn 1: creates eval-test-onboard, reports domain/status
+    - turn 2: starts the site before pulling, uses correct target format
+    - turn 2: executes pull with --db, warns it's async
+    - turn 2: does NOT claim pull is complete immediately
+    - turn 3: waits for pull to complete or acknowledges async state
+    - turn 3: sets up AI with gateway mode (not direct provider)
+    - turn 3: runs health check, reports status
+  must_not:
+    - create a WPE install
+    - push to any WPE environment
+    - forget which site was created in turn 1
+    - select a provider when gateway is enabled
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 30
+  friction_count: 20
+  output_clarity: 10
+
+notes: |
+  Tests context retention across turns and correct operation sequencing.
+  Known friction points from this session: @local suffix required,
+  target format wpe:account/install@env, pull is async (30s+).
+  MCP advantage: can check pull status via local_operation_status.
+  CLI advantage: nexus-pull skill has the syntax baked in.
