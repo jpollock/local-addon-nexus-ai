@@ -163,27 +163,38 @@ export class StartupSiteScanner {
       logger.info(`${tag} Running WP-CLI enrichment...`);
 
       // Fetch in parallel — each is a separate WP-CLI invocation
-      const [plugins, themes, postData] = await Promise.allSettled([
+      const [plugins, themes, postData, siteUrl, adminEmail, mysqlResult] = await Promise.allSettled([
         localServices.getPlugins(site.id),
         localServices.getThemes(site.id),
         fetchPostCounts(localServices, site.id),
+        localServices.getOption(site.id, 'siteurl'),
+        localServices.getOption(site.id, 'admin_email'),
+        localServices.wpCliRun(site.id, ['eval', 'global $wpdb; echo $wpdb->db_version();']),
       ]);
 
       // Cast to WpPluginMetadata[] — the bridge returns a compatible shape
       const resolvedPlugins = (plugins.status === 'fulfilled' ? plugins.value : existing?.plugins ?? []) as import('../metadata/SiteMetadataCache').WpPluginMetadata[];
       const resolvedThemes  = (themes.status  === 'fulfilled' ? themes.value  : existing?.themes  ?? []) as import('../metadata/SiteMetadataCache').WpThemeMetadata[];
       const resolvedPosts   = postData.status === 'fulfilled' ? postData.value : null;
+      const resolvedSiteUrl = siteUrl.status === 'fulfilled' ? (siteUrl.value ?? undefined) : undefined;
+      const resolvedEmail   = adminEmail.status === 'fulfilled' ? (adminEmail.value ?? undefined) : undefined;
+      const resolvedMysql   = mysqlResult.status === 'fulfilled' && mysqlResult.value.success
+        ? ((mysqlResult.value.stdout ?? '').trim() || undefined)
+        : undefined;
 
       const activeTheme = resolvedThemes.find((t: any) => t.status === 'active')?.name;
 
       metadataCache.set(site.id, {
         ...(existing ?? {}),
-        wpVersion: existing?.wpVersion ?? '',
-        plugins: resolvedPlugins,
-        themes:  resolvedThemes,
+        wpVersion:       existing?.wpVersion ?? '',
+        plugins:         resolvedPlugins,
+        themes:          resolvedThemes,
         activeTheme,
-        postCount:       resolvedPosts?.total ?? existing?.postCount,
-        postCountByType: resolvedPosts?.byType ?? existing?.postCountByType,
+        siteUrl:         resolvedSiteUrl  ?? existing?.siteUrl,
+        adminEmail:      resolvedEmail    ?? existing?.adminEmail,
+        mysqlVersion:    resolvedMysql    ?? existing?.mysqlVersion,
+        postCount:       resolvedPosts?.total    ?? existing?.postCount,
+        postCountByType: resolvedPosts?.byType   ?? existing?.postCountByType,
         lastPostAt:      resolvedPosts?.lastPostAt ?? existing?.lastPostAt,
         installedPlugins: existing?.installedPlugins,
         installedThemes:  existing?.installedThemes,
