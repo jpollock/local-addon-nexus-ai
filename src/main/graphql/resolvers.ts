@@ -1318,12 +1318,14 @@ export function createResolvers(context: ResolverContext) {
             // Recent activity
             if (twin.lastPostAt && now - twin.lastPostAt < MONTH_MS) recentActivityCount++;
 
-            // WP version frequency
+            // WP version — normalize RC/dev suffixes for grouping but keep the base
             const wpV: string = twin.wpVersion ?? 'unknown';
             wpVersionMap.set(wpV, (wpVersionMap.get(wpV) ?? 0) + 1);
 
-            // PHP version frequency
-            const phpV: string = twin.phpVersion ?? 'unknown';
+            // PHP version — normalize to major.minor (8.2.29 → 8.2) for clean grouping
+            const rawPhp: string = twin.phpVersion ?? 'unknown';
+            const phpV = rawPhp === 'unknown' ? 'unknown'
+              : (rawPhp.match(/^(\d+\.\d+)/)?.[1] ?? rawPhp);
             phpVersionMap.set(phpV, (phpVersionMap.get(phpV) ?? 0) + 1);
           }
 
@@ -1492,6 +1494,62 @@ export function createResolvers(context: ResolverContext) {
             sitesWithFullData: 0,
             plugins: [],
           };
+        }
+      },
+
+      /**
+       * List sites on a specific PHP or WP version — for security triage
+       * (e.g. find all sites on PHP 7.4).
+       */
+      nexusFleetVersionSites: (_parent: any, { phpVersion, wpVersion }: { phpVersion?: string; wpVersion?: string }) => {
+        try {
+          if (!services.twinService) {
+            return { success: false, error: 'Twin service not available', sites: [] };
+          }
+
+          const localTwins = services.twinService.getAll() ?? [];
+          const graphService = (services as any).graphService;
+          const wpeTwins: any[] = [];
+
+          try {
+            if (graphService?.getDb?.()) {
+              const rows = graphService.getDb()
+                .prepare("SELECT name, wp_version, php_version FROM sites WHERE source='wpe' AND is_active=1")
+                .all() as any[];
+              for (const row of rows) {
+                wpeTwins.push({ siteName: row.name, wpVersion: row.wp_version, phpVersion: row.php_version, source: 'wpe' });
+              }
+            }
+          } catch { /* optional */ }
+
+          const normalizePhp = (v?: string) => v ? (v.match(/^(\d+\.\d+)/)?.[1] ?? v) : 'unknown';
+          const all = [
+            ...localTwins.map((t: any) => ({ siteName: t.siteName, wpVersion: t.wpVersion, phpVersion: t.phpVersion, source: 'local' })),
+            ...wpeTwins,
+          ];
+
+          const matched = all.filter((s) => {
+            if (phpVersion) {
+              const normalized = normalizePhp(s.phpVersion);
+              const target = normalizePhp(phpVersion);
+              if (normalized !== target) return false;
+            }
+            if (wpVersion && s.wpVersion !== wpVersion) return false;
+            return true;
+          });
+
+          return {
+            success: true,
+            error: null,
+            sites: matched.map((s) => ({
+              name: s.siteName,
+              wpVersion: s.wpVersion ?? null,
+              phpVersion: normalizePhp(s.phpVersion),
+              source: s.source ?? 'local',
+            })),
+          };
+        } catch (err: any) {
+          return { success: false, error: err.message, sites: [] };
         }
       },
 

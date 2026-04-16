@@ -1149,4 +1149,84 @@ fleetCommand
     }
   });
 
+/**
+ * nexus fleet php <version>   — find all sites on a PHP version
+ * nexus fleet wp <version>    — find all sites on a WP version
+ */
+fleetCommand
+  .command('php <version>')
+  .description('List all sites running a specific PHP version (from twin cache)')
+  .option('--json', 'Output as JSON')
+  .action(async (version, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusFleetVersionSites: any }>(`
+        mutation($phpVersion: String) {
+          nexusFleetVersionSites(phpVersion: $phpVersion) {
+            success error
+            sites { name wpVersion phpVersion source }
+          }
+        }
+      `, { phpVersion: version });
+
+      const { success, error, sites } = result.nexusFleetVersionSites;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+
+      if (options.json) { console.log(JSON.stringify(sites, null, 2)); return; }
+
+      if (sites.length === 0) {
+        console.log(`\nNo sites found on PHP ${version}\n`);
+        return;
+      }
+      console.log(`\nSites on PHP ${version} — ${sites.length} found\n`);
+      for (const s of sites) {
+        const wp = s.wpVersion ? ` · WP ${s.wpVersion}` : '';
+        const src = s.source === 'wpe' ? ' [WPE]' : ' [local]';
+        console.log(`  ${s.name}${src}${wp}`);
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+fleetCommand
+  .command('wp <version>')
+  .description('List all sites running a specific WordPress version (from twin cache)')
+  .option('--json', 'Output as JSON')
+  .action(async (version, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusFleetVersionSites: any }>(`
+        mutation($wpVersion: String) {
+          nexusFleetVersionSites(wpVersion: $wpVersion) {
+            success error
+            sites { name wpVersion phpVersion source }
+          }
+        }
+      `, { wpVersion: version });
+
+      const { success, error, sites } = result.nexusFleetVersionSites;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+
+      if (options.json) { console.log(JSON.stringify(sites, null, 2)); return; }
+
+      if (sites.length === 0) {
+        console.log(`\nNo sites found on WordPress ${version}\n`);
+        return;
+      }
+      console.log(`\nSites on WordPress ${version} — ${sites.length} found\n`);
+      for (const s of sites) {
+        const php = s.phpVersion ? ` · PHP ${s.phpVersion}` : '';
+        const src = s.source === 'wpe' ? ' [WPE]' : ' [local]';
+        console.log(`  ${s.name}${src}${php}`);
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 export { fleetCommand };

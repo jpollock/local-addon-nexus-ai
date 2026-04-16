@@ -545,6 +545,19 @@ export const typeDefs = gql`
     plugins: [FleetPluginEntry!]!
   }
 
+  type FleetVersionSite {
+    name: String!
+    wpVersion: String
+    phpVersion: String
+    source: String!
+  }
+
+  type FleetVersionSitesResult {
+    success: Boolean!
+    error: String
+    sites: [FleetVersionSite!]!
+  }
+
   # ============================================================================
   # WP-CLI Types
   # ============================================================================
@@ -754,6 +767,9 @@ export const typeDefs = gql`
 
     "Aggregate plugin presence across the fleet from twin cache"
     nexusFleetPlugins(search: String, minSites: Int): FleetPluginsResult!
+
+    "List sites on a specific PHP or WP version — for security triage"
+    nexusFleetVersionSites(phpVersion: String, wpVersion: String): FleetVersionSitesResult!
 
     "List plugins on a site (local or WPE)"
     nexusWpPluginList(target: String!): NexusWpPluginListResult!
