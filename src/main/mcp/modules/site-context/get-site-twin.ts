@@ -8,6 +8,7 @@
  */
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
+import { freshnessFooter } from '../../../twin/twin-helpers';
 
 export const getSiteTwinHandler: McpToolHandler = {
   definition: {
@@ -62,6 +63,9 @@ export const getSiteTwinHandler: McpToolHandler = {
       lines.push('');
       lines.push(`> 🔶 Some fields (${freshness.requiresRunningFields.slice(0, 3).join(', ')}…) require the site to be running.`);
     }
+
+    const footer = freshnessFooter(twin);
+    if (footer) { lines.push(''); lines.push(footer); }
 
     return ok(lines.join('\n'));
   },
