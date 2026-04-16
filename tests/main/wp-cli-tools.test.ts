@@ -79,12 +79,12 @@ describe('WP-CLI Tools', () => {
   // --- Pre-flight checks ---
 
   describe('pre-flight: site must be running', () => {
-    test('wp_plugin_list rejects halted site', async () => {
+    test('wp_plugin_list rejects halted site with no twin data', async () => {
       localServices.getSiteStatus.mockReturnValue('halted');
       const result = await registry.call('wp_plugin_list', { site: 'Test Site' }, services);
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('halted');
-      expect(result.content[0].text).toContain('local_start_site');
+      expect(result.content[0].text).toContain('nexus sites start');
     });
 
     test('wp_core_version rejects halted site', async () => {

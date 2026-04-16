@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { requireRunning, ok, error } from './preflight';
+import { ok, error } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { cachedDataNote, haltedNoDataError } from './twin-fallback';
 
 export const themeListHandler: McpToolHandler = {
   definition: {
@@ -43,8 +44,21 @@ export const themeListHandler: McpToolHandler = {
       }
     }
 
-    const check = requireRunning(target.site, services);
-    if (check) return check;
+    // Local path — check if running; fall back to twin if halted
+    const siteStatus = services.localServices!.getSiteStatus(target.site.id);
+    if (siteStatus !== 'running') {
+      const twin = services.twinService?.get(target.site.id);
+      if (twin?.themes?.length) {
+        const note = cachedDataNote(twin.asOf ?? Date.now(), target.site.name);
+        const lines = [note, `## Themes (${twin.themes.length})`];
+        for (const t of twin.themes) {
+          const tStatus = t.status === 'active' ? '**active**' : (t.status ?? 'unknown');
+          lines.push(`- ${t.name}${t.version ? ` v${t.version}` : ''} [${tStatus}]`);
+        }
+        return ok(lines.join('\n'));
+      }
+      return error(haltedNoDataError(target.site.name));
+    }
 
     const themes = await services.localServices!.getThemes(target.site.id);
 
@@ -54,8 +68,8 @@ export const themeListHandler: McpToolHandler = {
 
     const lines = [`## Themes (${themes.length})`];
     for (const t of themes) {
-      const status = t.status === 'active' ? '**active**' : t.status;
-      lines.push(`- ${t.name} v${t.version} [${status}]`);
+      const tStatus = t.status === 'active' ? '**active**' : t.status;
+      lines.push(`- ${t.name} v${t.version} [${tStatus}]`);
     }
 
     return ok(lines.join('\n'));
