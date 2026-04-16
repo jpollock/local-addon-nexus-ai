@@ -307,37 +307,40 @@ export function createResolvers(context: ResolverContext) {
             };
           });
 
-          // Build WPE sites list (only if we have installs)
-          const wpe = wpeInstalls.map((install: any) => {
-            // Find local site linked to this install
-            const linkedSite = local.find((s: any) =>
-              s.linkedTo?.installId === install.id
-            );
+          // Build WPE sites list — wrapped defensively so a bad install record
+          // never propagates as a 500.
+          let wpe: any[] = [];
+          try {
+            wpe = wpeInstalls.map((install: any) => {
+              const linkedSite = local.find((s: any) =>
+                s.linkedTo?.installId === install.id
+              );
 
-            // Extract account ID (account can be an object with id property)
-            const accountId = typeof install.account === 'object' && install.account?.id
-              ? install.account.id
-              : (typeof install.account === 'string' ? install.account : 'unknown');
+              const accountId = typeof install.account === 'object' && install.account?.id
+                ? install.account.id
+                : (typeof install.account === 'string' ? install.account : 'unknown');
 
-            // Get account name from map
-            const accountName = wpeAccounts.get(accountId) || null;
-
-            return {
-              account: accountId,
-              accountName,
-              installId: install.id,
-              environment: install.environment || 'unknown',
-              name: install.name,
-              domain: install.primaryDomain || install.cname || `${install.name}.wpengine.com`,
-              wpVersion: install.wpVersion || null,
-              phpVersion: install.phpVersion || null,
-              linkedTo: linkedSite?.name || null,
-            };
-          });
+              return {
+                account:     accountId || 'unknown',
+                accountName: wpeAccounts.get(accountId) || null,
+                installId:   install.id   || install.name || 'unknown', // String! — never null
+                environment: install.environment || 'unknown',
+                name:        install.name || null,
+                domain:      install.primaryDomain || install.cname || (install.name ? `${install.name}.wpengine.com` : 'unknown'),
+                wpVersion:   install.wpVersion  || null,
+                phpVersion:  install.phpVersion || null,
+                linkedTo:    linkedSite?.name   || null,
+              };
+            });
+          } catch (wpeErr: any) {
+            console.warn('[Nexus GraphQL] WPE install processing error:', wpeErr.message);
+          }
 
           return { local, wpe };
         } catch (error: any) {
-          throw new Error(`Failed to list sites: ${error.message}`);
+          // Never throw — return empty lists so callers get [] instead of 500
+          console.error('[Nexus GraphQL] nexusSitesList error:', error.message);
+          return { local: [], wpe: [] };
         }
       },
 
