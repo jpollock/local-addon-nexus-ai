@@ -2,6 +2,7 @@ import {
   indexFreshnessWarning,
   twinFreshnessWarning,
   dataSourceLine,
+  freshnessFooter,
   HOUR_MS,
   DAY_MS,
   WEEK_MS,
@@ -198,5 +199,65 @@ describe('dataSourceLine', () => {
     const result = dataSourceLine('graph', WEEK_MS - 1);
     expect(result).toContain('graph');
     expect(result).toContain('⚠️');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// freshnessFooter
+// ---------------------------------------------------------------------------
+
+describe('freshnessFooter', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(NOW);
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('returns null when asOf is null', () => {
+    const twin = makeTwin(null) as SiteDigitalTwin;
+    expect(freshnessFooter(twin)).toBeNull();
+  });
+
+  it('includes site name in refresh command', () => {
+    const twin = makeTwin(NOW) as SiteDigitalTwin;
+    const result = freshnessFooter(twin);
+    expect(result).toContain('nexus sites refresh My Blog');
+  });
+
+  it('includes age string', () => {
+    const twin = { ...makeTwin(NOW - 2 * HOUR_MS), asOf: NOW - 2 * HOUR_MS } as SiteDigitalTwin;
+    const result = freshnessFooter(twin);
+    expect(result).toContain('2h ago');
+  });
+
+  it('uses WP-CLI scan label for metadata completeness', () => {
+    const twin = { ...makeTwin(NOW), completeness: 'metadata' as const } as SiteDigitalTwin;
+    const result = freshnessFooter(twin);
+    expect(result).toContain('WP-CLI scan');
+  });
+
+  it('uses Filesystem scan label for filesystem completeness', () => {
+    const twin = { ...makeTwin(NOW), completeness: 'filesystem' as const } as SiteDigitalTwin;
+    const result = freshnessFooter(twin);
+    expect(result).toContain('Filesystem scan');
+  });
+
+  it('uses WP-CLI scan + index for indexed completeness', () => {
+    const twin = { ...makeTwin(NOW), completeness: 'indexed' as const } as SiteDigitalTwin;
+    const result = freshnessFooter(twin);
+    expect(result).toContain('WP-CLI scan + index');
+  });
+
+  it('uses CAPI label for wpe source', () => {
+    const twin = { ...makeTwin(NOW), source: 'wpe' as const } as SiteDigitalTwin;
+    const result = freshnessFooter(twin);
+    expect(result).toContain('CAPI');
+  });
+
+  it('wraps result in italic markdown', () => {
+    const twin = makeTwin(NOW) as SiteDigitalTwin;
+    const result = freshnessFooter(twin)!;
+    expect(result.startsWith('_')).toBe(true);
+    expect(result.endsWith('_')).toBe(true);
   });
 });

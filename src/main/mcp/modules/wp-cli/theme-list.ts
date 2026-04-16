@@ -2,6 +2,7 @@ import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
 import { cachedDataNote, haltedNoDataError } from './twin-fallback';
+import { freshnessFooter } from '../../../twin/twin-helpers';
 
 export const themeListHandler: McpToolHandler = {
   definition: {
@@ -55,6 +56,8 @@ export const themeListHandler: McpToolHandler = {
           const tStatus = t.status === 'active' ? '**active**' : (t.status ?? 'unknown');
           lines.push(`- ${t.name}${t.version ? ` v${t.version}` : ''} [${tStatus}]`);
         }
+        const footer = freshnessFooter(twin);
+        if (footer) { lines.push(''); lines.push(footer); }
         return ok(lines.join('\n'));
       }
       return error(haltedNoDataError(target.site.name));
