@@ -42,6 +42,24 @@ export function parseTarget(target: string): ParsedTarget {
     };
   }
 
+  // Incomplete WPE target (starts with wpe: but missing @environment)
+  if (target.startsWith('wpe:')) {
+    throw new Error(
+      `Incomplete WPE target: ${target}\n\n` +
+        `Expected: wpe:account/install@environment\n` +
+        `Environments: production, staging, development`
+    );
+  }
+
+  // Plain name (no @) — resolve at the server level (local first, then WPE graph)
+  if (!target.includes('@')) {
+    return {
+      type: 'local',
+      original: target,
+      siteName: target,
+    };
+  }
+
   // Check if it's a shorthand attempt (mysite@production)
   if (target.includes('@')) {
     const [siteName, env] = target.split('@');
@@ -58,9 +76,9 @@ export function parseTarget(target: string): ParsedTarget {
   throw new Error(
     `Invalid target syntax: ${target}\n\n` +
       `Expected formats:\n` +
+      `  Plain:  mysite\n` +
       `  Local:  mysite@local\n` +
-      `  WPE:    wpe:account/install@environment\n` +
-      `  Linked: mysite@environment (after linking)\n\n` +
+      `  WPE:    wpe:account/install@environment\n\n` +
       `Environments: production, staging, development`
   );
 }

@@ -32,6 +32,7 @@ sitesCommand
               domain
               path
               status
+              siteKind
               wpVersion
               phpVersion
               mysqlVersion
@@ -70,13 +71,18 @@ sitesCommand
       }
 
       // Human-readable output
+      const isWpe = site.siteKind === 'wpe';
       console.log(`\n${site.name}`);
       console.log('─'.repeat(Math.max(site.name.length, 40)));
-      console.log(`Status:       ${site.status === 'running' ? '🟢 Running' : '⚫ Halted'}`);
+      if (isWpe) {
+        console.log(`Type:         🌐 WP Engine Environment`);
+      } else {
+        console.log(`Status:       ${site.status === 'running' ? '🟢 Running' : '⚫ Halted'}`);
+      }
       console.log(`Domain:       ${site.domain || 'N/A'}`);
       if (site.siteUrl)    console.log(`Site URL:     ${site.siteUrl}`);
       if (site.adminEmail) console.log(`Admin email:  ${site.adminEmail}`);
-      console.log(`Path:         ${site.path}`);
+      if (!isWpe) console.log(`Path:         ${site.path}`);
 
       // Versions
       if (site.wpVersion)    console.log(`WordPress:    ${site.wpVersion}`);
@@ -117,8 +123,8 @@ sitesCommand
       if (site.twinCompleteness && site.twinCompleteness !== 'none') {
         const icon = site.twinCompleteness === 'indexed' || site.twinCompleteness === 'metadata' ? '✅' : '🔶';
         console.log(`Twin data:    ${icon} ${site.twinCompleteness} · ${site.twinAge ?? 'unknown age'}`);
-      } else {
-        console.log(`Twin data:    ❌ None — run: nexus sites refresh ${target}`);
+      } else if (!isWpe) {
+        console.log(`Twin data:    ❌ None — run: nexus sites refresh ${site.name}`);
       }
 
       console.log('');

@@ -81,10 +81,12 @@ export const typeDefs = gql`
     name: String!
     "Site domain"
     domain: String
-    "Site path on disk"
+    "Site path on disk (empty for WPE sites)"
     path: String!
-    "Site status (running, halted)"
+    "Site status (running, halted, remote)"
     status: String!
+    "Site kind: local or wpe"
+    siteKind: String!
     "WordPress version"
     wpVersion: String
     "PHP version"
