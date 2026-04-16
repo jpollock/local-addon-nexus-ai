@@ -307,8 +307,8 @@ export function createResolvers(context: ResolverContext) {
             };
           });
 
-          // Build WPE sites list — wrapped defensively so a bad install record
-          // never propagates as a 500.
+          // Build WPE sites list — defensively wrapped + persist to graph for fleet tools.
+          const graphService = (services as any).graphService;
           let wpe: any[] = [];
           try {
             wpe = wpeInstalls.map((install: any) => {
@@ -320,13 +320,38 @@ export function createResolvers(context: ResolverContext) {
                 ? install.account.id
                 : (typeof install.account === 'string' ? install.account : 'unknown');
 
+              const accountName = wpeAccounts.get(accountId) || null;
+              const domain = install.primaryDomain || install.cname || (install.name ? `${install.name}.wpengine.com` : 'unknown');
+
+              // Upsert into graph sites table so fleet summary/plugins/deep-refresh can find it
+              if (graphService && install.id && install.name) {
+                try {
+                  const now = Date.now();
+                  graphService.getDb()?.prepare(`
+                    INSERT INTO sites (id, name, domain, wp_version, php_version, account_id,
+                                       source, remote_install_id, last_sync_at, is_active,
+                                       created_at, updated_at)
+                    VALUES (?,?,?,?,?,?,'wpe',?,?,1,?,?)
+                    ON CONFLICT(id) DO UPDATE SET
+                      name=excluded.name, domain=excluded.domain,
+                      wp_version=excluded.wp_version, php_version=excluded.php_version,
+                      account_id=excluded.account_id, remote_install_id=excluded.remote_install_id,
+                      last_sync_at=excluded.last_sync_at, updated_at=excluded.updated_at
+                  `).run(
+                    `wpe-${install.id}`, install.name, domain,
+                    install.wpVersion || null, install.phpVersion || null, accountId,
+                    install.id, now, now, now
+                  );
+                } catch { /* graph upsert is best-effort */ }
+              }
+
               return {
                 account:     accountId || 'unknown',
-                accountName: wpeAccounts.get(accountId) || null,
-                installId:   install.id   || install.name || 'unknown', // String! — never null
+                accountName,
+                installId:   install.id   || install.name || 'unknown',
                 environment: install.environment || 'unknown',
                 name:        install.name || null,
-                domain:      install.primaryDomain || install.cname || (install.name ? `${install.name}.wpengine.com` : 'unknown'),
+                domain,
                 wpVersion:   install.wpVersion  || null,
                 phpVersion:  install.phpVersion || null,
                 linkedTo:    linkedSite?.name   || null,
@@ -1105,7 +1130,6 @@ export function createResolvers(context: ResolverContext) {
       },
 
       /**
-<<<<<<< HEAD
        * Deep-refresh a WPE site via SSH WP-CLI:
        * fetches plugins, themes, and WP version and persists them to the graph.
        */
