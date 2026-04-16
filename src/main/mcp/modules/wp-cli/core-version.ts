@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { requireRunning, ok, error } from './preflight';
+import { ok, error } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { cachedDataNote, haltedNoDataError } from './twin-fallback';
 
 export const coreVersionHandler: McpToolHandler = {
   definition: {
@@ -28,8 +29,16 @@ export const coreVersionHandler: McpToolHandler = {
       return ok(`WordPress ${result.stdout?.trim() ?? 'unknown'}`);
     }
 
-    const check = requireRunning(target.site, services);
-    if (check) return check;
+    // Local path — check if running; fall back to twin if halted
+    const siteStatus = services.localServices!.getSiteStatus(target.site.id);
+    if (siteStatus !== 'running') {
+      const twin = services.twinService?.get(target.site.id);
+      if (twin?.wpVersion) {
+        const note = cachedDataNote(twin.asOf ?? Date.now(), target.site.name);
+        return ok(`${note}\nWordPress ${twin.wpVersion}`);
+      }
+      return error(haltedNoDataError(target.site.name));
+    }
 
     const version = await services.localServices!.getWpVersion(target.site.id);
     return ok(`WordPress ${version ?? 'unknown'}`);
