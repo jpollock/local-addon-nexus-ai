@@ -181,6 +181,23 @@ case "$cmd" in
     fi
     ;;
 
+  "mcp-on")
+    CLAUDE_BIN="$HOME/.claude/local/claude"
+    echo -e "\n${BOLD}Connecting Nexus MCP...${RESET}"
+    nexus mcp setup --agent claude-code --write
+    echo ""
+    $CLAUDE_BIN mcp list 2>&1 | grep "local-nexus-ai"
+    ;;
+
+  "mcp-off")
+    CLAUDE_BIN="$HOME/.claude/local/claude"
+    echo -e "\n${BOLD}Disconnecting Nexus MCP...${RESET}"
+    $CLAUDE_BIN mcp remove local-nexus-ai 2>&1 && \
+      echo -e "${GREEN}✅ local-nexus-ai disconnected${RESET}" || \
+      echo -e "${YELLOW}⚠  local-nexus-ai was not connected${RESET}"
+    echo ""
+    ;;
+
   "open")
     open "$RESULTS"
     ;;
