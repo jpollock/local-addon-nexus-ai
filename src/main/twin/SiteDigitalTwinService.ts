@@ -16,9 +16,12 @@ import type {
   TwinFreshnessReport,
   FieldFreshness,
   FieldSource,
+  DataMethod,
+  CanAnswerResult,
   TwinPlugin,
   TwinTheme,
 } from './SiteDigitalTwin';
+import { HOUR_MS, DAY_MS } from './twin-helpers';
 import type { SiteMetadataCache } from '../metadata/SiteMetadataCache';
 import type { IndexRegistry } from '../content/IndexRegistry';
 import type { SiteDataAccessor } from '../mcp/types';
@@ -31,7 +34,10 @@ interface TwinServiceDeps {
   graphService?: any;
 }
 
-const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+// Identity fields — always present, no staleness concern
+const IDENTITY_FIELDS = new Set<string>([
+  'siteId', 'siteName', 'domain', 'path', 'source', 'sources', 'completeness', 'asOf',
+]);
 
 export class SiteDigitalTwinService {
   constructor(private deps: TwinServiceDeps) {}
@@ -184,6 +190,78 @@ export class SiteDigitalTwinService {
   }
 
   /**
+   * Assemble a SiteDigitalTwin for a WPE-only graph site (no Local siteData entry).
+   * Used when the site was found in the GraphService `sites` table with source='wpe'.
+   */
+  getFromGraph(graphSite: any, graphService?: any): SiteDigitalTwin {
+    const sources: Partial<Record<string, FieldSource>> = {};
+    const graphTs: number = graphSite.last_sync_at ?? Date.now();
+
+    const twin: SiteDigitalTwin = {
+      siteId:     graphSite.id,
+      siteName:   graphSite.name,
+      domain:     graphSite.domain ?? graphSite.remote_domain ?? '',
+      path:       '',
+      source:     'wpe',
+      sources,
+      completeness: 'none',
+      asOf: null,
+    };
+
+    const src = (method: DataMethod): FieldSource => ({
+      method,
+      timestamp: graphTs,
+      requiresRunning: false,
+    });
+
+    if (graphSite.wp_version) {
+      twin.wpVersion = graphSite.wp_version;
+      sources['wpVersion'] = src('capi');
+    }
+    if (graphSite.php_version) {
+      twin.phpVersion = graphSite.php_version;
+      sources['phpVersion'] = src('capi');
+    }
+    const siteUrl = graphSite.remote_domain ?? graphSite.domain;
+    if (siteUrl) {
+      twin.siteUrl = siteUrl;
+      sources['siteUrl'] = src('capi');
+    }
+    if (graphSite.remote_install_id) {
+      twin.wpeInstallId = graphSite.remote_install_id;
+      sources['wpeInstallId'] = src('capi');
+    }
+    if (graphSite.account_id) {
+      twin.wpeAccountId = graphSite.account_id;
+      sources['wpeAccountId'] = src('capi');
+    }
+
+    // Usage data (sync call — getSiteUsage is not async)
+    const gs = graphService ?? this.deps.graphService;
+    if (gs) {
+      try {
+        const usageRows = gs.getSiteUsage?.(graphSite.id);
+        if (usageRows?.length) {
+          const u = usageRows[0];
+          twin.usage = {
+            period:         u.period,
+            visits:         u.visits ?? undefined,
+            bandwidthBytes: u.bandwidthBytes ?? undefined,
+            storageBytes:   u.storageBytes ?? undefined,
+            recordedAt:     u.recordedAt,
+          };
+          sources['usage'] = src('capi');
+        }
+      } catch { /* optional — fail silently */ }
+    }
+
+    twin.completeness = computeCompleteness(twin);
+    twin.asOf         = computeAsOf(sources);
+
+    return twin;
+  }
+
+  /**
    * Assemble twins for all sites known to Local's siteData.
    */
   getAll(): SiteDigitalTwin[] {
@@ -208,7 +286,7 @@ export class SiteDigitalTwinService {
       }));
 
     const sorted = [...entries].sort((a, b) => b.ageMs - a.ageMs);
-    const stale  = entries.filter((e) => e.ageMs > STALE_THRESHOLD_MS);
+    const stale  = entries.filter((e) => e.ageMs > DAY_MS);
     const requiresRunning = entries
       .filter((e) => e.requiresRunning)
       .map((e) => e.field);
@@ -219,6 +297,68 @@ export class SiteDigitalTwinService {
       staleFields:   stale,
       requiresRunningFields: requiresRunning,
     };
+  }
+
+  /**
+   * Decide whether the twin can answer a question about a specific field.
+   *
+   * Returns:
+   *   can: false   — field has no data; tool should skip or prompt for refresh
+   *   can: true    — data exists; confidence indicates how fresh it is
+   *   reason       — present when can=false or confidence='stale'; what to do
+   *
+   * Usage:
+   *   const { can, confidence, reason } = twinService.canAnswer(twin, 'plugins');
+   *   if (!can) return `Cannot answer: ${reason}`;
+   *   if (confidence === 'stale') lines.push(`> ⚠️ ${reason}`);
+   */
+  canAnswer(twin: SiteDigitalTwin, field: keyof SiteDigitalTwin): CanAnswerResult {
+    if (IDENTITY_FIELDS.has(field as string)) {
+      return { can: true, confidence: 'high' };
+    }
+
+    const src = twin.sources[field as string];
+    const hasValue = twin[field] !== undefined && twin[field] !== null;
+
+    if (!src && !hasValue) {
+      return {
+        can: false,
+        confidence: 'stale',
+        reason: 'No data available — run nexus_site_refresh to populate',
+      };
+    }
+
+    if (!src) {
+      // Value exists but no provenance — treat as current (inferred/structural)
+      return { can: true, confidence: 'high' };
+    }
+
+    if (!hasValue) {
+      // Source entry exists but field came back empty — data was collected, nothing found
+      const hint = src.requiresRunning
+        ? 'start the site and run nexus_site_refresh'
+        : 'run nexus_site_refresh';
+      return { can: false, confidence: 'stale', reason: `Field not populated — ${hint}` };
+    }
+
+    const ageMs = Date.now() - src.timestamp;
+
+    if (ageMs > DAY_MS) {
+      const hint = src.requiresRunning
+        ? 'start the site and run nexus_site_refresh to refresh'
+        : 'run nexus_site_refresh to refresh';
+      return {
+        can: true,
+        confidence: 'stale',
+        reason: `Data from ${formatAge(ageMs)} — ${hint}`,
+      };
+    }
+
+    if (ageMs > HOUR_MS) {
+      return { can: true, confidence: 'medium' };
+    }
+
+    return { can: true, confidence: 'high' };
   }
 
   /**
