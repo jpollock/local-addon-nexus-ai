@@ -772,4 +772,39 @@ fleetCommand
     }
   });
 
+// ============================================================================
+// Digital twin commands
+// ============================================================================
+
+/**
+ * nexus fleet refresh
+ */
+fleetCommand
+  .command('refresh')
+  .description('Refresh the cached data (digital twin) for all local sites')
+  .action(async () => {
+    try {
+      const client = getClient();
+      console.log('\nRefreshing twin for all sites...\n');
+
+      const result = await client.mutate<{ nexusFleetRefresh: any }>(`
+        mutation {
+          nexusFleetRefresh {
+            success
+            error
+            report
+          }
+        }
+      `);
+
+      const { success, error, report } = result.nexusFleetRefresh;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+
+      console.log('\n' + report + '\n');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 export { fleetCommand };

@@ -40,7 +40,31 @@ export interface SiteMetadata {
   siteUrl?: string;               // "http://nexus-test-site.local"
   adminEmail?: string;            // "admin@example.com"
   lastUpdated: number;            // timestamp
-  updateSource: 'lifecycle' | 'manual' | 'setup-ai' | 'upgrade-wp';
+  updateSource: 'lifecycle' | 'manual' | 'setup-ai' | 'upgrade-wp' | 'startup-scan';
+
+  /**
+   * How complete is this snapshot?
+   * - 'filesystem': read from disk only (no WP-CLI) — works for halted sites.
+   *   wpVersion, installedPlugins, installedThemes are populated; active status unknown.
+   * - 'full': enriched via WP-CLI — active plugin/theme status, post counts, etc.
+   * Defaults to 'full' for records written before this field existed.
+   */
+  scanDepth?: 'filesystem' | 'full';
+
+  /** Plugin directory names discovered from wp-content/plugins/ (filesystem scan). */
+  installedPlugins?: string[];
+
+  /** Theme directory names discovered from wp-content/themes/ (filesystem scan). */
+  installedThemes?: string[];
+
+  /** Total published post count (requires WP-CLI — only set on 'full' scans). */
+  postCount?: number;
+
+  /** Published post count broken down by post type (requires WP-CLI). */
+  postCountByType?: Record<string, number>;
+
+  /** Unix timestamp of the most recently published post (requires WP-CLI). */
+  lastPostAt?: number;
 }
 
 export interface SiteMetadataWithAge extends SiteMetadata {
@@ -89,11 +113,22 @@ export class SiteMetadataCache {
 
   /**
    * Set metadata for a site.
+   * scanDepth defaults to 'full' for callers that predate the field.
    */
   set(siteId: string, metadata: Omit<SiteMetadata, 'lastUpdated'>): void {
     const allMetadata = this.getAll();
+    const existing = allMetadata[siteId];
+
+    // Preserve filesystem-sourced fields that WP-CLI callers don't collect.
+    // Without this, a lifecycle or manual refresh would silently drop phpVersion
+    // and other values that were populated by the startup filesystem scan.
     allMetadata[siteId] = {
+      phpVersion:       existing?.phpVersion,
+      mysqlVersion:     existing?.mysqlVersion,
+      installedPlugins: existing?.installedPlugins,
+      installedThemes:  existing?.installedThemes,
       ...metadata,
+      scanDepth: metadata.scanDepth ?? 'full',
       lastUpdated: Date.now(),
     };
     this.storage.set(STORAGE_KEYS.SITE_METADATA, allMetadata);

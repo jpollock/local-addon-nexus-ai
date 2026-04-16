@@ -34,6 +34,16 @@ sitesCommand
               status
               wpVersion
               phpVersion
+              mysqlVersion
+              siteUrl
+              adminEmail
+              activeTheme
+              activePluginCount
+              installedPluginCount
+              postCount
+              lastPostAt
+              twinCompleteness
+              twinAge
               indexed
               indexedAt
               documentCount
@@ -64,16 +74,30 @@ sitesCommand
       console.log('─'.repeat(Math.max(site.name.length, 40)));
       console.log(`Status:       ${site.status === 'running' ? '🟢 Running' : '⚫ Halted'}`);
       console.log(`Domain:       ${site.domain || 'N/A'}`);
+      if (site.siteUrl)    console.log(`Site URL:     ${site.siteUrl}`);
+      if (site.adminEmail) console.log(`Admin email:  ${site.adminEmail}`);
       console.log(`Path:         ${site.path}`);
 
-      if (site.wpVersion) {
-        console.log(`WordPress:    ${site.wpVersion}`);
+      // Versions
+      if (site.wpVersion)    console.log(`WordPress:    ${site.wpVersion}`);
+      if (site.phpVersion)   console.log(`PHP:          ${site.phpVersion}`);
+      if (site.mysqlVersion) console.log(`MySQL:        ${site.mysqlVersion}`);
+
+      // Theme & plugins
+      if (site.activeTheme) console.log(`Theme:        ${site.activeTheme}`);
+      if (site.installedPluginCount != null) {
+        console.log(`Plugins:      ${site.activePluginCount} active / ${site.installedPluginCount} installed`);
       }
 
-      if (site.phpVersion) {
-        console.log(`PHP:          ${site.phpVersion}`);
+      // Content
+      if (site.postCount != null) {
+        const lastPost = site.lastPostAt
+          ? ` · last post ${new Date(site.lastPostAt).toLocaleDateString()}`
+          : '';
+        console.log(`Posts:        ${site.postCount} published${lastPost}`);
       }
 
+      // Index
       if (site.indexed) {
         console.log(`Indexed:      ✅ Yes (${site.documentCount} docs, ${site.chunkCount} chunks)`);
         if (site.indexedAt) {
@@ -84,8 +108,17 @@ sitesCommand
         console.log(`Indexed:      ⚫ No`);
       }
 
+      // WPE link
       if (site.linkedTo) {
         console.log(`WPE Link:     ${site.linkedTo.installId}@${site.linkedTo.environment}`);
+      }
+
+      // Twin data quality
+      if (site.twinCompleteness && site.twinCompleteness !== 'none') {
+        const icon = site.twinCompleteness === 'indexed' || site.twinCompleteness === 'metadata' ? '✅' : '🔶';
+        console.log(`Twin data:    ${icon} ${site.twinCompleteness} · ${site.twinAge ?? 'unknown age'}`);
+      } else {
+        console.log(`Twin data:    ❌ None — run: nexus sites refresh ${target}`);
       }
 
       console.log('');
@@ -841,6 +874,73 @@ sitesCommand
       console.log('');
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
+// Digital twin commands
+// ============================================================================
+
+/**
+ * nexus sites status <site>
+ */
+sitesCommand
+  .command('status <target>')
+  .description('Show what cached data exists for a site and how fresh it is')
+  .option('--json', 'Output as JSON')
+  .action(async (target, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusSiteStatus: any }>(`
+        mutation($target: String!) {
+          nexusSiteStatus(target: $target) {
+            success
+            error
+            report
+          }
+        }
+      `, { target });
+
+      const { success, error, report } = result.nexusSiteStatus;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+
+      if (options.json) { console.log(report); return; }
+      console.log('\n' + report + '\n');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
+ * nexus sites refresh <site>
+ */
+sitesCommand
+  .command('refresh <target>')
+  .description('Refresh the cached data (digital twin) for a site')
+  .option('--force', 'Force WP-CLI enrichment even if a recent scan exists')
+  .action(async (target, options) => {
+    try {
+      const client = getClient();
+      console.log(`\nRefreshing twin for ${target}...`);
+
+      const result = await client.mutate<{ nexusSiteRefresh: any }>(`
+        mutation($target: String!, $force: Boolean) {
+          nexusSiteRefresh(target: $target, force: $force) {
+            success
+            error
+            report
+          }
+        }
+      `, { target, force: options.force ?? false });
+
+      const { success, error, report } = result.nexusSiteRefresh;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+
+      console.log('\n' + report + '\n');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
       process.exit(1);
     }
   });

@@ -115,6 +115,8 @@ export interface LocalSiteRef {
   id: string;
   name: string;
   path: string;
+  /** PHP version string from Local's site config (e.g. "8.2.27"). */
+  phpVersion?: string;
 }
 
 export interface Logger {
@@ -170,37 +172,80 @@ export function registerLifecycleHooks(
       }
     }
 
-    // Digital Twin: Refresh metadata cache (WP version, plugins, themes)
-    // Run in parallel with indexing since both query WordPress
+    // Digital Twin: Refresh metadata cache (WP version, plugins, themes, options, post counts)
+    // All fetches run in parallel since the site is already running.
     const metadataRefreshPromise = (async () => {
       if (metadataCache && localServices) {
         try {
-          const [wpVersion, plugins, themes] = await Promise.all([
+          const [
+            wpVersion, plugins, themes,
+            siteUrl, adminEmail,
+            mysqlVersionResult, postCountResult,
+          ] = await Promise.allSettled([
             localServices.getWpVersion(site.id),
             localServices.getPlugins(site.id),
             localServices.getThemes(site.id),
+            localServices.getOption(site.id, 'siteurl'),
+            localServices.getOption(site.id, 'admin_email'),
+            // MySQL version via wp eval (WordPress already loaded — no flags needed)
+            localServices.wpCliRun(site.id, ['eval', 'global $wpdb; echo $wpdb->db_version();']),
+            // Post counts via wp eval — one round-trip for all post types
+            localServices.wpCliRun(site.id, [
+              'eval',
+              'global $wpdb; $r=$wpdb->get_results("SELECT post_type,COUNT(*) c,MAX(post_date_gmt) ld FROM {$wpdb->posts} WHERE post_status=\'publish\' GROUP BY post_type",ARRAY_A); echo json_encode($r);',
+            ]),
           ]);
 
+          // Parse post count result
+          let postCount: number | undefined;
+          let postCountByType: Record<string, number> | undefined;
+          let lastPostAt: number | undefined;
+          if (postCountResult.status === 'fulfilled' && postCountResult.value.success) {
+            try {
+              const rows = JSON.parse((postCountResult.value.stdout ?? '').trim()) as Array<{ post_type: string; c: string; ld: string }>;
+              postCountByType = {};
+              postCount = 0;
+              let lastDate: string | null = null;
+              for (const row of rows) {
+                const n = parseInt(row.c, 10);
+                postCountByType[row.post_type] = n;
+                postCount += n;
+                if (!lastDate || row.ld > lastDate) lastDate = row.ld;
+              }
+              if (lastDate) lastPostAt = new Date(lastDate + ' UTC').getTime();
+            } catch { /* malformed output — skip */ }
+          }
+
+          const mysqlVersion = mysqlVersionResult.status === 'fulfilled' && mysqlVersionResult.value.success
+            ? (mysqlVersionResult.value.stdout ?? '').trim() || undefined
+            : undefined;
+
           metadataCache.set(site.id, {
-            wpVersion: wpVersion ?? 'unknown',
-            plugins: plugins.map(p => ({
-              name: p.name,
-              title: p.title,
-              version: p.version,
-              status: p.status as 'active' | 'inactive',
-              file: p.file,
-            })),
-            themes: themes.map(t => ({
-              name: t.name,
-              title: t.title,
-              version: t.version,
+            wpVersion: wpVersion.status === 'fulfilled' ? (wpVersion.value ?? 'unknown') : 'unknown',
+            // phpVersion comes from Local's site object — WP-CLI doesn't return it.
+            phpVersion: site.phpVersion || undefined,
+            mysqlVersion,
+            siteUrl: siteUrl.status === 'fulfilled' ? (siteUrl.value ?? undefined) : undefined,
+            adminEmail: adminEmail.status === 'fulfilled' ? (adminEmail.value ?? undefined) : undefined,
+            plugins: plugins.status === 'fulfilled' ? plugins.value.map(p => ({
+              name: p.name, title: p.title, version: p.version,
+              status: p.status as 'active' | 'inactive', file: p.file,
+            })) : [],
+            themes: themes.status === 'fulfilled' ? themes.value.map(t => ({
+              name: t.name, title: t.title, version: t.version,
               status: t.status as 'active' | 'inactive',
-            })),
-            activeTheme: themes.find(t => t.status === 'active')?.name,
+            })) : [],
+            activeTheme: themes.status === 'fulfilled'
+              ? themes.value.find(t => t.status === 'active')?.name
+              : undefined,
+            postCount,
+            postCountByType,
+            lastPostAt,
             updateSource: 'lifecycle',
+            scanDepth: 'full',
           });
 
-          logger.info(`[NexusAI] Refreshed metadata cache for ${site.name} (${wpVersion})`);
+          logger.info(`[NexusAI] Refreshed metadata cache for ${site.name} (WP ${wpVersion.status === 'fulfilled' ? wpVersion.value : '?'}, ${postCount ?? '?'} posts)`);
         } catch (err) {
           logger.error(`[NexusAI] Metadata refresh failed for ${site.name}:`, err);
         }

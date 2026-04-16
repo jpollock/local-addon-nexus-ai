@@ -434,4 +434,82 @@ describe('GraphService', () => {
       expect(site).not.toBeNull();
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // site_usage — bandwidth / visits / storage persistence
+  // ---------------------------------------------------------------------------
+
+  describe('site usage (upsertSiteUsage / getSiteUsage / getLatestUsagePeriods)', () => {
+    const PERIOD = '2026-04';
+    const SITE_ID = 'wpe-test-install';
+
+    it('should insert a usage record', () => {
+      graphService.upsertSiteUsage(SITE_ID, PERIOD, { visits: 4521 });
+      const rows = graphService.getSiteUsage(SITE_ID, PERIOD);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].siteId).toBe(SITE_ID);
+      expect(rows[0].period).toBe(PERIOD);
+      expect(rows[0].source).toBe('wpe-capi');
+      expect(rows[0].recordedAt).toBeGreaterThan(0);
+    });
+
+    it('should upsert — overwrite existing record for same site+period+source', () => {
+      graphService.upsertSiteUsage(SITE_ID, PERIOD, { visits: 100 });
+      graphService.upsertSiteUsage(SITE_ID, PERIOD, { visits: 200 });
+      const rows = graphService.getSiteUsage(SITE_ID, PERIOD);
+      expect(rows).toHaveLength(1);
+    });
+
+    it('should extract known numeric fields from CAPI response', () => {
+      graphService.upsertSiteUsage(SITE_ID, PERIOD, {
+        visits: 4521,
+        bandwidth: 1234567890,
+        storage: 987654321,
+      });
+      const row = graphService.getSiteUsage(SITE_ID, PERIOD)[0];
+      expect(row.visits).toBe(4521);
+      expect(row.bandwidthBytes).toBe(1234567890);
+      expect(row.storageBytes).toBe(987654321);
+    });
+
+    it('should store null for unknown field names', () => {
+      graphService.upsertSiteUsage(SITE_ID, PERIOD, { some_unknown_field: 'hello' });
+      const row = graphService.getSiteUsage(SITE_ID, PERIOD)[0];
+      expect(row.visits).toBeNull();
+      expect(row.bandwidthBytes).toBeNull();
+    });
+
+    it('getSiteUsage returns all periods when no filter', () => {
+      graphService.upsertSiteUsage(SITE_ID, '2026-03', { visits: 100 });
+      graphService.upsertSiteUsage(SITE_ID, '2026-04', { visits: 200 });
+      expect(graphService.getSiteUsage(SITE_ID)).toHaveLength(2);
+    });
+
+    it('getSiteUsage filters to matching period', () => {
+      graphService.upsertSiteUsage(SITE_ID, '2026-03', { visits: 100 });
+      graphService.upsertSiteUsage(SITE_ID, '2026-04', { visits: 200 });
+      const rows = graphService.getSiteUsage(SITE_ID, '2026-03');
+      expect(rows).toHaveLength(1);
+      expect(rows[0].period).toBe('2026-03');
+    });
+
+    it('getSiteUsage returns empty array for unknown site', () => {
+      expect(graphService.getSiteUsage('unknown')).toHaveLength(0);
+    });
+
+    it('getLatestUsagePeriods returns most recent period per site', () => {
+      graphService.upsertSiteUsage('site-a', '2026-03', { visits: 100 });
+      graphService.upsertSiteUsage('site-a', '2026-04', { visits: 200 });
+      graphService.upsertSiteUsage('site-b', '2026-02', { visits: 50 });
+
+      const latest = graphService.getLatestUsagePeriods();
+      expect(latest.size).toBe(2);
+      expect(latest.get('site-a')?.period).toBe('2026-04');
+      expect(latest.get('site-b')?.period).toBe('2026-02');
+    });
+
+    it('getLatestUsagePeriods returns empty map when no data', () => {
+      expect(graphService.getLatestUsagePeriods().size).toBe(0);
+    });
+  });
 });

@@ -130,6 +130,10 @@ export interface NexusServices {
   groupStorage?: any;
   /** Tracks push/pull/export operations by intercepting Local's IPC events */
   operationTracker?: import('../operation-tracker').OperationTracker;
+  /** Digital twin metadata cache — site metadata populated at startup and on site start */
+  metadataCache?: import('../metadata/SiteMetadataCache').SiteMetadataCache;
+  /** Digital twin service — assembles unified site snapshots from all stores */
+  twinService?: import('../twin/SiteDigitalTwinService').SiteDigitalTwinService;
 }
 
 /**
