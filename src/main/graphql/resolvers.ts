@@ -950,6 +950,45 @@ export function createResolvers(context: ResolverContext) {
       },
 
       /**
+       * Digital twin: status report for one site
+       */
+      nexusSiteStatus: async (_parent: any, { target }: { target: string }) => {
+        try {
+          const result = await registry.call('nexus_site_status', { site: target }, services, 'cli');
+          const text = result?.content?.[0]?.text ?? '';
+          return { success: !result?.isError, error: result?.isError ? text : null, report: text };
+        } catch (err: any) {
+          return { success: false, error: err.message, report: null };
+        }
+      },
+
+      /**
+       * Digital twin: refresh one site
+       */
+      nexusSiteRefresh: async (_parent: any, { target, force }: { target: string; force?: boolean }) => {
+        try {
+          const result = await registry.call('nexus_site_refresh', { site: target, force: !!force }, services, 'cli');
+          const text = result?.content?.[0]?.text ?? '';
+          return { success: !result?.isError, error: result?.isError ? text : null, report: text };
+        } catch (err: any) {
+          return { success: false, error: err.message, report: null };
+        }
+      },
+
+      /**
+       * Digital twin: refresh all sites
+       */
+      nexusFleetRefresh: async () => {
+        try {
+          const result = await registry.call('nexus_fleet_refresh', {}, services, 'cli');
+          const text = result?.content?.[0]?.text ?? '';
+          return { success: !result?.isError, error: result?.isError ? text : null, report: text };
+        } catch (err: any) {
+          return { success: false, error: err.message, report: null };
+        }
+      },
+
+      /**
        * Run any WP-CLI command on a site (local or WPE)
        */
       nexusWpCommand: async (_parent: any, { target, command }: { target: string; command: string[] }) => {

@@ -191,6 +191,7 @@ export default function main(context: any): void {
     eventProcessor: eventProcessor as any,
     httpEventInterface: httpEventInterface as any,
     operationTracker,
+    metadataCache,
   };
 
   const registry = new ToolRegistry();

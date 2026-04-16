@@ -461,6 +461,14 @@ export const typeDefs = gql`
     status: String
   }
 
+  "Result of a digital twin status or refresh operation"
+  type NexusTwinReportResult {
+    success: Boolean!
+    error: String
+    "Human-readable report (markdown)"
+    report: String
+  }
+
   # ============================================================================
   # WP-CLI Types
   # ============================================================================
@@ -652,6 +660,15 @@ export const typeDefs = gql`
 
     "Delete a local site"
     nexusSitesDelete(target: String!): NexusSiteOperationResult!
+
+    "Show digital twin status (data completeness and freshness) for a site"
+    nexusSiteStatus(target: String!): NexusTwinReportResult!
+
+    "Refresh the digital twin for a single site (filesystem + optional WP-CLI)"
+    nexusSiteRefresh(target: String!, force: Boolean): NexusTwinReportResult!
+
+    "Refresh the digital twin for all local sites"
+    nexusFleetRefresh: NexusTwinReportResult!
 
     "List plugins on a site (local or WPE)"
     nexusWpPluginList(target: String!): NexusWpPluginListResult!

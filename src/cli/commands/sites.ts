@@ -845,4 +845,71 @@ sitesCommand
     }
   });
 
+// ============================================================================
+// Digital twin commands
+// ============================================================================
+
+/**
+ * nexus sites status <site>
+ */
+sitesCommand
+  .command('status <target>')
+  .description('Show what cached data exists for a site and how fresh it is')
+  .option('--json', 'Output as JSON')
+  .action(async (target, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusSiteStatus: any }>(`
+        mutation($target: String!) {
+          nexusSiteStatus(target: $target) {
+            success
+            error
+            report
+          }
+        }
+      `, { target });
+
+      const { success, error, report } = result.nexusSiteStatus;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+
+      if (options.json) { console.log(report); return; }
+      console.log('\n' + report + '\n');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
+ * nexus sites refresh <site>
+ */
+sitesCommand
+  .command('refresh <target>')
+  .description('Refresh the cached data (digital twin) for a site')
+  .option('--force', 'Force WP-CLI enrichment even if a recent scan exists')
+  .action(async (target, options) => {
+    try {
+      const client = getClient();
+      console.log(`\nRefreshing twin for ${target}...`);
+
+      const result = await client.mutate<{ nexusSiteRefresh: any }>(`
+        mutation($target: String!, $force: Boolean) {
+          nexusSiteRefresh(target: $target, force: $force) {
+            success
+            error
+            report
+          }
+        }
+      `, { target, force: options.force ?? false });
+
+      const { success, error, report } = result.nexusSiteRefresh;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+
+      console.log('\n' + report + '\n');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 export { sitesCommand };
