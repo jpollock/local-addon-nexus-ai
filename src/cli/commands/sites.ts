@@ -921,16 +921,55 @@ sitesCommand
 
 /**
  * nexus sites refresh <site>
+ *
+ * Local sites: filesystem + WP-CLI scan (site must be running for WP-CLI).
+ * WPE sites:   SSH WP-CLI scan (plugins, themes, version, URL, email, posts).
  */
 sitesCommand
   .command('refresh <target>')
   .description('Refresh the cached data (digital twin) for a site')
-  .option('--force', 'Force WP-CLI enrichment even if a recent scan exists')
+  .option('--force', 'Force WP-CLI enrichment even if a recent scan exists (local only)')
   .action(async (target, options) => {
     try {
-      const client = getClient();
-      console.log(`\nRefreshing twin for ${target}...`);
+      const client = getClient({ timeout: 120000 });
 
+      // Resolve whether this is a WPE site by checking the sites list
+      const listResult = await client.mutate<{ nexusSitesList: any }>(`
+        mutation {
+          nexusSitesList {
+            local { name }
+            wpe   { name installId }
+          }
+        }
+      `);
+
+      const localNames: string[] = (listResult.nexusSitesList.local ?? []).map((s: any) => s.name.toLowerCase());
+      const wpeSite = (listResult.nexusSitesList.wpe ?? []).find(
+        (s: any) => s.name?.toLowerCase() === target.toLowerCase() ||
+                    s.installId?.toLowerCase() === target.toLowerCase()
+      );
+
+      const isWpe = !localNames.includes(target.toLowerCase()) && !!wpeSite;
+
+      console.log(`\nRefreshing twin for ${target}${isWpe ? ' (WPE via SSH)' : ''}...`);
+
+      if (isWpe) {
+        const result = await client.mutate<{ nexusWpeSiteDeepRefresh: any }>(`
+          mutation($installName: String!) {
+            nexusWpeSiteDeepRefresh(installName: $installName) {
+              success error pluginCount themeCount wpVersion
+            }
+          }
+        `, { installName: wpeSite.name });
+
+        const r = result.nexusWpeSiteDeepRefresh;
+        if (!r.success) { console.error(`\n❌ ${r.error}`); process.exit(1); }
+        console.log(`\n✅ ${target} refreshed via SSH`);
+        console.log(`   WP ${r.wpVersion ?? '?'} · ${r.pluginCount} plugins · ${r.themeCount} themes\n`);
+        return;
+      }
+
+      // Local site path
       const result = await client.mutate<{ nexusSiteRefresh: any }>(`
         mutation($target: String!, $force: Boolean) {
           nexusSiteRefresh(target: $target, force: $force) {
