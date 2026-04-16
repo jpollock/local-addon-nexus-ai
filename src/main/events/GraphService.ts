@@ -233,6 +233,22 @@ export class GraphService {
       this.logger.info('[GraphService] ✓ wpe_accounts table created');
     }
 
+    // Migration: add SSH-enriched WPE site fields if missing
+    for (const [col, def] of [
+      ['site_url',     'TEXT'],
+      ['admin_email',  'TEXT'],
+      ['active_theme', 'TEXT'],
+      ['post_count',   'INTEGER'],
+    ] as [string, string][]) {
+      const has = this.db
+        .prepare(`SELECT COUNT(*) as c FROM pragma_table_info('sites') WHERE name='${col}'`)
+        .get() as { c: number };
+      if (!has.c) {
+        this.db.exec(`ALTER TABLE sites ADD COLUMN ${col} ${def}`);
+        this.logger.info(`[GraphService] ✓ Added ${col} column to sites`);
+      }
+    }
+
     // Migration: create site_usage table if missing
     const hasSiteUsage = this.db
       .prepare("SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name='site_usage'")

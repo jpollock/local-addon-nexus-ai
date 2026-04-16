@@ -1130,11 +1130,18 @@ export function createResolvers(context: ResolverContext) {
             siteId = row?.id ?? null;
           }
 
-          // Run SSH WP-CLI in parallel
-          const [pluginResult, themeResult, versionResult] = await Promise.all([
+          // Run all SSH WP-CLI calls in parallel
+          const [
+            pluginResult, themeResult, versionResult,
+            siteUrlResult, adminEmailResult, postCountResult, activeThemeResult,
+          ] = await Promise.all([
             services.localServices.remoteWpCliRun(installName, ['plugin', 'list', '--format=json', '--fields=name,title,version,status']),
             services.localServices.remoteWpCliRun(installName, ['theme', 'list', '--format=json', '--fields=name,title,version,status']),
             services.localServices.remoteWpCliRun(installName, ['core', 'version']),
+            services.localServices.remoteWpCliRun(installName, ['option', 'get', 'siteurl']),
+            services.localServices.remoteWpCliRun(installName, ['option', 'get', 'admin_email']),
+            services.localServices.remoteWpCliRun(installName, ['post', 'list', '--post_status=publish', '--format=count']),
+            services.localServices.remoteWpCliRun(installName, ['option', 'get', 'stylesheet']),
           ]);
 
           const errors: string[] = [];
@@ -1178,16 +1185,24 @@ export function createResolvers(context: ResolverContext) {
             errors.push(`theme list failed: ${themeResult.stdout || themeResult.stderr || 'unknown'}`);
           }
 
-          // Update WP version in graph
+          // Collect scalar fields and write them + wp_version in one UPDATE
           if (versionResult.success && versionResult.stdout) {
             wpVersion = versionResult.stdout.trim();
-            if (siteId && graphService?.getDb?.()) {
-              graphService.getDb()
-                .prepare('UPDATE sites SET wp_version=?, last_sync_at=? WHERE id=?')
-                .run(wpVersion, now, siteId);
-            }
           } else if (!versionResult.success) {
             errors.push(`core version failed: ${versionResult.stdout || 'unknown'}`);
+          }
+
+          if (siteId && graphService?.getDb?.()) {
+            const siteUrl    = siteUrlResult.success    ? siteUrlResult.stdout?.trim()    || null : null;
+            const adminEmail = adminEmailResult.success ? adminEmailResult.stdout?.trim() || null : null;
+            const postCount  = postCountResult.success  ? parseInt(postCountResult.stdout?.trim() || '0', 10) || null : null;
+            const activeTheme = activeThemeResult.success ? activeThemeResult.stdout?.trim() || null : null;
+
+            graphService.getDb().prepare(`
+              UPDATE sites
+                 SET wp_version=?, site_url=?, admin_email=?, active_theme=?, post_count=?, last_sync_at=?
+               WHERE id=?
+            `).run(wpVersion, siteUrl, adminEmail, activeTheme, postCount, now, siteId);
           }
 
           return {
