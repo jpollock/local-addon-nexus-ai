@@ -39,6 +39,16 @@ interface ParsedTarget {
   installId?: string;
 }
 
+function formatTwinAge(ageMs: number): string {
+  const s = Math.floor(ageMs / 1000);
+  if (s < 60)   return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60)   return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24)   return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 function parseTarget(target: string): ParsedTarget {
   // mysite@local
   if (target.endsWith('@local')) {
@@ -311,6 +321,12 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
+          // Enrich with twin data if available
+          const twin = services.twinService?.get(site.id) ?? null;
+          const twinAge = twin?.asOf
+            ? formatTwinAge(Date.now() - twin.asOf)
+            : null;
+
           return {
             success: true,
             site: {
@@ -319,10 +335,21 @@ export function createResolvers(context: ResolverContext) {
               domain: site.domain,
               path: site.path,
               status,
-              wpVersion: site.wpVersion || null,
-              phpVersion: site.phpVersion || null,
+              // Twin takes precedence over Local's own site fields
+              wpVersion:            twin?.wpVersion ?? site.wpVersion ?? null,
+              phpVersion:           twin?.phpVersion ?? site.phpVersion ?? null,
+              mysqlVersion:         twin?.mysqlVersion ?? null,
+              siteUrl:              twin?.siteUrl ?? null,
+              adminEmail:           twin?.adminEmail ?? null,
+              activeTheme:          twin?.activeTheme ?? null,
+              activePluginCount:    twin?.plugins?.filter((p: any) => p.status === 'active').length ?? null,
+              installedPluginCount: twin?.plugins?.length ?? twin?.installedPlugins?.length ?? null,
+              postCount:            twin?.postCount ?? null,
+              lastPostAt:           twin?.lastPostAt ? new Date(twin.lastPostAt).toISOString() : null,
+              twinCompleteness:     twin?.completeness ?? 'none',
+              twinAge,
               indexed: !!indexEntry,
-              indexedAt: indexEntry?.lastIndexed || null,
+              indexedAt: indexEntry?.lastIndexed?.toString() || null,
               documentCount: indexEntry?.documentCount || 0,
               chunkCount: indexEntry?.chunkCount || 0,
               linkedTo,

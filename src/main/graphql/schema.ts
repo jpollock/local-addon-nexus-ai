@@ -89,6 +89,26 @@ export const typeDefs = gql`
     wpVersion: String
     "PHP version"
     phpVersion: String
+    "MySQL version"
+    mysqlVersion: String
+    "Site URL"
+    siteUrl: String
+    "Admin email"
+    adminEmail: String
+    "Active theme name"
+    activeTheme: String
+    "Number of active plugins"
+    activePluginCount: Int
+    "Total installed plugins"
+    installedPluginCount: Int
+    "Published post count"
+    postCount: Int
+    "Last published post date (ISO string)"
+    lastPostAt: String
+    "Twin data completeness: none, filesystem, metadata, indexed"
+    twinCompleteness: String
+    "How old the twin data is (human-readable)"
+    twinAge: String
     "Is site indexed"
     indexed: Boolean!
     "Last indexed timestamp"
