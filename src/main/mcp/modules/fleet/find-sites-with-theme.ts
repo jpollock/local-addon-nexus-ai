@@ -1,4 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
+import { fleetFreshnessWarning } from '../../../twin/twin-helpers';
 
 export const findSitesWithThemeHandler: McpToolHandler = {
   definition: {
@@ -78,6 +79,9 @@ export const findSitesWithThemeHandler: McpToolHandler = {
 
     lines.push('');
     lines.push(`Found in ${matches.length} of ${indexed.length} indexed sites.`);
+
+    const warning = fleetFreshnessWarning(indexed);
+    if (warning) lines.push(warning);
 
     return ok(lines.join('\n'));
   },

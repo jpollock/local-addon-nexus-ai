@@ -1,4 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
+import { fleetFreshnessWarning } from '../../../twin/twin-helpers';
 
 function ok(text: string): McpToolResult {
   return { content: [{ type: 'text', text }] };
@@ -58,6 +59,8 @@ export const fleetHealthSummaryHandler: McpToolHandler = {
 
     const avg = Math.round(totalScore / entries.length);
 
+    const freshnessWarn = fleetFreshnessWarning(entries);
+
     const lines = [
       '## Fleet Health Summary',
       '',
@@ -67,6 +70,8 @@ export const fleetHealthSummaryHandler: McpToolHandler = {
       '### Per-Site Scores',
       ...siteLines,
     ];
+
+    if (freshnessWarn) lines.push(freshnessWarn);
 
     return ok(lines.join('\n'));
   },
