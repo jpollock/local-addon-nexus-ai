@@ -69,9 +69,74 @@ function parseTarget(target: string): ParsedTarget {
     };
   }
 
+  // Incomplete WPE target (starts with wpe: but missing @environment)
+  if (target.startsWith('wpe:')) {
+    throw new Error(
+      `Incomplete WPE target: ${target}. Expected wpe:account/install@environment`
+    );
+  }
+
+  // Plain name (no @) — treat as local, resolved later by resolveSite()
+  if (!target.includes('@')) {
+    return {
+      type: 'local',
+      siteName: target,
+    };
+  }
+
   throw new Error(
-    `Invalid target syntax: ${target}. Expected 'mysite@local' or 'wpe:account/install@environment'`
+    `Invalid target syntax: ${target}. Expected 'mysite', 'mysite@local', or 'wpe:account/install@environment'`
   );
+}
+
+/**
+ * Find a WPE site in the graph by name or domain (for plain-name fallback)
+ */
+function resolveWpeGraphSite(query: string, graphService: any): any | null {
+  if (!graphService?.getDb?.()) return null;
+  const db = graphService.getDb();
+  const q = query.toLowerCase();
+
+  // Exact name match first, then domain
+  const rows = db.prepare("SELECT * FROM sites WHERE source='wpe'").all() as any[];
+  const byName = rows.find((r: any) => r.name?.toLowerCase() === q);
+  if (byName) return byName;
+  const byDomain = rows.find((r: any) => r.domain?.toLowerCase() === q || r.remote_domain?.toLowerCase() === q);
+  if (byDomain) return byDomain;
+  // Partial name match last
+  const partial = rows.find((r: any) => r.name?.toLowerCase().includes(q));
+  return partial ?? null;
+}
+
+/**
+ * Build SiteDetails fields for a WPE graph row (no local site object)
+ */
+function buildWpeSiteDetails(graphSite: any, twin: any, twinAge: string | null): any {
+  return {
+    id: graphSite.id,
+    name: graphSite.name,
+    domain: graphSite.domain ?? graphSite.remote_domain ?? null,
+    path: '',
+    status: 'remote',
+    siteKind: 'wpe',
+    wpVersion:            twin?.wpVersion ?? graphSite.wp_version ?? null,
+    phpVersion:           twin?.phpVersion ?? graphSite.php_version ?? null,
+    mysqlVersion:         null,
+    siteUrl:              twin?.siteUrl ?? graphSite.remote_domain ?? graphSite.domain ?? null,
+    adminEmail:           null,
+    activeTheme:          twin?.activeTheme ?? null,
+    activePluginCount:    twin?.plugins?.filter((p: any) => p.status === 'active').length ?? null,
+    installedPluginCount: twin?.plugins?.length ?? null,
+    postCount:            twin?.postCount ?? null,
+    lastPostAt:           null,
+    twinCompleteness:     twin?.completeness ?? 'none',
+    twinAge,
+    indexed: false,
+    indexedAt: null,
+    documentCount: 0,
+    chunkCount: 0,
+    linkedTo: null,
+  };
 }
 
 /**
@@ -281,79 +346,100 @@ export function createResolvers(context: ResolverContext) {
        */
       nexusSitesGet: async (_parent: any, { target }: { target: string }) => {
         try {
+          const parsed = parseTarget(target);
+          const graphService = (services as any).graphService;
+
+          // ── Explicit WPE target: wpe:account/install@environment ──────────
+          if (parsed.type === 'wpe') {
+            const rows = graphService?.getDb?.()
+              ? (graphService.getDb().prepare("SELECT * FROM sites WHERE source='wpe'").all() as any[])
+              : [];
+            const installName = parsed.installName!;
+            const graphSite = rows.find((r: any) =>
+              r.remote_install_id === installName ||
+              r.name?.toLowerCase() === installName.toLowerCase()
+            ) ?? null;
+
+            if (!graphSite) {
+              return { success: false, error: `WPE install not found: ${target}` };
+            }
+
+            const twin = services.twinService?.getFromGraph?.(graphSite, graphService) ?? null;
+            const twinAge = twin?.asOf ? formatTwinAge(Date.now() - twin.asOf) : null;
+            return { success: true, site: buildWpeSiteDetails(graphSite, twin, twinAge) };
+          }
+
+          // ── Local target (plain name or @local) ───────────────────────────
           if (!services.localServices) {
             return { success: false, error: 'Local services not available' };
           }
 
-          const parsed = parseTarget(target);
-          if (parsed.type !== 'local') {
-            return {
-              success: false,
-              error: 'Only local sites are supported. Use target format: mysite@local',
-            };
-          }
-
           const site = resolveSite(parsed.siteName!, services.siteData);
-          if (!site) {
+
+          if (site) {
+            // Found in Local — assemble from local siteData + twin
+            const status = services.localServices.getSiteStatus(site.id);
+            const indexEntry = services.indexRegistry.get(site.id);
+
+            let linkedTo = null;
+            const rawSite = services.localServices?.resolveSiteObject?.(site.id) as any;
+            const wpeConnection = rawSite?.hostConnections
+              ? Object.values(rawSite.hostConnections).find((c: any) => c.hostId === 'wpe' || c.accountId)
+              : null;
+
+            if (wpeConnection) {
+              const remoteSiteId = (wpeConnection as any).remoteSiteId;
+              const remoteSiteEnv = (wpeConnection as any).remoteSiteEnv;
+              linkedTo = {
+                installId: remoteSiteId || 'unknown',
+                environment: remoteSiteEnv?.environment || 'unknown',
+              };
+            }
+
+            const twin = services.twinService?.get(site.id) ?? null;
+            const twinAge = twin?.asOf ? formatTwinAge(Date.now() - twin.asOf) : null;
+
             return {
-              success: false,
-              error: `Site "${parsed.siteName}" not found`,
+              success: true,
+              site: {
+                id: site.id,
+                name: site.name,
+                domain: site.domain,
+                path: site.path,
+                status,
+                siteKind: 'local',
+                wpVersion:            twin?.wpVersion ?? site.wpVersion ?? null,
+                phpVersion:           twin?.phpVersion ?? site.phpVersion ?? null,
+                mysqlVersion:         twin?.mysqlVersion ?? null,
+                siteUrl:              twin?.siteUrl ?? null,
+                adminEmail:           twin?.adminEmail ?? null,
+                activeTheme:          twin?.activeTheme ?? null,
+                activePluginCount:    twin?.plugins?.filter((p: any) => p.status === 'active').length ?? null,
+                installedPluginCount: twin?.plugins?.length ?? twin?.installedPlugins?.length ?? null,
+                postCount:            twin?.postCount ?? null,
+                lastPostAt:           twin?.lastPostAt ? new Date(twin.lastPostAt).toISOString() : null,
+                twinCompleteness:     twin?.completeness ?? 'none',
+                twinAge,
+                indexed: !!indexEntry,
+                indexedAt: indexEntry?.lastIndexed?.toString() || null,
+                documentCount: indexEntry?.documentCount || 0,
+                chunkCount: indexEntry?.chunkCount || 0,
+                linkedTo,
+              },
             };
           }
 
-          const status = services.localServices.getSiteStatus(site.id);
-          const indexEntry = services.indexRegistry.get(site.id);
-
-          // Get link info if available
-          let linkedTo = null;
-          const rawSite = services.localServices?.resolveSiteObject?.(site.id) as any;
-          const wpeConnection = rawSite?.hostConnections
-            ? Object.values(rawSite.hostConnections).find((c: any) => c.hostId === 'wpe' || c.accountId)
-            : null;
-
-          if (wpeConnection) {
-            const remoteSiteId = (wpeConnection as any).remoteSiteId;
-            const remoteSiteEnv = (wpeConnection as any).remoteSiteEnv;
-
-            linkedTo = {
-              installId: remoteSiteId || 'unknown',
-              environment: remoteSiteEnv?.environment || 'unknown',
-            };
+          // ── Local not found — try WPE graph as fallback ───────────────────
+          const graphSite = resolveWpeGraphSite(parsed.siteName!, graphService);
+          if (graphSite) {
+            const twin = services.twinService?.getFromGraph?.(graphSite, graphService) ?? null;
+            const twinAge = twin?.asOf ? formatTwinAge(Date.now() - twin.asOf) : null;
+            return { success: true, site: buildWpeSiteDetails(graphSite, twin, twinAge) };
           }
-
-          // Enrich with twin data if available
-          const twin = services.twinService?.get(site.id) ?? null;
-          const twinAge = twin?.asOf
-            ? formatTwinAge(Date.now() - twin.asOf)
-            : null;
 
           return {
-            success: true,
-            site: {
-              id: site.id,
-              name: site.name,
-              domain: site.domain,
-              path: site.path,
-              status,
-              // Twin takes precedence over Local's own site fields
-              wpVersion:            twin?.wpVersion ?? site.wpVersion ?? null,
-              phpVersion:           twin?.phpVersion ?? site.phpVersion ?? null,
-              mysqlVersion:         twin?.mysqlVersion ?? null,
-              siteUrl:              twin?.siteUrl ?? null,
-              adminEmail:           twin?.adminEmail ?? null,
-              activeTheme:          twin?.activeTheme ?? null,
-              activePluginCount:    twin?.plugins?.filter((p: any) => p.status === 'active').length ?? null,
-              installedPluginCount: twin?.plugins?.length ?? twin?.installedPlugins?.length ?? null,
-              postCount:            twin?.postCount ?? null,
-              lastPostAt:           twin?.lastPostAt ? new Date(twin.lastPostAt).toISOString() : null,
-              twinCompleteness:     twin?.completeness ?? 'none',
-              twinAge,
-              indexed: !!indexEntry,
-              indexedAt: indexEntry?.lastIndexed?.toString() || null,
-              documentCount: indexEntry?.documentCount || 0,
-              chunkCount: indexEntry?.chunkCount || 0,
-              linkedTo,
-            },
+            success: false,
+            error: `Site "${parsed.siteName}" not found. Try 'nexus sites list' to see available sites.`,
           };
         } catch (error: any) {
           return {

@@ -174,3 +174,20 @@ export interface TwinFreshnessReport {
   /** Fields that can't be populated without a running site */
   requiresRunningFields: string[];
 }
+
+// ---------------------------------------------------------------------------
+// canAnswer result
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of SiteDigitalTwinService.canAnswer().
+ *
+ * - can: false means no data at all; the tool should skip this field or ask the user to refresh.
+ * - can: true with confidence 'stale' means data exists but is old; show a caveat.
+ * - reason is present whenever can=false or confidence='stale'.
+ */
+export interface CanAnswerResult {
+  can: boolean;
+  confidence: 'high' | 'medium' | 'stale';
+  reason?: string;
+}

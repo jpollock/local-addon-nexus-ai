@@ -44,7 +44,7 @@ describe('CLI Target Parsing', () => {
     });
 
     it('should throw error if no environment specified', () => {
-      expect(() => parseTarget('wpe:w7579/myinstall')).toThrow('Invalid target syntax');
+      expect(() => parseTarget('wpe:w7579/myinstall')).toThrow();
     });
 
     it('should handle site names with hyphens and underscores', () => {
@@ -59,12 +59,16 @@ describe('CLI Target Parsing', () => {
       expect(result.installId).toBe('my-test-install');
     });
 
-    it('should throw on invalid target format', () => {
-      expect(() => parseTarget('invalid')).toThrow();
+    it('should accept plain name as local target', () => {
+      const result = parseTarget('invalid');
+      expect(result.type).toBe('local');
+      expect(result.siteName).toBe('invalid');
     });
 
-    it('should throw on missing @', () => {
-      expect(() => parseTarget('mysite')).toThrow();
+    it('should accept plain site name without @ suffix', () => {
+      const result = parseTarget('mysite');
+      expect(result.type).toBe('local');
+      expect(result.siteName).toBe('mysite');
     });
 
     it('should throw on invalid WPE format', () => {
