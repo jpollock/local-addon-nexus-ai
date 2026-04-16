@@ -263,9 +263,15 @@ function runClaudeP(
 ): TurnData {
   // allowedTools set after nexusPath is resolved below
 
-  // Resolve the absolute nexus path — Claude's Bash tool uses a non-interactive
-  // shell that doesn't source .zshrc, so fnm PATH injection is absent.
+  // Resolve the absolute nexus path.
+  // IMPORTANT: Do NOT use `which nexus` — Claude's Bash shell may find
+  // ~/node_modules/.bin/nexus (published 0.2.1) before the fnm path (dev 0.2.4),
+  // causing HTTP 500s from schema incompatibility.
+  // Always use the dev repo bin/nexus.js directly when running evals from this project.
+  const devRepoBin = path.resolve(__dirname, '..', '..', '..', 'bin', 'nexus.js');
   const nexusPath = (() => {
+    if (fs.existsSync(devRepoBin)) return `node ${devRepoBin}`;
+    // fallback: try fnm path
     try {
       const r = spawnSync('which', ['nexus'], { encoding: 'utf-8', env: process.env });
       return r.stdout.trim() || 'nexus';
