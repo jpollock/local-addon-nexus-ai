@@ -136,13 +136,10 @@ check_prereqs() {
   fi
   local running=$(nexus sites list --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len([s for s in d.get('local',[]) if s.get('status')=='running']))" 2>/dev/null || echo "?")
   if [ "$running" = "0" ] || [ "$running" = "?" ]; then
-    echo -e "${YELLOW}⚠  No running local sites. Start some first:${RESET}"
-    echo "  nexus sites start jppblank@local"
-    echo "  nexus sites start frostscape@local"
-    echo ""
-    read -p "Continue anyway? (y/N) → " ans
-    ans="${ans%$'\r'}"   # strip carriage return (^M) from terminal input
-    [[ "$ans" =~ ^[Yy]$ ]] || exit 0
+    echo -e "${YELLOW}⚠  No running local sites — evals work better with at least one running.${RESET}"
+    echo -e "   Start some with: nexus sites start jppblank@local"
+    echo -e "   ${BOLD}Continuing in 5 seconds... (Ctrl+C to abort)${RESET}"
+    sleep 5
   else
     echo -e "  ${GREEN}✅ $running local site(s) running${RESET}"
   fi
