@@ -1240,8 +1240,37 @@ export function createResolvers(context: ResolverContext) {
           const DAY_MS = 24 * 60 * 60 * 1000;
           const MONTH_MS = 30 * DAY_MS;
           const now = Date.now();
+          const graphService = (services as any).graphService;
 
-          const twins = services.twinService.getAll() ?? [];
+          // Local site twins
+          const localTwins = services.twinService.getAll() ?? [];
+
+          // WPE-only graph sites (minimal twin shape for aggregation)
+          const wpeTwins: any[] = [];
+          try {
+            if (graphService?.getDb?.()) {
+              const db = graphService.getDb();
+              const wpeRows = db.prepare("SELECT * FROM sites WHERE source='wpe'").all() as any[];
+              for (const row of wpeRows) {
+                const hasPlugins = db.prepare('SELECT COUNT(*) as c FROM plugins WHERE site_id=?').get(row.id) as { c: number };
+                const comp = hasPlugins.c > 0 ? 'metadata' : (row.wp_version ? 'filesystem' : 'none');
+                wpeTwins.push({
+                  siteName: row.name,
+                  wpVersion: row.wp_version ?? undefined,
+                  phpVersion: row.php_version ?? undefined,
+                  completeness: comp,
+                  asOf: row.last_sync_at ?? null,
+                  lastPostAt: row.post_count != null ? now - 1 : null, // post_count present means was scanned; no exact date
+                  plugins: hasPlugins.c > 0
+                    ? db.prepare('SELECT slug as name, name as title, is_active FROM plugins WHERE site_id=?').all(row.id)
+                        .map((p: any) => ({ name: p.name, title: p.title, status: p.is_active ? 'active' : 'inactive' }))
+                    : undefined,
+                });
+              }
+            }
+          } catch { /* WPE graph optional */ }
+
+          const twins = [...localTwins, ...wpeTwins];
 
           const completeness = { none: 0, filesystem: 0, metadata: 0, indexed: 0 };
           let staleCount = 0;
@@ -1332,7 +1361,35 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const twins = services.twinService.getAll() ?? [];
+          const localTwins = services.twinService.getAll() ?? [];
+
+          // Supplement with WPE graph sites (plugins from graph plugins table)
+          const wpePluginTwins: any[] = [];
+          try {
+            const graphService = (services as any).graphService;
+            if (graphService?.getDb?.()) {
+              const db = graphService.getDb();
+              const wpeRows = db.prepare("SELECT id, name FROM sites WHERE source='wpe'").all() as any[];
+              for (const row of wpeRows) {
+                const pluginRows = db.prepare(
+                  'SELECT slug as name, name as title, is_active FROM plugins WHERE site_id=?'
+                ).all(row.id) as any[];
+                if (pluginRows.length) {
+                  wpePluginTwins.push({
+                    siteName: row.name,
+                    completeness: 'metadata',
+                    plugins: pluginRows.map((p: any) => ({
+                      name: p.name, title: p.title,
+                      status: p.is_active ? 'active' : 'inactive',
+                    })),
+                    installedPlugins: undefined,
+                  });
+                }
+              }
+            }
+          } catch { /* optional */ }
+
+          const twins = [...localTwins, ...wpePluginTwins];
 
           const pluginMap = new Map<string, {
             slug: string;
