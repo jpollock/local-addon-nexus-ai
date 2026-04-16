@@ -912,7 +912,7 @@ fleetCommand
         }
       }
 
-      // ── WPE sites — fully parallel ─────────────────────────────────────────
+      // ── WPE sites — bounded concurrency (SSH connections can't all run at once)
       if (doWpe) {
         const wpeSites: Array<{ name: string; installId: string }> = listResult.nexusSitesList.wpe ?? [];
 
@@ -920,9 +920,9 @@ fleetCommand
           console.log('\n  (no WPE sites found — not authenticated or no installs)');
         } else {
           if (doLocal) console.log('');
-          console.log(`WPE sites (${wpeSites.length} in parallel via SSH):`);
+          console.log(`WPE sites (concurrency: ${Math.min(concurrency, wpeSites.length)}):`);
 
-          await Promise.allSettled(wpeSites.map(async (site) => {
+          const processWpe = async (site: { name: string; installId: string }) => {
             const t0 = Date.now();
             try {
               const deepResult = await client.mutate<{ nexusWpeSiteDeepRefresh: any }>(`
@@ -946,10 +946,18 @@ fleetCommand
               }
             } catch (err: any) {
               const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-              console.log(`  ${site.name}  ❌ ${err.message} (${elapsed}s)`);
-              results.push({ name: site.name, outcome: `❌ ${err.message}` });
+              console.log(`  ${site.name}  ❌ ${truncErr(err.message)} (${elapsed}s)`);
+              results.push({ name: site.name, outcome: `❌ ${truncErr(err.message)}` });
             }
-          }));
+          };
+
+          const wpeQueue = [...wpeSites];
+          const wpeWorkers = Array.from({ length: Math.min(concurrency, wpeSites.length) }, async () => {
+            while (wpeQueue.length > 0) {
+              await processWpe(wpeQueue.shift()!);
+            }
+          });
+          await Promise.all(wpeWorkers);
         }
       }
 
