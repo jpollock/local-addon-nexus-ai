@@ -785,6 +785,7 @@ fleetCommand
   .option('--deep', 'Full WP-CLI scan: start/scan/stop halted local sites; SSH WP-CLI for WPE sites')
   .option('--local-only', 'Limit --deep to local sites only')
   .option('--wpe-only', 'Limit --deep to WPE sites only (SSH WP-CLI)')
+  .option('--concurrency <n>', 'Max local sites to start simultaneously in --deep mode (default: 3)', '3')
   .action(async (options) => {
     try {
       const client = getClient({ timeout: 600000 }); // 10 min for deep mode
@@ -812,6 +813,7 @@ fleetCommand
       // Deep mode: full WP-CLI scan for local (start/scan/stop) and/or WPE (SSH)
       const doLocal = !options.wpeOnly;
       const doWpe   = !options.localOnly;
+      const concurrency = Math.max(1, parseInt(options.concurrency ?? '3', 10));
 
       const scope = doLocal && doWpe ? 'local + WPE' : doLocal ? 'local only' : 'WPE only';
       console.log(`\n🔄 Deep refresh (${scope})...\n`);
@@ -827,19 +829,20 @@ fleetCommand
 
       const results: Array<{ name: string; outcome: string }> = [];
 
-      // ── Local sites ────────────────────────────────────────────────────────
+      // ── Local sites — bounded concurrency ─────────────────────────────────
       if (doLocal) {
-        const localSites: Array<{ name: string; status: string }> = listResult.nexusSitesList.local;
+        const localSites: Array<{ name: string; status: string }> = listResult.nexusSitesList.local ?? [];
 
         if (localSites.length === 0) {
           console.log('  (no local sites found)');
         } else {
-          console.log('Local sites:');
-          for (const site of localSites) {
+          console.log(`Local sites (concurrency: ${Math.min(concurrency, localSites.length)}):`);
+
+          const processLocal = async (site: { name: string; status: string }) => {
             const wasHalted = site.status !== 'running';
+            const t0 = Date.now();
 
             if (wasHalted) {
-              process.stdout.write(`  ${site.name}  starting... `);
               const startResult = await client.mutate<{ nexusSitesStart: any }>(`
                 mutation($target: String!) {
                   nexusSitesStart(target: $target) { success error }
@@ -848,82 +851,102 @@ fleetCommand
 
               if (!startResult.nexusSitesStart.success) {
                 const msg = startResult.nexusSitesStart.error ?? 'failed to start';
-                console.log(`❌ ${msg}`);
+                console.log(`  ${site.name}  ❌ start failed: ${msg}`);
                 results.push({ name: site.name, outcome: `❌ start failed: ${msg}` });
-                continue;
+                return;
               }
-              process.stdout.write('started  ');
-            } else {
-              process.stdout.write(`  ${site.name}  already running  `);
             }
 
-            process.stdout.write('scanning... ');
             const refreshResult = await client.mutate<{ nexusSiteRefresh: any }>(`
               mutation($target: String!, $force: Boolean) {
                 nexusSiteRefresh(target: $target, force: $force) { success error }
               }
             `, { target: site.name, force: true });
 
-            if (!refreshResult.nexusSiteRefresh.success) {
-              process.stdout.write(`❌ ${refreshResult.nexusSiteRefresh.error ?? 'scan failed'}  `);
-            } else {
-              process.stdout.write('scanned  ');
-            }
+            const scanOk = refreshResult.nexusSiteRefresh.success;
 
             if (wasHalted) {
-              process.stdout.write('stopping... ');
               const stopResult = await client.mutate<{ nexusSitesStop: any }>(`
                 mutation($target: String!) {
                   nexusSitesStop(target: $target) { success error }
                 }
               `, { target: site.name });
 
-              if (!stopResult.nexusSitesStop.success) {
-                const msg = stopResult.nexusSitesStop.error ?? 'failed to stop';
-                console.log(`⚠️  ${msg}`);
-                results.push({ name: site.name, outcome: `⚠️ scanned but stop failed: ${msg}` });
+              const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+              if (!scanOk) {
+                const msg = refreshResult.nexusSiteRefresh.error ?? 'scan failed';
+                console.log(`  ${site.name}  ⚠️  scanned with errors (${elapsed}s): ${msg}`);
+                results.push({ name: site.name, outcome: `⚠️ scan error: ${msg}` });
+              } else if (!stopResult.nexusSitesStop.success) {
+                const msg = stopResult.nexusSitesStop.error ?? 'stop failed';
+                console.log(`  ${site.name}  ⚠️  scanned but stop failed (${elapsed}s): ${msg}`);
+                results.push({ name: site.name, outcome: `⚠️ scanned, stop failed: ${msg}` });
               } else {
-                console.log('✅');
+                console.log(`  ${site.name}  ✅  (${elapsed}s)`);
                 results.push({ name: site.name, outcome: '✅ full WP-CLI scan' });
               }
             } else {
-              console.log('✅');
-              results.push({ name: site.name, outcome: '✅ full WP-CLI scan (left running)' });
+              const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+              if (!scanOk) {
+                const msg = refreshResult.nexusSiteRefresh.error ?? 'scan failed';
+                console.log(`  ${site.name}  ❌ scan failed (${elapsed}s): ${msg}`);
+                results.push({ name: site.name, outcome: `❌ scan failed: ${msg}` });
+              } else {
+                console.log(`  ${site.name}  ✅  (${elapsed}s, left running)`);
+                results.push({ name: site.name, outcome: '✅ full WP-CLI scan (left running)' });
+              }
             }
-          }
+          };
+
+          // Worker pool: N workers pull from a shared queue
+          const queue = [...localSites];
+          const workers = Array.from({ length: Math.min(concurrency, localSites.length) }, async () => {
+            while (queue.length > 0) {
+              const site = queue.shift()!;
+              await processLocal(site);
+            }
+          });
+          await Promise.all(workers);
         }
       }
 
-      // ── WPE sites (SSH WP-CLI) ─────────────────────────────────────────────
+      // ── WPE sites — fully parallel ─────────────────────────────────────────
       if (doWpe) {
-        const wpeSites: Array<{ name: string; installId: string }> = listResult.nexusSitesList.wpe;
+        const wpeSites: Array<{ name: string; installId: string }> = listResult.nexusSitesList.wpe ?? [];
 
         if (wpeSites.length === 0) {
           console.log('\n  (no WPE sites found — not authenticated or no installs)');
         } else {
           if (doLocal) console.log('');
-          console.log('WPE sites (SSH):');
-          for (const site of wpeSites) {
-            process.stdout.write(`  ${site.name}  scanning via SSH... `);
+          console.log(`WPE sites (${wpeSites.length} in parallel via SSH):`);
 
-            const deepResult = await client.mutate<{ nexusWpeSiteDeepRefresh: any }>(`
-              mutation($installName: String!) {
-                nexusWpeSiteDeepRefresh(installName: $installName) {
-                  success error installName pluginCount themeCount wpVersion
+          await Promise.allSettled(wpeSites.map(async (site) => {
+            const t0 = Date.now();
+            try {
+              const deepResult = await client.mutate<{ nexusWpeSiteDeepRefresh: any }>(`
+                mutation($installName: String!) {
+                  nexusWpeSiteDeepRefresh(installName: $installName) {
+                    success error pluginCount themeCount wpVersion
+                  }
                 }
-              }
-            `, { installName: site.name });
+              `, { installName: site.name });
 
-            const r = deepResult.nexusWpeSiteDeepRefresh;
-            if (!r.success) {
-              console.log(`❌ ${r.error ?? 'failed'}`);
-              results.push({ name: site.name, outcome: `❌ ${r.error ?? 'SSH scan failed'}` });
-            } else {
-              const detail = `${r.pluginCount} plugins, ${r.themeCount} themes, WP ${r.wpVersion ?? '?'}`;
-              console.log(`✅  (${detail})`);
-              results.push({ name: site.name, outcome: `✅ SSH WP-CLI scan (${detail})` });
+              const r = deepResult.nexusWpeSiteDeepRefresh;
+              const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+              if (!r.success) {
+                console.log(`  ${site.name}  ❌ ${r.error ?? 'SSH scan failed'} (${elapsed}s)`);
+                results.push({ name: site.name, outcome: `❌ ${r.error ?? 'SSH scan failed'}` });
+              } else {
+                const detail = `${r.pluginCount} plugins, ${r.themeCount} themes, WP ${r.wpVersion ?? '?'}`;
+                console.log(`  ${site.name}  ✅  ${detail} (${elapsed}s)`);
+                results.push({ name: site.name, outcome: `✅ SSH WP-CLI scan (${detail})` });
+              }
+            } catch (err: any) {
+              const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+              console.log(`  ${site.name}  ❌ ${err.message} (${elapsed}s)`);
+              results.push({ name: site.name, outcome: `❌ ${err.message}` });
             }
-          }
+          }));
         }
       }
 
