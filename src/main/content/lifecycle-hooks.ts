@@ -198,6 +198,7 @@ export function registerLifecycleHooks(
             })),
             activeTheme: themes.find(t => t.status === 'active')?.name,
             updateSource: 'lifecycle',
+            scanDepth: 'full',
           });
 
           logger.info(`[NexusAI] Refreshed metadata cache for ${site.name} (${wpVersion})`);

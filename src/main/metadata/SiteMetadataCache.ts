@@ -117,7 +117,16 @@ export class SiteMetadataCache {
    */
   set(siteId: string, metadata: Omit<SiteMetadata, 'lastUpdated'>): void {
     const allMetadata = this.getAll();
+    const existing = allMetadata[siteId];
+
+    // Preserve filesystem-sourced fields that WP-CLI callers don't collect.
+    // Without this, a lifecycle or manual refresh would silently drop phpVersion
+    // and other values that were populated by the startup filesystem scan.
     allMetadata[siteId] = {
+      phpVersion:       existing?.phpVersion,
+      mysqlVersion:     existing?.mysqlVersion,
+      installedPlugins: existing?.installedPlugins,
+      installedThemes:  existing?.installedThemes,
       ...metadata,
       scanDepth: metadata.scanDepth ?? 'full',
       lastUpdated: Date.now(),
