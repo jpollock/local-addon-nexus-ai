@@ -523,6 +523,11 @@ sitesCommand
   .description('Start a local site')
   .action(async (target) => {
     try {
+      if (!target.endsWith('@local')) {
+        console.error(`\n❌ Target must include @local suffix.`);
+        console.error(`   Use: nexus sites start ${target}@local\n`);
+        process.exit(1);
+      }
       const client = getClient({ timeout: 120000 }); // 2 min for start
 
       console.log(`Starting site: ${target}...`);
@@ -562,6 +567,11 @@ sitesCommand
   .description('Stop a local site')
   .action(async (target) => {
     try {
+      if (!target.endsWith('@local')) {
+        console.error(`\n❌ Target must include @local suffix.`);
+        console.error(`   Use: nexus sites stop ${target}@local\n`);
+        process.exit(1);
+      }
       const client = getClient({ timeout: 120000 }); // 2 min for stop
 
       console.log(`Stopping site: ${target}...`);
@@ -601,6 +611,11 @@ sitesCommand
   .description('Restart a local site')
   .action(async (target) => {
     try {
+      if (!target.endsWith('@local')) {
+        console.error(`\n❌ Target must include @local suffix.`);
+        console.error(`   Use: nexus sites restart ${target}@local\n`);
+        process.exit(1);
+      }
       const client = getClient({ timeout: 120000 }); // 2 min for restart
 
       console.log(`Restarting site: ${target}...`);

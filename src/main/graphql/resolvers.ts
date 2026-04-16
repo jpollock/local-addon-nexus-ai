@@ -1710,14 +1710,16 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const changes = await services.localServices.getSiteChanges(site.id, input.since);
+          // getSiteChanges doesn't exist in the bridge — use getSyncHistory instead
+          // which returns the history of push/pull operations for this site
+          const history = await services.localServices.getSyncHistory?.(site.id) ?? [];
 
           return {
             success: true,
-            changes: changes.map((c: any) => ({
-              type: c.type,
-              path: c.path,
-              status: c.status || null,
+            changes: history.map((c: any) => ({
+              type: c.direction ?? 'unknown',
+              path: c.installName ?? '',
+              status: c.success ? 'completed' : 'failed',
             })),
           };
         } catch (error: any) {
