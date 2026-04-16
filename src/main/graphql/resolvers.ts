@@ -1105,6 +1105,7 @@ export function createResolvers(context: ResolverContext) {
       },
 
       /**
+<<<<<<< HEAD
        * Deep-refresh a WPE site via SSH WP-CLI:
        * fetches plugins, themes, and WP version and persists them to the graph.
        */
@@ -1212,6 +1213,204 @@ export function createResolvers(context: ResolverContext) {
           };
         } catch (error: any) {
           return { success: false, error: error.message, ...empty };
+        }
+      },
+
+      /**
+       * Fleet-wide summary from twin cache — WP/PHP version distribution,
+       * completeness breakdown, recent post activity, stale count.
+       */
+      nexusFleetSummary: () => {
+        try {
+          if (!services.twinService) {
+            return {
+              success: false,
+              error: 'Twin service not available',
+              totalSites: 0,
+              sitesWithFullData: 0,
+              wpVersions: [],
+              phpVersions: [],
+              completeness: { none: 0, filesystem: 0, metadata: 0, indexed: 0 },
+              staleCount: 0,
+              neverScannedCount: 0,
+              recentActivityCount: 0,
+            };
+          }
+
+          const DAY_MS = 24 * 60 * 60 * 1000;
+          const MONTH_MS = 30 * DAY_MS;
+          const now = Date.now();
+
+          const twins = services.twinService.getAll() ?? [];
+
+          const completeness = { none: 0, filesystem: 0, metadata: 0, indexed: 0 };
+          let staleCount = 0;
+          let neverScannedCount = 0;
+          let recentActivityCount = 0;
+
+          const wpVersionMap = new Map<string, number>();
+          const phpVersionMap = new Map<string, number>();
+
+          for (const twin of twins) {
+            // Completeness — twin.completeness is 'none'|'filesystem'|'metadata'|'indexed'
+            const comp = twin.completeness as 'none' | 'filesystem' | 'metadata' | 'indexed';
+            completeness[comp]++;
+
+            // Stale (asOf exists and > 24h old)
+            if (twin.asOf && now - twin.asOf > DAY_MS) staleCount++;
+
+            // Never scanned
+            if (comp === 'none') neverScannedCount++;
+
+            // Recent activity
+            if (twin.lastPostAt && now - twin.lastPostAt < MONTH_MS) recentActivityCount++;
+
+            // WP version frequency
+            const wpV: string = twin.wpVersion ?? 'unknown';
+            wpVersionMap.set(wpV, (wpVersionMap.get(wpV) ?? 0) + 1);
+
+            // PHP version frequency
+            const phpV: string = twin.phpVersion ?? 'unknown';
+            phpVersionMap.set(phpV, (phpVersionMap.get(phpV) ?? 0) + 1);
+          }
+
+          const sitesWithFullData = twins.filter(
+            (t: any) => t.completeness === 'metadata' || t.completeness === 'indexed'
+          ).length;
+
+          // Build sorted version arrays, 'unknown' last
+          const sortVersions = (map: Map<string, number>) => {
+            const entries = Array.from(map.entries()).map(([version, count]) => ({ version, count }));
+            entries.sort((a, b) => {
+              if (a.version === 'unknown') return 1;
+              if (b.version === 'unknown') return -1;
+              return b.count - a.count;
+            });
+            return entries;
+          };
+
+          return {
+            success: true,
+            error: null,
+            totalSites: twins.length,
+            sitesWithFullData,
+            wpVersions: sortVersions(wpVersionMap),
+            phpVersions: sortVersions(phpVersionMap),
+            completeness,
+            staleCount,
+            neverScannedCount,
+            recentActivityCount,
+          };
+        } catch (err: any) {
+          return {
+            success: false,
+            error: err.message,
+            totalSites: 0,
+            sitesWithFullData: 0,
+            wpVersions: [],
+            phpVersions: [],
+            completeness: { none: 0, filesystem: 0, metadata: 0, indexed: 0 },
+            staleCount: 0,
+            neverScannedCount: 0,
+            recentActivityCount: 0,
+          };
+        }
+      },
+
+      /**
+       * Aggregate plugin presence across the fleet from twin cache.
+       */
+      nexusFleetPlugins: (_parent: any, { search, minSites }: { search?: string; minSites?: number }) => {
+        try {
+          if (!services.twinService) {
+            return {
+              success: false,
+              error: 'Twin service not available',
+              totalSites: 0,
+              sitesWithFullData: 0,
+              plugins: [],
+            };
+          }
+
+          const twins = services.twinService.getAll() ?? [];
+
+          const pluginMap = new Map<string, {
+            slug: string;
+            title?: string;
+            activeOnCount: number;
+            installedOnCount: number;
+            sites: string[];
+          }>();
+
+          for (const twin of twins) {
+            // Process plugins with status (from metadata/indexed completeness)
+            if (twin.plugins?.length) {
+              for (const plugin of twin.plugins) {
+                const slug = plugin.name;
+                if (!pluginMap.has(slug)) {
+                  pluginMap.set(slug, { slug, title: plugin.title, activeOnCount: 0, installedOnCount: 0, sites: [] });
+                }
+                const entry = pluginMap.get(slug)!;
+                if (plugin.title && !entry.title) entry.title = plugin.title;
+                entry.installedOnCount++;
+                if (plugin.status === 'active') {
+                  entry.activeOnCount++;
+                  if (!entry.sites.includes(twin.siteName)) entry.sites.push(twin.siteName);
+                }
+              }
+            }
+
+            // Process filesystem-only installed plugins (count as installed, not active)
+            if (twin.installedPlugins?.length) {
+              for (const slug of twin.installedPlugins) {
+                // Only add if not already tracked via plugins[] (avoid double-counting)
+                if (!twin.plugins?.some((p: any) => p.name === slug)) {
+                  if (!pluginMap.has(slug)) {
+                    pluginMap.set(slug, { slug, activeOnCount: 0, installedOnCount: 0, sites: [] });
+                  }
+                  pluginMap.get(slug)!.installedOnCount++;
+                }
+              }
+            }
+          }
+
+          const effectiveMinSites = minSites ?? 1;
+          let plugins = Array.from(pluginMap.values());
+
+          // Apply search filter
+          if (search) {
+            const q = search.toLowerCase();
+            plugins = plugins.filter(p =>
+              p.slug.toLowerCase().includes(q) ||
+              (p.title ?? '').toLowerCase().includes(q)
+            );
+          }
+
+          // Apply minSites filter
+          plugins = plugins.filter(p => p.activeOnCount >= effectiveMinSites);
+
+          // Sort by activeOnCount desc
+          plugins.sort((a, b) => b.activeOnCount - a.activeOnCount);
+
+          const sitesWithFullData = twins.filter(
+            (t: any) => t.completeness === 'metadata' || t.completeness === 'indexed'
+          ).length;
+
+          return {
+            success: true,
+            error: null,
+            totalSites: twins.length,
+            sitesWithFullData,
+            plugins,
+          };
+        } catch (err: any) {
+          return {
+            success: false,
+            error: err.message,
+            totalSites: 0,
+            sitesWithFullData: 0,
+            plugins: [],
+          };
         }
       },
 
