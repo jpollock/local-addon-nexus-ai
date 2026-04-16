@@ -232,6 +232,30 @@ export class GraphService {
       this.db.exec('CREATE TABLE IF NOT EXISTS wpe_accounts (id TEXT PRIMARY KEY, name TEXT NOT NULL, nickname TEXT)');
       this.logger.info('[GraphService] ✓ wpe_accounts table created');
     }
+
+    // Migration: create site_usage table if missing
+    const hasSiteUsage = this.db
+      .prepare("SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name='site_usage'")
+      .get() as { c: number };
+    if (!hasSiteUsage.c) {
+      this.logger.info('[GraphService] Creating site_usage table...');
+      this.db.exec(`
+        CREATE TABLE site_usage (
+          site_id      TEXT    NOT NULL,
+          period       TEXT    NOT NULL,
+          source       TEXT    NOT NULL DEFAULT 'wpe-capi',
+          visits       INTEGER,
+          bandwidth_bytes INTEGER,
+          storage_bytes   INTEGER,
+          raw_json     TEXT,
+          recorded_at  INTEGER NOT NULL,
+          PRIMARY KEY (site_id, period, source)
+        );
+        CREATE INDEX idx_site_usage_site ON site_usage(site_id);
+        CREATE INDEX idx_site_usage_period ON site_usage(period);
+      `);
+      this.logger.info('[GraphService] ✓ site_usage table created');
+    }
   }
 
   /** Expose the underlying database for shared use (e.g., HealthTrendTracker). */
@@ -1159,6 +1183,84 @@ export class GraphService {
     return rows;
   }
 
+  // ---------------------------------------------------------------------------
+  // Site usage (bandwidth / visits / storage)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Upsert a usage record for one site + period combination.
+   * @param siteId   Graph site id (e.g. "wpe-abc123")
+   * @param period   "YYYY-MM" string
+   * @param data     Raw CAPI response object — parsed for known fields,
+   *                 stored verbatim as raw_json for future use
+   */
+  upsertSiteUsage(
+    siteId: string,
+    period: string,
+    data: Record<string, unknown>,
+    source = 'wpe-capi',
+  ): void {
+    if (!this.db) return;
+
+    // Parse known CAPI fields — structure varies; extract what we can
+    const visits         = extractNumber(data, ['visits', 'pageviews', 'visitor_count']);
+    const bandwidthBytes = extractNumber(data, ['bandwidth', 'bandwidth_bytes', 'transfer_bytes']);
+    const storageBytes   = extractNumber(data, ['storage', 'storage_bytes', 'disk_bytes']);
+
+    this.db.prepare(`
+      INSERT INTO site_usage (site_id, period, source, visits, bandwidth_bytes, storage_bytes, raw_json, recorded_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (site_id, period, source) DO UPDATE SET
+        visits          = excluded.visits,
+        bandwidth_bytes = excluded.bandwidth_bytes,
+        storage_bytes   = excluded.storage_bytes,
+        raw_json        = excluded.raw_json,
+        recorded_at     = excluded.recorded_at
+    `).run(siteId, period, source, visits, bandwidthBytes, storageBytes, JSON.stringify(data), Date.now());
+  }
+
+  /**
+   * Get persisted usage for a site, optionally filtered to a specific period.
+   * Returns rows ordered by period descending (newest first).
+   */
+  getSiteUsage(siteId: string, period?: string): Array<{
+    siteId: string; period: string; source: string;
+    visits: number | null; bandwidthBytes: number | null; storageBytes: number | null;
+    recordedAt: number;
+  }> {
+    if (!this.db) return [];
+
+    const rows = period
+      ? this.db.prepare('SELECT * FROM site_usage WHERE site_id = ? AND period = ? ORDER BY period DESC').all(siteId, period)
+      : this.db.prepare('SELECT * FROM site_usage WHERE site_id = ? ORDER BY period DESC').all(siteId);
+
+    return (rows as any[]).map((r) => ({
+      siteId: r.site_id,
+      period: r.period,
+      source: r.source,
+      visits: r.visits,
+      bandwidthBytes: r.bandwidth_bytes,
+      storageBytes: r.storage_bytes,
+      recordedAt: r.recorded_at,
+    }));
+  }
+
+  /**
+   * Get the most recent persisted usage period for each WPE site.
+   * Useful for checking cache freshness before a CAPI call.
+   */
+  getLatestUsagePeriods(): Map<string, { period: string; recordedAt: number }> {
+    if (!this.db) return new Map();
+
+    const rows = this.db.prepare(`
+      SELECT site_id, period, MAX(recorded_at) as recorded_at
+      FROM site_usage
+      GROUP BY site_id
+    `).all() as Array<{ site_id: string; period: string; recorded_at: number }>;
+
+    return new Map(rows.map((r) => [r.site_id, { period: r.period, recordedAt: r.recorded_at }]));
+  }
+
   /**
    * Calculate text relevance score (0-1)
    * Higher score for exact matches, lower for partial
@@ -1178,4 +1280,24 @@ export class GraphService {
 
     return score;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Module-level helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Try a list of key names (including nested dot-paths) against a data object
+ * and return the first numeric value found, or null.
+ */
+function extractNumber(data: Record<string, unknown>, keys: string[]): number | null {
+  for (const key of keys) {
+    let val: unknown = data;
+    for (const part of key.split('.')) {
+      val = (val as any)?.[part];
+    }
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string' && !isNaN(Number(val))) return Number(val);
+  }
+  return null;
 }

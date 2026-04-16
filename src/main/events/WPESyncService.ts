@@ -710,4 +710,76 @@ export class WPESyncService {
       throw error;
     }
   }
+
+  /**
+   * Sync usage data (visits, bandwidth, storage) for all known WPE installs.
+   *
+   * Runs as part of the hourly cron. For each WPE install in the graph:
+   *   1. Checks if we already have a fresh record for the current period
+   *   2. If stale (> 1 hour) or missing: fetches from CAPI and persists to site_usage
+   *   3. Also populates the in-memory usage-cache so MCP tools get the cached version
+   *
+   * Non-fatal: individual install failures are logged and skipped.
+   */
+  async syncUsageData(): Promise<{ synced: number; skipped: number; failed: number }> {
+    if (!this.localServices.isCAPIAvailable()) {
+      this.logger?.info('[WPESyncService:usage] CAPI not available — skipping usage sync');
+      return { synced: 0, skipped: 0, failed: 0 };
+    }
+
+    const db = this.graphService.getDb();
+    if (!db) return { synced: 0, skipped: 0, failed: 0 };
+
+    // Get all WPE installs from the graph
+    const installs = db.prepare(
+      "SELECT id, remote_install_id, name FROM sites WHERE source='wpe' AND is_active=1 AND remote_install_id IS NOT NULL"
+    ).all() as Array<{ id: string; remote_install_id: string; name: string }>;
+
+    if (!installs.length) return { synced: 0, skipped: 0, failed: 0 };
+
+    // Current month period string
+    const now = new Date();
+    const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const firstDate = `${period}-01`;
+    const lastDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+    // Check which installs already have a fresh record (< 1 hour old)
+    const latestPeriods = this.graphService.getLatestUsagePeriods();
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+
+    this.logger?.info(`[WPESyncService:usage] Syncing usage for ${installs.length} installs (period: ${period})`);
+
+    let synced = 0, skipped = 0, failed = 0;
+    const limit = pLimit(3); // max 3 concurrent CAPI calls
+
+    await Promise.all(installs.map((install) => limit(async () => {
+      try {
+        const latest = latestPeriods.get(install.id);
+        if (latest?.period === period && (Date.now() - latest.recordedAt) < ONE_HOUR_MS) {
+          skipped++;
+          return;
+        }
+
+        const data = await this.localServices.capiDirect(
+          `/installs/${install.remote_install_id}/usage?first_date=${firstDate}&last_date=${lastDate}`,
+        ) as Record<string, unknown>;
+
+        this.graphService.upsertSiteUsage(install.id, period, data);
+
+        // Also update the in-memory cache used by MCP tools so they don't re-fetch
+        const { setUsageCached, makeUsageCacheKey } = require('../mcp/modules/wpe/usage-cache');
+        const cacheKey = makeUsageCacheKey('install', install.remote_install_id, firstDate, lastDate);
+        setUsageCached(cacheKey, data, true /* isCurrentMonth */);
+
+        synced++;
+        this.logger?.info(`[WPESyncService:usage] Synced ${install.name} — ${period}`);
+      } catch (err: any) {
+        failed++;
+        this.logger?.warn(`[WPESyncService:usage] Failed for ${install.name}: ${err.message}`);
+      }
+    })));
+
+    this.logger?.info(`[WPESyncService:usage] Done — ${synced} synced, ${skipped} skipped, ${failed} failed`);
+    return { synced, skipped, failed };
+  }
 }

@@ -398,9 +398,13 @@ export default function main(context: any): void {
             localLogger.info('[NexusAI] All WPE sites fresh — skipping SSH sync');
           }
         } catch { /* non-fatal */ }
+        // Tier 3: usage data — persist to SQLite on startup
+        try {
+          await wpeSyncService.syncUsageData();
+        } catch { /* non-fatal */ }
       }, 10000);
 
-      // Scheduled hourly: Tier 1 CAPI (always) + Tier 2 SSH (if stale)
+      // Scheduled hourly: Tier 1 CAPI (always) + Tier 2 SSH (if stale) + usage sync
       setInterval(async () => {
         if (!localServicesBridge.isCAPIAvailable()) return;
         // Tier 1: always — keeps account/PHP/domain data fresh, detects new installs
@@ -413,6 +417,10 @@ export default function main(context: any): void {
           const hours = getWpeSyncIntervalHours();
           const stale = await wpeSyncService.isStale(hours);
           if (stale) await runWpeAutoSyncIncremental('scheduled interval');
+        } catch { /* non-fatal */ }
+        // Tier 3: usage data (bandwidth/visits/storage) — persisted to SQLite
+        try {
+          await wpeSyncService.syncUsageData();
         } catch { /* non-fatal */ }
       }, 60 * 60 * 1000);
 
