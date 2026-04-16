@@ -2,6 +2,7 @@ import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
 import { cachedDataNote, haltedNoDataError } from './twin-fallback';
+import { freshnessFooter } from '../../../twin/twin-helpers';
 
 export const coreVersionHandler: McpToolHandler = {
   definition: {
@@ -35,7 +36,10 @@ export const coreVersionHandler: McpToolHandler = {
       const twin = services.twinService?.get(target.site.id);
       if (twin?.wpVersion) {
         const note = cachedDataNote(twin.asOf ?? Date.now(), target.site.name);
-        return ok(`${note}\nWordPress ${twin.wpVersion}`);
+        const footer = freshnessFooter(twin);
+        const parts = [`${note}\nWordPress ${twin.wpVersion}`];
+        if (footer) parts.push(footer);
+        return ok(parts.join('\n'));
       }
       return error(haltedNoDataError(target.site.name));
     }

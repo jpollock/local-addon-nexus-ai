@@ -122,6 +122,31 @@ export function dataSourceLine(source: string, ageMs: number): string {
 }
 
 /**
+ * Standard one-line freshness footer for any tool that serves data from a twin.
+ * Returns null if the twin has no data (asOf is null).
+ *
+ * Format: _Data: WP-CLI scan · 27m ago · nexus sites refresh mysite to update_
+ */
+export function freshnessFooter(twin: SiteDigitalTwin): string | null {
+  if (twin.asOf === null) return null;
+
+  const ageMs = Date.now() - twin.asOf;
+  const ageStr = formatAge(ageMs);
+  const methodLabel = completenessMethodLabel(twin);
+  const refreshCmd = `nexus sites refresh ${twin.siteName}`;
+
+  return `_Data: ${methodLabel} · ${ageStr} · ${refreshCmd} to update_`;
+}
+
+function completenessMethodLabel(twin: SiteDigitalTwin): string {
+  if (twin.source === 'wpe') return 'CAPI';
+  if (twin.completeness === 'indexed') return 'WP-CLI scan + index';
+  if (twin.completeness === 'metadata') return 'WP-CLI scan';
+  if (twin.completeness === 'filesystem') return 'Filesystem scan';
+  return 'Cached data';
+}
+
+/**
  * Returns a staleness warning for the stalest entry in a collection, or null
  * if all entries are fresh (or the list is empty).
  */

@@ -16,6 +16,7 @@
  */
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
+import { freshnessFooter } from '../../../twin/twin-helpers';
 
 export const getSiteStructureHandler: McpToolHandler = {
   definition: {
@@ -66,21 +67,6 @@ export const getSiteStructureHandler: McpToolHandler = {
     // Header
     lines.push(`## ${site.name}`);
 
-    // Freshness banner
-    if (twin) {
-      const twinFreshness = services.twinService!.getFreshness(twin);
-      const age = twin.asOf
-        ? formatAge(Date.now() - twin.asOf)
-        : 'unknown';
-      const depthLabel = twin.completeness === 'none'       ? '❌ No data'
-                       : twin.completeness === 'filesystem' ? '🔶 Filesystem only'
-                       : twin.completeness === 'metadata'   ? '✅ WP-CLI scan'
-                       : '✅ Fully indexed';
-      const staleWarn = twinFreshness.staleFields.length > 0 ? ' ⚠️ some fields stale' : '';
-      lines.push(`_Twin: ${depthLabel} · updated ${age}${staleWarn}_`);
-    } else if (structure) {
-      lines.push('_Data from content index (no twin data available)_');
-    }
     lines.push('');
 
     // Core versions — twin takes precedence
@@ -249,6 +235,9 @@ export const getSiteStructureHandler: McpToolHandler = {
       lines.push('');
       lines.push('_Run `nexus_site_refresh` to populate site metadata._');
     }
+
+    const footer = twin ? freshnessFooter(twin) : '_Data from content index (no twin data available)_';
+    if (footer) { lines.push(''); lines.push(footer); }
 
     return ok(lines.join('\n'));
   },
