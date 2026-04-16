@@ -781,8 +781,8 @@ fleetCommand
  */
 fleetCommand
   .command('refresh')
-  .description('Refresh the cached data (digital twin) for all local sites')
-  .option('--deep', 'Start halted sites, do a full WP-CLI scan, then stop them again')
+  .description('Refresh cached twin data for all sites (local + WPE if authenticated)')
+  .option('--deep', 'Local only: start each halted local site, run a full WP-CLI scan, then stop it')
   .action(async (options) => {
     try {
       const client = getClient({ timeout: 600000 }); // 10 min for deep mode
@@ -807,8 +807,8 @@ fleetCommand
         return;
       }
 
-      // Deep mode: start halted sites → full WP-CLI scan → stop them
-      console.log('\n🔄 Deep refresh — halted sites will be briefly started for a full scan.\n');
+      // Deep mode: local sites only — start halted → full WP-CLI scan → stop
+      console.log('\n🔄 Deep refresh (local sites only) — halted sites will be briefly started for a full WP-CLI scan.\n');
 
       // Get all local sites
       const listResult = await client.mutate<{ nexusSitesList: any }>(`
