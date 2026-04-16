@@ -1,4 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
+import { indexFreshnessWarning } from '../../../twin/twin-helpers';
 
 function ok(text: string): McpToolResult {
   return { content: [{ type: 'text', text }] };
@@ -60,6 +61,10 @@ export const getSiteHealthHandler: McpToolHandler = {
         lines.push(`- ${rec}`);
       }
     }
+
+    const indexEntry = services.indexRegistry.get?.(siteId) ?? null;
+    const warning = indexEntry ? indexFreshnessWarning(indexEntry) : null;
+    if (warning) lines.push(warning);
 
     return ok(lines.join('\n'));
   },

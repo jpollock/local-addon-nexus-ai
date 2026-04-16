@@ -1,4 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
+import { IndexEntry } from '../../../../common/types';
 
 export const searchAcrossSitesHandler: McpToolHandler = {
   definition: {
@@ -72,9 +73,17 @@ export const searchAcrossSitesHandler: McpToolHandler = {
       };
     }
 
+    const STALE_7D = 7 * 24 * 60 * 60 * 1000;
+    const veryStale = indexedSites.filter(
+      (e: IndexEntry) => e.lastIndexed && Date.now() - e.lastIndexed > STALE_7D,
+    );
+    const fleetWarning = veryStale.length > 0
+      ? `\n\n> ❌ ${veryStale.length} site${veryStale.length !== 1 ? 's have' : ' has'} index data older than 7 days — new content may not appear in results. Run \`reindex_site\` to refresh.`
+      : '';
+
     const header = `Found ${totalResults} results across ${sections.length} sites for "${args.query}":\n`;
     return {
-      content: [{ type: 'text', text: header + '\n' + sections.join('\n\n') }],
+      content: [{ type: 'text', text: header + '\n' + sections.join('\n\n') + fleetWarning }],
     };
   },
 };

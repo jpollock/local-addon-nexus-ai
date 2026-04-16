@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
 import { IndexEntry } from '../../../../common/types';
+import { fleetFreshnessWarning } from '../../../twin/twin-helpers';
 
 interface DriftItem {
   type: 'version_mismatch' | 'missing_plugin' | 'extra_plugin' | 'wp_version' | 'php_version' | 'theme_diff';
@@ -138,6 +139,9 @@ export const detectDriftHandler: McpToolHandler = {
       }
       lines.push('');
     }
+
+    const warning = fleetFreshnessWarning([baselineEntry, ...targets]);
+    if (warning) lines.push(warning);
 
     return ok(lines.join('\n'));
   },

@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
 import { SiteStructure } from '../../../../common/types';
+import { fleetFreshnessWarning } from '../../../twin/twin-helpers';
 
 export const compareSitesHandler: McpToolHandler = {
   definition: {
@@ -150,6 +151,9 @@ export const compareSitesHandler: McpToolHandler = {
       lines.push('### Integration Differences');
       lines.push(...integrations);
     }
+
+    const warning = fleetFreshnessWarning([entryA, entryB]);
+    if (warning) lines.push(warning);
 
     return ok(lines.join('\n'));
   },

@@ -120,3 +120,17 @@ export function dataSourceLine(source: string, ageMs: number): string {
 
   return `(${source}: <1h ago ✅)`;
 }
+
+/**
+ * Returns a staleness warning for the stalest entry in a collection, or null
+ * if all entries are fresh (or the list is empty).
+ */
+export function fleetFreshnessWarning(entries: (IndexEntry | null)[]): string | null {
+  const valid = entries.filter((e): e is IndexEntry => !!e && !!e.lastIndexed);
+  if (valid.length === 0) return null;
+
+  const stalest = valid.reduce((oldest, e) =>
+    e.lastIndexed < oldest.lastIndexed ? e : oldest,
+  );
+  return indexFreshnessWarning(stalest);
+}

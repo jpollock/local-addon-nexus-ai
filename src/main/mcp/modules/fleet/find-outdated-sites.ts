@@ -11,6 +11,7 @@
  */
 import { McpToolHandler, McpToolResult } from '../../types';
 import { groupByVersion, compareVersions } from './version-utils';
+import { fleetFreshnessWarning } from '../../../twin/twin-helpers';
 
 interface SiteRecord {
   id: string;
@@ -117,6 +118,12 @@ export const findOutdatedSitesHandler: McpToolHandler = {
       const pluginData = await loadPlugins(graphService, sourceFilter, sites.map((s) => s.id));
       lines.push(...formatPluginMismatches(pluginData, graphSites));
     }
+
+    const indexEntries = sourceFilter !== 'wpe'
+      ? services.indexRegistry.listAll().filter((e) => e.structure)
+      : [];
+    const warning = fleetFreshnessWarning(indexEntries);
+    if (warning) lines.push(warning);
 
     return ok(lines.join('\n'));
   },

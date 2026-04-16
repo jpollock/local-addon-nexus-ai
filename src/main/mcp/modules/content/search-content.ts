@@ -1,5 +1,6 @@
 import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
 import { resolveSite } from '../../site-resolver';
+import { indexFreshnessWarning } from '../../../twin/twin-helpers';
 
 export const searchContentHandler: McpToolHandler = {
   definition: {
@@ -95,7 +96,9 @@ export const searchContentHandler: McpToolHandler = {
       })
       .join('\n\n');
 
-    return ok(`Found ${results.length} results in "${siteName}":\n\n${formatted}`);
+    const warning = indexEntry ? indexFreshnessWarning(indexEntry) : null;
+    const suffix = warning ? `\n${warning}` : '';
+    return ok(`Found ${results.length} results in "${siteName}":\n\n${formatted}${suffix}`);
   },
 };
 
