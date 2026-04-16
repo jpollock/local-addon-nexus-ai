@@ -8,6 +8,8 @@ import { Command } from 'commander';
 import { getClient } from '../utils/graphql';
 import { parseTarget } from '../utils/target';
 
+const truncErr = (msg: string) => msg.split('\n')[0].slice(0, 120);
+
 const fleetCommand = new Command('fleet').description('Fleet intelligence and analytics');
 
 // ============================================================================
@@ -850,7 +852,7 @@ fleetCommand
               `, { target: site.name });
 
               if (!startResult.nexusSitesStart.success) {
-                const msg = startResult.nexusSitesStart.error ?? 'failed to start';
+                const msg = truncErr(startResult.nexusSitesStart.error ?? 'failed to start');
                 console.log(`  ${site.name}  ❌ start failed: ${msg}`);
                 results.push({ name: site.name, outcome: `❌ start failed: ${msg}` });
                 return;
@@ -874,11 +876,11 @@ fleetCommand
 
               const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
               if (!scanOk) {
-                const msg = refreshResult.nexusSiteRefresh.error ?? 'scan failed';
+                const msg = truncErr(refreshResult.nexusSiteRefresh.error ?? 'scan failed');
                 console.log(`  ${site.name}  ⚠️  scanned with errors (${elapsed}s): ${msg}`);
                 results.push({ name: site.name, outcome: `⚠️ scan error: ${msg}` });
               } else if (!stopResult.nexusSitesStop.success) {
-                const msg = stopResult.nexusSitesStop.error ?? 'stop failed';
+                const msg = truncErr(stopResult.nexusSitesStop.error ?? 'stop failed');
                 console.log(`  ${site.name}  ⚠️  scanned but stop failed (${elapsed}s): ${msg}`);
                 results.push({ name: site.name, outcome: `⚠️ scanned, stop failed: ${msg}` });
               } else {
@@ -888,7 +890,7 @@ fleetCommand
             } else {
               const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
               if (!scanOk) {
-                const msg = refreshResult.nexusSiteRefresh.error ?? 'scan failed';
+                const msg = truncErr(refreshResult.nexusSiteRefresh.error ?? 'scan failed');
                 console.log(`  ${site.name}  ❌ scan failed (${elapsed}s): ${msg}`);
                 results.push({ name: site.name, outcome: `❌ scan failed: ${msg}` });
               } else {
@@ -934,8 +936,9 @@ fleetCommand
               const r = deepResult.nexusWpeSiteDeepRefresh;
               const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
               if (!r.success) {
-                console.log(`  ${site.name}  ❌ ${r.error ?? 'SSH scan failed'} (${elapsed}s)`);
-                results.push({ name: site.name, outcome: `❌ ${r.error ?? 'SSH scan failed'}` });
+                const msg = truncErr(r.error ?? 'SSH scan failed');
+                console.log(`  ${site.name}  ❌ ${msg} (${elapsed}s)`);
+                results.push({ name: site.name, outcome: `❌ ${msg}` });
               } else {
                 const detail = `${r.pluginCount} plugins, ${r.themeCount} themes, WP ${r.wpVersion ?? '?'}`;
                 console.log(`  ${site.name}  ✅  ${detail} (${elapsed}s)`);
