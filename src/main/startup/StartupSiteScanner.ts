@@ -67,6 +67,23 @@ export class StartupSiteScanner {
   constructor(private deps: ScannerDeps) {}
 
   /**
+   * Scan a single site with a filesystem-only scan.
+   * Used by HaltedSiteRefreshScheduler to refresh halted sites on a schedule.
+   * Skips WP-CLI enrichment regardless of site status — caller is responsible
+   * for knowing the site is halted.
+   */
+  async scanSite(siteId: string): Promise<void> {
+    const { getAllSites } = this.deps;
+    const sites = getAllSites();
+    const site = sites.find((s) => s.id === siteId);
+    if (!site) {
+      this.deps.logger.warn(`[StartupSiteScanner] scanSite: site ${siteId} not found`);
+      return;
+    }
+    await this.filesystemScan(site);
+  }
+
+  /**
    * Scan all sites. Safe to call multiple times — idempotent per site.
    * Errors on individual sites are caught and logged; they never abort others.
    */

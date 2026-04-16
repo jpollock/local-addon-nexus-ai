@@ -46,6 +46,7 @@ import { typeDefs } from './graphql/schema';
 import { createResolvers } from './graphql/resolvers';
 import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 import { StartupSiteScanner } from './startup/StartupSiteScanner';
+import { HaltedSiteRefreshScheduler } from './startup/HaltedSiteRefreshScheduler';
 import { SiteDigitalTwinService } from './twin/SiteDigitalTwinService';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -350,31 +351,47 @@ export default function main(context: any): void {
 
       // Startup: scan all Local sites (filesystem + WP-CLI for running ones)
       // Runs at 5s so the readyPromise has settled and services are live.
+      const startupScanner = new StartupSiteScanner({
+        getAllSites: () => {
+          const all = siteData.getSites() as Record<string, any>;
+          return Object.values(all).map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            path: s.path,
+            phpVersion: s.phpVersion,
+          }));
+        },
+        getRunningSiteIds: () => {
+          const statuses = localServicesBridge.getAllSiteStatuses() as Record<string, string>;
+          return Object.entries(statuses)
+            .filter(([, status]) => status === 'running')
+            .map(([id]) => id);
+        },
+        localServices: localServicesBridge,
+        metadataCache,
+        logger: localLogger,
+      });
+
       setTimeout(() => {
-        const scanner = new StartupSiteScanner({
-          getAllSites: () => {
-            const all = siteData.getSites() as Record<string, any>;
-            return Object.values(all).map((s: any) => ({
-              id: s.id,
-              name: s.name,
-              path: s.path,
-              phpVersion: s.phpVersion,
-            }));
-          },
-          getRunningSiteIds: () => {
-            const statuses = localServicesBridge.getAllSiteStatuses() as Record<string, string>;
-            return Object.entries(statuses)
-              .filter(([, status]) => status === 'running')
-              .map(([id]) => id);
-          },
-          localServices: localServicesBridge,
-          metadataCache,
-          logger: localLogger,
-        });
-        scanner.scan().catch((err) => {
+        startupScanner.scan().catch((err) => {
           localLogger.warn('[NexusAI] Startup site scan failed (non-fatal):', (err as Error).message);
         });
       }, 5000);
+
+      // Phase 3.2: Scheduled filesystem refresh for halted sites.
+      // Re-runs the filesystem scan on halted sites whose twin is stale (>24h).
+      // Running sites are handled by the lifecycle hook on site-start — skip them.
+      const haltedRefreshScheduler = new HaltedSiteRefreshScheduler({
+        scanner: startupScanner,
+        metadataCache,
+        siteData: siteDataAccessor,
+        isSiteRunning: (siteId: string) => {
+          const statuses = localServicesBridge.getAllSiteStatuses() as Record<string, string>;
+          return statuses[siteId] === 'running';
+        },
+        logger: localLogger,
+      });
+      haltedRefreshScheduler.start();
 
       // Startup: Tier 1 CAPI-only sync (fast, every startup when authenticated)
       // then Tier 2 SSH sync (slow, only if stale)
