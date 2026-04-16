@@ -46,6 +46,7 @@ import { typeDefs } from './graphql/schema';
 import { createResolvers } from './graphql/resolvers';
 import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 import { StartupSiteScanner } from './startup/StartupSiteScanner';
+import { SiteDigitalTwinService } from './twin/SiteDigitalTwinService';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -192,6 +193,12 @@ export default function main(context: any): void {
     httpEventInterface: httpEventInterface as any,
     operationTracker,
     metadataCache,
+    twinService: new SiteDigitalTwinService({
+      siteData: siteDataAccessor,
+      metadataCache,
+      indexRegistry,
+      graphService,
+    }),
   };
 
   const registry = new ToolRegistry();

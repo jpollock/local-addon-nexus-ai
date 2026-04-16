@@ -85,13 +85,15 @@ describe('MCP Tool Handlers', () => {
     registerSiteContextTools(registry);
   });
 
-  test('registers all 9 content + site-context tools', () => {
+  test('registers all 11 content + site-context tools', () => {
     const names = registry.allToolNames().sort();
     expect(names).toEqual([
       'get_index_status',
       'get_site_structure',
       'list_indexed_sites',
       'nexus_fleet_refresh',
+      'nexus_get_fleet_twins',
+      'nexus_get_site_twin',
       'nexus_site_refresh',
       'nexus_site_status',
       'reindex_site',
