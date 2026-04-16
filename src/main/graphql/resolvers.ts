@@ -307,8 +307,8 @@ export function createResolvers(context: ResolverContext) {
             };
           });
 
-          // Build WPE sites list — wrapped defensively so a bad install record
-          // never propagates as a 500.
+          // Build WPE sites list — defensively wrapped + persist to graph for fleet tools.
+          const graphService = (services as any).graphService;
           let wpe: any[] = [];
           try {
             wpe = wpeInstalls.map((install: any) => {
@@ -320,13 +320,38 @@ export function createResolvers(context: ResolverContext) {
                 ? install.account.id
                 : (typeof install.account === 'string' ? install.account : 'unknown');
 
+              const accountName = wpeAccounts.get(accountId) || null;
+              const domain = install.primaryDomain || install.cname || (install.name ? `${install.name}.wpengine.com` : 'unknown');
+
+              // Upsert into graph sites table so fleet summary/plugins/deep-refresh can find it
+              if (graphService && install.id && install.name) {
+                try {
+                  const now = Date.now();
+                  graphService.getDb()?.prepare(`
+                    INSERT INTO sites (id, name, domain, wp_version, php_version, account_id,
+                                       source, remote_install_id, last_sync_at, is_active,
+                                       created_at, updated_at)
+                    VALUES (?,?,?,?,?,?,'wpe',?,?,1,?,?)
+                    ON CONFLICT(id) DO UPDATE SET
+                      name=excluded.name, domain=excluded.domain,
+                      wp_version=excluded.wp_version, php_version=excluded.php_version,
+                      account_id=excluded.account_id, remote_install_id=excluded.remote_install_id,
+                      last_sync_at=excluded.last_sync_at, updated_at=excluded.updated_at
+                  `).run(
+                    `wpe-${install.id}`, install.name, domain,
+                    install.wpVersion || null, install.phpVersion || null, accountId,
+                    install.id, now, now, now
+                  );
+                } catch { /* graph upsert is best-effort */ }
+              }
+
               return {
                 account:     accountId || 'unknown',
-                accountName: wpeAccounts.get(accountId) || null,
-                installId:   install.id   || install.name || 'unknown', // String! — never null
+                accountName,
+                installId:   install.id   || install.name || 'unknown',
                 environment: install.environment || 'unknown',
                 name:        install.name || null,
-                domain:      install.primaryDomain || install.cname || (install.name ? `${install.name}.wpengine.com` : 'unknown'),
+                domain,
                 wpVersion:   install.wpVersion  || null,
                 phpVersion:  install.phpVersion || null,
                 linkedTo:    linkedSite?.name   || null,
@@ -1212,6 +1237,319 @@ export function createResolvers(context: ResolverContext) {
           };
         } catch (error: any) {
           return { success: false, error: error.message, ...empty };
+        }
+      },
+
+      /**
+       * Fleet-wide summary from twin cache — WP/PHP version distribution,
+       * completeness breakdown, recent post activity, stale count.
+       */
+      nexusFleetSummary: () => {
+        try {
+          if (!services.twinService) {
+            return {
+              success: false,
+              error: 'Twin service not available',
+              totalSites: 0,
+              sitesWithFullData: 0,
+              wpVersions: [],
+              phpVersions: [],
+              completeness: { none: 0, filesystem: 0, metadata: 0, indexed: 0 },
+              staleCount: 0,
+              neverScannedCount: 0,
+              recentActivityCount: 0,
+            };
+          }
+
+          const DAY_MS = 24 * 60 * 60 * 1000;
+          const MONTH_MS = 30 * DAY_MS;
+          const now = Date.now();
+          const graphService = (services as any).graphService;
+
+          // Local site twins
+          const localTwins = services.twinService.getAll() ?? [];
+
+          // WPE-only graph sites (minimal twin shape for aggregation)
+          const wpeTwins: any[] = [];
+          try {
+            if (graphService?.getDb?.()) {
+              const db = graphService.getDb();
+              const wpeRows = db.prepare("SELECT * FROM sites WHERE source='wpe'").all() as any[];
+              for (const row of wpeRows) {
+                const hasPlugins = db.prepare('SELECT COUNT(*) as c FROM plugins WHERE site_id=?').get(row.id) as { c: number };
+                const comp = hasPlugins.c > 0 ? 'metadata' : (row.wp_version ? 'filesystem' : 'none');
+                wpeTwins.push({
+                  siteName: row.name,
+                  wpVersion: row.wp_version ?? undefined,
+                  phpVersion: row.php_version ?? undefined,
+                  completeness: comp,
+                  asOf: row.last_sync_at ?? null,
+                  lastPostAt: row.post_count != null ? now - 1 : null, // post_count present means was scanned; no exact date
+                  plugins: hasPlugins.c > 0
+                    ? db.prepare('SELECT slug as name, name as title, is_active FROM plugins WHERE site_id=?').all(row.id)
+                        .map((p: any) => ({ name: p.name, title: p.title, status: p.is_active ? 'active' : 'inactive' }))
+                    : undefined,
+                });
+              }
+            }
+          } catch { /* WPE graph optional */ }
+
+          const twins = [...localTwins, ...wpeTwins];
+
+          const completeness = { none: 0, filesystem: 0, metadata: 0, indexed: 0 };
+          let staleCount = 0;
+          let neverScannedCount = 0;
+          let recentActivityCount = 0;
+
+          const wpVersionMap = new Map<string, number>();
+          const phpVersionMap = new Map<string, number>();
+
+          for (const twin of twins) {
+            // Completeness — twin.completeness is 'none'|'filesystem'|'metadata'|'indexed'
+            const comp = twin.completeness as 'none' | 'filesystem' | 'metadata' | 'indexed';
+            completeness[comp]++;
+
+            // Stale (asOf exists and > 24h old)
+            if (twin.asOf && now - twin.asOf > DAY_MS) staleCount++;
+
+            // Never scanned
+            if (comp === 'none') neverScannedCount++;
+
+            // Recent activity
+            if (twin.lastPostAt && now - twin.lastPostAt < MONTH_MS) recentActivityCount++;
+
+            // WP version — normalize RC/dev suffixes for grouping but keep the base
+            const wpV: string = twin.wpVersion ?? 'unknown';
+            wpVersionMap.set(wpV, (wpVersionMap.get(wpV) ?? 0) + 1);
+
+            // PHP version — normalize to major.minor (8.2.29 → 8.2) for clean grouping
+            const rawPhp: string = twin.phpVersion ?? 'unknown';
+            const phpV = rawPhp === 'unknown' ? 'unknown'
+              : (rawPhp.match(/^(\d+\.\d+)/)?.[1] ?? rawPhp);
+            phpVersionMap.set(phpV, (phpVersionMap.get(phpV) ?? 0) + 1);
+          }
+
+          const sitesWithFullData = twins.filter(
+            (t: any) => t.completeness === 'metadata' || t.completeness === 'indexed'
+          ).length;
+
+          // Build sorted version arrays, 'unknown' last
+          const sortVersions = (map: Map<string, number>) => {
+            const entries = Array.from(map.entries()).map(([version, count]) => ({ version, count }));
+            entries.sort((a, b) => {
+              if (a.version === 'unknown') return 1;
+              if (b.version === 'unknown') return -1;
+              return b.count - a.count;
+            });
+            return entries;
+          };
+
+          return {
+            success: true,
+            error: null,
+            totalSites: twins.length,
+            sitesWithFullData,
+            wpVersions: sortVersions(wpVersionMap),
+            phpVersions: sortVersions(phpVersionMap),
+            completeness,
+            staleCount,
+            neverScannedCount,
+            recentActivityCount,
+          };
+        } catch (err: any) {
+          return {
+            success: false,
+            error: err.message,
+            totalSites: 0,
+            sitesWithFullData: 0,
+            wpVersions: [],
+            phpVersions: [],
+            completeness: { none: 0, filesystem: 0, metadata: 0, indexed: 0 },
+            staleCount: 0,
+            neverScannedCount: 0,
+            recentActivityCount: 0,
+          };
+        }
+      },
+
+      /**
+       * Aggregate plugin presence across the fleet from twin cache.
+       */
+      nexusFleetPlugins: (_parent: any, { search, minSites }: { search?: string; minSites?: number }) => {
+        try {
+          if (!services.twinService) {
+            return {
+              success: false,
+              error: 'Twin service not available',
+              totalSites: 0,
+              sitesWithFullData: 0,
+              plugins: [],
+            };
+          }
+
+          const localTwins = services.twinService.getAll() ?? [];
+
+          // Supplement with WPE graph sites (plugins from graph plugins table)
+          const wpePluginTwins: any[] = [];
+          try {
+            const graphService = (services as any).graphService;
+            if (graphService?.getDb?.()) {
+              const db = graphService.getDb();
+              const wpeRows = db.prepare("SELECT id, name FROM sites WHERE source='wpe'").all() as any[];
+              for (const row of wpeRows) {
+                const pluginRows = db.prepare(
+                  'SELECT slug as name, name as title, is_active FROM plugins WHERE site_id=?'
+                ).all(row.id) as any[];
+                if (pluginRows.length) {
+                  wpePluginTwins.push({
+                    siteName: row.name,
+                    completeness: 'metadata',
+                    plugins: pluginRows.map((p: any) => ({
+                      name: p.name, title: p.title,
+                      status: p.is_active ? 'active' : 'inactive',
+                    })),
+                    installedPlugins: undefined,
+                  });
+                }
+              }
+            }
+          } catch { /* optional */ }
+
+          const twins = [...localTwins, ...wpePluginTwins];
+
+          const pluginMap = new Map<string, {
+            slug: string;
+            title?: string;
+            activeOnCount: number;
+            installedOnCount: number;
+            sites: string[];
+          }>();
+
+          for (const twin of twins) {
+            // Process plugins with status (from metadata/indexed completeness)
+            if (twin.plugins?.length) {
+              for (const plugin of twin.plugins) {
+                const slug = plugin.name;
+                if (!pluginMap.has(slug)) {
+                  pluginMap.set(slug, { slug, title: plugin.title, activeOnCount: 0, installedOnCount: 0, sites: [] });
+                }
+                const entry = pluginMap.get(slug)!;
+                if (plugin.title && !entry.title) entry.title = plugin.title;
+                entry.installedOnCount++;
+                if (plugin.status === 'active') {
+                  entry.activeOnCount++;
+                  if (!entry.sites.includes(twin.siteName)) entry.sites.push(twin.siteName);
+                }
+              }
+            }
+
+            // Process filesystem-only installed plugins (count as installed, not active)
+            if (twin.installedPlugins?.length) {
+              for (const slug of twin.installedPlugins) {
+                // Only add if not already tracked via plugins[] (avoid double-counting)
+                if (!twin.plugins?.some((p: any) => p.name === slug)) {
+                  if (!pluginMap.has(slug)) {
+                    pluginMap.set(slug, { slug, activeOnCount: 0, installedOnCount: 0, sites: [] });
+                  }
+                  pluginMap.get(slug)!.installedOnCount++;
+                }
+              }
+            }
+          }
+
+          const effectiveMinSites = minSites ?? 1;
+          let plugins = Array.from(pluginMap.values());
+
+          // Apply search filter
+          if (search) {
+            const q = search.toLowerCase();
+            plugins = plugins.filter(p =>
+              p.slug.toLowerCase().includes(q) ||
+              (p.title ?? '').toLowerCase().includes(q)
+            );
+          }
+
+          // Apply minSites filter
+          plugins = plugins.filter(p => p.activeOnCount >= effectiveMinSites);
+
+          // Sort by activeOnCount desc
+          plugins.sort((a, b) => b.activeOnCount - a.activeOnCount);
+
+          const sitesWithFullData = twins.filter(
+            (t: any) => t.completeness === 'metadata' || t.completeness === 'indexed'
+          ).length;
+
+          return {
+            success: true,
+            error: null,
+            totalSites: twins.length,
+            sitesWithFullData,
+            plugins,
+          };
+        } catch (err: any) {
+          return {
+            success: false,
+            error: err.message,
+            totalSites: 0,
+            sitesWithFullData: 0,
+            plugins: [],
+          };
+        }
+      },
+
+      /**
+       * List sites on a specific PHP or WP version — for security triage
+       * (e.g. find all sites on PHP 7.4).
+       */
+      nexusFleetVersionSites: (_parent: any, { phpVersion, wpVersion }: { phpVersion?: string; wpVersion?: string }) => {
+        try {
+          if (!services.twinService) {
+            return { success: false, error: 'Twin service not available', sites: [] };
+          }
+
+          const localTwins = services.twinService.getAll() ?? [];
+          const graphService = (services as any).graphService;
+          const wpeTwins: any[] = [];
+
+          try {
+            if (graphService?.getDb?.()) {
+              const rows = graphService.getDb()
+                .prepare("SELECT name, wp_version, php_version FROM sites WHERE source='wpe' AND is_active=1")
+                .all() as any[];
+              for (const row of rows) {
+                wpeTwins.push({ siteName: row.name, wpVersion: row.wp_version, phpVersion: row.php_version, source: 'wpe' });
+              }
+            }
+          } catch { /* optional */ }
+
+          const normalizePhp = (v?: string) => v ? (v.match(/^(\d+\.\d+)/)?.[1] ?? v) : 'unknown';
+          const all = [
+            ...localTwins.map((t: any) => ({ siteName: t.siteName, wpVersion: t.wpVersion, phpVersion: t.phpVersion, source: 'local' })),
+            ...wpeTwins,
+          ];
+
+          const matched = all.filter((s) => {
+            if (phpVersion) {
+              const normalized = normalizePhp(s.phpVersion);
+              const target = normalizePhp(phpVersion);
+              if (normalized !== target) return false;
+            }
+            if (wpVersion && s.wpVersion !== wpVersion) return false;
+            return true;
+          });
+
+          return {
+            success: true,
+            error: null,
+            sites: matched.map((s) => ({
+              name: s.siteName,
+              wpVersion: s.wpVersion ?? null,
+              phpVersion: normalizePhp(s.phpVersion),
+              source: s.source ?? 'local',
+            })),
+          };
+        } catch (err: any) {
+          return { success: false, error: err.message, sites: [] };
         }
       },
 

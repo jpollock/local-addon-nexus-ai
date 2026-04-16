@@ -557,14 +557,14 @@ export class WPESyncService {
 
       if (isNew) {
         newInstalls.push(i.name);
-        // Insert bare record — SSH sync will fill wp_version, plugins, users
         await this.graphService.upsertSite({
           id: siteId,
           name: i.name,
           domain: i.primaryDomain || `${i.name}.wpengine.com`,
+          wp_version: i.wpVersion ?? undefined,
           php_version: i.phpVersion ?? undefined,
           account_id: i.account?.id ?? undefined,
-          last_sync_at: undefined, // not SSH-synced yet
+          last_sync_at: undefined,
           is_active: true,
           created_at: now,
           updated_at: now,
@@ -574,16 +574,18 @@ export class WPESyncService {
         });
         updatedFields++;
       } else {
-        // Update CAPI fields on existing record (COALESCE preserves existing values)
+        // Update CAPI fields on existing record.
+        // wp_version and php_version use COALESCE so SSH-synced values are not overwritten.
         if (db) {
           const result = db.prepare(`
             UPDATE sites SET
+              wp_version  = COALESCE(wp_version, ?),
               php_version = COALESCE(php_version, ?),
-              account_id = COALESCE(account_id, ?),
+              account_id  = COALESCE(account_id, ?),
               domain = CASE WHEN domain = '' OR domain IS NULL THEN ? ELSE domain END,
               updated_at = ?
             WHERE id = ?
-          `).run(i.phpVersion ?? null, i.account?.id ?? null, i.primaryDomain ?? null, now, siteId);
+          `).run(i.wpVersion ?? null, i.phpVersion ?? null, i.account?.id ?? null, i.primaryDomain ?? null, now, siteId);
           if (result.changes > 0) updatedFields++;
         }
       }

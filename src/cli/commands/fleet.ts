@@ -779,6 +779,183 @@ fleetCommand
 // ============================================================================
 
 /**
+ * nexus fleet summary — fleet-wide summary from twin cache
+ */
+fleetCommand
+  .command('summary')
+  .description('Fleet-wide summary from twin cache (WP/PHP versions, completeness, activity)')
+  .action(async () => {
+    try {
+      const client = getClient();
+
+      const result = await client.mutate<{ nexusFleetSummary: any }>(`
+        mutation {
+          nexusFleetSummary {
+            success
+            error
+            totalSites
+            sitesWithFullData
+            wpVersions {
+              version
+              count
+            }
+            phpVersions {
+              version
+              count
+            }
+            completeness {
+              none
+              filesystem
+              metadata
+              indexed
+            }
+            staleCount
+            neverScannedCount
+            recentActivityCount
+          }
+        }
+      `, {});
+
+      const data = result.nexusFleetSummary;
+
+      if (!data.success) {
+        console.error(`\n❌ ${data.error}`);
+        process.exit(1);
+      }
+
+      const BAR_WIDTH = 20;
+
+      function bar(count: number, maxCount: number): string {
+        const filled = maxCount > 0 ? Math.round((count / maxCount) * BAR_WIDTH) : 0;
+        return '█'.repeat(filled);
+      }
+
+      console.log(`\nFleet Summary — ${data.totalSites} sites (${data.sitesWithFullData} with full WP-CLI data)`);
+      console.log('─'.repeat(53));
+
+      // WP versions
+      if (data.wpVersions.length > 0) {
+        console.log('\nWordPress versions:');
+        const maxWp = Math.max(...data.wpVersions.map((v: any) => v.count));
+        for (const entry of data.wpVersions) {
+          const b = bar(entry.count, maxWp);
+          const label = entry.version.padEnd(8);
+          console.log(`  ${label}  ${b.padEnd(BAR_WIDTH)}  ${entry.count} site${entry.count !== 1 ? 's' : ''}`);
+        }
+      }
+
+      // PHP versions
+      if (data.phpVersions.length > 0) {
+        console.log('\nPHP versions:');
+        const maxPhp = Math.max(...data.phpVersions.map((v: any) => v.count));
+        for (const entry of data.phpVersions) {
+          const b = bar(entry.count, maxPhp);
+          const label = entry.version.padEnd(8);
+          console.log(`  ${label}  ${b.padEnd(BAR_WIDTH)}  ${entry.count} site${entry.count !== 1 ? 's' : ''}`);
+        }
+      }
+
+      // Completeness
+      console.log('\nTwin completeness:');
+      const c = data.completeness;
+      if (c.indexed > 0)    console.log(`  ✅ indexed      ${c.indexed} site${c.indexed !== 1 ? 's' : ''}`);
+      if (c.metadata > 0)   console.log(`  ✅ metadata     ${c.metadata} site${c.metadata !== 1 ? 's' : ''}`);
+      if (c.filesystem > 0) console.log(`  🔶 filesystem   ${c.filesystem} site${c.filesystem !== 1 ? 's' : ''}`);
+      if (c.none > 0)       console.log(`  ❌ none         ${c.none} site${c.none !== 1 ? 's' : ''}`);
+
+      console.log('');
+      console.log(`Recent activity (last 30d):  ${data.recentActivityCount} sites`);
+      if (data.staleCount > 0) {
+        console.log(`Stale twins (> 24h):        ${data.staleCount} sites  → nexus fleet refresh to update`);
+      }
+      if (data.neverScannedCount > 0) {
+        console.log(`Never scanned:               ${data.neverScannedCount} sites  → nexus fleet refresh --deep to populate`);
+      }
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
+ * nexus fleet plugins — aggregate plugin presence from twin cache
+ */
+fleetCommand
+  .command('plugins')
+  .description('Aggregate plugin presence across the fleet from twin cache')
+  .option('--search <name>', 'Filter by plugin name (partial match)')
+  .option('--active-on <n>', 'Only show plugins active on N or more sites', '1')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      const client = getClient();
+
+      const minSites = parseInt(options.activeOn, 10) || 1;
+
+      const result = await client.mutate<{ nexusFleetPlugins: any }>(`
+        mutation($search: String, $minSites: Int) {
+          nexusFleetPlugins(search: $search, minSites: $minSites) {
+            success
+            error
+            totalSites
+            sitesWithFullData
+            plugins {
+              slug
+              title
+              activeOnCount
+              installedOnCount
+              sites
+            }
+          }
+        }
+      `, { search: options.search || null, minSites });
+
+      const data = result.nexusFleetPlugins;
+
+      if (!data.success) {
+        console.error(`\n❌ ${data.error}`);
+        process.exit(1);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+
+      console.log(`\nFleet plugins — ${data.totalSites} sites (${data.sitesWithFullData} with full data)`);
+      console.log('─'.repeat(53));
+
+      if (data.plugins.length === 0) {
+        console.log('\n  No plugins found matching your criteria.\n');
+        return;
+      }
+
+      console.log('');
+      const header = 'Plugin'.padEnd(32) + 'Active   Sites';
+      console.log(header);
+      console.log('─'.repeat(54));
+
+      for (const plugin of data.plugins) {
+        const label = (plugin.title || plugin.slug).substring(0, 31).padEnd(32);
+        const activeStr = String(plugin.activeOnCount).padEnd(9);
+        const sitesList = plugin.sites.slice(0, 3).join(', ') + (plugin.sites.length > 3 ? `, +${plugin.sites.length - 3} more` : '');
+        console.log(`${label}${activeStr}${sitesList}`);
+      }
+
+      console.log('');
+      console.log(`${data.plugins.length} plugin${data.plugins.length !== 1 ? 's' : ''} found across ${data.sitesWithFullData} sites with full data.`);
+      if (!options.search && minSites === 1) {
+        console.log('Run --active-on 3 to filter. Run --search <name> to filter by name.');
+      }
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
  * nexus fleet refresh [--deep]
  */
 fleetCommand
@@ -964,6 +1141,86 @@ fleetCommand
       console.log('\nSummary:');
       for (const r of results) {
         console.log(`  ${r.name}: ${r.outcome}`);
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+/**
+ * nexus fleet php <version>   — find all sites on a PHP version
+ * nexus fleet wp <version>    — find all sites on a WP version
+ */
+fleetCommand
+  .command('php <version>')
+  .description('List all sites running a specific PHP version (from twin cache)')
+  .option('--json', 'Output as JSON')
+  .action(async (version, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusFleetVersionSites: any }>(`
+        mutation($phpVersion: String) {
+          nexusFleetVersionSites(phpVersion: $phpVersion) {
+            success error
+            sites { name wpVersion phpVersion source }
+          }
+        }
+      `, { phpVersion: version });
+
+      const { success, error, sites } = result.nexusFleetVersionSites;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+
+      if (options.json) { console.log(JSON.stringify(sites, null, 2)); return; }
+
+      if (sites.length === 0) {
+        console.log(`\nNo sites found on PHP ${version}\n`);
+        return;
+      }
+      console.log(`\nSites on PHP ${version} — ${sites.length} found\n`);
+      for (const s of sites) {
+        const wp = s.wpVersion ? ` · WP ${s.wpVersion}` : '';
+        const src = s.source === 'wpe' ? ' [WPE]' : ' [local]';
+        console.log(`  ${s.name}${src}${wp}`);
+      }
+      console.log('');
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+fleetCommand
+  .command('wp <version>')
+  .description('List all sites running a specific WordPress version (from twin cache)')
+  .option('--json', 'Output as JSON')
+  .action(async (version, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusFleetVersionSites: any }>(`
+        mutation($wpVersion: String) {
+          nexusFleetVersionSites(wpVersion: $wpVersion) {
+            success error
+            sites { name wpVersion phpVersion source }
+          }
+        }
+      `, { wpVersion: version });
+
+      const { success, error, sites } = result.nexusFleetVersionSites;
+      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+
+      if (options.json) { console.log(JSON.stringify(sites, null, 2)); return; }
+
+      if (sites.length === 0) {
+        console.log(`\nNo sites found on WordPress ${version}\n`);
+        return;
+      }
+      console.log(`\nSites on WordPress ${version} — ${sites.length} found\n`);
+      for (const s of sites) {
+        const php = s.phpVersion ? ` · PHP ${s.phpVersion}` : '';
+        const src = s.source === 'wpe' ? ' [WPE]' : ' [local]';
+        console.log(`  ${s.name}${src}${php}`);
       }
       console.log('');
     } catch (err: any) {

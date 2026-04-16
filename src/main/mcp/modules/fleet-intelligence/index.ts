@@ -7,6 +7,8 @@ import { bulkReindexHandler } from './bulk-reindex';
 import { bulkPluginUpdateHandler } from './bulk-plugin-update';
 import { listSiteGroupsHandler } from './list-site-groups';
 import { manageSiteGroupHandler } from './manage-site-group';
+import { fleetSummaryHandler } from './fleet-summary';
+import { fleetPluginsHandler } from './fleet-plugins';
 
 export function registerFleetIntelligenceTools(registry: ToolRegistry): void {
   registry.register(fleetHealthSummaryHandler);
@@ -17,4 +19,6 @@ export function registerFleetIntelligenceTools(registry: ToolRegistry): void {
   registry.register(bulkPluginUpdateHandler);
   registry.register(listSiteGroupsHandler);
   registry.register(manageSiteGroupHandler);
+  registry.register(fleetSummaryHandler);
+  registry.register(fleetPluginsHandler);
 }

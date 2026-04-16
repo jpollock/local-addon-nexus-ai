@@ -501,6 +501,64 @@ export const typeDefs = gql`
   }
 
   # ============================================================================
+  # Fleet Intelligence — Phase 4 Twin Analytics Types
+  # ============================================================================
+
+  type FleetVersionCount {
+    version: String!
+    count: Int!
+  }
+
+  type FleetCompletenessCount {
+    none: Int!
+    filesystem: Int!
+    metadata: Int!
+    indexed: Int!
+  }
+
+  type FleetSummaryResult {
+    success: Boolean!
+    error: String
+    totalSites: Int!
+    sitesWithFullData: Int!
+    wpVersions: [FleetVersionCount!]!
+    phpVersions: [FleetVersionCount!]!
+    completeness: FleetCompletenessCount!
+    staleCount: Int!
+    neverScannedCount: Int!
+    recentActivityCount: Int!
+  }
+
+  type FleetPluginEntry {
+    slug: String!
+    title: String
+    activeOnCount: Int!
+    installedOnCount: Int!
+    sites: [String!]!
+  }
+
+  type FleetPluginsResult {
+    success: Boolean!
+    error: String
+    totalSites: Int!
+    sitesWithFullData: Int!
+    plugins: [FleetPluginEntry!]!
+  }
+
+  type FleetVersionSite {
+    name: String!
+    wpVersion: String
+    phpVersion: String
+    source: String!
+  }
+
+  type FleetVersionSitesResult {
+    success: Boolean!
+    error: String
+    sites: [FleetVersionSite!]!
+  }
+
+  # ============================================================================
   # WP-CLI Types
   # ============================================================================
 
@@ -703,6 +761,15 @@ export const typeDefs = gql`
 
     "Deep-refresh a WPE site via SSH WP-CLI — fetches plugins, themes, and WP version and persists to the graph"
     nexusWpeSiteDeepRefresh(installName: String!): NexusWpeSiteDeepRefreshResult!
+
+    "Fleet-wide summary from twin cache — WP/PHP version distribution, completeness, activity"
+    nexusFleetSummary: FleetSummaryResult!
+
+    "Aggregate plugin presence across the fleet from twin cache"
+    nexusFleetPlugins(search: String, minSites: Int): FleetPluginsResult!
+
+    "List sites on a specific PHP or WP version — for security triage"
+    nexusFleetVersionSites(phpVersion: String, wpVersion: String): FleetVersionSitesResult!
 
     "List plugins on a site (local or WPE)"
     nexusWpPluginList(target: String!): NexusWpPluginListResult!
