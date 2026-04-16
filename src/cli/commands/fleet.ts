@@ -777,30 +777,121 @@ fleetCommand
 // ============================================================================
 
 /**
- * nexus fleet refresh
+ * nexus fleet refresh [--deep]
  */
 fleetCommand
   .command('refresh')
   .description('Refresh the cached data (digital twin) for all local sites')
-  .action(async () => {
+  .option('--deep', 'Start halted sites, do a full WP-CLI scan, then stop them again')
+  .action(async (options) => {
     try {
-      const client = getClient();
-      console.log('\nRefreshing twin for all sites...\n');
+      const client = getClient({ timeout: 600000 }); // 10 min for deep mode
 
-      const result = await client.mutate<{ nexusFleetRefresh: any }>(`
+      if (!options.deep) {
+        // Standard: filesystem scan for halted, WP-CLI for running
+        console.log('\nRefreshing twin for all sites...\n');
+
+        const result = await client.mutate<{ nexusFleetRefresh: any }>(`
+          mutation {
+            nexusFleetRefresh {
+              success
+              error
+              report
+            }
+          }
+        `);
+
+        const { success, error, report } = result.nexusFleetRefresh;
+        if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+        console.log('\n' + report + '\n');
+        return;
+      }
+
+      // Deep mode: start halted sites → full WP-CLI scan → stop them
+      console.log('\n🔄 Deep refresh — halted sites will be briefly started for a full scan.\n');
+
+      // Get all local sites
+      const listResult = await client.mutate<{ nexusSitesList: any }>(`
         mutation {
-          nexusFleetRefresh {
-            success
-            error
-            report
+          nexusSitesList {
+            local { name status }
           }
         }
       `);
 
-      const { success, error, report } = result.nexusFleetRefresh;
-      if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
+      const sites: Array<{ name: string; status: string }> = listResult.nexusSitesList.local;
+      if (sites.length === 0) {
+        console.log('No local sites found.');
+        return;
+      }
 
-      console.log('\n' + report + '\n');
+      const results: Array<{ name: string; outcome: string }> = [];
+
+      for (const site of sites) {
+        const wasHalted = site.status !== 'running';
+
+        if (wasHalted) {
+          process.stdout.write(`  ${site.name}  starting... `);
+          const startResult = await client.mutate<{ nexusSitesStart: any }>(`
+            mutation($target: String!) {
+              nexusSitesStart(target: $target) { success error }
+            }
+          `, { target: site.name });
+
+          if (!startResult.nexusSitesStart.success) {
+            const msg = startResult.nexusSitesStart.error ?? 'failed to start';
+            console.log(`❌ ${msg}`);
+            results.push({ name: site.name, outcome: `❌ start failed: ${msg}` });
+            continue;
+          }
+          process.stdout.write('started  ');
+        } else {
+          process.stdout.write(`  ${site.name}  already running  `);
+        }
+
+        // Refresh (full WP-CLI scan)
+        process.stdout.write('scanning... ');
+        const refreshResult = await client.mutate<{ nexusSiteRefresh: any }>(`
+          mutation($target: String!, $force: Boolean) {
+            nexusSiteRefresh(target: $target, force: $force) { success error }
+          }
+        `, { target: site.name, force: true });
+
+        if (!refreshResult.nexusSiteRefresh.success) {
+          const msg = refreshResult.nexusSiteRefresh.error ?? 'scan failed';
+          process.stdout.write(`❌ ${msg}`);
+        } else {
+          process.stdout.write('scanned  ');
+        }
+
+        // Stop only if we started it
+        if (wasHalted) {
+          process.stdout.write('stopping... ');
+          const stopResult = await client.mutate<{ nexusSitesStop: any }>(`
+            mutation($target: String!) {
+              nexusSitesStop(target: $target) { success error }
+            }
+          `, { target: site.name });
+
+          if (!stopResult.nexusSitesStop.success) {
+            const msg = stopResult.nexusSitesStop.error ?? 'failed to stop';
+            console.log(`⚠️  ${msg}`);
+            results.push({ name: site.name, outcome: `⚠️ scanned but stop failed: ${msg}` });
+          } else {
+            console.log('✅');
+            results.push({ name: site.name, outcome: '✅ scanned' });
+          }
+        } else {
+          console.log('✅');
+          results.push({ name: site.name, outcome: '✅ scanned (was running, left running)' });
+        }
+      }
+
+      console.log('\nSummary:');
+      for (const r of results) {
+        console.log(`  ${r.name}: ${r.outcome}`);
+      }
+      console.log('');
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
