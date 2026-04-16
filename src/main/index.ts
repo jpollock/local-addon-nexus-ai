@@ -45,6 +45,7 @@ import { AiProxyServer } from './ai-proxy/AiProxyServer';
 import { typeDefs } from './graphql/schema';
 import { createResolvers } from './graphql/resolvers';
 import { SiteMetadataCache } from './metadata/SiteMetadataCache';
+import { StartupSiteScanner } from './startup/StartupSiteScanner';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -338,6 +339,34 @@ export default function main(context: any): void {
           localLogger.error('[NexusAI] WPE auto-sync failed:', (err as Error).message);
         }
       };
+
+      // Startup: scan all Local sites (filesystem + WP-CLI for running ones)
+      // Runs at 5s so the readyPromise has settled and services are live.
+      setTimeout(() => {
+        const scanner = new StartupSiteScanner({
+          getAllSites: () => {
+            const all = siteData.getSites() as Record<string, any>;
+            return Object.values(all).map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              path: s.path,
+              phpVersion: s.phpVersion,
+            }));
+          },
+          getRunningSiteIds: () => {
+            const statuses = localServicesBridge.getAllSiteStatuses() as Record<string, string>;
+            return Object.entries(statuses)
+              .filter(([, status]) => status === 'running')
+              .map(([id]) => id);
+          },
+          localServices: localServicesBridge,
+          metadataCache,
+          logger: localLogger,
+        });
+        scanner.scan().catch((err) => {
+          localLogger.warn('[NexusAI] Startup site scan failed (non-fatal):', (err as Error).message);
+        });
+      }, 5000);
 
       // Startup: Tier 1 CAPI-only sync (fast, every startup when authenticated)
       // then Tier 2 SSH sync (slow, only if stale)
