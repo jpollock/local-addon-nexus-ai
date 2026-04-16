@@ -96,7 +96,7 @@ export const searchContentHandler: McpToolHandler = {
       })
       .join('\n\n');
 
-    const warning = indexFreshnessWarning(indexEntry);
+    const warning = indexEntry ? indexFreshnessWarning(indexEntry) : null;
     const suffix = warning ? `\n${warning}` : '';
     return ok(`Found ${results.length} results in "${siteName}":\n\n${formatted}${suffix}`);
   },

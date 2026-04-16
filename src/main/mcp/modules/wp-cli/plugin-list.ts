@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { requireRunning, ok, error } from './preflight';
+import { ok, error } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { cachedDataNote, haltedNoDataError } from './twin-fallback';
 
 export const pluginListHandler: McpToolHandler = {
   definition: {
@@ -47,9 +48,21 @@ export const pluginListHandler: McpToolHandler = {
       }
     }
 
-    // Local path
-    const check = requireRunning(target.site, services);
-    if (check) return check;
+    // Local path — check if running; fall back to twin if halted
+    const siteStatus = services.localServices!.getSiteStatus(target.site.id);
+    if (siteStatus !== 'running') {
+      const twin = services.twinService?.get(target.site.id);
+      if (twin?.plugins?.length) {
+        const note = cachedDataNote(twin.asOf ?? Date.now(), target.site.name);
+        const lines = [note, `## Plugins (${twin.plugins.length})`];
+        for (const p of twin.plugins) {
+          const pStatus = p.status === 'active' ? '**active**' : (p.status ?? 'unknown');
+          lines.push(`- ${p.name}${p.version ? ` v${p.version}` : ''} [${pStatus}]`);
+        }
+        return ok(lines.join('\n'));
+      }
+      return error(haltedNoDataError(target.site.name));
+    }
 
     const plugins = await services.localServices!.getPlugins(target.site.id);
 
@@ -59,8 +72,8 @@ export const pluginListHandler: McpToolHandler = {
 
     const lines = [`## Plugins (${plugins.length})`];
     for (const p of plugins) {
-      const status = p.status === 'active' ? '**active**' : p.status;
-      lines.push(`- ${p.name} v${p.version} [${status}]`);
+      const pStatus = p.status === 'active' ? '**active**' : p.status;
+      lines.push(`- ${p.name} v${p.version} [${pStatus}]`);
     }
 
     return ok(lines.join('\n'));

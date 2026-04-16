@@ -63,7 +63,7 @@ export const getSiteHealthHandler: McpToolHandler = {
     }
 
     const indexEntry = services.indexRegistry.get?.(siteId) ?? null;
-    const warning = indexFreshnessWarning(indexEntry);
+    const warning = indexEntry ? indexFreshnessWarning(indexEntry) : null;
     if (warning) lines.push(warning);
 
     return ok(lines.join('\n'));

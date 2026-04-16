@@ -26,6 +26,7 @@ import { IndexEntry, SiteStructure, PluginInfo, ThemeInfo } from '../../src/comm
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
+const FRESH = 30 * 60 * 1000; // 30 minutes — guaranteed no warning
 
 function makePlugin(slug: string, name: string, version: string, active = true): PluginInfo {
   return { slug, name, version, isActive: active, description: '' };
@@ -103,19 +104,17 @@ function getText(result: { content: Array<{ type: string; text: string }> }): st
 
 describe('twin-helpers', () => {
   describe('indexFreshnessWarning', () => {
-    test('returns empty string for null entry', () => {
-      expect(indexFreshnessWarning(null)).toBe('');
+    test('returns null when indexed < 1h ago', () => {
+      const entry = makeEntry('s1', Date.now() - 30 * 60 * 1000);
+      expect(indexFreshnessWarning(entry)).toBeNull();
     });
 
-    test('returns empty string when entry has no lastIndexed', () => {
-      const entry = makeEntry('s1', 0);
-      entry.lastIndexed = 0;
-      expect(indexFreshnessWarning(entry)).toBe('');
-    });
-
-    test('returns empty string when indexed < 24h ago', () => {
-      const entry = makeEntry('s1', Date.now() - 23 * HOUR);
-      expect(indexFreshnessWarning(entry)).toBe('');
+    test('returns inline note when indexed 1–24h ago', () => {
+      const entry = makeEntry('s1', Date.now() - 2 * HOUR);
+      const result = indexFreshnessWarning(entry);
+      expect(result).toBeTruthy();
+      expect(result).not.toContain('⚠️');
+      expect(result).not.toContain('❌');
     });
 
     test('returns ⚠️ warning when indexed > 24h ago', () => {
@@ -132,25 +131,33 @@ describe('twin-helpers', () => {
       expect(result).toContain('reindex_site');
     });
 
-    test('24h boundary — exactly 24h is still no warning', () => {
-      const entry = makeEntry('s1', Date.now() - DAY + 1000);
-      expect(indexFreshnessWarning(entry)).toBe('');
+    test('returns ❌ for error state regardless of age', () => {
+      const entry = makeEntry('s1', Date.now() - HOUR, 'error');
+      const result = indexFreshnessWarning(entry);
+      expect(result).toContain('❌');
+      expect(result).toContain('error state');
+    });
+
+    test('returns ❌ for stale state even if recently indexed', () => {
+      const entry = makeEntry('s1', Date.now() - 2 * HOUR, 'stale');
+      const result = indexFreshnessWarning(entry);
+      expect(result).toContain('❌');
     });
   });
 
   describe('fleetFreshnessWarning', () => {
-    test('returns empty string when all entries are fresh', () => {
+    test('returns null when all entries are fresh', () => {
       const entries = [
-        makeEntry('s1', Date.now() - 1 * HOUR),
-        makeEntry('s2', Date.now() - 2 * HOUR),
+        makeEntry('s1', Date.now() - 30 * 60 * 1000),
+        makeEntry('s2', Date.now() - 45 * 60 * 1000),
       ];
-      expect(fleetFreshnessWarning(entries)).toBe('');
+      expect(fleetFreshnessWarning(entries)).toBeNull();
     });
 
     test('returns warning based on stalest entry', () => {
       const entries = [
-        makeEntry('s1', Date.now() - 1 * HOUR),
-        makeEntry('s2', Date.now() - 30 * HOUR), // stale
+        makeEntry('s1', Date.now() - FRESH),
+        makeEntry('s2', Date.now() - 30 * HOUR),
       ];
       const result = fleetFreshnessWarning(entries);
       expect(result).toContain('⚠️');
@@ -158,19 +165,19 @@ describe('twin-helpers', () => {
 
     test('returns ❌ when stalest is > 7 days', () => {
       const entries = [
-        makeEntry('s1', Date.now() - 1 * HOUR),
+        makeEntry('s1', Date.now() - FRESH),
         makeEntry('s2', Date.now() - 8 * DAY),
       ];
       const result = fleetFreshnessWarning(entries);
       expect(result).toContain('❌');
     });
 
-    test('handles empty array', () => {
-      expect(fleetFreshnessWarning([])).toBe('');
+    test('returns null for empty array', () => {
+      expect(fleetFreshnessWarning([])).toBeNull();
     });
 
-    test('handles array of nulls', () => {
-      expect(fleetFreshnessWarning([null, null])).toBe('');
+    test('returns null for array of nulls', () => {
+      expect(fleetFreshnessWarning([null, null])).toBeNull();
     });
   });
 });
@@ -193,14 +200,14 @@ describe('compare_sites staleness', () => {
   }
 
   test('no warning when both sites freshly indexed', async () => {
-    const services = setup(Date.now() - HOUR, Date.now() - 2 * HOUR);
+    const services = setup(Date.now() - FRESH, Date.now() - FRESH);
     const result = await compareSitesHandler.execute({ site_a: 'Site A', site_b: 'Site B' }, services);
     expect(getText(result)).not.toContain('⚠️');
     expect(getText(result)).not.toContain('❌');
   });
 
   test('⚠️ warning when one site is > 24h old', async () => {
-    const services = setup(Date.now() - HOUR, Date.now() - 30 * HOUR);
+    const services = setup(Date.now() - FRESH, Date.now() - 30 * HOUR);
     const result = await compareSitesHandler.execute({ site_a: 'Site A', site_b: 'Site B' }, services);
     expect(getText(result)).toContain('⚠️');
   });
@@ -230,19 +237,19 @@ describe('detect_drift staleness', () => {
   }
 
   test('no warning when all sites are fresh', async () => {
-    const services = setup(HOUR, 2 * HOUR);
+    const services = setup(FRESH, FRESH);
     const result = await detectDriftHandler.execute({ baseline_site: 'Baseline' }, services);
     expect(getText(result)).not.toContain('⚠️');
   });
 
   test('⚠️ warning when target is > 24h old', async () => {
-    const services = setup(HOUR, 30 * HOUR);
+    const services = setup(FRESH, 30 * HOUR);
     const result = await detectDriftHandler.execute({ baseline_site: 'Baseline' }, services);
     expect(getText(result)).toContain('⚠️');
   });
 
   test('❌ warning when baseline is > 7d old', async () => {
-    const services = setup(8 * DAY, HOUR);
+    const services = setup(8 * DAY, FRESH);
     const result = await detectDriftHandler.execute({ baseline_site: 'Baseline' }, services);
     expect(getText(result)).toContain('❌');
   });
@@ -269,7 +276,7 @@ describe('find_sites_with_plugin staleness', () => {
   }
 
   test('no warning when freshly indexed', async () => {
-    const services = setup(Date.now() - HOUR);
+    const services = setup(Date.now() - FRESH);
     const result = await findSitesWithPluginHandler.execute({ plugin: 'woocommerce' }, services);
     expect(getText(result)).not.toContain('⚠️');
     expect(getText(result)).not.toContain('❌');
@@ -308,7 +315,7 @@ describe('find_sites_with_theme staleness', () => {
   }
 
   test('no warning when freshly indexed', async () => {
-    const services = setup(Date.now() - HOUR);
+    const services = setup(Date.now() - FRESH);
     const result = await findSitesWithThemeHandler.execute({ theme: 'twentytwentyfour' }, services);
     expect(getText(result)).not.toContain('⚠️');
   });
@@ -358,7 +365,7 @@ describe('search_site_content staleness', () => {
   }
 
   test('no warning when freshly indexed', async () => {
-    const services = setup(Date.now() - HOUR);
+    const services = setup(Date.now() - FRESH);
     const result = await searchContentHandler.execute({ site: 'My Site', query: 'hello' }, services);
     expect(getText(result)).not.toContain('⚠️');
     expect(getText(result)).not.toContain('❌');
