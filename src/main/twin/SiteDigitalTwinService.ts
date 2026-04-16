@@ -214,6 +214,7 @@ export class SiteDigitalTwinService {
       requiresRunning: false,
     });
 
+    // ── CAPI fields (always available for WPE sites) ─────────────────────
     if (graphSite.wp_version) {
       twin.wpVersion = graphSite.wp_version;
       sources['wpVersion'] = src('capi');
@@ -222,10 +223,11 @@ export class SiteDigitalTwinService {
       twin.phpVersion = graphSite.php_version;
       sources['phpVersion'] = src('capi');
     }
-    const siteUrl = graphSite.remote_domain ?? graphSite.domain;
+    // site_url from SSH scan takes precedence over domain
+    const siteUrl = graphSite.site_url ?? graphSite.remote_domain ?? graphSite.domain;
     if (siteUrl) {
       twin.siteUrl = siteUrl;
-      sources['siteUrl'] = src('capi');
+      sources['siteUrl'] = graphSite.site_url ? src('wp-cli') : src('capi');
     }
     if (graphSite.remote_install_id) {
       twin.wpeInstallId = graphSite.remote_install_id;
@@ -236,9 +238,55 @@ export class SiteDigitalTwinService {
       sources['wpeAccountId'] = src('capi');
     }
 
-    // Usage data (sync call — getSiteUsage is not async)
+    // ── SSH-enriched fields (populated by nexusWpeSiteDeepRefresh) ───────
+    if (graphSite.admin_email) {
+      twin.adminEmail = graphSite.admin_email;
+      sources['adminEmail'] = src('wp-cli');
+    }
+    if (graphSite.active_theme) {
+      twin.activeTheme = graphSite.active_theme;
+      sources['activeTheme'] = src('wp-cli');
+    }
+    if (graphSite.post_count != null) {
+      twin.postCount = graphSite.post_count;
+      sources['postCount'] = src('wp-cli');
+    }
+
+    // ── Plugins + themes from graph DB (sync) ────────────────────────────
     const gs = graphService ?? this.deps.graphService;
     if (gs) {
+      try {
+        const db = gs.getDb?.();
+        if (db) {
+          const pluginRows = db.prepare(
+            'SELECT slug, name, version, is_active FROM plugins WHERE site_id = ?'
+          ).all(graphSite.id) as any[];
+          if (pluginRows.length) {
+            twin.plugins = pluginRows.map((p) => ({
+              name:    p.slug,
+              title:   p.name,
+              version: p.version ?? undefined,
+              status:  p.is_active ? 'active' : 'inactive' as 'active' | 'inactive',
+            }));
+            sources['plugins'] = src('wp-cli');
+          }
+
+          const themeRows = db.prepare(
+            'SELECT slug, name, version, is_active FROM themes WHERE site_id = ?'
+          ).all(graphSite.id) as any[];
+          if (themeRows.length) {
+            twin.themes = themeRows.map((t) => ({
+              name:    t.slug,
+              title:   t.name,
+              version: t.version ?? undefined,
+              status:  t.is_active ? 'active' : 'inactive' as 'active' | 'inactive',
+            }));
+            sources['themes'] = src('wp-cli');
+          }
+        }
+      } catch { /* fail silently — graph data is optional */ }
+
+      // Usage data
       try {
         const usageRows = gs.getSiteUsage?.(graphSite.id);
         if (usageRows?.length) {

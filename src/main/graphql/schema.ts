@@ -491,6 +491,15 @@ export const typeDefs = gql`
     report: String
   }
 
+  type NexusWpeSiteDeepRefreshResult {
+    success: Boolean!
+    error: String
+    installName: String
+    pluginCount: Int
+    themeCount: Int
+    wpVersion: String
+  }
+
   # ============================================================================
   # WP-CLI Types
   # ============================================================================
@@ -691,6 +700,9 @@ export const typeDefs = gql`
 
     "Refresh the digital twin for all local sites"
     nexusFleetRefresh: NexusTwinReportResult!
+
+    "Deep-refresh a WPE site via SSH WP-CLI — fetches plugins, themes, and WP version and persists to the graph"
+    nexusWpeSiteDeepRefresh(installName: String!): NexusWpeSiteDeepRefreshResult!
 
     "List plugins on a site (local or WPE)"
     nexusWpPluginList(target: String!): NexusWpPluginListResult!

@@ -307,37 +307,40 @@ export function createResolvers(context: ResolverContext) {
             };
           });
 
-          // Build WPE sites list (only if we have installs)
-          const wpe = wpeInstalls.map((install: any) => {
-            // Find local site linked to this install
-            const linkedSite = local.find((s: any) =>
-              s.linkedTo?.installId === install.id
-            );
+          // Build WPE sites list — wrapped defensively so a bad install record
+          // never propagates as a 500.
+          let wpe: any[] = [];
+          try {
+            wpe = wpeInstalls.map((install: any) => {
+              const linkedSite = local.find((s: any) =>
+                s.linkedTo?.installId === install.id
+              );
 
-            // Extract account ID (account can be an object with id property)
-            const accountId = typeof install.account === 'object' && install.account?.id
-              ? install.account.id
-              : (typeof install.account === 'string' ? install.account : 'unknown');
+              const accountId = typeof install.account === 'object' && install.account?.id
+                ? install.account.id
+                : (typeof install.account === 'string' ? install.account : 'unknown');
 
-            // Get account name from map
-            const accountName = wpeAccounts.get(accountId) || null;
-
-            return {
-              account: accountId,
-              accountName,
-              installId: install.id,
-              environment: install.environment || 'unknown',
-              name: install.name,
-              domain: install.primaryDomain || install.cname || `${install.name}.wpengine.com`,
-              wpVersion: install.wpVersion || null,
-              phpVersion: install.phpVersion || null,
-              linkedTo: linkedSite?.name || null,
-            };
-          });
+              return {
+                account:     accountId || 'unknown',
+                accountName: wpeAccounts.get(accountId) || null,
+                installId:   install.id   || install.name || 'unknown', // String! — never null
+                environment: install.environment || 'unknown',
+                name:        install.name || null,
+                domain:      install.primaryDomain || install.cname || (install.name ? `${install.name}.wpengine.com` : 'unknown'),
+                wpVersion:   install.wpVersion  || null,
+                phpVersion:  install.phpVersion || null,
+                linkedTo:    linkedSite?.name   || null,
+              };
+            });
+          } catch (wpeErr: any) {
+            console.warn('[Nexus GraphQL] WPE install processing error:', wpeErr.message);
+          }
 
           return { local, wpe };
         } catch (error: any) {
-          throw new Error(`Failed to list sites: ${error.message}`);
+          // Never throw — return empty lists so callers get [] instead of 500
+          console.error('[Nexus GraphQL] nexusSitesList error:', error.message);
+          return { local: [], wpe: [] };
         }
       },
 
@@ -1098,6 +1101,117 @@ export function createResolvers(context: ResolverContext) {
           return { success: !result?.isError, error: result?.isError ? text : null, report: text };
         } catch (err: any) {
           return { success: false, error: err.message, report: null };
+        }
+      },
+
+      /**
+       * Deep-refresh a WPE site via SSH WP-CLI:
+       * fetches plugins, themes, and WP version and persists them to the graph.
+       */
+      nexusWpeSiteDeepRefresh: async (_parent: any, { installName }: { installName: string }) => {
+        const empty = { installName, pluginCount: 0, themeCount: 0, wpVersion: null };
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available', ...empty };
+          }
+          if (!services.localServices.isSSHKeyAvailable()) {
+            return { success: false, error: 'WP Engine SSH key not found. Connect to WP Engine via Local first.', ...empty };
+          }
+
+          const graphService = (services as any).graphService;
+          const now = Date.now();
+
+          // Find the graph site ID for this install
+          let siteId: string | null = null;
+          if (graphService?.getDb?.()) {
+            const row = graphService.getDb().prepare(
+              "SELECT id FROM sites WHERE source='wpe' AND (name=? OR remote_install_id=?)"
+            ).get(installName, installName) as any;
+            siteId = row?.id ?? null;
+          }
+
+          // Run all SSH WP-CLI calls in parallel
+          const [
+            pluginResult, themeResult, versionResult,
+            siteUrlResult, adminEmailResult, postCountResult, activeThemeResult,
+          ] = await Promise.all([
+            services.localServices.remoteWpCliRun(installName, ['plugin', 'list', '--format=json', '--fields=name,title,version,status']),
+            services.localServices.remoteWpCliRun(installName, ['theme', 'list', '--format=json', '--fields=name,title,version,status']),
+            services.localServices.remoteWpCliRun(installName, ['core', 'version']),
+            services.localServices.remoteWpCliRun(installName, ['option', 'get', 'siteurl']),
+            services.localServices.remoteWpCliRun(installName, ['option', 'get', 'admin_email']),
+            services.localServices.remoteWpCliRun(installName, ['post', 'list', '--post_status=publish', '--format=count']),
+            services.localServices.remoteWpCliRun(installName, ['option', 'get', 'stylesheet']),
+          ]);
+
+          const errors: string[] = [];
+          let pluginCount = 0;
+          let themeCount = 0;
+          let wpVersion: string | null = null;
+
+          // Persist plugins
+          if (pluginResult.success && pluginResult.stdout && siteId && graphService) {
+            try {
+              const plugins = JSON.parse(pluginResult.stdout);
+              await graphService.deletePlugins(siteId);
+              for (const p of plugins) {
+                await graphService.upsertPlugin({
+                  site_id: siteId, slug: p.name, name: p.title || p.name,
+                  version: p.version || null, is_active: p.status === 'active',
+                  author: null, created_at: now, updated_at: now,
+                });
+                pluginCount++;
+              }
+            } catch (e) { errors.push(`plugins: ${(e as Error).message}`); }
+          } else if (!pluginResult.success) {
+            errors.push(`plugin list failed: ${pluginResult.stdout || pluginResult.stderr || 'unknown'}`);
+          }
+
+          // Persist themes
+          if (themeResult.success && themeResult.stdout && siteId && graphService) {
+            try {
+              const themes = JSON.parse(themeResult.stdout);
+              await graphService.deleteThemes(siteId);
+              for (const t of themes) {
+                await graphService.upsertTheme({
+                  site_id: siteId, slug: t.name, name: t.title || t.name,
+                  version: t.version || null, is_active: t.status === 'active',
+                  author: null, created_at: now, updated_at: now,
+                });
+                themeCount++;
+              }
+            } catch (e) { errors.push(`themes: ${(e as Error).message}`); }
+          } else if (!themeResult.success) {
+            errors.push(`theme list failed: ${themeResult.stdout || themeResult.stderr || 'unknown'}`);
+          }
+
+          // Collect scalar fields and write them + wp_version in one UPDATE
+          if (versionResult.success && versionResult.stdout) {
+            wpVersion = versionResult.stdout.trim();
+          } else if (!versionResult.success) {
+            errors.push(`core version failed: ${versionResult.stdout || 'unknown'}`);
+          }
+
+          if (siteId && graphService?.getDb?.()) {
+            const siteUrl    = siteUrlResult.success    ? siteUrlResult.stdout?.trim()    || null : null;
+            const adminEmail = adminEmailResult.success ? adminEmailResult.stdout?.trim() || null : null;
+            const postCount  = postCountResult.success  ? parseInt(postCountResult.stdout?.trim() || '0', 10) || null : null;
+            const activeTheme = activeThemeResult.success ? activeThemeResult.stdout?.trim() || null : null;
+
+            graphService.getDb().prepare(`
+              UPDATE sites
+                 SET wp_version=?, site_url=?, admin_email=?, active_theme=?, post_count=?, last_sync_at=?
+               WHERE id=?
+            `).run(wpVersion, siteUrl, adminEmail, activeTheme, postCount, now, siteId);
+          }
+
+          return {
+            success: errors.length === 0 || pluginCount > 0 || themeCount > 0,
+            error: errors.length > 0 ? errors.join('; ') : null,
+            installName, pluginCount, themeCount, wpVersion,
+          };
+        } catch (error: any) {
+          return { success: false, error: error.message, ...empty };
         }
       },
 
