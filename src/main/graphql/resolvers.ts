@@ -1102,6 +1102,102 @@ export function createResolvers(context: ResolverContext) {
       },
 
       /**
+       * Deep-refresh a WPE site via SSH WP-CLI:
+       * fetches plugins, themes, and WP version and persists them to the graph.
+       */
+      nexusWpeSiteDeepRefresh: async (_parent: any, { installName }: { installName: string }) => {
+        const empty = { installName, pluginCount: 0, themeCount: 0, wpVersion: null };
+        try {
+          if (!services.localServices) {
+            return { success: false, error: 'Local services not available', ...empty };
+          }
+          if (!services.localServices.isSSHKeyAvailable()) {
+            return { success: false, error: 'WP Engine SSH key not found. Connect to WP Engine via Local first.', ...empty };
+          }
+
+          const graphService = (services as any).graphService;
+          const now = Date.now();
+
+          // Find the graph site ID for this install
+          let siteId: string | null = null;
+          if (graphService?.getDb?.()) {
+            const row = graphService.getDb().prepare(
+              "SELECT id FROM sites WHERE source='wpe' AND (name=? OR remote_install_id=?)"
+            ).get(installName, installName) as any;
+            siteId = row?.id ?? null;
+          }
+
+          // Run SSH WP-CLI in parallel
+          const [pluginResult, themeResult, versionResult] = await Promise.all([
+            services.localServices.remoteWpCliRun(installName, ['plugin', 'list', '--format=json', '--fields=name,title,version,status']),
+            services.localServices.remoteWpCliRun(installName, ['theme', 'list', '--format=json', '--fields=name,title,version,status']),
+            services.localServices.remoteWpCliRun(installName, ['core', 'version']),
+          ]);
+
+          const errors: string[] = [];
+          let pluginCount = 0;
+          let themeCount = 0;
+          let wpVersion: string | null = null;
+
+          // Persist plugins
+          if (pluginResult.success && pluginResult.stdout && siteId && graphService) {
+            try {
+              const plugins = JSON.parse(pluginResult.stdout);
+              await graphService.deletePlugins(siteId);
+              for (const p of plugins) {
+                await graphService.upsertPlugin({
+                  site_id: siteId, slug: p.name, name: p.title || p.name,
+                  version: p.version || null, is_active: p.status === 'active',
+                  author: null, created_at: now, updated_at: now,
+                });
+                pluginCount++;
+              }
+            } catch (e) { errors.push(`plugins: ${(e as Error).message}`); }
+          } else if (!pluginResult.success) {
+            errors.push(`plugin list failed: ${pluginResult.stdout || pluginResult.stderr || 'unknown'}`);
+          }
+
+          // Persist themes
+          if (themeResult.success && themeResult.stdout && siteId && graphService) {
+            try {
+              const themes = JSON.parse(themeResult.stdout);
+              await graphService.deleteThemes(siteId);
+              for (const t of themes) {
+                await graphService.upsertTheme({
+                  site_id: siteId, slug: t.name, name: t.title || t.name,
+                  version: t.version || null, is_active: t.status === 'active',
+                  author: null, created_at: now, updated_at: now,
+                });
+                themeCount++;
+              }
+            } catch (e) { errors.push(`themes: ${(e as Error).message}`); }
+          } else if (!themeResult.success) {
+            errors.push(`theme list failed: ${themeResult.stdout || themeResult.stderr || 'unknown'}`);
+          }
+
+          // Update WP version in graph
+          if (versionResult.success && versionResult.stdout) {
+            wpVersion = versionResult.stdout.trim();
+            if (siteId && graphService?.getDb?.()) {
+              graphService.getDb()
+                .prepare('UPDATE sites SET wp_version=?, last_sync_at=? WHERE id=?')
+                .run(wpVersion, now, siteId);
+            }
+          } else if (!versionResult.success) {
+            errors.push(`core version failed: ${versionResult.stdout || 'unknown'}`);
+          }
+
+          return {
+            success: errors.length === 0 || pluginCount > 0 || themeCount > 0,
+            error: errors.length > 0 ? errors.join('; ') : null,
+            installName, pluginCount, themeCount, wpVersion,
+          };
+        } catch (error: any) {
+          return { success: false, error: error.message, ...empty };
+        }
+      },
+
+      /**
        * Run any WP-CLI command on a site (local or WPE)
        */
       nexusWpCommand: async (_parent: any, { target, command }: { target: string; command: string[] }) => {
