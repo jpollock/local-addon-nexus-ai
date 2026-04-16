@@ -115,6 +115,8 @@ export interface LocalSiteRef {
   id: string;
   name: string;
   path: string;
+  /** PHP version string from Local's site config (e.g. "8.2.27"). */
+  phpVersion?: string;
 }
 
 export interface Logger {
@@ -183,6 +185,10 @@ export function registerLifecycleHooks(
 
           metadataCache.set(site.id, {
             wpVersion: wpVersion ?? 'unknown',
+            // phpVersion comes from Local's site object — WP-CLI doesn't return it.
+            // SiteMetadataCache.set() preserves any existing value, but supplying
+            // it here ensures it's populated on first lifecycle write too.
+            phpVersion: site.phpVersion || undefined,
             plugins: plugins.map(p => ({
               name: p.name,
               title: p.title,
