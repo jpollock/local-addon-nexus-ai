@@ -1253,7 +1253,7 @@ export class GraphService {
     if (!this.db) return new Map();
 
     const rows = this.db.prepare(`
-      SELECT site_id, period, MAX(recorded_at) as recorded_at
+      SELECT site_id, MAX(period) as period, MAX(recorded_at) as recorded_at
       FROM site_usage
       GROUP BY site_id
     `).all() as Array<{ site_id: string; period: string; recorded_at: number }>;

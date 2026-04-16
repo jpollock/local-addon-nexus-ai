@@ -299,6 +299,87 @@ describe('SiteMetadataCache', () => {
     });
   });
 
+  // --- New fields and field-preservation behaviour (added with digital twin) ---
+
+  describe('scanDepth and new fields', () => {
+    it('defaults scanDepth to "full" when not supplied', () => {
+      cache.set('site1', { wpVersion: '7.0', plugins: [], themes: [], updateSource: 'lifecycle' });
+      expect(cache.get('site1')!.scanDepth).toBe('full');
+    });
+
+    it('preserves supplied scanDepth', () => {
+      cache.set('site1', { wpVersion: '7.0', plugins: [], themes: [], updateSource: 'startup-scan', scanDepth: 'filesystem' });
+      expect(cache.get('site1')!.scanDepth).toBe('filesystem');
+    });
+
+    it('stores new twin fields', () => {
+      cache.set('site1', {
+        wpVersion: '7.0',
+        phpVersion: '8.2',
+        mysqlVersion: '8.0.35',
+        siteUrl: 'http://site1.local',
+        adminEmail: 'admin@site1.local',
+        postCount: 42,
+        postCountByType: { post: 40, page: 2 },
+        lastPostAt: 1700000000000,
+        installedPlugins: ['akismet', 'woocommerce'],
+        installedThemes: ['twentytwentyfive'],
+        plugins: [],
+        themes: [],
+        updateSource: 'lifecycle',
+      });
+      const m = cache.get('site1')!;
+      expect(m.mysqlVersion).toBe('8.0.35');
+      expect(m.siteUrl).toBe('http://site1.local');
+      expect(m.adminEmail).toBe('admin@site1.local');
+      expect(m.postCount).toBe(42);
+      expect(m.postCountByType).toEqual({ post: 40, page: 2 });
+      expect(m.lastPostAt).toBe(1700000000000);
+      expect(m.installedPlugins).toEqual(['akismet', 'woocommerce']);
+      expect(m.installedThemes).toEqual(['twentytwentyfive']);
+    });
+  });
+
+  describe('set() field-preservation (filesystem fields survive full-scan overwrite)', () => {
+    it('preserves phpVersion from previous write when new write omits it', () => {
+      // Filesystem scan populates phpVersion
+      cache.set('site1', {
+        wpVersion: '7.0', phpVersion: '8.2', plugins: [], themes: [],
+        updateSource: 'startup-scan', scanDepth: 'filesystem',
+      });
+      // Lifecycle write doesn't supply phpVersion (WP-CLI doesn't return it)
+      cache.set('site1', {
+        wpVersion: '7.0', plugins: [], themes: [], updateSource: 'lifecycle',
+      });
+      expect(cache.get('site1')!.phpVersion).toBe('8.2');
+    });
+
+    it('preserves mysqlVersion from previous write', () => {
+      cache.set('site1', { wpVersion: '7.0', mysqlVersion: '8.0.35', plugins: [], themes: [], updateSource: 'lifecycle' });
+      cache.set('site1', { wpVersion: '7.0.1', plugins: [], themes: [], updateSource: 'manual' });
+      expect(cache.get('site1')!.mysqlVersion).toBe('8.0.35');
+    });
+
+    it('preserves installedPlugins from filesystem scan when full scan overwrites', () => {
+      cache.set('site1', {
+        wpVersion: '7.0', installedPlugins: ['akismet', 'woocommerce'],
+        plugins: [], themes: [], updateSource: 'startup-scan', scanDepth: 'filesystem',
+      });
+      cache.set('site1', {
+        wpVersion: '7.0',
+        plugins: [{ name: 'akismet', title: 'Akismet', version: '5.3', status: 'active' }],
+        themes: [], updateSource: 'lifecycle', scanDepth: 'full',
+      });
+      expect(cache.get('site1')!.installedPlugins).toEqual(['akismet', 'woocommerce']);
+    });
+
+    it('allows explicit override of preserved fields', () => {
+      cache.set('site1', { wpVersion: '7.0', phpVersion: '8.1', plugins: [], themes: [], updateSource: 'startup-scan' });
+      cache.set('site1', { wpVersion: '7.0', phpVersion: '8.2', plugins: [], themes: [], updateSource: 'lifecycle' });
+      expect(cache.get('site1')!.phpVersion).toBe('8.2');
+    });
+  });
+
   describe('clear()', () => {
     it('should remove all cached metadata', () => {
       cache.set('site-a', {
