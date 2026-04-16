@@ -819,8 +819,8 @@ fleetCommand
       const listResult = await client.mutate<{ nexusSitesList: any }>(`
         mutation {
           nexusSitesList {
-            local { name status }
-            wpe   { name installId }
+            ${doLocal ? 'local { name status }' : ''}
+            ${doWpe   ? 'wpe   { name installId }' : ''}
           }
         }
       `);
