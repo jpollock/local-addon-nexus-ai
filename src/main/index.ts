@@ -47,6 +47,7 @@ import { createResolvers } from './graphql/resolvers';
 import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 import { StartupSiteScanner } from './startup/StartupSiteScanner';
 import { HaltedSiteRefreshScheduler } from './startup/HaltedSiteRefreshScheduler';
+import { WpeRefreshScheduler } from './startup/WpeRefreshScheduler';
 import { SiteDigitalTwinService } from './twin/SiteDigitalTwinService';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -392,6 +393,16 @@ export default function main(context: any): void {
         logger: localLogger,
       });
       haltedRefreshScheduler.start();
+
+      // Phase 5: Scheduled SSH WP-CLI refresh for stale WPE installs.
+      // Runs once every 24h; updates plugins, themes, site URL, admin email,
+      // post count, and active theme for installs not refreshed recently.
+      const wpeRefreshScheduler = new WpeRefreshScheduler({
+        graphService,
+        localServices: localServicesBridge,
+        logger: localLogger,
+      });
+      wpeRefreshScheduler.start();
 
       // Startup: Tier 1 CAPI-only sync (fast, every startup when authenticated)
       // then Tier 2 SSH sync (slow, only if stale)

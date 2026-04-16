@@ -345,6 +345,31 @@ handleRefreshMetadata = async () => {
 };
 ```
 
+### 4. Every 24h Background Scheduler — WPE SSH Scan (Automatic)
+
+**Class:** `WpeRefreshScheduler` (`src/main/startup/WpeRefreshScheduler.ts`)
+**Frequency:** Every 24 hours (configurable via `intervalMs`)
+**Accuracy:** ✅ High — live SSH WP-CLI data
+**Applies to:** WPE installs only (`source='wpe'`)
+
+Runs parallel SSH WP-CLI commands against each stale WPE install and persists the results:
+
+| Data fetched | WP-CLI command |
+|---|---|
+| Plugin list | `plugin list --format=json --fields=name,title,version,status` |
+| Theme list | `theme list --format=json --fields=name,title,version,status` |
+| WP core version | `core version` |
+| Site URL | `option get siteurl` |
+| Admin email | `option get admin_email` |
+| Published post count | `post list --post_status=publish --format=count` |
+| Active theme | `option get stylesheet` |
+
+An install is skipped if its `last_sync_at` is within the staleness threshold (default: same as `intervalMs`). If the SSH key is unavailable, the entire cycle is skipped.
+
+| Trigger | Handler | Target |
+|---|---|---|
+| **Every 24h (background)** | `WpeRefreshScheduler` SSH scan | Stale WPE installs |
+
 ---
 
 ## Cache Invalidation
