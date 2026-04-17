@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { runCli, skipTest } from './helpers/cli-test-utils';
+import { runCli, skipTest, getLocalSites } from './helpers/cli-test-utils';
 
 // ---------------------------------------------------------------------------
 // nexus fleet summary

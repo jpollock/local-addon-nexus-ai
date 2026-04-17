@@ -90,8 +90,8 @@ describe('nexus sites get — plain name (no @local)', () => {
     const r = await runCli(['sites', 'get', sites[0].name, '--json'], { timeout: 30000 });
     expect(r.exitCode).toBe(0);
     const data = JSON.parse(r.stdout);
-    // siteKind added in Sprint D — local sites should return 'local'
-    expect(['local', 'wpe']).toContain(data.site?.siteKind);
+    // siteKind added in Sprint D — sites get --json outputs site directly (not wrapped)
+    expect(['local', 'wpe']).toContain(data.siteKind);
   });
 
   it('returns error for nonexistent plain name', async () => {
