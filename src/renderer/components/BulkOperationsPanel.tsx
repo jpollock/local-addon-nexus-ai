@@ -18,6 +18,7 @@ import type { BulkOperationStatus } from '../../common/types';
 
 interface BulkOperationsPanelProps {
   electron: any;
+  siteNames?: Map<string, string>; // id → human-readable name
 }
 
 interface BulkOperationsPanelState {
@@ -364,7 +365,7 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
             React.createElement(
               'div',
               { key: siteId, style: resultItemStyle(result.status === 'completed') },
-              React.createElement('span', { style: resultSiteIdStyle }, siteId),
+              React.createElement('span', { style: resultSiteIdStyle }, op.siteNames?.[siteId] ?? this.props.siteNames?.get(siteId) ?? siteId),
               React.createElement(
                 'span',
                 { style: resultMessageStyle(result.status === 'completed') },
@@ -389,7 +390,7 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
                 fontSize: '12px',
               },
             },
-            React.createElement('span', { style: resultSiteIdStyle }, siteId),
+            React.createElement('span', { style: resultSiteIdStyle }, op.siteNames?.[siteId] ?? this.props.siteNames?.get(siteId) ?? siteId),
             React.createElement(
               'span',
               { style: { fontSize: '11px', color: 'var(--nxai-card-sub, #6b7280)' } },
@@ -429,6 +430,11 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
           'div',
           { style: cardActionsStyle },
           this.renderBadge(op.status),
+          React.createElement(
+            'span',
+            { style: { fontSize: '14px', color: '#9ca3af', marginLeft: '6px', userSelect: 'none' } },
+            isExpanded ? '▾' : '▸',
+          ),
           isRunning
             ? React.createElement(
                 'button',

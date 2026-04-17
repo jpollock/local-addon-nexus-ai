@@ -360,6 +360,7 @@ export interface BulkOperationStatus {
   id: string;
   type: string;
   siteIds: string[];
+  siteNames?: Record<string, string>;
   status: 'running' | 'completed' | 'completed_with_errors' | 'cancelled' | 'failed';
   progress: { completed: number; total: number; errors: string[] };
   siteResults: Record<string, {

@@ -111,8 +111,8 @@ describe('WPE Integration Tools', () => {
     registerWpeTools(registry);
   });
 
-  test('registers 76 tools', () => {
-    expect(registry.allToolNames()).toHaveLength(76);
+  test('registers 77 tools', () => {
+    expect(registry.allToolNames()).toHaveLength(77);
   });
 
   describe('CAPI tool gating', () => {

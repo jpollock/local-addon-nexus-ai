@@ -263,6 +263,18 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
    * moveSitesToGroup([], groupId, refetchGroups=true) is the documented way
    * to trigger Local's sidebar refresh. We call it as a no-op to fire the event.
    */
+  /** Build a siteId→name map from current siteData — call at op creation time. */
+  function buildSiteNames(ids?: string[]): Record<string, string> {
+    const all = siteData.getSites();
+    const source = ids ?? Object.keys(all);
+    const names: Record<string, string> = {};
+    for (const id of source) {
+      const site = all[id];
+      if (site?.name) names[id] = site.name;
+    }
+    return names;
+  }
+
   function notifyGroupsChanged(): void {
     try {
       const org = serviceContainer?.sitesOrganization;
@@ -1979,6 +1991,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const opId = bulkOpManager.execute({
         type: 'setup-ai',
         siteIds: targetIds,
+        siteNames: buildSiteNames(targetIds),
         options: { provider: settings?.aiProvider },
       });
 
@@ -2008,6 +2021,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const opId = bulkOpManager.execute({
         type: 'reindex',
         siteIds: targetIds,
+        siteNames: buildSiteNames(targetIds),
         options: {},
       });
 
@@ -2031,6 +2045,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const opId = bulkOpManager.execute({
         type: "setup-ai",
         siteIds: allSiteIds,
+        siteNames: buildSiteNames(allSiteIds),
         options: { autoStartStop: true },
       });
 
@@ -2054,6 +2069,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const opId = bulkOpManager.execute({
         type: "reindex",
         siteIds: allSiteIds,
+        siteNames: buildSiteNames(allSiteIds),
         options: { autoStartStop: true },
       });
 
@@ -2077,12 +2093,63 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const opId = bulkOpManager.execute({
         type: "sync-graph",
         siteIds: allSiteIds,
+        siteNames: buildSiteNames(allSiteIds),
         options: { autoStartStop: true },
       });
 
       return { success: true, opId, count: allSiteIds.length };
     } catch (err) {
       localLogger.error("[NexusAI] sync-graph-all failed:", (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // Quick fleet refresh — filesystem scan for halted, WP-CLI for running (no auto-start)
+  safeHandle(IPC_CHANNELS.FLEET_REFRESH_QUICK, async (_event: any) => {
+    try {
+      const result = await deps.nexusServices?.registry?.call('nexus_fleet_refresh', {}, deps.nexusServices, 'ui');
+      const text = result?.content?.[0]?.text ?? '';
+      return { success: !result?.isError, message: text };
+    } catch (err) {
+      localLogger.error('[NexusAI] fleet-refresh-quick failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // Health check all sites
+  safeHandle(IPC_CHANNELS.FLEET_HEALTH_CHECK_ALL, async (_event: any) => {
+    try {
+      const allSites = siteData.getSites();
+      const allSiteIds = Object.keys(allSites);
+      if (allSiteIds.length === 0) return { success: true, opId: null, message: 'No sites found' };
+      const opId = bulkOpManager.execute({
+        type: 'health-refresh',
+        siteIds: allSiteIds,
+        siteNames: buildSiteNames(allSiteIds),
+        options: { autoStartStop: true },
+      });
+      return { success: true, opId, count: allSiteIds.length };
+    } catch (err) {
+      localLogger.error('[NexusAI] fleet-health-check-all failed:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // Update all plugins
+  safeHandle(IPC_CHANNELS.FLEET_PLUGIN_UPDATE_ALL, async (_event: any) => {
+    try {
+      const allSites = siteData.getSites();
+      const allSiteIds = Object.keys(allSites);
+      if (allSiteIds.length === 0) return { success: true, opId: null, message: 'No sites found' };
+      const opId = bulkOpManager.execute({
+        type: 'plugin-update',
+        siteIds: allSiteIds,
+        siteNames: buildSiteNames(allSiteIds),
+        options: { autoStartStop: true },
+      });
+      return { success: true, opId, count: allSiteIds.length };
+    } catch (err) {
+      localLogger.error('[NexusAI] fleet-plugin-update-all failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
     }
   });
@@ -3492,7 +3559,13 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
         filtered = filtered.slice(-validated.limit);
       }
 
-      return { success: true, records: filtered };
+      // Enrich with live site names — siteData is authoritative over stored values
+      const enriched = filtered.map((r: any) => {
+        const site = r.siteId ? siteData.getSite(r.siteId) : null;
+        return site ? { ...r, siteName: site.name } : r;
+      });
+
+      return { success: true, records: enriched };
     } catch (err) {
       localLogger.error('[NexusAI] ai-gateway-get-usage failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
