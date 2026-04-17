@@ -83,6 +83,83 @@ describe('fleet-health-summary', () => {
     expect(fleetHealthSummaryHandler.definition.name).toBe('fleet_health_summary');
     expect(fleetHealthSummaryHandler.definition.annotations).toEqual({ title: 'Fleet Health Summary', readOnlyHint: true });
   });
+
+  test('shows stale tag for sites with twin data > 24h old', async () => {
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const staleTwin = {
+      siteId: 'site-1',
+      siteName: 'Site One',
+      asOf: Date.now() - 2 * ONE_DAY_MS, // 2 days old — stale
+      completeness: 'metadata',
+      sources: {},
+    };
+    const freshTwin = {
+      siteId: 'site-2',
+      siteName: 'Site Two',
+      asOf: Date.now() - 1000, // 1 second old — fresh
+      completeness: 'metadata',
+      sources: {},
+    };
+
+    const services = createMockServices({
+      healthCalculator: {
+        calculateAllScores: jest.fn().mockResolvedValue({ 'site-1': 85, 'site-2': 45 }),
+      },
+      indexRegistry: {
+        listAll: jest.fn().mockReturnValue([
+          { siteId: 'site-1', siteName: 'Site One', state: 'indexed' },
+          { siteId: 'site-2', siteName: 'Site Two', state: 'indexed' },
+        ]),
+      } as any,
+      siteData: {
+        getSite: jest.fn(),
+        getSites: jest.fn().mockReturnValue({
+          'site-1': { id: 'site-1', name: 'Site One', path: '/a', domain: 'one.local' },
+          'site-2': { id: 'site-2', name: 'Site Two', path: '/b', domain: 'two.local' },
+        }),
+      },
+      twinService: {
+        get: jest.fn().mockImplementation((siteId: string) => {
+          if (siteId === 'site-1') return staleTwin;
+          if (siteId === 'site-2') return freshTwin;
+          return null;
+        }),
+      } as any,
+    });
+
+    const result = await fleetHealthSummaryHandler.execute({}, services);
+    const text = getText(result);
+    expect(text).toContain('Site One');
+    expect(text).toContain('⚠️ stale');
+    // Site Two is fresh — no stale tag
+    expect(text).toMatch(/Site Two.*45\/100 \[Critical\](?! ⚠️)/);
+  });
+
+  test('shows no data tag when twin is missing', async () => {
+    const services = createMockServices({
+      healthCalculator: {
+        calculateAllScores: jest.fn().mockResolvedValue({ 'site-1': 60 }),
+      },
+      indexRegistry: {
+        listAll: jest.fn().mockReturnValue([
+          { siteId: 'site-1', siteName: 'Site One', state: 'indexed' },
+        ]),
+      } as any,
+      siteData: {
+        getSite: jest.fn(),
+        getSites: jest.fn().mockReturnValue({
+          'site-1': { id: 'site-1', name: 'Site One', path: '/a', domain: 'one.local' },
+        }),
+      },
+      twinService: {
+        get: jest.fn().mockReturnValue(null),
+      } as any,
+    });
+
+    const result = await fleetHealthSummaryHandler.execute({}, services);
+    const text = getText(result);
+    expect(text).toContain('⚠️ no data');
+  });
 });
 
 describe('get-site-health', () => {

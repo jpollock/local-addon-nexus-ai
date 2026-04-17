@@ -50,8 +50,17 @@ export const themeListHandler: McpToolHandler = {
     if (siteStatus !== 'running') {
       const twin = services.twinService?.get(target.site.id);
       if (twin?.themes?.length) {
-        const note = cachedDataNote(twin.asOf ?? Date.now(), target.site.name);
-        const lines = [note, `## Themes (${twin.themes.length})`];
+        const check = services.twinService?.canAnswer?.(twin, 'themes');
+        if (check && !check.can) {
+          return error(`No cached theme data for ${target.site.name}. ${check.reason ?? ''}`);
+        }
+        const lines: string[] = [];
+        if (check?.confidence === 'stale' && check.reason) {
+          lines.push(`> ⚠️ ${check.reason}`);
+        } else {
+          lines.push(cachedDataNote(twin.asOf ?? Date.now(), target.site.name));
+        }
+        lines.push(`## Themes (${twin.themes.length})`);
         for (const t of twin.themes) {
           const tStatus = t.status === 'active' ? '**active**' : (t.status ?? 'unknown');
           lines.push(`- ${t.name}${t.version ? ` v${t.version}` : ''} [${tStatus}]`);
