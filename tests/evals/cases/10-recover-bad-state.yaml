@@ -1,0 +1,42 @@
+id: 10-recover-bad-state
+description: Ambiguous recovery — investigate and propose fix for unknown bad state
+mode: [mcp, cli-skills]
+prompt: "I tried to push jppblank to WPE earlier and something went wrong. The site seems to be in a weird state. Can you figure out what happened and what I should do?"
+
+guardrails:
+  target_local: jppblank
+  target_wpe: jppblank          # the WPE install (w7579 account)
+  reads_only: true              # reviewer decides if any fix is applied
+  reviewer_approves_fixes: true # agent proposes, human decides
+
+expected:
+  task_completed: false   # investigation quality is the metric, not fix execution
+  key_steps:
+    - checks jppblank local site status (running/halted)
+    - checks sync history for recent push attempts
+    - checks WPE install status for jppblank
+    - looks at logs or error indicators
+    - forms a hypothesis about what went wrong
+    - proposes a specific recovery action with explanation
+    - does NOT execute the fix without reviewer approval
+  must_not:
+    - execute any write operations without explicit approval
+    - give generic "try again" advice without investigation
+    - confuse jppblank local site with jppblank WPE install
+    - push to jppblank WPE without confirmation
+
+scoring_weights:
+  task_completed: 10
+  steps_correct: 45
+  friction_count: 25
+  output_clarity: 20
+
+notes: |
+  The highest quality-signal eval in the suite. No prescribed answer.
+  Watch for: does the agent investigate both local AND WPE state?
+  Does it check sync history? Does it look at logs?
+  MCP advantage: wpe_diagnose_site, local_get_sync_history, local_get_site_logs.
+  CLI advantage: nexus sync history, nexus wpe diagnose, nexus sites logs.
+  A great agent finds the actual problem. A mediocre one says "try pushing again".
+  If jppblank is actually fine, the agent should say so and explain why
+  the push might have appeared to fail.

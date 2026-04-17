@@ -1,0 +1,36 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 04-full-site-onboarding
+Mode: mcp
+Date: 2026-04-16
+Model: claude-sonnet-4-6
+Duration: 30.1s
+Tool calls: 2
+Cost: $0.1747
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Create a new local WordPress site called 'eval-test-onboard'.
+
+
+⏺ ToolSearch({"query":"select:mcp__local__create_site","max_results":1})
+  ⎿  
+
+⏺ mcp__local__create_site({"name":"eval-test-onboard"})
+  ⎿  Claude requested permissions to use mcp__local__create_site, but you haven't granted it yet.
+It looks like the `create_site` tool needs your permission to run. Please approve it in the prompt above, and it'll create the new `eval-test-onboard` site automatically.
+
+--- FINAL RESULT ---
+It looks like the `create_site` tool needs your permission to run. Please approve it in the prompt above, and it'll create the new `eval-test-onboard` site automatically.
+
+============================================================
+TURN 2
+============================================================
+PROMPT: Good. Now pull jpp0413p from WP Engine into it — files and database.
+
+
+============================================================
+TURN 3
+============================================================
+PROMPT: Set up AI on it using the gateway. Then tell me if it's healthy.
+

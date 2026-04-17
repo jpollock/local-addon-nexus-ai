@@ -1922,25 +1922,48 @@ wpeCommand
       if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
       const parsed = JSON.parse(data);
       if (options.json) { console.log(JSON.stringify(parsed, null, 2)); return; }
-      const { accounts, installs, usage } = parsed;
-      console.log('\nPortfolio Overview:');
-      console.log('─'.repeat(40));
-      if (accounts !== undefined) console.log(`  Accounts:  ${formatNum(accounts)}`);
-      if (installs !== undefined) console.log(`  Installs:  ${formatNum(installs)}`);
-      if (usage) {
-        if (usage.bandwidth !== undefined) console.log(`  Bandwidth: ${formatBytes(usage.bandwidth)}`);
-        if (usage.storage !== undefined) console.log(`  Storage:   ${formatBytes(usage.storage)}`);
-        if (usage.visits !== undefined) console.log(`  Visits:    ${formatNum(usage.visits)}`);
+
+      const accounts: any[] = Array.isArray(parsed.accounts) ? parsed.accounts : [];
+      const installs: any[] = Array.isArray(parsed.installs) ? parsed.installs : [];
+      const usageData: any[] = Array.isArray(parsed.usage) ? parsed.usage : [];
+      const period = parsed.period ?? {};
+
+      // Aggregate totals from per-account usage
+      let totalVisits = 0;
+      let totalBandwidthBytes = 0;
+      const accountRows: Array<{ name: string; installCount: number; visits: number; bandwidthBytes: number }> = [];
+
+      for (const u of usageData) {
+        const envMetrics: any[] = u.usage?.environment_metrics ?? [];
+        let acctVisits = 0;
+        let acctBandwidth = 0;
+        for (const env of envMetrics) {
+          acctVisits += Number(env.metrics_rollup?.visit_count?.sum ?? 0);
+          acctBandwidth += Number(env.metrics_rollup?.network_total_bytes?.sum ?? 0);
+        }
+        totalVisits += acctVisits;
+        totalBandwidthBytes += acctBandwidth;
+        const acctInstalls = installs.filter((i: any) => (i.account?.id ?? i.account_id) === u.accountId).length;
+        accountRows.push({ name: u.accountName, installCount: acctInstalls, visits: acctVisits, bandwidthBytes: acctBandwidth });
       }
-      const accountSummaries = parsed.account_summaries ?? parsed.accountSummaries ?? [];
-      if (accountSummaries.length > 0) {
-        console.log('\nPer-Account Summary:');
-        console.log('─'.repeat(60));
-        console.log(`  ${'Account'.padEnd(28)} ${'Installs'.padEnd(12)} Bandwidth`);
-        console.log('─'.repeat(60));
-        for (const a of accountSummaries) {
-          const bw = formatBytes(a.bandwidth ?? a.network_total_bytes);
-          console.log(`  ${(a.name ?? a.account ?? '').padEnd(28)} ${String(a.installs ?? '').padEnd(12)} ${bw}`);
+
+      const monthLabel = period.firstDate ? period.firstDate.slice(0, 7) : 'current month';
+
+      console.log(`\nPortfolio Overview — ${monthLabel}`);
+      console.log('─'.repeat(50));
+      console.log(`  Accounts:  ${formatNum(accounts.length)}`);
+      console.log(`  Installs:  ${formatNum(installs.length)}`);
+      console.log(`  Visits:    ${formatNum(totalVisits)}`);
+      console.log(`  Bandwidth: ${formatBytes(totalBandwidthBytes)}`);
+
+      if (accountRows.length > 0) {
+        accountRows.sort((a, b) => b.visits - a.visits);
+        console.log('\nBy Account (sorted by visits):');
+        console.log('─'.repeat(70));
+        console.log(`  ${'Account'.padEnd(26)} ${'Installs'.padEnd(10)} ${'Visits'.padEnd(12)} Bandwidth`);
+        console.log('─'.repeat(70));
+        for (const a of accountRows) {
+          console.log(`  ${a.name.padEnd(26)} ${String(a.installCount).padEnd(10)} ${formatNum(a.visits).padEnd(12)} ${formatBytes(a.bandwidthBytes)}`);
         }
       }
       console.log('');

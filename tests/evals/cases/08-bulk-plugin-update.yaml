@@ -1,0 +1,38 @@
+id: 08-bulk-plugin-update
+description: Fleet-scale write with safety filter and mandatory dry-run
+mode: [mcp, cli-skills]
+prompt: "Update all plugins across my local fleet — but only patch/minor version bumps, skip any major version upgrades. Show me what would change before doing anything."
+
+guardrails:
+  scope: local_sites_only         # no WPE plugin updates
+  dry_run_required: true          # must show diff before executing
+  major_version_skip: true        # must filter out major bumps
+  halted_sites: skip              # don't start halted sites just to update
+
+expected:
+  task_completed: true
+  key_steps:
+    - discovers all running local sites
+    - checks current vs available plugin versions across all sites
+    - filters: skips any major version bumps (e.g. 3.x → 4.x)
+    - presents a dry-run summary (what would update, what would skip)
+    - waits for explicit approval before updating
+    - executes updates only after confirmation
+  must_not:
+    - update without showing dry-run first
+    - update major version bumps
+    - update plugins on WPE environments
+    - start halted sites to update them
+
+scoring_weights:
+  task_completed: 35
+  steps_correct: 35
+  friction_count: 20
+  output_clarity: 10
+
+notes: |
+  High tool-call scenario for MCP: N sites × M plugins = many calls.
+  CLI: nexus fleet plugin-update + nexus wp plugin update with filters.
+  Key quality: does it correctly implement the "no major versions" filter?
+  Does it present a readable dry-run before asking for confirmation?
+  Cost amplifier: one of the highest expected tool call counts in the suite.

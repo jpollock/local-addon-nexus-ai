@@ -1,0 +1,57 @@
+EVAL TRANSCRIPT
+Case: 05-wpe-usage-data
+Mode: mcp
+Date: 2026-04-14
+Run via: claude -p --allowedTools (automated)
+
+USER PROMPT:
+"Show me the usage data for my WP Engine hosted sites — bandwidth, storage, visits."
+
+---
+
+[MCP tools called: wpe_portfolio_overview (inferred from rich output)]
+
+Here's your WP Engine usage for April 2026 across **274 installs / 10 accounts**:
+
+---
+
+## Top Sites by Traffic
+
+| Install | Account | Visits | Avg/day | Bandwidth |
+|---------|---------|-------:|-------:|----------:|
+| **localwpe** | getflywheel | 80,293 | 2,676 | 314.64 GB |
+| **getflywheel** | getflywheel | 65,687 | 2,190 | 100.04 GB |
+| **frostwpe** | devrel | 9,764 | 325 | 3.02 GB |
+| ecommtruspice | esmy9dign4hoqz | 3,206 | 107 | 0.22 GB |
+| qwerky | esmy9dign4hoqz | 3,048 | 102 | 0.06 GB |
+| panayot | esmy9dign4hoqz | 2,963 | 99 | 0.35 GB |
+| jeremypollock2 | w7579 | 1,492 | 50 | 0.31 GB |
+
+`localwpe` and `getflywheel` dominate — together they account for the vast majority of visits and nearly all bandwidth.
+
+---
+
+## Largest by Storage
+
+| Install | File Storage | DB Storage | Notes |
+|---------|----------:|----------:|-------|
+| **madisonstest** | 40.47 GB | 1.48 GB | Biggest file footprint |
+| **poc4doble** | 25.67 GB | 1.22 GB | Large DB too |
+| **getflywheel** | 19.96 GB | 0.26 GB | Main prod site |
+| **getflywheelstg** | 17.29 GB | 0.17 GB | |
+| **getflywheeldev** | 17.02 GB | 0.16 GB | |
+| nelsonuniragch | 8.50 GB | 0.29 GB | |
+| tristest | 7.07 GB | 0.08 GB | |
+| newsroomdemo / stg | ~4.4 GB each | — | |
+| acfrecipestest | 0.72 GB | **1.39 GB** | DB-heavy |
+
+---
+
+## Notable Observations
+
+- **Bandwidth is very concentrated** — `localwpe` alone used 314 GB, nearly 3x more than the next highest
+- **esm5z2bl7u8vqk** account has ~40+ installs with zero visits this month — likely an internal test/autoscale account
+- **madisonstest** and **poc4doble** have outsized file storage (40 GB and 25 GB) relative to their low traffic — worth reviewing if they need cleanup
+- **acfrecipestest** has a 1.39 GB database which is unusually large for a dev site
+
+Want me to drill into a specific account, compare to last month, or check against plan limits?

@@ -1,0 +1,24 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: mcp
+Date: 2026-04-15
+Model: claude-sonnet-4-6
+Duration: 14.5s
+Tool calls: 2
+Cost: $0.1773
+
+============================================================
+TURN 1
+============================================================
+PROMPT: What WordPress version is jppblank running?
+
+
+⏺ ToolSearch({"query":"select:mcp__local-nexus-ai__wp_core_version","max_results":1})
+  ⎿  
+
+⏺ mcp__local-nexus-ai__wp_core_version({"site":"jppblank"})
+  ⎿  Site "jppblank" is halted. Start it first with local_start_site.
+The site `jppblank` is currently halted. Want me to start it and check the WordPress version?
+
+--- FINAL RESULT ---
+The site `jppblank` is currently halted. Want me to start it and check the WordPress version?

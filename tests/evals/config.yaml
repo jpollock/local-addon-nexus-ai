@@ -1,0 +1,45 @@
+# Nexus AI Eval Framework — Environment Configuration
+# Fill this in before running evals. Committed with safe defaults.
+
+# ── WPE Accounts ────────────────────────────────────────────────
+test_account: w7579              # All eval-created resources go here
+read_accounts:                   # Safe for reads (no writes)
+  - w7579
+  - jpollock911
+  - devrel
+  - getflywheel
+  - esmy9dign4hoqz
+
+# ── WPE Installs ─────────────────────────────────────────────────
+# Safe for pull/read operations
+read_installs:
+  jpp0413p:
+    account: w7579
+    environment: production
+  jppblank:
+    account: w7579
+    environment: production
+
+# Dedicated test install set — used for write/promotion scenarios
+test_site:       wpeplugintest
+test_prod:       jppwpeplugin         # production install in wpeplugintest
+test_staging:    jppwpeplugistg       # staging install in wpeplugintest
+
+# Never touch these — high-traffic production
+restricted_installs:
+  - localwpe         # 146k visits/mo, 386GB bandwidth
+  - getflywheel      # production
+
+# ── Local Sites ──────────────────────────────────────────────────
+test_local_prefix: eval-test     # All created local sites use this prefix
+clean_local_after_run: true      # Auto-delete eval-test-* local sites after run
+
+# ── Domains ──────────────────────────────────────────────────────
+test_domain: eval-test.example.com   # Won't actually resolve — safe for go-live checks
+
+# ── Guardrails (apply to ALL evals) ─────────────────────────────
+# - Never modify restricted_installs
+# - Never push to a production install unless created in this eval run
+# - Any WPE resource created must be named eval-test-* or use test_site above
+# - Delete your own eval-test-* resources at end of each eval run
+# - Dry-run required before any bulk write operation

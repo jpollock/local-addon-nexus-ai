@@ -243,6 +243,8 @@ export function createResolvers(context: ResolverContext) {
           }
 
           const local = sites.map((site: any) => {
+            const twinCompleteness = services.twinService?.get(site.id)?.completeness ?? 'none';
+
             // Check if site has WPE connection
             const rawSite = services.localServices?.resolveSiteObject?.(site.id) as any;
             const wpeConnection = rawSite?.hostConnections
@@ -257,6 +259,7 @@ export function createResolvers(context: ResolverContext) {
                 domain: site.domain || 'unknown',
                 id: site.id,
                 phpVersion: site.phpVersion || null,
+                twinCompleteness,
                 linkedTo: null,
               };
             }
@@ -295,6 +298,7 @@ export function createResolvers(context: ResolverContext) {
               domain: site.domain || 'unknown',
               id: site.id,
               phpVersion: site.phpVersion || null,
+              twinCompleteness,
               linkedTo: {
                 account: accountId,
                 accountName,
@@ -307,8 +311,9 @@ export function createResolvers(context: ResolverContext) {
             };
           });
 
-          // Build WPE sites list — defensively wrapped + persist to graph for fleet tools.
-          const graphService = (services as any).graphService;
+          // Build WPE sites list — simple map, no DB writes.
+          // WPE installs are persisted to the graph by WPESyncService.syncFromCAPI()
+          // on startup and hourly — no need to duplicate it here on every list call.
           let wpe: any[] = [];
           try {
             wpe = wpeInstalls.map((install: any) => {
@@ -322,28 +327,6 @@ export function createResolvers(context: ResolverContext) {
 
               const accountName = wpeAccounts.get(accountId) || null;
               const domain = install.primaryDomain || install.cname || (install.name ? `${install.name}.wpengine.com` : 'unknown');
-
-              // Upsert into graph sites table so fleet summary/plugins/deep-refresh can find it
-              if (graphService && install.id && install.name) {
-                try {
-                  const now = Date.now();
-                  graphService.getDb()?.prepare(`
-                    INSERT INTO sites (id, name, domain, wp_version, php_version, account_id,
-                                       source, remote_install_id, last_sync_at, is_active,
-                                       created_at, updated_at)
-                    VALUES (?,?,?,?,?,?,'wpe',?,?,1,?,?)
-                    ON CONFLICT(id) DO UPDATE SET
-                      name=excluded.name, domain=excluded.domain,
-                      wp_version=excluded.wp_version, php_version=excluded.php_version,
-                      account_id=excluded.account_id, remote_install_id=excluded.remote_install_id,
-                      last_sync_at=excluded.last_sync_at, updated_at=excluded.updated_at
-                  `).run(
-                    `wpe-${install.id}`, install.name, domain,
-                    install.wpVersion || null, install.phpVersion || null, accountId,
-                    install.id, now, now, now
-                  );
-                } catch { /* graph upsert is best-effort */ }
-              }
 
               return {
                 account:     accountId || 'unknown',
@@ -834,7 +817,7 @@ export function createResolvers(context: ResolverContext) {
             return { success: false, error: 'Local services not available', blueprints: [] };
           }
 
-          const blueprints = await services.localServices.listBlueprints();
+          const blueprints = await services.localServices.getBlueprints();
 
           return {
             success: true,
@@ -2314,14 +2297,16 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const changes = await services.localServices.getSiteChanges(site.id, input.since);
+          // getSiteChanges doesn't exist in the bridge — use getSyncHistory instead
+          // which returns the history of push/pull operations for this site
+          const history = await services.localServices.getSyncHistory?.(site.id) ?? [];
 
           return {
             success: true,
-            changes: changes.map((c: any) => ({
-              type: c.type,
-              path: c.path,
-              status: c.status || null,
+            changes: history.map((c: any) => ({
+              type: c.direction ?? 'unknown',
+              path: c.installName ?? '',
+              status: c.success ? 'completed' : 'failed',
             })),
           };
         } catch (error: any) {
@@ -2371,7 +2356,7 @@ export function createResolvers(context: ResolverContext) {
             history: history.map((entry: any) => ({
               timestamp: entry.timestamp,
               direction: entry.direction,
-              success: entry.success,
+              success: entry.success ?? true,  // non-nullable in schema; default true if not set
               filesTransferred: entry.filesTransferred || null,
               databaseIncluded: entry.databaseIncluded || false,
             })),

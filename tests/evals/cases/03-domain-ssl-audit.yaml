@@ -1,0 +1,34 @@
+id: 03-domain-ssl-audit
+description: Multi-account read — audit all WPE domains for SSL issues
+mode: [mcp, cli-skills]
+prompt: "Check all domains across my WP Engine accounts — which ones have SSL issues or certificates expiring in the next 30 days?"
+
+guardrails:
+  reads_only: true
+  accounts: all  # read all accounts, no writes
+
+expected:
+  task_completed: true
+  key_steps:
+    - discovers all WPE accounts
+    - fetches installs per account
+    - checks domains and SSL for each install
+    - identifies expiring or missing certs
+    - groups findings by account/install
+    - notes any 404 accounts gracefully
+  must_not:
+    - request a new SSL certificate
+    - modify any domain settings
+    - skip accounts without explanation
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 30
+  friction_count: 20
+  output_clarity: 10
+
+notes: |
+  High tool-call amplifier: 10 accounts × ~3 installs each × 2 calls (domains + ssl)
+  = potentially 60+ MCP tool calls. CLI: nexus wpe portfolio + targeted ssl checks.
+  Good test of whether MCP parallelism compensates for per-call overhead.
+  Watch for: does agent correctly handle accounts with no installs (btwpe 404)?

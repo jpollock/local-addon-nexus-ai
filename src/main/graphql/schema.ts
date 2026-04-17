@@ -25,6 +25,8 @@ export const typeDefs = gql`
     id: ID!
     "PHP version"
     phpVersion: String
+    "Twin completeness: none, filesystem, metadata, indexed"
+    twinCompleteness: String
     "Linked WPE environment"
     linkedTo: SiteLink
   }
@@ -46,6 +48,8 @@ export const typeDefs = gql`
     wpVersion: String
     "PHP version"
     phpVersion: String
+    "Twin completeness: none, filesystem, metadata, indexed"
+    twinCompleteness: String
     "Linked local site"
     linkedTo: String
   }

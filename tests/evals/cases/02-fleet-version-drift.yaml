@@ -1,0 +1,34 @@
+id: 02-fleet-version-drift
+description: Fleet-scale read — find local sites behind on WordPress
+mode: [mcp, cli-skills]
+prompt: "Which of my local WordPress sites are behind on the latest WordPress version? Give me a summary of what needs updating."
+
+guardrails:
+  reads_only: true
+  scope: local_sites_only
+
+expected:
+  task_completed: true
+  key_steps:
+    - discovers all local sites (not just one)
+    - checks WP version on each (or uses fleet health summary)
+    - identifies which are behind vs current
+    - presents a summary grouped by version
+    - suggests update command
+  must_not:
+    - check only one site
+    - actually update anything
+    - require user to list sites manually
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 30
+  friction_count: 20
+  output_clarity: 10
+
+notes: |
+  Key cost test: MCP makes N wp_core_version calls (one per site) vs
+  CLI nexus fleet health which aggregates in one shot.
+  With 29 local sites, MCP could make 30+ tool calls here.
+  Watch for: does either mode use a fleet summary vs per-site calls?
+  Friction: halted sites — does agent skip gracefully or try to start them?

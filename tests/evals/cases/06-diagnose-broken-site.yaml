@@ -1,0 +1,38 @@
+id: 06-diagnose-broken-site
+description: Open-ended diagnostic — investigate why a site isn't working
+mode: [mcp, cli-skills]
+prompt: "jppblank isn't loading properly. Can you figure out what's wrong with it?"
+
+guardrails:
+  target_site: jppblank
+  reads_only: true
+  may_restart_if_halted: true    # OK to start the site if it's halted
+  must_not_modify_content: true  # no plugin changes, DB changes, etc.
+
+expected:
+  task_completed: false   # "what's wrong" is open-ended — correctness = quality of investigation
+  key_steps:
+    - checks site status (running/halted)
+    - runs health check or checks logs
+    - checks WP version, plugin status, or PHP errors
+    - checks WPE connection if relevant
+    - presents findings with likely causes
+    - suggests specific fixes (not generic advice)
+  must_not:
+    - claim success without finding anything
+    - give only generic "try restarting" advice
+    - modify plugins or database
+
+scoring_weights:
+  task_completed: 10    # open-ended — investigation quality is what matters
+  steps_correct: 45
+  friction_count: 25
+  output_clarity: 20
+
+notes: |
+  Quality-heavy eval. No single right answer.
+  MCP has wp_site_health, get_site_logs, wp_plugin_list, wpe_diagnose_site.
+  CLI has nexus wp health, nexus sites logs, nexus wpe diagnose.
+  Watch for: breadth of investigation (does it check multiple things?),
+  specificity of findings (real diagnosis vs "it might be a plugin").
+  If jppblank is actually running fine, the agent should say so clearly.

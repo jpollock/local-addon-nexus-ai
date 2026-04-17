@@ -1,0 +1,31 @@
+id: 01-single-field-lookup
+description: Minimal single-fact lookup — baseline overhead measurement
+mode: [mcp, cli-skills]
+prompt: "What WordPress version is jppblank running?"
+
+guardrails:
+  reads_only: true
+  installs: [jppblank]
+
+expected:
+  task_completed: true
+  key_steps:
+    - identifies jppblank as a local site OR WPE install
+    - retrieves WordPress version (should be 7.x or similar)
+    - answers directly without unnecessary additional data
+  must_not:
+    - modify anything
+    - fetch unrelated data (plugin list, usage, etc.)
+    - ask the user for clarification
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 30
+  friction_count: 20
+  output_clarity: 10
+
+notes: |
+  This is the cost baseline. Both modes should complete in 1 tool call.
+  MCP: wp_core_version or local_get_site. CLI: nexus wp version jppblank@local.
+  Watch for: does MCP load 160 tool defs just to answer one question?
+  The token ratio for this case shows maximum MCP overhead relative to task complexity.
