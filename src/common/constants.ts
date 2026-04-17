@@ -159,6 +159,10 @@ export const IPC_CHANNELS = {
 
   // WPE Auth (fire-and-forget — keeps Express server alive in main process)
   WPE_LOGIN_START: `${ADDON_PREFIX}:wpe:login-start`,
+
+  // Fleet Intelligence (Dashboard panels)
+  GET_FLEET_SUMMARY: `${ADDON_PREFIX}:get-fleet-summary`,
+  GET_FLEET_PLUGINS: `${ADDON_PREFIX}:get-fleet-plugins`,
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -101,6 +101,28 @@ interface AiProxyInfo {
   toolCapableModels: string[];
 }
 
+interface FleetVersionEntry {
+  version: string;
+  count: number;
+}
+
+interface FleetSummaryData {
+  total: number;
+  totalLocal: number;
+  totalWpe: number;
+  wpVersions: FleetVersionEntry[];
+  phpVersions: FleetVersionEntry[];
+  completeness: { none: number; filesystem: number; metadata: number; indexed: number };
+  staleCount: number;
+  neverScannedCount: number;
+}
+
+interface FleetPlugin {
+  slug: string;
+  title: string;
+  siteCount: number;
+}
+
 interface NexusOverviewState {
   stats: DashboardStats | null;
   mcpInfo: McpInfo | null;
@@ -148,6 +170,9 @@ interface NexusOverviewState {
   dbScanResults: Array<{ siteId: string; siteName: string; healthScore?: number; issues?: any[]; error?: string }> | null;
   wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null; fresh_count: number; stale_count: number } | null;
   wpeSyncThresholdHours: number;
+  // Fleet Intelligence panels
+  fleetSummary: FleetSummaryData | null;
+  fleetPlugins: FleetPlugin[];
   // Credential sync state
   syncStatus: Record<string, { lastSync: number; success: boolean }>;
   syncing: boolean;
@@ -327,6 +352,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     syncing: false,
     syncResults: null,
     wpeAuthError: false,
+    fleetSummary: null,
+    fleetPlugins: [],
   };
 
   componentDidMount(): void {
@@ -395,7 +422,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult, fleetPluginsResult] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -405,6 +432,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES),
         ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
         ipc.invoke(IPC_CHANNELS.WPE_SYNC_STATS),
+        ipc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY),
+        ipc.invoke(IPC_CHANNELS.GET_FLEET_PLUGINS),
       ]);
       if (!this.mounted) return;
 
@@ -465,6 +494,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         loading: false,
         error: stats ? null : 'Failed to load stats',
         wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
+        fleetSummary: fleetSummaryResult ?? null,
+        fleetPlugins: fleetPluginsResult?.plugins ?? [],
       });
     } catch (err: any) {
       if (!this.mounted) return;
@@ -1117,6 +1148,168 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     );
   }
 
+  renderFleetSummaryCard(): React.ReactNode {
+    const { fleetSummary } = this.state;
+    if (!fleetSummary) {
+      return React.createElement('div', { style: { ...cardStyle, gridColumn: '1 / 3' } },
+        React.createElement('div', { style: cardTitleStyle }, 'Fleet Summary'),
+        React.createElement('div', { style: { color: 'var(--nxai-card-sub)', fontSize: '13px' } }, 'Loading fleet data\u2026'),
+      );
+    }
+
+    const { total, totalLocal, totalWpe, wpVersions, phpVersions, completeness, staleCount, neverScannedCount } = fleetSummary;
+
+    // Show top 3 WP versions
+    const topWp = wpVersions.slice(0, 3);
+    const otherWpCount = wpVersions.slice(3).reduce((s, e) => s + (e.version !== 'unknown' ? e.count : 0), 0);
+
+    // Show top 3 PHP versions
+    const topPhp = phpVersions.slice(0, 3);
+    const otherPhpCount = phpVersions.slice(3).reduce((s, e) => s + (e.version !== 'unknown' ? e.count : 0), 0);
+
+    const versionListStyle: React.CSSProperties = {
+      fontSize: '12px',
+      color: 'var(--nxai-card-text)',
+      lineHeight: '1.8',
+    };
+
+    const colStyle: React.CSSProperties = {
+      flex: 1,
+    };
+
+    const labelStyle: React.CSSProperties = {
+      fontSize: '11px',
+      fontWeight: 600,
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.5px',
+      color: 'var(--nxai-card-label)',
+      marginBottom: '6px',
+    };
+
+    return React.createElement('div', { style: { ...cardStyle, gridColumn: '1 / 3' } },
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' } },
+        React.createElement('div', { style: cardTitleStyle }, 'Fleet Intelligence'),
+        React.createElement('div', { style: { fontSize: '22px', fontWeight: 700, color: 'var(--nxai-card-text)' } },
+          `${total} sites`,
+          React.createElement('span', { style: { fontSize: '12px', fontWeight: 400, color: 'var(--nxai-card-sub)', marginLeft: '8px' } },
+            `${totalLocal} local \u00B7 ${totalWpe} WPE`,
+          ),
+        ),
+      ),
+
+      React.createElement('div', { style: { display: 'flex', gap: '24px' } },
+        // WP Versions column
+        React.createElement('div', { style: colStyle },
+          React.createElement('div', { style: labelStyle }, 'WordPress'),
+          React.createElement('div', { style: versionListStyle },
+            ...topWp.map(e =>
+              React.createElement('div', { key: e.version },
+                React.createElement('span', { style: { fontWeight: 500 } }, e.version),
+                React.createElement('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: '6px' } }, `${e.count} site${e.count !== 1 ? 's' : ''}`),
+              )
+            ),
+            otherWpCount > 0
+              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)' } }, `+${otherWpCount} on other versions`)
+              : null,
+          ),
+        ),
+
+        // PHP Versions column
+        React.createElement('div', { style: colStyle },
+          React.createElement('div', { style: labelStyle }, 'PHP'),
+          React.createElement('div', { style: versionListStyle },
+            ...topPhp.map(e =>
+              React.createElement('div', { key: e.version },
+                React.createElement('span', { style: { fontWeight: 500 } }, e.version),
+                React.createElement('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: '6px' } }, `${e.count} site${e.count !== 1 ? 's' : ''}`),
+              )
+            ),
+            otherPhpCount > 0
+              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)' } }, `+${otherPhpCount} on other versions`)
+              : null,
+          ),
+        ),
+
+        // Completeness column
+        React.createElement('div', { style: colStyle },
+          React.createElement('div', { style: labelStyle }, 'Twin Data'),
+          React.createElement('div', { style: versionListStyle },
+            completeness.indexed > 0
+              ? React.createElement('div', null, `\u2705 indexed: ${completeness.indexed}`)
+              : null,
+            completeness.metadata > 0
+              ? React.createElement('div', null, `\u2705 metadata: ${completeness.metadata}`)
+              : null,
+            completeness.filesystem > 0
+              ? React.createElement('div', null, `\uD83D\uDD36 filesystem: ${completeness.filesystem}`)
+              : null,
+            completeness.none > 0
+              ? React.createElement('div', null, `\u274C none: ${completeness.none}`)
+              : null,
+          ),
+        ),
+
+        // Freshness column
+        React.createElement('div', { style: colStyle },
+          React.createElement('div', { style: labelStyle }, 'Freshness'),
+          React.createElement('div', { style: versionListStyle },
+            staleCount > 0
+              ? React.createElement('div', { style: { color: UI_COLORS.STATUS_WARNING } },
+                  `\u26A0\uFE0F ${staleCount} need${staleCount !== 1 ? '' : 's'} refresh`,
+                )
+              : React.createElement('div', { style: { color: UI_COLORS.STATUS_RUNNING } }, '\u2713 All current'),
+            neverScannedCount > 0
+              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)' } },
+                  `${neverScannedCount} never scanned`,
+                )
+              : null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  renderFleetPluginsCard(): React.ReactNode {
+    const { fleetPlugins } = this.state;
+
+    const topPlugins = fleetPlugins.slice(0, 10);
+
+    return React.createElement('div', { style: cardStyle },
+      React.createElement('div', { style: cardTitleStyle }, 'Top Plugins'),
+      topPlugins.length === 0
+        ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)', fontSize: '13px' } },
+            'No plugin data yet. Run fleet refresh to populate.',
+          )
+        : React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '6px' } },
+            ...topPlugins.map((plugin, idx) =>
+              React.createElement('div', {
+                key: plugin.slug,
+                style: {
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '4px 0',
+                  borderBottom: idx < topPlugins.length - 1 ? '1px solid var(--nxai-card-border)' : 'none',
+                },
+              },
+                React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+                  React.createElement('div', {
+                    style: { fontSize: '12px', fontWeight: 500, color: 'var(--nxai-card-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
+                    title: plugin.slug,
+                  }, plugin.title !== plugin.slug ? plugin.title : plugin.slug),
+                  plugin.title !== plugin.slug
+                    ? React.createElement('div', { style: { fontSize: '10px', color: 'var(--nxai-card-sub)', fontFamily: 'monospace' } }, plugin.slug)
+                    : null,
+                ),
+                React.createElement('div', {
+                  style: { fontSize: '12px', color: 'var(--nxai-card-sub)', marginLeft: '12px', whiteSpace: 'nowrap' as const, flexShrink: 0 },
+                }, `${plugin.siteCount} site${plugin.siteCount !== 1 ? 's' : ''}`),
+              )
+            ),
+          ),
+    );
+  }
+
   renderOverviewTab(): React.ReactNode {
     const { stats } = this.state;
     if (!stats) return null;
@@ -1145,6 +1338,13 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         this.renderIndexCard(stats),
         this.renderGraphCard(),
         this.renderWpeSyncCard(),
+      ),
+
+      // Fleet Intelligence — summary + top plugins
+      this.renderSectionLabel('Fleet Intelligence'),
+      React.createElement('div', { style: { ...cardContainerStyle, gridTemplateColumns: '2fr 1fr', marginBottom: '24px' } },
+        this.renderFleetSummaryCard(),
+        this.renderFleetPluginsCard(),
       ),
 
       // AI Gateway — tabbed: Requests | By Caller
