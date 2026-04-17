@@ -422,7 +422,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult, fleetPluginsResult] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -433,7 +433,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
         ipc.invoke(IPC_CHANNELS.WPE_SYNC_STATS),
         ipc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY),
-        ipc.invoke(IPC_CHANNELS.GET_FLEET_PLUGINS),
       ]);
       if (!this.mounted) return;
 
@@ -495,7 +494,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         error: stats ? null : 'Failed to load stats',
         wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
         fleetSummary: fleetSummaryResult ?? null,
-        fleetPlugins: fleetPluginsResult?.plugins ?? [],
       });
     } catch (err: any) {
       if (!this.mounted) return;
@@ -1340,12 +1338,9 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         this.renderWpeSyncCard(),
       ),
 
-      // Fleet Intelligence — summary + top plugins
+      // Fleet Intelligence — indexing status, completeness, version distribution
       this.renderSectionLabel('Fleet Intelligence'),
-      React.createElement('div', { style: { ...cardContainerStyle, gridTemplateColumns: '2fr 1fr', marginBottom: '24px' } },
-        this.renderFleetSummaryCard(),
-        this.renderFleetPluginsCard(),
-      ),
+      this.renderFleetSummaryCard(),
 
       // AI Gateway — tabbed: Requests | By Caller
       React.createElement(AIGatewayPanel, { electron: this.props.electron }),
@@ -1409,133 +1404,117 @@ renderTabBar(): React.ReactNode {
   }
 
 
+  renderOpsButton(
+    label: string,
+    loadingLabel: string,
+    isRunning: boolean,
+    opId: string | null,
+    handler: () => void,
+    description?: string,
+  ): React.ReactNode {
+    return React.createElement('div', { style: { flex: '1', minWidth: '220px' } },
+      React.createElement('button', {
+        style: isRunning
+          ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed', width: '100%' }
+          : { ...btnPrimaryStyle, width: '100%' },
+        onClick: isRunning ? undefined : handler,
+        disabled: isRunning,
+      }, isRunning ? loadingLabel : label),
+      description
+        ? React.createElement('div', { style: { fontSize: '11px', color: '#6b7280', marginTop: '4px', lineHeight: '1.3' } }, description)
+        : null,
+      opId
+        ? React.createElement('div', { style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' } }, 'Started — check progress below.')
+        : null,
+    );
+  }
+
   renderOperationsTab(): React.ReactNode {
+    const groupStyle = { display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' as const };
+    const groupLabelStyle = { fontSize: '12px', fontWeight: '600' as const, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '8px' };
+
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const } },
-      // Fleet Operations section
-      this.renderSectionLabel('Fleet Operations'),
+      this.renderSectionLabel('Operations'),
 
-      // Fleet operation buttons (4 buttons)
-      React.createElement('div', { style: { display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' } },
-        // Setup AI Fleet (running only)
-        React.createElement('div', { style: { flex: '1', minWidth: '250px' } },
-          React.createElement('button', {
-            style: this.state.fleetSetupRunning
-              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed', width: '100%' }
-              : { ...btnPrimaryStyle, width: '100%' },
-            onClick: this.state.fleetSetupRunning ? undefined : this.handleSetupAIFleet,
-            disabled: this.state.fleetSetupRunning,
-          }, this.state.fleetSetupRunning ? 'Setting up...' : 'Setup AI for All Running Sites'),
-          this.state.fleetSetupOpId
-            ? React.createElement('div', {
-                style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' },
-              }, 'Started! Check progress below.')
-            : null,
+      // ── Refresh Site Data ────────────────────────────────────────────────────
+      React.createElement('div', { style: groupLabelStyle }, 'Refresh Site Data'),
+      React.createElement('div', { style: groupStyle },
+        this.renderOpsButton(
+          'Refresh local sites', 'Syncing...',
+          this.state.syncGraphRunning, this.state.syncGraphOpId,
+          this.handleSyncGraph,
+          'WP-CLI scan: updates plugin list, WP version, themes. Starts halted sites temporarily.',
         ),
-
-        // Index All Fleet (running only)
-        React.createElement('div', { style: { flex: '1', minWidth: '250px' } },
-          React.createElement('button', {
-            style: this.state.fleetIndexRunning
-              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed', width: '100%' }
-              : { ...btnPrimaryStyle, width: '100%' },
-            onClick: this.state.fleetIndexRunning ? undefined : this.handleIndexAllFleet,
-            disabled: this.state.fleetIndexRunning,
-          }, this.state.fleetIndexRunning ? 'Indexing...' : 'Index All Running Sites'),
-          this.state.fleetIndexOpId
-            ? React.createElement('div', {
-                style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' },
-              }, 'Started! Check progress below.')
-            : null,
-        ),
-
-        // Setup AI for ALL Sites (auto-start)
-        React.createElement("div", { style: { flex: "1", minWidth: "250px" } },
-          React.createElement("button", {
-            style: this.state.setupAllAutoRunning
-              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: "not-allowed", width: "100%" }
-              : { ...btnPrimaryStyle, width: "100%" },
-            onClick: this.state.setupAllAutoRunning ? undefined : this.handleSetupAllAuto,
-            disabled: this.state.setupAllAutoRunning,
-          }, this.state.setupAllAutoRunning ? "Setting up..." : "Setup AI for All Sites (auto-start)"),
-          this.state.setupAllAutoOpId
-            ? React.createElement("div", {
-                style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
-              }, "Started! Check progress below.")
-            : null,
-        ),
-
-        // Re-index ALL Sites (auto-start)
-        React.createElement("div", { style: { flex: "1", minWidth: "250px" } },
-          React.createElement("button", {
-            style: this.state.indexAllAutoRunning
-              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: "not-allowed", width: "100%" }
-              : { ...btnPrimaryStyle, width: "100%" },
-            onClick: this.state.indexAllAutoRunning ? undefined : this.handleIndexAllAuto,
-            disabled: this.state.indexAllAutoRunning,
-          }, this.state.indexAllAutoRunning ? "Indexing..." : "Re-index All Sites (auto-start)"),
-          this.state.indexAllAutoOpId
-            ? React.createElement("div", {
-                style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
-              }, "Started! Check progress below.")
-            : null,
-        ),
-
-        // Sync Graph (all sites, auto-start/stop)
-        React.createElement("div", { style: { flex: "1", minWidth: "250px" } },
-          React.createElement("button", {
-            style: this.state.syncGraphRunning
-              ? { ...btnPrimaryStyle, opacity: 0.6, cursor: "not-allowed", width: "100%" }
-              : { ...btnPrimaryStyle, width: "100%" },
-            onClick: this.state.syncGraphRunning ? undefined : this.handleSyncGraph,
-            disabled: this.state.syncGraphRunning,
-          }, this.state.syncGraphRunning ? "Syncing..." : "Refresh Site Finder Data (auto-start)"),
-          this.state.syncGraphOpId
-            ? React.createElement("div", {
-                style: { fontSize: "12px", color: UI_COLORS.STATUS_RUNNING, marginTop: "4px" },
-              }, "Started! Check progress below.")
-            : null,
+        this.renderOpsButton(
+          'Refresh WPE sites', 'Syncing...',
+          this.state.wpeSyncing, null,
+          this.handleWpeSync,
+          'SSH scan: updates plugin list, WP version, themes for all WPE installs.',
         ),
       ),
 
-      // Bulk Operations Panel
-      React.createElement(BulkOperationsPanel, { electron: this.props.electron }),
+      // ── Index for Search ────────────────────────────────────────────────────
+      React.createElement('div', { style: groupLabelStyle }, 'Index for Search'),
+      React.createElement('div', { style: groupStyle },
+        this.renderOpsButton(
+          'Index local sites', 'Indexing...',
+          this.state.indexAllAutoRunning, this.state.indexAllAutoOpId,
+          this.handleIndexAllAuto,
+          'Extracts and indexes post/page content from local sites. Starts halted sites temporarily.',
+        ),
+        this.renderOpsButton(
+          'Index WPE sites', 'Indexing...',
+          this.state.wpeSyncing, null,
+          this.handleWpeSync,
+          'SSH: extracts and indexes post/page content from WPE installs. Requires SSH key.',
+        ),
+      ),
 
-      // Divider
-      React.createElement('hr', {
-        style: {
-          border: 'none',
-          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
-          margin: '32px 0 24px',
-        },
+      // ── AI Features ─────────────────────────────────────────────────────────
+      React.createElement('div', { style: groupLabelStyle }, 'AI Features'),
+      React.createElement('div', { style: groupStyle },
+        this.renderOpsButton(
+          'Set up AI on all local sites', 'Setting up...',
+          this.state.setupAllAutoRunning, this.state.setupAllAutoOpId,
+          this.handleSetupAllAuto,
+          'Installs AI plugin and syncs API credentials. Local sites only. Starts halted sites temporarily.',
+        ),
+      ),
+
+      // WPE sync progress (runs outside bulkOpManager — show inline)
+      this.state.wpeSyncing && this.state.wpeSyncProgress
+        ? React.createElement('div', {
+            style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: '10px', padding: '16px 20px', marginBottom: '12px' },
+          },
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' } },
+              React.createElement('span', { style: { fontSize: '13px', fontWeight: 600 } }, 'WPE SSH sync'),
+              React.createElement('span', { style: { fontSize: '12px', color: '#6b7280' } },
+                `${this.state.wpeSyncProgress.current} / ${this.state.wpeSyncProgress.total} sites`,
+              ),
+            ),
+            React.createElement('div', { style: { fontSize: '12px', color: '#6b7280' } },
+              this.state.wpeSyncProgress.currentSite
+                ? `Syncing: ${this.state.wpeSyncProgress.currentSite}`
+                : 'Starting...',
+            ),
+          )
+        : null,
+
+      // Bulk Operations Panel — shows running / completed operations
+      React.createElement(BulkOperationsPanel, {
+        electron: this.props.electron,
+        siteNames: new Map(Object.values(this.state.sites || {}).map((s: any) => [s.id, s.name])),
       }),
 
-      // Credential Sync section
-      this.renderSectionLabel('Credential Sync'),
-      this.renderCredentialSyncSection(),
-
-      // Divider
-      React.createElement('hr', {
-        style: {
-          border: 'none',
-          borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
-          margin: '32px 0 24px',
-        },
-      }),
-
-      // WPE Sync section
-      this.renderSectionLabel('WP Engine Sites'),
-      this.renderWpeSyncSection(),
-
-      // Database Health
-      this.renderSectionLabel('Database Health'),
+      // ── Maintenance ──────────────────────────────────────────────────────────
+      React.createElement('hr', { style: { border: 'none', borderTop: '1px solid var(--nxai-card-border, #e5e7eb)', margin: '32px 0 24px' } }),
+      this.renderSectionLabel('Maintenance'),
       this.renderDbScanSection(),
-
-      // Content Index Maintenance
-      this.renderSectionLabel('Content Index'),
       this.renderContentMaintenance(),
 
-      // SSH Diagnostics
-      this.renderSectionLabel('SSH Diagnostics'),
+      // ── Developer Tools ───────────────────────────────────────────────────────
+      React.createElement('hr', { style: { border: 'none', borderTop: '1px solid var(--nxai-card-border, #e5e7eb)', margin: '32px 0 24px' } }),
+      this.renderSectionLabel('Developer Tools'),
       this.renderSshDiagnostics(),
     );
   }
@@ -1626,16 +1605,6 @@ renderTabBar(): React.ReactNode {
 
     return React.createElement('div', { style: { marginBottom: '24px' } },
       React.createElement('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap' as const } },
-
-        React.createElement('button', {
-          style: grayBtn,
-          onClick: async () => {
-            const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES);
-            if (result.success) {
-              (window as any).showToast?.(`Cleanup: ${result.vectorDocsRemoved} vector docs + ${result.graphRowsRemoved} graph rows removed`, 'success');
-            }
-          },
-        }, 'Remove Excluded Types'),
 
         React.createElement('button', {
           style: grayBtn,

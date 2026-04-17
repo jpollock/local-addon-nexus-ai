@@ -111,6 +111,11 @@ export const IPC_CHANNELS = {
   // Graph Sync
   SYNC_GRAPH_ALL: `${ADDON_PREFIX}:sync-graph-all`,
 
+  // Fleet operations (new, user-intent named)
+  FLEET_REFRESH_QUICK: `${ADDON_PREFIX}:fleet:refresh-quick`,
+  FLEET_HEALTH_CHECK_ALL: `${ADDON_PREFIX}:fleet:health-check-all`,
+  FLEET_PLUGIN_UPDATE_ALL: `${ADDON_PREFIX}:fleet:plugin-update-all`,
+
   // Digital Twin (Site Metadata Cache)
   GET_SITE_METADATA: `${ADDON_PREFIX}:metadata:get`,
   REFRESH_SITE_METADATA: `${ADDON_PREFIX}:metadata:refresh`,

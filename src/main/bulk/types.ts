@@ -7,6 +7,7 @@ export type BulkOpType = 'reindex' | 'plugin-update' | 'start' | 'stop' | 'healt
 export interface BulkOperationRequest {
   type: BulkOpType;
   siteIds: string[];
+  siteNames?: Record<string, string>; // id → display name, resolved at creation time
   options?: {
     pluginSlug?: string;
     dryRun?: boolean;
@@ -19,6 +20,7 @@ export interface BulkOperation {
   id: string;
   type: BulkOpType;
   siteIds: string[];
+  siteNames: Record<string, string>;
   options: Record<string, any>;
   status: 'running' | 'completed' | 'completed_with_errors' | 'cancelled' | 'failed';
   progress: { completed: number; total: number; errors: string[] };
@@ -39,6 +41,7 @@ export interface BulkOperationStatus {
   id: string;
   type: BulkOpType;
   siteIds: string[];
+  siteNames: Record<string, string>;
   status: 'running' | 'completed' | 'completed_with_errors' | 'cancelled' | 'failed';
   progress: { completed: number; total: number; errors: string[] };
   siteResults: Record<string, SiteOpResult>;
