@@ -382,6 +382,7 @@ export default function main(context: any): void {
       // Phase 3.2: Scheduled filesystem refresh for halted sites.
       // Re-runs the filesystem scan on halted sites whose twin is stale (>24h).
       // Running sites are handled by the lifecycle hook on site-start — skip them.
+      const haltedIntervalHours = (registryStorage.get(STORAGE_KEYS.SETTINGS) as { haltedSiteRefreshIntervalHours?: number } | null)?.haltedSiteRefreshIntervalHours ?? 24;
       const haltedRefreshScheduler = new HaltedSiteRefreshScheduler({
         scanner: startupScanner,
         metadataCache,
@@ -390,6 +391,7 @@ export default function main(context: any): void {
           const statuses = localServicesBridge.getAllSiteStatuses() as Record<string, string>;
           return statuses[siteId] === 'running';
         },
+        intervalMs: haltedIntervalHours * 60 * 60 * 1000,
         logger: localLogger,
       });
       haltedRefreshScheduler.start();
@@ -397,12 +399,20 @@ export default function main(context: any): void {
       // Phase 5: Scheduled SSH WP-CLI refresh for stale WPE installs.
       // Runs once every 24h; updates plugins, themes, site URL, admin email,
       // post count, and active theme for installs not refreshed recently.
+      const wpeRefreshSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeRefreshIntervalHours?: number; wpeRefreshAutoEnabled?: boolean } | null;
+      const wpeRefreshHours = wpeRefreshSettings?.wpeRefreshIntervalHours ?? 24;
+      const wpeRefreshEnabled = wpeRefreshSettings?.wpeRefreshAutoEnabled !== false; // default: true
       const wpeRefreshScheduler = new WpeRefreshScheduler({
         graphService,
         localServices: localServicesBridge,
+        intervalMs: wpeRefreshHours * 60 * 60 * 1000,
         logger: localLogger,
       });
-      wpeRefreshScheduler.start();
+      if (wpeRefreshEnabled) {
+        wpeRefreshScheduler.start();
+      } else {
+        localLogger.info('[NexusAI] WPE SSH refresh auto-run disabled by preference — scheduler not started');
+      }
 
       // Startup: Tier 1 CAPI-only sync (fast, every startup when authenticated)
       // then Tier 2 SSH sync (slow, only if stale)

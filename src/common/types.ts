@@ -225,6 +225,9 @@ export interface NexusSettings {
   useLocalGateway?: boolean; // Route all AI requests through Local AI Gateway
   wpeSyncIntervalHours?: number; // How often to auto-sync WPE sites (default: 8)
   wpeSyncAutoEnabled?: boolean;  // Whether auto-sync is enabled (default: true)
+  haltedSiteRefreshIntervalHours?: number; // How often to refresh halted local sites (default: 24)
+  wpeRefreshIntervalHours?: number;         // How often to run WPE SSH refresh cycle (default: 24)
+  wpeRefreshAutoEnabled?: boolean;          // Whether WPE SSH refresh is enabled (default: true)
 }
 
 export interface SiteAIConfig {

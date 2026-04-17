@@ -269,6 +269,34 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     });
   };
 
+  handleHaltedRefreshIntervalChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const val = parseInt(e.target.value, 10);
+    const hours = isNaN(val) || val < 1 ? 1 : val > 168 ? 168 : val;
+    this.setState((prev) => {
+      const next = { ...prev.settings, haltedSiteRefreshIntervalHours: hours };
+      this.notifyChange(next);
+      return { settings: next };
+    });
+  };
+
+  handleWpeRefreshIntervalChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const val = parseInt(e.target.value, 10);
+    const hours = isNaN(val) || val < 1 ? 1 : val > 168 ? 168 : val;
+    this.setState((prev) => {
+      const next = { ...prev.settings, wpeRefreshIntervalHours: hours };
+      this.notifyChange(next);
+      return { settings: next };
+    });
+  };
+
+  handleWpeRefreshAutoEnabledToggle = (): void => {
+    this.setState((prev) => {
+      const next = { ...prev.settings, wpeRefreshAutoEnabled: prev.settings.wpeRefreshAutoEnabled === false ? true : false };
+      this.notifyChange(next);
+      return { settings: next };
+    });
+  };
+
   handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
     const providerId = e.target.value as AIProvider;
     this.setState((prev) => {
@@ -767,6 +795,73 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
               React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, marginLeft: '4px' } }, '(1–168)'),
             )
           : null,
+      ),
+
+      // WPE SSH Refresh Scheduler
+      React.createElement('div', { style: sectionStyle },
+        React.createElement('div', { style: labelStyle }, 'WPE SSH Refresh'),
+        React.createElement('div', { style: descStyle },
+          'Periodically re-scans WP Engine installs via SSH WP-CLI to update plugins, themes, site URL, admin email, and post count. Changes take effect on the next Local restart.',
+        ),
+        React.createElement('label', { style: checkboxRowStyle },
+          React.createElement('input', {
+            type: 'checkbox',
+            checked: settings.wpeRefreshAutoEnabled !== false,
+            onChange: this.handleWpeRefreshAutoEnabledToggle,
+            style: { width: '16px', height: '16px', cursor: 'pointer' },
+          }),
+          React.createElement('span', { style: { fontSize: '14px' } }, 'Enable automatic WPE SSH refresh'),
+        ),
+        settings.wpeRefreshAutoEnabled !== false
+          ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' } },
+              React.createElement('span', { style: { fontSize: '14px' } }, 'Refresh every'),
+              React.createElement('input', {
+                type: 'number',
+                min: 1,
+                max: 168,
+                value: settings.wpeRefreshIntervalHours ?? 24,
+                onChange: this.handleWpeRefreshIntervalChange,
+                style: {
+                  width: '64px',
+                  padding: '4px 8px',
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  border: '1px solid var(--color-border-primary, #ccc)',
+                  textAlign: 'center' as const,
+                },
+              }),
+              React.createElement('span', { style: { fontSize: '14px' } }, 'hours'),
+              React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, marginLeft: '4px' } }, '(1–168)'),
+            )
+          : null,
+      ),
+
+      // Halted Site Refresh Scheduler
+      React.createElement('div', { style: sectionStyle },
+        React.createElement('div', { style: labelStyle }, 'Halted Site Refresh'),
+        React.createElement('div', { style: descStyle },
+          'Periodically re-scans halted local sites via filesystem to keep their metadata fresh. Running sites are updated automatically when started. Changes take effect on the next Local restart.',
+        ),
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+          React.createElement('span', { style: { fontSize: '14px' } }, 'Halted site refresh interval (hours)'),
+          React.createElement('input', {
+            type: 'number',
+            min: 1,
+            max: 168,
+            value: settings.haltedSiteRefreshIntervalHours ?? 24,
+            onChange: this.handleHaltedRefreshIntervalChange,
+            style: {
+              width: '64px',
+              padding: '4px 8px',
+              fontSize: '14px',
+              borderRadius: '4px',
+              border: '1px solid var(--color-border-primary, #ccc)',
+              textAlign: 'center' as const,
+            },
+          }),
+          React.createElement('span', { style: { fontSize: '14px' } }, 'hours'),
+          React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, marginLeft: '4px' } }, '(1–168)'),
+        ),
       ),
 
     );
