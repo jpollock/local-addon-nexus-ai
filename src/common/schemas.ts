@@ -26,6 +26,9 @@ export const UpdateSettingsSchema = z.object({
   useLocalGateway: z.boolean().optional(),
   wpeSyncIntervalHours: z.number().int().min(1).max(168).optional(),
   wpeSyncAutoEnabled: z.boolean().optional(),
+  haltedSiteRefreshIntervalHours: z.number().int().min(1).max(168).optional(),
+  wpeRefreshIntervalHours: z.number().int().min(1).max(168).optional(),
+  wpeRefreshAutoEnabled: z.boolean().optional(),
 }).strict(); // Prevent unknown properties
 
 export const PluginSlugSchema = z
