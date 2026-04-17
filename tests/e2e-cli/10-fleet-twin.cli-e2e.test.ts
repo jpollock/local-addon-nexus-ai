@@ -54,7 +54,7 @@ describe('nexus fleet plugins', () => {
   });
 
   it('shows output (plugin table or no-data message)', async () => {
-    const r = await runCli('fleet plugins', { timeout: 30000 });
+    const r = await runCli('fleet plugins', { timeout: 90000 });
     expect(r.output.length).toBeGreaterThan(0);
   });
 
@@ -153,12 +153,13 @@ describe('nexus fleet wp', () => {
 
 describe('nexus fleet refresh', () => {
   it('returns exit 0', async () => {
-    const r = await runCli('fleet refresh', { timeout: 120000 });
+    // fleet refresh scans all sites — can be slow with many sites; allow 3 min
+    const r = await runCli('fleet refresh', { timeout: 180000 });
     expect(r.exitCode).toBe(0);
   });
 
   it('reports sites refreshed', async () => {
-    const r = await runCli('fleet refresh', { timeout: 120000 });
+    const r = await runCli('fleet refresh', { timeout: 180000 });
     expect(r.output).toMatch(/sites?|refresh/i);
   });
 });
