@@ -58,6 +58,7 @@ function makeServices(site: LocalSiteInfo, opts: {
   getPlugins?: jest.Mock;
   getThemes?: jest.Mock;
   getWpVersion?: jest.Mock;
+  canAnswer?: jest.Mock;
 } = {}): NexusServices {
   const {
     siteStatus = 'halted',
@@ -65,7 +66,13 @@ function makeServices(site: LocalSiteInfo, opts: {
     getPlugins = jest.fn().mockResolvedValue([]),
     getThemes = jest.fn().mockResolvedValue([]),
     getWpVersion = jest.fn().mockResolvedValue('6.4.2'),
+    canAnswer,
   } = opts;
+
+  const twinServiceMock: any = { get: jest.fn().mockReturnValue(twin) };
+  if (canAnswer) {
+    twinServiceMock.canAnswer = canAnswer;
+  }
 
   return {
     vectorStore: {} as any,
@@ -83,7 +90,7 @@ function makeServices(site: LocalSiteInfo, opts: {
       isCAPIAvailable: jest.fn().mockReturnValue(false),
       isSSHKeyAvailable: jest.fn().mockReturnValue(false),
     } as any,
-    twinService: { get: jest.fn().mockReturnValue(twin) } as any,
+    twinService: twinServiceMock as any,
   } as any;
 }
 
@@ -306,5 +313,135 @@ describe('wp_core_version — halted site fallbacks', () => {
     expect(result.isError).toBeUndefined();
     expect(getWpVersion).toHaveBeenCalledWith('site-1');
     expect(result.content[0].text).toBe('WordPress 7.0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// canAnswer() integration — mocked via twinService
+// ---------------------------------------------------------------------------
+
+describe('wp_plugin_list — canAnswer() integration', () => {
+  it('prepends canAnswer stale reason when confidence is stale', async () => {
+    const site = makeSite();
+    const twin = makeTwin({ plugins: SAMPLE_PLUGINS });
+    const canAnswer = jest.fn().mockReturnValue({
+      can: true,
+      confidence: 'stale',
+      reason: 'Data from 2d ago — run nexus_site_refresh to refresh',
+    });
+    const services = makeServices(site, { twin, canAnswer });
+
+    const result = await pluginListHandler.execute({ site: 'mysite' }, services);
+
+    expect(result.isError).toBeUndefined();
+    const text = result.content[0].text;
+    expect(text).toContain('> ⚠️ Data from 2d ago');
+    expect(text).toContain('nexus_site_refresh');
+    expect(text).toContain('woocommerce');
+    expect(canAnswer).toHaveBeenCalledWith(twin, 'plugins');
+  });
+
+  it('returns error when canAnswer says can=false', async () => {
+    const site = makeSite();
+    const twin = makeTwin({ plugins: SAMPLE_PLUGINS });
+    const canAnswer = jest.fn().mockReturnValue({
+      can: false,
+      confidence: 'stale',
+      reason: 'Field not populated — run nexus_site_refresh',
+    });
+    const services = makeServices(site, { twin, canAnswer });
+
+    const result = await pluginListHandler.execute({ site: 'mysite' }, services);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('No cached plugin data');
+    expect(result.content[0].text).toContain('nexus_site_refresh');
+  });
+
+  it('uses cachedDataNote when canAnswer is not available (no mock)', async () => {
+    const site = makeSite();
+    const twin = makeTwin({ plugins: SAMPLE_PLUGINS, asOf: Date.now() - 2 * ONE_HOUR_MS });
+    const services = makeServices(site, { twin }); // no canAnswer mock
+
+    const result = await pluginListHandler.execute({ site: 'mysite' }, services);
+
+    expect(result.isError).toBeUndefined();
+    const text = result.content[0].text;
+    expect(text).toContain('cached');
+    expect(text).toContain('site is halted');
+  });
+});
+
+describe('wp_theme_list — canAnswer() integration', () => {
+  it('prepends canAnswer stale reason when confidence is stale', async () => {
+    const site = makeSite();
+    const twin = makeTwin({ themes: SAMPLE_THEMES });
+    const canAnswer = jest.fn().mockReturnValue({
+      can: true,
+      confidence: 'stale',
+      reason: 'Data from 3d ago — run nexus_site_refresh to refresh',
+    });
+    const services = makeServices(site, { twin, canAnswer });
+
+    const result = await themeListHandler.execute({ site: 'mysite' }, services);
+
+    expect(result.isError).toBeUndefined();
+    const text = result.content[0].text;
+    expect(text).toContain('> ⚠️ Data from 3d ago');
+    expect(text).toContain('twentytwentyfour');
+    expect(canAnswer).toHaveBeenCalledWith(twin, 'themes');
+  });
+
+  it('returns error when canAnswer says can=false', async () => {
+    const site = makeSite();
+    const twin = makeTwin({ themes: SAMPLE_THEMES });
+    const canAnswer = jest.fn().mockReturnValue({
+      can: false,
+      confidence: 'stale',
+      reason: 'Field not populated — run nexus_site_refresh',
+    });
+    const services = makeServices(site, { twin, canAnswer });
+
+    const result = await themeListHandler.execute({ site: 'mysite' }, services);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('No cached theme data');
+  });
+});
+
+describe('wp_core_version — canAnswer() integration', () => {
+  it('prepends canAnswer stale reason when confidence is stale', async () => {
+    const site = makeSite();
+    const twin = makeTwin({ wpVersion: '6.7.1' });
+    const canAnswer = jest.fn().mockReturnValue({
+      can: true,
+      confidence: 'stale',
+      reason: 'Data from 5d ago — run nexus_site_refresh to refresh',
+    });
+    const services = makeServices(site, { twin, canAnswer });
+
+    const result = await coreVersionHandler.execute({ site: 'mysite' }, services);
+
+    expect(result.isError).toBeUndefined();
+    const text = result.content[0].text;
+    expect(text).toContain('> ⚠️ Data from 5d ago');
+    expect(text).toContain('WordPress 6.7.1');
+    expect(canAnswer).toHaveBeenCalledWith(twin, 'wpVersion');
+  });
+
+  it('returns error when canAnswer says can=false', async () => {
+    const site = makeSite();
+    const twin = makeTwin({ wpVersion: '6.7.1' });
+    const canAnswer = jest.fn().mockReturnValue({
+      can: false,
+      confidence: 'stale',
+      reason: 'Field not populated — run nexus_site_refresh',
+    });
+    const services = makeServices(site, { twin, canAnswer });
+
+    const result = await coreVersionHandler.execute({ site: 'mysite' }, services);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('No cached WP version');
   });
 });

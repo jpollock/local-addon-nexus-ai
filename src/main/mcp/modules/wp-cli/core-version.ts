@@ -35,11 +35,20 @@ export const coreVersionHandler: McpToolHandler = {
     if (siteStatus !== 'running') {
       const twin = services.twinService?.get(target.site.id);
       if (twin?.wpVersion) {
-        const note = cachedDataNote(twin.asOf ?? Date.now(), target.site.name);
+        const lines: string[] = [];
+        const check = services.twinService?.canAnswer?.(twin, 'wpVersion');
+        if (check && !check.can) {
+          return error(`No cached WP version for ${target.site.name}. ${check.reason ?? ''}`);
+        }
+        if (check?.confidence === 'stale' && check.reason) {
+          lines.push(`> ⚠️ ${check.reason}`);
+        } else {
+          lines.push(cachedDataNote(twin.asOf ?? Date.now(), target.site.name));
+        }
+        lines.push(`WordPress ${twin.wpVersion}`);
         const footer = freshnessFooter(twin);
-        const parts = [`${note}\nWordPress ${twin.wpVersion}`];
-        if (footer) parts.push(footer);
-        return ok(parts.join('\n'));
+        if (footer) lines.push(footer);
+        return ok(lines.join('\n'));
       }
       return error(haltedNoDataError(target.site.name));
     }

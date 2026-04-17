@@ -54,8 +54,17 @@ export const pluginListHandler: McpToolHandler = {
     if (siteStatus !== 'running') {
       const twin = services.twinService?.get(target.site.id);
       if (twin?.plugins?.length) {
-        const note = cachedDataNote(twin.asOf ?? Date.now(), target.site.name);
-        const lines = [note, `## Plugins (${twin.plugins.length})`];
+        const check = services.twinService?.canAnswer?.(twin, 'plugins');
+        if (check && !check.can) {
+          return error(`No cached plugin data for ${target.site.name}. ${check.reason ?? ''}`);
+        }
+        const lines: string[] = [];
+        if (check?.confidence === 'stale' && check.reason) {
+          lines.push(`> ⚠️ ${check.reason}`);
+        } else {
+          lines.push(cachedDataNote(twin.asOf ?? Date.now(), target.site.name));
+        }
+        lines.push(`## Plugins (${twin.plugins.length})`);
         for (const p of twin.plugins) {
           const pStatus = p.status === 'active' ? '**active**' : (p.status ?? 'unknown');
           lines.push(`- ${p.name}${p.version ? ` v${p.version}` : ''} [${pStatus}]`);

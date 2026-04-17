@@ -54,6 +54,32 @@ export const getSiteTwinHandler: McpToolHandler = {
     if (twin.completeness === 'none') {
       lines.push('');
       lines.push('> **No data available.** Run `nexus_site_refresh` to populate the twin.');
+    } else if (twin.completeness === 'filesystem' || twin.completeness === 'metadata') {
+      // Surface per-field canAnswer results for key fields
+      const keyFields: Array<keyof typeof twin> = ['wpVersion', 'plugins', 'themes'];
+      const staleReasons: string[] = [];
+      const missingFields: string[] = [];
+
+      for (const field of keyFields) {
+        const check = twinService.canAnswer(twin, field as any);
+        if (!check.can) {
+          missingFields.push(field as string);
+        } else if (check.confidence === 'stale' && check.reason) {
+          staleReasons.push(`\`${field as string}\`: ${check.reason}`);
+        }
+      }
+
+      if (staleReasons.length > 0) {
+        lines.push('');
+        for (const reason of staleReasons) {
+          lines.push(`> ⚠️ ${reason}`);
+        }
+      }
+
+      if (missingFields.length > 0) {
+        lines.push('');
+        lines.push(`> ⚠️ Missing data for: ${missingFields.join(', ')}. Run \`nexus_site_refresh\` to populate.`);
+      }
     } else if (freshness.staleFields.length > 0) {
       lines.push('');
       lines.push(`> ⚠️ ${freshness.staleFields.length} field(s) are > 24h old. Consider running \`nexus_site_refresh\`.`);

@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { fleetFreshnessWarning } from '../../../twin/twin-helpers';
+import { fleetFreshnessWarning, DAY_MS } from '../../../twin/twin-helpers';
 
 function ok(text: string): McpToolResult {
   return { content: [{ type: 'text', text }] };
@@ -54,7 +54,19 @@ export const fleetHealthSummaryHandler: McpToolHandler = {
       else critical++;
 
       const icon = score >= 80 ? 'Good' : score >= 50 ? 'Warning' : 'Critical';
-      siteLines.push(`- **${entry.siteName}** (${entry.siteId}): ${score}/100 [${icon}]`);
+
+      // Per-site staleness indicator from twin data
+      let staleTag = '';
+      if (services.twinService) {
+        const twin = services.twinService.get(entry.siteId);
+        if (twin?.asOf != null && Date.now() - twin.asOf > DAY_MS) {
+          staleTag = ' ⚠️ stale';
+        } else if (!twin || twin.asOf === null) {
+          staleTag = ' ⚠️ no data';
+        }
+      }
+
+      siteLines.push(`- **${entry.siteName}** (${entry.siteId}): ${score}/100 [${icon}]${staleTag}`);
     }
 
     const avg = Math.round(totalScore / entries.length);
