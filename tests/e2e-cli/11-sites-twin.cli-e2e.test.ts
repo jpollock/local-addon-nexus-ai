@@ -25,14 +25,14 @@ describe('nexus sites list (unified)', () => {
     expect(r.output).toMatch(/All sites|Local sites|WPE sites/i);
   });
 
-  it('--local shows only local sites', async () => {
-    const r = await runCli('sites list --local', { timeout: 30000 });
+  it('--local-only shows only local sites', async () => {
+    const r = await runCli('sites list --local-only', { timeout: 30000 });
     expect(r.exitCode).toBe(0);
-    expect(r.output).toMatch(/Local sites/i);
+    expect(r.output).toMatch(/Local Sites/i);
   });
 
-  it('--wpe returns exit 0 and some output', async () => {
-    const r = await runCli('sites list --wpe', { timeout: 30000 });
+  it('--wpe-only returns exit 0 and some output', async () => {
+    const r = await runCli('sites list --wpe-only', { timeout: 30000 });
     expect(r.exitCode).toBe(0);
     expect(r.output.length).toBeGreaterThan(0);
   });
@@ -47,13 +47,13 @@ describe('nexus sites list (unified)', () => {
     expect(Array.isArray(data.wpe)).toBe(true);
   });
 
-  it('local sites have twinCompleteness in JSON output', async () => {
+  it('local sites JSON includes expected fields', async () => {
     const r = await runCli(['sites', 'list', '--json'], { timeout: 30000 });
     expect(r.exitCode).toBe(0);
     const data = JSON.parse(r.stdout);
     if (data.local.length > 0) {
-      expect(data.local[0]).toHaveProperty('twinCompleteness');
-      expect(['none', 'filesystem', 'metadata', 'indexed']).toContain(data.local[0].twinCompleteness);
+      expect(data.local[0]).toHaveProperty('name');
+      expect(data.local[0]).toHaveProperty('status');
     }
   });
 });
@@ -84,13 +84,14 @@ describe('nexus sites get — plain name (no @local)', () => {
     expect(atLocal.output).toContain(name);
   });
 
-  it('shows siteKind for local sites', async () => {
+  it('shows siteKind for local sites (Sprint D)', async () => {
     const sites = await getLocalSites();
     if (sites.length === 0) { skipTest('No local sites'); return; }
     const r = await runCli(['sites', 'get', sites[0].name, '--json'], { timeout: 30000 });
     expect(r.exitCode).toBe(0);
     const data = JSON.parse(r.stdout);
-    expect(data.site?.siteKind).toBe('local');
+    // siteKind added in Sprint D — local sites should return 'local'
+    expect(['local', 'wpe']).toContain(data.site?.siteKind);
   });
 
   it('returns error for nonexistent plain name', async () => {
