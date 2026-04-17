@@ -48,12 +48,21 @@ export async function runCli(
       reject(new Error(`CLI command timed out after ${timeout}ms: nexus ${args.join(' ')}`));
     }, timeout);
 
+    // Kill child when parent receives Ctrl+C so tests stop immediately
+    const sigintHandler = () => { child.kill(); };
+    process.once('SIGINT', sigintHandler);
+
     child.on('close', (code) => {
       clearTimeout(timer);
+      process.removeListener('SIGINT', sigintHandler);
       resolve({ stdout, stderr, exitCode: code || 0, output: stdout + stderr });
     });
 
-    child.on('error', reject);
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      process.removeListener('SIGINT', sigintHandler);
+      reject(err);
+    });
   });
 }
 

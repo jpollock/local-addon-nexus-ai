@@ -22,4 +22,5 @@ module.exports = {
   verbose: true,
   bail: false, // Continue running tests even if some fail
   maxWorkers: 1, // Run tests sequentially to avoid conflicts
+  forceExit: true, // Kill any hanging child processes on Ctrl+C or completion
 };
