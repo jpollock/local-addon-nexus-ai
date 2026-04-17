@@ -449,6 +449,153 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // Fleet Intelligence — Dashboard panels
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.GET_FLEET_SUMMARY, () => {
+    try {
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const twinService = deps.nexusServices?.twinService;
+      const twins = twinService ? (twinService.getAll() ?? []) : [];
+
+      // WPE sites from graph DB
+      let wpeSites: any[] = [];
+      try {
+        const db = graphService.getDb();
+        if (db) {
+          wpeSites = db.prepare("SELECT id, wp_version, php_version FROM sites WHERE source='wpe'").all() as any[];
+        }
+      } catch { /* graph may not be ready */ }
+
+      const totalLocal = twins.length;
+      const totalWpe = wpeSites.length;
+      const total = totalLocal + totalWpe;
+
+      // Completeness counts (local twins only)
+      const completeness = { none: 0, filesystem: 0, metadata: 0, indexed: 0 };
+      let staleCount = 0;
+      let neverScannedCount = 0;
+
+      const wpVersionMap = new Map<string, number>();
+      const phpVersionMap = new Map<string, number>();
+
+      // Helper: normalize PHP version to major.minor
+      const normalizePhp = (v: string) => {
+        const parts = v.split('.');
+        return parts.length >= 2 ? `${parts[0]}.${parts[1]}` : v;
+      };
+
+      for (const twin of twins) {
+        completeness[twin.completeness as keyof typeof completeness]++;
+        if (twin.asOf && now - twin.asOf > DAY_MS) staleCount++;
+        if (twin.completeness === 'none') neverScannedCount++;
+
+        const wpV = twin.wpVersion ?? 'unknown';
+        wpVersionMap.set(wpV, (wpVersionMap.get(wpV) ?? 0) + 1);
+
+        const rawPhp = twin.phpVersion ?? 'unknown';
+        const phpV = rawPhp === 'unknown' ? 'unknown' : normalizePhp(rawPhp);
+        phpVersionMap.set(phpV, (phpVersionMap.get(phpV) ?? 0) + 1);
+      }
+
+      // Add WPE site versions
+      for (const site of wpeSites) {
+        const wpV = site.wp_version ?? 'unknown';
+        wpVersionMap.set(wpV, (wpVersionMap.get(wpV) ?? 0) + 1);
+
+        const rawPhp = site.php_version ?? 'unknown';
+        const phpV = rawPhp === 'unknown' ? 'unknown' : normalizePhp(rawPhp);
+        phpVersionMap.set(phpV, (phpVersionMap.get(phpV) ?? 0) + 1);
+      }
+
+      // Sort versions by count desc, unknown last; keep top 5 + "other"
+      const sortVersions = (map: Map<string, number>) => {
+        const entries = Array.from(map.entries()).map(([version, count]) => ({ version, count }));
+        entries.sort((a, b) => {
+          if (a.version === 'unknown') return 1;
+          if (b.version === 'unknown') return -1;
+          return b.count - a.count;
+        });
+        const top = entries.slice(0, 5);
+        const otherCount = entries.slice(5).reduce((s, e) => s + (e.version === 'unknown' ? 0 : e.count), 0);
+        const unknownCount = entries.find(e => e.version === 'unknown')?.count ?? 0;
+        if (otherCount > 0) top.push({ version: 'other', count: otherCount });
+        if (unknownCount > 0) top.push({ version: 'unknown', count: unknownCount });
+        return top;
+      };
+
+      return {
+        total,
+        totalLocal,
+        totalWpe,
+        wpVersions: sortVersions(wpVersionMap),
+        phpVersions: sortVersions(phpVersionMap),
+        completeness,
+        staleCount,
+        neverScannedCount,
+      };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-fleet-summary failed:', (err as Error).message);
+      return null;
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.GET_FLEET_PLUGINS, () => {
+    try {
+      const twinService = deps.nexusServices?.twinService;
+      const twins = twinService ? (twinService.getAll() ?? []) : [];
+
+      const pluginMap = new Map<string, { slug: string; title: string; siteCount: number }>();
+
+      // Local twins — active plugins from metadata/indexed
+      for (const twin of twins) {
+        if (twin.plugins?.length) {
+          for (const plugin of twin.plugins) {
+            if (plugin.status === 'active') {
+              const slug = plugin.name;
+              if (!pluginMap.has(slug)) {
+                pluginMap.set(slug, { slug, title: plugin.title ?? slug, siteCount: 0 });
+              }
+              pluginMap.get(slug)!.siteCount++;
+            }
+          }
+        }
+      }
+
+      // WPE sites from graph DB — active plugins
+      try {
+        const db = graphService.getDb();
+        if (db) {
+          const rows = db.prepare(
+            "SELECT p.slug, p.name FROM plugins p JOIN sites s ON s.id = p.site_id WHERE s.source='wpe' AND p.is_active=1"
+          ).all() as Array<{ slug: string; name: string }>;
+
+          for (const row of rows) {
+            const slug = row.slug;
+            if (!pluginMap.has(slug)) {
+              pluginMap.set(slug, { slug, title: row.name ?? slug, siteCount: 0 });
+            }
+            const entry = pluginMap.get(slug)!;
+            if (row.name && entry.title === slug) entry.title = row.name;
+            entry.siteCount++;
+          }
+        }
+      } catch { /* graph may not be ready */ }
+
+      const plugins = Array.from(pluginMap.values())
+        .filter(p => p.siteCount > 0)
+        .sort((a, b) => b.siteCount - a.siteCount)
+        .slice(0, 15);
+
+      return { plugins };
+    } catch (err) {
+      localLogger.error('[NexusAI] get-fleet-plugins failed:', (err as Error).message);
+      return null;
+    }
+  });
+
   safeHandle(IPC_CHANNELS.START_SITE, async (_event: any, siteId: string) => {
     try {
       // Validate input
