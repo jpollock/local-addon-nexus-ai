@@ -32,6 +32,13 @@ interface ProviderInfo {
 
 
 
+interface WebhookConfigUI {
+  id: string;
+  url: string;
+  secret?: string;
+  events: string[];
+}
+
 interface NexusPreferencesState {
   settings: NexusSettings;
   sites: SiteListItem[];
@@ -55,6 +62,18 @@ interface NexusPreferencesState {
   wpeCredsSaved: boolean;
   // Section expand/collapse state (Item 6)
   expandedSections: Set<string>;
+  // Webhooks (Phase 3)
+  webhooks: WebhookConfigUI[];
+  webhookUrlInput: string;
+  webhookSecretInput: string;
+  webhookEventsInput: string[];
+  webhookSaving: boolean;
+  // REST API
+  restApiEnabled: boolean;
+  restApiTokenSet: boolean;
+  restApiPort: number;
+  restApiMaskedToken: string | null;
+  restApiGenerating: boolean;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -152,6 +171,18 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     wpePendingClear: false,
     wpeCredsSaved: false,
     expandedSections: new Set(['ai-provider']),
+    // Webhooks (Phase 3)
+    webhooks: [],
+    webhookUrlInput: '',
+    webhookSecretInput: '',
+    webhookEventsInput: [],
+    webhookSaving: false,
+    // REST API
+    restApiEnabled: false,
+    restApiTokenSet: false,
+    restApiPort: 14200,
+    restApiMaskedToken: null,
+    restApiGenerating: false,
   };
 
   componentDidMount(): void {
@@ -166,12 +197,14 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   fetchData = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [settings, sites, providers, keyStatus, wpeCredsStatus] = await Promise.all([
+      const [settings, sites, providers, keyStatus, wpeCredsStatus, webhooks, restApiStatus] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
         ipc.invoke(IPC_CHANNELS.GET_PROVIDERS),
         ipc.invoke(IPC_CHANNELS.GET_API_KEY_STATUS),
         ipc.invoke(IPC_CHANNELS.WPE_GET_API_CREDENTIALS_STATUS),
+        ipc.invoke(IPC_CHANNELS.WEBHOOKS_LIST).catch(() => []),
+        ipc.invoke(IPC_CHANNELS.GET_REST_API_STATUS).catch(() => null),
       ]);
       if (!this.mounted) return;
       this.setState({
@@ -182,6 +215,10 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         wpeCredentialsConfigured: wpeCredsStatus?.configured ?? false,
         wpeUsername: wpeCredsStatus?.username ?? '',
         wpeUsernameInput: wpeCredsStatus?.username ?? '',
+        webhooks: webhooks ?? [],
+        restApiEnabled: restApiStatus?.enabled ?? false,
+        restApiTokenSet: restApiStatus?.tokenSet ?? false,
+        restApiPort: restApiStatus?.port ?? 14200,
         loading: false,
       }, () => {
         // Load models and stored key for the current provider
@@ -441,6 +478,27 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       // Error handling - could show error message
       if (!this.mounted) return;
       this.setState({ wpeCredsSaved: false });
+    }
+  };
+
+  handleGenerateRestApiToken = async (): Promise<void> => {
+    this.setState({ restApiGenerating: true });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GENERATE_REST_API_TOKEN);
+      if (!this.mounted) return;
+      if (result?.success) {
+        this.setState({
+          restApiEnabled: true,
+          restApiTokenSet: true,
+          restApiMaskedToken: result.maskedToken ?? null,
+          restApiGenerating: false,
+        });
+      } else {
+        this.setState({ restApiGenerating: false });
+      }
+    } catch {
+      if (!this.mounted) return;
+      this.setState({ restApiGenerating: false });
     }
   };
 
@@ -707,6 +765,88 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   }
 
 
+  // -----------------------------------------------------------------------
+  // REST API Section Render
+  // -----------------------------------------------------------------------
+
+  renderRestApiSection(): React.ReactNode {
+    const { restApiEnabled, restApiTokenSet, restApiPort, restApiMaskedToken, restApiGenerating } = this.state;
+
+    const tokenDisplay = restApiMaskedToken
+      ? restApiMaskedToken
+      : restApiTokenSet
+        ? `${restApiPort}...****`
+        : null;
+
+    return React.createElement('div', null,
+      React.createElement('div', { style: descStyle },
+        'Expose a read-only HTTP REST API for external tools (monitoring dashboards, Slack bots, GitHub Actions). ',
+        'The API runs on port ',
+        React.createElement('code', { style: { fontFamily: 'monospace', fontSize: '12px' } }, String(restApiPort)),
+        ' and requires a Bearer token for all requests.',
+      ),
+
+      restApiEnabled
+        ? React.createElement('div', { style: { marginBottom: '12px' } },
+            React.createElement('div', { style: { ...labelStyle, marginBottom: '4px' } }, 'Status'),
+            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+              React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
+              React.createElement('span', { style: { fontSize: '14px' } },
+                `Enabled on http://127.0.0.1:${restApiPort}`,
+              ),
+            ),
+          )
+        : null,
+
+      tokenDisplay
+        ? React.createElement('div', { style: { marginBottom: '12px' } },
+            React.createElement('div', { style: { ...labelStyle, marginBottom: '4px' } }, 'Token'),
+            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+              React.createElement('code', {
+                style: {
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(128,128,128,0.3)',
+                  letterSpacing: '0.5px',
+                },
+              }, tokenDisplay),
+            ),
+            restApiMaskedToken
+              ? React.createElement('div', {
+                  style: { fontSize: '12px', opacity: 0.7, marginTop: '4px' },
+                }, 'Token shown only once. Re-generate to replace.')
+              : null,
+          )
+        : null,
+
+      React.createElement('div', { style: rowStyle },
+        React.createElement('button', {
+          style: {
+            ...btnSmallStyle,
+            backgroundColor: restApiEnabled ? 'transparent' : UI_COLORS.WPE_BRAND,
+            color: restApiEnabled ? 'inherit' : '#fff',
+            borderColor: restApiEnabled ? 'rgba(128,128,128,0.4)' : UI_COLORS.WPE_BRAND,
+          },
+          onClick: this.handleGenerateRestApiToken,
+          disabled: restApiGenerating,
+          title: restApiEnabled
+            ? 'Generate a new token — replaces the existing token. Restart Local to apply.'
+            : 'Generate a Bearer token to enable the REST API.',
+        }, restApiGenerating ? 'Generating...' : restApiEnabled ? 'Re-generate Token' : 'Generate Token'),
+      ),
+
+      React.createElement('div', { style: { fontSize: '12px', opacity: 0.6, marginTop: '4px', lineHeight: 1.4 } },
+        'The REST API starts automatically on the next Local restart after a token is generated. ',
+        'Example: ',
+        React.createElement('code', { style: { fontFamily: 'monospace', fontSize: '11px' } },
+          `curl -H "Authorization: Bearer <token>" http://127.0.0.1:${restApiPort}/api/v1/sites`,
+        ),
+      ),
+    );
+  }
+
   render(): React.ReactNode {
     const { settings, sites, loading, expandedSections } = this.state;
 
@@ -955,6 +1095,157 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       ) : null,
     );
 
+    // -----------------------------------------------------------------------
+    // Section 5: Webhooks (collapsed by default)
+    // -----------------------------------------------------------------------
+    const webhooksExpanded = expandedSections.has('webhooks');
+    const { webhooks, webhookUrlInput, webhookSecretInput, webhookEventsInput, webhookSaving } = this.state;
+    const ipc5 = this.props.electron.ipcRenderer;
+
+    const ALL_WEBHOOK_EVENTS = [
+      'site.indexed',
+      'site.health.degraded',
+      'wpe.sync.failed',
+      'backup.created',
+      'plugin.update.available',
+    ];
+
+    const toggleWebhookEvent = (evt: string) => {
+      const current = webhookEventsInput;
+      const next = current.includes(evt) ? current.filter((e) => e !== evt) : [...current, evt];
+      this.setState({ webhookEventsInput: next });
+    };
+
+    const addWebhook = async () => {
+      if (!webhookUrlInput.trim()) return;
+      this.setState({ webhookSaving: true });
+      try {
+        const result = await ipc5.invoke(IPC_CHANNELS.WEBHOOKS_ADD, {
+          url: webhookUrlInput.trim(),
+          secret: webhookSecretInput.trim() || undefined,
+          events: webhookEventsInput.length > 0 ? webhookEventsInput : ALL_WEBHOOK_EVENTS,
+        });
+        if (result?.success) {
+          this.setState({
+            webhooks: [...webhooks, result.webhook],
+            webhookUrlInput: '',
+            webhookSecretInput: '',
+            webhookEventsInput: [],
+          });
+        }
+      } catch { /* ignore */ }
+      this.setState({ webhookSaving: false });
+    };
+
+    const deleteWebhook = async (id: string) => {
+      await ipc5.invoke(IPC_CHANNELS.WEBHOOKS_DELETE, { id });
+      this.setState({ webhooks: webhooks.filter((w) => w.id !== id) });
+    };
+
+    const testWebhook = async (id: string) => {
+      await ipc5.invoke(IPC_CHANNELS.WEBHOOKS_TEST, { id });
+    };
+
+    const section5 = React.createElement('div', { style: sectionStyle },
+      this.renderSectionHeader('webhooks', 'Webhooks'),
+      webhooksExpanded ? React.createElement('div', null,
+        React.createElement('div', { style: descStyle },
+          'Send HTTP POST notifications to external endpoints when Nexus events occur. ',
+          'Include an optional secret for HMAC-SHA256 request signing.',
+        ),
+
+        // Existing webhooks list
+        webhooks.length > 0
+          ? React.createElement('div', { style: { marginBottom: '16px' } },
+              ...webhooks.map((wh) =>
+                React.createElement('div', {
+                  key: wh.id,
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px',
+                    marginBottom: '6px',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(128, 128, 128, 0.2)',
+                  },
+                },
+                  React.createElement('div', { style: { flex: 1, fontSize: '13px' } },
+                    React.createElement('div', null, wh.url.length > 50 ? wh.url.substring(0, 47) + '...' : wh.url),
+                    React.createElement('div', { style: { opacity: 0.6, fontSize: '11px', marginTop: '2px' } },
+                      wh.events.join(', '),
+                    ),
+                  ),
+                  React.createElement('button', {
+                    style: { ...btnSmallStyle, borderColor: '#6b7280', color: '#6b7280' },
+                    onClick: () => testWebhook(wh.id),
+                    title: 'Send a test ping to this webhook',
+                  }, 'Test'),
+                  React.createElement('button', {
+                    style: { ...btnSmallStyle, borderColor: '#ef4444', color: '#ef4444' },
+                    onClick: () => deleteWebhook(wh.id),
+                    title: 'Remove this webhook',
+                  }, 'Delete'),
+                ),
+              ),
+            )
+          : React.createElement('div', { style: { opacity: 0.6, fontSize: '13px', marginBottom: '12px' } }, 'No webhooks configured.'),
+
+        // Add webhook form
+        React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '10px' } },
+          React.createElement('div', { style: labelStyle }, 'Add Webhook'),
+          React.createElement('input', {
+            type: 'url',
+            placeholder: 'https://your-endpoint.example.com/hook',
+            value: webhookUrlInput,
+            onChange: (e: any) => this.setState({ webhookUrlInput: e.target.value }),
+            style: inputStyle,
+          }),
+          React.createElement('input', {
+            type: 'text',
+            placeholder: 'Secret (optional — for HMAC signature)',
+            value: webhookSecretInput,
+            onChange: (e: any) => this.setState({ webhookSecretInput: e.target.value }),
+            style: { ...inputStyle, fontFamily: 'monospace' },
+          }),
+          React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap' as const, gap: '8px' } },
+            ...ALL_WEBHOOK_EVENTS.map((evt) =>
+              React.createElement('label', {
+                key: evt,
+                style: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer' },
+              },
+                React.createElement('input', {
+                  type: 'checkbox',
+                  checked: webhookEventsInput.length === 0 || webhookEventsInput.includes(evt),
+                  onChange: () => toggleWebhookEvent(evt),
+                }),
+                evt,
+              ),
+            ),
+          ),
+          React.createElement('button', {
+            style: webhookSaving
+              ? { ...btnSmallStyle, borderColor: '#6b7280', color: '#6b7280', opacity: 0.6, cursor: 'not-allowed' }
+              : { ...btnSmallStyle, borderColor: '#51bb7b', color: '#51bb7b' },
+            onClick: webhookSaving ? undefined : addWebhook,
+            disabled: webhookSaving || !webhookUrlInput.trim(),
+          }, webhookSaving ? 'Adding...' : 'Add Webhook'),
+        ),
+      ) : null,
+    );
+
+    // -----------------------------------------------------------------------
+    // Section 6: Advanced — REST API (collapsed by default)
+    // -----------------------------------------------------------------------
+    const advancedExpanded = expandedSections.has('advanced');
+    const section6 = React.createElement('div', { style: sectionStyle },
+      this.renderSectionHeader('advanced', 'Advanced'),
+      advancedExpanded ? React.createElement('div', null,
+        React.createElement('div', { style: { ...labelStyle, marginBottom: '8px' } }, 'REST API'),
+        this.renderRestApiSection(),
+      ) : null,
+    );
+
     return React.createElement('div', { style: { padding: '24px' } },
       React.createElement('style', null, `
         .nexus-password-input {
@@ -965,6 +1256,8 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       section2,
       section3,
       section4,
+      section5,
+      section6,
     );
   }
 }

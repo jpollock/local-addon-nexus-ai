@@ -115,6 +115,8 @@ export const IPC_CHANNELS = {
   FLEET_REFRESH_QUICK: `${ADDON_PREFIX}:fleet:refresh-quick`,
   FLEET_HEALTH_CHECK_ALL: `${ADDON_PREFIX}:fleet:health-check-all`,
   FLEET_PLUGIN_UPDATE_ALL: `${ADDON_PREFIX}:fleet:plugin-update-all`,
+  GET_FLEET_HEALTH_HISTORY: `${ADDON_PREFIX}:fleet:health-history`,
+  RUN_FLEET_HEALTH_NOW: `${ADDON_PREFIX}:fleet:health-run-now`,
 
   // Digital Twin (Site Metadata Cache)
   GET_SITE_METADATA: `${ADDON_PREFIX}:metadata:get`,
@@ -171,6 +173,20 @@ export const IPC_CHANNELS = {
 
   // WPE Backup
   WPE_CREATE_BACKUP: `${ADDON_PREFIX}:wpe:create-backup`,
+
+  // REST API
+  GET_REST_API_STATUS: `${ADDON_PREFIX}:rest-api:get-status`,
+  GENERATE_REST_API_TOKEN: `${ADDON_PREFIX}:rest-api:generate-token`,
+
+  // Webhooks (Phase 3)
+  WEBHOOKS_LIST: `${ADDON_PREFIX}:webhooks:list`,
+  WEBHOOKS_ADD: `${ADDON_PREFIX}:webhooks:add`,
+  WEBHOOKS_DELETE: `${ADDON_PREFIX}:webhooks:delete`,
+  WEBHOOKS_TEST: `${ADDON_PREFIX}:webhooks:test`,
+
+  // Operation Audit Log (Phase 3)
+  OPERATION_AUDIT_LIST: `${ADDON_PREFIX}:operation-audit:list`,
+  OPERATION_AUDIT_EXPORT: `${ADDON_PREFIX}:operation-audit:export`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -224,6 +240,7 @@ export const STORAGE_KEYS = {
   SITE_AI_CONFIG: `${ADDON_PREFIX}_site_ai_config`, // Per-site AI provider configuration
   DB_SCAN_CACHE: `${ADDON_PREFIX}_db_scan_cache`,
   WPE_INSTALL_CACHE: `${ADDON_PREFIX}_wpe_install_cache`, // WPE install names/IDs cached after CAPI sync
+  REST_API_TOKEN: `${ADDON_PREFIX}_rest_api_token`, // Bearer token for the read-only REST API server
 } as const;
 
 // ---------------------------------------------------------------------------

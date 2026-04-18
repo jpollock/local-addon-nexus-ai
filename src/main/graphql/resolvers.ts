@@ -4625,6 +4625,44 @@ export function createResolvers(context: ResolverContext) {
           return { success: true, data: JSON.stringify({ accounts, installs, usage, period: { firstDate, lastDate } }) };
         } catch (err: any) { return { success: false, error: err.message }; }
       },
+
+      // ======================================================================
+      // Phase 3: Operation Audit Log Resolvers
+      // ======================================================================
+
+      nexusOperationAuditList: async (
+        _parent: ResolverParent,
+        { limit, operation }: { limit?: number; operation?: string },
+      ) => {
+        try {
+          const { OperationAuditLog, defaultAuditLogPath } = require('../audit/OperationAuditLog');
+          const auditLog = new OperationAuditLog(defaultAuditLogPath());
+          const entries = auditLog.list(limit, operation ? { operation } : undefined);
+          return {
+            success: true,
+            entries: entries.map((e: any) => ({
+              ...e,
+              parameters: JSON.stringify(e.parameters),
+            })),
+          };
+        } catch (err: any) {
+          return { success: false, error: err.message, entries: [] };
+        }
+      },
+
+      nexusOperationAuditExport: async (
+        _parent: ResolverParent,
+        { outputPath }: { outputPath: string },
+      ) => {
+        try {
+          const { OperationAuditLog, defaultAuditLogPath } = require('../audit/OperationAuditLog');
+          const auditLog = new OperationAuditLog(defaultAuditLogPath());
+          auditLog.export(outputPath);
+          return { success: true, outputPath };
+        } catch (err: any) {
+          return { success: false, error: err.message, outputPath: null };
+        }
+      },
     },
   };
 }

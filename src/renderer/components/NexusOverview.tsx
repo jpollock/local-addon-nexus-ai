@@ -190,6 +190,14 @@ interface NexusOverviewState {
   goLiveModalOpen: boolean;
   goLiveInstallId: string | null;
   goLiveInstallName: string | null;
+  // Fleet health scheduler (Phase 3)
+  fleetHealthHistory: Array<{
+    timestamp: string;
+    checked: number;
+    degraded: number;
+    siteScores: Array<{ siteId: string; siteName: string; score: number }>;
+  }>;
+  fleetHealthRunning: boolean;
 }
 
 // -- Shared styles --
@@ -374,6 +382,9 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     goLiveModalOpen: false,
     goLiveInstallId: null,
     goLiveInstallName: null,
+    // Fleet health scheduler (Phase 3)
+    fleetHealthHistory: [],
+    fleetHealthRunning: false,
   };
 
   componentDidMount(): void {
@@ -442,7 +453,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult, fleetHealthHistory] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -453,6 +464,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
         ipc.invoke(IPC_CHANNELS.WPE_SYNC_STATS),
         ipc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY),
+        ipc.invoke(IPC_CHANNELS.GET_FLEET_HEALTH_HISTORY, { limit: 5 }).catch(() => []),
       ]);
       if (!this.mounted) return;
 
@@ -515,6 +527,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
         fleetSummary: fleetSummaryResult ?? null,
         onboardingDismissed: settings?.onboardingDismissed ?? false,
+        fleetHealthHistory: Array.isArray(fleetHealthHistory) ? fleetHealthHistory : [],
       });
     } catch (err: any) {
       if (!this.mounted) return;
@@ -1490,8 +1503,74 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         },
           React.createElement(TopIssuesPanel, { electron: this.props.electron }),
           React.createElement(StorageHealthPanel, { electron: this.props.electron }),
+          this.renderFleetHealthHistory(),
         ),
       ),
+    );
+  }
+
+  renderFleetHealthHistory(): React.ReactNode {
+    const { fleetHealthHistory, fleetHealthRunning } = this.state;
+    const ipc = this.props.electron.ipcRenderer;
+
+    const runNow = async () => {
+      this.setState({ fleetHealthRunning: true });
+      try {
+        await ipc.invoke(IPC_CHANNELS.RUN_FLEET_HEALTH_NOW);
+        const history = await ipc.invoke(IPC_CHANNELS.GET_FLEET_HEALTH_HISTORY, { limit: 5 });
+        if (this.mounted) this.setState({ fleetHealthHistory: Array.isArray(history) ? history : [] });
+      } catch { /* ignore */ }
+      if (this.mounted) this.setState({ fleetHealthRunning: false });
+    };
+
+    return React.createElement('div', {
+      style: {
+        background: 'var(--nxai-card-bg, #fff)',
+        border: '1px solid var(--nxai-card-border, #e5e7eb)',
+        borderRadius: '8px',
+        padding: '12px',
+        flexShrink: 0,
+      },
+    },
+      React.createElement('div', {
+        style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' },
+      },
+        React.createElement('div', { style: { fontSize: '12px', fontWeight: 600, color: 'var(--nxai-card-text)' } },
+          'Scheduled Health Checks',
+        ),
+        React.createElement('button', {
+          style: {
+            fontSize: '11px',
+            padding: '3px 8px',
+            borderRadius: '4px',
+            border: '1px solid #6b7280',
+            cursor: fleetHealthRunning ? 'not-allowed' : 'pointer',
+            opacity: fleetHealthRunning ? 0.6 : 1,
+          },
+          onClick: fleetHealthRunning ? undefined : runNow,
+        }, fleetHealthRunning ? 'Running...' : 'Run Now'),
+      ),
+
+      fleetHealthHistory.length === 0
+        ? React.createElement('div', { style: { fontSize: '11px', opacity: 0.6 } }, 'No scheduled checks yet.')
+        : React.createElement('div', null,
+            ...fleetHealthHistory.slice(0, 5).map((entry, i) => {
+              const degradedColor = entry.degraded > 0 ? '#f59e0b' : '#22c55e';
+              return React.createElement('div', {
+                key: i,
+                style: { fontSize: '11px', padding: '4px 0', borderBottom: '1px solid var(--nxai-card-border, #e5e7eb)' },
+              },
+                React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between' } },
+                  React.createElement('span', { style: { opacity: 0.7 } },
+                    new Date(entry.timestamp).toLocaleString(),
+                  ),
+                  React.createElement('span', { style: { color: degradedColor, fontWeight: 600 } },
+                    `${entry.degraded}/${entry.checked} degraded`,
+                  ),
+                ),
+              );
+            }),
+          ),
     );
   }
 

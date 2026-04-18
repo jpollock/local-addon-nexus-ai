@@ -37,7 +37,7 @@ export function registerWpeSyncHandlers(deps: IpcHandlerDeps, ctx: WpeSyncHandle
     const startTime = Date.now();
 
     if (!deps.wpeSyncService) {
-      localLogger.warn('[NexusAI] WPE sync service not initialized');
+      localLogger.warn?.('[NexusAI] WPE sync service not initialized');
       return { success: false, error: 'WPE sync service not available' };
     }
 
@@ -48,7 +48,7 @@ export function registerWpeSyncHandlers(deps: IpcHandlerDeps, ctx: WpeSyncHandle
       // Manual sync always force-refreshes all installs (staleThresholdHours=0)
       // Incremental staleness is only for scheduled/auto syncs
       localLogger.info(`[NexusAI] Starting WPE site sync (force)${limit ? ` (limit: ${limit})` : ''}...`);
-      const result = await deps.wpeSyncService.syncAllWPESites(limit, 0);
+      const result = await deps.wpeSyncService?.syncAllWPESites(limit, 0);
       localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed`);
 
       auditLogger.logSuccess(
@@ -94,7 +94,7 @@ export function registerWpeSyncHandlers(deps: IpcHandlerDeps, ctx: WpeSyncHandle
 
   safeHandle(IPC_CHANNELS.WPE_SYNC_STOP, () => {
     if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
-    deps.wpeSyncService.stopSync();
+    deps.wpeSyncService?.stopSync();
     return { success: true };
   });
 
@@ -169,7 +169,7 @@ export function registerWpeSyncHandlers(deps: IpcHandlerDeps, ctx: WpeSyncHandle
           if (status === 401 || status === 403) {
             wpeAuthError = true;
           } else {
-            localLogger.warn('[NexusAI] Failed to enrich sites with account_id:', String(err));
+            localLogger.warn?.('[NexusAI] Failed to enrich sites with account_id:', String(err));
           }
         }
       }
@@ -205,7 +205,7 @@ export function registerWpeSyncHandlers(deps: IpcHandlerDeps, ctx: WpeSyncHandle
       );
 
       if (!site) {
-        localLogger.warn(`[NexusAI] WPE site not found: ${validated}. Available sites:`, sites.map((s: any) => s.id));
+        localLogger.warn?.(`[NexusAI] WPE site not found: ${validated}. Available sites:`, sites.map((s: any) => s.id));
         return { success: false, error: `Site not found: ${validated}` };
       }
 
@@ -246,7 +246,7 @@ export function registerWpeSyncHandlers(deps: IpcHandlerDeps, ctx: WpeSyncHandle
         }
       }
 
-      await deps.wpeSyncService.syncSingleSite(installId);
+      await deps.wpeSyncService?.syncSingleSite(installId);
 
       auditLogger.logSuccess(
         'wpe_sync_single',

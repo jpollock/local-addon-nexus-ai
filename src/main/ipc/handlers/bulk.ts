@@ -227,7 +227,7 @@ export function registerBulkHandlers(deps: IpcHandlerDeps, ctx: BulkHandlerConte
   // Quick fleet refresh — filesystem scan for halted, WP-CLI for running (no auto-start)
   safeHandle(IPC_CHANNELS.FLEET_REFRESH_QUICK, async (_event: any) => {
     try {
-      const result = await deps.nexusServices?.registry?.call('nexus_fleet_refresh', {}, deps.nexusServices, 'ui');
+      const result = await deps.nexusServices?.registry?.call('nexus_fleet_refresh', {}, deps.nexusServices, 'cli');
       const text = result?.content?.[0]?.text ?? '';
       return { success: !result?.isError, message: text };
     } catch (err) {

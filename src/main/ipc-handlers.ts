@@ -3361,5 +3361,37 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // REST API — token management
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.GET_REST_API_STATUS, async (_event: any) => {
+    try {
+      const token = registryStorage.get(STORAGE_KEYS.REST_API_TOKEN) as string | null;
+      return {
+        success: true,
+        enabled: !!token,
+        port: 14200,
+        tokenSet: !!token,
+      };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.GENERATE_REST_API_TOKEN, async (_event: any) => {
+    try {
+      // Generate a cryptographically random 32-byte hex token
+      const crypto = require('crypto') as typeof import('crypto');
+      const token = crypto.randomBytes(32).toString('hex');
+      registryStorage.set(STORAGE_KEYS.REST_API_TOKEN, token);
+      // Return a masked version: show first 8 and last 4 chars
+      const masked = `${token.substring(0, 8)}...${token.substring(token.length - 4)}`;
+      return { success: true, maskedToken: masked };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
 }
