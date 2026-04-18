@@ -5,8 +5,52 @@
  */
 
 import { Command } from 'commander';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { getClient } from '../utils/graphql';
 import { parseTarget } from '../utils/target';
+
+// ---------------------------------------------------------------------------
+// Resume state helpers
+// ---------------------------------------------------------------------------
+
+export interface ResumeState {
+  command: string;
+  completed: string[];
+  failed: string[];
+  pending: string[];
+  timestamp: number;
+}
+
+const RESUME_STATE_FILE = path.join(os.homedir(), '.nexus-resume-state.json');
+
+export function saveResumeState(state: ResumeState): void {
+  try {
+    fs.writeFileSync(RESUME_STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+  } catch {
+    // Non-fatal — resume state is best-effort
+  }
+}
+
+export function loadResumeState(): ResumeState | null {
+  try {
+    const raw = fs.readFileSync(RESUME_STATE_FILE, 'utf-8');
+    return JSON.parse(raw) as ResumeState;
+  } catch {
+    return null;
+  }
+}
+
+export function clearResumeState(): void {
+  try {
+    if (fs.existsSync(RESUME_STATE_FILE)) {
+      fs.unlinkSync(RESUME_STATE_FILE);
+    }
+  } catch {
+    // Non-fatal
+  }
+}
 
 const truncErr = (msg: string) => msg.split('\n')[0].slice(0, 120);
 
@@ -965,9 +1009,14 @@ fleetCommand
   .option('--local-only', 'Limit --deep to local sites only')
   .option('--wpe-only', 'Limit --deep to WPE sites only (SSH WP-CLI)')
   .option('--concurrency <n>', 'Max local sites to start simultaneously in --deep mode (default: 3)', '3')
+  .option('--on-error <mode>', 'How to handle site failures: continue (default) or stop', 'continue')
+  .option('--resume', 'Resume from last interrupted run (retry failed + pending sites only)')
   .action(async (options) => {
     try {
       const client = getClient({ timeout: 600000 }); // 10 min for deep mode
+
+      // Validate --on-error value
+      const onError: 'continue' | 'stop' = options.onError === 'stop' ? 'stop' : 'continue';
 
       if (!options.deep) {
         // Standard: filesystem scan for halted, WP-CLI for running
@@ -994,8 +1043,14 @@ fleetCommand
       const doWpe   = !options.localOnly;
       const concurrency = Math.max(1, parseInt(options.concurrency ?? '3', 10));
 
+      // Build the command string for resume state
+      const commandParts = ['fleet refresh --deep'];
+      if (options.localOnly) commandParts.push('--local-only');
+      if (options.wpeOnly) commandParts.push('--wpe-only');
+      const commandStr = commandParts.join(' ');
+
       const scope = doLocal && doWpe ? 'local + WPE' : doLocal ? 'local only' : 'WPE only';
-      console.log(`\n🔄 Deep refresh (${scope})...\n`);
+      console.log(`\nDeep refresh (${scope})...\n`);
 
       const listResult = await client.mutate<{ nexusSitesList: any }>(`
         mutation {
@@ -1006,18 +1061,44 @@ fleetCommand
         }
       `);
 
-      const results: Array<{ name: string; outcome: string }> = [];
+      let localSites: Array<{ name: string; status: string }> = doLocal
+        ? (listResult.nexusSitesList.local ?? [])
+        : [];
+      let wpeSites: Array<{ name: string; installId: string }> = doWpe
+        ? (listResult.nexusSitesList.wpe ?? [])
+        : [];
+
+      // ── Handle --resume: filter sites based on saved state ────────────────
+      if (options.resume) {
+        const savedState = loadResumeState();
+        if (!savedState) {
+          console.log('  No resume state found. Run without --resume to start fresh.\n');
+          process.exit(1);
+        }
+
+        const toRetry = new Set([...savedState.failed, ...savedState.pending]);
+        const completedSet = new Set(savedState.completed);
+
+        localSites = localSites.filter((s) => toRetry.has(s.name) || !completedSet.has(s.name));
+        wpeSites = wpeSites.filter((s) => toRetry.has(s.name) || !completedSet.has(s.name));
+
+        const retryCount = localSites.length + wpeSites.length;
+        console.log(`  Resuming: retrying ${retryCount} site${retryCount !== 1 ? 's' : ''} (${savedState.failed.length} failed, ${savedState.pending.length} pending from last run)\n`);
+      }
+
+      const results: Array<{ name: string; outcome: string; failed: boolean }> = [];
+      let stopRequested = false;
 
       // ── Local sites — bounded concurrency ─────────────────────────────────
       if (doLocal) {
-        const localSites: Array<{ name: string; status: string }> = listResult.nexusSitesList.local ?? [];
-
         if (localSites.length === 0) {
           console.log('  (no local sites found)');
         } else {
           console.log(`Local sites (concurrency: ${Math.min(concurrency, localSites.length)}):`);
 
-          const processLocal = async (site: { name: string; status: string }) => {
+          const processLocal = async (site: { name: string; status: string }): Promise<void> => {
+            if (stopRequested) return;
+
             const wasHalted = site.status !== 'running';
             const t0 = Date.now();
 
@@ -1031,7 +1112,8 @@ fleetCommand
               if (!startResult.nexusSitesStart.success) {
                 const msg = truncErr(startResult.nexusSitesStart.error ?? 'failed to start');
                 console.log(`  ${site.name}  ❌ start failed: ${msg}`);
-                results.push({ name: site.name, outcome: `❌ start failed: ${msg}` });
+                results.push({ name: site.name, outcome: `❌ start failed: ${msg}`, failed: true });
+                if (onError === 'stop') { stopRequested = true; }
                 return;
               }
             }
@@ -1055,24 +1137,26 @@ fleetCommand
               if (!scanOk) {
                 const msg = truncErr(refreshResult.nexusSiteRefresh.error ?? 'scan failed');
                 console.log(`  ${site.name}  ⚠️  scanned with errors (${elapsed}s): ${msg}`);
-                results.push({ name: site.name, outcome: `⚠️ scan error: ${msg}` });
+                results.push({ name: site.name, outcome: `⚠️ scan error: ${msg}`, failed: true });
+                if (onError === 'stop') { stopRequested = true; }
               } else if (!stopResult.nexusSitesStop.success) {
                 const msg = truncErr(stopResult.nexusSitesStop.error ?? 'stop failed');
                 console.log(`  ${site.name}  ⚠️  scanned but stop failed (${elapsed}s): ${msg}`);
-                results.push({ name: site.name, outcome: `⚠️ scanned, stop failed: ${msg}` });
+                results.push({ name: site.name, outcome: `⚠️ scanned, stop failed: ${msg}`, failed: false });
               } else {
                 console.log(`  ${site.name}  ✅  (${elapsed}s)`);
-                results.push({ name: site.name, outcome: '✅ full WP-CLI scan' });
+                results.push({ name: site.name, outcome: '✅ full WP-CLI scan', failed: false });
               }
             } else {
               const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
               if (!scanOk) {
                 const msg = truncErr(refreshResult.nexusSiteRefresh.error ?? 'scan failed');
                 console.log(`  ${site.name}  ❌ scan failed (${elapsed}s): ${msg}`);
-                results.push({ name: site.name, outcome: `❌ scan failed: ${msg}` });
+                results.push({ name: site.name, outcome: `❌ scan failed: ${msg}`, failed: true });
+                if (onError === 'stop') { stopRequested = true; }
               } else {
                 console.log(`  ${site.name}  ✅  (${elapsed}s, left running)`);
-                results.push({ name: site.name, outcome: '✅ full WP-CLI scan (left running)' });
+                results.push({ name: site.name, outcome: '✅ full WP-CLI scan (left running)', failed: false });
               }
             }
           };
@@ -1080,26 +1164,49 @@ fleetCommand
           // Worker pool: N workers pull from a shared queue
           const queue = [...localSites];
           const workers = Array.from({ length: Math.min(concurrency, localSites.length) }, async () => {
-            while (queue.length > 0) {
+            while (queue.length > 0 && !stopRequested) {
               const site = queue.shift()!;
               await processLocal(site);
             }
           });
           await Promise.all(workers);
+
+          // Handle stop: mark remaining queued sites as not processed
+          if (stopRequested) {
+            const processedNames = new Set(results.map((r) => r.name));
+            const notProcessed = localSites.filter((s) => !processedNames.has(s.name));
+            if (notProcessed.length > 0) {
+              const remaining = notProcessed.length + (doWpe ? wpeSites.length : 0);
+              console.log(`\nStopping due to --on-error=stop. ${remaining} site${remaining !== 1 ? 's' : ''} were not processed.`);
+              // Save resume state before exiting
+              saveResumeState({
+                command: commandStr,
+                completed: results.filter((r) => !r.failed).map((r) => r.name),
+                failed: results.filter((r) => r.failed).map((r) => r.name),
+                pending: [
+                  ...notProcessed.map((s) => s.name),
+                  ...(doWpe ? wpeSites.map((s) => s.name) : []),
+                ],
+                timestamp: Date.now(),
+              });
+              console.log(`  Resume state saved. Run with --resume to retry.\n`);
+              process.exit(1);
+            }
+          }
         }
       }
 
       // ── WPE sites — bounded concurrency (SSH connections can't all run at once)
-      if (doWpe) {
-        const wpeSites: Array<{ name: string; installId: string }> = listResult.nexusSitesList.wpe ?? [];
-
+      if (doWpe && !stopRequested) {
         if (wpeSites.length === 0) {
           console.log('\n  (no WPE sites found — not authenticated or no installs)');
         } else {
           if (doLocal) console.log('');
           console.log(`WPE sites (concurrency: ${Math.min(concurrency, wpeSites.length)}):`);
 
-          const processWpe = async (site: { name: string; installId: string }) => {
+          const processWpe = async (site: { name: string; installId: string }): Promise<void> => {
+            if (stopRequested) return;
+
             const t0 = Date.now();
             try {
               const deepResult = await client.mutate<{ nexusWpeSiteDeepRefresh: any }>(`
@@ -1115,26 +1222,46 @@ fleetCommand
               if (!r.success) {
                 const msg = truncErr(r.error ?? 'SSH scan failed');
                 console.log(`  ${site.name}  ❌ ${msg} (${elapsed}s)`);
-                results.push({ name: site.name, outcome: `❌ ${msg}` });
+                results.push({ name: site.name, outcome: `❌ ${msg}`, failed: true });
+                if (onError === 'stop') { stopRequested = true; }
               } else {
                 const detail = `${r.pluginCount} plugins, ${r.themeCount} themes, WP ${r.wpVersion ?? '?'}`;
                 console.log(`  ${site.name}  ✅  ${detail} (${elapsed}s)`);
-                results.push({ name: site.name, outcome: `✅ SSH WP-CLI scan (${detail})` });
+                results.push({ name: site.name, outcome: `✅ SSH WP-CLI scan (${detail})`, failed: false });
               }
             } catch (err: any) {
               const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
               console.log(`  ${site.name}  ❌ ${truncErr(err.message)} (${elapsed}s)`);
-              results.push({ name: site.name, outcome: `❌ ${truncErr(err.message)}` });
+              results.push({ name: site.name, outcome: `❌ ${truncErr(err.message)}`, failed: true });
+              if (onError === 'stop') { stopRequested = true; }
             }
           };
 
           const wpeQueue = [...wpeSites];
           const wpeWorkers = Array.from({ length: Math.min(concurrency, wpeSites.length) }, async () => {
-            while (wpeQueue.length > 0) {
+            while (wpeQueue.length > 0 && !stopRequested) {
               await processWpe(wpeQueue.shift()!);
             }
           });
           await Promise.all(wpeWorkers);
+
+          // Handle stop: mark remaining WPE sites as not processed
+          if (stopRequested) {
+            const processedNames = new Set(results.map((r) => r.name));
+            const notProcessed = wpeSites.filter((s) => !processedNames.has(s.name));
+            if (notProcessed.length > 0) {
+              console.log(`\nStopping due to --on-error=stop. ${notProcessed.length} site${notProcessed.length !== 1 ? 's' : ''} were not processed.`);
+              saveResumeState({
+                command: commandStr,
+                completed: results.filter((r) => !r.failed).map((r) => r.name),
+                failed: results.filter((r) => r.failed).map((r) => r.name),
+                pending: notProcessed.map((s) => s.name),
+                timestamp: Date.now(),
+              });
+              console.log(`  Resume state saved. Run with --resume to retry.\n`);
+              process.exit(1);
+            }
+          }
         }
       }
 
@@ -1142,7 +1269,26 @@ fleetCommand
       for (const r of results) {
         console.log(`  ${r.name}: ${r.outcome}`);
       }
-      console.log('');
+
+      const failedCount = results.filter((r) => r.failed).length;
+      const successCount = results.filter((r) => !r.failed).length;
+      console.log(`\n  ${successCount} succeeded, ${failedCount} failed`);
+
+      // Save resume state if there were failures (for potential --resume use)
+      if (failedCount > 0) {
+        saveResumeState({
+          command: commandStr,
+          completed: results.filter((r) => !r.failed).map((r) => r.name),
+          failed: results.filter((r) => r.failed).map((r) => r.name),
+          pending: [],
+          timestamp: Date.now(),
+        });
+        console.log(`  Run with --resume to retry failed sites.\n`);
+      } else {
+        // All succeeded — clear any stale resume state
+        clearResumeState();
+        console.log('');
+      }
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
       process.exit(1);

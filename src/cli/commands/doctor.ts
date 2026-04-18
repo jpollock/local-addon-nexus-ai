@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as child_process from 'child_process';
 import { Command } from 'commander';
 import { isLocalInstalled, isLocalRunning } from '../bootstrap/process';
 import { isAddonInstalled, isAddonActivated, getInstalledAddonVersion, isDevAddon } from '../bootstrap/addon';
@@ -380,6 +381,166 @@ async function checkSitesWithAI(graphqlAvailable: boolean): Promise<CheckResult>
 }
 
 // ---------------------------------------------------------------------------
+// New checks: disk space, stale twins, recent errors
+// ---------------------------------------------------------------------------
+
+/**
+ * Check disk space available on the primary filesystem.
+ * Warn < 2 GB, error < 500 MB.
+ */
+async function checkDiskSpace(): Promise<CheckResult> {
+  try {
+    const output = child_process.execSync('df -k / 2>/dev/null || df -k $HOME 2>/dev/null', {
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+
+    const lines = output.trim().split('\n');
+    for (const line of lines.slice(1)) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length >= 4) {
+        const availableRaw = parseInt(parts[3], 10);
+        if (!isNaN(availableRaw)) {
+          // macOS df uses 512-byte blocks when value is very large; Linux uses 1K blocks
+          let availableBytes: number;
+          if (availableRaw > 1_000_000_000) {
+            availableBytes = availableRaw * 512;
+          } else {
+            availableBytes = availableRaw * 1024;
+          }
+
+          const availableGB = availableBytes / (1024 * 1024 * 1024);
+          const availableGBStr = availableGB.toFixed(1);
+
+          if (availableGB < 0.5) {
+            return {
+              label: 'Disk space',
+              status: 'error',
+              detail: `${availableGBStr} GB available (critical — operations will fail)`,
+              action: 'Free up disk space — at least 500 MB required',
+            };
+          } else if (availableGB < 2) {
+            return {
+              label: 'Disk space',
+              status: 'warn',
+              detail: `${availableGBStr} GB available (warning — indexing may fail)`,
+              action: 'Free up disk space to ensure at least 2 GB available',
+            };
+          } else {
+            return {
+              label: 'Disk space',
+              status: 'ok',
+              detail: `${availableGBStr} GB available (healthy)`,
+            };
+          }
+        }
+      }
+    }
+
+    return { label: 'Disk space', status: 'warn', detail: 'Could not parse disk info' };
+  } catch {
+    return { label: 'Disk space', status: 'warn', detail: 'Could not check disk space' };
+  }
+}
+
+/**
+ * Check for stale twin data (site data older than 24h).
+ * Uses the nexusFleetSummary GraphQL mutation to get staleCount.
+ */
+async function checkStaleTwins(graphqlAvailable: boolean): Promise<CheckResult> {
+  if (!graphqlAvailable) {
+    return { label: 'Site data', status: 'skip', detail: 'Local not running' };
+  }
+  try {
+    const { getClient } = await import('../utils/graphql');
+    const client = getClient({ timeout: 8000 });
+    const result = await client.mutate<{ nexusFleetSummary: any }>(`
+      mutation {
+        nexusFleetSummary {
+          success
+          error
+          totalSites
+          staleCount
+        }
+      }
+    `, {});
+
+    const data = result.nexusFleetSummary;
+    if (!data?.success) {
+      return { label: 'Site data', status: 'skip', detail: 'Could not reach fleet summary' };
+    }
+
+    const { totalSites, staleCount } = data;
+
+    if (staleCount === 0) {
+      return {
+        label: 'Site data',
+        status: 'ok',
+        detail: `All ${totalSites} site${totalSites !== 1 ? 's' : ''} have fresh data`,
+      };
+    }
+
+    return {
+      label: 'Site data',
+      status: 'warn',
+      detail: `${staleCount} site${staleCount !== 1 ? 's' : ''} have data older than 24h`,
+      action: 'nexus fleet refresh',
+    };
+  } catch {
+    return { label: 'Site data', status: 'skip', detail: 'Could not reach addon' };
+  }
+}
+
+/**
+ * Check if Local's addon log contains errors from the last session.
+ */
+async function checkRecentLogErrors(): Promise<CheckResult> {
+  try {
+    const paths = getLocalPaths();
+    const logsDir = path.join(paths.dataDir, 'logs');
+
+    if (!fs.existsSync(logsDir)) {
+      return { label: 'Recent errors', status: 'skip', detail: 'No log directory found' };
+    }
+
+    const logFiles = fs.readdirSync(logsDir)
+      .filter((f) => f.endsWith('.log'))
+      .map((f) => ({ name: f, mtime: fs.statSync(path.join(logsDir, f)).mtime.getTime() }))
+      .sort((a, b) => b.mtime - a.mtime);
+
+    if (logFiles.length === 0) {
+      return { label: 'Recent errors', status: 'skip', detail: 'No log files found' };
+    }
+
+    const logPath = path.join(logsDir, logFiles[0].name);
+    const content = fs.readFileSync(logPath, 'utf-8');
+    const lines = content.split('\n');
+
+    // Check last 100 lines for errors
+    const startIndex = Math.max(0, lines.length - 100);
+    let errorCount = 0;
+    for (let i = startIndex; i < lines.length; i++) {
+      if (/error|exception|failed|crash|fatal/i.test(lines[i]) && lines[i].trim()) {
+        errorCount++;
+      }
+    }
+
+    if (errorCount === 0) {
+      return { label: 'Recent errors', status: 'ok', detail: 'No errors in last session log' };
+    }
+
+    return {
+      label: 'Recent errors',
+      status: 'warn',
+      detail: `${errorCount} error${errorCount !== 1 ? 's' : ''} detected in last session`,
+      action: 'nexus troubleshoot for details',
+    };
+  } catch {
+    return { label: 'Recent errors', status: 'skip', detail: 'Could not read log files' };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Report rendering
 // ---------------------------------------------------------------------------
 
@@ -489,6 +650,11 @@ export const doctorCommand = new Command('doctor')
     checks.push(await checkAiProvider(graphqlAvailable));
     checks.push(await checkGateway(graphqlAvailable));
     checks.push(await checkSitesWithAI(graphqlAvailable));
+
+    // ── Phase 3: additional system checks ────────────────────────────────
+    checks.push(await checkDiskSpace());
+    checks.push(await checkStaleTwins(graphqlAvailable));
+    checks.push(await checkRecentLogErrors());
 
     // ── Output ────────────────────────────────────────────────────────────
     if (options.json) {
