@@ -21,6 +21,7 @@ import { buildCredentialSyncPhp, SUPPORTED_PROVIDERS, PROVIDER_TO_WP_OPTION } fr
 import { switchProviderForSite } from '../mcp/modules/wp-connector/switch-provider';
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
 import { STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../../common/constants';
+import { getApiKey, KeyVault } from '../security/KeyVault';
 
 interface ResolverContext {
   registry: ToolRegistry;
@@ -165,13 +166,12 @@ export function createResolvers(context: ResolverContext) {
       nexusAiGetConfig: () => {
         try {
           const settings = (services.registryStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
-          const apiKeys = (services.registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
           return {
             success: true,
             config: {
               provider: settings.aiProvider ?? null,
               model: settings.aiModel ?? null,
-              hasApiKey: settings.aiProvider ? !!apiKeys[settings.aiProvider] : false,
+              hasApiKey: settings.aiProvider ? !!getApiKey(services.registryStorage, settings.aiProvider) : false,
               useLocalGateway: !!settings.useLocalGateway,
             },
           };
@@ -197,8 +197,9 @@ export function createResolvers(context: ResolverContext) {
           if (useLocalGateway !== undefined) updated.useLocalGateway = useLocalGateway;
           services.registryStorage.set(STORAGE_KEYS.SETTINGS, updated);
           if (apiKey) {
-            const keys = (services.registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-            services.registryStorage.set(STORAGE_KEYS.API_KEYS, { ...keys, [provider]: apiKey });
+            // Store via KeyVault to ensure encryption at rest
+            const vault = new KeyVault(services.registryStorage, STORAGE_KEYS.API_KEYS);
+            vault.setKey(provider, apiKey);
           }
           return { success: true };
         } catch (err: any) {

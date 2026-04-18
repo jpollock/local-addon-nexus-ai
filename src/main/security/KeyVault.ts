@@ -83,14 +83,17 @@ export class KeyVault {
    */
   private migrateFromLegacy(keyName: string): string | null {
     try {
-      const blob = (this.storage.get(this.legacyStorageKey) ?? {}) as Record<string, string>;
-      const plainValue = blob[keyName];
+      const rawBlob = (this.storage.get(this.legacyStorageKey) ?? {}) as Record<string, string>;
+      const plainValue = rawBlob[keyName];
       if (plainValue) {
         // Write encrypted version
         this.setKey(keyName, plainValue);
-        // Remove the plain-text value from the legacy blob
-        delete blob[keyName];
-        this.storage.set(this.legacyStorageKey, blob as any);
+        // Remove the plain-text value from the legacy blob.
+        // Clone first to avoid mutating the original object reference (which may
+        // be shared across tests or between callers that hold the same reference).
+        const updatedBlob = { ...rawBlob };
+        delete updatedBlob[keyName];
+        this.storage.set(this.legacyStorageKey, updatedBlob as any);
         return plainValue;
       }
     } catch {
@@ -116,7 +119,7 @@ export class KeyVault {
 
     const stored = this.encrypt(value);
     const key = this.storageKey(keyName);
-    const blob = (this.storage.get(key) ?? {}) as Record<string, string>;
+    const blob = { ...(this.storage.get(key) ?? {}) } as Record<string, string>;
     blob[keyName] = stored;
     this.storage.set(key, blob as any);
   }
@@ -167,16 +170,17 @@ export class KeyVault {
    */
   deleteKey(keyName: string): void {
     const key = this.storageKey(keyName);
-    const blob = (this.storage.get(key) ?? {}) as Record<string, string>;
+    const blob = { ...(this.storage.get(key) ?? {}) } as Record<string, string>;
     delete blob[keyName];
     this.storage.set(key, blob as any);
 
     // Also clean up any residual plain-text value
     try {
-      const legacyBlob = (this.storage.get(this.legacyStorageKey) ?? {}) as Record<string, string>;
-      if (legacyBlob[keyName]) {
-        delete legacyBlob[keyName];
-        this.storage.set(this.legacyStorageKey, legacyBlob as any);
+      const legacyRaw = (this.storage.get(this.legacyStorageKey) ?? {}) as Record<string, string>;
+      if (legacyRaw[keyName]) {
+        const updatedLegacy = { ...legacyRaw };
+        delete updatedLegacy[keyName];
+        this.storage.set(this.legacyStorageKey, updatedLegacy as any);
       }
     } catch {
       // Best-effort cleanup

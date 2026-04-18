@@ -16,6 +16,7 @@ import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
 import { AIGatewayPanel } from './AIGatewayPanel';
 import { LoadingSpinner } from './LoadingSpinner';
+import { GoLiveChecklist } from './GoLiveChecklist';
 
 // Local's native notification components
 let toast: any = null;
@@ -180,6 +181,15 @@ interface NexusOverviewState {
   wpeAuthError: boolean;
   // Onboarding
   onboardingDismissed: boolean;
+  // WPE action buttons
+  wpeBackupRunning: boolean;
+  wpeBackupInstallId: string | null;
+  wpeBackupInstallName: string | null;
+  wpeSyncNowRunning: boolean;
+  // Go-live checklist modal
+  goLiveModalOpen: boolean;
+  goLiveInstallId: string | null;
+  goLiveInstallName: string | null;
 }
 
 // -- Shared styles --
@@ -357,6 +367,13 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     fleetSummary: null,
     fleetPlugins: [],
     onboardingDismissed: true, // default true prevents flash; overridden after settings load
+    wpeBackupRunning: false,
+    wpeBackupInstallId: null,
+    wpeBackupInstallName: null,
+    wpeSyncNowRunning: false,
+    goLiveModalOpen: false,
+    goLiveInstallId: null,
+    goLiveInstallName: null,
   };
 
   componentDidMount(): void {
@@ -1538,6 +1555,52 @@ renderTabBar(): React.ReactNode {
     );
   }
 
+  renderGoLiveChecklistButton(): React.ReactNode {
+    const { wpeSites } = this.state;
+
+    const handleClick = () => {
+      if (wpeSites.length === 0) {
+        if (toast) toast({ type: 'error', content: 'No WP Engine installs found. Run a WPE sync first.' });
+        return;
+      }
+      if (wpeSites.length === 1) {
+        this.setState({
+          goLiveModalOpen: true,
+          goLiveInstallId: wpeSites[0].wpeInstallId || wpeSites[0].id,
+          goLiveInstallName: wpeSites[0].name,
+        });
+        return;
+      }
+      // Multiple installs — show a simple prompt
+      const choices = wpeSites.map((s, i) => `${i + 1}. ${s.name}`).join('\n');
+      const choice = (window as any).prompt(
+        `Select WP Engine install to check:\n\n${choices}\n\nEnter number:`,
+        '1',
+      );
+      if (!choice) return;
+      const idx = parseInt(choice, 10) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= wpeSites.length) {
+        if (toast) toast({ type: 'error', content: 'Invalid selection.' });
+        return;
+      }
+      this.setState({
+        goLiveModalOpen: true,
+        goLiveInstallId: wpeSites[idx].wpeInstallId || wpeSites[idx].id,
+        goLiveInstallName: wpeSites[idx].name,
+      });
+    };
+
+    return React.createElement('div', { style: { flex: '1', minWidth: '220px' } },
+      React.createElement('button', {
+        style: { ...btnPrimaryStyle, width: '100%' },
+        onClick: handleClick,
+      }, 'Run Go-Live Checklist'),
+      React.createElement('div', { style: { fontSize: '11px', color: '#6b7280', marginTop: '4px', lineHeight: '1.3' } },
+        'Runs 6 pre-launch health checks for a WPE install: SSL, domain, WP/PHP versions, backup, health score.',
+      ),
+    );
+  }
+
   renderOperationsTab(): React.ReactNode {
     const groupStyle = { display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' as const };
     const groupLabelStyle = { fontSize: '12px', fontWeight: '600' as const, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '8px' };
@@ -1589,6 +1652,46 @@ renderTabBar(): React.ReactNode {
           'Installs AI plugin and syncs API credentials. Local sites only. Starts halted sites temporarily.',
         ),
       ),
+
+      // ── WP Engine ───────────────────────────────────────────────────────────
+      React.createElement('div', { style: groupLabelStyle }, 'WP Engine'),
+      React.createElement('div', { style: groupStyle },
+        this.renderOpsButton(
+          'Create WPE Backup', this.state.wpeBackupInstallName ? `Backing up ${this.state.wpeBackupInstallName}…` : 'Creating backup…',
+          this.state.wpeBackupRunning, null,
+          this.handleCreateWPEBackup,
+          'Creates an on-demand backup for a WP Engine install via CAPI. Requires WPE login.',
+        ),
+        this.renderOpsButton(
+          'Sync WPE Metadata Now', 'Syncing…',
+          this.state.wpeSyncNowRunning || this.state.wpeSyncing, null,
+          this.handleSyncWPEMetadataNow,
+          'Immediately syncs WP Engine metadata (WP version, PHP, plugins) without waiting for scheduled cron.',
+        ),
+        this.renderGoLiveChecklistButton(),
+      ),
+
+      // Go-live checklist modal overlay
+      this.state.goLiveModalOpen && this.state.goLiveInstallId && this.state.goLiveInstallName
+        ? React.createElement('div', {
+            style: {
+              position: 'fixed' as const,
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.55)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            },
+          },
+            React.createElement(GoLiveChecklist, {
+              electron: this.props.electron,
+              installId: this.state.goLiveInstallId,
+              installName: this.state.goLiveInstallName,
+              onClose: () => this.setState({ goLiveModalOpen: false, goLiveInstallId: null, goLiveInstallName: null }),
+            }),
+          )
+        : null,
 
       // WPE sync progress (runs outside bulkOpManager — show inline)
       this.state.wpeSyncing && this.state.wpeSyncProgress
@@ -2040,6 +2143,81 @@ renderTabBar(): React.ReactNode {
         toast({ type: 'error', content: `WPE sync error: ${errorMsg}` });
       }
       console.error('[NexusOverview] WPE sync error:', error);
+    }
+  };
+
+  handleCreateWPEBackup = async (): Promise<void> => {
+    const { wpeSites } = this.state;
+    if (wpeSites.length === 0) {
+      if (toast) toast({ type: 'error', content: 'No WP Engine installs found. Run a WPE sync first.' });
+      return;
+    }
+
+    let installId: string;
+    let installName: string;
+
+    if (wpeSites.length === 1) {
+      installId = wpeSites[0].wpeInstallId || wpeSites[0].id;
+      installName = wpeSites[0].name;
+    } else {
+      // Build a simple install list for the user to choose from
+      const choices = wpeSites
+        .map((s, i) => `${i + 1}. ${s.name} (${s.wpeInstallId || s.id})`)
+        .join('\n');
+      const choice = (window as any).prompt(
+        `Select WP Engine install to back up:\n\n${choices}\n\nEnter number:`,
+        '1',
+      );
+      if (!choice) return;
+      const idx = parseInt(choice, 10) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= wpeSites.length) {
+        if (toast) toast({ type: 'error', content: 'Invalid selection.' });
+        return;
+      }
+      installId = wpeSites[idx].wpeInstallId || wpeSites[idx].id;
+      installName = wpeSites[idx].name;
+    }
+
+    this.setState({ wpeBackupRunning: true, wpeBackupInstallId: installId, wpeBackupInstallName: installName });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.WPE_CREATE_BACKUP,
+        { installId },
+      );
+      if (!this.mounted) return;
+      if (result.success) {
+        if (toast) toast({ type: 'success', content: `Backup created for ${installName}` });
+      } else {
+        if (toast) toast({ type: 'error', content: `Backup failed: ${result.error}` });
+      }
+    } catch (err: any) {
+      if (!this.mounted) return;
+      if (toast) toast({ type: 'error', content: `Backup error: ${err.message}` });
+    } finally {
+      if (this.mounted) {
+        this.setState({ wpeBackupRunning: false, wpeBackupInstallId: null, wpeBackupInstallName: null });
+      }
+    }
+  };
+
+  handleSyncWPEMetadataNow = async (): Promise<void> => {
+    if (this.state.wpeSyncNowRunning || this.state.wpeSyncing) return;
+    this.setState({ wpeSyncNowRunning: true });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_ALL);
+      if (!this.mounted) return;
+      if (result.success) {
+        const count = result.synced ?? 0;
+        if (toast) toast({ type: 'success', content: `WP Engine metadata synced — ${count} install${count !== 1 ? 's' : ''} updated` });
+        await this.fetchAll();
+      } else {
+        if (toast) toast({ type: 'error', content: `Sync failed: ${result.error}. Check nexus wpe status for recovery guidance.` });
+      }
+    } catch (err: any) {
+      if (!this.mounted) return;
+      if (toast) toast({ type: 'error', content: `Sync error: ${err.message}` });
+    } finally {
+      if (this.mounted) this.setState({ wpeSyncNowRunning: false });
     }
   };
 

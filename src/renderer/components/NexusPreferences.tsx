@@ -486,7 +486,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   // -----------------------------------------------------------------------
 
   renderChatSection(): React.ReactNode {
-    const { settings, providers, models, loadingModels, keyStatus, keyInput, keySaved } = this.state;
+    const { settings, providers, models, loadingModels, keyStatus, keyInput, keySaved, keyIsSet } = this.state;
     const currentProvider = providers.find((p) => p.id === settings.aiProvider);
     const currentStatus = settings.aiProvider ? (keyStatus[settings.aiProvider] ?? 'unchecked') : 'unchecked';
 
@@ -545,31 +545,49 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         React.createElement('div', { style: rowStyle },
           React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '70px', /* color inherited */ } }, 'API Key'),
           React.createElement('input', {
-            type: 'password',
+            // When keyIsSet the displayed value is the masked representation (e.g. sk-ant-api0...xxxx)
+            // Show as readable text so the user can see it is set. When typing a new key use password.
+            type: keyIsSet ? 'text' : 'password',
             value: keyInput,
             onChange: this.handleKeyInputChange,
-            placeholder: 'Enter API key...',
+            placeholder: keyIsSet ? '' : 'Enter API key...',
             className: 'nexus-password-input',
+            readOnly: keyIsSet,
             style: {
               ...inputStyle,
               flex: 1,
               maxWidth: '350px',
+              opacity: keyIsSet ? 0.7 : 1,
+              cursor: keyIsSet ? 'default' : 'text',
             },
           }),
-          React.createElement('button', {
-            style: {
-              ...btnSmallStyle,
-              ...(keyInput.trim() && !keySaved ? { backgroundColor: UI_COLORS.WPE_BRAND, color: '#fff', border: 'none' } : {}),
-            },
-            onClick: this.handleSaveKey,
-            disabled: !keyInput.trim() || keySaved,
-          }, keySaved ? 'Saved' : 'Apply'),
+          // When key is set show a Change button; otherwise show Apply
+          keyIsSet
+            ? React.createElement('button', {
+                style: btnSmallStyle,
+                onClick: () => this.setState({ keyInput: '', keySaved: false, keyIsSet: false }),
+              }, 'Change')
+            : React.createElement('button', {
+                style: {
+                  ...btnSmallStyle,
+                  ...(keyInput.trim() && !keySaved ? { backgroundColor: UI_COLORS.WPE_BRAND, color: '#fff', border: 'none' } : {}),
+                },
+                onClick: this.handleSaveKey,
+                disabled: !keyInput.trim() || keySaved,
+              }, keySaved ? 'Saved' : 'Apply'),
           React.createElement('button', {
             style: btnSmallStyle,
             onClick: this.handleValidateKey,
-            disabled: !keyInput.trim() || currentStatus === 'checking',
+            disabled: !keyInput.trim() || keyIsSet || currentStatus === 'checking',
           }, 'Check Key'),
         ),
+
+        // Security indicator shown when a key is stored
+        keyIsSet ? React.createElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '80px', marginBottom: '4px' },
+        },
+          React.createElement('span', { style: { fontSize: '11px', opacity: 0.6 } }, 'Key is encrypted and stored securely'),
+        ) : null,
 
         // Status indicator
         React.createElement('div', {

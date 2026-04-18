@@ -16,6 +16,7 @@ import type { GraphService } from './events/GraphService';
 import type { EventProcessor } from './events/EventProcessor';
 import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
 import { scanDatabase } from './mcp/modules/db-scanner/db-scanner';
+import { getApiKey, hasApiKey } from './security/KeyVault';
 import { switchProviderForSite } from './mcp/modules/wp-connector/switch-provider';
 import { generateEventSummary } from './events/event-summary';
 import type { EventTimelineEntry, EventStats } from '../common/types';
@@ -1923,10 +1924,17 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           }
         }
 
-        // Check if credentials are synced by looking at stored keys
-        const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-        for (const [provider, key] of Object.entries(storedKeys)) {
+        // Check if credentials are synced — check both legacy and encrypted storage
+        const legacyKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+        for (const [provider, key] of Object.entries(legacyKeys)) {
           if (key) providers.push(provider);
+        }
+        // Also check encrypted storage for migrated keys
+        const allProviderIds = ['anthropic', 'openai', 'google', 'ollama'];
+        for (const pid of allProviderIds) {
+          if (!providers.includes(pid) && hasApiKey(registryStorage, pid)) {
+            providers.push(pid);
+          }
         }
         credentialsSynced = providers.length > 0;
 
@@ -2443,7 +2451,6 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       // Get settings to determine which provider to use
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
-      const apiKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
 
       // Use || not ?? — settings fields can be empty strings which ?? won't catch
       const aiProvider = settings?.aiProvider || 'anthropic';
@@ -2452,7 +2459,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         : aiProvider === 'google' ? 'gemini-1.5-flash'
         : 'llama3.2';
       const aiModel = settings?.aiModel || defaultModel;
-      const apiKey = apiKeys[aiProvider];
+      const apiKey = getApiKey(registryStorage, aiProvider);
 
       localLogger.info('[NexusAI] AI parse request - provider:', aiProvider, 'model:', aiModel, 'hasKey:', !!apiKey);
 
@@ -3994,6 +4001,41 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     } catch (err) {
       localLogger.error('[NexusAI] db-get-last-scan failed:', (err as Error).message);
       return { success: false, error: (err as Error).message, scan: null };
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // WPE Backup — create a backup for a specific WPE install
+  // ---------------------------------------------------------------------------
+
+  safeHandle(IPC_CHANNELS.WPE_CREATE_BACKUP, async (_event: any, { installId }: { installId: string }) => {
+    const startTime = Date.now();
+    try {
+      if (!localServicesBridge.isCAPIAvailable() || !localServicesBridge.isWPEAuthenticated()) {
+        return { success: false, error: 'WP Engine not connected. Run nexus wpe login first.' };
+      }
+      const result = await localServicesBridge.capiCreateBackup(
+        installId,
+        `Nexus AI backup — ${new Date().toISOString()}`,
+      );
+      auditLogger.logSuccess(
+        'wpe_create_backup',
+        installId,
+        'wpe_install',
+        { backupId: (result as any)?.id },
+        Date.now() - startTime,
+      );
+      return { success: true, backupId: (result as any)?.id, message: 'Backup initiated' };
+    } catch (err: any) {
+      auditLogger.logFailure(
+        'wpe_create_backup',
+        installId,
+        'wpe_install',
+        err.message,
+        { installId },
+        Date.now() - startTime,
+      );
+      return { success: false, error: err.message };
     }
   });
 

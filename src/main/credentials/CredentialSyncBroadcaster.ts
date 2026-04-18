@@ -10,6 +10,8 @@ import type { RegistryStorage } from '../content/IndexRegistry';
 import type { SiteDataAccessor } from '../mcp/types';
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
 import { STORAGE_KEYS } from '../../common/constants';
+import { hasApiKey } from '../security/KeyVault';
+import { listProviders } from '../chat/providers/index';
 
 export interface CredentialSyncResult {
   siteId: string;
@@ -150,7 +152,16 @@ export class CredentialSyncBroadcaster {
   }
 
   private getConfiguredProviders(): string[] {
-    const storedKeys = (this.registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-    return Object.keys(storedKeys).filter((k) => storedKeys[k]);
+    // Check both legacy plain-text blob and encrypted storage via hasApiKey
+    const legacyKeys = (this.registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+    const legacyProviders = Object.keys(legacyKeys).filter((k) => legacyKeys[k]);
+
+    // Also check encrypted storage for providers that have been migrated
+    const allProviders = listProviders().map((p) => p.id);
+    const encryptedProviders = allProviders.filter(
+      (pid) => !legacyProviders.includes(pid) && hasApiKey(this.registryStorage, pid),
+    );
+
+    return [...new Set([...legacyProviders, ...encryptedProviders])];
   }
 }

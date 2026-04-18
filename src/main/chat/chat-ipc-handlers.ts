@@ -3,6 +3,7 @@ import type { RegistryStorage } from '../content/IndexRegistry';
 import type { ChatService } from './ChatService';
 import type { CredentialSyncBroadcaster } from '../credentials/CredentialSyncBroadcaster';
 import { getProvider, listProviders } from './providers/index';
+import { KeyVault } from '../security/KeyVault';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
@@ -16,6 +17,10 @@ export interface ChatIpcHandlerDeps {
 
 export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
   const { chatService, registryStorage, localLogger, credentialBroadcaster } = deps;
+
+  // Create a KeyVault scoped to API key storage, with migration support for
+  // the legacy plain-text API_KEYS storage blob.
+  const keyVault = new KeyVault(registryStorage, STORAGE_KEYS.API_KEYS);
 
   // -----------------------------------------------------------------------
   // Chat
@@ -32,7 +37,8 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
       siteId?: string,
     ) => {
       try {
-        const apiKey = getStoredApiKey(registryStorage, providerId);
+        // Use KeyVault to retrieve decrypted key — stays server-side only
+        const apiKey = keyVault.getKey(providerId);
         await chatService.sendMessage(sessionId, message, {
           providerId,
           model,
@@ -78,7 +84,8 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
       const provider = getProvider(providerId);
       if (!provider) return [];
 
-      const apiKey = getStoredApiKey(registryStorage, providerId);
+      // Decrypt key server-side — never send to renderer
+      const apiKey = keyVault.getKey(providerId);
       try {
         return await provider.listModels({
           apiKey: apiKey ?? undefined,
@@ -100,8 +107,8 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
 
       const error = await provider.validateKey(apiKey);
       if (!error) {
-        // Store the key on successful validation
-        storeApiKey(registryStorage, providerId, apiKey);
+        // Store the key encrypted on successful validation
+        keyVault.setKey(providerId, apiKey);
         setKeyStatus(registryStorage, providerId, 'valid');
         return { valid: true };
       }
@@ -114,7 +121,7 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
   ipcMain.handle(
     IPC_CHANNELS.SAVE_API_KEY,
     async (_event: any, providerId: string, apiKey: string) => {
-      storeApiKey(registryStorage, providerId, apiKey);
+      keyVault.setKey(providerId, apiKey.trim());
       setKeyStatus(registryStorage, providerId, 'unchecked');
 
       // Broadcast key change to all running WordPress sites (fire-and-forget)
@@ -131,7 +138,10 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
   ipcMain.handle(
     IPC_CHANNELS.GET_API_KEY,
     (_event: any, providerId: string) => {
-      return getStoredApiKey(registryStorage, providerId);
+      // Return a masked representation — the full key stays in the main process.
+      // The renderer uses this to display "key is set" state without receiving
+      // the actual secret.
+      return keyVault.getMasked(providerId);
     },
   );
 
@@ -148,14 +158,25 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
       return { success: false, error: 'Credential broadcaster not available' };
     }
     try {
-      // Broadcast all configured providers
-      const keys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-      const providers = Object.keys(keys).filter((k) => keys[k]);
+      // Collect all provider IDs that have stored keys (check both encrypted
+      // and any remaining legacy storage so no providers are skipped).
+      const legacyKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+      const providerIds = new Set<string>(Object.keys(legacyKeys).filter((k) => legacyKeys[k]));
+
+      // Also check encrypted storage
+      const knownProviders = listProviders().map((p) => p.id);
+      for (const pid of knownProviders) {
+        if (keyVault.hasKey(pid)) {
+          providerIds.add(pid);
+        }
+      }
+
       const allResults = [];
-      for (const providerId of providers) {
+      for (const providerId of providerIds) {
         const results = await credentialBroadcaster.broadcastKeyChange(providerId);
         allResults.push(...results);
       }
+
       // Deduplicate by siteId (keep last result per site)
       const bySite = new Map<string, typeof allResults[0]>();
       for (const r of allResults) {
@@ -176,19 +197,8 @@ export function registerChatIpcHandlers(deps: ChatIpcHandlerDeps): void {
 }
 
 // ---------------------------------------------------------------------------
-// API Key Storage Helpers
+// Key Status Helpers (status flags remain plain text — not secrets)
 // ---------------------------------------------------------------------------
-
-function getStoredApiKey(storage: RegistryStorage, providerId: string): string | null {
-  const keys = (storage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-  return keys[providerId] ?? null;
-}
-
-function storeApiKey(storage: RegistryStorage, providerId: string, apiKey: string): void {
-  const keys = (storage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-  keys[providerId] = apiKey;
-  storage.set(STORAGE_KEYS.API_KEYS, keys as any);
-}
 
 function getKeyStatuses(storage: RegistryStorage): Record<string, string> {
   return (storage.get(STORAGE_KEYS.API_KEY_STATUS) ?? {}) as Record<string, string>;
@@ -198,4 +208,17 @@ function setKeyStatus(storage: RegistryStorage, providerId: string, status: stri
   const statuses = getKeyStatuses(storage);
   statuses[providerId] = status;
   storage.set(STORAGE_KEYS.API_KEY_STATUS, statuses as any);
+}
+
+// ---------------------------------------------------------------------------
+// Re-export KeyVault factory so other parts of the main process can obtain a
+// decrypted key without going through IPC.
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a KeyVault instance backed by the given storage object.
+ * Use this in non-IPC code (e.g. CredentialSyncBroadcaster) to decrypt keys.
+ */
+export function createKeyVault(storage: RegistryStorage): KeyVault {
+  return new KeyVault(storage, STORAGE_KEYS.API_KEYS);
 }
