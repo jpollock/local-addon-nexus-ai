@@ -36,6 +36,8 @@ export interface BulkOpDeps {
 
 const MAX_CONCURRENCY = 5; // Increased from 3 for better performance (50 sites: ~10 min vs ~17 min)
 const MAX_HISTORY = 20;
+/** Maximum individual site results retained per operation to cap memory usage. */
+const MAX_SITE_RESULTS = 500;
 
 export class BulkOperationManager {
   private ops: Map<string, BulkOperation> = new Map();
@@ -91,20 +93,22 @@ export class BulkOperationManager {
     const active = new Set<Promise<void>>();
 
     while (queue.length > 0 || active.size > 0) {
-      // Fill up to max concurrency
+      // Fill up to max concurrency using tracked set so each promise removes
+      // itself on completion — avoids the Promise.race re-enrollment bug where
+      // a completed promise lingers in the active set.
       while (queue.length > 0 && active.size < MAX_CONCURRENCY) {
         if (op.abortController.signal.aborted) {
           break;
         }
         const siteId = queue.shift()!;
-        const promise = this.executeSingle(op, siteId).then(() => {
-          active.delete(promise);
+        const p: Promise<void> = this.executeSingle(op, siteId).finally(() => {
+          active.delete(p);
         });
-        active.add(promise);
+        active.add(p);
       }
 
       if (op.abortController.signal.aborted) {
-        // Mark remaining queued sites as failed
+        // Mark remaining queued sites as cancelled
         for (const siteId of queue) {
           const result = op.results.get(siteId);
           if (result && result.status === 'pending') {
@@ -115,16 +119,22 @@ export class BulkOperationManager {
           }
         }
         queue.length = 0;
-        // Wait for active operations to finish
+        // Wait for all active operations to finish before exiting
         if (active.size > 0) {
-          await Promise.race([...active]);
+          await Promise.allSettled([...active]);
         }
-        continue;
+        break;
       }
 
       if (active.size > 0) {
+        // Wait for any one promise to free a slot before refilling
         await Promise.race([...active]);
       }
+    }
+
+    // Drain any remaining active promises (e.g. after abort break above)
+    if (active.size > 0) {
+      await Promise.allSettled([...active]);
     }
 
     // Cleanup: stop any auto-started sites that are still running
@@ -150,7 +160,27 @@ export class BulkOperationManager {
       op.status = 'completed';
     }
 
+    this.pruneHistory();
     this.deps.onProgress(op.id, this.getStatus(op.id)!);
+  }
+
+  /**
+   * Evict oldest completed operations so memory doesn't grow without bound.
+   * Keeps at most MAX_HISTORY operations; always preserves running operations.
+   */
+  private pruneHistory(): void {
+    if (this.ops.size <= MAX_HISTORY) return;
+
+    // Collect completed/cancelled/failed ops sorted oldest-first
+    const evictable = [...this.ops.values()]
+      .filter(op => op.status !== 'running')
+      .sort((a, b) => a.createdAt - b.createdAt);
+
+    const excess = this.ops.size - MAX_HISTORY;
+    for (let i = 0; i < excess && i < evictable.length; i++) {
+      this.ops.delete(evictable[i].id);
+      this.completionPromises.delete(evictable[i].id);
+    }
   }
 
   private async executeSingle(op: BulkOperation, siteId: string): Promise<void> {
@@ -397,8 +427,11 @@ export class BulkOperationManager {
     if (!op) return null;
 
     const siteResults: Record<string, SiteOpResult> = {};
+    let resultCount = 0;
     for (const [key, value] of op.results) {
+      if (resultCount >= MAX_SITE_RESULTS) break;
       siteResults[key] = { ...value };
+      resultCount++;
     }
 
     return {
