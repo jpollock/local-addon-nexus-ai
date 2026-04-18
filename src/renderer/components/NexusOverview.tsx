@@ -178,6 +178,8 @@ interface NexusOverviewState {
   syncing: boolean;
   syncResults: Array<{ siteId: string; siteName: string; success: boolean; providers: string[]; error?: string }> | null;
   wpeAuthError: boolean;
+  // Onboarding
+  onboardingDismissed: boolean;
 }
 
 // -- Shared styles --
@@ -354,6 +356,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     wpeAuthError: false,
     fleetSummary: null,
     fleetPlugins: [],
+    onboardingDismissed: true, // default true prevents flash; overridden after settings load
   };
 
   componentDidMount(): void {
@@ -494,6 +497,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         error: stats ? null : 'Failed to load stats',
         wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
         fleetSummary: fleetSummaryResult ?? null,
+        onboardingDismissed: settings?.onboardingDismissed ?? false,
       });
     } catch (err: any) {
       if (!this.mounted) return;
@@ -1308,11 +1312,116 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     );
   }
 
+  handleDismissOnboarding = async (): Promise<void> => {
+    this.setState({ onboardingDismissed: true });
+    try {
+      await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.UPDATE_SETTINGS,
+        { onboardingDismissed: true },
+      );
+    } catch {
+      // Best-effort
+    }
+  };
+
+  renderOnboardingCard(): React.ReactNode {
+    if (this.state.onboardingDismissed) return null;
+
+    const cardStyle2: React.CSSProperties = {
+      borderRadius: '10px',
+      padding: '20px 24px',
+      border: `1px solid ${UI_COLORS.WPE_BRAND}`,
+      backgroundColor: 'rgba(81, 187, 123, 0.07)',
+      marginBottom: '20px',
+    };
+    const stepStyle: React.CSSProperties = {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '12px',
+      marginBottom: '10px',
+      fontSize: '14px',
+    };
+    const numStyle: React.CSSProperties = {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '22px',
+      height: '22px',
+      borderRadius: '50%',
+      backgroundColor: UI_COLORS.WPE_BRAND,
+      color: '#fff',
+      fontSize: '12px',
+      fontWeight: 700,
+      flexShrink: 0,
+    };
+    const prefLinkStyle: React.CSSProperties = {
+      color: UI_COLORS.WPE_BRAND,
+      textDecoration: 'underline',
+      cursor: 'pointer',
+      background: 'none',
+      border: 'none',
+      padding: 0,
+      fontSize: 'inherit',
+    };
+
+    return React.createElement('div', { style: cardStyle2 },
+      React.createElement('div', {
+        style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' },
+      },
+        React.createElement('strong', { style: { fontSize: '15px' } }, 'Getting Started with Nexus AI'),
+        React.createElement('button', {
+          onClick: this.handleDismissOnboarding,
+          title: 'Dismiss — don\'t show again',
+          style: { background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '18px', lineHeight: 1, padding: '0 4px' },
+        }, '\u00d7'),
+      ),
+      React.createElement('div', { style: stepStyle },
+        React.createElement('span', { style: numStyle }, '1'),
+        React.createElement('span', null,
+          'Configure your AI provider in ',
+          React.createElement('button', { onClick: () => {
+            const nav = document.querySelector('[data-nav="preferences"]') as HTMLElement | null;
+            if (nav) nav.click();
+          }, style: prefLinkStyle }, 'Preferences'),
+          ' to connect Claude, OpenAI, or another provider.',
+        ),
+      ),
+      React.createElement('div', { style: stepStyle },
+        React.createElement('span', { style: numStyle }, '2'),
+        React.createElement('span', null,
+          'Enable auto-indexing in ',
+          React.createElement('button', { onClick: () => {
+            const nav = document.querySelector('[data-nav="preferences"]') as HTMLElement | null;
+            if (nav) nav.click();
+          }, style: prefLinkStyle }, 'Preferences'),
+          ' so new content is indexed automatically when sites start.',
+        ),
+      ),
+      React.createElement('div', { style: stepStyle },
+        React.createElement('span', { style: numStyle }, '3'),
+        React.createElement('span', null,
+          'Go to a site and click ',
+          React.createElement('strong', null, '"Install AI Tools"'),
+          ' to enable WordPress AI features on that site.',
+        ),
+      ),
+      React.createElement('div', {
+        style: { marginTop: '14px', borderTop: '1px solid rgba(81,187,123,0.3)', paddingTop: '12px' },
+      },
+        React.createElement('button', {
+          onClick: this.handleDismissOnboarding,
+          style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', opacity: 0.6, padding: 0, textDecoration: 'underline' },
+        }, 'Dismiss — don\'t show again'),
+      ),
+    );
+  }
+
   renderOverviewTab(): React.ReactNode {
     const { stats } = this.state;
     if (!stats) return null;
 
     return React.createElement('div', null,
+      this.renderOnboardingCard(),
       this.renderSetupBanner(stats),
       this.renderWpeAuthBanner(),
 

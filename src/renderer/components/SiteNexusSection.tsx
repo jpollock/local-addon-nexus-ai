@@ -57,6 +57,7 @@ interface SiteNexusSectionState {
   globalAIProvider: string | null;
   dbScan: DbScanResult | null;
   dbScanning: boolean;
+  detailsExpanded: boolean;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -149,6 +150,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     globalAIProvider: null,
     dbScan: null,
     dbScanning: false,
+    detailsExpanded: false,
   };
 
   componentDidMount(): void {
@@ -273,12 +275,20 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
 
   handleIndex = async (): Promise<void> => {
     this.setState({ indexing: true });
+    const startTime = Date.now();
     try {
       await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_SITE, this.props.site.id);
       if (!this.mounted) return;
       await this.fetchData();
-    } catch {
-      // Error handled by refresh
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const { indexEntry } = this.state;
+      const docCount = indexEntry?.documentCount ?? 0;
+      const msg = `Indexed ${docCount.toLocaleString()} documents in ${elapsed}s`;
+      (window as any).showToast?.(msg, 'success');
+    } catch (err: any) {
+      if (!this.mounted) return;
+      const hint = 'Try indexing fewer sites at once.';
+      (window as any).showToast?.(`Indexing failed. ${hint}`, 'error');
     }
     if (this.mounted) this.setState({ indexing: false });
   };
@@ -290,6 +300,10 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
         IPC_CHANNELS.SETUP_AI, this.props.site.id, provider,
       );
       if (!this.mounted) return;
+      const msg = result.success
+        ? 'AI tools installed and ready.'
+        : `${result.message || 'Setup failed'}. Check that the site is running. Start it from Local, then try again.`;
+      (window as any).showToast?.(msg, result.success ? 'success' : 'error');
       this.setState({
         settingUpAI: false,
         setupResult: { success: result.success, message: result.message },
@@ -297,6 +311,8 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       this.fetchData();
     } catch {
       if (!this.mounted) return;
+      const msg = 'Setup failed. Check that the site is running. Start it from Local, then try again.';
+      (window as any).showToast?.(msg, 'error');
       this.setState({ settingUpAI: false, setupResult: { success: false, message: 'Setup failed' } });
     }
   };
@@ -329,12 +345,20 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   handleSyncCredentials = async (): Promise<void> => {
     this.setState({ syncingCreds: true });
     try {
-      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_ALL_CREDENTIALS);
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_ALL_CREDENTIALS);
       if (!this.mounted) return;
+      if (result && result.success === false) {
+        const msg = 'Credentials sync failed. Your API key may be invalid. Re-enter it in Preferences.';
+        (window as any).showToast?.(msg, 'error');
+      } else {
+        (window as any).showToast?.('Credentials synced successfully.', 'success');
+      }
       this.setState({ syncingCreds: false });
       this.fetchData();
     } catch {
       if (!this.mounted) return;
+      const msg = 'Credentials sync failed. Your API key may be invalid. Re-enter it in Preferences.';
+      (window as any).showToast?.(msg, 'error');
       this.setState({ syncingCreds: false });
     }
   };
@@ -399,12 +423,18 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
           setupResult: { success: true, message: 'Metadata refreshed successfully' },
         });
         // Re-fetch AI status to update plugin states
-        this.fetchData();
+        await this.fetchData();
+        if (!this.mounted) return;
+        const wpVer = this.state.wpVersion;
+        const pluginCount = this.state.aiStatus?.providers?.length;
+        const detail = wpVer ? `WordPress ${wpVer}` : '';
+        (window as any).showToast?.(`Metadata updated${detail ? ` — ${detail}` : ''}.`, 'success');
       } else {
         this.setState({
           refreshingMetadata: false,
           setupResult: { success: false, message: result.error || 'Refresh failed' },
         });
+        (window as any).showToast?.(`Metadata refresh failed: ${result.error || 'Unknown error'}`, 'error');
       }
     } catch {
       if (!this.mounted) return;
@@ -412,6 +442,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
         refreshingMetadata: false,
         setupResult: { success: false, message: 'Refresh failed' },
       });
+      (window as any).showToast?.('Metadata refresh failed.', 'error');
     }
   };
 
@@ -527,8 +558,48 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     }, props.children);
   }
 
+  /** Helper to create a styled action button with tooltip support */
+  createActionButtonWithTitle(props: {
+    onClick?: () => void;
+    disabled?: boolean;
+    title?: string;
+    children: string;
+  }): React.ReactElement {
+    const { TextButton } = this.props;
+
+    if (TextButton) {
+      return React.createElement(TextButton, {
+        onClick: props.onClick,
+        disabled: props.disabled,
+        inline: true,
+        title: props.title,
+        style: { paddingLeft: '10px' },
+      }, props.children);
+    }
+
+    return React.createElement('a', {
+      onClick: props.disabled ? undefined : props.onClick,
+      title: props.title,
+      style: {
+        paddingLeft: '10px',
+        cursor: props.disabled ? 'default' : 'pointer',
+        color: props.disabled ? '#888' : '#51c356',
+        textDecoration: 'none',
+        fontWeight: 400,
+        fontSize: 'inherit',
+        opacity: props.disabled ? 0.5 : 1,
+      },
+      onMouseEnter: (e: any) => {
+        if (!props.disabled) e.target.style.textDecoration = 'underline';
+      },
+      onMouseLeave: (e: any) => {
+        e.target.style.textDecoration = 'none';
+      },
+    }, props.children);
+  }
+
   render(): React.ReactNode {
-    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds, wpVersion, wpVersionAge, upgradingWp, refreshingMetadata, siteAIConfig, showProviderPicker, pickerProvider, switchingProvider, useLocalGateway, globalAIProvider } = this.state;
+    const { indexEntry, indexing, excluded, loading, aiStatus, settingUpAI, setupResult, syncingCreds, wpVersion, wpVersionAge, upgradingWp, refreshingMetadata, siteAIConfig, showProviderPicker, pickerProvider, switchingProvider, useLocalGateway, globalAIProvider, detailsExpanded } = this.state;
 
     if (loading) {
       return React.createElement('ul', { className: 'TableList' },
@@ -546,89 +617,66 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       ? indexEntry.state.charAt(0).toUpperCase() + indexEntry.state.slice(1)
       : 'Not indexed';
 
-    const rows: React.ReactElement[] = [];
+    // Tooltip for index state label
+    const stateLabelTooltip = indexEntry?.state === 'indexed'
+      ? 'Content is indexed for semantic search. Update Index if you\'ve published new content.'
+      : indexEntry?.state === 'stale'
+      ? 'This data is more than 24 hours old. Click Refresh Metadata to update it.'
+      : undefined;
 
-    // Index status + action
-    rows.push(row('Index status',
-      React.createElement('span', { style: dotStyle(stateColor) }),
-      stateLabel,
-      this.createActionButton({
+    // Always-visible rows
+    const alwaysRows: React.ReactElement[] = [];
+    // Detail rows (hidden by default)
+    const detailRows: React.ReactElement[] = [];
+
+    // -- ALWAYS VISIBLE: Index status + action --
+    const indexButtonText = indexing ? 'Working...'
+      : indexEntry ? 'Update Index'
+      : 'Index Content';
+    const indexButtonTitle = indexing ? undefined
+      : indexEntry
+      ? 'Creates a searchable database of posts, pages, and products using AI. Run after adding content to your site.'
+      : 'Creates a searchable database of posts, pages, and products using AI. Run after adding content to your site.';
+
+    alwaysRows.push(row('Index status',
+      React.createElement('span', {
+        style: dotStyle(stateColor),
+        title: stateLabelTooltip,
+      }),
+      React.createElement('span', { title: stateLabelTooltip }, stateLabel),
+      this.createActionButtonWithTitle({
         onClick: indexing ? undefined : this.handleIndex,
         disabled: indexing,
-        children: indexing ? 'Indexing...' : (indexEntry ? 'Re-index' : 'Index Now'),
+        title: indexButtonTitle,
+        children: indexButtonText,
       }),
     ));
 
-    // Documents + chunks
-    rows.push(row('Documents',
-      indexEntry
-        ? `${indexEntry.documentCount.toLocaleString()} documents \u2022 ${indexEntry.chunkCount.toLocaleString()} chunks`
-        : '\u2014',
-    ));
-
-    // Last indexed
-    rows.push(row('Last indexed',
-      indexEntry ? formatTimeAgo(indexEntry.lastIndexed) : 'Never',
-    ));
-
-    // Auto-index toggle
-    rows.push(row('Auto-index',
-      React.createElement('input', {
-        type: 'checkbox',
-        checked: !excluded,
-        onChange: this.handleExclusionToggle,
-        style: { cursor: 'pointer', verticalAlign: 'middle', marginRight: 8 },
-      }),
-      !excluded ? 'On' : 'Off',
-    ));
-
-    // Metadata refresh button (shown at top if metadata exists)
-    const hasMetadata = wpVersion !== null || (aiStatus && (aiStatus.metadataAge || wpVersionAge));
-    const metadataAge = aiStatus?.metadataAge || wpVersionAge;
-    const isStale = aiStatus?.metadataIsStale ?? false;
-
-    if (hasMetadata) {
-      const ageDisplay = metadataAge
-        ? ` (${metadataAge}${isStale ? ', stale' : ''})`
-        : '';
-
-      rows.push(row('Metadata',
-        React.createElement('span', { style: dotStyle(isStale ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING) }),
-        `Cached${ageDisplay}`,
-        this.createActionButton({
-          onClick: refreshingMetadata ? undefined : this.handleRefreshMetadata,
-          disabled: refreshingMetadata,
-          children: refreshingMetadata ? 'Refreshing...' : 'Refresh',
-        }),
+    // -- ALWAYS VISIBLE: WordPress version --
+    if (aiStatus && wpVersion !== null) {
+      const needsUpgrade = !isWp7OrLater(wpVersion);
+      alwaysRows.push(row('WordPress',
+        React.createElement('span', { style: dotStyle(needsUpgrade ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING) }),
+        wpVersion,
+        needsUpgrade
+          ? this.createActionButtonWithTitle({
+              onClick: upgradingWp ? undefined : this.handleUpgradeWordPress,
+              disabled: upgradingWp,
+              title: 'Upgrade WordPress to the latest version. Required for AI features.',
+              children: upgradingWp ? 'Working...' : 'Upgrade to WP 7.0',
+            })
+          : null,
       ));
     }
 
-    // AI rows (only render if AI status is loaded)
+    // -- ALWAYS VISIBLE: AI Provider row --
+    const canSetupAI = wpVersion === null || isWp7OrLater(wpVersion);
+    const isAIConfigured = !!siteAIConfig;
+    const gatewayActive = aiStatus ? (aiStatus.gatewayProvider === 'active') : false;
+    const gatewayPending = useLocalGateway && !gatewayActive;
+
     if (aiStatus) {
-      // WordPress Version (show if we have it)
-      if (wpVersion !== null) {
-        const needsUpgrade = !isWp7OrLater(wpVersion);
-
-        rows.push(row('WordPress',
-          React.createElement('span', { style: dotStyle(needsUpgrade ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING) }),
-          wpVersion,
-          needsUpgrade
-            ? this.createActionButton({
-                onClick: upgradingWp ? undefined : this.handleUpgradeWordPress,
-                disabled: upgradingWp,
-                children: upgradingWp ? 'Upgrading...' : 'Upgrade to WP 7.0',
-              })
-            : null,
-        ));
-      }
-
-      // AI Provider row — always show when we have aiStatus
-      const canSetupAI = wpVersion === null || isWp7OrLater(wpVersion);
-      const isAIConfigured = !!siteAIConfig;
-      const gatewayActive = aiStatus.gatewayProvider === 'active';
-      const gatewayPending = useLocalGateway && !gatewayActive;
-
-      // Provider picker — shown inline when user clicks Setup AI or Change Provider
+      // Provider picker — shown inline when user clicks Install AI Tools or Change Provider
       const providerPickerElement = showProviderPicker
         ? React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 10 } },
             React.createElement('select', {
@@ -649,8 +697,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
                 React.createElement('option', { key: p.id, value: p.id }, p.label),
               ),
             ),
-            // Confirm button
-            this.createActionButton({
+            this.createActionButtonWithTitle({
               onClick: () => {
                 if (!pickerProvider) return;
                 if (isAIConfigured) {
@@ -660,144 +707,188 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
                 }
               },
               disabled: !pickerProvider || settingUpAI || switchingProvider,
-              children: isAIConfigured ? (switchingProvider ? 'Switching...' : 'Switch') : (settingUpAI ? 'Setting up...' : 'Go'),
+              children: isAIConfigured ? (switchingProvider ? 'Working...' : 'Switch') : (settingUpAI ? 'Working...' : 'Go'),
             }),
-            // Cancel
-            this.createActionButton({
+            this.createActionButtonWithTitle({
               onClick: () => this.setState({ showProviderPicker: false, pickerProvider: '' }),
               children: 'Cancel',
             }),
           )
         : null;
 
-      // AI Provider row
       if (isAIConfigured) {
-        // Already set up — show provider name + Change Provider link (or gateway note)
         const providerDisplayName = PROVIDER_LABELS[siteAIConfig!.provider] ?? siteAIConfig!.provider;
         const displayName = (useLocalGateway && siteAIConfig!.provider !== 'ollama')
           ? `${providerDisplayName} via Gateway`
           : providerDisplayName;
 
-        // Show Change button only when gateway is off (or Ollama)
-        // When gateway is pending, show a note about what Apply will do
         const changeButton = gatewayPending
           ? React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, paddingLeft: 8 } },
               `→ will switch to ${PROVIDER_LABELS[globalAIProvider ?? ''] ?? globalAIProvider ?? 'global provider'} via Gateway`)
           : (!useLocalGateway || siteAIConfig!.provider === 'ollama'
             ? (!showProviderPicker
-                ? this.createActionButton({
+                ? this.createActionButtonWithTitle({
                     onClick: () => this.setState({ showProviderPicker: true, pickerProvider: siteAIConfig!.provider as AIProvider }),
                     disabled: switchingProvider,
-                    children: switchingProvider ? 'Switching...' : 'Change',
+                    children: switchingProvider ? 'Working...' : 'Change',
                   })
                 : null)
             : React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, paddingLeft: 8 } }, 'Change in Preferences'));
 
-        rows.push(row('AI Provider',
+        alwaysRows.push(row('AI Provider',
           React.createElement('span', { style: dotStyle(UI_COLORS.STATUS_RUNNING) }),
           displayName,
           changeButton,
           providerPickerElement,
         ));
       } else {
-        // Not configured — show Setup AI button (with provider picker)
-        const setupButtonText = settingUpAI ? 'Setting up...'
-          : !canSetupAI ? 'Requires WP 7.0+'
-          : 'Setup AI';
+        // Not configured — show Install AI Tools button (Item 7: always label "Install AI Tools")
+        const setupButtonText = settingUpAI ? 'Working...' : 'Install AI Tools';
+        const setupDisabled = settingUpAI || !canSetupAI;
+        const setupTitle = !canSetupAI
+          ? 'Requires WordPress 7.0 or later. Upgrade WordPress first.'
+          : 'Installs the WordPress AI plugin and configures it with your provider credentials. Requires WordPress 7.0+.';
 
-        rows.push(row('AI Provider',
+        alwaysRows.push(row('AI Provider',
           React.createElement('span', { style: dotStyle('#888') }),
           'Not configured',
           !showProviderPicker && !settingUpAI
-            ? this.createActionButton({
+            ? this.createActionButtonWithTitle({
                 onClick: canSetupAI ? () => this.setState({ showProviderPicker: true, pickerProvider: '' }) : undefined,
-                disabled: !canSetupAI,
+                disabled: setupDisabled,
+                title: setupTitle,
                 children: setupButtonText,
               })
-            : (settingUpAI ? React.createElement('span', { style: { fontSize: 12, opacity: 0.7, paddingLeft: 8 } }, 'Setting up...') : null),
+            : (settingUpAI ? React.createElement('span', { style: { fontSize: 12, opacity: 0.7, paddingLeft: 8 } }, 'Working...') : null),
           providerPickerElement,
         ));
       }
+    }
 
-      // AI Plugin status row (secondary, only show if not active)
-      if (aiStatus.aiPlugin !== 'active') {
-        rows.push(row('AI plugin',
-          React.createElement('span', { style: dotStyle(pluginColor(aiStatus.aiPlugin)) }),
-          pluginLabel(aiStatus.aiPlugin),
-        ));
-      }
+    // -- DETAIL: Documents + chunks --
+    detailRows.push(row('Documents',
+      indexEntry
+        ? `${indexEntry.documentCount.toLocaleString()} documents \u2022 ${indexEntry.chunkCount.toLocaleString()} chunks`
+        : '\u2014',
+    ));
 
-      // Local AI Gateway row — always shown
+    // -- DETAIL: Last indexed --
+    detailRows.push(row('Last indexed',
+      indexEntry ? formatTimeAgo(indexEntry.lastIndexed) : 'Never',
+    ));
+
+    // -- DETAIL: Auto-index toggle --
+    detailRows.push(row('Auto-index',
+      React.createElement('input', {
+        type: 'checkbox',
+        checked: !excluded,
+        onChange: this.handleExclusionToggle,
+        title: 'When on, this site is indexed automatically when started.',
+        style: { cursor: 'pointer', verticalAlign: 'middle', marginRight: 8 },
+      }),
+      !excluded ? 'On' : 'Off',
+    ));
+
+    // -- DETAIL: Metadata refresh --
+    const hasMetadata = wpVersion !== null || (aiStatus && (aiStatus.metadataAge || wpVersionAge));
+    const metadataAge = aiStatus?.metadataAge || wpVersionAge;
+    const isStale = aiStatus?.metadataIsStale ?? false;
+
+    if (hasMetadata) {
+      const ageDisplay = metadataAge
+        ? ` (${metadataAge}${isStale ? ', stale' : ''})`
+        : '';
+
+      detailRows.push(row('Metadata',
+        React.createElement('span', {
+          style: dotStyle(isStale ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING),
+          title: isStale ? 'This data is more than 24 hours old. Click Refresh Metadata to update it.' : undefined,
+        }),
+        React.createElement('span', {
+          title: isStale ? 'This data is more than 24 hours old. Click Refresh Metadata to update it.' : undefined,
+        }, `Cached${ageDisplay}`),
+        this.createActionButtonWithTitle({
+          onClick: refreshingMetadata ? undefined : this.handleRefreshMetadata,
+          disabled: refreshingMetadata,
+          title: 'Updates WordPress version, plugin list, themes, and admin email from the live site.',
+          children: refreshingMetadata ? 'Working...' : 'Refresh Metadata',
+        }),
+      ));
+    }
+
+    // -- DETAIL: AI Plugin status (only show if not active) --
+    if (aiStatus && aiStatus.aiPlugin !== 'active') {
+      detailRows.push(row('AI plugin',
+        React.createElement('span', { style: dotStyle(pluginColor(aiStatus.aiPlugin)) }),
+        pluginLabel(aiStatus.aiPlugin),
+      ));
+    }
+
+    // -- DETAIL: Local AI Gateway row --
+    if (aiStatus) {
       const gatewayColor = gatewayActive ? UI_COLORS.STATUS_RUNNING
         : gatewayPending ? UI_COLORS.STATUS_WARNING
         : '#888';
       const gatewayLabel = gatewayActive ? 'Active' : gatewayPending ? 'Pending' : 'Inactive';
 
-      rows.push(row('Local AI Gateway',
+      detailRows.push(row('Local AI Gateway',
         React.createElement('span', { style: dotStyle(gatewayColor) }),
         gatewayLabel,
-        // Pending: offer Apply button to re-run setup with current global settings
         gatewayPending && canSetupAI
-          ? this.createActionButton({
+          ? this.createActionButtonWithTitle({
               onClick: settingUpAI ? undefined : () => this.handleSetupAI(),
               disabled: settingUpAI || !canSetupAI,
-              children: settingUpAI ? 'Applying...' : 'Apply',
+              children: settingUpAI ? 'Working...' : 'Apply',
             })
           : null,
       ));
 
-      // Credentials — only show if AI is configured
+      // -- DETAIL: Credentials --
       if (isAIConfigured) {
         const credsSynced = aiStatus.credentialsSynced ?? false;
-        rows.push(row('Credentials',
+        detailRows.push(row('Credentials',
           React.createElement('span', { style: dotStyle(credsSynced ? UI_COLORS.STATUS_RUNNING : '#888') }),
           credsSynced ? `Synced (${PROVIDER_LABELS[siteAIConfig!.provider] ?? siteAIConfig!.provider})` : 'Not synced',
-          this.createActionButton({
+          this.createActionButtonWithTitle({
             onClick: syncingCreds ? undefined : this.handleSyncCredentials,
             disabled: syncingCreds,
-            children: syncingCreds ? 'Syncing...' : 'Sync Keys',
+            title: 'Sends your AI provider API key to this WordPress site so AI features work in wp-admin.',
+            children: syncingCreds ? 'Working...' : 'Sync AI Credentials',
           }),
         ));
       }
     }
 
-    // AI Context File (show for all sites)
+    // -- DETAIL: AI Context File --
     const { aiContextStatus, generatingContext } = this.state;
     if (aiContextStatus) {
       const contextExists = aiContextStatus.exists;
       const contextAge = aiContextStatus.ageString;
-
-      const statusText = contextExists
-        ? `Generated ${contextAge}`
-        : 'Not generated';
-
+      const statusText = contextExists ? `Generated ${contextAge}` : 'Not generated';
       const statusColor = contextExists ? UI_COLORS.STATUS_RUNNING : '#888';
 
       const actions = [];
-
-      // Generate/Regenerate button
-      actions.push(this.createActionButton({
+      actions.push(this.createActionButtonWithTitle({
         onClick: generatingContext ? undefined : this.handleGenerateContext,
         disabled: generatingContext,
-        children: generatingContext ? 'Generating...' : (contextExists ? 'Regenerate' : 'Generate'),
+        children: generatingContext ? 'Working...' : (contextExists ? 'Regenerate' : 'Generate'),
       }));
 
-      // Show in Finder button (only if exists)
       if (contextExists && aiContextStatus.filePath) {
-        actions.push(this.createActionButton({
+        actions.push(this.createActionButtonWithTitle({
           onClick: this.handleShowInFinder,
           children: 'Show in Finder',
         }));
       }
 
-      rows.push(row('AI Context File',
+      detailRows.push(row('AI Context File',
         React.createElement('span', { style: dotStyle(statusColor) }),
         statusText,
         ...actions,
       ));
     }
 
-    // Database Health row
+    // -- DETAIL: Database Health row --
     const { dbScan, dbScanning } = this.state;
     const dbScoreColor = !dbScan ? '#888'
       : dbScan.healthScore >= 80 ? UI_COLORS.STATUS_RUNNING
@@ -806,25 +897,42 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     const siteIsRunning = this.props.site.status === 'running';
     const dbScoreText = dbScan ? `${dbScan.healthScore}/100` : (siteIsRunning ? 'Not scanned' : 'Start site to scan');
 
-    rows.push(row('Database Health',
+    detailRows.push(row('Database Health',
       React.createElement('span', { style: dotStyle(dbScoreColor) }),
       dbScoreText,
-      this.createActionButton({
+      this.createActionButtonWithTitle({
         onClick: (dbScanning || !siteIsRunning) ? undefined : this.handleDbScan,
         disabled: dbScanning || !siteIsRunning,
+        title: siteIsRunning ? 'Scans the WordPress database for performance issues, orphaned data, and optimization opportunities.' : 'Start the site to enable database scanning.',
         children: dbScanning ? 'Scanning...' : (dbScan ? 'Re-scan' : 'Scan'),
       }),
     ));
 
-    // Top DB issue row (only if there's something to show)
     if (dbScan && dbScan.summary.length > 0) {
-      rows.push(row('Top DB issue',
-        dbScan.summary[0],
-      ));
+      detailRows.push(row('Top DB issue', dbScan.summary[0]));
     }
 
+    // -- Show/hide details toggle --
+    const detailToggle = React.createElement('li', {
+      key: '__details-toggle',
+      className: 'TableListRow',
+      style: { cursor: 'pointer', opacity: 0.6 },
+      onClick: () => this.setState({ detailsExpanded: !detailsExpanded }),
+    },
+      React.createElement('strong', null, ''),
+      React.createElement('div', null,
+        detailsExpanded ? 'Hide details \u25be' : 'Show details \u25b8',
+      ),
+    );
+
+    const allRows = [
+      ...alwaysRows,
+      detailToggle,
+      ...(detailsExpanded ? detailRows : []),
+    ];
+
     return React.createElement('div', null,
-      React.createElement('ul', { className: 'TableList' }, ...rows),
+      React.createElement('ul', { className: 'TableList' }, ...allRows),
 
       // Setup result banner
       setupResult
