@@ -14,6 +14,9 @@ import type { McpServer } from './mcp/McpServer';
 import type { LocalServicesBridge } from './mcp/local-services-bridge';
 import type { GraphService } from './events/GraphService';
 import type { EventProcessor } from './events/EventProcessor';
+import type { IpcHandlerDeps } from './types/ipc-handler-deps';
+import type { NexusLogger } from './types/nexus-services';
+export type { IpcHandlerDeps } from './types/ipc-handler-deps';
 import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
 import { scanDatabase } from './mcp/modules/db-scanner/db-scanner';
 import { getApiKey, hasApiKey } from './security/KeyVault';
@@ -72,6 +75,7 @@ import {
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
+type IpcMainInvokeEvent = import('electron').IpcMainInvokeEvent;
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -91,28 +95,7 @@ const DEFAULT_SETTINGS: NexusSettings = {
   excludedSiteIds: [],
 };
 
-export interface IpcHandlerDeps {
-  siteData: any;
-  localServicesBridge: LocalServicesBridge;
-  indexRegistry: IndexRegistry;
-  embeddingService: EmbeddingService;
-  contentPipeline: ContentPipeline;
-  vectorStore: VectorStore;
-  registryStorage: RegistryStorage;
-  localLogger: any;
-  getMcpServer: () => McpServer | null;
-  graphService: GraphService;
-  eventProcessor: EventProcessor;
-  vectorDbPath: string;
-  /** Raw service container for accessing Local services directly */
-  serviceContainer?: any;
-  /** NexusServices object — mutated to add Sprint 2/3 services after creation */
-  nexusServices?: any;
-  /** WPE site sync service (Phase 1) */
-  wpeSyncService?: WPESyncService;
-  /** Site metadata cache (Digital Twin) */
-  metadataCache?: SiteMetadataCache;
-}
+// IpcHandlerDeps is now defined in ./types/ipc-handler-deps and re-exported above.
 
 /**
  * Wait for database to be ready by polling with a simple WP-CLI command.
@@ -121,7 +104,7 @@ export interface IpcHandlerDeps {
 async function waitForDatabaseReady(
   siteId: string,
   localServices: LocalServicesBridge,
-  logger: any,
+  logger: NexusLogger,
   timeoutMs: number = 30000,
 ): Promise<void> {
   const startTime = Date.now();
@@ -168,7 +151,7 @@ async function waitForDatabaseReady(
 async function withSiteRunning<T>(
   siteId: string,
   localServices: LocalServicesBridge,
-  logger: any,
+  logger: NexusLogger,
   work: () => Promise<T>,
 ): Promise<T> {
   let wasAutoStarted = false;
@@ -301,7 +284,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
       const indexed = indexRegistry.listAll();
-      const indexedIds = new Set(indexed.map((e: any) => e.siteId));
+      const indexedIds = new Set(indexed.map((e) => e.siteId));
 
       // Fetch WP versions from graph for all local sites
       const wpVersionsMap = new Map<string, string>();
@@ -315,7 +298,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         });
       }
 
-      return Object.values(allSites).map((site: any) => {
+      return Object.values(allSites).map((site) => {
         const connections = site.hostConnections;
         const connList = connections
           ? (Array.isArray(connections) ? connections : Object.values(connections))
@@ -348,7 +331,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const allSites = siteData.getSites();
       const siteIds: string[] = [];
 
-      for (const site of Object.values(allSites) as any[]) {
+      for (const site of Object.values(allSites)) {
         const connections = site.hostConnections;
         if (!connections) continue;
         const connList = Array.isArray(connections) ? connections : Object.values(connections);
@@ -371,7 +354,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       // Local sites
       const totalSites = siteList.length;
-      const runningSites = siteList.filter((s: any) => statuses[s.id] === 'running').length;
+      const runningSites = siteList.filter((s) => statuses[s.id] === 'running').length;
 
       // WPE-connected local sites
       let wpeConnectedSites = 0;
@@ -413,10 +396,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       // Index stats — local (index registry) + WPE (graph content table)
       const indexEntries = indexRegistry.listAll();
-      const localIndexedSites = indexEntries.filter((e: any) => e.state === 'indexed').length;
-      const totalDocs = indexEntries.reduce((sum: number, e: any) => sum + (e.documentCount || 0), 0);
-      const totalChunks = indexEntries.reduce((sum: number, e: any) => sum + (e.chunkCount || 0), 0);
-      const lastIndexed = indexEntries.reduce((max: number, e: any) => Math.max(max, e.lastIndexed || 0), 0);
+      const localIndexedSites = indexEntries.filter((e) => e.state === 'indexed').length;
+      const totalDocs = indexEntries.reduce((sum: number, e) => sum + (e.documentCount || 0), 0);
+      const totalChunks = indexEntries.reduce((sum: number, e) => sum + (e.chunkCount || 0), 0);
+      const lastIndexed = indexEntries.reduce((max: number, e) => Math.max(max, e.lastIndexed || 0), 0);
 
       // WPE indexed sites — count distinct sites with content in graph DB
       let wpeIndexedSites = 0;
@@ -609,7 +592,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.START_SITE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.START_SITE, async (_event: IpcMainInvokeEvent, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -621,7 +604,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.STOP_SITE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.STOP_SITE, async (_event: IpcMainInvokeEvent, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -633,7 +616,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SEARCH, async (_event: any, query: string, siteId?: string, limit?: number) => {
+  safeHandle(IPC_CHANNELS.SEARCH, async (_event: IpcMainInvokeEvent, query: string, siteId?: string, limit?: number) => {
     try {
       // Validate input
       const validated = validateInput(SearchContentSchema, { query, siteIds: siteId ? [siteId] : undefined, limit });
@@ -645,12 +628,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         const results = await vectorStore.search(targetSiteId, queryVector, { limit: maxResults });
         const site = siteData.getSite(targetSiteId);
         return {
-          results: results.map((r: any) => ({ ...r, siteId: targetSiteId, siteName: site?.name ?? targetSiteId })),
+          results: results.map((r) => ({ ...r, siteId: targetSiteId, siteName: site?.name ?? targetSiteId })),
         };
       }
 
       // Search all indexed sites, merge results
-      const entries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
+      const entries = indexRegistry.listAll().filter((e) => e.state === 'indexed');
       const allResults: any[] = [];
       for (const entry of entries) {
         const results = await vectorStore.search(entry.siteId, queryVector, { limit: maxResults });
@@ -668,7 +651,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: any, params: { siteId: string }) => {
+  safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: IpcMainInvokeEvent, params: { siteId: string }) => {
     const startTime = Date.now();
     try {
       // Validate input
@@ -743,7 +726,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, async (_event: any, partial: Partial<NexusSettings>) => {
+  safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, async (_event: IpcMainInvokeEvent, partial: Partial<NexusSettings>) => {
     try {
       const validated = validateInput(UpdateSettingsSchema, partial);
 
@@ -809,7 +792,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: IpcMainInvokeEvent, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -858,7 +841,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.UPGRADE_WP, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.UPGRADE_WP, async (_event: IpcMainInvokeEvent, siteId: string) => {
     const startTime = Date.now();
     try {
       // Validate input
@@ -996,7 +979,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string, provider?: string) => {
+  safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: IpcMainInvokeEvent, siteId: string, provider?: string) => {
     const startTime = Date.now();
     let wasAutoStarted = false;
 
@@ -1134,7 +1117,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Per-Site AI Config (Phase 4)
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.GET_SITE_AI_CONFIG, (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GET_SITE_AI_CONFIG, (_event: IpcMainInvokeEvent, siteId: string) => {
     try {
       const validated = validateInput(SiteIdSchema, siteId);
       const siteConfigs = (registryStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
@@ -1145,7 +1128,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SWITCH_AI_PROVIDER, async (_event: any, siteId: string, provider: string) => {
+  safeHandle(IPC_CHANNELS.SWITCH_AI_PROVIDER, async (_event: IpcMainInvokeEvent, siteId: string, provider: string) => {
     try {
       const validatedSiteId = validateInput(SiteIdSchema, siteId);
 
@@ -1180,7 +1163,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Event Tracking & Visibility (Sprint 1)
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.EVENTS_GET_TIMELINE, async (_event: any, options?: {
+  safeHandle(IPC_CHANNELS.EVENTS_GET_TIMELINE, async (_event: IpcMainInvokeEvent, options?: {
     limit?: number;
     filter?: string;
     status?: 'pending' | 'processed' | 'failed';
@@ -1283,7 +1266,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.STORAGE_CLEANUP, async (_event: any, options?: {
+  safeHandle(IPC_CHANNELS.STORAGE_CLEANUP, async (_event: IpcMainInvokeEvent, options?: {
     retentionDays?: number;
   }) => {
     const startTime = Date.now();
@@ -1345,7 +1328,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   queryStorage.load().catch(err => localLogger.error('[NexusAI] Failed to load saved queries:', err.message));
 
   // Unified search
-  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, params: { query: string; filters?: any; options?: any }) => {
+  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: IpcMainInvokeEvent, params: { query: string; filters?: any; options?: any }) => {
     try {
       // Validate input
       const validated = validateInput(SearchUnifiedSchema, params);
@@ -1371,7 +1354,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.FILTERS_APPLY, async (_event: any, filterId: string) => {
+  safeHandle(IPC_CHANNELS.FILTERS_APPLY, async (_event: IpcMainInvokeEvent, filterId: string) => {
     try {
       // Validate input
       const validated = validateInput(FilterIdSchema, filterId);
@@ -1385,7 +1368,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Health scores
-  safeHandle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: any, params: { siteId: string }) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: IpcMainInvokeEvent, params: { siteId: string }) => {
     try {
       // Validate input
       const validated = validateInput(HealthGetScoreSchema, params);
@@ -1431,7 +1414,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.QUERIES_CREATE, async (_event: any, query: any) => {
+  safeHandle(IPC_CHANNELS.QUERIES_CREATE, async (_event: IpcMainInvokeEvent, query: any) => {
     try {
       // Validate input
       const validated = validateInput(QuerySchema, query);
@@ -1450,7 +1433,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: any, params: { id: string; changes: any }) => {
+  safeHandle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: IpcMainInvokeEvent, params: { id: string; changes: any }) => {
     try {
       // Validate input
       const validated = validateInput(QueryUpdateSchema, params);
@@ -1463,7 +1446,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.QUERIES_DELETE, async (_event: any, id: string) => {
+  safeHandle(IPC_CHANNELS.QUERIES_DELETE, async (_event: IpcMainInvokeEvent, id: string) => {
     try {
       // Validate input
       const validated = validateInput(QueryIdSchema, id);
@@ -1476,7 +1459,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.QUERIES_RUN, async (_event: any, id: string) => {
+  safeHandle(IPC_CHANNELS.QUERIES_RUN, async (_event: IpcMainInvokeEvent, id: string) => {
     try {
       // Validate input
       const validated = validateInput(QueryIdSchema, id);
@@ -1598,7 +1581,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // --- Bulk Operations ---
 
-  safeHandle(IPC_CHANNELS.BULK_EXECUTE, async (_event: any, request: any) => {
+  safeHandle(IPC_CHANNELS.BULK_EXECUTE, async (_event: IpcMainInvokeEvent, request: any) => {
     const startTime = Date.now();
     try {
       // Validate input
@@ -1631,7 +1614,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.BULK_STATUS, async (_event: any, opId: string) => {
+  safeHandle(IPC_CHANNELS.BULK_STATUS, async (_event: IpcMainInvokeEvent, opId: string) => {
     try {
       // Validate input
       const validated = validateInput(BulkOperationIdSchema, opId);
@@ -1642,7 +1625,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.BULK_CANCEL, async (_event: any, opId: string) => {
+  safeHandle(IPC_CHANNELS.BULK_CANCEL, async (_event: IpcMainInvokeEvent, opId: string) => {
     try {
       // Validate input
       const validated = validateInput(BulkOperationIdSchema, opId);
@@ -1667,7 +1650,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_CREATE, async (_event: any, args: { name: string }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_CREATE, async (_event: IpcMainInvokeEvent, args: { name: string }) => {
     try {
       // Validate input
       const validated = validateInput(GroupCreateSchema, args);
@@ -1680,7 +1663,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: any, params: { id: string; changes: { name?: string } }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: IpcMainInvokeEvent, params: { id: string; changes: { name?: string } }) => {
     try {
       // Validate input
       const validated = validateInput(GroupUpdateSchema, params);
@@ -1696,7 +1679,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_DELETE, async (_event: any, id: string) => {
+  safeHandle(IPC_CHANNELS.GROUPS_DELETE, async (_event: IpcMainInvokeEvent, id: string) => {
     try {
       // Validate input
       const validated = validateInput(GroupIdSchema, id);
@@ -1709,7 +1692,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: any, params: { groupId: string; siteId: string }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: IpcMainInvokeEvent, params: { groupId: string; siteId: string }) => {
     try {
       // Validate input
       const validated = validateInput(GroupAddRemoveSiteSchema, params);
@@ -1722,7 +1705,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: any, params: { groupId: string; siteId: string }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: IpcMainInvokeEvent, params: { groupId: string; siteId: string }) => {
     try {
       // Validate input
       const validated = validateInput(GroupAddRemoveSiteSchema, params);
@@ -1737,7 +1720,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // --- Health Trends ---
 
-  safeHandle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: any, params: { siteId: string; days?: number }) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: IpcMainInvokeEvent, params: { siteId: string; days?: number }) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
 
     // Validate input
@@ -1746,7 +1729,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     return { success: true, trend: healthTrendTracker.getSiteTrend(validated.siteId, validated.days || 30) };
   });
 
-  safeHandle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: any, params?: { days?: number }) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: IpcMainInvokeEvent, params?: { days?: number }) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
 
     // Validate input
@@ -1760,7 +1743,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   safeHandle(IPC_CHANNELS.DASHBOARD_V2_STATS, async () => {
     try {
       // Health distribution
-      const allEntries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
+      const allEntries = indexRegistry.listAll().filter((e) => e.state === 'indexed');
       const siteIds = allEntries.map((e: any) => e.siteId);
       const siteInfoMap: Record<string, any> = {};
 
@@ -1816,7 +1799,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // AI Status & Proxy (Sprint 4)
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.GET_AI_STATUS, async (_event: any, siteId?: string) => {
+  safeHandle(IPC_CHANNELS.GET_AI_STATUS, async (_event: IpcMainInvokeEvent, siteId?: string) => {
     try {
       // Validate input if siteId provided
       const validatedSiteId = siteId ? validateInput(SiteIdSchema, siteId) : undefined;
@@ -1978,7 +1961,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SETUP_AI_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
+  safeHandle(IPC_CHANNELS.SETUP_AI_FLEET, async (_event: IpcMainInvokeEvent, options?: { siteIds?: string[] }) => {
     try {
       // Validate input
       const validated = validateInput(FleetOperationOptionsSchema, options);
@@ -2010,7 +1993,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.INDEX_ALL_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
+  safeHandle(IPC_CHANNELS.INDEX_ALL_FLEET, async (_event: IpcMainInvokeEvent, options?: { siteIds?: string[] }) => {
     try {
       // Validate input
       const validated = validateInput(FleetOperationOptionsSchema, options);
@@ -2041,7 +2024,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Auto-start/stop: Setup AI for ALL sites (including halted)
-  safeHandle(IPC_CHANNELS.SETUP_AI_ALL_AUTO, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.SETUP_AI_ALL_AUTO, async (_event: IpcMainInvokeEvent) => {
     try {
       const allSites = siteData.getSites();
       const allSiteIds = Object.keys(allSites);
@@ -2065,7 +2048,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Auto-start/stop: Index ALL sites (including halted)
-  safeHandle(IPC_CHANNELS.INDEX_ALL_AUTO, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.INDEX_ALL_AUTO, async (_event: IpcMainInvokeEvent) => {
     try {
       const allSites = siteData.getSites();
       const allSiteIds = Object.keys(allSites);
@@ -2089,7 +2072,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Sync Graph: Refresh GraphService with current plugin/theme/user data (auto-start/stop)
-  safeHandle(IPC_CHANNELS.SYNC_GRAPH_ALL, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.SYNC_GRAPH_ALL, async (_event: IpcMainInvokeEvent) => {
     try {
       const allSites = siteData.getSites();
       const allSiteIds = Object.keys(allSites);
@@ -2113,9 +2096,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Quick fleet refresh — filesystem scan for halted, WP-CLI for running (no auto-start)
-  safeHandle(IPC_CHANNELS.FLEET_REFRESH_QUICK, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.FLEET_REFRESH_QUICK, async (_event: IpcMainInvokeEvent) => {
     try {
-      const result = await deps.nexusServices?.registry?.call('nexus_fleet_refresh', {}, deps.nexusServices, 'ui');
+      const result = await deps.nexusServices?.registry?.call('nexus_fleet_refresh', {}, deps.nexusServices);
       const text = result?.content?.[0]?.text ?? '';
       return { success: !result?.isError, message: text };
     } catch (err) {
@@ -2125,7 +2108,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Health check all sites
-  safeHandle(IPC_CHANNELS.FLEET_HEALTH_CHECK_ALL, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.FLEET_HEALTH_CHECK_ALL, async (_event: IpcMainInvokeEvent) => {
     try {
       const allSites = siteData.getSites();
       const allSiteIds = Object.keys(allSites);
@@ -2144,7 +2127,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Update all plugins
-  safeHandle(IPC_CHANNELS.FLEET_PLUGIN_UPDATE_ALL, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.FLEET_PLUGIN_UPDATE_ALL, async (_event: IpcMainInvokeEvent) => {
     try {
       const allSites = siteData.getSites();
       const allSiteIds = Object.keys(allSites);
@@ -2166,7 +2149,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Site Finder (Advanced Site Search)
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.SITE_FINDER_GET_OPTIONS, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.SITE_FINDER_GET_OPTIONS, async (_event: IpcMainInvokeEvent) => {
     try {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
@@ -2218,7 +2201,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SITE_FINDER_APPLY, async (_event: any, filters: any) => {
+  safeHandle(IPC_CHANNELS.SITE_FINDER_APPLY, async (_event: IpcMainInvokeEvent, filters: any) => {
     try {
       // Validate input
       const validated = validateInput(SiteFinderFiltersSchema, filters);
@@ -2442,7 +2425,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SITE_FINDER_AI_PARSE, async (_event: any, payload: { conversation: Array<{ role: string; content: string }> }) => {
+  safeHandle(IPC_CHANNELS.SITE_FINDER_AI_PARSE, async (_event: IpcMainInvokeEvent, payload: { conversation: Array<{ role: string; content: string }> }) => {
     try {
       // Validate input
       const validated = validateInput(SiteFinderAIParseSchema, payload);
@@ -2643,7 +2626,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, async (_event: any, payload: { siteId: string }) => {
+  safeHandle(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, async (_event: IpcMainInvokeEvent, payload: { siteId: string }) => {
     try {
       const { siteId } = payload;
 
@@ -2670,7 +2653,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.SIDEBAR_BULK_ACTION, async (_event: any, payload: { action: string; siteIds: string[] }) => {
+  safeHandle(IPC_CHANNELS.SIDEBAR_BULK_ACTION, async (_event: IpcMainInvokeEvent, payload: { action: string; siteIds: string[] }) => {
     try {
       // Validate input
       const validated = validateInput(SidebarBulkActionSchema, payload);
@@ -2750,7 +2733,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.WPE_SET_API_CREDENTIALS, async (_event: any, username: string, password: string) => {
+  safeHandle(IPC_CHANNELS.WPE_SET_API_CREDENTIALS, async (_event: IpcMainInvokeEvent, username: string, password: string) => {
     try {
       await localServicesBridge.wpeSetApiCredentials(username, password);
       localLogger.info(`[NexusAI] WPE API credentials stored for user: ${username}`);
@@ -2779,11 +2762,11 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Sync all WPE sites from wp-nexus MCP
    */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_ALL, async (_event: any, options?: { limit?: number }) => {
+  safeHandle(IPC_CHANNELS.WPE_SYNC_ALL, async (_event: IpcMainInvokeEvent, options?: { limit?: number }) => {
     const startTime = Date.now();
 
     if (!deps.wpeSyncService) {
-      localLogger.warn('[NexusAI] WPE sync service not initialized');
+      localLogger.warn?.('[NexusAI] WPE sync service not initialized');
       return { success: false, error: 'WPE sync service not available' };
     }
 
@@ -2840,7 +2823,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.WPE_DIAGNOSE, async (_event: any, params: { installName: string; args: string[] }) => {
+  safeHandle(IPC_CHANNELS.WPE_DIAGNOSE, async (_event: IpcMainInvokeEvent, params: { installName: string; args: string[] }) => {
     const { installName, args } = params;
     if (!installName || !args?.length) return { success: false, error: 'installName and args required' };
     const start = Date.now();
@@ -3025,7 +3008,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
           if (status === 401 || status === 403) {
             wpeAuthError = true;
           } else {
-            localLogger.warn('[NexusAI] Failed to enrich sites with account_id:', String(err));
+            localLogger.warn?.('[NexusAI] Failed to enrich sites with account_id:', String(err));
           }
         }
       }
@@ -3040,7 +3023,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Get details for a specific WPE site
    */
-  safeHandle(IPC_CHANNELS.WPE_GET_SITE_DETAILS, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_GET_SITE_DETAILS, async (_event: IpcMainInvokeEvent, installId: string) => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
@@ -3062,7 +3045,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       );
 
       if (!site) {
-        localLogger.warn(`[NexusAI] WPE site not found: ${validated}. Available sites:`, sites.map((s: any) => s.id));
+        localLogger.warn?.(`[NexusAI] WPE site not found: ${validated}. Available sites:`, sites.map((s: any) => s.id));
         return { success: false, error: `Site not found: ${validated}` };
       }
 
@@ -3076,7 +3059,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Re-sync a single WPE site
    */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: any, params: { installId: string }) => {
+  safeHandle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: IpcMainInvokeEvent, params: { installId: string }) => {
     const startTime = Date.now();
 
     if (!deps.wpeSyncService) {
@@ -3136,7 +3119,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    *
    * Uses wp-nexus MCP tools to gather detailed site information
    */
-  safeHandle(IPC_CHANNELS.WPE_DIAGNOSE_SITE, async (_event: any, installId: string) => {
+  safeHandle(IPC_CHANNELS.WPE_DIAGNOSE_SITE, async (_event: IpcMainInvokeEvent, installId: string) => {
     try {
       // Validate input
       const validated = validateInput(WpeInstallIdSchema, installId);
@@ -3162,7 +3145,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Remove a WPE site from the graph
    */
-  safeHandle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, params: { installId: string }) => {
+  safeHandle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: IpcMainInvokeEvent, params: { installId: string }) => {
     const startTime = Date.now();
 
     if (!deps.wpeSyncService) {
@@ -3211,7 +3194,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * - Links to WPE environment
    * - Triggers pull operation (database + files)
    */
-  safeHandle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, params: { wpeSiteId: string; installName: string; installId: string }) => {
+  safeHandle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: IpcMainInvokeEvent, params: { wpeSiteId: string; installName: string; installId: string }) => {
     const startTime = Date.now();
     try {
       // Validate input
@@ -3249,7 +3232,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
         // Re-sync this install's metadata so the graph reflects post-pull state
         if (deps.wpeSyncService) {
           deps.wpeSyncService.syncSingleSite(validated.installId).catch((err: Error) => {
-            localLogger.warn('[NexusAI] Post-pull sync failed (non-fatal):', err.message);
+            localLogger.warn?.('[NexusAI] Post-pull sync failed (non-fatal):', err.message);
           });
         }
 
@@ -3308,7 +3291,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Get details for a single WPE site
    */
-  safeHandle('nexus-ai:wpe:get-site-details', async (_event: any, installId: string) => {
+  safeHandle('nexus-ai:wpe:get-site-details', async (_event: IpcMainInvokeEvent, installId: string) => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
@@ -3333,7 +3316,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Re-sync metadata for a single WPE site
    */
-  safeHandle('nexus-ai:wpe:sync-single-site', async (_event: any, installId: string) => {
+  safeHandle('nexus-ai:wpe:sync-single-site', async (_event: IpcMainInvokeEvent, installId: string) => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
@@ -3399,7 +3382,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // Digital Twin: Site Metadata Cache
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.GET_SITE_METADATA, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GET_SITE_METADATA, async (_event: IpcMainInvokeEvent, siteId: string) => {
     if (!metadataCache) {
       return { success: false, error: 'Metadata cache not available' };
     }
@@ -3420,7 +3403,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.REFRESH_SITE_METADATA, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.REFRESH_SITE_METADATA, async (_event: IpcMainInvokeEvent, siteId: string) => {
     const startTime = Date.now();
 
     if (!metadataCache) {
@@ -3533,7 +3516,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // AI Gateway (Phase 2.3)
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_USAGE, async (_event: any, options?: {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_USAGE, async (_event: IpcMainInvokeEvent, options?: {
     siteId?: string;
     since?: number;
     until?: number;
@@ -3579,7 +3562,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_COST, async (_event: any, options?: {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_COST, async (_event: IpcMainInvokeEvent, options?: {
     siteId?: string;
     startDate?: number;
     endDate?: number;
@@ -3639,7 +3622,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_STATS, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_STATS, async (_event: IpcMainInvokeEvent) => {
     try {
       const USAGE_KEY = 'nexus_ai_gateway_usage';
       const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
@@ -3695,7 +3678,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_CLEAR_USAGE, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_CLEAR_USAGE, async (_event: IpcMainInvokeEvent) => {
     const startTime = Date.now();
     try {
       const USAGE_KEY = 'nexus_ai_gateway_usage';
@@ -3730,7 +3713,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   // Rate limiting (Phase 2.4)
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_RATE_LIMIT, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_RATE_LIMIT, async (_event: IpcMainInvokeEvent, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -3744,7 +3727,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_SET_RATE_LIMIT, async (_event: any, params: { siteId: string; config?: any }) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_SET_RATE_LIMIT, async (_event: IpcMainInvokeEvent, params: { siteId: string; config?: any }) => {
     try {
       // Validate input
       const validated = validateInput(AIGatewayRateLimitSchema, params);
@@ -3759,7 +3742,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_CHECK_RATE_LIMIT, async (_event: any, params: { siteId: string }) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_CHECK_RATE_LIMIT, async (_event: IpcMainInvokeEvent, params: { siteId: string }) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, params.siteId);
@@ -3777,7 +3760,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // AI Context File Generation
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.AI_CONTEXT_GENERATE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.AI_CONTEXT_GENERATE, async (_event: IpcMainInvokeEvent, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -3846,7 +3829,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_CONTEXT_GET_STATUS, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.AI_CONTEXT_GET_STATUS, async (_event: IpcMainInvokeEvent, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -3937,7 +3920,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.DB_SCAN_SITE, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.DB_SCAN_SITE, async (_event: IpcMainInvokeEvent, siteId: string) => {
     try {
       const site = siteData.getSite(siteId);
       if (!site) return { success: false, error: `Site ${siteId} not found` };
@@ -3981,11 +3964,11 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // The caller should poll wpe status after this returns.
   safeHandle(IPC_CHANNELS.WPE_LOGIN_START, async () => {
     try {
-      const wpeOAuth = (serviceContainer as any).wpeOAuth;
+      const wpeOAuth = serviceContainer?.wpeOAuth;
       if (!wpeOAuth) return { success: false, error: 'WPE OAuth service not available in this version of Local' };
       // Start auth in background — keeps server alive until callback is received
       wpeOAuth.authenticate().catch((err: Error) => {
-        localLogger.warn('[NexusAI] WPE auth failed:', err.message);
+        localLogger.warn?.('[NexusAI] WPE auth failed:', err.message);
       });
       return { success: true };
     } catch (err) {
@@ -3993,7 +3976,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.DB_GET_LAST_SCAN, async (_event: any, siteId: string) => {
+  safeHandle(IPC_CHANNELS.DB_GET_LAST_SCAN, async (_event: IpcMainInvokeEvent, siteId: string) => {
     try {
       const cache = registryStorage.get(STORAGE_KEYS.DB_SCAN_CACHE) ?? {};
       const scan = (cache as Record<string, any>)[siteId] ?? null;

@@ -16,6 +16,10 @@ import { spawn } from 'child_process';
 export interface WpCliResult {
   stdout: string | null;
   success: boolean;
+  /** Standard error output, if captured. Not always present — check before using. */
+  stderr?: string | null;
+  /** Process exit code. Not always present. */
+  exitCode?: number | null;
 }
 
 export interface WpPlugin {
@@ -123,9 +127,23 @@ export interface LocalServicesBridge {
 
   // SSL
   trustCert(siteId: string): Promise<void>;
+  /** Alias for trustCert — trusts the SSL certificate for a local site. */
+  trustSsl?(siteId: string): Promise<void>;
 
   // Lightning Services
   getAvailablePhpVersions(): Promise<string[]>;
+
+  // PHP version management
+  changePhpVersion?(siteId: string, version: string): Promise<void>;
+
+  // Xdebug
+  toggleXdebug?(siteId: string, enable: boolean): Promise<{ enabled: boolean }>;
+
+  // Site logs
+  getSiteLogs?(siteId: string, opts?: { lines?: number; type?: string; tail?: number; follow?: boolean }): Promise<string>;
+
+  // WPE Link
+  linkToWpe?(siteId: string, installName: string, environment: string): Promise<void>;
 
   // Site Groups (Local native)
   getSiteGroups(): Array<{ id: string; name: string; siteIds: string[]; index: number }>;
