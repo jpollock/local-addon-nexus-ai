@@ -416,6 +416,8 @@ At 92 tools, the MCP surface is a cognitive burden for AI agents and a maintenan
 
 ## What NOT to Build Next
 
+**Extend the REST API.** The addon's user-facing surfaces are CLI and MCP — not HTTP. The REST API was built speculatively in Phase 3 without a concrete consumer. The CLI already handles scripting. MCP handles AI agents. There is no user asking for a third interface. Do not add write endpoints, do not add auth token rotation, do not build webhook management UI, do not extend it further until a specific external tool with a named user requires it. If that day comes, revisit. Until then, the REST API exists but is not a product surface.
+
 **More MCP tools.** The problem is not the number of tools — 92 is already too many to navigate. Every engineering hour spent on tool 93 would be better spent making tools 1-92 more reliable, better documented, and more discoverable. Do not add MCP tools until the rationalization work in Sprint N+3 is done.
 
 **A mobile app.** The REST API enables mobile access for anyone who wants to build a mobile interface. Building a native mobile app would consume 6+ months of engineering and reach a small fraction of the user base. The target user is at a desktop with Local running.

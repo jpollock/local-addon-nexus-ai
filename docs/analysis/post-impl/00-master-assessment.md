@@ -153,7 +153,7 @@ Apply in `log()` before writing.
 
 ## The Sprint in One Sentence
 
-The sprint fixed what was genuinely broken (security, UX, architecture) and delivered real new infrastructure (REST API, webhooks, audit log). The one hygiene item worth doing before export/compliance use: redact sensitive fields in the audit log. Everything else flagged as a security issue was either already working correctly or overstated given the localhost threat model.
+The sprint fixed what was genuinely broken (security, UX, architecture) and delivered real new infrastructure (webhooks, audit log, fleet health scheduler). The one hygiene item worth doing before export/compliance use: redact sensitive fields in the audit log. Everything else flagged as a security issue was either already working correctly or overstated given the localhost threat model.
 
 ---
 

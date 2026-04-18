@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-The mvp-next sprint delivered on **5 of 7 promised capability areas**, adding 200+ lines of production code across CLI, dashboard, REST API, webhooks, and audit logging. However, **delivery was partial in some areas**, particularly REST API (read-only, no writes), and **new gaps were introduced** where REST endpoints exist but lack write operations promised for external integrations.
+The mvp-next sprint delivered on **5 of 7 promised capability areas**, adding production code across CLI, dashboard, webhooks, and audit logging. **Note on REST API:** this was built per the roadmap but is outside the addon's actual interface surface (CLI + MCP). It should not be extended and does not represent a gap — it represents scope that should not have been added. The real delivery gaps are in webhook reliability and audit log queryability.
 
 ### What was delivered
 - ✅ Dashboard: WPE action buttons (Create Backup, Sync Metadata)
@@ -21,7 +21,7 @@ The mvp-next sprint delivered on **5 of 7 promised capability areas**, adding 20
 - ✅ Audit log: OperationAuditLog for Tier 2/3 destructive operations
 
 ### Delivery gaps discovered
-- ⚠️ REST API is read-only (no POST/PUT/DELETE) — contradicts prior roadmap hint at "write operations forthcoming"
+- ⚠️ REST API was built but is outside the addon's interface surface (CLI + MCP). Do not extend.
 - ⚠️ Webhook events are fire-and-forget; no delivery tracking or retry logic
 - ⚠️ Audit log exists but not exposed via UI or API for compliance queries
 - ⚠️ Dashboard buttons added but no bulk operation progress UI or cancel capability
@@ -74,7 +74,7 @@ Updated matrix showing CLI / MCP / UI / REST coverage after the sprint.
 | Query audit log | ❌ | ❌ | ❌ | ❌ | Not exposed; `OperationAuditLog.list()` exists but no public CLI/REST query |
 
 ### Key observations
-- REST API parity with CLI is **50%** (read-only; no mutations)
+- REST API exists but is not a primary interface — CLI and MCP are. REST API parity is not a goal.
 - Dashboard action coverage improved from **5% to 25%** (added backup, metadata sync, checklist)
 - UI still lacks bulk operation progress tracking and cancellation
 
@@ -82,11 +82,9 @@ Updated matrix showing CLI / MCP / UI / REST coverage after the sprint.
 
 ## 3. New Gaps Opened by Sprint Delivery
 
-### A. REST API Partial Delivery
+### A. REST API — Scope That Should Not Be Extended
 
-**Gap:** REST API surface exists but is strictly read-only.
-
-**What was promised/implied:** "Integration surface — Limited REST API exposure; no webhooks or event feeds for automation" suggested REST would grow.
+**Assessment:** The REST API was built per the Phase 3 roadmap spec, but represents scope outside the addon's actual user-facing surfaces (CLI + MCP). There is no current consumer. The CLI already handles scripting. MCP handles AI agents. Do not add write endpoints. Do not treat "REST API parity with CLI" as a goal.
 
 **What was delivered:** 5 GET endpoints only. No POST/PUT/DELETE.
 
