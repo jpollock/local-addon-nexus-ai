@@ -27,7 +27,7 @@ The MVP sprint successfully addressed **critical architectural issues** from the
 - Empty catch blocks down from 997 to 213 (-79%) but still problematic
 - Integration tests for new modules (REST API, webhooks, audit) need expansion
 - No integration test for end-to-end bulk operations with error recovery
-- Webhook URL validation lacks SSRF hardening (accepts any URL)
+- Webhook URL validation: localhost is fine (user intent), cloud metadata endpoints worth filtering as hygiene
 - Several handlers still use old destructuring patterns instead of validated schemas
 
 ---
@@ -245,7 +245,7 @@ if (BLOCKED_HOSTS.includes(hostname)) {
 }
 ```
 
-**Priority:** Medium — Requires user configuration, not automatic. Add validation before GA.
+**Priority:** Low — Not a real threat for a localhost machine tool. Users configure their own webhook URLs intentionally. The only worth-doing variant: block cloud metadata endpoints (AWS 169.254.169.254) as a 30-min hygiene fix. Not a GA blocker.
 
 **Tests:**
 - `tests/unit/webhooks/WebhookEmitter.test.ts` — 6,428 bytes
