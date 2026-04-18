@@ -3,8 +3,16 @@
  *
  * All Electron IPC handlers for the Nexus AI addon, extracted from index.ts
  * to keep the main entry point focused on initialization.
+ *
+ * Domain handler modules (extracted in Phase 1.9):
+ *   - src/main/ipc/handlers/credentials.ts  — WPE API credential handlers
+ *   - src/main/ipc/handlers/bulk.ts          — bulk / fleet operation handlers
+ *   - src/main/ipc/handlers/wpe-sync.ts      — WPE site sync handlers
  */
 import { IPC_CHANNELS, STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../common/constants';
+import { registerCredentialHandlers } from './ipc/handlers/credentials';
+import { registerBulkHandlers } from './ipc/handlers/bulk';
+import { registerWpeSyncHandlers } from './ipc/handlers/wpe-sync';
 import type { NexusSettings } from '../common/types';
 import type { IndexRegistry, RegistryStorage } from './content/IndexRegistry';
 import type { ContentPipeline } from './content/ContentPipeline';
@@ -14,12 +22,8 @@ import type { McpServer } from './mcp/McpServer';
 import type { LocalServicesBridge } from './mcp/local-services-bridge';
 import type { GraphService } from './events/GraphService';
 import type { EventProcessor } from './events/EventProcessor';
-import type { IpcHandlerDeps } from './types/ipc-handler-deps';
-import type { NexusLogger } from './types/nexus-services';
-export type { IpcHandlerDeps } from './types/ipc-handler-deps';
 import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
 import { scanDatabase } from './mcp/modules/db-scanner/db-scanner';
-import { getApiKey, hasApiKey } from './security/KeyVault';
 import { switchProviderForSite } from './mcp/modules/wp-connector/switch-provider';
 import { generateEventSummary } from './events/event-summary';
 import type { EventTimelineEntry, EventStats } from '../common/types';
@@ -42,13 +46,7 @@ import {
   UpdateSettingsSchema,
   IndexSiteSchema,
   SearchUnifiedSchema,
-  BulkOperationRequestSchema,
-  BulkOperationIdSchema,
-  FleetOperationOptionsSchema,
-  WpeRemoveSiteSchema,
   WpePullToLocalSchema,
-  WpeSyncSingleSchema,
-  WpeSyncAllSchema,
   WpeInstallIdSchema,
   HealthGetScoreSchema,
   HealthGetTrendSchema,
@@ -75,7 +73,6 @@ import {
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
-type IpcMainInvokeEvent = import('electron').IpcMainInvokeEvent;
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -95,7 +92,28 @@ const DEFAULT_SETTINGS: NexusSettings = {
   excludedSiteIds: [],
 };
 
-// IpcHandlerDeps is now defined in ./types/ipc-handler-deps and re-exported above.
+export interface IpcHandlerDeps {
+  siteData: any;
+  localServicesBridge: LocalServicesBridge;
+  indexRegistry: IndexRegistry;
+  embeddingService: EmbeddingService;
+  contentPipeline: ContentPipeline;
+  vectorStore: VectorStore;
+  registryStorage: RegistryStorage;
+  localLogger: any;
+  getMcpServer: () => McpServer | null;
+  graphService: GraphService;
+  eventProcessor: EventProcessor;
+  vectorDbPath: string;
+  /** Raw service container for accessing Local services directly */
+  serviceContainer?: any;
+  /** NexusServices object — mutated to add Sprint 2/3 services after creation */
+  nexusServices?: any;
+  /** WPE site sync service (Phase 1) */
+  wpeSyncService?: WPESyncService;
+  /** Site metadata cache (Digital Twin) */
+  metadataCache?: SiteMetadataCache;
+}
 
 /**
  * Wait for database to be ready by polling with a simple WP-CLI command.
@@ -104,7 +122,7 @@ const DEFAULT_SETTINGS: NexusSettings = {
 async function waitForDatabaseReady(
   siteId: string,
   localServices: LocalServicesBridge,
-  logger: NexusLogger,
+  logger: any,
   timeoutMs: number = 30000,
 ): Promise<void> {
   const startTime = Date.now();
@@ -151,7 +169,7 @@ async function waitForDatabaseReady(
 async function withSiteRunning<T>(
   siteId: string,
   localServices: LocalServicesBridge,
-  logger: NexusLogger,
+  logger: any,
   work: () => Promise<T>,
 ): Promise<T> {
   let wasAutoStarted = false;
@@ -284,7 +302,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
       const indexed = indexRegistry.listAll();
-      const indexedIds = new Set(indexed.map((e) => e.siteId));
+      const indexedIds = new Set(indexed.map((e: any) => e.siteId));
 
       // Fetch WP versions from graph for all local sites
       const wpVersionsMap = new Map<string, string>();
@@ -298,7 +316,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         });
       }
 
-      return Object.values(allSites).map((site) => {
+      return Object.values(allSites).map((site: any) => {
         const connections = site.hostConnections;
         const connList = connections
           ? (Array.isArray(connections) ? connections : Object.values(connections))
@@ -331,7 +349,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const allSites = siteData.getSites();
       const siteIds: string[] = [];
 
-      for (const site of Object.values(allSites)) {
+      for (const site of Object.values(allSites) as any[]) {
         const connections = site.hostConnections;
         if (!connections) continue;
         const connList = Array.isArray(connections) ? connections : Object.values(connections);
@@ -354,7 +372,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       // Local sites
       const totalSites = siteList.length;
-      const runningSites = siteList.filter((s) => statuses[s.id] === 'running').length;
+      const runningSites = siteList.filter((s: any) => statuses[s.id] === 'running').length;
 
       // WPE-connected local sites
       let wpeConnectedSites = 0;
@@ -396,10 +414,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       // Index stats — local (index registry) + WPE (graph content table)
       const indexEntries = indexRegistry.listAll();
-      const localIndexedSites = indexEntries.filter((e) => e.state === 'indexed').length;
-      const totalDocs = indexEntries.reduce((sum: number, e) => sum + (e.documentCount || 0), 0);
-      const totalChunks = indexEntries.reduce((sum: number, e) => sum + (e.chunkCount || 0), 0);
-      const lastIndexed = indexEntries.reduce((max: number, e) => Math.max(max, e.lastIndexed || 0), 0);
+      const localIndexedSites = indexEntries.filter((e: any) => e.state === 'indexed').length;
+      const totalDocs = indexEntries.reduce((sum: number, e: any) => sum + (e.documentCount || 0), 0);
+      const totalChunks = indexEntries.reduce((sum: number, e: any) => sum + (e.chunkCount || 0), 0);
+      const lastIndexed = indexEntries.reduce((max: number, e: any) => Math.max(max, e.lastIndexed || 0), 0);
 
       // WPE indexed sites — count distinct sites with content in graph DB
       let wpeIndexedSites = 0;
@@ -592,7 +610,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.START_SITE, async (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.START_SITE, async (_event: any, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -604,7 +622,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.STOP_SITE, async (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.STOP_SITE, async (_event: any, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -616,7 +634,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SEARCH, async (_event: IpcMainInvokeEvent, query: string, siteId?: string, limit?: number) => {
+  safeHandle(IPC_CHANNELS.SEARCH, async (_event: any, query: string, siteId?: string, limit?: number) => {
     try {
       // Validate input
       const validated = validateInput(SearchContentSchema, { query, siteIds: siteId ? [siteId] : undefined, limit });
@@ -628,12 +646,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         const results = await vectorStore.search(targetSiteId, queryVector, { limit: maxResults });
         const site = siteData.getSite(targetSiteId);
         return {
-          results: results.map((r) => ({ ...r, siteId: targetSiteId, siteName: site?.name ?? targetSiteId })),
+          results: results.map((r: any) => ({ ...r, siteId: targetSiteId, siteName: site?.name ?? targetSiteId })),
         };
       }
 
       // Search all indexed sites, merge results
-      const entries = indexRegistry.listAll().filter((e) => e.state === 'indexed');
+      const entries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
       const allResults: any[] = [];
       for (const entry of entries) {
         const results = await vectorStore.search(entry.siteId, queryVector, { limit: maxResults });
@@ -651,7 +669,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: IpcMainInvokeEvent, params: { siteId: string }) => {
+  safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: any, params: { siteId: string }) => {
     const startTime = Date.now();
     try {
       // Validate input
@@ -726,7 +744,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, async (_event: IpcMainInvokeEvent, partial: Partial<NexusSettings>) => {
+  safeHandle(IPC_CHANNELS.UPDATE_SETTINGS, async (_event: any, partial: Partial<NexusSettings>) => {
     try {
       const validated = validateInput(UpdateSettingsSchema, partial);
 
@@ -792,7 +810,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GET_WP_VERSION, async (_event: any, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -841,7 +859,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.UPGRADE_WP, async (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.UPGRADE_WP, async (_event: any, siteId: string) => {
     const startTime = Date.now();
     try {
       // Validate input
@@ -979,7 +997,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: IpcMainInvokeEvent, siteId: string, provider?: string) => {
+  safeHandle(IPC_CHANNELS.SETUP_AI, async (_event: any, siteId: string, provider?: string) => {
     const startTime = Date.now();
     let wasAutoStarted = false;
 
@@ -1117,7 +1135,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Per-Site AI Config (Phase 4)
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.GET_SITE_AI_CONFIG, (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GET_SITE_AI_CONFIG, (_event: any, siteId: string) => {
     try {
       const validated = validateInput(SiteIdSchema, siteId);
       const siteConfigs = (registryStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
@@ -1128,7 +1146,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SWITCH_AI_PROVIDER, async (_event: IpcMainInvokeEvent, siteId: string, provider: string) => {
+  safeHandle(IPC_CHANNELS.SWITCH_AI_PROVIDER, async (_event: any, siteId: string, provider: string) => {
     try {
       const validatedSiteId = validateInput(SiteIdSchema, siteId);
 
@@ -1163,7 +1181,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Event Tracking & Visibility (Sprint 1)
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.EVENTS_GET_TIMELINE, async (_event: IpcMainInvokeEvent, options?: {
+  safeHandle(IPC_CHANNELS.EVENTS_GET_TIMELINE, async (_event: any, options?: {
     limit?: number;
     filter?: string;
     status?: 'pending' | 'processed' | 'failed';
@@ -1266,7 +1284,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.STORAGE_CLEANUP, async (_event: IpcMainInvokeEvent, options?: {
+  safeHandle(IPC_CHANNELS.STORAGE_CLEANUP, async (_event: any, options?: {
     retentionDays?: number;
   }) => {
     const startTime = Date.now();
@@ -1328,7 +1346,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   queryStorage.load().catch(err => localLogger.error('[NexusAI] Failed to load saved queries:', err.message));
 
   // Unified search
-  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: IpcMainInvokeEvent, params: { query: string; filters?: any; options?: any }) => {
+  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, params: { query: string; filters?: any; options?: any }) => {
     try {
       // Validate input
       const validated = validateInput(SearchUnifiedSchema, params);
@@ -1354,7 +1372,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.FILTERS_APPLY, async (_event: IpcMainInvokeEvent, filterId: string) => {
+  safeHandle(IPC_CHANNELS.FILTERS_APPLY, async (_event: any, filterId: string) => {
     try {
       // Validate input
       const validated = validateInput(FilterIdSchema, filterId);
@@ -1368,7 +1386,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   });
 
   // Health scores
-  safeHandle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: IpcMainInvokeEvent, params: { siteId: string }) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_SCORE, async (_event: any, params: { siteId: string }) => {
     try {
       // Validate input
       const validated = validateInput(HealthGetScoreSchema, params);
@@ -1414,7 +1432,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.QUERIES_CREATE, async (_event: IpcMainInvokeEvent, query: any) => {
+  safeHandle(IPC_CHANNELS.QUERIES_CREATE, async (_event: any, query: any) => {
     try {
       // Validate input
       const validated = validateInput(QuerySchema, query);
@@ -1433,7 +1451,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: IpcMainInvokeEvent, params: { id: string; changes: any }) => {
+  safeHandle(IPC_CHANNELS.QUERIES_UPDATE, async (_event: any, params: { id: string; changes: any }) => {
     try {
       // Validate input
       const validated = validateInput(QueryUpdateSchema, params);
@@ -1446,7 +1464,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.QUERIES_DELETE, async (_event: IpcMainInvokeEvent, id: string) => {
+  safeHandle(IPC_CHANNELS.QUERIES_DELETE, async (_event: any, id: string) => {
     try {
       // Validate input
       const validated = validateInput(QueryIdSchema, id);
@@ -1459,7 +1477,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.QUERIES_RUN, async (_event: IpcMainInvokeEvent, id: string) => {
+  safeHandle(IPC_CHANNELS.QUERIES_RUN, async (_event: any, id: string) => {
     try {
       // Validate input
       const validated = validateInput(QueryIdSchema, id);
@@ -1579,65 +1597,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     localLogger.error('[NexusAI] Failed to init HealthTrendTracker');
   }
 
-  // --- Bulk Operations ---
-
-  safeHandle(IPC_CHANNELS.BULK_EXECUTE, async (_event: IpcMainInvokeEvent, request: any) => {
-    const startTime = Date.now();
-    try {
-      // Validate input
-      const validated = validateInput(BulkOperationRequestSchema, request);
-
-      // Audit log bulk operation start
-      auditLogger.log({
-        operation: `bulk_${validated.type}`,
-        target: `${validated.siteIds.length} sites`,
-        targetType: 'bulk_operation',
-        result: 'started',
-        params: { type: validated.type, siteCount: validated.siteIds.length },
-        durationMs: 0,
-      });
-
-      const opId = await bulkOpManager.execute(validated);
-
-      return { success: true, opId };
-    } catch (err) {
-      localLogger.error('[NexusAI] bulk:execute failed:', (err as Error).message);
-      auditLogger.logFailure(
-        'bulk_execute',
-        'multiple',
-        'bulk_operation',
-        (err as Error).message,
-        request,
-        Date.now() - startTime,
-      );
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.BULK_STATUS, async (_event: IpcMainInvokeEvent, opId: string) => {
-    try {
-      // Validate input
-      const validated = validateInput(BulkOperationIdSchema, opId);
-      const status = bulkOpManager.getStatus(validated);
-      return status ? { success: true, ...status } : { success: false, error: 'Operation not found' };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.BULK_CANCEL, async (_event: IpcMainInvokeEvent, opId: string) => {
-    try {
-      // Validate input
-      const validated = validateInput(BulkOperationIdSchema, opId);
-      return { success: bulkOpManager.cancel(validated) };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.BULK_LIST, async () => {
-    return { success: true, operations: bulkOpManager.listAll() };
-  });
+  // --- Bulk Operations --- (extracted to src/main/ipc/handlers/bulk.ts)
+  registerBulkHandlers(deps, { bulkOpManager, auditLogger, buildSiteNames });
 
   // --- Site Groups (Local native) ---
 
@@ -1650,7 +1611,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_CREATE, async (_event: IpcMainInvokeEvent, args: { name: string }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_CREATE, async (_event: any, args: { name: string }) => {
     try {
       // Validate input
       const validated = validateInput(GroupCreateSchema, args);
@@ -1663,7 +1624,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: IpcMainInvokeEvent, params: { id: string; changes: { name?: string } }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_UPDATE, async (_event: any, params: { id: string; changes: { name?: string } }) => {
     try {
       // Validate input
       const validated = validateInput(GroupUpdateSchema, params);
@@ -1679,7 +1640,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_DELETE, async (_event: IpcMainInvokeEvent, id: string) => {
+  safeHandle(IPC_CHANNELS.GROUPS_DELETE, async (_event: any, id: string) => {
     try {
       // Validate input
       const validated = validateInput(GroupIdSchema, id);
@@ -1692,7 +1653,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: IpcMainInvokeEvent, params: { groupId: string; siteId: string }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_ADD_SITE, async (_event: any, params: { groupId: string; siteId: string }) => {
     try {
       // Validate input
       const validated = validateInput(GroupAddRemoveSiteSchema, params);
@@ -1705,7 +1666,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: IpcMainInvokeEvent, params: { groupId: string; siteId: string }) => {
+  safeHandle(IPC_CHANNELS.GROUPS_REMOVE_SITE, async (_event: any, params: { groupId: string; siteId: string }) => {
     try {
       // Validate input
       const validated = validateInput(GroupAddRemoveSiteSchema, params);
@@ -1720,7 +1681,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // --- Health Trends ---
 
-  safeHandle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: IpcMainInvokeEvent, params: { siteId: string; days?: number }) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_TREND, async (_event: any, params: { siteId: string; days?: number }) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
 
     // Validate input
@@ -1729,7 +1690,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     return { success: true, trend: healthTrendTracker.getSiteTrend(validated.siteId, validated.days || 30) };
   });
 
-  safeHandle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: IpcMainInvokeEvent, params?: { days?: number }) => {
+  safeHandle(IPC_CHANNELS.HEALTH_GET_FLEET_TREND, async (_event: any, params?: { days?: number }) => {
     if (!healthTrendTracker) return { success: false, error: 'Health trend tracker not available' };
 
     // Validate input
@@ -1743,7 +1704,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   safeHandle(IPC_CHANNELS.DASHBOARD_V2_STATS, async () => {
     try {
       // Health distribution
-      const allEntries = indexRegistry.listAll().filter((e) => e.state === 'indexed');
+      const allEntries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
       const siteIds = allEntries.map((e: any) => e.siteId);
       const siteInfoMap: Record<string, any> = {};
 
@@ -1799,7 +1760,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // AI Status & Proxy (Sprint 4)
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.GET_AI_STATUS, async (_event: IpcMainInvokeEvent, siteId?: string) => {
+  safeHandle(IPC_CHANNELS.GET_AI_STATUS, async (_event: any, siteId?: string) => {
     try {
       // Validate input if siteId provided
       const validatedSiteId = siteId ? validateInput(SiteIdSchema, siteId) : undefined;
@@ -1907,17 +1868,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           }
         }
 
-        // Check if credentials are synced — check both legacy and encrypted storage
-        const legacyKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-        for (const [provider, key] of Object.entries(legacyKeys)) {
+        // Check if credentials are synced by looking at stored keys
+        const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
+        for (const [provider, key] of Object.entries(storedKeys)) {
           if (key) providers.push(provider);
-        }
-        // Also check encrypted storage for migrated keys
-        const allProviderIds = ['anthropic', 'openai', 'google', 'ollama'];
-        for (const pid of allProviderIds) {
-          if (!providers.includes(pid) && hasApiKey(registryStorage, pid)) {
-            providers.push(pid);
-          }
         }
         credentialsSynced = providers.length > 0;
 
@@ -1961,195 +1915,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SETUP_AI_FLEET, async (_event: IpcMainInvokeEvent, options?: { siteIds?: string[] }) => {
-    try {
-      // Validate input
-      const validated = validateInput(FleetOperationOptionsSchema, options);
-
-      const allSites = siteData.getSites();
-      const statuses = localServicesBridge.getAllSiteStatuses();
-
-      // Use provided siteIds or all running sites
-      const targetIds = validated?.siteIds
-        ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
-
-      if (targetIds.length === 0) {
-        return { success: true, opId: null, message: 'No running sites to set up' };
-      }
-
-      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
-
-      const opId = bulkOpManager.execute({
-        type: 'setup-ai',
-        siteIds: targetIds,
-        siteNames: buildSiteNames(targetIds),
-        options: { provider: settings?.aiProvider },
-      });
-
-      return { success: true, opId };
-    } catch (err) {
-      localLogger.error('[NexusAI] setup-ai-fleet failed:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.INDEX_ALL_FLEET, async (_event: IpcMainInvokeEvent, options?: { siteIds?: string[] }) => {
-    try {
-      // Validate input
-      const validated = validateInput(FleetOperationOptionsSchema, options);
-
-      const allSites = siteData.getSites();
-      const statuses = localServicesBridge.getAllSiteStatuses();
-
-      // Use provided siteIds or all running sites
-      const targetIds = validated?.siteIds
-        ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
-
-      if (targetIds.length === 0) {
-        return { success: true, opId: null, message: 'No running sites to index' };
-      }
-
-      const opId = bulkOpManager.execute({
-        type: 'reindex',
-        siteIds: targetIds,
-        siteNames: buildSiteNames(targetIds),
-        options: {},
-      });
-
-      return { success: true, opId };
-    } catch (err) {
-      localLogger.error('[NexusAI] index-all-fleet failed:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Auto-start/stop: Setup AI for ALL sites (including halted)
-  safeHandle(IPC_CHANNELS.SETUP_AI_ALL_AUTO, async (_event: IpcMainInvokeEvent) => {
-    try {
-      const allSites = siteData.getSites();
-      const allSiteIds = Object.keys(allSites);
-
-      if (allSiteIds.length === 0) {
-        return { success: true, opId: null, message: "No sites to setup" };
-      }
-
-      const opId = bulkOpManager.execute({
-        type: "setup-ai",
-        siteIds: allSiteIds,
-        siteNames: buildSiteNames(allSiteIds),
-        options: { autoStartStop: true },
-      });
-
-      return { success: true, opId };
-    } catch (err) {
-      localLogger.error("[NexusAI] setup-ai-all-auto failed:", (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Auto-start/stop: Index ALL sites (including halted)
-  safeHandle(IPC_CHANNELS.INDEX_ALL_AUTO, async (_event: IpcMainInvokeEvent) => {
-    try {
-      const allSites = siteData.getSites();
-      const allSiteIds = Object.keys(allSites);
-
-      if (allSiteIds.length === 0) {
-        return { success: true, opId: null, message: "No sites to index" };
-      }
-
-      const opId = bulkOpManager.execute({
-        type: "reindex",
-        siteIds: allSiteIds,
-        siteNames: buildSiteNames(allSiteIds),
-        options: { autoStartStop: true },
-      });
-
-      return { success: true, opId };
-    } catch (err) {
-      localLogger.error("[NexusAI] index-all-auto failed:", (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Sync Graph: Refresh GraphService with current plugin/theme/user data (auto-start/stop)
-  safeHandle(IPC_CHANNELS.SYNC_GRAPH_ALL, async (_event: IpcMainInvokeEvent) => {
-    try {
-      const allSites = siteData.getSites();
-      const allSiteIds = Object.keys(allSites);
-
-      if (allSiteIds.length === 0) {
-        return { success: false, error: "No sites to sync." };
-      }
-
-      const opId = bulkOpManager.execute({
-        type: "sync-graph",
-        siteIds: allSiteIds,
-        siteNames: buildSiteNames(allSiteIds),
-        options: { autoStartStop: true },
-      });
-
-      return { success: true, opId, count: allSiteIds.length };
-    } catch (err) {
-      localLogger.error("[NexusAI] sync-graph-all failed:", (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Quick fleet refresh — filesystem scan for halted, WP-CLI for running (no auto-start)
-  safeHandle(IPC_CHANNELS.FLEET_REFRESH_QUICK, async (_event: IpcMainInvokeEvent) => {
-    try {
-      const result = await deps.nexusServices?.registry?.call('nexus_fleet_refresh', {}, deps.nexusServices);
-      const text = result?.content?.[0]?.text ?? '';
-      return { success: !result?.isError, message: text };
-    } catch (err) {
-      localLogger.error('[NexusAI] fleet-refresh-quick failed:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Health check all sites
-  safeHandle(IPC_CHANNELS.FLEET_HEALTH_CHECK_ALL, async (_event: IpcMainInvokeEvent) => {
-    try {
-      const allSites = siteData.getSites();
-      const allSiteIds = Object.keys(allSites);
-      if (allSiteIds.length === 0) return { success: true, opId: null, message: 'No sites found' };
-      const opId = bulkOpManager.execute({
-        type: 'health-refresh',
-        siteIds: allSiteIds,
-        siteNames: buildSiteNames(allSiteIds),
-        options: { autoStartStop: true },
-      });
-      return { success: true, opId, count: allSiteIds.length };
-    } catch (err) {
-      localLogger.error('[NexusAI] fleet-health-check-all failed:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Update all plugins
-  safeHandle(IPC_CHANNELS.FLEET_PLUGIN_UPDATE_ALL, async (_event: IpcMainInvokeEvent) => {
-    try {
-      const allSites = siteData.getSites();
-      const allSiteIds = Object.keys(allSites);
-      if (allSiteIds.length === 0) return { success: true, opId: null, message: 'No sites found' };
-      const opId = bulkOpManager.execute({
-        type: 'plugin-update',
-        siteIds: allSiteIds,
-        siteNames: buildSiteNames(allSiteIds),
-        options: { autoStartStop: true },
-      });
-      return { success: true, opId, count: allSiteIds.length };
-    } catch (err) {
-      localLogger.error('[NexusAI] fleet-plugin-update-all failed:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
+  // Fleet shortcut handlers (SETUP_AI_FLEET, INDEX_ALL_FLEET, etc.) are
+  // registered above in registerBulkHandlers().
 
   // ---------------------------------------------------------------------------
   // Site Finder (Advanced Site Search)
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.SITE_FINDER_GET_OPTIONS, async (_event: IpcMainInvokeEvent) => {
+  safeHandle(IPC_CHANNELS.SITE_FINDER_GET_OPTIONS, async (_event: any) => {
     try {
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
@@ -2201,7 +1974,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SITE_FINDER_APPLY, async (_event: IpcMainInvokeEvent, filters: any) => {
+  safeHandle(IPC_CHANNELS.SITE_FINDER_APPLY, async (_event: any, filters: any) => {
     try {
       // Validate input
       const validated = validateInput(SiteFinderFiltersSchema, filters);
@@ -2425,7 +2198,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SITE_FINDER_AI_PARSE, async (_event: IpcMainInvokeEvent, payload: { conversation: Array<{ role: string; content: string }> }) => {
+  safeHandle(IPC_CHANNELS.SITE_FINDER_AI_PARSE, async (_event: any, payload: { conversation: Array<{ role: string; content: string }> }) => {
     try {
       // Validate input
       const validated = validateInput(SiteFinderAIParseSchema, payload);
@@ -2434,6 +2207,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       // Get settings to determine which provider to use
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+      const apiKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
 
       // Use || not ?? — settings fields can be empty strings which ?? won't catch
       const aiProvider = settings?.aiProvider || 'anthropic';
@@ -2442,7 +2216,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         : aiProvider === 'google' ? 'gemini-1.5-flash'
         : 'llama3.2';
       const aiModel = settings?.aiModel || defaultModel;
-      const apiKey = getApiKey(registryStorage, aiProvider);
+      const apiKey = apiKeys[aiProvider];
 
       localLogger.info('[NexusAI] AI parse request - provider:', aiProvider, 'model:', aiModel, 'hasKey:', !!apiKey);
 
@@ -2626,7 +2400,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, async (_event: IpcMainInvokeEvent, payload: { siteId: string }) => {
+  safeHandle(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, async (_event: any, payload: { siteId: string }) => {
     try {
       const { siteId } = payload;
 
@@ -2653,7 +2427,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.SIDEBAR_BULK_ACTION, async (_event: IpcMainInvokeEvent, payload: { action: string; siteIds: string[] }) => {
+  safeHandle(IPC_CHANNELS.SIDEBAR_BULK_ACTION, async (_event: any, payload: { action: string; siteIds: string[] }) => {
     try {
       // Validate input
       const validated = validateInput(SidebarBulkActionSchema, payload);
@@ -2706,124 +2480,17 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   }
 
   // =========================================================================
-  // WPE API Credentials (for backup creation via basic auth)
+  // WPE API Credentials + WPE Site Sync Handlers
+  // (extracted to src/main/ipc/handlers/credentials.ts and wpe-sync.ts)
   // =========================================================================
+  registerCredentialHandlers(deps);
+  registerWpeSyncHandlers(deps, { auditLogger });
 
-  safeHandle(IPC_CHANNELS.WPE_GET_API_CREDENTIALS_STATUS, async () => {
-    try {
-      const status = await localServicesBridge.wpeGetApiCredentialsStatus();
-      return { configured: status.configured, username: status.username ?? null };
-    } catch (err: any) {
-      localLogger.error(`[NexusAI] Failed to get WPE credentials status: ${err.message}`);
-      return { configured: false, username: null };
-    }
-  });
+  // WPE_SYNC_ALL, WPE_SYNC_STATUS, WPE_SYNC_STOP, WPE_SYNC_STATS, WPE_CAPI_SYNC,
+  // WPE_SYNC_SINGLE, WPE_GET_SYNCED_SITES, WPE_GET_SITE_DETAILS, WPE_DIAGNOSE_SITE,
+  // WPE_REMOVE_SITE — all registered above in registerWpeSyncHandlers().
 
-  safeHandle(IPC_CHANNELS.WPE_GET_API_CREDENTIALS, async () => {
-    try {
-      const status = await localServicesBridge.wpeGetApiCredentialsStatus();
-      if (!status.configured) {
-        return { username: '', password: '' };
-      }
-      // Return username only for display, password stays encrypted
-      return { username: status.username ?? '', password: '' };
-    } catch (err: any) {
-      localLogger.error(`[NexusAI] Failed to get WPE credentials: ${err.message}`);
-      return { username: '', password: '' };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.WPE_SET_API_CREDENTIALS, async (_event: IpcMainInvokeEvent, username: string, password: string) => {
-    try {
-      await localServicesBridge.wpeSetApiCredentials(username, password);
-      localLogger.info(`[NexusAI] WPE API credentials stored for user: ${username}`);
-      return { success: true };
-    } catch (err: any) {
-      localLogger.error(`[NexusAI] Failed to store WPE credentials: ${err.message}`);
-      throw err;
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.WPE_CLEAR_API_CREDENTIALS, async () => {
-    try {
-      await localServicesBridge.wpeClearApiCredentials();
-      localLogger.info(`[NexusAI] WPE API credentials cleared`);
-      return { success: true };
-    } catch (err: any) {
-      localLogger.error(`[NexusAI] Failed to clear WPE credentials: ${err.message}`);
-      throw err;
-    }
-  });
-
-  // =========================================================================
-  // WPE Site Sync Handlers (Phase 1)
-  // =========================================================================
-
-  /**
-   * Sync all WPE sites from wp-nexus MCP
-   */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_ALL, async (_event: IpcMainInvokeEvent, options?: { limit?: number }) => {
-    const startTime = Date.now();
-
-    if (!deps.wpeSyncService) {
-      localLogger.warn?.('[NexusAI] WPE sync service not initialized');
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      // Validate input
-      const validated = validateInput(WpeSyncAllSchema, options);
-
-      const limit = validated?.limit;
-      // Manual sync always force-refreshes all installs (staleThresholdHours=0)
-      // Incremental staleness is only for scheduled/auto syncs
-      localLogger.info(`[NexusAI] Starting WPE site sync (force)${limit ? ` (limit: ${limit})` : ''}...`);
-      const result = await deps.wpeSyncService.syncAllWPESites(limit, 0);
-      localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed`);
-
-      // Audit log success
-      auditLogger.logSuccess(
-        'wpe_sync_all',
-        'all_installs',
-        'wpe_install',
-        { synced: result.synced, failed: result.failed, limit },
-        Date.now() - startTime,
-      );
-
-      return result;
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      const errorStack = err instanceof Error ? err.stack : undefined;
-      localLogger.error('[NexusAI] WPE sync failed:', errorMsg, errorStack);
-      auditLogger.logFailure(
-        'wpe_sync_all',
-        'all_installs',
-        'wpe_install',
-        errorMsg,
-        options || {},
-        Date.now() - startTime,
-      );
-      return { success: false, error: errorMsg };
-    }
-  });
-
-  /**
-   * Get current sync progress
-   */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_STATUS, async () => {
-    if (!deps.wpeSyncService) {
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      const progress = deps.wpeSyncService.getProgress();
-      return { success: true, progress };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.WPE_DIAGNOSE, async (_event: IpcMainInvokeEvent, params: { installName: string; args: string[] }) => {
+  safeHandle(IPC_CHANNELS.WPE_DIAGNOSE, async (_event: any, params: { installName: string; args: string[] }) => {
     const { installName, args } = params;
     if (!installName || !args?.length) return { success: false, error: 'installName and args required' };
     const start = Date.now();
@@ -2887,302 +2554,9 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.WPE_CAPI_SYNC, async () => {
-    if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
-    try {
-      const result = await deps.wpeSyncService.syncFromCAPI();
-      return { success: true, ...result };
-    } catch (err: any) {
-      return { success: false, error: err.message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS, async () => {
-    try {
-      const db = graphService.getDb();
-      if (!db) return { success: false, error: 'Graph DB not available' };
-      const result = db.prepare(
-        "DELETE FROM sites WHERE source='wpe' AND is_active=0"
-      ).run();
-      // Also clean up orphaned plugins/content/users for removed sites
-      db.prepare("DELETE FROM plugins WHERE site_id NOT IN (SELECT id FROM sites)").run();
-      db.prepare("DELETE FROM content WHERE site_id NOT IN (SELECT id FROM sites)").run();
-      db.prepare("DELETE FROM users WHERE site_id NOT IN (SELECT id FROM sites)").run();
-      localLogger.info(`[NexusAI] Cleaned up ${result.changes} ghost installs`);
-      return { success: true, removed: result.changes };
-    } catch (err: any) {
-      return { success: false, error: err.message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES, async () => {
-    try {
-      // Clean vector store
-      const vecResult = await vectorStore.cleanupExcludedTypes(EXCLUDED_POST_TYPES);
-
-      // Clean graph DB content table
-      const db = graphService.getDb();
-      let graphRemoved = 0;
-      if (db) {
-        const placeholders = EXCLUDED_POST_TYPES.map(() => '?').join(',');
-        const result = db.prepare(
-          `DELETE FROM content WHERE post_type IN (${placeholders})`
-        ).run(...EXCLUDED_POST_TYPES);
-        graphRemoved = result.changes;
-      }
-
-      localLogger.info(
-        `[NexusAI] Cleanup: removed ${vecResult.docsRemoved} vector docs + ${graphRemoved} graph content rows for excluded types`
-      );
-
-      return { success: true, vectorDocsRemoved: vecResult.docsRemoved, graphRowsRemoved: graphRemoved, tablesScanned: vecResult.tablesScanned };
-    } catch (err: any) {
-      return { success: false, error: err.message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.WPE_SYNC_STOP, () => {
-    if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
-    deps.wpeSyncService.stopSync();
-    return { success: true };
-  });
-
-  /**
-   * Get WPE sync summary stats from graph DB for dashboard display
-   */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_STATS, async () => {
-    try {
-      const db = graphService.getDb();
-      if (!db) return { success: true, stats: null };
-
-      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncIntervalHours?: number } | null;
-      const thresholdHours = settings?.wpeSyncIntervalHours ?? 8;
-      const cutoff = Date.now() - thresholdHours * 60 * 60 * 1000;
-
-      const row = db.prepare(`
-        SELECT
-          COUNT(*) as total,
-          SUM(CASE WHEN wp_version IS NOT NULL THEN 1 ELSE 0 END) as has_wp_version,
-          SUM(CASE WHEN php_version IS NOT NULL THEN 1 ELSE 0 END) as has_php_version,
-          MAX(last_sync_at) as last_sync_at,
-          SUM(CASE WHEN last_sync_at >= ? THEN 1 ELSE 0 END) as fresh_count,
-          SUM(CASE WHEN last_sync_at IS NULL OR last_sync_at < ? THEN 1 ELSE 0 END) as stale_count
-        FROM sites WHERE source = 'wpe'
-      `).get(cutoff, cutoff) as {
-        total: number; has_wp_version: number; has_php_version: number;
-        last_sync_at: number | null; fresh_count: number; stale_count: number;
-      } | undefined;
-
-      return { success: true, stats: row ?? null, thresholdHours };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  /**
-   * Get list of synced WPE sites
-   */
-  safeHandle(IPC_CHANNELS.WPE_GET_SYNCED_SITES, async () => {
-    if (!deps.wpeSyncService) {
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      const sites = await deps.wpeSyncService.getSyncedWPESites();
-
-      // Enrich sites with account_id from CAPI if available
-      let wpeAuthError = false;
-      if (localServicesBridge.isCAPIAvailable()) {
-        try {
-          const installs = await localServicesBridge.capiGetInstalls() as any[];
-          const installMap = new Map(installs.map((i: any) => [i.id, i.account?.id]));
-
-          sites.forEach((site: any) => {
-            const accountId = installMap.get(site.remote_install_id);
-            if (accountId) {
-              site.account_id = accountId;
-            }
-          });
-        } catch (err) {
-          const status = (err as any)?.response?.status;
-          if (status === 401 || status === 403) {
-            wpeAuthError = true;
-          } else {
-            localLogger.warn?.('[NexusAI] Failed to enrich sites with account_id:', String(err));
-          }
-        }
-      }
-
-      return { success: true, sites, wpeAuthError };
-    } catch (err) {
-      localLogger.error('[NexusAI] Failed to get synced WPE sites:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  /**
-   * Get details for a specific WPE site
-   */
-  safeHandle(IPC_CHANNELS.WPE_GET_SITE_DETAILS, async (_event: IpcMainInvokeEvent, installId: string) => {
-    if (!deps.wpeSyncService) {
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      // Validate input
-      const validated = validateInput(WpeInstallIdSchema, installId);
-
-      const sites = await deps.wpeSyncService.getSyncedWPESites();
-      // installId could be:
-      // - Full ID: "wpe-myinstprod"
-      // - Stripped ID: "myinstprod"
-      // - Install ID: "myinstprod"
-      const site = sites.find((s: any) =>
-        s.id === validated ||
-        s.id === `wpe-${validated}` ||
-        s.remote_install_id === validated ||
-        s.install_id === validated
-      );
-
-      if (!site) {
-        localLogger.warn?.(`[NexusAI] WPE site not found: ${validated}. Available sites:`, sites.map((s: any) => s.id));
-        return { success: false, error: `Site not found: ${validated}` };
-      }
-
-      return { success: true, site };
-    } catch (err) {
-      localLogger.error('[NexusAI] Failed to get WPE site details:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  /**
-   * Re-sync a single WPE site
-   */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: IpcMainInvokeEvent, params: { installId: string }) => {
-    const startTime = Date.now();
-
-    if (!deps.wpeSyncService) {
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      // Validate input
-      const validated = validateInput(WpeSyncSingleSchema, params);
-      let installId = validated.installId;
-
-      // If looks like a name (not a UUID), resolve to UUID via graph
-      const isUuid = /^[0-9a-f-]{36}$/i.test(installId);
-      if (!isUuid) {
-        const db = graphService.getDb();
-        if (db) {
-          const row = db.prepare(
-            "SELECT remote_install_id FROM sites WHERE source='wpe' AND name=? LIMIT 1"
-          ).get(installId) as { remote_install_id: string } | undefined;
-          if (row?.remote_install_id) {
-            installId = row.remote_install_id;
-          } else {
-            return { success: false, error: `Install "${installId}" not found in graph. Run Sync All first.` };
-          }
-        }
-      }
-
-      await deps.wpeSyncService.syncSingleSite(installId);
-
-      // Audit log success
-      auditLogger.logSuccess(
-        'wpe_sync_single',
-        installId,
-        'wpe_install',
-        {},
-        Date.now() - startTime,
-      );
-
-      localLogger.info(`[NexusAI] Re-synced WPE site: ${installId}`);
-      return { success: true };
-    } catch (err) {
-      localLogger.error('[NexusAI] Failed to re-sync WPE site:', (err as Error).message);
-      auditLogger.logFailure(
-        'wpe_sync_single',
-        params?.installId || 'unknown',
-        'wpe_install',
-        (err as Error).message,
-        params,
-        Date.now() - startTime,
-      );
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  /**
-   * Run diagnostics on a WPE site
-   *
-   * Uses wp-nexus MCP tools to gather detailed site information
-   */
-  safeHandle(IPC_CHANNELS.WPE_DIAGNOSE_SITE, async (_event: IpcMainInvokeEvent, installId: string) => {
-    try {
-      // Validate input
-      const validated = validateInput(WpeInstallIdSchema, installId);
-
-      // TODO: Call wpe_diagnose_site MCP tool when available
-      // For now, return placeholder diagnostics
-      const diagnostics = {
-        sslStatus: 'active',
-        backupStatus: 'recent',
-        diskUsage: { used: 2.5, limit: 10, percentage: 25 },
-        bandwidthUsage: { used: 150, limit: 500, percentage: 30 },
-        cacheStatus: 'enabled',
-        phpVersion: '8.1',
-      };
-
-      return { success: true, diagnostics };
-    } catch (err) {
-      localLogger.error('[NexusAI] Failed to diagnose WPE site:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  /**
-   * Remove a WPE site from the graph
-   */
-  safeHandle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: IpcMainInvokeEvent, params: { installId: string }) => {
-    const startTime = Date.now();
-
-    if (!deps.wpeSyncService) {
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      // Validate input
-      const validated = validateInput(WpeRemoveSiteSchema, params);
-      const installId = validated.installId;
-
-      await deps.wpeSyncService.removeWPESite(installId);
-
-      // Audit log success
-      auditLogger.logSuccess(
-        'wpe_remove_site',
-        installId,
-        'wpe_install',
-        {},
-        Date.now() - startTime,
-      );
-
-      localLogger.info(`[NexusAI] Removed WPE site: ${installId}`);
-      return { success: true };
-    } catch (err) {
-      localLogger.error('[NexusAI] Failed to remove WPE site:', (err as Error).message);
-      auditLogger.logFailure(
-        'wpe_remove_site',
-        params?.installId || 'unknown',
-        'wpe_install',
-        (err as Error).message,
-        params,
-        Date.now() - startTime,
-      );
-      return { success: false, error: (err as Error).message };
-    }
-  });
+  // WPE_CAPI_SYNC, WPE_SYNC_STOP, WPE_SYNC_STATS, WPE_GET_SYNCED_SITES,
+  // WPE_GET_SITE_DETAILS, WPE_SYNC_SINGLE, WPE_DIAGNOSE_SITE, WPE_REMOVE_SITE
+  // — all registered above in registerWpeSyncHandlers().
 
   /**
    * Pull a WPE site to Local (PRODUCTION-READY VERSION)
@@ -3194,7 +2568,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
    * - Links to WPE environment
    * - Triggers pull operation (database + files)
    */
-  safeHandle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: IpcMainInvokeEvent, params: { wpeSiteId: string; installName: string; installId: string }) => {
+  safeHandle(IPC_CHANNELS.WPE_PULL_TO_LOCAL, async (_event: any, params: { wpeSiteId: string; installName: string; installId: string }) => {
     const startTime = Date.now();
     try {
       // Validate input
@@ -3232,7 +2606,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
         // Re-sync this install's metadata so the graph reflects post-pull state
         if (deps.wpeSyncService) {
           deps.wpeSyncService.syncSingleSite(validated.installId).catch((err: Error) => {
-            localLogger.warn?.('[NexusAI] Post-pull sync failed (non-fatal):', err.message);
+            localLogger.warn('[NexusAI] Post-pull sync failed (non-fatal):', err.message);
           });
         }
 
@@ -3291,7 +2665,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Get details for a single WPE site
    */
-  safeHandle('nexus-ai:wpe:get-site-details', async (_event: IpcMainInvokeEvent, installId: string) => {
+  safeHandle('nexus-ai:wpe:get-site-details', async (_event: any, installId: string) => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
@@ -3316,7 +2690,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   /**
    * Re-sync metadata for a single WPE site
    */
-  safeHandle('nexus-ai:wpe:sync-single-site', async (_event: IpcMainInvokeEvent, installId: string) => {
+  safeHandle('nexus-ai:wpe:sync-single-site', async (_event: any, installId: string) => {
     if (!deps.wpeSyncService) {
       return { success: false, error: 'WPE sync service not available' };
     }
@@ -3382,7 +2756,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // Digital Twin: Site Metadata Cache
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.GET_SITE_METADATA, async (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.GET_SITE_METADATA, async (_event: any, siteId: string) => {
     if (!metadataCache) {
       return { success: false, error: 'Metadata cache not available' };
     }
@@ -3403,7 +2777,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.REFRESH_SITE_METADATA, async (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.REFRESH_SITE_METADATA, async (_event: any, siteId: string) => {
     const startTime = Date.now();
 
     if (!metadataCache) {
@@ -3516,7 +2890,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // AI Gateway (Phase 2.3)
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_USAGE, async (_event: IpcMainInvokeEvent, options?: {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_USAGE, async (_event: any, options?: {
     siteId?: string;
     since?: number;
     until?: number;
@@ -3562,7 +2936,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_COST, async (_event: IpcMainInvokeEvent, options?: {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_COST, async (_event: any, options?: {
     siteId?: string;
     startDate?: number;
     endDate?: number;
@@ -3622,7 +2996,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_STATS, async (_event: IpcMainInvokeEvent) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_STATS, async (_event: any) => {
     try {
       const USAGE_KEY = 'nexus_ai_gateway_usage';
       const allRecords = (registryStorage.get(USAGE_KEY) ?? []) as any[];
@@ -3678,7 +3052,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_CLEAR_USAGE, async (_event: IpcMainInvokeEvent) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_CLEAR_USAGE, async (_event: any) => {
     const startTime = Date.now();
     try {
       const USAGE_KEY = 'nexus_ai_gateway_usage';
@@ -3713,7 +3087,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   });
 
   // Rate limiting (Phase 2.4)
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_RATE_LIMIT, async (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_GET_RATE_LIMIT, async (_event: any, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -3727,7 +3101,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_SET_RATE_LIMIT, async (_event: IpcMainInvokeEvent, params: { siteId: string; config?: any }) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_SET_RATE_LIMIT, async (_event: any, params: { siteId: string; config?: any }) => {
     try {
       // Validate input
       const validated = validateInput(AIGatewayRateLimitSchema, params);
@@ -3742,7 +3116,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_GATEWAY_CHECK_RATE_LIMIT, async (_event: IpcMainInvokeEvent, params: { siteId: string }) => {
+  safeHandle(IPC_CHANNELS.AI_GATEWAY_CHECK_RATE_LIMIT, async (_event: any, params: { siteId: string }) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, params.siteId);
@@ -3760,7 +3134,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // AI Context File Generation
   // ---------------------------------------------------------------------------
 
-  safeHandle(IPC_CHANNELS.AI_CONTEXT_GENERATE, async (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.AI_CONTEXT_GENERATE, async (_event: any, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -3829,7 +3203,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.AI_CONTEXT_GET_STATUS, async (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.AI_CONTEXT_GET_STATUS, async (_event: any, siteId: string) => {
     try {
       // Validate input
       const validated = validateInput(SiteIdSchema, siteId);
@@ -3920,7 +3294,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.DB_SCAN_SITE, async (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.DB_SCAN_SITE, async (_event: any, siteId: string) => {
     try {
       const site = siteData.getSite(siteId);
       if (!site) return { success: false, error: `Site ${siteId} not found` };
@@ -3964,11 +3338,11 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // The caller should poll wpe status after this returns.
   safeHandle(IPC_CHANNELS.WPE_LOGIN_START, async () => {
     try {
-      const wpeOAuth = serviceContainer?.wpeOAuth;
+      const wpeOAuth = (serviceContainer as any).wpeOAuth;
       if (!wpeOAuth) return { success: false, error: 'WPE OAuth service not available in this version of Local' };
       // Start auth in background — keeps server alive until callback is received
       wpeOAuth.authenticate().catch((err: Error) => {
-        localLogger.warn?.('[NexusAI] WPE auth failed:', err.message);
+        localLogger.warn('[NexusAI] WPE auth failed:', err.message);
       });
       return { success: true };
     } catch (err) {
@@ -3976,7 +3350,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.DB_GET_LAST_SCAN, async (_event: IpcMainInvokeEvent, siteId: string) => {
+  safeHandle(IPC_CHANNELS.DB_GET_LAST_SCAN, async (_event: any, siteId: string) => {
     try {
       const cache = registryStorage.get(STORAGE_KEYS.DB_SCAN_CACHE) ?? {};
       const scan = (cache as Record<string, any>)[siteId] ?? null;
@@ -3984,41 +3358,6 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     } catch (err) {
       localLogger.error('[NexusAI] db-get-last-scan failed:', (err as Error).message);
       return { success: false, error: (err as Error).message, scan: null };
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // WPE Backup — create a backup for a specific WPE install
-  // ---------------------------------------------------------------------------
-
-  safeHandle(IPC_CHANNELS.WPE_CREATE_BACKUP, async (_event: any, { installId }: { installId: string }) => {
-    const startTime = Date.now();
-    try {
-      if (!localServicesBridge.isCAPIAvailable() || !localServicesBridge.isWPEAuthenticated()) {
-        return { success: false, error: 'WP Engine not connected. Run nexus wpe login first.' };
-      }
-      const result = await localServicesBridge.capiCreateBackup(
-        installId,
-        `Nexus AI backup — ${new Date().toISOString()}`,
-      );
-      auditLogger.logSuccess(
-        'wpe_create_backup',
-        installId,
-        'wpe_install',
-        { backupId: (result as any)?.id },
-        Date.now() - startTime,
-      );
-      return { success: true, backupId: (result as any)?.id, message: 'Backup initiated' };
-    } catch (err: any) {
-      auditLogger.logFailure(
-        'wpe_create_backup',
-        installId,
-        'wpe_install',
-        err.message,
-        { installId },
-        Date.now() - startTime,
-      );
-      return { success: false, error: err.message };
     }
   });
 
