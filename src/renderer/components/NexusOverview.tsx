@@ -16,7 +16,6 @@ import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
 import { AIGatewayPanel } from './AIGatewayPanel';
 import { LoadingSpinner } from './LoadingSpinner';
-
 // Local's native notification components
 let toast: any = null;
 try {
@@ -34,7 +33,7 @@ interface NexusOverviewProps {
 interface DashboardStats {
   localSites: { total: number; running: number; halted: number };
   wpeConnected: { count: number };
-  remoteSites: { total: number; unlinked: number; capiAvailable: boolean };
+  remoteSites: { total: number; unlinked: number; capiAvailable: boolean; wpeAuthenticated: boolean };
   mcpServer: { running: boolean; toolCount: number; port: number | null; version: string | null };
   embedding: { ready: boolean; model: string; quantized: boolean; dimensions: number; maxSequenceLength: number };
   index: { localIndexed: number; localTotal: number; wpeIndexed: number; wpeTotal: number; totalDocuments: number; totalChunks: number; lastIndexed: number | null };
@@ -178,6 +177,16 @@ interface NexusOverviewState {
   syncing: boolean;
   syncResults: Array<{ siteId: string; siteName: string; success: boolean; providers: string[]; error?: string }> | null;
   wpeAuthError: boolean;
+  // Onboarding
+  onboardingDismissed: boolean;
+  // WPE action buttons
+  wpeBackupRunning: boolean;
+  wpeBackupInstallId: string | null;
+  wpeBackupInstallName: string | null;
+  wpeSyncNowRunning: boolean;
+  // WPE account filter
+  wpeAccounts: Array<{ id: string; name: string; nickname?: string }>;
+  wpeAccountFilter: string[] | null;
 }
 
 // -- Shared styles --
@@ -295,6 +304,12 @@ function truncate(text: string, maxLen: number): string {
   return text.slice(0, maxLen) + '...';
 }
 
+function navigateToPreferences(electron: any): void {
+  // Round-trip through our main process which calls serviceContainer.sendIPCEvent('goToRoute', ...)
+  // This is the correct mechanism — goToRoute is a main→renderer event that Local's App.tsx handles.
+  electron?.ipcRenderer?.invoke(IPC_CHANNELS.NAVIGATE_TO_PREFERENCES);
+}
+
 export class NexusOverview extends React.Component<NexusOverviewProps, NexusOverviewState> {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -354,6 +369,13 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     wpeAuthError: false,
     fleetSummary: null,
     fleetPlugins: [],
+    onboardingDismissed: true, // default true prevents flash; overridden after settings load
+    wpeBackupRunning: false,
+    wpeBackupInstallId: null,
+    wpeBackupInstallName: null,
+    wpeSyncNowRunning: false,
+    wpeAccounts: [],
+    wpeAccountFilter: null,
   };
 
   componentDidMount(): void {
@@ -422,7 +444,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult, wpeAccounts] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -433,6 +455,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
         ipc.invoke(IPC_CHANNELS.WPE_SYNC_STATS),
         ipc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY),
+        ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
       ]);
       if (!this.mounted) return;
 
@@ -494,6 +517,9 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         error: stats ? null : 'Failed to load stats',
         wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
         fleetSummary: fleetSummaryResult ?? null,
+        onboardingDismissed: settings?.onboardingDismissed ?? false,
+        wpeAccounts: Array.isArray(wpeAccounts) ? wpeAccounts : [],
+        wpeAccountFilter: settings?.wpeAccountFilter ?? null,
       });
     } catch (err: any) {
       if (!this.mounted) return;
@@ -948,9 +974,13 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     );
   }
 
+  handleWpeConnect = (): void => {
+    this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_LOGIN_START).catch(() => {});
+  };
+
   renderWpeAuthBanner(): React.ReactNode {
-    const { stats, wpeAuthError } = this.state;
-    if (!stats?.remoteSites.capiAvailable || !wpeAuthError) return null;
+    const { wpeAuthError } = this.state;
+    if (!wpeAuthError) return null;
     return React.createElement('div', {
       style: {
         padding: '12px 16px',
@@ -963,23 +993,18 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         gap: '10px',
       },
     },
-      React.createElement('span', {
-        style: { fontSize: '15px', lineHeight: 1, flexShrink: 0 },
-      }, '\u{1F512}'),
+      React.createElement('span', { style: { fontSize: '15px', lineHeight: 1, flexShrink: 0 } }, '\u{1F512}'),
       React.createElement('span', { style: { fontSize: '13px', color: 'var(--nxai-card-text)', flex: 1 } },
-        React.createElement('strong', null, 'Not signed in to WP Engine.'),
-        ' WPE-specific features are unavailable. Run ',
-        React.createElement('code', {
-          style: { fontFamily: 'monospace', fontSize: '12px', backgroundColor: 'var(--nxai-code-bg, rgba(0,0,0,0.08))', padding: '1px 5px', borderRadius: '3px' },
-        }, 'nexus wpe login'),
-        ' to connect, or check your status with ',
-        React.createElement('code', {
-          style: { fontFamily: 'monospace', fontSize: '12px', backgroundColor: 'var(--nxai-code-bg, rgba(0,0,0,0.08))', padding: '1px 5px', borderRadius: '3px' },
-        }, 'nexus wpe status'),
-        '.',
+        React.createElement('strong', null, 'Not connected to WP Engine.'),
+        ' Sign in to enable WPE site management, deep scans, backups, and content indexing.',
       ),
+      React.createElement('button', {
+        style: { padding: '6px 14px', borderRadius: '6px', border: 'none', backgroundColor: '#0ECAD4', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 },
+        onClick: this.handleWpeConnect,
+      }, 'Connect'),
     );
   }
+
 
   renderMcpPanel(): React.ReactNode {
     const { mcpInfo, copiedField } = this.state;
@@ -1308,11 +1333,110 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     );
   }
 
+  handleDismissOnboarding = async (): Promise<void> => {
+    this.setState({ onboardingDismissed: true });
+    try {
+      await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.UPDATE_SETTINGS,
+        { onboardingDismissed: true },
+      );
+    } catch {
+      // Best-effort
+    }
+  };
+
+  renderOnboardingCard(): React.ReactNode {
+    if (this.state.onboardingDismissed) return null;
+
+    const cardStyle2: React.CSSProperties = {
+      borderRadius: '10px',
+      padding: '20px 24px',
+      border: `1px solid ${UI_COLORS.WPE_BRAND}`,
+      backgroundColor: 'rgba(81, 187, 123, 0.07)',
+      marginBottom: '20px',
+    };
+    const stepStyle: React.CSSProperties = {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '12px',
+      marginBottom: '10px',
+      fontSize: '14px',
+    };
+    const numStyle: React.CSSProperties = {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '22px',
+      height: '22px',
+      borderRadius: '50%',
+      backgroundColor: UI_COLORS.WPE_BRAND,
+      color: '#fff',
+      fontSize: '12px',
+      fontWeight: 700,
+      flexShrink: 0,
+    };
+    const prefLinkStyle: React.CSSProperties = {
+      color: UI_COLORS.WPE_BRAND,
+      textDecoration: 'underline',
+      cursor: 'pointer',
+      background: 'none',
+      border: 'none',
+      padding: 0,
+      fontSize: 'inherit',
+    };
+
+    return React.createElement('div', { style: cardStyle2 },
+      React.createElement('div', {
+        style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' },
+      },
+        React.createElement('strong', { style: { fontSize: '15px' } }, 'Getting Started with Nexus AI'),
+        React.createElement('button', {
+          onClick: this.handleDismissOnboarding,
+          title: 'Dismiss — don\'t show again',
+          style: { background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '18px', lineHeight: 1, padding: '0 4px' },
+        }, '\u00d7'),
+      ),
+      React.createElement('div', { style: stepStyle },
+        React.createElement('span', { style: numStyle }, '1'),
+        React.createElement('span', null,
+          'Configure your AI provider in ',
+          React.createElement('button', { onClick: () => navigateToPreferences(this.props.electron), style: prefLinkStyle }, 'Preferences'),
+          ' to connect Claude, OpenAI, or another provider.',
+        ),
+      ),
+      React.createElement('div', { style: stepStyle },
+        React.createElement('span', { style: numStyle }, '2'),
+        React.createElement('span', null,
+          'Enable auto-indexing in ',
+          React.createElement('button', { onClick: () => navigateToPreferences(this.props.electron), style: prefLinkStyle }, 'Preferences'),
+          ' so new content is indexed automatically when sites start.',
+        ),
+      ),
+      React.createElement('div', { style: stepStyle },
+        React.createElement('span', { style: numStyle }, '3'),
+        React.createElement('span', null,
+          'Go to a site and click ',
+          React.createElement('strong', null, '"Install AI Tools"'),
+          ' to enable WordPress AI features on that site.',
+        ),
+      ),
+      React.createElement('div', {
+        style: { marginTop: '14px', borderTop: '1px solid rgba(81,187,123,0.3)', paddingTop: '12px' },
+      },
+        React.createElement('button', {
+          onClick: this.handleDismissOnboarding,
+          style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', opacity: 0.6, padding: 0, textDecoration: 'underline' },
+        }, 'Dismiss — don\'t show again'),
+      ),
+    );
+  }
+
   renderOverviewTab(): React.ReactNode {
     const { stats } = this.state;
     if (!stats) return null;
 
     return React.createElement('div', null,
+      this.renderOnboardingCard(),
       this.renderSetupBanner(stats),
       this.renderWpeAuthBanner(),
 
@@ -1404,6 +1528,25 @@ renderTabBar(): React.ReactNode {
   }
 
 
+  renderWpeAccountScope(): React.ReactNode {
+    const { wpeAccounts, wpeAccountFilter } = this.state;
+    if (wpeAccounts.length === 0) return null;
+
+    const selectedIds = wpeAccountFilter ?? wpeAccounts.map((a) => a.id);
+    const isAll = wpeAccountFilter === null || selectedIds.length === wpeAccounts.length;
+    const scopeLabel = isAll
+      ? `All ${wpeAccounts.length} account${wpeAccounts.length !== 1 ? 's' : ''}`
+      : `${selectedIds.length} of ${wpeAccounts.length} accounts`;
+
+    return React.createElement('div', {
+      style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: '8px', backgroundColor: 'var(--nxai-card-bg, #fff)', marginBottom: '20px', fontSize: '12px' },
+    },
+      React.createElement('span', { style: { color: '#6b7280', fontWeight: 600 } }, 'Deep Scan Scope:'),
+      React.createElement('span', { style: { color: '#111827', flex: 1 } }, scopeLabel),
+      React.createElement('span', { style: { color: '#9ca3af' } }, '· Manage in Preferences → Nexus AI'),
+    );
+  }
+
   renderOpsButton(
     label: string,
     loadingLabel: string,
@@ -1411,14 +1554,17 @@ renderTabBar(): React.ReactNode {
     opId: string | null,
     handler: () => void,
     description?: string,
+    disabled?: boolean,
   ): React.ReactNode {
+    const inactive = isRunning || disabled;
     return React.createElement('div', { style: { flex: '1', minWidth: '220px' } },
       React.createElement('button', {
-        style: isRunning
-          ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed', width: '100%' }
+        style: inactive
+          ? { ...btnPrimaryStyle, opacity: 0.4, cursor: 'not-allowed', width: '100%' }
           : { ...btnPrimaryStyle, width: '100%' },
-        onClick: isRunning ? undefined : handler,
-        disabled: isRunning,
+        onClick: inactive ? undefined : handler,
+        disabled: inactive,
+        title: disabled ? 'Requires WP Engine login' : undefined,
       }, isRunning ? loadingLabel : label),
       description
         ? React.createElement('div', { style: { fontSize: '11px', color: '#6b7280', marginTop: '4px', lineHeight: '1.3' } }, description)
@@ -1433,8 +1579,13 @@ renderTabBar(): React.ReactNode {
     const groupStyle = { display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' as const };
     const groupLabelStyle = { fontSize: '12px', fontWeight: '600' as const, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '8px' };
 
+    const wpeDisabled = !(this.state.stats?.remoteSites.wpeAuthenticated ?? false);
+
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const } },
       this.renderSectionLabel('Operations'),
+
+      // ── WPE Deep Scan Scope ──────────────────────────────────────────────────
+      this.renderWpeAccountScope(),
 
       // ── Refresh Site Data ────────────────────────────────────────────────────
       React.createElement('div', { style: groupLabelStyle }, 'Refresh Site Data'),
@@ -1450,6 +1601,7 @@ renderTabBar(): React.ReactNode {
           this.state.wpeSyncing, null,
           this.handleWpeSync,
           'SSH scan: updates plugin list, WP version, themes for all WPE installs.',
+          wpeDisabled,
         ),
       ),
 
@@ -1464,9 +1616,10 @@ renderTabBar(): React.ReactNode {
         ),
         this.renderOpsButton(
           'Index WPE sites', 'Indexing...',
-          this.state.wpeSyncing, null,
-          this.handleWpeSync,
+          this.state.fleetIndexRunning, this.state.fleetIndexOpId,
+          this.handleIndexAllFleet,
           'SSH: extracts and indexes post/page content from WPE installs. Requires SSH key.',
+          wpeDisabled,
         ),
       ),
 
@@ -1931,6 +2084,81 @@ renderTabBar(): React.ReactNode {
         toast({ type: 'error', content: `WPE sync error: ${errorMsg}` });
       }
       console.error('[NexusOverview] WPE sync error:', error);
+    }
+  };
+
+  handleCreateWPEBackup = async (): Promise<void> => {
+    const { wpeSites } = this.state;
+    if (wpeSites.length === 0) {
+      if (toast) toast({ type: 'error', content: 'No WP Engine installs found. Run a WPE sync first.' });
+      return;
+    }
+
+    let installId: string;
+    let installName: string;
+
+    if (wpeSites.length === 1) {
+      installId = wpeSites[0].wpeInstallId || wpeSites[0].id;
+      installName = wpeSites[0].name;
+    } else {
+      // Build a simple install list for the user to choose from
+      const choices = wpeSites
+        .map((s, i) => `${i + 1}. ${s.name} (${s.wpeInstallId || s.id})`)
+        .join('\n');
+      const choice = (window as any).prompt(
+        `Select WP Engine install to back up:\n\n${choices}\n\nEnter number:`,
+        '1',
+      );
+      if (!choice) return;
+      const idx = parseInt(choice, 10) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= wpeSites.length) {
+        if (toast) toast({ type: 'error', content: 'Invalid selection.' });
+        return;
+      }
+      installId = wpeSites[idx].wpeInstallId || wpeSites[idx].id;
+      installName = wpeSites[idx].name;
+    }
+
+    this.setState({ wpeBackupRunning: true, wpeBackupInstallId: installId, wpeBackupInstallName: installName });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.WPE_CREATE_BACKUP,
+        { installId },
+      );
+      if (!this.mounted) return;
+      if (result.success) {
+        if (toast) toast({ type: 'success', content: `Backup created for ${installName}` });
+      } else {
+        if (toast) toast({ type: 'error', content: `Backup failed: ${result.error}` });
+      }
+    } catch (err: any) {
+      if (!this.mounted) return;
+      if (toast) toast({ type: 'error', content: `Backup error: ${err.message}` });
+    } finally {
+      if (this.mounted) {
+        this.setState({ wpeBackupRunning: false, wpeBackupInstallId: null, wpeBackupInstallName: null });
+      }
+    }
+  };
+
+  handleSyncWPEMetadataNow = async (): Promise<void> => {
+    if (this.state.wpeSyncNowRunning || this.state.wpeSyncing) return;
+    this.setState({ wpeSyncNowRunning: true });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_SYNC_ALL);
+      if (!this.mounted) return;
+      if (result.success) {
+        const count = result.synced ?? 0;
+        if (toast) toast({ type: 'success', content: `WP Engine metadata synced — ${count} install${count !== 1 ? 's' : ''} updated` });
+        await this.fetchAll();
+      } else {
+        if (toast) toast({ type: 'error', content: `Sync failed: ${result.error}. Check nexus wpe status for recovery guidance.` });
+      }
+    } catch (err: any) {
+      if (!this.mounted) return;
+      if (toast) toast({ type: 'error', content: `Sync error: ${err.message}` });
+    } finally {
+      if (this.mounted) this.setState({ wpeSyncNowRunning: false });
     }
   };
 

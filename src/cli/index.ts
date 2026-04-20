@@ -20,6 +20,7 @@ import { auditCommand } from './commands/audit';
 import { mcpCommand } from './commands/mcp';
 import { skillsCommand } from './commands/skills';
 import { doctorCommand } from './commands/doctor';
+import { troubleshootCommand } from './commands/troubleshoot';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
 import { setBootstrapResult } from './utils/context';
@@ -46,6 +47,7 @@ program.addCommand(auditCommand);
 program.addCommand(mcpCommand);
 program.addCommand(skillsCommand);
 program.addCommand(doctorCommand);
+program.addCommand(troubleshootCommand);
 
 // Global error handler
 process.on('unhandledRejection', (error: any) => {
@@ -71,7 +73,8 @@ async function main() {
                          process.argv.includes('-h') ||
                          process.argv.includes('help') ||
                          process.argv.includes('update') ||
-                         process.argv.includes('mcp'); // mcp reads connection-info file directly
+                         process.argv.includes('mcp') || // mcp reads connection-info file directly
+                         process.argv.includes('troubleshoot'); // troubleshoot runs its own checks
   // NOTE: doctor is NOT skipped — it runs bootstrap so it installs the addon if missing,
   // then reports the full health status. That's the correct first-run experience.
 

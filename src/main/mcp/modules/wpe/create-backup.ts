@@ -17,15 +17,44 @@ export const createBackupHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
+    const installId = args.install_id as string;
+    if (!installId) return error('Install ID is required.');
+
+    const description = (args.description as string) || 'Backup via Nexus AI';
+    const startTime = Date.now();
+
+    // Audit log: pending
+    services.operationAuditLog?.log({
+      operation: 'wpe.backup.create',
+      target: installId,
+      parameters: { installId, description },
+      outcome: 'pending',
+    });
+
     try {
-      const installId = args.install_id as string;
-      if (!installId) return error('Install ID is required.');
+      const result = await services.localServices!.capiCreateBackup(installId, description);
+      const backupId = (result as any)?.id;
+      const durationMs = Date.now() - startTime;
 
-      const description = (args.description as string) || 'Backup via Nexus AI';
-      await services.localServices!.capiCreateBackup(installId, description);
+      // Audit log: success
+      services.operationAuditLog?.log({
+        operation: 'wpe.backup.create',
+        target: installId,
+        parameters: { installId, description, backupId },
+        outcome: 'success',
+      });
 
-      return ok(`Backup created for install "${installId}".`);
+      return ok(`Backup created for install "${installId}".${backupId ? ` Backup ID: ${backupId}` : ''}`);
     } catch (err: any) {
+      // Audit log: failure
+      services.operationAuditLog?.log({
+        operation: 'wpe.backup.create',
+        target: installId,
+        parameters: { installId, description },
+        outcome: 'failure',
+        error: err.message,
+      });
+
       return capiError(err);
     }
   },

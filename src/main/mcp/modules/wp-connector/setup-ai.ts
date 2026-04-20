@@ -22,6 +22,7 @@ import {
 import { getOllamaStatus } from '../ollama/ask-ollama';
 import { redactCredentials } from '../../security/credential-redaction';
 import { generateMuPluginContent } from '../../../ai-gateway/mu-plugin-template';
+import { getApiKey } from '../../../security/KeyVault';
 
 /**
  * Path to bundled WP plugins directory.
@@ -471,8 +472,6 @@ export async function setupSiteForAI(
     }
   }
 
-  const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-
   // Step 2b: Install AI provider plugin for the chosen provider
   // Each provider needs its own plugin (e.g. ai-provider-for-anthropic) to register
   // with the ProviderRegistry. Without it, the Connector Screen can't validate keys.
@@ -803,7 +802,7 @@ export async function setupSiteForAI(
   // When useLocalGateway is true, the gateway MU plugin holds credentials — skip direct key sync.
   let credentials: SetupAIResult['credentials'] = 'skipped';
 
-  const providerKey = storedKeys[provider];
+  const providerKey = getApiKey(registryStorage, provider);
   const entries: CredentialEntry[] = [];
   if (!useLocalGateway && providerKey && PROVIDER_TO_WP_OPTION[provider]) {
     entries.push({

@@ -119,12 +119,12 @@ sitesCommand
         console.log(`WPE Link:     ${site.linkedTo.installId}@${site.linkedTo.environment}`);
       }
 
-      // Twin data quality
+      // Site data quality
       if (site.twinCompleteness && site.twinCompleteness !== 'none') {
         const icon = site.twinCompleteness === 'indexed' || site.twinCompleteness === 'metadata' ? '✅' : '🔶';
-        console.log(`Twin data:    ${icon} ${site.twinCompleteness} · ${site.twinAge ?? 'unknown age'}`);
+        console.log(`Site data:    ${icon} ${site.twinCompleteness} · ${site.twinAge ?? 'unknown age'}`);
       } else if (!isWpe) {
-        console.log(`Twin data:    ❌ None — run: nexus sites refresh ${site.name}`);
+        console.log(`Site data:    Not available — run: nexus sites refresh ${site.name}`);
       }
 
       console.log('');
@@ -563,7 +563,7 @@ sitesCommand
   .action(async (target) => {
     try {
       if (!target.endsWith('@local')) {
-        console.error(`\n❌ Target must include @local suffix.`);
+        console.error(`\n❌ Invalid target: must include @local suffix.`);
         console.error(`   Use: nexus sites start ${target}@local\n`);
         process.exit(1);
       }

@@ -168,6 +168,19 @@ export const IPC_CHANNELS = {
   // Fleet Intelligence (Dashboard panels)
   GET_FLEET_SUMMARY: `${ADDON_PREFIX}:get-fleet-summary`,
   GET_FLEET_PLUGINS: `${ADDON_PREFIX}:get-fleet-plugins`,
+
+  // WPE Backup
+  WPE_CREATE_BACKUP: `${ADDON_PREFIX}:wpe:create-backup`,
+
+  // Operation Audit Log (Phase 3)
+  OPERATION_AUDIT_LIST: `${ADDON_PREFIX}:operation-audit:list`,
+  OPERATION_AUDIT_EXPORT: `${ADDON_PREFIX}:operation-audit:export`,
+
+  // WPE Account Filter
+  GET_WPE_ACCOUNTS: `${ADDON_PREFIX}:wpe:get-accounts`,
+
+  // UI Navigation
+  NAVIGATE_TO_PREFERENCES: `${ADDON_PREFIX}:ui:navigate-to-preferences`,
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -562,6 +562,29 @@ export const typeDefs = gql`
     sites: [FleetVersionSite!]!
   }
 
+  type NexusAuditEntry {
+    id: String!
+    timestamp: String!
+    operation: String!
+    target: String!
+    parameters: String
+    outcome: String!
+    error: String
+    userId: String
+  }
+
+  type NexusAuditListResult {
+    success: Boolean!
+    error: String
+    entries: [NexusAuditEntry!]!
+  }
+
+  type NexusAuditExportResult {
+    success: Boolean!
+    error: String
+    outputPath: String
+  }
+
   # ============================================================================
   # WP-CLI Types
   # ============================================================================
@@ -774,6 +797,12 @@ export const typeDefs = gql`
 
     "List sites on a specific PHP or WP version — for security triage"
     nexusFleetVersionSites(phpVersion: String, wpVersion: String): FleetVersionSitesResult!
+
+    "List operation audit log entries"
+    nexusOperationAuditList(limit: Int, operation: String): NexusAuditListResult!
+
+    "Export operation audit log to a file"
+    nexusOperationAuditExport(outputPath: String!): NexusAuditExportResult!
 
     "List plugins on a site (local or WPE)"
     nexusWpPluginList(target: String!): NexusWpPluginListResult!

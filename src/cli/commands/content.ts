@@ -315,15 +315,16 @@ contentCommand
     }
   });
 
+// Primary command: index
 contentCommand
-  .command('reindex <target>')
-  .description('Reindex a site')
+  .command('index <target>')
+  .description('Index content for a site (creates searchable database of posts, pages, and products)')
   .action(async (target) => {
     try {
       parseTarget(target);
       const client = getClient({ timeout: 600000 }); // 10 min for indexing
 
-      console.log(`\nReindexing ${target}...`);
+      console.log(`\nIndexing content for ${target}...`);
 
       const result = await client.mutate<{ nexusContentReindex: any }>(`
         mutation($target: String!) {
@@ -340,10 +341,52 @@ contentCommand
 
       if (!success) {
         console.error(`\n❌ ${error}`);
+        console.error('   Try indexing fewer sites at once, or check that the site is running.');
         process.exit(1);
       }
 
-      console.log(`\n✅ Reindex complete`);
+      console.log(`\n✅ Content indexed`);
+      console.log(`   Documents: ${documentCount}`);
+      console.log(`   Chunks: ${chunkCount}`);
+      console.log('');
+    } catch (error: any) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+// Deprecated alias: reindex (kept for backwards compatibility)
+contentCommand
+  .command('reindex <target>')
+  .description('[Deprecated] Use "nexus content index" instead')
+  .action(async (target) => {
+    console.warn('\n⚠️  "nexus content reindex" is deprecated. Use "nexus content index" instead.\n');
+    try {
+      parseTarget(target);
+      const client = getClient({ timeout: 600000 }); // 10 min for indexing
+
+      console.log(`\nIndexing content for ${target}...`);
+
+      const result = await client.mutate<{ nexusContentReindex: any }>(`
+        mutation($target: String!) {
+          nexusContentReindex(target: $target) {
+            success
+            error
+            documentCount
+            chunkCount
+          }
+        }
+      `, { target });
+
+      const { success, error, documentCount, chunkCount } = result.nexusContentReindex;
+
+      if (!success) {
+        console.error(`\n❌ ${error}`);
+        console.error('   Try indexing fewer sites at once, or check that the site is running.');
+        process.exit(1);
+      }
+
+      console.log(`\n✅ Content indexed`);
       console.log(`   Documents: ${documentCount}`);
       console.log(`   Chunks: ${chunkCount}`);
       console.log('');

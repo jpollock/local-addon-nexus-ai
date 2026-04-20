@@ -7,6 +7,7 @@ import {
   CredentialEntry,
 } from './credential-helpers';
 import { redactCredentials } from '../../security/credential-redaction';
+import { getApiKey } from '../../../security/KeyVault';
 
 interface AutoSyncLogger {
   info(...args: unknown[]): void;
@@ -44,8 +45,7 @@ export async function autoSyncCredentials(
   }
 
   // Only sync the key for this site's configured provider
-  const storedKeys = (storage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-  const apiKey = storedKeys[provider];
+  const apiKey = getApiKey(storage, provider);
 
   // Providers that don't need a key (ollama, local-gateway) — nothing to sync
   if (!apiKey || !PROVIDER_TO_WP_OPTION[provider]) {

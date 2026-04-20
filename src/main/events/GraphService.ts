@@ -185,14 +185,16 @@ export class GraphService {
     if (!hasSourceColumn) {
       this.logger.info('[GraphService] Adding WPE columns to sites table...');
       try {
-        this.db.exec('ALTER TABLE sites ADD COLUMN source TEXT DEFAULT "local"');
-        this.logger.info('[GraphService]   - Added source column');
-        this.db.exec('ALTER TABLE sites ADD COLUMN remote_install_id TEXT');
-        this.logger.info('[GraphService]   - Added remote_install_id column');
-        this.db.exec('ALTER TABLE sites ADD COLUMN remote_domain TEXT');
-        this.logger.info('[GraphService]   - Added remote_domain column');
-        this.db.exec('CREATE INDEX IF NOT EXISTS idx_sites_source ON sites(source)');
-        this.logger.info('[GraphService]   - Created source index');
+        this.db.transaction(() => {
+          this.db!.exec('ALTER TABLE sites ADD COLUMN source TEXT DEFAULT "local"');
+          this.logger.info('[GraphService]   - Added source column');
+          this.db!.exec('ALTER TABLE sites ADD COLUMN remote_install_id TEXT');
+          this.logger.info('[GraphService]   - Added remote_install_id column');
+          this.db!.exec('ALTER TABLE sites ADD COLUMN remote_domain TEXT');
+          this.logger.info('[GraphService]   - Added remote_domain column');
+          this.db!.exec('CREATE INDEX IF NOT EXISTS idx_sites_source ON sites(source)');
+          this.logger.info('[GraphService]   - Created source index');
+        })();
         this.logger.info('[GraphService] ✓ WPE columns migration completed');
       } catch (err) {
         this.logger.error('[GraphService] Migration failed:', err);
@@ -203,23 +205,21 @@ export class GraphService {
     }
 
     // Migration: add php_version column if missing
-    const hasPhpVersion = this.db
-      .prepare("SELECT COUNT(*) as c FROM pragma_table_info('sites') WHERE name='php_version'")
-      .get() as { c: number };
-    if (!hasPhpVersion.c) {
+    if (!this.hasColumn('sites', 'php_version')) {
       this.logger.info('[GraphService] Adding php_version column to sites table...');
-      this.db.exec('ALTER TABLE sites ADD COLUMN php_version TEXT');
+      this.db.transaction(() => {
+        this.db!.exec('ALTER TABLE sites ADD COLUMN php_version TEXT');
+      })();
       this.logger.info('[GraphService] ✓ php_version column added');
     }
 
     // Migration: add account_id column if missing
-    const hasAccountId = this.db
-      .prepare("SELECT COUNT(*) as c FROM pragma_table_info('sites') WHERE name='account_id'")
-      .get() as { c: number };
-    if (!hasAccountId.c) {
+    if (!this.hasColumn('sites', 'account_id')) {
       this.logger.info('[GraphService] Adding account_id column to sites table...');
-      this.db.exec('ALTER TABLE sites ADD COLUMN account_id TEXT');
-      this.db.exec('CREATE INDEX IF NOT EXISTS idx_sites_account ON sites(account_id)');
+      this.db.transaction(() => {
+        this.db!.exec('ALTER TABLE sites ADD COLUMN account_id TEXT');
+        this.db!.exec('CREATE INDEX IF NOT EXISTS idx_sites_account ON sites(account_id)');
+      })();
       this.logger.info('[GraphService] ✓ account_id column added');
     }
 
@@ -240,11 +240,10 @@ export class GraphService {
       ['active_theme', 'TEXT'],
       ['post_count',   'INTEGER'],
     ] as [string, string][]) {
-      const has = this.db
-        .prepare(`SELECT COUNT(*) as c FROM pragma_table_info('sites') WHERE name='${col}'`)
-        .get() as { c: number };
-      if (!has.c) {
-        this.db.exec(`ALTER TABLE sites ADD COLUMN ${col} ${def}`);
+      if (!this.hasColumn('sites', col)) {
+        this.db.transaction(() => {
+          this.db!.exec(`ALTER TABLE sites ADD COLUMN ${col} ${def}`);
+        })();
         this.logger.info(`[GraphService] ✓ Added ${col} column to sites`);
       }
     }
@@ -255,23 +254,38 @@ export class GraphService {
       .get() as { c: number };
     if (!hasSiteUsage.c) {
       this.logger.info('[GraphService] Creating site_usage table...');
-      this.db.exec(`
-        CREATE TABLE site_usage (
-          site_id      TEXT    NOT NULL,
-          period       TEXT    NOT NULL,
-          source       TEXT    NOT NULL DEFAULT 'wpe-capi',
-          visits       INTEGER,
-          bandwidth_bytes INTEGER,
-          storage_bytes   INTEGER,
-          raw_json     TEXT,
-          recorded_at  INTEGER NOT NULL,
-          PRIMARY KEY (site_id, period, source)
-        );
-        CREATE INDEX idx_site_usage_site ON site_usage(site_id);
-        CREATE INDEX idx_site_usage_period ON site_usage(period);
-      `);
+      this.db.transaction(() => {
+        this.db!.exec(`
+          CREATE TABLE site_usage (
+            site_id      TEXT    NOT NULL,
+            period       TEXT    NOT NULL,
+            source       TEXT    NOT NULL DEFAULT 'wpe-capi',
+            visits       INTEGER,
+            bandwidth_bytes INTEGER,
+            storage_bytes   INTEGER,
+            raw_json     TEXT,
+            recorded_at  INTEGER NOT NULL,
+            PRIMARY KEY (site_id, period, source)
+          );
+          CREATE INDEX idx_site_usage_site ON site_usage(site_id);
+          CREATE INDEX idx_site_usage_period ON site_usage(period);
+        `);
+      })();
       this.logger.info('[GraphService] ✓ site_usage table created');
     }
+  }
+
+  /**
+   * Safe column-existence check using parameterized PRAGMA query.
+   * Eliminates template-string interpolation in SQL — always parameterized.
+   * Exposed as public so tests can verify its correctness directly.
+   */
+  hasColumn(table: string, column: string): boolean {
+    if (!this.db) return false;
+    const result = this.db
+      .prepare('SELECT COUNT(*) as c FROM pragma_table_info(?) WHERE name=?')
+      .get(table, column) as { c: number };
+    return result.c > 0;
   }
 
   /** Expose the underlying database for shared use (e.g., HealthTrendTracker). */

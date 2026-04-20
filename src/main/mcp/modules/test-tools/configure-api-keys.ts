@@ -1,5 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { STORAGE_KEYS } from '../../../../common/constants';
+import { KeyVault } from '../../../security/KeyVault';
 
 /**
  * Test-only tool to configure API keys in registry storage.
@@ -41,33 +42,28 @@ export const configureApiKeysHandler: McpToolHandler = {
       };
     }
 
-    // Get existing keys (if any)
-    const existingKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-
-    // Update with new keys (only set non-empty values)
+    // Store keys via KeyVault for encryption at rest
+    const keyVault = new KeyVault(registryStorage, STORAGE_KEYS.API_KEYS);
     const updates: Record<string, string> = {};
     let updateCount = 0;
 
     if (args.anthropic && typeof args.anthropic === 'string') {
-      existingKeys.anthropic = args.anthropic;
+      keyVault.setKey('anthropic', args.anthropic);
       updates.anthropic = args.anthropic;
       updateCount++;
     }
 
     if (args.openai && typeof args.openai === 'string') {
-      existingKeys.openai = args.openai;
+      keyVault.setKey('openai', args.openai);
       updates.openai = args.openai;
       updateCount++;
     }
 
     if (args.google && typeof args.google === 'string') {
-      existingKeys.google = args.google;
+      keyVault.setKey('google', args.google);
       updates.google = args.google;
       updateCount++;
     }
-
-    // Store back to registry
-    registryStorage.set(STORAGE_KEYS.API_KEYS, existingKeys);
 
     // Build response
     const lines: string[] = [];

@@ -10,6 +10,7 @@ import {
   CredentialEntry,
 } from './credential-helpers';
 import { redactCredentials } from '../../security/credential-redaction';
+import { getApiKey } from '../../../security/KeyVault';
 
 export const syncCredentialsHandler: McpToolHandler = {
   definition: {
@@ -59,17 +60,14 @@ export const syncCredentialsHandler: McpToolHandler = {
 
     const dryRun = (args.dry_run as boolean) ?? false;
 
-    // Read API keys from Local's storage
-    const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-
-    // Filter to requested providers (or all configured)
+    // Read API keys via KeyVault (handles encrypted + legacy plain-text migration)
     const requestedProviders = args.providers as string[] | undefined;
     const providersToSync = (requestedProviders ?? SUPPORTED_PROVIDERS).filter(
-      (p) => SUPPORTED_PROVIDERS.includes(p) && storedKeys[p],
+      (p) => SUPPORTED_PROVIDERS.includes(p) && getApiKey(registryStorage, p),
     );
 
     if (providersToSync.length === 0) {
-      const configured = SUPPORTED_PROVIDERS.filter((p) => storedKeys[p]);
+      const configured = SUPPORTED_PROVIDERS.filter((p) => getApiKey(registryStorage, p));
       if (configured.length === 0) {
         return error(
           'No AI provider API keys configured in Local. ' +
@@ -84,7 +82,7 @@ export const syncCredentialsHandler: McpToolHandler = {
     if (dryRun) {
       const lines = ['Dry run — would sync the following credentials:', ''];
       for (const provider of providersToSync) {
-        const key = storedKeys[provider];
+        const key = getApiKey(registryStorage, provider) ?? '';
         const masked = maskKey(key);
         const optionName = PROVIDER_TO_WP_OPTION[provider];
         lines.push(`  ${provider}: ${masked} → wp_options.${optionName}`);
@@ -97,7 +95,7 @@ export const syncCredentialsHandler: McpToolHandler = {
     // Build credential entries for the shared PHP builder
     const entries: CredentialEntry[] = providersToSync.map((provider) => ({
       provider,
-      key: storedKeys[provider],
+      key: getApiKey(registryStorage, provider) ?? '',
       optionName: PROVIDER_TO_WP_OPTION[provider],
     }));
 
@@ -127,7 +125,7 @@ export const syncCredentialsHandler: McpToolHandler = {
       const lines: string[] = [];
       lines.push(`Synced ${providersToSync.length} provider(s) to "${site.name}":`);
       for (const provider of providersToSync) {
-        const key = storedKeys[provider];
+        const key = getApiKey(registryStorage, provider) ?? '';
         const optionName = PROVIDER_TO_WP_OPTION[provider];
         lines.push(`  ${provider}: ${maskKey(key)} → ${optionName}`);
       }

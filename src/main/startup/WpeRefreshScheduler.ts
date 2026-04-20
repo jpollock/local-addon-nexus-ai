@@ -35,6 +35,12 @@ export interface WpeRefreshSchedulerOptions {
    * Default: same as intervalMs.
    */
   stalenessThresholdMs?: number;
+  /**
+   * Returns the current account filter. Called at the start of each cycle so
+   * changes to settings take effect without restarting the scheduler.
+   * Return null/undefined to include all accounts (default).
+   */
+  getAccountFilter?: () => string[] | null | undefined;
   logger: {
     info: (...args: any[]) => void;
     warn: (...args: any[]) => void;
@@ -55,6 +61,7 @@ export class WpeRefreshScheduler {
   private readonly localServices: LocalServicesBridge;
   private readonly intervalMs: number;
   private readonly stalenessThresholdMs: number;
+  private readonly getAccountFilter: () => string[] | null | undefined;
   private readonly logger: WpeRefreshSchedulerOptions['logger'];
 
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -65,6 +72,7 @@ export class WpeRefreshScheduler {
     this.localServices = options.localServices;
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
     this.stalenessThresholdMs = options.stalenessThresholdMs ?? this.intervalMs;
+    this.getAccountFilter = options.getAccountFilter ?? (() => null);
     this.logger = options.logger;
   }
 
@@ -158,22 +166,33 @@ export class WpeRefreshScheduler {
       return result;
     }
 
+    // Read account filter — evaluated fresh each cycle so settings changes apply immediately
+    const accountFilter = this.getAccountFilter();
+
     // Query all active WPE installs that have a remote_install_id
     type SiteRow = {
       id: string;
       name: string;
       remote_install_id: string;
       last_sync_at: number | null;
+      account_id: string | null;
     };
 
     let sites: SiteRow[];
     try {
       sites = db.prepare(
-        "SELECT id, name, remote_install_id, last_sync_at FROM sites WHERE source='wpe' AND is_active=1 AND remote_install_id IS NOT NULL"
+        "SELECT id, name, remote_install_id, last_sync_at, account_id FROM sites WHERE source='wpe' AND is_active=1 AND remote_install_id IS NOT NULL"
       ).all() as SiteRow[];
     } catch (err: any) {
       this.logger.error('[WpeRefreshScheduler] Failed to query WPE sites:', err.message);
       return result;
+    }
+
+    // Apply account filter if set
+    if (accountFilter && accountFilter.length > 0) {
+      const before = sites.length;
+      sites = sites.filter((s) => s.account_id && accountFilter.includes(s.account_id));
+      this.logger.info(`[WpeRefreshScheduler] Account filter: ${sites.length} of ${before} installs in scope`);
     }
 
     if (sites.length === 0) {

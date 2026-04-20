@@ -29,6 +29,7 @@ export const UpdateSettingsSchema = z.object({
   haltedSiteRefreshIntervalHours: z.number().int().min(1).max(168).optional(),
   wpeRefreshIntervalHours: z.number().int().min(1).max(168).optional(),
   wpeRefreshAutoEnabled: z.boolean().optional(),
+  wpeAccountFilter: z.array(z.string()).nullable().optional(),
 }).strict(); // Prevent unknown properties
 
 export const PluginSlugSchema = z

@@ -3,8 +3,16 @@
  *
  * All Electron IPC handlers for the Nexus AI addon, extracted from index.ts
  * to keep the main entry point focused on initialization.
+ *
+ * Domain handler modules (extracted in Phase 1.9):
+ *   - src/main/ipc/handlers/credentials.ts  — WPE API credential handlers
+ *   - src/main/ipc/handlers/bulk.ts          — bulk / fleet operation handlers
+ *   - src/main/ipc/handlers/wpe-sync.ts      — WPE site sync handlers
  */
 import { IPC_CHANNELS, STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../common/constants';
+import { registerCredentialHandlers } from './ipc/handlers/credentials';
+import { registerBulkHandlers } from './ipc/handlers/bulk';
+import { registerWpeSyncHandlers } from './ipc/handlers/wpe-sync';
 import type { NexusSettings } from '../common/types';
 import type { IndexRegistry, RegistryStorage } from './content/IndexRegistry';
 import type { ContentPipeline } from './content/ContentPipeline';
@@ -38,13 +46,7 @@ import {
   UpdateSettingsSchema,
   IndexSiteSchema,
   SearchUnifiedSchema,
-  BulkOperationRequestSchema,
-  BulkOperationIdSchema,
-  FleetOperationOptionsSchema,
-  WpeRemoveSiteSchema,
   WpePullToLocalSchema,
-  WpeSyncSingleSchema,
-  WpeSyncAllSchema,
   WpeInstallIdSchema,
   HealthGetScoreSchema,
   HealthGetTrendSchema,
@@ -390,8 +392,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       let remoteInstalls = 0;
       let totalRemoteInstalls = 0;
       let capiAvailable = false;
+      let wpeAuthenticated = false;
       try {
         capiAvailable = localServicesBridge.isCAPIAvailable();
+        wpeAuthenticated = localServicesBridge.isWPEAuthenticated();
         if (capiAvailable) {
           const installs = await localServicesBridge.capiGetInstalls() as any[];
           totalRemoteInstalls = installs?.length ?? 0;
@@ -431,7 +435,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return {
         localSites: { total: totalSites, running: runningSites, halted: totalSites - runningSites },
         wpeConnected: { count: wpeConnectedSites },
-        remoteSites: { total: totalRemoteInstalls, unlinked: remoteInstalls, capiAvailable },
+        remoteSites: { total: totalRemoteInstalls, unlinked: remoteInstalls, capiAvailable, wpeAuthenticated },
         mcpServer: {
           running: !!mcpInfo,
           toolCount: mcpInfo?.tools?.length ?? 0,
@@ -720,6 +724,18 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         Date.now() - startTime,
       );
       return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.NAVIGATE_TO_PREFERENCES, () => {
+    deps.serviceContainer?.sendIPCEvent?.('goToRoute', '/settings//nexus-ai');
+  });
+
+  safeHandle(IPC_CHANNELS.GET_WPE_ACCOUNTS, () => {
+    try {
+      return graphService.getAccounts();
+    } catch {
+      return [];
     }
   });
 
@@ -1595,65 +1611,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     localLogger.error('[NexusAI] Failed to init HealthTrendTracker');
   }
 
-  // --- Bulk Operations ---
-
-  safeHandle(IPC_CHANNELS.BULK_EXECUTE, async (_event: any, request: any) => {
-    const startTime = Date.now();
-    try {
-      // Validate input
-      const validated = validateInput(BulkOperationRequestSchema, request);
-
-      // Audit log bulk operation start
-      auditLogger.log({
-        operation: `bulk_${validated.type}`,
-        target: `${validated.siteIds.length} sites`,
-        targetType: 'bulk_operation',
-        result: 'started',
-        params: { type: validated.type, siteCount: validated.siteIds.length },
-        durationMs: 0,
-      });
-
-      const opId = await bulkOpManager.execute(validated);
-
-      return { success: true, opId };
-    } catch (err) {
-      localLogger.error('[NexusAI] bulk:execute failed:', (err as Error).message);
-      auditLogger.logFailure(
-        'bulk_execute',
-        'multiple',
-        'bulk_operation',
-        (err as Error).message,
-        request,
-        Date.now() - startTime,
-      );
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.BULK_STATUS, async (_event: any, opId: string) => {
-    try {
-      // Validate input
-      const validated = validateInput(BulkOperationIdSchema, opId);
-      const status = bulkOpManager.getStatus(validated);
-      return status ? { success: true, ...status } : { success: false, error: 'Operation not found' };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.BULK_CANCEL, async (_event: any, opId: string) => {
-    try {
-      // Validate input
-      const validated = validateInput(BulkOperationIdSchema, opId);
-      return { success: bulkOpManager.cancel(validated) };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.BULK_LIST, async () => {
-    return { success: true, operations: bulkOpManager.listAll() };
-  });
+  // --- Bulk Operations --- (extracted to src/main/ipc/handlers/bulk.ts)
+  registerBulkHandlers(deps, { bulkOpManager, auditLogger, buildSiteNames });
 
   // --- Site Groups (Local native) ---
 
@@ -1970,189 +1929,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
-  safeHandle(IPC_CHANNELS.SETUP_AI_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
-    try {
-      // Validate input
-      const validated = validateInput(FleetOperationOptionsSchema, options);
-
-      const allSites = siteData.getSites();
-      const statuses = localServicesBridge.getAllSiteStatuses();
-
-      // Use provided siteIds or all running sites
-      const targetIds = validated?.siteIds
-        ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
-
-      if (targetIds.length === 0) {
-        return { success: true, opId: null, message: 'No running sites to set up' };
-      }
-
-      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
-
-      const opId = bulkOpManager.execute({
-        type: 'setup-ai',
-        siteIds: targetIds,
-        siteNames: buildSiteNames(targetIds),
-        options: { provider: settings?.aiProvider },
-      });
-
-      return { success: true, opId };
-    } catch (err) {
-      localLogger.error('[NexusAI] setup-ai-fleet failed:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.INDEX_ALL_FLEET, async (_event: any, options?: { siteIds?: string[] }) => {
-    try {
-      // Validate input
-      const validated = validateInput(FleetOperationOptionsSchema, options);
-
-      const allSites = siteData.getSites();
-      const statuses = localServicesBridge.getAllSiteStatuses();
-
-      // Use provided siteIds or all running sites
-      const targetIds = validated?.siteIds
-        ?? Object.keys(allSites).filter((id) => statuses[id] === 'running');
-
-      if (targetIds.length === 0) {
-        return { success: true, opId: null, message: 'No running sites to index' };
-      }
-
-      const opId = bulkOpManager.execute({
-        type: 'reindex',
-        siteIds: targetIds,
-        siteNames: buildSiteNames(targetIds),
-        options: {},
-      });
-
-      return { success: true, opId };
-    } catch (err) {
-      localLogger.error('[NexusAI] index-all-fleet failed:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Auto-start/stop: Setup AI for ALL sites (including halted)
-  safeHandle(IPC_CHANNELS.SETUP_AI_ALL_AUTO, async (_event: any) => {
-    try {
-      const allSites = siteData.getSites();
-      const allSiteIds = Object.keys(allSites);
-
-      if (allSiteIds.length === 0) {
-        return { success: true, opId: null, message: "No sites to setup" };
-      }
-
-      const opId = bulkOpManager.execute({
-        type: "setup-ai",
-        siteIds: allSiteIds,
-        siteNames: buildSiteNames(allSiteIds),
-        options: { autoStartStop: true },
-      });
-
-      return { success: true, opId };
-    } catch (err) {
-      localLogger.error("[NexusAI] setup-ai-all-auto failed:", (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Auto-start/stop: Index ALL sites (including halted)
-  safeHandle(IPC_CHANNELS.INDEX_ALL_AUTO, async (_event: any) => {
-    try {
-      const allSites = siteData.getSites();
-      const allSiteIds = Object.keys(allSites);
-
-      if (allSiteIds.length === 0) {
-        return { success: true, opId: null, message: "No sites to index" };
-      }
-
-      const opId = bulkOpManager.execute({
-        type: "reindex",
-        siteIds: allSiteIds,
-        siteNames: buildSiteNames(allSiteIds),
-        options: { autoStartStop: true },
-      });
-
-      return { success: true, opId };
-    } catch (err) {
-      localLogger.error("[NexusAI] index-all-auto failed:", (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Sync Graph: Refresh GraphService with current plugin/theme/user data (auto-start/stop)
-  safeHandle(IPC_CHANNELS.SYNC_GRAPH_ALL, async (_event: any) => {
-    try {
-      const allSites = siteData.getSites();
-      const allSiteIds = Object.keys(allSites);
-
-      if (allSiteIds.length === 0) {
-        return { success: false, error: "No sites to sync." };
-      }
-
-      const opId = bulkOpManager.execute({
-        type: "sync-graph",
-        siteIds: allSiteIds,
-        siteNames: buildSiteNames(allSiteIds),
-        options: { autoStartStop: true },
-      });
-
-      return { success: true, opId, count: allSiteIds.length };
-    } catch (err) {
-      localLogger.error("[NexusAI] sync-graph-all failed:", (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Quick fleet refresh — filesystem scan for halted, WP-CLI for running (no auto-start)
-  safeHandle(IPC_CHANNELS.FLEET_REFRESH_QUICK, async (_event: any) => {
-    try {
-      const result = await deps.nexusServices?.registry?.call('nexus_fleet_refresh', {}, deps.nexusServices, 'ui');
-      const text = result?.content?.[0]?.text ?? '';
-      return { success: !result?.isError, message: text };
-    } catch (err) {
-      localLogger.error('[NexusAI] fleet-refresh-quick failed:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Health check all sites
-  safeHandle(IPC_CHANNELS.FLEET_HEALTH_CHECK_ALL, async (_event: any) => {
-    try {
-      const allSites = siteData.getSites();
-      const allSiteIds = Object.keys(allSites);
-      if (allSiteIds.length === 0) return { success: true, opId: null, message: 'No sites found' };
-      const opId = bulkOpManager.execute({
-        type: 'health-refresh',
-        siteIds: allSiteIds,
-        siteNames: buildSiteNames(allSiteIds),
-        options: { autoStartStop: true },
-      });
-      return { success: true, opId, count: allSiteIds.length };
-    } catch (err) {
-      localLogger.error('[NexusAI] fleet-health-check-all failed:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  // Update all plugins
-  safeHandle(IPC_CHANNELS.FLEET_PLUGIN_UPDATE_ALL, async (_event: any) => {
-    try {
-      const allSites = siteData.getSites();
-      const allSiteIds = Object.keys(allSites);
-      if (allSiteIds.length === 0) return { success: true, opId: null, message: 'No sites found' };
-      const opId = bulkOpManager.execute({
-        type: 'plugin-update',
-        siteIds: allSiteIds,
-        siteNames: buildSiteNames(allSiteIds),
-        options: { autoStartStop: true },
-      });
-      return { success: true, opId, count: allSiteIds.length };
-    } catch (err) {
-      localLogger.error('[NexusAI] fleet-plugin-update-all failed:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
+  // Fleet shortcut handlers (SETUP_AI_FLEET, INDEX_ALL_FLEET, etc.) are
+  // registered above in registerBulkHandlers().
 
   // ---------------------------------------------------------------------------
   // Site Finder (Advanced Site Search)
@@ -2716,122 +2494,15 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   }
 
   // =========================================================================
-  // WPE API Credentials (for backup creation via basic auth)
+  // WPE API Credentials + WPE Site Sync Handlers
+  // (extracted to src/main/ipc/handlers/credentials.ts and wpe-sync.ts)
   // =========================================================================
+  registerCredentialHandlers(deps);
+  registerWpeSyncHandlers(deps, { auditLogger });
 
-  safeHandle(IPC_CHANNELS.WPE_GET_API_CREDENTIALS_STATUS, async () => {
-    try {
-      const status = await localServicesBridge.wpeGetApiCredentialsStatus();
-      return { configured: status.configured, username: status.username ?? null };
-    } catch (err: any) {
-      localLogger.error(`[NexusAI] Failed to get WPE credentials status: ${err.message}`);
-      return { configured: false, username: null };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.WPE_GET_API_CREDENTIALS, async () => {
-    try {
-      const status = await localServicesBridge.wpeGetApiCredentialsStatus();
-      if (!status.configured) {
-        return { username: '', password: '' };
-      }
-      // Return username only for display, password stays encrypted
-      return { username: status.username ?? '', password: '' };
-    } catch (err: any) {
-      localLogger.error(`[NexusAI] Failed to get WPE credentials: ${err.message}`);
-      return { username: '', password: '' };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.WPE_SET_API_CREDENTIALS, async (_event: any, username: string, password: string) => {
-    try {
-      await localServicesBridge.wpeSetApiCredentials(username, password);
-      localLogger.info(`[NexusAI] WPE API credentials stored for user: ${username}`);
-      return { success: true };
-    } catch (err: any) {
-      localLogger.error(`[NexusAI] Failed to store WPE credentials: ${err.message}`);
-      throw err;
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.WPE_CLEAR_API_CREDENTIALS, async () => {
-    try {
-      await localServicesBridge.wpeClearApiCredentials();
-      localLogger.info(`[NexusAI] WPE API credentials cleared`);
-      return { success: true };
-    } catch (err: any) {
-      localLogger.error(`[NexusAI] Failed to clear WPE credentials: ${err.message}`);
-      throw err;
-    }
-  });
-
-  // =========================================================================
-  // WPE Site Sync Handlers (Phase 1)
-  // =========================================================================
-
-  /**
-   * Sync all WPE sites from wp-nexus MCP
-   */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_ALL, async (_event: any, options?: { limit?: number }) => {
-    const startTime = Date.now();
-
-    if (!deps.wpeSyncService) {
-      localLogger.warn('[NexusAI] WPE sync service not initialized');
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      // Validate input
-      const validated = validateInput(WpeSyncAllSchema, options);
-
-      const limit = validated?.limit;
-      // Manual sync always force-refreshes all installs (staleThresholdHours=0)
-      // Incremental staleness is only for scheduled/auto syncs
-      localLogger.info(`[NexusAI] Starting WPE site sync (force)${limit ? ` (limit: ${limit})` : ''}...`);
-      const result = await deps.wpeSyncService.syncAllWPESites(limit, 0);
-      localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed`);
-
-      // Audit log success
-      auditLogger.logSuccess(
-        'wpe_sync_all',
-        'all_installs',
-        'wpe_install',
-        { synced: result.synced, failed: result.failed, limit },
-        Date.now() - startTime,
-      );
-
-      return result;
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      const errorStack = err instanceof Error ? err.stack : undefined;
-      localLogger.error('[NexusAI] WPE sync failed:', errorMsg, errorStack);
-      auditLogger.logFailure(
-        'wpe_sync_all',
-        'all_installs',
-        'wpe_install',
-        errorMsg,
-        options || {},
-        Date.now() - startTime,
-      );
-      return { success: false, error: errorMsg };
-    }
-  });
-
-  /**
-   * Get current sync progress
-   */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_STATUS, async () => {
-    if (!deps.wpeSyncService) {
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      const progress = deps.wpeSyncService.getProgress();
-      return { success: true, progress };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
-  });
+  // WPE_SYNC_ALL, WPE_SYNC_STATUS, WPE_SYNC_STOP, WPE_SYNC_STATS, WPE_CAPI_SYNC,
+  // WPE_SYNC_SINGLE, WPE_GET_SYNCED_SITES, WPE_GET_SITE_DETAILS, WPE_DIAGNOSE_SITE,
+  // WPE_REMOVE_SITE — all registered above in registerWpeSyncHandlers().
 
   safeHandle(IPC_CHANNELS.WPE_DIAGNOSE, async (_event: any, params: { installName: string; args: string[] }) => {
     const { installName, args } = params;
@@ -2897,302 +2568,9 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  safeHandle(IPC_CHANNELS.WPE_CAPI_SYNC, async () => {
-    if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
-    try {
-      const result = await deps.wpeSyncService.syncFromCAPI();
-      return { success: true, ...result };
-    } catch (err: any) {
-      return { success: false, error: err.message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.CLEANUP_GHOST_INSTALLS, async () => {
-    try {
-      const db = graphService.getDb();
-      if (!db) return { success: false, error: 'Graph DB not available' };
-      const result = db.prepare(
-        "DELETE FROM sites WHERE source='wpe' AND is_active=0"
-      ).run();
-      // Also clean up orphaned plugins/content/users for removed sites
-      db.prepare("DELETE FROM plugins WHERE site_id NOT IN (SELECT id FROM sites)").run();
-      db.prepare("DELETE FROM content WHERE site_id NOT IN (SELECT id FROM sites)").run();
-      db.prepare("DELETE FROM users WHERE site_id NOT IN (SELECT id FROM sites)").run();
-      localLogger.info(`[NexusAI] Cleaned up ${result.changes} ghost installs`);
-      return { success: true, removed: result.changes };
-    } catch (err: any) {
-      return { success: false, error: err.message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.CLEANUP_EXCLUDED_TYPES, async () => {
-    try {
-      // Clean vector store
-      const vecResult = await vectorStore.cleanupExcludedTypes(EXCLUDED_POST_TYPES);
-
-      // Clean graph DB content table
-      const db = graphService.getDb();
-      let graphRemoved = 0;
-      if (db) {
-        const placeholders = EXCLUDED_POST_TYPES.map(() => '?').join(',');
-        const result = db.prepare(
-          `DELETE FROM content WHERE post_type IN (${placeholders})`
-        ).run(...EXCLUDED_POST_TYPES);
-        graphRemoved = result.changes;
-      }
-
-      localLogger.info(
-        `[NexusAI] Cleanup: removed ${vecResult.docsRemoved} vector docs + ${graphRemoved} graph content rows for excluded types`
-      );
-
-      return { success: true, vectorDocsRemoved: vecResult.docsRemoved, graphRowsRemoved: graphRemoved, tablesScanned: vecResult.tablesScanned };
-    } catch (err: any) {
-      return { success: false, error: err.message };
-    }
-  });
-
-  safeHandle(IPC_CHANNELS.WPE_SYNC_STOP, () => {
-    if (!deps.wpeSyncService) return { success: false, error: 'Sync service not available' };
-    deps.wpeSyncService.stopSync();
-    return { success: true };
-  });
-
-  /**
-   * Get WPE sync summary stats from graph DB for dashboard display
-   */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_STATS, async () => {
-    try {
-      const db = graphService.getDb();
-      if (!db) return { success: true, stats: null };
-
-      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncIntervalHours?: number } | null;
-      const thresholdHours = settings?.wpeSyncIntervalHours ?? 8;
-      const cutoff = Date.now() - thresholdHours * 60 * 60 * 1000;
-
-      const row = db.prepare(`
-        SELECT
-          COUNT(*) as total,
-          SUM(CASE WHEN wp_version IS NOT NULL THEN 1 ELSE 0 END) as has_wp_version,
-          SUM(CASE WHEN php_version IS NOT NULL THEN 1 ELSE 0 END) as has_php_version,
-          MAX(last_sync_at) as last_sync_at,
-          SUM(CASE WHEN last_sync_at >= ? THEN 1 ELSE 0 END) as fresh_count,
-          SUM(CASE WHEN last_sync_at IS NULL OR last_sync_at < ? THEN 1 ELSE 0 END) as stale_count
-        FROM sites WHERE source = 'wpe'
-      `).get(cutoff, cutoff) as {
-        total: number; has_wp_version: number; has_php_version: number;
-        last_sync_at: number | null; fresh_count: number; stale_count: number;
-      } | undefined;
-
-      return { success: true, stats: row ?? null, thresholdHours };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  /**
-   * Get list of synced WPE sites
-   */
-  safeHandle(IPC_CHANNELS.WPE_GET_SYNCED_SITES, async () => {
-    if (!deps.wpeSyncService) {
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      const sites = await deps.wpeSyncService.getSyncedWPESites();
-
-      // Enrich sites with account_id from CAPI if available
-      let wpeAuthError = false;
-      if (localServicesBridge.isCAPIAvailable()) {
-        try {
-          const installs = await localServicesBridge.capiGetInstalls() as any[];
-          const installMap = new Map(installs.map((i: any) => [i.id, i.account?.id]));
-
-          sites.forEach((site: any) => {
-            const accountId = installMap.get(site.remote_install_id);
-            if (accountId) {
-              site.account_id = accountId;
-            }
-          });
-        } catch (err) {
-          const status = (err as any)?.response?.status;
-          if (status === 401 || status === 403) {
-            wpeAuthError = true;
-          } else {
-            localLogger.warn('[NexusAI] Failed to enrich sites with account_id:', String(err));
-          }
-        }
-      }
-
-      return { success: true, sites, wpeAuthError };
-    } catch (err) {
-      localLogger.error('[NexusAI] Failed to get synced WPE sites:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  /**
-   * Get details for a specific WPE site
-   */
-  safeHandle(IPC_CHANNELS.WPE_GET_SITE_DETAILS, async (_event: any, installId: string) => {
-    if (!deps.wpeSyncService) {
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      // Validate input
-      const validated = validateInput(WpeInstallIdSchema, installId);
-
-      const sites = await deps.wpeSyncService.getSyncedWPESites();
-      // installId could be:
-      // - Full ID: "wpe-myinstprod"
-      // - Stripped ID: "myinstprod"
-      // - Install ID: "myinstprod"
-      const site = sites.find((s: any) =>
-        s.id === validated ||
-        s.id === `wpe-${validated}` ||
-        s.remote_install_id === validated ||
-        s.install_id === validated
-      );
-
-      if (!site) {
-        localLogger.warn(`[NexusAI] WPE site not found: ${validated}. Available sites:`, sites.map((s: any) => s.id));
-        return { success: false, error: `Site not found: ${validated}` };
-      }
-
-      return { success: true, site };
-    } catch (err) {
-      localLogger.error('[NexusAI] Failed to get WPE site details:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  /**
-   * Re-sync a single WPE site
-   */
-  safeHandle(IPC_CHANNELS.WPE_SYNC_SINGLE, async (_event: any, params: { installId: string }) => {
-    const startTime = Date.now();
-
-    if (!deps.wpeSyncService) {
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      // Validate input
-      const validated = validateInput(WpeSyncSingleSchema, params);
-      let installId = validated.installId;
-
-      // If looks like a name (not a UUID), resolve to UUID via graph
-      const isUuid = /^[0-9a-f-]{36}$/i.test(installId);
-      if (!isUuid) {
-        const db = graphService.getDb();
-        if (db) {
-          const row = db.prepare(
-            "SELECT remote_install_id FROM sites WHERE source='wpe' AND name=? LIMIT 1"
-          ).get(installId) as { remote_install_id: string } | undefined;
-          if (row?.remote_install_id) {
-            installId = row.remote_install_id;
-          } else {
-            return { success: false, error: `Install "${installId}" not found in graph. Run Sync All first.` };
-          }
-        }
-      }
-
-      await deps.wpeSyncService.syncSingleSite(installId);
-
-      // Audit log success
-      auditLogger.logSuccess(
-        'wpe_sync_single',
-        installId,
-        'wpe_install',
-        {},
-        Date.now() - startTime,
-      );
-
-      localLogger.info(`[NexusAI] Re-synced WPE site: ${installId}`);
-      return { success: true };
-    } catch (err) {
-      localLogger.error('[NexusAI] Failed to re-sync WPE site:', (err as Error).message);
-      auditLogger.logFailure(
-        'wpe_sync_single',
-        params?.installId || 'unknown',
-        'wpe_install',
-        (err as Error).message,
-        params,
-        Date.now() - startTime,
-      );
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  /**
-   * Run diagnostics on a WPE site
-   *
-   * Uses wp-nexus MCP tools to gather detailed site information
-   */
-  safeHandle(IPC_CHANNELS.WPE_DIAGNOSE_SITE, async (_event: any, installId: string) => {
-    try {
-      // Validate input
-      const validated = validateInput(WpeInstallIdSchema, installId);
-
-      // TODO: Call wpe_diagnose_site MCP tool when available
-      // For now, return placeholder diagnostics
-      const diagnostics = {
-        sslStatus: 'active',
-        backupStatus: 'recent',
-        diskUsage: { used: 2.5, limit: 10, percentage: 25 },
-        bandwidthUsage: { used: 150, limit: 500, percentage: 30 },
-        cacheStatus: 'enabled',
-        phpVersion: '8.1',
-      };
-
-      return { success: true, diagnostics };
-    } catch (err) {
-      localLogger.error('[NexusAI] Failed to diagnose WPE site:', (err as Error).message);
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  /**
-   * Remove a WPE site from the graph
-   */
-  safeHandle(IPC_CHANNELS.WPE_REMOVE_SITE, async (_event: any, params: { installId: string }) => {
-    const startTime = Date.now();
-
-    if (!deps.wpeSyncService) {
-      return { success: false, error: 'WPE sync service not available' };
-    }
-
-    try {
-      // Validate input
-      const validated = validateInput(WpeRemoveSiteSchema, params);
-      const installId = validated.installId;
-
-      await deps.wpeSyncService.removeWPESite(installId);
-
-      // Audit log success
-      auditLogger.logSuccess(
-        'wpe_remove_site',
-        installId,
-        'wpe_install',
-        {},
-        Date.now() - startTime,
-      );
-
-      localLogger.info(`[NexusAI] Removed WPE site: ${installId}`);
-      return { success: true };
-    } catch (err) {
-      localLogger.error('[NexusAI] Failed to remove WPE site:', (err as Error).message);
-      auditLogger.logFailure(
-        'wpe_remove_site',
-        params?.installId || 'unknown',
-        'wpe_install',
-        (err as Error).message,
-        params,
-        Date.now() - startTime,
-      );
-      return { success: false, error: (err as Error).message };
-    }
-  });
+  // WPE_CAPI_SYNC, WPE_SYNC_STOP, WPE_SYNC_STATS, WPE_GET_SYNCED_SITES,
+  // WPE_GET_SITE_DETAILS, WPE_SYNC_SINGLE, WPE_DIAGNOSE_SITE, WPE_REMOVE_SITE
+  // — all registered above in registerWpeSyncHandlers().
 
   /**
    * Pull a WPE site to Local (PRODUCTION-READY VERSION)
@@ -3994,6 +3372,32 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     } catch (err) {
       localLogger.error('[NexusAI] db-get-last-scan failed:', (err as Error).message);
       return { success: false, error: (err as Error).message, scan: null };
+    }
+  });
+
+  // =========================================================================
+  // Operation Audit Log (Phase 3)
+  // =========================================================================
+
+  safeHandle(IPC_CHANNELS.OPERATION_AUDIT_LIST, async (_event: any, params?: { limit?: number; operation?: string }) => {
+    try {
+      const { OperationAuditLog, defaultAuditLogPath } = await import('./audit/OperationAuditLog');
+      const auditLog = new OperationAuditLog(defaultAuditLogPath());
+      const entries = auditLog.list(params?.limit, params?.operation ? { operation: params.operation } : undefined);
+      return { success: true, entries };
+    } catch (err: any) {
+      return { success: true, entries: [] };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.OPERATION_AUDIT_EXPORT, async (_event: any, params: { outputPath: string }) => {
+    try {
+      const { OperationAuditLog, defaultAuditLogPath } = await import('./audit/OperationAuditLog');
+      const auditLog = new OperationAuditLog(defaultAuditLogPath());
+      auditLog.export(params.outputPath);
+      return { success: true, outputPath: params.outputPath };
+    } catch (err: any) {
+      return { success: false, error: err.message };
     }
   });
 

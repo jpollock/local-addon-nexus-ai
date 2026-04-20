@@ -13,6 +13,7 @@
 import * as http from 'http';
 import type { RegistryStorage } from '../content/IndexRegistry';
 import { STORAGE_KEYS } from '../../common/constants';
+import { KeyVault } from '../security/KeyVault';
 import { getSiteIdFromToken } from './token-manager';
 import { translateToAnthropic, translateFromAnthropic } from './format-translator';
 import { callAnthropicAPI, calculateAnthropicCost } from './anthropic-client';
@@ -124,11 +125,13 @@ export class AIGatewayRoutes {
   private storage: RegistryStorage;
   private logger: any;
   private onUsageRecorded?: (record: GatewayUsageRecord) => void;
+  private keyVault: KeyVault;
 
   constructor(options: AIGatewayRoutesOptions) {
     this.storage = options.storage;
     this.logger = options.logger;
     this.onUsageRecorded = options.onUsageRecorded;
+    this.keyVault = new KeyVault(options.storage, STORAGE_KEYS.API_KEYS);
   }
 
   /**
@@ -166,7 +169,6 @@ export class AIGatewayRoutes {
       return;
     }
 
-    const apiKeys = (this.storage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
     const settings = (this.storage.get(STORAGE_KEYS.SETTINGS) ?? {}) as Record<string, any>;
     const model = openAIRequest.model;
     const globalProvider: ChatProvider = (settings.aiProvider ?? 'anthropic') as ChatProvider;
@@ -181,7 +183,7 @@ export class AIGatewayRoutes {
     let costUsd: number;
 
     if (resolvedProvider === 'anthropic') {
-      const anthropicKey = apiKeys.anthropic;
+      const anthropicKey = this.keyVault.getKey('anthropic');
       if (!anthropicKey) { this.sendError(res, 503, 'Anthropic API key not configured in Local'); return; }
 
       const anthropicRequest = translateToAnthropic(openAIRequest);
@@ -202,7 +204,7 @@ export class AIGatewayRoutes {
       costUsd           = calculateAnthropicCost(model, promptTokens, completionTokens);
 
     } else if (resolvedProvider === 'openai') {
-      const openaiKey = apiKeys.openai;
+      const openaiKey = this.keyVault.getKey('openai');
       if (!openaiKey) { this.sendError(res, 503, 'OpenAI API key not configured in Local'); return; }
 
       let openaiResponse;
@@ -222,7 +224,7 @@ export class AIGatewayRoutes {
       costUsd           = calculateOpenAICost(model, promptTokens, completionTokens);
 
     } else if (resolvedProvider === 'google') {
-      const googleKey = apiKeys.google;
+      const googleKey = this.keyVault.getKey('google');
       if (!googleKey) { this.sendError(res, 503, 'Google API key not configured in Local'); return; }
 
       let googleResponse;
@@ -283,8 +285,6 @@ export class AIGatewayRoutes {
       return;
     }
 
-    const apiKeys = (this.storage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-
     this.logger.info(
       `[AIGateway] Image request from site ${siteId}: model=${imageRequest.model}, prompt="${imageRequest.prompt.substring(0, 60)}..."`,
     );
@@ -294,7 +294,7 @@ export class AIGatewayRoutes {
     let costUsd: number;
 
     if (isGoogleImage) {
-      const googleKey = apiKeys.google;
+      const googleKey = this.keyVault.getKey('google');
       if (!googleKey) {
         this.sendError(res, 503, 'Google API key not configured in Local (required for Imagen)');
         return;
@@ -308,7 +308,7 @@ export class AIGatewayRoutes {
       }
       costUsd = calculateGoogleImageCost(imageRequest.model, imageRequest.n ?? 1);
     } else {
-      const openaiKey = apiKeys.openai;
+      const openaiKey = this.keyVault.getKey('openai');
       if (!openaiKey) {
         this.sendError(res, 503, 'OpenAI API key not configured in Local (required for image generation)');
         return;
@@ -358,7 +358,6 @@ export class AIGatewayRoutes {
    * a model from a different provider than what the user configured.
    */
   handleModels(_req: http.IncomingMessage, res: http.ServerResponse): void {
-    const apiKeys = (this.storage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
     const settings = (this.storage.get(STORAGE_KEYS.SETTINGS) ?? {}) as Record<string, any>;
     const globalProvider: string = settings.aiProvider || 'anthropic';
 
@@ -367,14 +366,14 @@ export class AIGatewayRoutes {
 
     switch (globalProvider) {
       case 'openai':
-        if (apiKeys.openai) {
+        if (this.keyVault.hasKey('openai')) {
           for (const m of [...CATALOG.openai, ...CATALOG.openai_image]) {
             models.push({ id: m.id, object: 'model', created: ts, owned_by: 'openai' });
           }
         }
         break;
       case 'google':
-        if (apiKeys.google) {
+        if (this.keyVault.hasKey('google')) {
           for (const m of [...CATALOG.google, ...CATALOG.google_image]) {
             models.push({ id: m.id, object: 'model', created: ts, owned_by: 'google' });
           }
@@ -382,7 +381,7 @@ export class AIGatewayRoutes {
         break;
       case 'anthropic':
       default:
-        if (apiKeys.anthropic) {
+        if (this.keyVault.hasKey('anthropic')) {
           for (const m of CATALOG.anthropic) {
             models.push({ id: m.id, object: 'model', created: ts, owned_by: 'anthropic' });
           }

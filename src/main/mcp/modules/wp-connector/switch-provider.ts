@@ -12,6 +12,7 @@ import type { RegistryStorage } from '../../../content/IndexRegistry';
 import type { AIProvider, SiteAIConfig } from '../../../../common/types';
 import { STORAGE_KEYS } from '../../../../common/constants';
 import { PROVIDER_TO_WP_OPTION, buildCredentialSyncPhp, CredentialEntry } from './credential-helpers';
+import { getApiKey } from '../../../security/KeyVault';
 
 const WP_PLUGINS_ROOT = path.resolve(__dirname, '..', '..', '..', '..', 'wp-plugins');
 
@@ -118,8 +119,7 @@ export async function switchProviderForSite(
   }
 
   // Step 3: Sync new provider's API key (if needed)
-  const storedKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-  const apiKey = storedKeys[newProvider];
+  const apiKey = getApiKey(registryStorage, newProvider);
 
   if (apiKey && PROVIDER_TO_WP_OPTION[newProvider]) {
     const entries: CredentialEntry[] = [{

@@ -55,10 +55,28 @@ async function testGraphQLConnection(info: GraphQLConnectionInfo): Promise<boole
       body: JSON.stringify({ query: '{ __typename }' }),
     });
 
-    return response.ok;
+    // Accept any response that reached the server (even auth errors mean server is up)
+    return response.status < 600;
   } catch {
     return false;
   }
+}
+
+async function testCliConnectivity(): Promise<boolean> {
+  // Use the nexus CLI itself as the connectivity probe — it handles token discovery
+  const { spawn } = require('child_process');
+  const CLI_BIN = require('path').resolve(__dirname, '..', '..', 'bin', 'nexus.js');
+  return new Promise((resolve) => {
+    const child = spawn(CLI_BIN, ['sites', 'list', '--json'], { timeout: 10000 });
+    let stdout = '';
+    child.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+    child.on('close', (code: number) => {
+      // If we got JSON back (even empty), server is up
+      try { JSON.parse(stdout); resolve(true); } catch { resolve(code === 0); }
+    });
+    child.on('error', () => resolve(false));
+    setTimeout(() => { child.kill(); resolve(false); }, 10000);
+  });
 }
 
 export default async function globalSetup() {
@@ -76,15 +94,14 @@ export default async function globalSetup() {
 
   console.log(`[CLI E2E Setup] Found GraphQL connection: ${connectionInfo.url}`);
 
-  // Test connection
-  const connected = await testGraphQLConnection(connectionInfo);
-  if (!connected) {
-    console.error('\n❌ Could not connect to Local GraphQL server.');
-    console.error(`   URL: ${connectionInfo.url}`);
-    console.error('\n   Local may be running but GraphQL is not responding.');
-    console.error('   Try restarting Local and running tests again.\n');
+  // Verify via the CLI binary itself — it handles stale tokens/ports internally
+  const cliConnected = await testCliConnectivity();
+  if (!cliConnected) {
+    console.error('\n❌ nexus CLI cannot reach Local GraphQL server.');
+    console.error('   Ensure Local is running with the Nexus AI addon enabled.\n');
     throw new Error('Cannot connect to Local GraphQL');
   }
+  console.log('[CLI E2E Setup] ✅ CLI connectivity verified');
 
   console.log('[CLI E2E Setup] ✅ Connected to Local GraphQL');
 
