@@ -136,8 +136,6 @@ export interface NexusServices {
   twinService?: import('../twin/SiteDigitalTwinService').SiteDigitalTwinService;
   /** Phase 3: Append-only file-based audit log for Tier 2/3 operations */
   operationAuditLog?: import('../audit/OperationAuditLog').OperationAuditLog;
-  /** Phase 3: Webhook emitter for delivering event payloads to HTTP endpoints */
-  webhookEmitter?: import('../webhooks/WebhookEmitter').WebhookEmitter;
 }
 
 /**

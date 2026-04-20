@@ -21,6 +21,12 @@ syncCommand
   .option('--files-only', 'Pull files only')
   .action(async (localSite, options) => {
     try {
+      if (!localSite.endsWith('@local')) {
+        console.error(`\n❌ Invalid target: local site must use @local format.`);
+        console.error(`   Use: nexus sync pull ${localSite}@local --from ${options.from}\n`);
+        process.exit(1);
+      }
+
       // Validate targets
       const localSiteName = requireLocalTarget(localSite);
       const wpeTarget = requireWpeTarget(options.from);
@@ -87,6 +93,12 @@ syncCommand
   .option('--create', 'Create WPE install if does not exist')
   .action(async (localSite, options) => {
     try {
+      if (!localSite.endsWith('@local')) {
+        console.error(`\n❌ Invalid target: local site must use @local format.`);
+        console.error(`   Use: nexus sync push ${localSite}@local --to ${options.to}\n`);
+        process.exit(1);
+      }
+
       // Validate targets
       const localSiteName = requireLocalTarget(localSite);
       const wpeTarget = requireWpeTarget(options.to);

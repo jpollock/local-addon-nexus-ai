@@ -16,8 +16,6 @@ import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
 import { AIGatewayPanel } from './AIGatewayPanel';
 import { LoadingSpinner } from './LoadingSpinner';
-import { GoLiveChecklist } from './GoLiveChecklist';
-
 // Local's native notification components
 let toast: any = null;
 try {
@@ -35,7 +33,7 @@ interface NexusOverviewProps {
 interface DashboardStats {
   localSites: { total: number; running: number; halted: number };
   wpeConnected: { count: number };
-  remoteSites: { total: number; unlinked: number; capiAvailable: boolean };
+  remoteSites: { total: number; unlinked: number; capiAvailable: boolean; wpeAuthenticated: boolean };
   mcpServer: { running: boolean; toolCount: number; port: number | null; version: string | null };
   embedding: { ready: boolean; model: string; quantized: boolean; dimensions: number; maxSequenceLength: number };
   index: { localIndexed: number; localTotal: number; wpeIndexed: number; wpeTotal: number; totalDocuments: number; totalChunks: number; lastIndexed: number | null };
@@ -186,18 +184,9 @@ interface NexusOverviewState {
   wpeBackupInstallId: string | null;
   wpeBackupInstallName: string | null;
   wpeSyncNowRunning: boolean;
-  // Go-live checklist modal
-  goLiveModalOpen: boolean;
-  goLiveInstallId: string | null;
-  goLiveInstallName: string | null;
-  // Fleet health scheduler (Phase 3)
-  fleetHealthHistory: Array<{
-    timestamp: string;
-    checked: number;
-    degraded: number;
-    siteScores: Array<{ siteId: string; siteName: string; score: number }>;
-  }>;
-  fleetHealthRunning: boolean;
+  // WPE account filter
+  wpeAccounts: Array<{ id: string; name: string; nickname?: string }>;
+  wpeAccountFilter: string[] | null;
 }
 
 // -- Shared styles --
@@ -315,6 +304,12 @@ function truncate(text: string, maxLen: number): string {
   return text.slice(0, maxLen) + '...';
 }
 
+function navigateToPreferences(electron: any): void {
+  // Round-trip through our main process which calls serviceContainer.sendIPCEvent('goToRoute', ...)
+  // This is the correct mechanism — goToRoute is a main→renderer event that Local's App.tsx handles.
+  electron?.ipcRenderer?.invoke(IPC_CHANNELS.NAVIGATE_TO_PREFERENCES);
+}
+
 export class NexusOverview extends React.Component<NexusOverviewProps, NexusOverviewState> {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -379,12 +374,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     wpeBackupInstallId: null,
     wpeBackupInstallName: null,
     wpeSyncNowRunning: false,
-    goLiveModalOpen: false,
-    goLiveInstallId: null,
-    goLiveInstallName: null,
-    // Fleet health scheduler (Phase 3)
-    fleetHealthHistory: [],
-    fleetHealthRunning: false,
+    wpeAccounts: [],
+    wpeAccountFilter: null,
   };
 
   componentDidMount(): void {
@@ -453,7 +444,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult, fleetHealthHistory] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult, wpeAccounts] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -464,7 +455,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
         ipc.invoke(IPC_CHANNELS.WPE_SYNC_STATS),
         ipc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY),
-        ipc.invoke(IPC_CHANNELS.GET_FLEET_HEALTH_HISTORY, { limit: 5 }).catch(() => []),
+        ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
       ]);
       if (!this.mounted) return;
 
@@ -527,7 +518,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         wpeAuthError: wpeSitesResult?.wpeAuthError ?? false,
         fleetSummary: fleetSummaryResult ?? null,
         onboardingDismissed: settings?.onboardingDismissed ?? false,
-        fleetHealthHistory: Array.isArray(fleetHealthHistory) ? fleetHealthHistory : [],
+        wpeAccounts: Array.isArray(wpeAccounts) ? wpeAccounts : [],
+        wpeAccountFilter: settings?.wpeAccountFilter ?? null,
       });
     } catch (err: any) {
       if (!this.mounted) return;
@@ -982,9 +974,13 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     );
   }
 
+  handleWpeConnect = (): void => {
+    this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.WPE_LOGIN_START).catch(() => {});
+  };
+
   renderWpeAuthBanner(): React.ReactNode {
-    const { stats, wpeAuthError } = this.state;
-    if (!stats?.remoteSites.capiAvailable || !wpeAuthError) return null;
+    const { wpeAuthError } = this.state;
+    if (!wpeAuthError) return null;
     return React.createElement('div', {
       style: {
         padding: '12px 16px',
@@ -997,23 +993,18 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         gap: '10px',
       },
     },
-      React.createElement('span', {
-        style: { fontSize: '15px', lineHeight: 1, flexShrink: 0 },
-      }, '\u{1F512}'),
+      React.createElement('span', { style: { fontSize: '15px', lineHeight: 1, flexShrink: 0 } }, '\u{1F512}'),
       React.createElement('span', { style: { fontSize: '13px', color: 'var(--nxai-card-text)', flex: 1 } },
-        React.createElement('strong', null, 'Not signed in to WP Engine.'),
-        ' WPE-specific features are unavailable. Run ',
-        React.createElement('code', {
-          style: { fontFamily: 'monospace', fontSize: '12px', backgroundColor: 'var(--nxai-code-bg, rgba(0,0,0,0.08))', padding: '1px 5px', borderRadius: '3px' },
-        }, 'nexus wpe login'),
-        ' to connect, or check your status with ',
-        React.createElement('code', {
-          style: { fontFamily: 'monospace', fontSize: '12px', backgroundColor: 'var(--nxai-code-bg, rgba(0,0,0,0.08))', padding: '1px 5px', borderRadius: '3px' },
-        }, 'nexus wpe status'),
-        '.',
+        React.createElement('strong', null, 'Not connected to WP Engine.'),
+        ' Sign in to enable WPE site management, deep scans, backups, and content indexing.',
       ),
+      React.createElement('button', {
+        style: { padding: '6px 14px', borderRadius: '6px', border: 'none', backgroundColor: '#0ECAD4', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 },
+        onClick: this.handleWpeConnect,
+      }, 'Connect'),
     );
   }
+
 
   renderMcpPanel(): React.ReactNode {
     const { mcpInfo, copiedField } = this.state;
@@ -1409,10 +1400,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         React.createElement('span', { style: numStyle }, '1'),
         React.createElement('span', null,
           'Configure your AI provider in ',
-          React.createElement('button', { onClick: () => {
-            const nav = document.querySelector('[data-nav="preferences"]') as HTMLElement | null;
-            if (nav) nav.click();
-          }, style: prefLinkStyle }, 'Preferences'),
+          React.createElement('button', { onClick: () => navigateToPreferences(this.props.electron), style: prefLinkStyle }, 'Preferences'),
           ' to connect Claude, OpenAI, or another provider.',
         ),
       ),
@@ -1420,10 +1408,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         React.createElement('span', { style: numStyle }, '2'),
         React.createElement('span', null,
           'Enable auto-indexing in ',
-          React.createElement('button', { onClick: () => {
-            const nav = document.querySelector('[data-nav="preferences"]') as HTMLElement | null;
-            if (nav) nav.click();
-          }, style: prefLinkStyle }, 'Preferences'),
+          React.createElement('button', { onClick: () => navigateToPreferences(this.props.electron), style: prefLinkStyle }, 'Preferences'),
           ' so new content is indexed automatically when sites start.',
         ),
       ),
@@ -1503,74 +1488,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         },
           React.createElement(TopIssuesPanel, { electron: this.props.electron }),
           React.createElement(StorageHealthPanel, { electron: this.props.electron }),
-          this.renderFleetHealthHistory(),
         ),
       ),
-    );
-  }
-
-  renderFleetHealthHistory(): React.ReactNode {
-    const { fleetHealthHistory, fleetHealthRunning } = this.state;
-    const ipc = this.props.electron.ipcRenderer;
-
-    const runNow = async () => {
-      this.setState({ fleetHealthRunning: true });
-      try {
-        await ipc.invoke(IPC_CHANNELS.RUN_FLEET_HEALTH_NOW);
-        const history = await ipc.invoke(IPC_CHANNELS.GET_FLEET_HEALTH_HISTORY, { limit: 5 });
-        if (this.mounted) this.setState({ fleetHealthHistory: Array.isArray(history) ? history : [] });
-      } catch { /* ignore */ }
-      if (this.mounted) this.setState({ fleetHealthRunning: false });
-    };
-
-    return React.createElement('div', {
-      style: {
-        background: 'var(--nxai-card-bg, #fff)',
-        border: '1px solid var(--nxai-card-border, #e5e7eb)',
-        borderRadius: '8px',
-        padding: '12px',
-        flexShrink: 0,
-      },
-    },
-      React.createElement('div', {
-        style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' },
-      },
-        React.createElement('div', { style: { fontSize: '12px', fontWeight: 600, color: 'var(--nxai-card-text)' } },
-          'Scheduled Health Checks',
-        ),
-        React.createElement('button', {
-          style: {
-            fontSize: '11px',
-            padding: '3px 8px',
-            borderRadius: '4px',
-            border: '1px solid #6b7280',
-            cursor: fleetHealthRunning ? 'not-allowed' : 'pointer',
-            opacity: fleetHealthRunning ? 0.6 : 1,
-          },
-          onClick: fleetHealthRunning ? undefined : runNow,
-        }, fleetHealthRunning ? 'Running...' : 'Run Now'),
-      ),
-
-      fleetHealthHistory.length === 0
-        ? React.createElement('div', { style: { fontSize: '11px', opacity: 0.6 } }, 'No scheduled checks yet.')
-        : React.createElement('div', null,
-            ...fleetHealthHistory.slice(0, 5).map((entry, i) => {
-              const degradedColor = entry.degraded > 0 ? '#f59e0b' : '#22c55e';
-              return React.createElement('div', {
-                key: i,
-                style: { fontSize: '11px', padding: '4px 0', borderBottom: '1px solid var(--nxai-card-border, #e5e7eb)' },
-              },
-                React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between' } },
-                  React.createElement('span', { style: { opacity: 0.7 } },
-                    new Date(entry.timestamp).toLocaleString(),
-                  ),
-                  React.createElement('span', { style: { color: degradedColor, fontWeight: 600 } },
-                    `${entry.degraded}/${entry.checked} degraded`,
-                  ),
-                ),
-              );
-            }),
-          ),
     );
   }
 
@@ -1609,6 +1528,25 @@ renderTabBar(): React.ReactNode {
   }
 
 
+  renderWpeAccountScope(): React.ReactNode {
+    const { wpeAccounts, wpeAccountFilter } = this.state;
+    if (wpeAccounts.length === 0) return null;
+
+    const selectedIds = wpeAccountFilter ?? wpeAccounts.map((a) => a.id);
+    const isAll = wpeAccountFilter === null || selectedIds.length === wpeAccounts.length;
+    const scopeLabel = isAll
+      ? `All ${wpeAccounts.length} account${wpeAccounts.length !== 1 ? 's' : ''}`
+      : `${selectedIds.length} of ${wpeAccounts.length} accounts`;
+
+    return React.createElement('div', {
+      style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: '8px', backgroundColor: 'var(--nxai-card-bg, #fff)', marginBottom: '20px', fontSize: '12px' },
+    },
+      React.createElement('span', { style: { color: '#6b7280', fontWeight: 600 } }, 'Deep Scan Scope:'),
+      React.createElement('span', { style: { color: '#111827', flex: 1 } }, scopeLabel),
+      React.createElement('span', { style: { color: '#9ca3af' } }, '· Manage in Preferences → Nexus AI'),
+    );
+  }
+
   renderOpsButton(
     label: string,
     loadingLabel: string,
@@ -1616,14 +1554,17 @@ renderTabBar(): React.ReactNode {
     opId: string | null,
     handler: () => void,
     description?: string,
+    disabled?: boolean,
   ): React.ReactNode {
+    const inactive = isRunning || disabled;
     return React.createElement('div', { style: { flex: '1', minWidth: '220px' } },
       React.createElement('button', {
-        style: isRunning
-          ? { ...btnPrimaryStyle, opacity: 0.6, cursor: 'not-allowed', width: '100%' }
+        style: inactive
+          ? { ...btnPrimaryStyle, opacity: 0.4, cursor: 'not-allowed', width: '100%' }
           : { ...btnPrimaryStyle, width: '100%' },
-        onClick: isRunning ? undefined : handler,
-        disabled: isRunning,
+        onClick: inactive ? undefined : handler,
+        disabled: inactive,
+        title: disabled ? 'Requires WP Engine login' : undefined,
       }, isRunning ? loadingLabel : label),
       description
         ? React.createElement('div', { style: { fontSize: '11px', color: '#6b7280', marginTop: '4px', lineHeight: '1.3' } }, description)
@@ -1634,58 +1575,17 @@ renderTabBar(): React.ReactNode {
     );
   }
 
-  renderGoLiveChecklistButton(): React.ReactNode {
-    const { wpeSites } = this.state;
-
-    const handleClick = () => {
-      if (wpeSites.length === 0) {
-        if (toast) toast({ type: 'error', content: 'No WP Engine installs found. Run a WPE sync first.' });
-        return;
-      }
-      if (wpeSites.length === 1) {
-        this.setState({
-          goLiveModalOpen: true,
-          goLiveInstallId: wpeSites[0].wpeInstallId || wpeSites[0].id,
-          goLiveInstallName: wpeSites[0].name,
-        });
-        return;
-      }
-      // Multiple installs — show a simple prompt
-      const choices = wpeSites.map((s, i) => `${i + 1}. ${s.name}`).join('\n');
-      const choice = (window as any).prompt(
-        `Select WP Engine install to check:\n\n${choices}\n\nEnter number:`,
-        '1',
-      );
-      if (!choice) return;
-      const idx = parseInt(choice, 10) - 1;
-      if (isNaN(idx) || idx < 0 || idx >= wpeSites.length) {
-        if (toast) toast({ type: 'error', content: 'Invalid selection.' });
-        return;
-      }
-      this.setState({
-        goLiveModalOpen: true,
-        goLiveInstallId: wpeSites[idx].wpeInstallId || wpeSites[idx].id,
-        goLiveInstallName: wpeSites[idx].name,
-      });
-    };
-
-    return React.createElement('div', { style: { flex: '1', minWidth: '220px' } },
-      React.createElement('button', {
-        style: { ...btnPrimaryStyle, width: '100%' },
-        onClick: handleClick,
-      }, 'Run Go-Live Checklist'),
-      React.createElement('div', { style: { fontSize: '11px', color: '#6b7280', marginTop: '4px', lineHeight: '1.3' } },
-        'Runs 6 pre-launch health checks for a WPE install: SSL, domain, WP/PHP versions, backup, health score.',
-      ),
-    );
-  }
-
   renderOperationsTab(): React.ReactNode {
     const groupStyle = { display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' as const };
     const groupLabelStyle = { fontSize: '12px', fontWeight: '600' as const, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '8px' };
 
+    const wpeDisabled = !(this.state.stats?.remoteSites.wpeAuthenticated ?? false);
+
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const } },
       this.renderSectionLabel('Operations'),
+
+      // ── WPE Deep Scan Scope ──────────────────────────────────────────────────
+      this.renderWpeAccountScope(),
 
       // ── Refresh Site Data ────────────────────────────────────────────────────
       React.createElement('div', { style: groupLabelStyle }, 'Refresh Site Data'),
@@ -1701,6 +1601,7 @@ renderTabBar(): React.ReactNode {
           this.state.wpeSyncing, null,
           this.handleWpeSync,
           'SSH scan: updates plugin list, WP version, themes for all WPE installs.',
+          wpeDisabled,
         ),
       ),
 
@@ -1715,9 +1616,10 @@ renderTabBar(): React.ReactNode {
         ),
         this.renderOpsButton(
           'Index WPE sites', 'Indexing...',
-          this.state.wpeSyncing, null,
-          this.handleWpeSync,
+          this.state.fleetIndexRunning, this.state.fleetIndexOpId,
+          this.handleIndexAllFleet,
           'SSH: extracts and indexes post/page content from WPE installs. Requires SSH key.',
+          wpeDisabled,
         ),
       ),
 
@@ -1731,46 +1633,6 @@ renderTabBar(): React.ReactNode {
           'Installs AI plugin and syncs API credentials. Local sites only. Starts halted sites temporarily.',
         ),
       ),
-
-      // ── WP Engine ───────────────────────────────────────────────────────────
-      React.createElement('div', { style: groupLabelStyle }, 'WP Engine'),
-      React.createElement('div', { style: groupStyle },
-        this.renderOpsButton(
-          'Create WPE Backup', this.state.wpeBackupInstallName ? `Backing up ${this.state.wpeBackupInstallName}…` : 'Creating backup…',
-          this.state.wpeBackupRunning, null,
-          this.handleCreateWPEBackup,
-          'Creates an on-demand backup for a WP Engine install via CAPI. Requires WPE login.',
-        ),
-        this.renderOpsButton(
-          'Sync WPE Metadata Now', 'Syncing…',
-          this.state.wpeSyncNowRunning || this.state.wpeSyncing, null,
-          this.handleSyncWPEMetadataNow,
-          'Immediately syncs WP Engine metadata (WP version, PHP, plugins) without waiting for scheduled cron.',
-        ),
-        this.renderGoLiveChecklistButton(),
-      ),
-
-      // Go-live checklist modal overlay
-      this.state.goLiveModalOpen && this.state.goLiveInstallId && this.state.goLiveInstallName
-        ? React.createElement('div', {
-            style: {
-              position: 'fixed' as const,
-              top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: 'rgba(0,0,0,0.55)',
-              zIndex: 1000,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            },
-          },
-            React.createElement(GoLiveChecklist, {
-              electron: this.props.electron,
-              installId: this.state.goLiveInstallId,
-              installName: this.state.goLiveInstallName,
-              onClose: () => this.setState({ goLiveModalOpen: false, goLiveInstallId: null, goLiveInstallName: null }),
-            }),
-          )
-        : null,
 
       // WPE sync progress (runs outside bulkOpManager — show inline)
       this.state.wpeSyncing && this.state.wpeSyncProgress

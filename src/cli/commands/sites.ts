@@ -563,7 +563,7 @@ sitesCommand
   .action(async (target) => {
     try {
       if (!target.endsWith('@local')) {
-        console.error(`\n❌ Target must include @local suffix.`);
+        console.error(`\n❌ Invalid target: must include @local suffix.`);
         console.error(`   Use: nexus sites start ${target}@local\n`);
         process.exit(1);
       }

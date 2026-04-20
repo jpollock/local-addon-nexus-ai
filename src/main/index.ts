@@ -49,7 +49,6 @@ import { StartupSiteScanner } from './startup/StartupSiteScanner';
 import { HaltedSiteRefreshScheduler } from './startup/HaltedSiteRefreshScheduler';
 import { WpeRefreshScheduler } from './startup/WpeRefreshScheduler';
 import { SiteDigitalTwinService } from './twin/SiteDigitalTwinService';
-import { RestApiServer } from './rest/RestApiServer';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -307,22 +306,6 @@ export default function main(context: any): void {
       localLogger.info(`[NexusAI] MCP server running on ${connectionInfo.url}`);
       localLogger.info(`[NexusAI] Tools: ${connectionInfo.tools.join(', ')}`);
 
-      // Start REST API server if a token has been generated
-      const restApiToken = registryStorage.get(STORAGE_KEYS.REST_API_TOKEN) as string | null;
-      if (restApiToken) {
-        try {
-          const restApi = new RestApiServer({
-            port: 14200,
-            authToken: restApiToken,
-            services: nexusServices,
-            logger: localLogger,
-          });
-          await restApi.start();
-        } catch (restErr) {
-          localLogger.error('[NexusAI] REST API server failed to start:', (restErr as Error).message);
-        }
-      }
-
       // Start AI Proxy Server (OpenAI-compatible endpoint backed by Ollama)
       const aiProxyServer = new AiProxyServer({
         logger: localLogger,
@@ -423,6 +406,10 @@ export default function main(context: any): void {
         graphService,
         localServices: localServicesBridge,
         intervalMs: wpeRefreshHours * 60 * 60 * 1000,
+        getAccountFilter: () => {
+          const s = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeAccountFilter?: string[] | null } | null;
+          return s?.wpeAccountFilter ?? null;
+        },
         logger: localLogger,
       });
       if (wpeRefreshEnabled) {

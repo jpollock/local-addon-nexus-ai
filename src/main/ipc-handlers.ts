@@ -392,8 +392,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       let remoteInstalls = 0;
       let totalRemoteInstalls = 0;
       let capiAvailable = false;
+      let wpeAuthenticated = false;
       try {
         capiAvailable = localServicesBridge.isCAPIAvailable();
+        wpeAuthenticated = localServicesBridge.isWPEAuthenticated();
         if (capiAvailable) {
           const installs = await localServicesBridge.capiGetInstalls() as any[];
           totalRemoteInstalls = installs?.length ?? 0;
@@ -433,7 +435,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return {
         localSites: { total: totalSites, running: runningSites, halted: totalSites - runningSites },
         wpeConnected: { count: wpeConnectedSites },
-        remoteSites: { total: totalRemoteInstalls, unlinked: remoteInstalls, capiAvailable },
+        remoteSites: { total: totalRemoteInstalls, unlinked: remoteInstalls, capiAvailable, wpeAuthenticated },
         mcpServer: {
           running: !!mcpInfo,
           toolCount: mcpInfo?.tools?.length ?? 0,
@@ -722,6 +724,18 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         Date.now() - startTime,
       );
       return { success: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.NAVIGATE_TO_PREFERENCES, () => {
+    deps.serviceContainer?.sendIPCEvent?.('goToRoute', '/settings//nexus-ai');
+  });
+
+  safeHandle(IPC_CHANNELS.GET_WPE_ACCOUNTS, () => {
+    try {
+      return graphService.getAccounts();
+    } catch {
+      return [];
     }
   });
 
@@ -3361,35 +3375,29 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
-  // ---------------------------------------------------------------------------
-  // REST API — token management
-  // ---------------------------------------------------------------------------
+  // =========================================================================
+  // Operation Audit Log (Phase 3)
+  // =========================================================================
 
-  safeHandle(IPC_CHANNELS.GET_REST_API_STATUS, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.OPERATION_AUDIT_LIST, async (_event: any, params?: { limit?: number; operation?: string }) => {
     try {
-      const token = registryStorage.get(STORAGE_KEYS.REST_API_TOKEN) as string | null;
-      return {
-        success: true,
-        enabled: !!token,
-        port: 14200,
-        tokenSet: !!token,
-      };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
+      const { OperationAuditLog, defaultAuditLogPath } = await import('./audit/OperationAuditLog');
+      const auditLog = new OperationAuditLog(defaultAuditLogPath());
+      const entries = auditLog.list(params?.limit, params?.operation ? { operation: params.operation } : undefined);
+      return { success: true, entries };
+    } catch (err: any) {
+      return { success: true, entries: [] };
     }
   });
 
-  safeHandle(IPC_CHANNELS.GENERATE_REST_API_TOKEN, async (_event: any) => {
+  safeHandle(IPC_CHANNELS.OPERATION_AUDIT_EXPORT, async (_event: any, params: { outputPath: string }) => {
     try {
-      // Generate a cryptographically random 32-byte hex token
-      const crypto = require('crypto') as typeof import('crypto');
-      const token = crypto.randomBytes(32).toString('hex');
-      registryStorage.set(STORAGE_KEYS.REST_API_TOKEN, token);
-      // Return a masked version: show first 8 and last 4 chars
-      const masked = `${token.substring(0, 8)}...${token.substring(token.length - 4)}`;
-      return { success: true, maskedToken: masked };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
+      const { OperationAuditLog, defaultAuditLogPath } = await import('./audit/OperationAuditLog');
+      const auditLog = new OperationAuditLog(defaultAuditLogPath());
+      auditLog.export(params.outputPath);
+      return { success: true, outputPath: params.outputPath };
+    } catch (err: any) {
+      return { success: false, error: err.message };
     }
   });
 

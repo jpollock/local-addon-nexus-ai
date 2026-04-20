@@ -31,7 +31,6 @@ import type { OperationTracker } from '../operation-tracker';
 import type { LocalSiteDataAccessor } from './site-data';
 import type { ToolRegistry } from '../mcp/tool-registry';
 import type { OperationAuditLog } from '../audit/OperationAuditLog';
-import type { WebhookEmitter } from '../webhooks/WebhookEmitter';
 
 // ---------------------------------------------------------------------------
 // Minimal logger shape (matches Local's logger API)
@@ -159,8 +158,4 @@ export interface NexusServices {
    */
   operationAuditLog?: OperationAuditLog;
 
-  /**
-   * Webhook emitter — delivers event payloads to configured HTTP endpoints.
-   */
-  webhookEmitter?: WebhookEmitter;
 }

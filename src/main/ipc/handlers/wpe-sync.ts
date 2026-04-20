@@ -45,10 +45,12 @@ export function registerWpeSyncHandlers(deps: IpcHandlerDeps, ctx: WpeSyncHandle
       const validated = validateInput(WpeSyncAllSchema, options);
 
       const limit = validated?.limit;
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeAccountFilter?: string[] | null } | null;
+      const accountFilter = settings?.wpeAccountFilter ?? null;
       // Manual sync always force-refreshes all installs (staleThresholdHours=0)
       // Incremental staleness is only for scheduled/auto syncs
-      localLogger.info(`[NexusAI] Starting WPE site sync (force)${limit ? ` (limit: ${limit})` : ''}...`);
-      const result = await deps.wpeSyncService?.syncAllWPESites(limit, 0);
+      localLogger.info(`[NexusAI] Starting WPE site sync (force)${limit ? ` (limit: ${limit})` : ''}${accountFilter ? ` (${accountFilter.length} accounts)` : ''}...`);
+      const result = await deps.wpeSyncService?.syncAllWPESites(limit, 0, accountFilter);
       localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed`);
 
       auditLogger.logSuccess(

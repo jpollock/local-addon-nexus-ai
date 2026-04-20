@@ -44,14 +44,6 @@ export const createBackupHandler: McpToolHandler = {
         outcome: 'success',
       });
 
-      // Webhook: backup.created
-      services.webhookEmitter?.emit('backup.created', {
-        installId,
-        backupId: backupId ?? null,
-        description,
-        durationMs,
-      }).catch(() => {});
-
       return ok(`Backup created for install "${installId}".${backupId ? ` Backup ID: ${backupId}` : ''}`);
     } catch (err: any) {
       // Audit log: failure

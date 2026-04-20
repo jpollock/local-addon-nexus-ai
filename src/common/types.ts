@@ -228,7 +228,7 @@ export interface NexusSettings {
   haltedSiteRefreshIntervalHours?: number; // How often to refresh halted local sites (default: 24)
   wpeRefreshIntervalHours?: number;         // How often to run WPE SSH refresh cycle (default: 24)
   wpeRefreshAutoEnabled?: boolean;          // Whether WPE SSH refresh is enabled (default: true)
-  restApiEnabled?: boolean; // Whether the read-only REST API server is enabled (default: false)
+  wpeAccountFilter?: string[] | null;       // Account IDs to deep-scan; null/undefined = all accounts
 }
 
 export interface SiteAIConfig {

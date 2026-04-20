@@ -99,7 +99,7 @@ export class WPESyncService {
    * Sync all WPE sites from CAPI
    * @param limit - Optional limit on number of sites to sync (for testing)
    */
-  async syncAllWPESites(limit?: number, staleThresholdHours?: number): Promise<WPESyncResult> {
+  async syncAllWPESites(limit?: number, staleThresholdHours?: number, accountFilter?: string[] | null): Promise<WPESyncResult> {
     this.abortRequested = false;
     const result: WPESyncResult = {
       success: true,
@@ -134,6 +134,13 @@ export class WPESyncService {
       }
 
       this.logger.info(`[WPESyncService] Found ${installs.length} WPE installs`);
+
+      // Apply account filter — null/undefined means all accounts
+      if (accountFilter && accountFilter.length > 0) {
+        const before = installs.length;
+        installs = installs.filter((i: any) => i.account?.id && accountFilter.includes(i.account.id));
+        this.logger.info(`[WPESyncService] Account filter applied: ${installs.length} of ${before} installs in scope`);
+      }
 
       // Fetch and store accounts for name/nickname lookup
       let accountMap = new Map<string, { name: string; nickname?: string }>();
