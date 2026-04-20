@@ -7,6 +7,7 @@ export const ADDON_PREFIX = 'nexus-ai';
 
 export const IPC_CHANNELS = {
   GET_MCP_INFO: `${ADDON_PREFIX}:get-mcp-info`,
+  GET_STARTUP_STATUS: `${ADDON_PREFIX}:get-startup-status`,
   GET_FLEET_STATUS: `${ADDON_PREFIX}:get-fleet-status`,
   GET_SITES: `${ADDON_PREFIX}:get-sites`,
   GET_WPE_SITE_IDS: `${ADDON_PREFIX}:get-wpe-site-ids`,
