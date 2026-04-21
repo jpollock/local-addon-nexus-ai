@@ -50,6 +50,8 @@
     "test:stress:verbose": "jest --config tests/stress/jest.stress.config.js --verbose",
     "test:stress:memory": "node --expose-gc node_modules/.bin/jest --config tests/stress/jest.stress.config.js tests/stress/04-memory-leaks.test.ts",
     "pretest:stress": "echo 'Requires Local running with Nexus AI addon loaded'",
+    "eval:run": "npx promptfoo eval -c tests/evals/promptfoo/promptfooconfig.yaml --no-cache --max-concurrency 1",
+    "eval:view": "npx promptfoo view",
     "test:eval": "jest --config tests/eval/jest.eval.config.js",
     "test:eval:verbose": "jest --config tests/eval/jest.eval.config.js --verbose",
     "test:all": "npm test && npm run test:eval && npm run test:integration && npm run test:e2e",
@@ -98,6 +100,7 @@
     "eslint": "^8.56.0",
     "jest": "^29.7.0",
     "js-yaml": "^4.1.1",
+    "promptfoo": "^0.121.5",
     "ts-jest": "^29.1.0",
     "typescript": "^5.3.3"
   },

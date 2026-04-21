@@ -562,6 +562,32 @@ export const typeDefs = gql`
     sites: [FleetVersionSite!]!
   }
 
+  type NexusGatewayUsageSite {
+    siteId: String!
+    siteName: String!
+    totalCost: Float!
+    totalRequests: Int!
+    totalTokens: Int!
+  }
+
+  type NexusGatewayUsageModel {
+    model: String!
+    totalCost: Float!
+    totalRequests: Int!
+    totalTokens: Int!
+  }
+
+  type NexusGatewayUsageResult {
+    success: Boolean!
+    error: String
+    month: String!
+    totalCost: Float!
+    totalRequests: Int!
+    totalTokens: Int!
+    bySite: [NexusGatewayUsageSite!]!
+    byModel: [NexusGatewayUsageModel!]!
+  }
+
   type NexusAuditEntry {
     id: String!
     timestamp: String!
@@ -797,6 +823,9 @@ export const typeDefs = gql`
 
     "List sites on a specific PHP or WP version — for security triage"
     nexusFleetVersionSites(phpVersion: String, wpVersion: String): FleetVersionSitesResult!
+
+    "AI gateway usage summary — spend by site and model"
+    nexusGatewayUsage(month: String, siteId: String): NexusGatewayUsageResult!
 
     "List operation audit log entries"
     nexusOperationAuditList(limit: Int, operation: String): NexusAuditListResult!

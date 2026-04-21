@@ -290,9 +290,11 @@ function runClaudeP(
     : '';
   const actualPrompt = cliPrefix + prompt;
 
-  // Build allowedTools after resolving nexusPath
+  // Build allowedTools after resolving nexusPath.
+  // MCP mode: allow all local-nexus-ai tools so Claude can pick the right ones.
+  // Per-case allowlists were too narrow — Claude kept finding better tools that weren't listed.
   const allowedTools = mode === 'mcp'
-    ? (MCP_TOOLS[caseId] ?? []).join(',')
+    ? 'mcp__local-nexus-ai__*'
     : `Bash(${nexusPath} *)`;
 
   const args = [
@@ -303,6 +305,10 @@ function runClaudeP(
   ];
 
   if (allowedTools) args.push('--allowedTools', allowedTools);
+
+  // MCP mode: skip tool approval prompts so Claude can call tools without blocking.
+  // In real use (Claude Desktop) the user approves interactively — this replicates that.
+  if (mode === 'mcp') args.push('--dangerously-skip-permissions');
 
   if (sessionId) {
     const idx = args.indexOf('--no-session-persistence');

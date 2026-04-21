@@ -4630,6 +4630,67 @@ export function createResolvers(context: ResolverContext) {
       // Phase 3: Operation Audit Log Resolvers
       // ======================================================================
 
+      nexusGatewayUsage: (
+        _parent: ResolverParent,
+        { month, siteId }: { month?: string; siteId?: string },
+      ) => {
+        try {
+          const USAGE_KEY = 'nexus_ai_gateway_usage';
+          const allRecords = (services.registryStorage?.get(USAGE_KEY) ?? []) as any[];
+
+          const targetMonth = month ?? new Date().toISOString().slice(0, 7); // YYYY-MM
+          const [year, mon] = targetMonth.split('-').map(Number);
+          const start = new Date(year, mon - 1, 1).getTime();
+          const end = new Date(year, mon, 1).getTime();
+
+          let records = allRecords.filter((r: any) => r.timestamp >= start && r.timestamp < end);
+          if (siteId) records = records.filter((r: any) => r.siteId === siteId);
+
+          // Aggregate by site
+          const siteMap = new Map<string, { siteName: string; cost: number; requests: number; tokens: number }>();
+          const modelMap = new Map<string, { cost: number; requests: number; tokens: number }>();
+
+          for (const r of records) {
+            const sid = r.siteId ?? 'unknown';
+            const site = services.siteData?.getSite(sid);
+            const name = site?.name ?? r.siteName ?? sid;
+            // Group by resolved name so the same site under multiple IDs is consolidated
+            if (!siteMap.has(name)) siteMap.set(name, { siteName: name, cost: 0, requests: 0, tokens: 0 });
+            const s = siteMap.get(name)!;
+            s.cost += r.costUsd ?? 0;
+            s.requests++;
+            s.tokens += r.totalTokens ?? 0;
+
+            const model = r.model ?? 'unknown';
+            if (!modelMap.has(model)) modelMap.set(model, { cost: 0, requests: 0, tokens: 0 });
+            const m = modelMap.get(model)!;
+            m.cost += r.costUsd ?? 0;
+            m.requests++;
+            m.tokens += r.totalTokens ?? 0;
+          }
+
+          const bySite = [...siteMap.entries()]
+            .map(([name, v]) => ({ siteId: name, siteName: v.siteName, totalCost: v.cost, totalRequests: v.requests, totalTokens: v.tokens }))
+            .sort((a, b) => b.totalCost - a.totalCost);
+
+          const byModel = [...modelMap.entries()]
+            .map(([model, v]) => ({ model, totalCost: v.cost, totalRequests: v.requests, totalTokens: v.tokens }))
+            .sort((a, b) => b.totalCost - a.totalCost);
+
+          return {
+            success: true,
+            month: targetMonth,
+            totalCost: records.reduce((s: number, r: any) => s + (r.costUsd ?? 0), 0),
+            totalRequests: records.length,
+            totalTokens: records.reduce((s: number, r: any) => s + (r.totalTokens ?? 0), 0),
+            bySite,
+            byModel,
+          };
+        } catch (err: any) {
+          return { success: false, error: err.message, month: month ?? '', totalCost: 0, totalRequests: 0, totalTokens: 0, bySite: [], byModel: [] };
+        }
+      },
+
       nexusOperationAuditList: async (
         _parent: ResolverParent,
         { limit, operation }: { limit?: number; operation?: string },
