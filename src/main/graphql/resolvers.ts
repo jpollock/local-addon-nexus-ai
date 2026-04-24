@@ -1567,6 +1567,7 @@ export function createResolvers(context: ResolverContext) {
        * Run any WP-CLI command on a site (local or WPE)
        */
       nexusWpCommand: async (_parent: ResolverParent, { target, command }: { target: string; command: string[] }) => {
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return {
@@ -1659,12 +1660,14 @@ export function createResolvers(context: ResolverContext) {
             exitCode: 1,
           };
         }
+        });
       },
 
       /**
        * List plugins on a site (local or WPE)
        */
       nexusWpPluginList: async (_parent: ResolverParent, { target }: { target: string }) => {
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return {
@@ -1775,12 +1778,14 @@ export function createResolvers(context: ResolverContext) {
             plugins: [],
           };
         }
+        });
       },
 
       /**
        * Pull from WPE to local
        */
       nexusSyncPull: async (_parent: ResolverParent, { input }: { input: any }) => {
+        return withQueue(async () => {
         try {
           const localParsed = parseTarget(input.localSite);
           const wpeParsed = parseTarget(input.wpeTarget);
@@ -1878,12 +1883,14 @@ export function createResolvers(context: ResolverContext) {
             linkCreated: false,
           };
         }
+        });
       },
 
       /**
        * Push from local to WPE
        */
       nexusSyncPush: async (_parent: ResolverParent, { input }: { input: any }) => {
+        return withQueue(async () => {
         try {
           const localParsed = parseTarget(input.localSite);
           const wpeParsed = parseTarget(input.wpeTarget);
@@ -1997,6 +2004,7 @@ export function createResolvers(context: ResolverContext) {
             installCreated: false,
           };
         }
+        });
       },
 
       /**
