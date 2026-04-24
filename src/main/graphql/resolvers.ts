@@ -3394,6 +3394,7 @@ export function createResolvers(context: ResolverContext) {
       },
 
       nexusContentReindex: async (_parent: ResolverParent, { target }: { target: string }) => {
+        return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
           const site = resolveSite(parsed.siteName!, services.siteData);
@@ -3429,6 +3430,7 @@ export function createResolvers(context: ResolverContext) {
             chunkCount: 0,
           };
         }
+        });
       },
 
       // ========================================================================
@@ -3479,6 +3481,7 @@ export function createResolvers(context: ResolverContext) {
       },
 
       nexusAiSetup: async (_parent: ResolverParent, { target, provider, force }: { target: string; provider?: string; force?: boolean }) => {
+        return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
           const site = resolveSite(parsed.siteName!, services.siteData);
@@ -3543,6 +3546,7 @@ export function createResolvers(context: ResolverContext) {
             configured: null,
           };
         }
+        });
       },
 
       nexusAiSyncCredentials: async (_parent: ResolverParent, { target }: { target: string }) => {
@@ -3667,6 +3671,7 @@ export function createResolvers(context: ResolverContext) {
       },
 
       nexusAiRun: async (_parent: ResolverParent, { target, ability, params }: { target: string; ability: string; params?: string }) => {
+        return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
           const site = resolveSite(parsed.siteName!, services.siteData);
@@ -3757,6 +3762,7 @@ export function createResolvers(context: ResolverContext) {
             result: null,
           };
         }
+        });
       },
 
       nexusAiStatus: async (_parent: ResolverParent, { target }: { target: string }) => {
@@ -3867,6 +3873,7 @@ export function createResolvers(context: ResolverContext) {
       // ========================================================================
 
       nexusAuditSite: async (_parent: ResolverParent, { target }: { target: string }) => {
+        return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
           const site = resolveSite(parsed.siteName!, services.siteData);
@@ -3956,9 +3963,11 @@ export function createResolvers(context: ResolverContext) {
             audit: null,
           };
         }
+        });
       },
 
       nexusAuditPlugins: async () => {
+        return withQueue(async () => {
         try {
           // Get all sites
           const allSites = services.siteData.getSites();
@@ -4022,12 +4031,14 @@ export function createResolvers(context: ResolverContext) {
             report: null,
           };
         }
+        });
       },
 
       /**
        * Scan database health for a local WordPress site
        */
       nexusDbScan: async (_parent: ResolverParent, { target }: { target: string }) => {
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return { success: false, error: 'Local services not available', scan: null };
@@ -4074,12 +4085,14 @@ export function createResolvers(context: ResolverContext) {
         } catch (error: any) {
           return { success: false, error: error.message, scan: null };
         }
+        });
       },
 
       /**
        * Clean database items (dry_run defaults to true)
        */
       nexusDbClean: async (_parent: ResolverParent, { input }: { input: { target: string; items?: string[]; dryRun?: boolean } }) => {
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return { success: false, error: 'Local services not available', result: null };
@@ -4116,6 +4129,7 @@ export function createResolvers(context: ResolverContext) {
         } catch (error: any) {
           return { success: false, error: error.message, result: null };
         }
+        });
       },
 
       /**
