@@ -2410,6 +2410,7 @@ export function createResolvers(context: ResolverContext) {
       // ========================================================================
 
       nexusFleetHealth: async () => {
+        return withQueue(async () => {
         try {
           if (!services.healthCalculator) {
             return {
@@ -2484,6 +2485,7 @@ export function createResolvers(context: ResolverContext) {
             summary: null,
           };
         }
+        });
       },
 
       nexusFleetSiteHealth: async (_parent: ResolverParent, { target }: { target: string }) => {
@@ -2847,11 +2849,12 @@ export function createResolvers(context: ResolverContext) {
       },
 
       nexusFleetBulkReindex: async (_parent: ResolverParent, { targets }: { targets: string[] }) => {
+        return withQueue(async () => {
         try {
-          const results = [];
+          const limit = pLimit(3);
 
-          // Reindex each target in parallel
-          const reindexPromises = targets.map(async (target) => {
+          // Reindex each target with bounded concurrency
+          const reindexPromises = targets.map((target) => limit(async () => {
             try {
               const parsed = parseTarget(target);
               const site = resolveSite(parsed.siteName!, services.siteData);
@@ -2887,7 +2890,7 @@ export function createResolvers(context: ResolverContext) {
                 documentCount: 0,
               };
             }
-          });
+          }));
 
           const reindexResults = await Promise.all(reindexPromises);
 
@@ -2902,15 +2905,17 @@ export function createResolvers(context: ResolverContext) {
             results: [],
           };
         }
+        });
       },
 
       nexusFleetBulkPluginUpdate: async (_parent: ResolverParent, { input }: { input: any }) => {
+        return withQueue(async () => {
         try {
           const { targets, plugin, all, dryRun } = input;
-          const results = [];
+          const limit = pLimit(3);
 
-          // Update plugins on each target in parallel
-          const updatePromises = targets.map(async (target: string) => {
+          // Update plugins on each target with bounded concurrency
+          const updatePromises = targets.map((target: string) => limit(async () => {
             try {
               const parsed = parseTarget(target);
               const site = resolveSite(parsed.siteName!, services.siteData);
@@ -2977,7 +2982,7 @@ export function createResolvers(context: ResolverContext) {
                 updatedPlugins: [],
               };
             }
-          });
+          }));
 
           const updateResults = await Promise.all(updatePromises);
 
@@ -2992,9 +2997,11 @@ export function createResolvers(context: ResolverContext) {
             results: [],
           };
         }
+        });
       },
 
       nexusFleetBulkHealthCheck: async (_parent: ResolverParent, { targets }: { targets: string[] }) => {
+        return withQueue(async () => {
         try {
           if (!services.healthCalculator) {
             return {
@@ -3004,11 +3011,11 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const results = [];
           const allSites = services.siteData.getSites();
+          const limit = pLimit(3);
 
-          // Check health for each target in parallel
-          const healthPromises = targets.map(async (target) => {
+          // Check health for each target with bounded concurrency
+          const healthPromises = targets.map((target) => limit(async () => {
             try {
               const parsed = parseTarget(target);
               const site = resolveSite(parsed.siteName!, services.siteData);
@@ -3045,7 +3052,7 @@ export function createResolvers(context: ResolverContext) {
                 issueCount: 0,
               };
             }
-          });
+          }));
 
           const healthResults = await Promise.all(healthPromises);
 
@@ -3060,6 +3067,7 @@ export function createResolvers(context: ResolverContext) {
             results: [],
           };
         }
+        });
       },
 
       nexusFleetCompare: async (_parent: ResolverParent, { target1, target2 }: { target1: string; target2: string }) => {
