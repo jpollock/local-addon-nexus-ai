@@ -8,6 +8,7 @@
 
 import type { NexusServices } from '../types/nexus-services';
 import type { GraphService } from '../events/GraphService';
+import PQueue from 'p-queue';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -202,8 +203,6 @@ export function buildWpeSiteDetails(
 // ---------------------------------------------------------------------------
 // Resolver concurrency queue
 // ---------------------------------------------------------------------------
-
-import PQueue from 'p-queue';
 
 /** Global concurrency limiter — caps expensive resolver handlers at 3 concurrent. */
 export const resolverQueue = new PQueue({ concurrency: 3 });

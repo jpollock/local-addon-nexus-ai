@@ -16,4 +16,19 @@ describe('withQueue', () => {
       withQueue(async () => { throw new Error('boom'); })
     ).rejects.toThrow('boom');
   });
+
+  test('limits concurrency to 3', async () => {
+    let active = 0;
+    let maxActive = 0;
+    const tasks = Array.from({ length: 6 }, () =>
+      withQueue(async () => {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((r) => setTimeout(r, 10));
+        active--;
+      })
+    );
+    await Promise.all(tasks);
+    expect(maxActive).toBe(3);
+  });
 });
