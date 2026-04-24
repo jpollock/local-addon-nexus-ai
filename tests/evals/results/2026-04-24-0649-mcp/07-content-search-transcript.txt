@@ -1,0 +1,141 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 07-content-search
+Mode: mcp
+Date: 2026-04-24
+Model: claude-sonnet-4-6
+Duration: 40.7s
+Tool calls: 2
+Cost: $0.1556
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts.
+
+Searching across all indexed sites for WooCommerce and e-commerce content now.
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"WooCommerce e-commerce products shop store","limit":10,"min_score":0.3})
+
+⏺ mcp__local-nexus-ai__fleet_search({"query":"WooCommerce ecommerce products shop store","content_types":["post"],"limit":15})
+  ⎿  Found 29 results across 7 sites for "WooCommerce e-commerce products shop store":
+
+### The Curated Shelf (index may be stale)
+  1. **Shop** (page, score: 0.641)
+     Shop
+
+  2. **My account** (page, score: 0.382)
+     [woocommerce_my_account]
+
+  3. **Cart** (page, score: 0.368)
+     You may be interested in… Your cart is currently empty! New in store
+
+### nexus-test-site (index may be stale)
+  1. **Shop** (page, score: 0.659)
+     Shop
+
+  2. **Cart** (page, score: 0.361)
+     You may be interest
+  ⎿  ## Search Results for "WooCommerce ecommerce products shop store"
+
+**30 results found**
+
+### Shop
+- Type: post | Site: nexus-test-site | Score: 68%
+- Shop
+
+### Shop
+- Type: post | Site: nexustestsite1 | Score: 68%
+- Shop
+
+### Shop
+- Type: post | Site: Faker Incorporated | Score: 66%
+- Shop
+
+### Shop
+- Type: post | Site: faker-incorporated | Score: 66%
+- Shop
+
+### Shop
+- Type: post | Site: The Curated Shelf | Score: 66%
+- Shop
+
+### Shop
+- Type: post | Site: Faker Incorporated | Score: 65%
+- Shop
+
+Here's what I found across your local sites:
+
+---
+
+## Sites with WooCommerce / E-Commerce Content
+
+### **Faker Incorporated** — most relevant
+This site has actual WooCommerce posts, not just boilerplate pages:
+
+| Post | Type | Relevance |
+|------|------|-----------|
+| **How to Get More Out of Your WooCommerce Store** | Blog post | 63% |
+| **Custom WooCommerce Store Build** | Product | 57% |
+| Shop, Cart, Checkout, My account | WC pages | Standard |
+
+The blog post mentions optimizing WooCommerce stores for clients. The product listing is a "Custom WooCommerce Store Build" service offering on an Astra theme.
+
+---
+
+### **Sites with standard WooCommerce pages only**
+These sites have WooCommerce installed (Shop/Cart/Checkout/My Account pages) but no unique content about it:
+
+- **The Curated Shelf**
+- **nexus-test-site**
+- **nexustestsite1**
+- **faker-incorporated** (appears to be a duplicate/clone of Faker Incorporated)
+
+---
+
+### **pm-toolkit-hub** — tangentially related
+Has PM research content that mentions e-commerce in context (market sizing for WooCommerce/performance optimization TAM analysis), not actual store content.
+
+---
+
+**Bottom line:** **Faker Incorporated** is your only site with substantive WooCommerce content (a blog post and a product). The rest have WooCommerce installed but only the standard placeholder pages.
+
+> Note: All indexes are stale (>7 days). Run `reindex_site` on any site to get fresher results.
+
+--- FINAL RESULT ---
+Here's what I found across your local sites:
+
+---
+
+## Sites with WooCommerce / E-Commerce Content
+
+### **Faker Incorporated** — most relevant
+This site has actual WooCommerce posts, not just boilerplate pages:
+
+| Post | Type | Relevance |
+|------|------|-----------|
+| **How to Get More Out of Your WooCommerce Store** | Blog post | 63% |
+| **Custom WooCommerce Store Build** | Product | 57% |
+| Shop, Cart, Checkout, My account | WC pages | Standard |
+
+The blog post mentions optimizing WooCommerce stores for clients. The product listing is a "Custom WooCommerce Store Build" service offering on an Astra theme.
+
+---
+
+### **Sites with standard WooCommerce pages only**
+These sites have WooCommerce installed (Shop/Cart/Checkout/My Account pages) but no unique content about it:
+
+- **The Curated Shelf**
+- **nexus-test-site**
+- **nexustestsite1**
+- **faker-incorporated** (appears to be a duplicate/clone of Faker Incorporated)
+
+---
+
+### **pm-toolkit-hub** — tangentially related
+Has PM research content that mentions e-commerce in context (market sizing for WooCommerce/performance optimization TAM analysis), not actual store content.
+
+---
+
+**Bottom line:** **Faker Incorporated** is your only site with substantive WooCommerce content (a blog post and a product). The rest have WooCommerce installed but only the standard placeholder pages.
+
+> Note: All indexes are stale (>7 days). Run `reindex_site` on any site to get fresher results.

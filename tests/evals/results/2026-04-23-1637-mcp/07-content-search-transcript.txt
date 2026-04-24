@@ -1,0 +1,140 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 07-content-search
+Mode: mcp
+Date: 2026-04-23
+Model: claude-sonnet-4-6
+Duration: 37.7s
+Tool calls: 4
+Cost: $0.1828
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts.
+
+I'll search across your local sites for WooCommerce and e-commerce content in parallel.
+
+⏺ ToolSearch({"query":"select:mcp__local-nexus-ai__search_across_sites,mcp__local-nexus-ai__list_indexed_sites","max_results":2})
+  ⎿  
+Searching across all indexed sites for both terms simultaneously.
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"WooCommerce shop products cart checkout","limit":5,"min_score":0.25})
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"e-commerce online store products pricing","limit":5,"min_score":0.25})
+
+⏺ mcp__local-nexus-ai__list_indexed_sites({})
+  ⎿  Found 26 results across 7 sites for "WooCommerce shop products cart checkout":
+
+### The Curated Shelf (index may be stale)
+  1. **Cart** (page, score: 0.497)
+     You may be interested in… Your cart is currently empty! New in store
+
+  2. **Checkout** (page, score: 0.476)
+     Checkout
+
+  3. **Shop** (page, score: 0.455)
+     Shop
+
+  4. **My account** (page, score: 0.364)
+     [woocommerce_my_account]
+
+### nexus-test-site (index may be stale)
+  1. **Checkout** (page, score: 0.495)
+     Checkout
+
+
+  ⎿  Found 25 results across 8 sites for "e-commerce online store products pricing":
+
+### The Curated Shelf (index may be stale)
+  1. **Shop** (page, score: 0.369)
+     Shop
+
+  2. **Memory Foam Mattress** (product, score: 0.351)
+     Memory Foam Mattress. simple product priced at $599.99 (was $799.99). Comfort and support for better sleep. SKU: PROD-009. Stock: instock. Categories:...
+
+  3. **Ergonomic Desk Chair** (product, score: 0.347)
+     Ergonomic Desk Chair. simple product priced at $99.99 (wa
+  ⎿  ## Indexed Sites
+
+- [STALE] **The Curated Shelf** — 44 docs, 44 chunks, last indexed: 2026-04-17T20:53:20.756Z
+- [STALE] **ACF Auto Car Finder** — 141 docs, 149 chunks, last indexed: 2026-03-26T02:15:26.556Z
+- [STALE] **IlTvA7yCC** — 0 docs, 0 chunks, last indexed: never
+- [STALE] **nexus-e2e-test** — 2 docs, 2 chunks, last indexed: 2026-03-01T20:05:57.416Z
+- [STALE] **nexus-e2e-test** — 0 docs, 0 chunks, last indexed: 2026-03-01T19:58:53.131Z
+- [STALE] **nexus-e2e-crud-test** — 2 docs, 2 chunks
+Here's what I found across your local sites:
+
+---
+
+## Sites with WooCommerce / E-Commerce Content
+
+### Faker Incorporated — **Most relevant** (highest scores)
+This is clearly your most WooCommerce-focused site with actual editorial content:
+
+| Post | Type | Excerpt |
+|------|------|---------|
+| **How to Get More Out of Your WooCommerce Store** | Post | "WooCommerce is the most popular e-commerce platform on the planet — but out of the box, it's just the beginning. Here's how we help our clients squeeze..." |
+| **Custom WooCommerce Store Build** | Product | "A fully designed, custom WooCommerce storefront built on Astra — optimized for speed, mobile, and conv..." |
+| **Cart** | Page | `[woocommerce_cart]` |
+| **Checkout** | Page | `[woocommerce_checkout]` |
+| **Shop** | Page | Standard WooCommerce shop page |
+
+### The Curated Shelf — **Product catalog site**
+Has actual product listings with prices (no editorial WooCommerce content):
+
+| Post | Type | Details |
+|------|------|---------|
+| **Memory Foam Mattress** | Product | $599.99 (was $799.99) — Furniture/Bedding |
+| **Ergonomic Desk Chair** | Product | $99.99 (was $129.99) |
+| **Outdoor Patio Sofa** | Product | $599.99 (was $749.99) |
+| **Electric Standing Desk** | Product | $399.99 (was $499.99) |
+| Cart, Checkout, Shop, My Account | Pages | Standard WooCommerce pages |
+
+### nexus-test-site & nexustestsite1
+Both have WooCommerce scaffolding (Cart, Checkout, Shop, My Account pages) but no unique product or editorial content beyond the defaults.
+
+### faker-incorporated (separate from "Faker Incorporated")
+Has a product called **Enterprise Widget Suite** — "Unlimited widgets, priority support, custom branding, and dedicated account management" — plus the standard WooCommerce pages.
+
+---
+
+**One heads-up:** all indexes are stale (last indexed April 17 or earlier), so any content added recently won't appear here. You can run `reindex_site` on any of these to get a fresh snapshot.
+
+--- FINAL RESULT ---
+Here's what I found across your local sites:
+
+---
+
+## Sites with WooCommerce / E-Commerce Content
+
+### Faker Incorporated — **Most relevant** (highest scores)
+This is clearly your most WooCommerce-focused site with actual editorial content:
+
+| Post | Type | Excerpt |
+|------|------|---------|
+| **How to Get More Out of Your WooCommerce Store** | Post | "WooCommerce is the most popular e-commerce platform on the planet — but out of the box, it's just the beginning. Here's how we help our clients squeeze..." |
+| **Custom WooCommerce Store Build** | Product | "A fully designed, custom WooCommerce storefront built on Astra — optimized for speed, mobile, and conv..." |
+| **Cart** | Page | `[woocommerce_cart]` |
+| **Checkout** | Page | `[woocommerce_checkout]` |
+| **Shop** | Page | Standard WooCommerce shop page |
+
+### The Curated Shelf — **Product catalog site**
+Has actual product listings with prices (no editorial WooCommerce content):
+
+| Post | Type | Details |
+|------|------|---------|
+| **Memory Foam Mattress** | Product | $599.99 (was $799.99) — Furniture/Bedding |
+| **Ergonomic Desk Chair** | Product | $99.99 (was $129.99) |
+| **Outdoor Patio Sofa** | Product | $599.99 (was $749.99) |
+| **Electric Standing Desk** | Product | $399.99 (was $499.99) |
+| Cart, Checkout, Shop, My Account | Pages | Standard WooCommerce pages |
+
+### nexus-test-site & nexustestsite1
+Both have WooCommerce scaffolding (Cart, Checkout, Shop, My Account pages) but no unique product or editorial content beyond the defaults.
+
+### faker-incorporated (separate from "Faker Incorporated")
+Has a product called **Enterprise Widget Suite** — "Unlimited widgets, priority support, custom branding, and dedicated account management" — plus the standard WooCommerce pages.
+
+---
+
+**One heads-up:** all indexes are stale (last indexed April 17 or earlier), so any content added recently won't appear here. You can run `reindex_site` on any of these to get a fresh snapshot.

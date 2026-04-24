@@ -1,0 +1,89 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 08-bulk-plugin-update
+Mode: mcp
+Date: 2026-04-23
+Model: claude-sonnet-4-6
+Duration: 6330.5s
+Tool calls: 8
+Cost: $0.0000
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Update all plugins across my local fleet — but only patch/minor version bumps, skip any major version upgrades. Show me what would change before doing anything.
+
+I'll start by getting your local fleet and then check plugin update availability across all sites. Let me pull the site list and outdated plugin info in parallel.
+
+⏺ mcp__local-nexus-ai__local_list_sites({})
+
+⏺ mcp__local-nexus-ai__find_outdated_sites({"source":"local"})
+  ⎿  ## Local Sites (31 total, 2 running)
+
+### Running
+- **another-test** (another-test.local) [id: myys_8yGJ, indexed: yes]
+- **eval-test-onboard** (eval-test-onboard.local) [id: ND2145jUw, indexed: yes]
+
+### Halted
+- jeremypollock.blog (jeremypollockblog.local) [id: mDSZDt3S6, halted]
+- nexus (nexus.local) [id: oahyb7b0P, halted]
+- mu-plugin (mu-plugin.local) [id: f95o8kDEU, halted]
+- offload-media-clean (offload-media-clean.local) [id: sk4daPsDs, halted]
+- nitropack-1 (nitropack-1.local) [id: xXdV
+  ⎿  ## Outdated Sites Report (local sites only)
+345 sites in scope
+
+### WordPress
+- Latest: 7.0-beta6 (3 sites)
+- Outdated: 7.0-RC2 (6 sites) — cli-target [local], nexus-e2e-test [local], testjpp1 [local], testjppdev [local], jppblank [local], jppblank [local]
+- Outdated: 7.0-RC1 (1 site) — The Curated Shelf [local]
+- Outdated: 7.0-RC1-62112 (1 site) — nexus-test-site [local]
+- Outdated: 7.0-RC2-62241 (2 sites) — another-test [local], nexustestsite1 [local]
+- Outdated: 6.9.4 (64 sites) — heath.biz [
+Good — 31 local sites, 2 running. The `find_outdated_sites` report shows cross-site version mismatches but not WordPress.org update availability. Let me check actual available plugin updates on the running sites, and also try the bulk update tool in dry-run mode.
+
+⏺ mcp__local-nexus-ai__wp_plugin_list({"site_name":"another-test"})
+
+⏺ mcp__local-nexus-ai__wp_plugin_list({"site_name":"eval-test-onboard"})
+  ⎿  Either "site" (for local) or "install_name" (for remote WPE) is required.
+  ⎿  Either "site" (for local) or "install_name" (for remote WPE) is required.
+
+⏺ mcp__local-nexus-ai__wp_plugin_list({"site":"another-test"})
+
+⏺ mcp__local-nexus-ai__wp_plugin_list({"site":"eval-test-onboard"})
+  ⎿  ## Plugins (10)
+- advanced-custom-fields-pro v6.8.0-beta2 [**active**]
+- ai v0.6.0 [**active**]
+- ai-provider-for-anthropic v1.0.2 [**active**]
+- ai-provider-for-google v1.0.3 [**active**]
+- ai-provider-for-local-gateway v1.0.0 [**active**]
+- ai-provider-for-openai v1.0.2 [**active**]
+- akismet v5.6 [inactive]
+- nexus-ai-connector v1.0.0 [**active**]
+- enable-acf-abilities v1.0.0 [must-use]
+- nexus-ai-connector-config v [must-use]
+  ⎿  Site "eval-test-onboard" is halted and no cached data exists. Start it with `nexus sites start eval-test-onboard` or run `nexus sites refresh eval-test-onboard`.
+The plugin list doesn't surface update availability inline. Let me get the fleet-wide plugin audit and try the bulk update tool in dry-run mode.
+
+⏺ mcp__local-nexus-ai__nexus_fleet_plugins({"site":"another-test"})
+
+⏺ mcp__local-nexus-ai__nexus_plugin_audit({})
+  ⎿  ## Fleet Plugins
+
+**50 plugins found** across 31 sites (25 with full WP-CLI data)
+
+| Plugin | Active on | Installed on | Sites |
+|--------|-----------|--------------|-------|
+| Nexus AI Connector (`nexus-ai-connector`) | 23 | 26 | jeremypollock.blog, nexus, mu-plugin, +20 more |
+| AI (`ai`) | 7 | 9 | nitropack-1, cli-target, The Curated Shelf, +4 more |
+| AI Provider for Local Gateway (`ai-provider-for-local-gateway`) | 7 | 7 | nitropack-1, cli-target, nexus-test-site, +4 more |
+| Advanced Custo
+  ⎿  ## Fleet Plugin Audit (2 sites)
+
+### another-test
+10 plugins, 0 updates available
+
+### eval-test-onboard
+2 plugins, 0 updates available
+
+---
+**Total:** 12 plugins across 2 sites, 0 updates available

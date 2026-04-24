@@ -284,31 +284,47 @@ function runClaudeP(
   const cliPrefix = mode === 'cli-skills'
     ? 'IMPORTANT CONSTRAINTS:\n' +
       `- The nexus CLI is at: ${nexusPath} (use this exact path in all commands)\n` +
-      `- Run commands like: ${nexusPath} sites list, ${nexusPath} wpe portfolio, ${nexusPath} wp health jppblank@local\n` +
-      '- You MUST use ONLY the Bash tool — do NOT use Read, Write, Edit, Glob, Grep, or any MCP tools\n' +
-      '- If you need information, get it by running nexus CLI commands, not by reading files\n\n'
-    : '';
+      `- Run commands like: ${nexusPath} sites list, ${nexusPath} content search-all "query", ${nexusPath} fleet health\n` +
+      '- Skill instructions are already in your system prompt — use them directly, do NOT invoke the Skill tool\n' +
+      '- Do NOT use MCP tools\n\n'
+    : 'IMPORTANT CONSTRAINTS:\n' +
+      '- You are running in MCP-only mode (simulating Claude Desktop)\n' +
+      '- You do NOT have access to Bash, terminal, or any CLI tools\n' +
+      '- Do not use ToolSearch or ListMcpResourcesTool — call local-nexus-ai tools directly\n' +
+      '- Key tools available: mcp__local-nexus-ai__search_site_content, mcp__local-nexus-ai__search_across_sites, mcp__local-nexus-ai__list_indexed_sites, mcp__local-nexus-ai__nexus_list_sites, mcp__local-nexus-ai__local_list_sites, mcp__local-nexus-ai__fleet_health_summary, mcp__local-nexus-ai__find_outdated_sites, mcp__local-nexus-ai__wp_core_version, mcp__local-nexus-ai__wpe_get_installs, mcp__local-nexus-ai__wpe_get_accounts\n' +
+      '- Do not attempt to run shell commands or read files from disk\n\n';
   const actualPrompt = cliPrefix + prompt;
 
-  // Build allowedTools after resolving nexusPath.
-  // MCP mode: allow all local-nexus-ai tools so Claude can pick the right ones.
-  // Per-case allowlists were too narrow — Claude kept finding better tools that weren't listed.
   const allowedTools = mode === 'mcp'
-    ? 'mcp__local-nexus-ai__*'
-    : `Bash(${nexusPath} *)`;
+    ? 'mcp__local-nexus-ai__search_across_sites,mcp__local-nexus-ai__search_site_content,mcp__local-nexus-ai__list_indexed_sites,mcp__local-nexus-ai__nexus_list_sites,mcp__local-nexus-ai__local_list_sites,mcp__local-nexus-ai__local_get_site,mcp__local-nexus-ai__find_outdated_sites,mcp__local-nexus-ai__fleet_health_summary,mcp__local-nexus-ai__wp_core_version,mcp__local-nexus-ai__wpe_get_accounts,mcp__local-nexus-ai__wpe_get_installs,mcp__local-nexus-ai__wpe_get_install,mcp__local-nexus-ai__wpe_create_backup,mcp__local-nexus-ai__wpe_backup_and_verify,mcp__local-nexus-ai__wpe_promote_environment,mcp__local-nexus-ai__wpe_account_ssl_status,mcp__local-nexus-ai__wpe_login,mcp__local-nexus-ai__wpe_diagnose_site,mcp__local-nexus-ai__local_get_sync_history,mcp__local-nexus-ai__get_metrics'
+    : `Bash(${nexusPath} *),Bash(nexus *),Read,Glob,Grep`;
 
   const args = [
     '-p', actualPrompt,
     '--output-format', 'stream-json',
     '--verbose',
     '--no-session-persistence',
+    '--dangerously-skip-permissions',
   ];
 
   if (allowedTools) args.push('--allowedTools', allowedTools);
 
-  // MCP mode: skip tool approval prompts so Claude can call tools without blocking.
-  // In real use (Claude Desktop) the user approves interactively — this replicates that.
-  if (mode === 'mcp') args.push('--dangerously-skip-permissions');
+  // CLI mode: append all nexus skill files to the system prompt.
+  // The Skill tool in claude -p non-interactive mode only returns "Execute skill: X"
+  // without the actual SKILL.md content — so skills are effectively no-ops.
+  // Appending the SKILL.md files directly gives Claude the instructions upfront.
+  if (mode === 'cli-skills') {
+    const skillsDir = path.join(__dirname, '..', '..', '..', '.claude', 'skills');
+    if (fs.existsSync(skillsDir)) {
+      const skillFiles = fs.readdirSync(skillsDir)
+        .map(name => path.join(skillsDir, name, 'SKILL.md'))
+        .filter(f => fs.existsSync(f));
+      for (const skillFile of skillFiles) {
+        args.push('--append-system-prompt-file', skillFile);
+      }
+    }
+  }
+
 
   if (sessionId) {
     const idx = args.indexOf('--no-session-persistence');
@@ -653,8 +669,10 @@ async function main(): Promise<void> {
   }
 
   // ── Create results directory ─────────────────────────────────────────────
-  const today = new Date().toISOString().slice(0, 10);
-  const runDir = path.join(RESULTS_DIR, `${today}-${mode}`);
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const timeStamp = now.toTimeString().slice(0, 5).replace(':', '');
+  const runDir = path.join(RESULTS_DIR, `${today}-${timeStamp}-${mode}`);
   fs.mkdirSync(runDir, { recursive: true });
 
   console.log(`\nResults → ${runDir.replace(process.env.HOME ?? '', '~')}\n`);

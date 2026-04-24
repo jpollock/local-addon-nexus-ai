@@ -301,27 +301,43 @@ const coreCommand = new Command('core').description('Manage WordPress core');
 coreCommand
   .command('version <target>')
   .description('Get WordPress version')
-  .action(async (target, options) => {
+  .action(async (target) => {
     try {
-      parseTarget(target);
+      const { hasExplicitRouting, resolveTarget, printResolutionHeader } = await import('../utils/resolve-target');
       const client = getClient();
 
-      const result = await client.mutate<{ nexusWpCommand: any }>(`
-        mutation($target: String!, $command: [String!]!) {
-          nexusWpCommand(target: $target, command: $command) {
-            success
-            error
-            stdout
-          }
+      // Smart resolution for bare names (no @local or wpe: prefix)
+      let targets: string[] = [target];
+      if (!hasExplicitRouting(target)) {
+        const resolution = await resolveTarget(target);
+        if (!resolution || resolution.matches.length === 0) {
+          // Fall back to treating as local — original behaviour
+          targets = [`${target}@local`];
+        } else {
+          const matches = printResolutionHeader(resolution);
+          targets = matches.map((m) => m.target);
         }
-      `, { target, command: ['core', 'version'] });
-
-      if (!result.nexusWpCommand.success) {
-        console.error(`\n❌ ${result.nexusWpCommand.error}`);
-        process.exit(1);
       }
 
-      console.log(`WordPress ${result.nexusWpCommand.stdout.trim()}`);
+      for (const t of targets) {
+        const result = await client.mutate<{ nexusWpCommand: any }>(`
+          mutation($target: String!, $command: [String!]!) {
+            nexusWpCommand(target: $target, command: $command) {
+              success
+              error
+              stdout
+            }
+          }
+        `, { target: t, command: ['core', 'version'] });
+
+        if (!result.nexusWpCommand.success) {
+          console.error(`❌ ${t}: ${result.nexusWpCommand.error}`);
+          continue;
+        }
+
+        const prefix = targets.length > 1 ? `${t.includes('@local') ? 'local' : 'WPE  '} ` : '';
+        console.log(`${prefix}WordPress ${result.nexusWpCommand.stdout.trim()}`);
+      }
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
       process.exit(1);

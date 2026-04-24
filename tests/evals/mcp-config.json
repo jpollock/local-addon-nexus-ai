@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "local-nexus-ai": {
+      "command": "node",
+      "args": ["/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/mcp-stdio.js"]
+    }
+  }
+}

@@ -1,0 +1,190 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 05-staging-to-prod-promotion
+Mode: cli-skills
+Date: 2026-04-24
+Model: claude-sonnet-4-6
+Duration: 329.4s
+Tool calls: 16
+Cost: $0.7519
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Promote the jppwpeplugistg (staging) install to jppwpeplugin (production) in the wpeplugintest site. Make sure production has a backup first.
+
+I'll start by getting the portfolio context to find the install IDs, then create a backup of production before promoting.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe portfolio 2>&1","description":"Get fleet-wide WPE portfolio context"})
+  ⎿  Portfolio Overview — 2026-03
+──────────────────────────────────────────────────
+  Accounts:  10
+  Installs:  297
+  Visits:    425,699
+  Bandwidth: 692.02 GB
+
+By Account (sorted by visits):
+──────────────────────────────────────────────────────────────────────
+  Account                    Installs   Visits       Bandwidth
+──────────────────────────────────────────────────────────────────────
+  getflywheel                5          282,827      683.46 GB
+  esmy9dign4hoqz             73         88,
+Now let me find the wpeplugintest account and its installs.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe --help 2>&1 | head -60","description":"Check available WPE CLI commands"})
+  ⎿  Usage: nexus wpe [options] [command]
+
+Manage WP Engine accounts and installs
+
+Options:
+  -h, --help                                           display help for command
+
+Commands:
+  accounts [options]                                   List WP Engine accounts
+  installs [options] [account]                         List installs for an account (or all accounts)
+  install [options] <installId>                        Get details about a specific install
+  backup [options] <target>                      
+I can see `backup` and `promote` commands. Let me find the wpeplugintest account and get the staging/production install IDs.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe sites 2>&1 | grep -i \"wpeplugin\\|wpeplugintest\" ","description":"Search for wpeplugintest site"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe installs --help 2>&1","description":"Check installs command options"})
+  ⎿    wpeplugintest                  38e66f39-13d5-4eda-ae55-ba8083724bf2 [object Object]
+  ⎿  Usage: nexus wpe installs [options] [account]
+
+List installs for an account (or all accounts)
+
+Options:
+  --json      Output as JSON
+  -h, --help  display help for command
+Got the site ID. Now let me get the installs for that site to find the staging and production install IDs.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe site 38e66f39-13d5-4eda-ae55-ba8083724bf2 --json 2>&1","description":"Get wpeplugintest site details w)
+  ⎿  {
+  "id": "38e66f39-13d5-4eda-ae55-ba8083724bf2",
+  "name": "wpeplugintest",
+  "account": {
+    "id": "b97e432b-c10a-4f0a-9ce7-55cedd575099"
+  },
+  "group_name": null,
+  "tags": [],
+  "created_at": "2024-12-17T01:21:58.076Z",
+  "sandbox": false,
+  "transferable": false,
+  "installs": [
+    {
+      "id": "74123063-1f21-4080-b983-aaa5c95ed1e2",
+      "name": "jppwpeplugin",
+      "environment": "production",
+      "cname": "jppwpeplugin.wpengine.com",
+      "php_version": "8.2",
+      "is_multisit
+Got the IDs:
+- Production `jppwpeplugin`: `74123063-1f21-4080-b983-aaa5c95ed1e2`
+- Staging `jppwpeplugistg`: `3a4b72ba-3aba-4753-b8ae-419e1956651d`
+
+Step 1: Creating a backup of production before promoting.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe backup --help 2>&1","description":"Check backup command options"})
+  ⎿  Usage: nexus wpe backup [options] <target>
+
+Create a backup of a WPE install
+
+Options:
+  --description <text>  Backup description
+  --emails <addresses>  Comma-separated notification emails (defaults to
+                        no-reply@wpengine.com)
+  -h, --help            display help for command
+
+⏺ TodoWrite({"todos":[{"content":"Create production backup before promoting","status":"in_progress","activeForm":"Creating production backup"},{"content":"Promote staging (jppwpeplugistg) to production (jppwpeplu)
+  ⎿  Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe backup 74123063-1f21-4080-b983-aaa5c95ed1e2 --description \"Pre-promotion backup before staging push\")
+  ⎿  Exit code 1
+
+Creating backup for 74123063-1f21-4080-b983-aaa5c95ed1e2...
+
+❌ Failed to create backup: Target must be a WPE install. Use format: wpe:account/install@environment
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe installs b97e432b-c10a-4f0a-9ce7-55cedd575099 2>&1","description":"List installs for the account to fi)
+  ⎿  WP Engine Installs:
+  w7579 (production)
+    Account: w7579
+    Domain:  w7579.wpengine.com
+    Target:  wpe:b97e432b-c10a-4f0a-9ce7-55cedd575099/w7579@production
+
+  elasticapi (production)
+    Account: w7579
+    Domain:  elasticapi.wpengine.com
+    Target:  wpe:b97e432b-c10a-4f0a-9ce7-55cedd575099/elasticapi@production
+
+  elasticapidev (development)
+    Account: w7579
+    Domain:  elasticapidev.wpengine.com
+    Target:  wpe:b97e432b-c10a-4f0a-9ce7-55cedd575099/elasticapidev@development
+
+  jerem
+Now I have the correct target format. Creating the production backup first.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe backup \"wpe:b97e432b-c10a-4f0a-9ce7-55cedd575099/jppwpeplugin@production\" --description \"Pre-promot)
+  ⎿  Creating backup for wpe:b97e432b-c10a-4f0a-9ce7-55cedd575099/jppwpeplugin@production...
+
+✅ Backup created
+   ID: ccfa4c98-acf0-4d6c-8b11-5d5edc8288e6
+Backup initiated. Let me verify it completed before promoting.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe backup-status 74123063-1f21-4080-b983-aaa5c95ed1e2 ccfa4c98-acf0-4d6c-8b11-5d5edc8288e6 2>&1","descrip)
+  ⎿  Backup Status: ccfa4c98-acf0-4d6c-8b11-5d5edc8288e6
+────────────────────────────────────────
+  Status:  in_progress
+Backup is in progress. Let me wait and poll until it's complete.
+
+⏺ Bash({"command":"for i in $(seq 1 12); do\n  sleep 15\n  STATUS=$(node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe backup-status 74123063-1f21-4080-b983-aaa5c95ed1e2 cc)
+  ⎿  [1] Backup status: completed
+[2] Backup status: completed
+[3] Backup status: completed
+[4] Backup status: completed
+[5] Backup status: completed
+[6] Backup status: completed
+[7] Backup status: completed
+[8] Backup status: completed
+[9] Backup status: completed
+[10] Backup status: completed
+[11] Backup status: completed
+[12] Backup status: completed
+Production backup is complete. Now promoting staging to production.
+
+⏺ TodoWrite({"todos":[{"content":"Create production backup before promoting","status":"completed","activeForm":"Creating production backup"},{"content":"Promote staging (jppwpeplugistg) to production (jppwpeplugi)
+  ⎿  Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe promote --help 2>&1","description":"Check promote command options"})
+  ⎿  Usage: nexus wpe promote [options] <sourceInstallId> <destInstallId>
+
+Promote (copy) one WP Engine install to another
+
+Options:
+  --no-database  Exclude database from promotion
+  --confirm      Confirm promotion (required for destructive action)
+  -h, --help     display help for command
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe promote 3a4b72ba-3aba-4753-b8ae-419e1956651d 74123063-1f21-4080-b983-aaa5c95ed1e2 --confirm 2>&1","des)
+  ⎿  ✅ Promotion complete
+   Promotion started from 3a4b72ba-3aba-4753-b8ae-419e1956651d to 74123063-1f21-4080-b983-aaa5c95ed1e2
+
+⏺ TodoWrite({"todos":[{"content":"Create production backup before promoting","status":"completed","activeForm":"Creating production backup"},{"content":"Promote staging (jppwpeplugistg) to production (jppwpeplugi)
+  ⎿  Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable
+Done. Here's a summary of what happened:
+
+1. **Backup created** — `jppwpeplugin` (production) was backed up with ID `ccfa4c98-acf0-4d6c-8b11-5d5edc8288e6`. Waited for it to reach `completed` status before proceeding.
+
+2. **Promotion complete** — `jppwpeplugistg` (staging) was promoted to `jppwpeplugin` (production). WPE has kicked off the copy; the promotion runs asynchronously on their end.
+
+The production site at `jppwpeplugin.wpenginepowered.com` should reflect the staging content within a few minutes. If anything looks wrong, the pre-promotion backup is available to restore from.
+
+--- FINAL RESULT ---
+Done. Here's a summary of what happened:
+
+1. **Backup created** — `jppwpeplugin` (production) was backed up with ID `ccfa4c98-acf0-4d6c-8b11-5d5edc8288e6`. Waited for it to reach `completed` status before proceeding.
+
+2. **Promotion complete** — `jppwpeplugistg` (staging) was promoted to `jppwpeplugin` (production). WPE has kicked off the copy; the promotion runs asynchronously on their end.
+
+The production site at `jppwpeplugin.wpenginepowered.com` should reflect the staging content within a few minutes. If anything looks wrong, the pre-promotion backup is available to restore from.

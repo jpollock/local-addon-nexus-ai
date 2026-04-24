@@ -562,6 +562,30 @@ export const typeDefs = gql`
     sites: [FleetVersionSite!]!
   }
 
+  type NexusTargetMatch {
+    "Formatted target string ready to pass to nexusWpCommand, e.g. sitename@local or wpe:account/install@production"
+    target: String!
+    "Human-readable label"
+    label: String!
+    "local or wpe"
+    type: String!
+    "running, halted, active, unknown"
+    status: String!
+    "ISO timestamp of last sync, null if live/unknown"
+    lastSyncAt: String
+    "true if data is live (local running site), false if cached"
+    isLive: Boolean!
+  }
+
+  type NexusTargetResolution {
+    "Input name that was resolved"
+    name: String!
+    "All matches found (may be 0, 1, or 2 — local + WPE)"
+    matches: [NexusTargetMatch!]!
+    "true if a linked local↔WPE pair was found"
+    isLinked: Boolean!
+  }
+
   type NexusGatewayUsageSite {
     siteId: String!
     siteName: String!
@@ -823,6 +847,9 @@ export const typeDefs = gql`
 
     "List sites on a specific PHP or WP version — for security triage"
     nexusFleetVersionSites(phpVersion: String, wpVersion: String): FleetVersionSitesResult!
+
+    "Resolve a bare site/install name to local, WPE, or both — used for smart target routing"
+    nexusResolveTarget(name: String!): NexusTargetResolution!
 
     "AI gateway usage summary — spend by site and model"
     nexusGatewayUsage(month: String, siteId: String): NexusGatewayUsageResult!

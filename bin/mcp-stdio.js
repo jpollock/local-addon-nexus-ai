@@ -86,6 +86,32 @@ function sendRequest(url, token, body) {
   });
 }
 
+async function probePort(port, token) {
+  return new Promise((resolve) => {
+    const req = http.request(
+      { hostname: '127.0.0.1', port, path: '/health', method: 'GET', timeout: 1000 },
+      (res) => { res.resume(); resolve(res.statusCode < 500); },
+    );
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.end();
+  });
+}
+
+async function resolveUrl(info) {
+  // Try the port in the connection info file first
+  if (await probePort(info.port, info.authToken)) return info.url;
+  // File may be stale — scan the MCP port range for the actual running server
+  const { MCP_PORT_RANGE_START = 10800, MCP_PORT_RANGE_END = 10899 } = {};
+  for (let p = MCP_PORT_RANGE_START; p <= MCP_PORT_RANGE_END; p++) {
+    if (p === info.port) continue;
+    if (await probePort(p, info.authToken)) {
+      return `http://127.0.0.1:${p}`;
+    }
+  }
+  return info.url; // fall back to file value
+}
+
 async function main() {
   const info = loadConnectionInfo();
   if (!info) {
@@ -94,6 +120,13 @@ async function main() {
         `Looked for: ${getConnectionInfoPath()}\n`,
     );
     process.exit(1);
+  }
+
+  // Resolve the actual running port (connection info file may be stale)
+  const resolvedUrl = await resolveUrl(info);
+  if (resolvedUrl !== info.url) {
+    process.stderr.write(`[mcp-stdio] Port in connection info (${info.port}) not responding — using ${resolvedUrl}\n`);
+    info.url = resolvedUrl;
   }
 
   const rl = readline.createInterface({ input: process.stdin, terminal: false });

@@ -4546,11 +4546,11 @@ export function createResolvers(context: ResolverContext) {
       nexusWpePromote: async (_parent: ResolverParent, { sourceInstallId, destInstallId, includeDatabase, confirm }: { sourceInstallId: string; destInstallId: string; includeDatabase?: boolean; confirm?: boolean }) => {
         try {
           if (!services.localServices) return { success: false, error: 'Local services not available' };
+          const [src, dst] = await Promise.all([
+            services.localServices.capiDirect(`/installs/${sourceInstallId}`) as Promise<any>,
+            services.localServices.capiDirect(`/installs/${destInstallId}`) as Promise<any>,
+          ]);
           if (!confirm) {
-            const [src, dst] = await Promise.all([
-              services.localServices.capiDirect(`/installs/${sourceInstallId}`) as Promise<any>,
-              services.localServices.capiDirect(`/installs/${destInstallId}`) as Promise<any>,
-            ]);
             return {
               success: true,
               requiresConfirmation: true,
@@ -4558,9 +4558,9 @@ export function createResolvers(context: ResolverContext) {
             };
           }
           await services.localServices.capiDirect('/install_copy', 'POST', {
-            source_install_id: sourceInstallId,
-            destination_install_id: destInstallId,
-            include_database: includeDatabase !== false,
+            source_environment_id: (src as any)?.id ?? sourceInstallId,
+            destination_environment_id: (dst as any)?.id ?? destInstallId,
+            custom_options: { include_files: true, include_db: includeDatabase !== false },
           });
           return { success: true, message: `Promotion started from ${sourceInstallId} to ${destInstallId}` };
         } catch (err: any) { return { success: false, error: err.message }; }
@@ -4629,6 +4629,70 @@ export function createResolvers(context: ResolverContext) {
       // ======================================================================
       // Phase 3: Operation Audit Log Resolvers
       // ======================================================================
+
+      nexusResolveTarget: (_parent: ResolverParent, { name }: { name: string }) => {
+        const matches: any[] = [];
+        const nameLower = name.toLowerCase();
+
+        // 1. Check local sites
+        if (services.siteData) {
+          const allSites = Object.values(services.siteData.getSites()) as any[];
+          const localMatch = allSites.find(
+            (s) => s.name?.toLowerCase() === nameLower || s.id === name,
+          );
+          if (localMatch) {
+            const status = services.localServices?.getSiteStatus?.(localMatch.id) ?? 'unknown';
+            matches.push({
+              target: `${localMatch.name}@local`,
+              label: `${localMatch.name} (local)`,
+              type: 'local',
+              status,
+              lastSyncAt: null,
+              isLive: status === 'running',
+            });
+          }
+        }
+
+        // 2. Check WPE installs in graph DB
+        const db = services.graphService?.getDb?.();
+        if (db) {
+          try {
+            const rows = db.prepare(
+              "SELECT name, remote_install_id, account_id, last_sync_at FROM sites WHERE source='wpe' AND (LOWER(name)=? OR remote_install_id=?) AND is_active=1 LIMIT 5"
+            ).all(nameLower, name) as any[];
+
+            for (const row of rows) {
+              // Build account name from wpe_accounts table
+              const accountRow = row.account_id
+                ? (db.prepare('SELECT name FROM wpe_accounts WHERE id=?').get(row.account_id) as any)
+                : null;
+              const accountName = accountRow?.name ?? row.account_id ?? 'unknown';
+              // Infer environment from install name convention (stg/dev suffix = staging/dev)
+              const env = /stg$|staging$/.test(row.name) ? 'staging'
+                : /dev$|development$/.test(row.name) ? 'development'
+                : 'production';
+              const target = `wpe:${accountName}/${row.name}@${env}`;
+              const lastSyncAt = row.last_sync_at ? new Date(row.last_sync_at).toISOString() : null;
+
+              matches.push({
+                target,
+                label: `${row.name} (WPE ${env}, ${accountName})`,
+                type: 'wpe',
+                status: 'active',
+                lastSyncAt,
+                isLive: false,
+              });
+            }
+          } catch { /* graph may not be ready */ }
+        }
+
+        // Detect linked pair: same name appears in both local and WPE
+        const hasLocal = matches.some((m) => m.type === 'local');
+        const hasWpe = matches.some((m) => m.type === 'wpe');
+        const isLinked = hasLocal && hasWpe;
+
+        return { name, matches, isLinked };
+      },
 
       nexusGatewayUsage: (
         _parent: ResolverParent,

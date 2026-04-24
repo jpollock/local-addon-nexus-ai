@@ -52,6 +52,7 @@
     "pretest:stress": "echo 'Requires Local running with Nexus AI addon loaded'",
     "eval:run": "npx promptfoo eval -c tests/evals/promptfoo/promptfooconfig.yaml --no-cache --max-concurrency 1",
     "eval:view": "npx promptfoo view",
+    "eval:score": "node tests/evals/viewer/server.js",
     "test:eval": "jest --config tests/eval/jest.eval.config.js",
     "test:eval:verbose": "jest --config tests/eval/jest.eval.config.js --verbose",
     "test:all": "npm test && npm run test:eval && npm run test:integration && npm run test:e2e",

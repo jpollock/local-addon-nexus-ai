@@ -154,14 +154,30 @@ case "$cmd" in
 
   "run")
     mode=${1:-""}
+    case_arg=""
+    if [ "${2:-}" != "" ]; then case_arg="--case $2"; fi
     if [ "$mode" = "mcp" ]; then
       check_prereqs
-      echo -e "\n${BOLD}Running MCP eval (10 cases)...${RESET}\n"
-      $RUNNER/auto-eval.ts --mode mcp
+      # Hide skills so MCP mode is pure MCP (simulates Claude Desktop)
+      GLOBAL_SKILLS="$HOME/.claude/skills"
+      GLOBAL_BAK="$HOME/.claude/skills.eval-bak"
+      LOCAL_SKILLS="$(pwd)/.claude/skills"
+      LOCAL_BAK="$(pwd)/.claude/skills.eval-bak"
+      [ -d "$GLOBAL_SKILLS" ] && mv "$GLOBAL_SKILLS" "$GLOBAL_BAK"
+      [ -d "$LOCAL_SKILLS" ] && mv "$LOCAL_SKILLS" "$LOCAL_BAK"
+      echo -e "  ${YELLOW}Skills hidden for MCP eval (pure MCP mode)${RESET}"
+      trap '[ -d "$GLOBAL_BAK" ] && mv "$GLOBAL_BAK" "$GLOBAL_SKILLS"; [ -d "$LOCAL_BAK" ] && mv "$LOCAL_BAK" "$LOCAL_SKILLS"; echo -e "  Skills restored."' EXIT INT TERM
+      echo -e "\n${BOLD}Running MCP eval...${RESET}\n"
+      $RUNNER/auto-eval.ts --mode mcp --skip-mcp-check $case_arg
+      # Restore skills (trap handles unexpected exits too)
+      trap - EXIT INT TERM
+      [ -d "$GLOBAL_BAK" ] && mv "$GLOBAL_BAK" "$GLOBAL_SKILLS"
+      [ -d "$LOCAL_BAK" ] && mv "$LOCAL_BAK" "$LOCAL_SKILLS"
+      echo -e "\n  ${GREEN}Skills restored.${RESET}"
     elif [ "$mode" = "cli" ]; then
       check_prereqs
-      echo -e "\n${BOLD}Running CLI/Skills eval (10 cases)...${RESET}\n"
-      $RUNNER/auto-eval.ts --mode cli-skills
+      echo -e "\n${BOLD}Running CLI/Skills eval...${RESET}\n"
+      $RUNNER/auto-eval.ts --mode cli-skills --skip-mcp-check $case_arg
     else
       echo "Usage: ./eval run mcp | cli"
     fi
@@ -174,11 +190,20 @@ case "$cmd" in
 
   "score")
     case_id=${1:-""}
+    PORT=4242
+    VIEWER="tests/evals/viewer/server.js"
+
+    # Always restart server to pick up latest results
+    kill $(lsof -ti:$PORT 2>/dev/null) 2>/dev/null || true; sleep 0.5
+    node "$VIEWER" &
+    sleep 1
+
     if [ -z "$case_id" ]; then
-      list_cases
+      open "http://localhost:$PORT"
     else
-      $RUNNER/compare-eval.ts --case "$case_id"
+      open "http://localhost:$PORT?case=$case_id"
     fi
+    echo -e "  ${GREEN}Eval scorer open at http://localhost:$PORT${RESET}"
     ;;
 
   "mcp-on")

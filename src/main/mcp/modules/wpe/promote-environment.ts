@@ -40,11 +40,16 @@ export const promoteEnvironmentHandler: McpToolHandler = {
 
     // Proceed with the copy (confirmation handled by McpSafetyWrapper Tier 3 flow)
     try {
+      // Resolve names to UUIDs — CAPI /install_copy requires environment UUIDs not names
+      const [srcInstall, dstInstall] = await Promise.all([
+        services.localServices!.capiDirect(`/installs/${sourceId}`) as Promise<any>,
+        services.localServices!.capiDirect(`/installs/${destId}`) as Promise<any>,
+      ]);
       // Swagger: source_environment_id / destination_environment_id (not install_id)
       // include_db goes inside custom_options, not at top level
       const result = await services.localServices!.capiDirect('/install_copy', 'POST', {
-        source_environment_id: sourceId,
-        destination_environment_id: destId,
+        source_environment_id: (srcInstall as any)?.id ?? sourceId,
+        destination_environment_id: (dstInstall as any)?.id ?? destId,
         custom_options: { include_files: true, include_db: includeDatabase },
       }) as any;
 

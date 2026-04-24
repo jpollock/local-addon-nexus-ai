@@ -1,0 +1,125 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 07-content-search
+Mode: mcp
+Date: 2026-04-23
+Model: claude-sonnet-4-6
+Duration: 43.3s
+Tool calls: 4
+Cost: $0.1839
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts.
+
+I'll search across your local sites for WooCommerce and e-commerce content simultaneously.
+
+⏺ ToolSearch({"query":"select:mcp__local-nexus-ai__search_across_sites,mcp__local-nexus-ai__list_indexed_sites","max_results":2})
+  ⎿  
+Searching for both terms in parallel across all your indexed sites.
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"WooCommerce shop products cart checkout","limit":5,"min_score":0.3})
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"e-commerce online store buying selling products","limit":5,"min_score":0.3})
+
+⏺ mcp__local-nexus-ai__list_indexed_sites({})
+  ⎿  Found 25 results across 6 sites for "WooCommerce shop products cart checkout":
+
+### The Curated Shelf (index may be stale)
+  1. **Cart** (page, score: 0.497)
+     You may be interested in… Your cart is currently empty! New in store
+
+  2. **Checkout** (page, score: 0.476)
+     Checkout
+
+  3. **Shop** (page, score: 0.455)
+     Shop
+
+  4. **My account** (page, score: 0.364)
+     [woocommerce_my_account]
+
+### nexus-test-site (index may be stale)
+  1. **Checkout** (page, score: 0.495)
+     Checkout
+
+
+  ⎿  Found 16 results across 8 sites for "e-commerce online store buying selling products":
+
+### The Curated Shelf (index may be stale)
+  1. **Shop** (page, score: 0.475)
+     Shop
+
+### nexus-test-site (index may be stale)
+  1. **Shop** (page, score: 0.475)
+     Shop
+
+### newsroom-admin-columns-poc (index may be stale)
+  1. **Do you buy souvenirs on holiday?** (poll, score: 0.329)
+     Do you buy souvenirs on holiday?
+
+### pm-toolkit-hub (index may be stale)
+  1. **Customer Segments** (pm_guide, scor
+  ⎿  ## Indexed Sites
+
+- [STALE] **The Curated Shelf** — 44 docs, 44 chunks, last indexed: 2026-04-17T20:53:20.756Z
+- [STALE] **ACF Auto Car Finder** — 141 docs, 149 chunks, last indexed: 2026-03-26T02:15:26.556Z
+- [STALE] **IlTvA7yCC** — 0 docs, 0 chunks, last indexed: never
+- [STALE] **nexus-e2e-test** — 2 docs, 2 chunks, last indexed: 2026-03-01T20:05:57.416Z
+- [STALE] **nexus-e2e-test** — 0 docs, 0 chunks, last indexed: 2026-03-01T19:58:53.131Z
+- [STALE] **nexus-e2e-crud-test** — 2 docs, 2 chunks
+Here's what I found across your local sites:
+
+---
+
+## Sites with WooCommerce / E-commerce Content
+
+### Faker Incorporated — richest e-commerce content
+This is the standout site with actual editorial and product content beyond just default WooCommerce pages:
+
+| Type | Title | Excerpt |
+|------|-------|---------|
+| **Post** | How to Get More Out of Your WooCommerce Store | "WooCommerce is the most popular e-commerce platform on the planet — but out of the box, it's just the beginning. Here's how we help our clients squeeze..." |
+| **Product** | Custom WooCommerce Store Build | "A fully designed, custom WooCommerce storefront built on Astra — optimized for speed, mobile, and conversions..." |
+| **Page** | Cart, Checkout, Shop, My Account | Standard WooCommerce store pages |
+
+### The Curated Shelf, nexus-test-site, nexustestsite1
+These three have WooCommerce installed (Cart, Checkout, Shop, My Account pages) but no editorial posts or products beyond the default store scaffolding.
+
+---
+
+## Caveats
+
+- **All indexes are stale** (last indexed Apr 17 at the latest) — content added since then won't appear. Run `reindex_site` on any of these to get a fresh picture.
+- There are multiple `Faker Incorporated` index entries from different indexing runs — the results above merged them, but the Apr 13 (19-doc) version is the most content-complete snapshot.
+- **faker-incorporated** (lowercase slug) appears to be an earlier/separate version of the same site with fewer docs indexed.
+
+If you want to dig deeper into the Faker Incorporated post or product content, I can search that site specifically for more detail.
+
+--- FINAL RESULT ---
+Here's what I found across your local sites:
+
+---
+
+## Sites with WooCommerce / E-commerce Content
+
+### Faker Incorporated — richest e-commerce content
+This is the standout site with actual editorial and product content beyond just default WooCommerce pages:
+
+| Type | Title | Excerpt |
+|------|-------|---------|
+| **Post** | How to Get More Out of Your WooCommerce Store | "WooCommerce is the most popular e-commerce platform on the planet — but out of the box, it's just the beginning. Here's how we help our clients squeeze..." |
+| **Product** | Custom WooCommerce Store Build | "A fully designed, custom WooCommerce storefront built on Astra — optimized for speed, mobile, and conversions..." |
+| **Page** | Cart, Checkout, Shop, My Account | Standard WooCommerce store pages |
+
+### The Curated Shelf, nexus-test-site, nexustestsite1
+These three have WooCommerce installed (Cart, Checkout, Shop, My Account pages) but no editorial posts or products beyond the default store scaffolding.
+
+---
+
+## Caveats
+
+- **All indexes are stale** (last indexed Apr 17 at the latest) — content added since then won't appear. Run `reindex_site` on any of these to get a fresh picture.
+- There are multiple `Faker Incorporated` index entries from different indexing runs — the results above merged them, but the Apr 13 (19-doc) version is the most content-complete snapshot.
+- **faker-incorporated** (lowercase slug) appears to be an earlier/separate version of the same site with fewer docs indexed.
+
+If you want to dig deeper into the Faker Incorporated post or product content, I can search that site specifically for more detail.

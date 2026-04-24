@@ -1,0 +1,76 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 08-bulk-plugin-update
+Mode: mcp
+Date: 2026-04-24
+Model: claude-sonnet-4-6
+Duration: 24.9s
+Tool calls: 2
+Cost: $0.1489
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Update all plugins across my local fleet — but only patch/minor version bumps, skip any major version upgrades. Show me what would change before doing anything.
+
+I'll run a fleet-wide plugin audit to see what's installed and what updates are available across all your running local sites.
+
+⏺ mcp__local-nexus-ai__nexus_plugin_audit({})
+
+⏺ mcp__local-nexus-ai__local_list_sites({})
+  ⎿  ## Fleet Plugin Audit (1 sites)
+
+### eval-test-onboard
+2 plugins, 0 updates available
+
+---
+**Total:** 2 plugins across 1 sites, 0 updates available
+  ⎿  ## Local Sites (30 total, 1 running)
+
+### Running
+- **eval-test-onboard** (eval-test-onboard.local) [id: Xo-b8P5Yx, indexed: yes]
+
+### Halted
+- jeremypollock.blog (jeremypollockblog.local) [id: mDSZDt3S6, halted]
+- nexus (nexus.local) [id: oahyb7b0P, halted]
+- mu-plugin (mu-plugin.local) [id: f95o8kDEU, halted]
+- offload-media-clean (offload-media-clean.local) [id: sk4daPsDs, halted]
+- nitropack-1 (nitropack-1.local) [id: xXdVoSUzJ, halted]
+- pm-toolkit-hub (pm-toolkit-hub.local) [id: ohe4bhLEm,
+The audit only runs on currently running sites, and you only have **1 site running** (`eval-test-onboard`) — which already has **0 updates available**.
+
+Here's the situation:
+
+**Running sites audited:** 1 of 30
+- `eval-test-onboard` — 2 plugins, **0 updates available**
+
+**29 sites are halted** and can't be audited (WP-CLI requires the site to be running to check plugin versions).
+
+**Your options:**
+
+1. **Start sites selectively** — I can start specific halted sites you care about, audit them, apply safe minor/patch updates, then stop them again. Which sites do you want to target?
+
+2. **Start all sites** — I can work through the fleet in batches (start → audit → update → stop), though that's 29 sites and will take a while.
+
+3. **Accept the current result** — If `eval-test-onboard` is the only site you're actively using, you're already up to date.
+
+Which approach would you like?
+
+--- FINAL RESULT ---
+The audit only runs on currently running sites, and you only have **1 site running** (`eval-test-onboard`) — which already has **0 updates available**.
+
+Here's the situation:
+
+**Running sites audited:** 1 of 30
+- `eval-test-onboard` — 2 plugins, **0 updates available**
+
+**29 sites are halted** and can't be audited (WP-CLI requires the site to be running to check plugin versions).
+
+**Your options:**
+
+1. **Start sites selectively** — I can start specific halted sites you care about, audit them, apply safe minor/patch updates, then stop them again. Which sites do you want to target?
+
+2. **Start all sites** — I can work through the fleet in batches (start → audit → update → stop), though that's 29 sites and will take a while.
+
+3. **Accept the current result** — If `eval-test-onboard` is the only site you're actively using, you're already up to date.
+
+Which approach would you like?

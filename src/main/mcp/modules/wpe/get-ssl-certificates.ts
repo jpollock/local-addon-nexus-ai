@@ -34,7 +34,7 @@ export const getSslCertificatesHandler: McpToolHandler = {
   async execute(args, services): Promise<McpToolResult> {
     try {
       const data = await services.localServices!.capiDirect(`/installs/${args.install_id}/ssl_certificates`) as any;
-      const results: any[] = data?.results ?? [];
+      const results: any[] = data?.results ?? data?.certificates ?? [];
 
       if (results.length === 0) {
         return ok('No SSL certificates found for this install.');
@@ -49,7 +49,7 @@ export const getSslCertificatesHandler: McpToolHandler = {
 
       for (const cert of results) {
         const domains = Array.isArray(cert.domains) ? cert.domains.join(', ') : (cert.domains ?? '-');
-        const expiry = formatExpiry(cert.expires_at ?? cert.expiry_date ?? cert.expiration_date);
+        const expiry = formatExpiry(cert.expires_time ?? cert.expires_at ?? cert.expiry_date ?? cert.expiration_date);
         const status = cert.status ?? '-';
         const type = cert.type ?? '-';
         lines.push(`| ${domains} | ${expiry} | ${status} | ${type} |`);

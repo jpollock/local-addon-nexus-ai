@@ -41,7 +41,7 @@ export const accountSslStatusHandler: McpToolHandler = {
             const data = await services.localServices!.capiDirect(
               `/installs/${inst.id}/ssl_certificates`,
             ) as any;
-            return { install: inst, certs: data?.results ?? [], error: null };
+            return { install: inst, certs: data?.results ?? data?.certificates ?? [], error: null };
           } catch (err: any) {
             return { install: inst, certs: [], error: err.message ?? String(err) };
           }
@@ -61,7 +61,7 @@ export const accountSslStatusHandler: McpToolHandler = {
         const allDomains: string[] = [];
 
         for (const cert of certs) {
-          const expStr = cert.expires_at ?? cert.expiry ?? cert.valid_to ?? null;
+          const expStr = cert.expires_time ?? cert.expires_at ?? cert.expiry ?? cert.valid_to ?? null;
           if (expStr) {
             const d = new Date(expStr);
             if (!isNaN(d.getTime())) {
