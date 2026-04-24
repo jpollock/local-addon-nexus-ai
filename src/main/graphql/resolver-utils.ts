@@ -198,3 +198,20 @@ export function buildWpeSiteDetails(
     linkedTo: null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Resolver concurrency queue
+// ---------------------------------------------------------------------------
+
+import PQueue from 'p-queue';
+
+/** Global concurrency limiter — caps expensive resolver handlers at 3 concurrent. */
+export const resolverQueue = new PQueue({ concurrency: 3 });
+
+/**
+ * Run an expensive resolver body inside the global concurrency queue.
+ * Does not change resolver return shapes or error behavior.
+ */
+export function withQueue<T>(fn: () => Promise<T>): Promise<T> {
+  return resolverQueue.add(fn) as Promise<T>;
+}
