@@ -1583,6 +1583,43 @@ export function createResolvers(context: ResolverContext) {
             // Local site
             const site = resolveSite(parsed.siteName!, services.siteData);
             if (!site) {
+              // Bare-name fallback: check WPE graph DB before giving up
+              const db = services.graphService?.getDb?.();
+              if (db) {
+                try {
+                  const wpeRow = db.prepare(
+                    "SELECT name FROM sites WHERE source='wpe' AND LOWER(name)=? AND is_active=1 LIMIT 1"
+                  ).get(parsed.siteName!.toLowerCase()) as any;
+                  if (wpeRow) {
+                    if (blockedRemoteCommands.some(cmd => commandStr.startsWith(cmd))) {
+                      return {
+                        success: false,
+                        error: `Command "${commandStr}" is blocked on remote sites for security reasons.`,
+                        stdout: '',
+                        stderr: '',
+                        exitCode: 1,
+                      };
+                    }
+                    if (!services.localServices.isSSHKeyAvailable()) {
+                      return {
+                        success: false,
+                        error: 'WP Engine SSH key not found. Connect to WP Engine via Local\'s UI first.',
+                        stdout: '',
+                        stderr: '',
+                        exitCode: 1,
+                      };
+                    }
+                    const result = await services.localServices.remoteWpCliRun(wpeRow.name, command);
+                    return {
+                      success: result.success,
+                      error: result.success ? null : (result.stdout || result.stderr || 'Command failed'),
+                      stdout: result.stdout || '',
+                      stderr: result.stderr || '',
+                      exitCode: result.success ? 0 : 1,
+                    };
+                  }
+                } catch { /* graph not ready */ }
+              }
               return {
                 success: false,
                 error: `Site not found: ${parsed.siteName}`,
@@ -1666,6 +1703,43 @@ export function createResolvers(context: ResolverContext) {
             // Local site
             const site = resolveSite(parsed.siteName!, services.siteData);
             if (!site) {
+              // Bare-name fallback: check WPE graph DB before giving up
+              const db = services.graphService?.getDb?.();
+              if (db) {
+                try {
+                  const wpeRow = db.prepare(
+                    "SELECT name FROM sites WHERE source='wpe' AND LOWER(name)=? AND is_active=1 LIMIT 1"
+                  ).get(parsed.siteName!.toLowerCase()) as any;
+                  if (wpeRow) {
+                    if (!services.localServices.isSSHKeyAvailable()) {
+                      return {
+                        success: false,
+                        error: 'WP Engine SSH key not found. Connect to WP Engine via Local\'s UI first.',
+                        plugins: [],
+                      };
+                    }
+                    const pluginResult = await services.localServices.remoteWpCliRun(
+                      wpeRow.name,
+                      ['plugin', 'list', '--format=json', '--fields=name,title,version,status,update_version'],
+                    );
+                    if (!pluginResult.success) {
+                      return { success: false, error: pluginResult.stdout || pluginResult.stderr || 'Command failed', plugins: [] };
+                    }
+                    const raw = JSON.parse(pluginResult.stdout || '[]');
+                    return {
+                      success: true,
+                      plugins: raw.map((p: any) => ({
+                        name: p.title || p.name,
+                        slug: p.name,
+                        status: p.status,
+                        version: p.version,
+                        update: p.update_version || null,
+                        autoUpdate: null,
+                      })),
+                    };
+                  }
+                } catch { /* graph not ready */ }
+              }
               return {
                 success: false,
                 error: `Site not found: ${parsed.siteName}`,
