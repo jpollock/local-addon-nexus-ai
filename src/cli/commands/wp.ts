@@ -7,6 +7,7 @@
 import { Command } from 'commander';
 import { getClient } from '../utils/graphql';
 import { parseTarget } from '../utils/target';
+import { loadMcpConnectionInfo, callMcpTool, targetToMcpArgs } from '../utils/mcp-client';
 
 const wpCommand = new Command('wp').description('Run WP-CLI commands on sites');
 
@@ -24,6 +25,18 @@ pluginCommand
   .action(async (target, options) => {
     try {
       parseTarget(target);
+
+      // MCP path: skip for --json (MCP returns markdown, not structured data)
+      if (!options.json && loadMcpConnectionInfo()) {
+        const { text, isError } = await callMcpTool('wp_plugin_list', targetToMcpArgs(target));
+        if (isError) {
+          console.error(`\n❌ ${text}`);
+          process.exit(1);
+        }
+        console.log(text);
+        return;
+      }
+
       const client = getClient();
 
       const result = await client.mutate<{ nexusWpPluginList: any }>(`
@@ -191,16 +204,37 @@ pluginCommand
   .action(async (target, slugs, options) => {
     try {
       parseTarget(target);
+
+      if (!options.all && slugs.length === 0) {
+        console.error('\n❌ Specify plugin slugs or use --all');
+        process.exit(1);
+      }
+
+      if (loadMcpConnectionInfo()) {
+        const targetArgs = targetToMcpArgs(target);
+        const updateSlugs: string[] = options.all ? ['--all'] : slugs;
+        for (const slug of updateSlugs) {
+          const { text, isError } = await callMcpTool(
+            'wp_plugin_update',
+            { ...targetArgs, slug } as Record<string, unknown>,
+            { timeout: 180000 },
+          );
+          if (isError) {
+            console.error(`\n❌ ${text}`);
+            process.exit(1);
+          }
+          console.log(text);
+        }
+        return;
+      }
+
       const client = getClient();
 
       const cmd = ['plugin', 'update'];
       if (options.all) {
         cmd.push('--all');
-      } else if (slugs.length > 0) {
-        cmd.push(...slugs);
       } else {
-        console.error('\n❌ Specify plugin slugs or use --all');
-        process.exit(1);
+        cmd.push(...slugs);
       }
       if (options.dryRun) cmd.push('--dry-run');
 
@@ -303,6 +337,16 @@ coreCommand
   .description('Get WordPress version')
   .action(async (target) => {
     try {
+      if (loadMcpConnectionInfo()) {
+        const { text, isError } = await callMcpTool('wp_core_version', targetToMcpArgs(target));
+        if (isError) {
+          console.error(`\n❌ ${text}`);
+          process.exit(1);
+        }
+        console.log(text);
+        return;
+      }
+
       const { hasExplicitRouting, resolveTarget, printResolutionHeader } = await import('../utils/resolve-target');
       const client = getClient();
 
@@ -945,6 +989,17 @@ wpCommand
   .action(async (target, options) => {
     try {
       parseTarget(target);
+
+      if (loadMcpConnectionInfo()) {
+        const { text, isError } = await callMcpTool('wp_site_health', targetToMcpArgs(target));
+        if (isError) {
+          console.error(`\n❌ ${text}`);
+          process.exit(1);
+        }
+        console.log(text);
+        return;
+      }
+
       const client = getClient();
 
       const result = await client.mutate<{ nexusWpCommand: any }>(`
