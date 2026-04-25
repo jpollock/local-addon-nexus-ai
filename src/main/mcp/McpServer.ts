@@ -69,19 +69,34 @@ export class McpServer {
   }
 
   async start(): Promise<ConnectionInfo> {
-    const port = this.port || await this.findPort();
-    this.port = port;
+    const ports = this.buildPortList();
 
     return new Promise((resolve, reject) => {
       this.server = http.createServer((req, res) => this.handleRequest(req, res));
 
-      this.server.listen(port, '127.0.0.1', () => {
-        const info = this.getConnectionInfo();
-        this.services.logger.info(`[NexusAI MCP] Server listening on http://127.0.0.1:${port}`);
-        resolve(info);
+      this.server.on('listening', () => {
+        // Read the actual OS-assigned port — eliminates any TOCTOU gap
+        const addr = this.server!.address() as { address: string; family: string; port: number };
+        this.port = addr.port;
+        this.services.logger.info(`[NexusAI MCP] Server listening on http://127.0.0.1:${this.port}`);
+        resolve(this.getConnectionInfo());
       });
 
-      this.server.on('error', reject);
+      this.server.on('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE') {
+          const next = ports.shift();
+          if (next !== undefined) {
+            // Retry on the next candidate — same server instance, no probe needed
+            this.server!.listen(next, '127.0.0.1');
+          } else {
+            reject(new Error(`No available port in range ${MCP_PORT_RANGE_START}-${MCP_PORT_RANGE_END}`));
+          }
+        } else {
+          reject(err);
+        }
+      });
+
+      this.server.listen(ports.shift()!, '127.0.0.1');
     });
   }
 
@@ -120,27 +135,22 @@ export class McpServer {
     return this.port;
   }
 
-  private async findPort(): Promise<number> {
-    // Try the preferred port first (reuses last-known port for stable HTTP configs)
-    if (this.preferredPort && await this.isPortAvailable(this.preferredPort)) {
-      return this.preferredPort;
+  private buildPortList(): number[] {
+    // Explicit test override (options.port set to a non-zero value) — single candidate only
+    if (this.port !== 0) {
+      return [this.port];
+    }
+    const ports: number[] = [];
+    // Preferred port (last-known) tried first for HTTP config stability
+    if (this.preferredPort) {
+      ports.push(this.preferredPort);
     }
     for (let port = MCP_PORT_RANGE_START; port <= MCP_PORT_RANGE_END; port++) {
-      if (port === this.preferredPort) continue; // already tried above
-      const available = await this.isPortAvailable(port);
-      if (available) return port;
+      if (port !== this.preferredPort) {
+        ports.push(port);
+      }
     }
-    throw new Error(`No available port in range ${MCP_PORT_RANGE_START}-${MCP_PORT_RANGE_END}`);
-  }
-
-  private isPortAvailable(port: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      const tester = http.createServer();
-      tester.once('error', () => resolve(false));
-      tester.listen(port, '127.0.0.1', () => {
-        tester.close(() => resolve(true));
-      });
-    });
+    return ports;
   }
 
   private handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {

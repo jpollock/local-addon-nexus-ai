@@ -290,8 +290,10 @@ export default function main(context: any): void {
       const instructionRegistry = new InstructionRegistry();
       registerAllInstructions(instructionRegistry, registryStorage);
 
-      // Reuse token and preferred port from previous run so HTTP configs stay stable
+      // Load previous run's token/port before clearing — reused for config stability.
+      // Delete first so the file only exists when a server is actually bound.
       const previousConnectionInfo = loadConnectionInfo();
+      deleteConnectionInfo();
       mcpServer = new McpServer({
         services: nexusServices,
         registry,
