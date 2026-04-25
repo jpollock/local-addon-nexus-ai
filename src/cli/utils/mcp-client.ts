@@ -66,7 +66,9 @@ export async function callMcpTool(
     params: { name: toolName, arguments: args },
   };
 
-  const timeout = options?.timeout ?? 30000;
+  // Short default: if MCP is up it responds in ms. 3s is generous — don't make
+  // users wait 30s before falling through to GraphQL when server is unreachable.
+  const timeout = options?.timeout ?? 3000;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -119,11 +121,16 @@ export function targetToMcpArgs(target: string): Record<string, string> {
     return { site: target.slice(0, -'@local'.length) };
   }
   if (target.startsWith('wpe:')) {
-    return { install_name: target.slice('wpe:'.length) };
+    // wpe:account/install@env — extract just the install name
+    const installPart = target.slice('wpe:'.length).split('@')[0].split('/').pop() ?? target;
+    return { install_name: installPart };
   }
   const envMatch = target.match(/^(.+?)@(production|staging|development)$/);
   if (envMatch) {
     return { install_name: envMatch[1] };
   }
-  return { site: target };
+  // Bare name: pass as install_name so WPE resolution is attempted.
+  // The MCP tool resolveTarget() will also check local sites if install_name
+  // doesn't match a WPE install, so this works for both local and WPE bare names.
+  return { install_name: target };
 }

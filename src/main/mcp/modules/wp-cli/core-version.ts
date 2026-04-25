@@ -23,6 +23,24 @@ export const coreVersionHandler: McpToolHandler = {
     if ('content' in target) return target;
 
     if (target.type === 'remote') {
+      // Check graph DB cache first — avoids SSH for data we already have
+      const db = services.graphService?.getDb?.();
+      if (db) {
+        try {
+          const row = db.prepare(
+            "SELECT wp_version, last_sync_at FROM sites WHERE source='wpe' AND name=? AND wp_version IS NOT NULL LIMIT 1"
+          ).get(target.installName) as { wp_version: string; last_sync_at: number } | undefined;
+          if (row?.wp_version) {
+            const ageMs = Date.now() - (row.last_sync_at ?? 0);
+            const ageHours = Math.floor(ageMs / 3600000);
+            const ageNote = ageHours < 1 ? 'synced recently'
+              : ageHours < 24 ? `synced ${ageHours}h ago`
+              : `synced ${Math.floor(ageHours / 24)}d ago`;
+            return ok(`WordPress ${row.wp_version} _(${ageNote} — run \`nexus wpe sync\` to refresh)_`);
+          }
+        } catch { /* graph not ready — fall through to SSH */ }
+      }
+
       const result = await remoteWpCliRun(target.installName, ['core', 'version'], services);
       if (!result.success) {
         return error(`Remote WP-CLI error: ${result.stdout}`);

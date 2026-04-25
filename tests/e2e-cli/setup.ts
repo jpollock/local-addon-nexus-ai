@@ -79,6 +79,54 @@ async function testCliConnectivity(): Promise<boolean> {
   });
 }
 
+const E2E_SITE_NAME = 'nexus-e2e-cli-test-site';
+const CLI_BIN_PATH = require('path').resolve(__dirname, '..', '..', 'bin', 'nexus.js');
+
+async function runCliSetup(args: string[]): Promise<{ stdout: string; exitCode: number }> {
+  const { spawn } = require('child_process');
+  return new Promise((resolve) => {
+    const child = spawn(CLI_BIN_PATH, args, { timeout: 60000 });
+    let stdout = '';
+    child.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+    child.on('close', (code: number) => resolve({ stdout, exitCode: code ?? 1 }));
+    child.on('error', () => resolve({ stdout, exitCode: 1 }));
+    setTimeout(() => { child.kill(); resolve({ stdout, exitCode: 1 }); }, 60000);
+  });
+}
+
+async function ensureE2ESiteRunning(): Promise<void> {
+  console.log(`[CLI E2E Setup] Ensuring ${E2E_SITE_NAME} is running...`);
+
+  const listResult = await runCliSetup(['sites', 'list', '--json']);
+  let sites: any[] = [];
+  try { sites = JSON.parse(listResult.stdout)?.local ?? []; } catch { /* ignore */ }
+
+  const site = sites.find((s: any) => s.name === E2E_SITE_NAME);
+
+  if (!site) {
+    console.log(`[CLI E2E Setup] ${E2E_SITE_NAME} not found — creating it...`);
+    const createResult = await runCliSetup(['sites', 'create', E2E_SITE_NAME]);
+    if (createResult.exitCode !== 0) {
+      throw new Error(`Failed to create ${E2E_SITE_NAME}: ${createResult.stdout}`);
+    }
+    console.log(`[CLI E2E Setup] ✅ Created ${E2E_SITE_NAME}`);
+  }
+
+  if (!site || site.status !== 'running') {
+    console.log(`[CLI E2E Setup] Starting ${E2E_SITE_NAME}...`);
+    const startResult = await runCliSetup(['sites', 'start', `${E2E_SITE_NAME}@local`]);
+    if (startResult.exitCode !== 0) {
+      throw new Error(`Failed to start ${E2E_SITE_NAME}: ${startResult.stdout}`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    console.log(`[CLI E2E Setup] ✅ ${E2E_SITE_NAME} started`);
+  } else {
+    console.log(`[CLI E2E Setup] ✅ ${E2E_SITE_NAME} already running`);
+  }
+
+  process.env.CLI_E2E_TEST_SITE = E2E_SITE_NAME;
+}
+
 export default async function globalSetup() {
   console.log('\n[CLI E2E Setup] Checking production Local...');
 
@@ -109,6 +157,9 @@ export default async function globalSetup() {
   process.env.CLI_E2E_GRAPHQL_URL = connectionInfo.url;
   process.env.CLI_E2E_GRAPHQL_PORT = String(connectionInfo.port);
   process.env.CLI_E2E_GRAPHQL_TOKEN = connectionInfo.authToken;
+
+  // Ensure the dedicated e2e test site is running
+  await ensureE2ESiteRunning();
 
   console.log('[CLI E2E Setup] ✅ Ready to run CLI tests\n');
 }

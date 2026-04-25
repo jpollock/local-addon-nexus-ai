@@ -28,13 +28,17 @@ pluginCommand
 
       // MCP path: skip for --json (MCP returns markdown, not structured data)
       if (!options.json && loadMcpConnectionInfo()) {
-        const { text, isError } = await callMcpTool('wp_plugin_list', targetToMcpArgs(target));
-        if (isError) {
-          console.error(`\n❌ ${text}`);
-          process.exit(1);
+        try {
+          const { text, isError } = await callMcpTool('wp_plugin_list', targetToMcpArgs(target));
+          if (isError) {
+            console.error(`\n❌ ${text}`);
+            process.exit(1);
+          }
+          console.log(text);
+          return;
+        } catch {
+          // MCP server unreachable — fall through to GraphQL
         }
-        console.log(text);
-        return;
       }
 
       const client = getClient();
@@ -123,6 +127,7 @@ pluginCommand
 
         if (!result.nexusWpCommand.success) {
           console.error(`❌ Failed: ${result.nexusWpCommand.error}`);
+          process.exit(1);
         } else {
           console.log(`✅ Installed ${slug}`);
         }
@@ -211,21 +216,25 @@ pluginCommand
       }
 
       if (loadMcpConnectionInfo()) {
-        const targetArgs = targetToMcpArgs(target);
-        const updateSlugs: string[] = options.all ? ['--all'] : slugs;
-        for (const slug of updateSlugs) {
-          const { text, isError } = await callMcpTool(
-            'wp_plugin_update',
-            { ...targetArgs, slug } as Record<string, unknown>,
-            { timeout: 180000 },
-          );
-          if (isError) {
-            console.error(`\n❌ ${text}`);
-            process.exit(1);
+        try {
+          const targetArgs = targetToMcpArgs(target);
+          const updateSlugs: string[] = options.all ? ['--all'] : slugs;
+          for (const slug of updateSlugs) {
+            const { text, isError } = await callMcpTool(
+              'wp_plugin_update',
+              { ...targetArgs, slug } as Record<string, unknown>,
+              { timeout: 180000 },
+            );
+            if (isError) {
+              console.error(`\n❌ ${text}`);
+              process.exit(1);
+            }
+            console.log(text);
           }
-          console.log(text);
+          return;
+        } catch {
+          // MCP server unreachable — fall through to GraphQL
         }
-        return;
       }
 
       const client = getClient();
@@ -338,13 +347,17 @@ coreCommand
   .action(async (target) => {
     try {
       if (loadMcpConnectionInfo()) {
-        const { text, isError } = await callMcpTool('wp_core_version', targetToMcpArgs(target));
-        if (isError) {
-          console.error(`\n❌ ${text}`);
-          process.exit(1);
+        try {
+          const { text, isError } = await callMcpTool('wp_core_version', targetToMcpArgs(target));
+          if (isError) {
+            console.error(`\n❌ ${text}`);
+            process.exit(1);
+          }
+          console.log(text);
+          return;
+        } catch {
+          // MCP server unreachable — fall through to GraphQL
         }
-        console.log(text);
-        return;
       }
 
       const client = getClient();
@@ -974,13 +987,17 @@ wpCommand
       parseTarget(target);
 
       if (loadMcpConnectionInfo()) {
-        const { text, isError } = await callMcpTool('wp_site_health', targetToMcpArgs(target));
-        if (isError) {
-          console.error(`\n❌ ${text}`);
-          process.exit(1);
+        try {
+          const { text, isError } = await callMcpTool('wp_site_health', targetToMcpArgs(target));
+          if (isError) {
+            console.error(`\n❌ ${text}`);
+            process.exit(1);
+          }
+          console.log(text);
+          return;
+        } catch {
+          // MCP server unreachable — fall through to GraphQL
         }
-        console.log(text);
-        return;
       }
 
       const client = getClient();
