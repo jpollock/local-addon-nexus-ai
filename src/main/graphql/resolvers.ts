@@ -24,6 +24,8 @@ import { STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../../common/constants';
 import { getApiKey, KeyVault } from '../security/KeyVault';
 import type { NexusServices } from '../types/nexus-services';
 import type { LocalSite, LocalSiteDataAccessor } from '../types/site-data';
+import pLimit from 'p-limit';
+import { withQueue } from './resolver-utils';
 
 /** The root value for GraphQL resolvers — always null/undefined for Query/Mutation. */
 type ResolverParent = unknown;
@@ -887,6 +889,7 @@ export function createResolvers(context: ResolverContext) {
        * Create a new local site
        */
       nexusSitesCreate: async (_parent: ResolverParent, { input }: { input: any }) => {
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return {
@@ -912,12 +915,14 @@ export function createResolvers(context: ResolverContext) {
             error: error.message,
           };
         }
+        });
       },
 
       /**
        * Start a local site
        */
       nexusSitesStart: async (_parent: ResolverParent, { target }: { target: string }) => {
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return { success: false, error: 'Local services not available' };
@@ -953,12 +958,14 @@ export function createResolvers(context: ResolverContext) {
             error: error.message,
           };
         }
+        });
       },
 
       /**
        * Stop a local site
        */
       nexusSitesStop: async (_parent: ResolverParent, { target }: { target: string }) => {
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return { success: false, error: 'Local services not available' };
@@ -994,6 +1001,7 @@ export function createResolvers(context: ResolverContext) {
             error: error.message,
           };
         }
+        });
       },
 
       /**
@@ -1099,6 +1107,7 @@ export function createResolvers(context: ResolverContext) {
        * Digital twin: refresh one site
        */
       nexusSiteRefresh: async (_parent: ResolverParent, { target, force }: { target: string; force?: boolean }) => {
+        return withQueue(async () => {
         try {
           const result = await registry.call('nexus_site_refresh', { site: target, force: !!force }, services, 'cli');
           const text = result?.content?.[0]?.text ?? '';
@@ -1106,12 +1115,14 @@ export function createResolvers(context: ResolverContext) {
         } catch (err: any) {
           return { success: false, error: err.message, report: null };
         }
+        });
       },
 
       /**
        * Digital twin: refresh all sites
        */
       nexusFleetRefresh: async () => {
+        return withQueue(async () => {
         try {
           const result = await registry.call('nexus_fleet_refresh', {}, services, 'cli');
           const text = result?.content?.[0]?.text ?? '';
@@ -1119,6 +1130,7 @@ export function createResolvers(context: ResolverContext) {
         } catch (err: any) {
           return { success: false, error: err.message, report: null };
         }
+        });
       },
 
       /**
@@ -1127,6 +1139,7 @@ export function createResolvers(context: ResolverContext) {
        */
       nexusWpeSiteDeepRefresh: async (_parent: ResolverParent, { installName }: { installName: string }) => {
         const empty = { installName, pluginCount: 0, themeCount: 0, wpVersion: null };
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return { success: false, error: 'Local services not available', ...empty };
@@ -1231,6 +1244,7 @@ export function createResolvers(context: ResolverContext) {
         } catch (error: any) {
           return { success: false, error: error.message, ...empty };
         }
+        });
       },
 
       /**
@@ -1553,6 +1567,7 @@ export function createResolvers(context: ResolverContext) {
        * Run any WP-CLI command on a site (local or WPE)
        */
       nexusWpCommand: async (_parent: ResolverParent, { target, command }: { target: string; command: string[] }) => {
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return {
@@ -1682,12 +1697,14 @@ export function createResolvers(context: ResolverContext) {
             exitCode: 1,
           };
         }
+        });
       },
 
       /**
        * List plugins on a site (local or WPE)
        */
       nexusWpPluginList: async (_parent: ResolverParent, { target }: { target: string }) => {
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return {
@@ -1835,12 +1852,14 @@ export function createResolvers(context: ResolverContext) {
             plugins: [],
           };
         }
+        });
       },
 
       /**
        * Pull from WPE to local
        */
       nexusSyncPull: async (_parent: ResolverParent, { input }: { input: any }) => {
+        return withQueue(async () => {
         try {
           const localParsed = parseTarget(input.localSite);
           const wpeParsed = parseTarget(input.wpeTarget);
@@ -1938,12 +1957,14 @@ export function createResolvers(context: ResolverContext) {
             linkCreated: false,
           };
         }
+        });
       },
 
       /**
        * Push from local to WPE
        */
       nexusSyncPush: async (_parent: ResolverParent, { input }: { input: any }) => {
+        return withQueue(async () => {
         try {
           const localParsed = parseTarget(input.localSite);
           const wpeParsed = parseTarget(input.wpeTarget);
@@ -2057,6 +2078,7 @@ export function createResolvers(context: ResolverContext) {
             installCreated: false,
           };
         }
+        });
       },
 
       /**
@@ -2462,6 +2484,7 @@ export function createResolvers(context: ResolverContext) {
       // ========================================================================
 
       nexusFleetHealth: async () => {
+        return withQueue(async () => {
         try {
           if (!services.healthCalculator) {
             return {
@@ -2536,6 +2559,7 @@ export function createResolvers(context: ResolverContext) {
             summary: null,
           };
         }
+        });
       },
 
       nexusFleetSiteHealth: async (_parent: ResolverParent, { target }: { target: string }) => {
@@ -2899,11 +2923,12 @@ export function createResolvers(context: ResolverContext) {
       },
 
       nexusFleetBulkReindex: async (_parent: ResolverParent, { targets }: { targets: string[] }) => {
+        return withQueue(async () => {
         try {
-          const results = [];
+          const limit = pLimit(3);
 
-          // Reindex each target in parallel
-          const reindexPromises = targets.map(async (target) => {
+          // Reindex each target with bounded concurrency
+          const reindexPromises = targets.map((target) => limit(async () => {
             try {
               const parsed = parseTarget(target);
               const site = resolveSite(parsed.siteName!, services.siteData);
@@ -2939,7 +2964,7 @@ export function createResolvers(context: ResolverContext) {
                 documentCount: 0,
               };
             }
-          });
+          }));
 
           const reindexResults = await Promise.all(reindexPromises);
 
@@ -2954,15 +2979,17 @@ export function createResolvers(context: ResolverContext) {
             results: [],
           };
         }
+        });
       },
 
       nexusFleetBulkPluginUpdate: async (_parent: ResolverParent, { input }: { input: any }) => {
+        return withQueue(async () => {
         try {
           const { targets, plugin, all, dryRun } = input;
-          const results = [];
+          const limit = pLimit(3);
 
-          // Update plugins on each target in parallel
-          const updatePromises = targets.map(async (target: string) => {
+          // Update plugins on each target with bounded concurrency
+          const updatePromises = targets.map((target: string) => limit(async () => {
             try {
               const parsed = parseTarget(target);
               const site = resolveSite(parsed.siteName!, services.siteData);
@@ -3029,7 +3056,7 @@ export function createResolvers(context: ResolverContext) {
                 updatedPlugins: [],
               };
             }
-          });
+          }));
 
           const updateResults = await Promise.all(updatePromises);
 
@@ -3044,9 +3071,11 @@ export function createResolvers(context: ResolverContext) {
             results: [],
           };
         }
+        });
       },
 
       nexusFleetBulkHealthCheck: async (_parent: ResolverParent, { targets }: { targets: string[] }) => {
+        return withQueue(async () => {
         try {
           if (!services.healthCalculator) {
             return {
@@ -3056,11 +3085,11 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const results = [];
           const allSites = services.siteData.getSites();
+          const limit = pLimit(3);
 
-          // Check health for each target in parallel
-          const healthPromises = targets.map(async (target) => {
+          // Check health for each target with bounded concurrency
+          const healthPromises = targets.map((target) => limit(async () => {
             try {
               const parsed = parseTarget(target);
               const site = resolveSite(parsed.siteName!, services.siteData);
@@ -3097,7 +3126,7 @@ export function createResolvers(context: ResolverContext) {
                 issueCount: 0,
               };
             }
-          });
+          }));
 
           const healthResults = await Promise.all(healthPromises);
 
@@ -3112,6 +3141,7 @@ export function createResolvers(context: ResolverContext) {
             results: [],
           };
         }
+        });
       },
 
       nexusFleetCompare: async (_parent: ResolverParent, { target1, target2 }: { target1: string; target2: string }) => {
@@ -3438,6 +3468,7 @@ export function createResolvers(context: ResolverContext) {
       },
 
       nexusContentReindex: async (_parent: ResolverParent, { target }: { target: string }) => {
+        return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
           const site = resolveSite(parsed.siteName!, services.siteData);
@@ -3473,6 +3504,7 @@ export function createResolvers(context: ResolverContext) {
             chunkCount: 0,
           };
         }
+        });
       },
 
       // ========================================================================
@@ -3523,6 +3555,7 @@ export function createResolvers(context: ResolverContext) {
       },
 
       nexusAiSetup: async (_parent: ResolverParent, { target, provider, force }: { target: string; provider?: string; force?: boolean }) => {
+        return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
           const site = resolveSite(parsed.siteName!, services.siteData);
@@ -3587,6 +3620,7 @@ export function createResolvers(context: ResolverContext) {
             configured: null,
           };
         }
+        });
       },
 
       nexusAiSyncCredentials: async (_parent: ResolverParent, { target }: { target: string }) => {
@@ -3711,6 +3745,7 @@ export function createResolvers(context: ResolverContext) {
       },
 
       nexusAiRun: async (_parent: ResolverParent, { target, ability, params }: { target: string; ability: string; params?: string }) => {
+        return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
           const site = resolveSite(parsed.siteName!, services.siteData);
@@ -3801,6 +3836,7 @@ export function createResolvers(context: ResolverContext) {
             result: null,
           };
         }
+        });
       },
 
       nexusAiStatus: async (_parent: ResolverParent, { target }: { target: string }) => {
@@ -3911,6 +3947,7 @@ export function createResolvers(context: ResolverContext) {
       // ========================================================================
 
       nexusAuditSite: async (_parent: ResolverParent, { target }: { target: string }) => {
+        return withQueue(async () => {
         try {
           const parsed = parseTarget(target);
           const site = resolveSite(parsed.siteName!, services.siteData);
@@ -4000,9 +4037,11 @@ export function createResolvers(context: ResolverContext) {
             audit: null,
           };
         }
+        });
       },
 
       nexusAuditPlugins: async () => {
+        return withQueue(async () => {
         try {
           // Get all sites
           const allSites = services.siteData.getSites();
@@ -4066,12 +4105,14 @@ export function createResolvers(context: ResolverContext) {
             report: null,
           };
         }
+        });
       },
 
       /**
        * Scan database health for a local WordPress site
        */
       nexusDbScan: async (_parent: ResolverParent, { target }: { target: string }) => {
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return { success: false, error: 'Local services not available', scan: null };
@@ -4118,12 +4159,14 @@ export function createResolvers(context: ResolverContext) {
         } catch (error: any) {
           return { success: false, error: error.message, scan: null };
         }
+        });
       },
 
       /**
        * Clean database items (dry_run defaults to true)
        */
       nexusDbClean: async (_parent: ResolverParent, { input }: { input: { target: string; items?: string[]; dryRun?: boolean } }) => {
+        return withQueue(async () => {
         try {
           if (!services.localServices) {
             return { success: false, error: 'Local services not available', result: null };
@@ -4160,6 +4203,7 @@ export function createResolvers(context: ResolverContext) {
         } catch (error: any) {
           return { success: false, error: error.message, result: null };
         }
+        });
       },
 
       /**
