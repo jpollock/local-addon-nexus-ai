@@ -137,7 +137,9 @@ execSync('npm install --omit=dev', { cwd: stagingDir, stdio: 'inherit' });
 console.log('Rebuilding native modules for Electron...');
 // Run from project root (where electron-rebuild is installed as devDep)
 // but target the staging directory
-run('npx', ['electron-rebuild', '-v', '37.8.0', '-f', '-w', 'better-sqlite3', '--module-dir', stagingDir],
+// On Windows, npx is a .cmd script and requires shell:true to resolve
+const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+run(npxCmd, ['electron-rebuild', '-v', '37.8.0', '-f', '-w', 'better-sqlite3', '--module-dir', stagingDir],
   { cwd: projectRoot });
 
 // ---------------------------------------------------------------------------
