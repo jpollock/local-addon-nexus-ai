@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# =============================================================================
+# eval-full — Full eval pipeline
+#
+# Usage: ./eval-full
+#
+# Runs the complete build → CLI eval → MCP eval → analyze → score pipeline.
+# A timestamped log is written to tests/evals/results/eval-full-YYYY-MM-DD-HHMM.log
+# =============================================================================
+
+set -e
+BOLD='\033[1m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; RESET='\033[0m'
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+LOG_DIR="tests/evals/results"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/eval-full-$(date '+%Y-%m-%d-%H%M').log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "=== eval-full started at $(date) ==="
+echo "=== Log: $LOG_FILE ==="
+
+step() {
+  local msg="[$( date '+%H:%M:%S')] $1"
+  echo -e "\n${BOLD}${msg}${RESET}"
+  echo "" >> "$LOG_FILE"
+  echo "STEP: $msg" >> "$LOG_FILE"
+}
+ok()   {
+  echo -e "  ${GREEN}✅ $1${RESET}"
+  echo "  OK: $1" >> "$LOG_FILE"
+}
+warn() {
+  echo -e "  ${YELLOW}⚠️  $1${RESET}"
+  echo "  WARN: $1" >> "$LOG_FILE"
+}
+fail() {
+  echo -e "  ${RED}❌ $1${RESET}"
+  echo "  FAIL: $1" >> "$LOG_FILE"
+  echo "=== eval-full FAILED at $(date) ===" >> "$LOG_FILE"
+  exit 1
+}
+
+# ── Cleanup trap ──────────────────────────────────────────────────────────────
+cleanup() {
+  echo -e "\n${RED}[eval-full] Interrupted — restoring environment...${RESET}"
+  echo "=== eval-full INTERRUPTED at $(date) ===" >> "$LOG_FILE"
+  [ -d "$HOME/.claude/skills.bak" ] && mv "$HOME/.claude/skills.bak" "$HOME/.claude/skills" 2>/dev/null && echo "  Restored global skills" >> "$LOG_FILE"
+  [ -d ".claude/skills.bak" ] && mv ".claude/skills.bak" ".claude/skills" 2>/dev/null && echo "  Restored local skills" >> "$LOG_FILE"
+  echo "  Log saved to: $LOG_FILE"
+  exit 130
+}
+trap cleanup INT TERM
+
+# ── 1. Build ──────────────────────────────────────────────────────────────────
+step "1/11 — Build + rebuild native modules"
+echo "  Running: npm run build"
+npm run build 2>&1 | tail -3
+echo "  Running: npm run rebuild"
+npm run rebuild 2>&1 | tail -2
+ok "Build complete"
+
+# ── 2. Restore skills if stuck ────────────────────────────────────────────────
+step "2/11 — Restore any stuck skills"
+if [ -d "$HOME/.claude/skills.bak" ]; then
+  mv "$HOME/.claude/skills.bak" "$HOME/.claude/skills"
+  warn "Restored global skills from .bak (previous run interrupted?)"
+fi
+if [ -d ".claude/skills.bak" ]; then
+  mv ".claude/skills.bak" ".claude/skills"
+  warn "Restored local skills from .bak (previous run interrupted?)"
+fi
+ok "Skills state clean"
+
+# ── 3. Stop Local ─────────────────────────────────────────────────────────────
+step "3/11 — Stop Local"
+echo "  Killing Local processes..."
+pkill -f "Local.app" 2>/dev/null && echo "  Killed Local.app" || echo "  Local.app not running"
+pkill -f "Local Helper" 2>/dev/null && echo "  Killed Local Helper" || true
+sleep 3
+ok "Local stopped"
+
+# ── 4. Start Local + wait for ready ──────────────────────────────────────────
+step "4/11 — Start Local, wait for GraphQL + MCP"
+echo "  Opening /Applications/Local.app..."
+open /Applications/Local.app
+
+echo "  Waiting for GraphQL server (up to 60s)..."
+for i in $(seq 1 30); do
+  if nexus sites list --json > /dev/null 2>&1; then
+    ok "Local GraphQL up after $((i*2))s"
+    break
+  fi
+  [ $i -eq 30 ] && fail "Local did not start within 60s — check Local.app manually"
+  sleep 2
+done
+
+echo "  Waiting for MCP server (up to 30s)..."
+for i in $(seq 1 15); do
+  PORT=$(python3 -c "import json; print(json.load(open('$HOME/Library/Application Support/Local/nexus-ai-mcp-connection-info.json'))['port'])" 2>/dev/null || echo "")
+  if [ -n "$PORT" ] && curl -s "http://127.0.0.1:$PORT/health" > /dev/null 2>&1; then
+    ok "MCP server ready on port $PORT after $((i*2))s"
+    break
+  fi
+  [ $i -eq 15 ] && warn "MCP server not ready after 30s — MCP eval may fail"
+  sleep 2
+done
+
+# ── 5. Set CLI mode ───────────────────────────────────────────────────────────
+step "5/11 — Set CLI mode (skills ✅, MCP ⚫)"
+echo "  Before:"
+~/bin/claude-mode status
+~/bin/claude-mode cli-only
+echo "  After:"
+~/bin/claude-mode status
+
+# ── 6. CLI eval ───────────────────────────────────────────────────────────────
+step "6/11 — Run CLI eval (all 10 cases)"
+CLI_START=$(date '+%H:%M:%S')
+echo "  Started at $CLI_START"
+./eval run cli
+CLI_END=$(date '+%H:%M:%S')
+ok "CLI eval complete (${CLI_START} → ${CLI_END})"
+
+# ── 7. Set MCP mode ───────────────────────────────────────────────────────────
+step "7/11 — Set MCP mode (skills ⚫, MCP ✅)"
+echo "  Before:"
+~/bin/claude-mode status
+~/bin/claude-mode mcp-only
+echo "  After:"
+~/bin/claude-mode status
+
+# ── 8. MCP eval ───────────────────────────────────────────────────────────────
+step "8/11 — Run MCP eval (all 10 cases)"
+MCP_START=$(date '+%H:%M:%S')
+echo "  Started at $MCP_START"
+./eval run mcp
+MCP_END=$(date '+%H:%M:%S')
+ok "MCP eval complete (${MCP_START} → ${MCP_END})"
+
+# ── 9. Restore full mode ──────────────────────────────────────────────────────
+step "9/11 — Restore full mode (skills ✅, MCP ✅)"
+~/bin/claude-mode full
+~/bin/claude-mode status
+
+# ── 10. Analyze ───────────────────────────────────────────────────────────────
+step "10/11 — Analyze results"
+./eval analyze
+ok "Analysis saved to tests/evals/results/"
+
+# ── 11. Open scorer ───────────────────────────────────────────────────────────
+step "11/11 — Open scorer UI"
+./eval score
+ok "Scorer open at http://localhost:4242"
+
+# ── Done ──────────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}${GREEN}═══════════════════════════════════════${RESET}"
+echo -e "${BOLD}${GREEN}  eval-full complete! $(date '+%H:%M:%S')${RESET}"
+echo -e "${BOLD}${GREEN}═══════════════════════════════════════${RESET}"
+echo -e "  CLI:     ${CLI_START} → ${CLI_END}"
+echo -e "  MCP:     ${MCP_START} → ${MCP_END}"
+echo -e "  Score:   http://localhost:4242"
+echo -e "  Results: tests/evals/results/"
+echo -e "  Log:     ${LOG_FILE}"
+echo ""
+echo "=== eval-full completed successfully at $(date) ===" >> "$LOG_FILE"

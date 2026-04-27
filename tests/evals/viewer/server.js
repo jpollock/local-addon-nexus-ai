@@ -33,6 +33,8 @@ function loadScores() {
 function saveScoresToStore(caseId, mode, scores, notes, runDir) {
   const store = loadScores();
   if (!store[caseId]) store[caseId] = {};
+  // Normalize mode key: UI sends 'cli' or 'mcp', store uses 'cli-skills' or 'mcp'
+  const storeKey = mode === 'cli' ? 'cli-skills' : mode;
   const weighted = (
     (scores.task ?? 0) * 40 +
     (scores.steps ?? 0) * 30 +
@@ -40,7 +42,7 @@ function saveScoresToStore(caseId, mode, scores, notes, runDir) {
     (scores.clarity ?? 0) * 10
   ) / 100;
 
-  store[caseId][mode] = {
+  store[caseId][storeKey] = {
     task: scores.task,
     steps: scores.steps,
     friction: scores.friction,
@@ -234,6 +236,15 @@ app.get('/api/scores/history', (req, res) => {
   } catch { res.json([]); }
 });
 
+app.get('/api/scores/history/:caseId', (req, res) => {
+  try {
+    if (!fs.existsSync(SCORES_HISTORY_FILE)) return res.json([]);
+    const lines = fs.readFileSync(SCORES_HISTORY_FILE, 'utf-8').split('\n').filter(Boolean);
+    const entries = lines.map(l => JSON.parse(l)).filter(e => e.caseId === req.params.caseId);
+    res.json(entries);
+  } catch { res.json([]); }
+});
+
 // ---------------------------------------------------------------------------
 // UI
 // ---------------------------------------------------------------------------
@@ -388,12 +399,74 @@ app.get('/', (req, res) => {
         <div class="weighted" id="mcp-weighted"></div>
       </div>
     </div>
+
+    <!-- History panel -->
+    <div id="history-panel" style="display:none;border-top:1px solid #e5e7eb;background:#fafafa;padding:16px 24px;">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;margin-bottom:12px;">Score History</div>
+      <div id="history-content" style="font-size:12px;color:#374151;"></div>
+    </div>
   </div>
 </div>
 
 <script>
 let currentCase = null;
 let currentData = null;
+
+async function loadHistory(caseId) {
+  const res = await fetch(\`/api/scores/history/\${caseId}\`);
+  const entries = await res.json();
+  if (!entries.length) {
+    document.getElementById('history-panel').style.display = 'none';
+    return;
+  }
+
+  // Group by mode, sort by timestamp
+  const byMode = {};
+  for (const e of entries) {
+    if (!byMode[e.mode]) byMode[e.mode] = [];
+    byMode[e.mode].push(e);
+  }
+
+  const fmtDate = (ts) => ts ? ts.slice(0,10) : '?';
+  const fmtRun = (r) => {
+    const m = (r||'').match(/(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})/);
+    if (!m) return r || '?';
+    const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return \`\${months[+m[2]-1]} \${+m[3]}, \${m[4]}:\${m[5]}\`;
+  };
+  const trendArrow = (scores) => {
+    if (scores.length < 2) return '';
+    const last = scores[scores.length-1].weighted;
+    const prev = scores[scores.length-2].weighted;
+    if (last > prev + 2) return \` <span style="color:#10b981">↑\${(last-prev).toFixed(0)}</span>\`;
+    if (last < prev - 2) return \` <span style="color:#ef4444">↓\${(prev-last).toFixed(0)}</span>\`;
+    return \` <span style="color:#9ca3af">→</span>\`;
+  };
+
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
+  html += '<tr style="color:#9ca3af;"><th style="text-align:left;padding:2px 8px 6px 0">Mode</th><th style="text-align:left;padding:2px 8px 6px 0">Run</th><th style="padding:2px 8px 6px 0">Weighted</th><th style="padding:2px 8px 6px 0">T</th><th style="padding:2px 8px 6px 0">St</th><th style="padding:2px 8px 6px 0">Fr</th><th style="padding:2px 8px 6px 0">Cl</th><th style="text-align:left;padding:2px 0 6px 0">Notes</th></tr>';
+
+  for (const [mode, scores] of Object.entries(byMode)) {
+    for (const [i, s] of scores.entries()) {
+      const isLatest = i === scores.length - 1;
+      const bg = isLatest ? 'background:#f0fdff;' : '';
+      html += \`<tr style="\${bg}">
+        <td style="padding:3px 8px 3px 0;font-weight:\${isLatest?600:400}">\${mode === 'cli-skills' ? 'CLI' : 'MCP'}</td>
+        <td style="padding:3px 8px 3px 0;color:#6b7280">\${fmtRun(s.runDir)}</td>
+        <td style="padding:3px 8px 3px 0;text-align:center;font-weight:\${isLatest?700:400}">\${s.weighted?.toFixed(1) ?? '—'}\${isLatest ? trendArrow(scores) : ''}</td>
+        <td style="padding:3px 8px 3px 0;text-align:center;color:#6b7280">\${s.scores?.task ?? '—'}</td>
+        <td style="padding:3px 8px 3px 0;text-align:center;color:#6b7280">\${s.scores?.steps ?? '—'}</td>
+        <td style="padding:3px 8px 3px 0;text-align:center;color:#6b7280">\${s.scores?.friction ?? '—'}</td>
+        <td style="padding:3px 8px 3px 0;text-align:center;color:#6b7280">\${s.scores?.clarity ?? '—'}</td>
+        <td style="padding:3px 0 3px 0;color:#6b7280;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\${s.notes || ''}</td>
+      </tr>\`;
+    }
+  }
+  html += '</table>';
+
+  document.getElementById('history-content').innerHTML = html;
+  document.getElementById('history-panel').style.display = 'block';
+}
 
 function updateVal(id) {
   const el = document.getElementById(id);
@@ -489,14 +562,23 @@ async function loadCase(caseId) {
     for (const dim of ['task', 'steps', 'friction', 'clarity']) {
       const el = document.getElementById(\`\${mode}-\${dim}\`);
       const val = scores[dim];
-      if (val !== null && val !== undefined) {
-        el.value = val;
-        document.getElementById(\`\${mode}-\${dim}-val\`).textContent = val;
-      }
+      // Always reset — if no score exists, reset to 0 so previous case values don't bleed through
+      const display = (val !== null && val !== undefined) ? val : 0;
+      el.value = display;
+      document.getElementById(\`\${mode}-\${dim}-val\`).textContent = (val !== null && val !== undefined) ? val : '—';
     }
+    // Load saved notes if they exist
+    const savedNotes = (mode === 'cli' ? currentData.cliScores : currentData.mcpScores)?.notes || '';
+    document.getElementById(\`\${mode}-notes\`).value = savedNotes;
+    // Show weighted score if already scored
+    const savedWeighted = (mode === 'cli' ? currentData.cliScores : currentData.mcpScores)?.weighted;
+    document.getElementById(\`\${mode}-weighted\`).textContent = savedWeighted != null ? \`Weighted score: \${savedWeighted.toFixed(1)} / 100\` : '';
+    const saveBtn = document.getElementById(\`\${mode}-save-btn\`);
+    if (saveBtn) { saveBtn.textContent = \`Save \${mode.toUpperCase()} Score\`; saveBtn.classList.remove('saved'); }
   }
 
   document.getElementById('scoring').style.display = 'grid';
+  loadHistory(caseId);
 }
 
 async function saveScore(mode) {
@@ -520,6 +602,7 @@ async function saveScore(mode) {
   document.getElementById(\`\${mode}-weighted\`).textContent = \`Weighted score: \${weighted.toFixed(1)} / 100\`;
   setTimeout(() => { btn.textContent = \`Save \${mode.toUpperCase()} Score\`; btn.classList.remove('saved'); }, 2000);
   loadCases();
+  loadHistory(currentCase);
 }
 
 (async () => {

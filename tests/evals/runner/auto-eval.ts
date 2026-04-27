@@ -255,12 +255,12 @@ interface TurnData {
   parsed: any;          // the stream-json result object (has cost/tokens)
 }
 
-function runClaudeP(
+async function runClaudeP(
   prompt: string,
   mode: 'mcp' | 'cli-skills',
   caseId: string,
   sessionId?: string,
-): TurnData {
+): Promise<TurnData> {
   // allowedTools set after nexusPath is resolved below
 
   // Resolve the absolute nexus path.
@@ -281,17 +281,20 @@ function runClaudeP(
   // For CLI/Skills mode, prefix the prompt to force Bash-only execution.
   // Use the absolute nexus path — Claude's Bash tool uses a non-interactive shell
   // that doesn't source .zshrc, so fnm PATH injection doesn't happen inside claude -p.
+  const skillsDir = path.resolve(__dirname, '..', '..', '..', '.claude', 'skills');
   const cliPrefix = mode === 'cli-skills'
     ? 'IMPORTANT CONSTRAINTS:\n' +
       `- The nexus CLI is at: ${nexusPath} (use this exact path in all commands)\n` +
-      `- Run commands like: ${nexusPath} sites list, ${nexusPath} content search-all "query", ${nexusPath} fleet health\n` +
-      '- Skill instructions are already in your system prompt — use them directly, do NOT invoke the Skill tool\n' +
-      '- Do NOT use MCP tools\n\n'
+      `- Nexus CLI skills are available at: ${skillsDir}/\n` +
+      `- Each skill has a SKILL.md file with the correct command syntax. Before running commands, read the relevant skill file (e.g. ${skillsDir}/nexus-search/SKILL.md) to get the right syntax and approach.\n` +
+      '- Available skills: nexus-sites, nexus-fleet, nexus-search, nexus-wp, nexus-wpe, nexus-pull, nexus-doctor, nexus-ai-setup\n' +
+      '- Do NOT invoke the Skill tool — read the SKILL.md files directly using the Read tool\n' +
+      '- Do NOT use MCP tools\n' +
+      '- Do NOT write to, edit, or modify any source code files (src/, lib/, bin/)\n\n'
     : 'IMPORTANT CONSTRAINTS:\n' +
       '- You are running in MCP-only mode (simulating Claude Desktop)\n' +
       '- You do NOT have access to Bash, terminal, or any CLI tools\n' +
-      '- Do not use ToolSearch or ListMcpResourcesTool — call local-nexus-ai tools directly\n' +
-      '- Key tools available: mcp__local-nexus-ai__search_site_content, mcp__local-nexus-ai__search_across_sites, mcp__local-nexus-ai__list_indexed_sites, mcp__local-nexus-ai__nexus_list_sites, mcp__local-nexus-ai__local_list_sites, mcp__local-nexus-ai__fleet_health_summary, mcp__local-nexus-ai__find_outdated_sites, mcp__local-nexus-ai__wp_core_version, mcp__local-nexus-ai__wpe_get_installs, mcp__local-nexus-ai__wpe_get_accounts\n' +
+      '- Use the local-nexus-ai MCP tools available to you — discover them via ToolSearch if needed\n' +
       '- Do not attempt to run shell commands or read files from disk\n\n';
   const actualPrompt = cliPrefix + prompt;
 
@@ -309,38 +312,63 @@ function runClaudeP(
 
   if (allowedTools) args.push('--allowedTools', allowedTools);
 
-  // CLI mode: append all nexus skill files to the system prompt.
-  // The Skill tool in claude -p non-interactive mode only returns "Execute skill: X"
-  // without the actual SKILL.md content — so skills are effectively no-ops.
-  // Appending the SKILL.md files directly gives Claude the instructions upfront.
-  if (mode === 'cli-skills') {
-    const skillsDir = path.join(__dirname, '..', '..', '..', '.claude', 'skills');
-    if (fs.existsSync(skillsDir)) {
-      const skillFiles = fs.readdirSync(skillsDir)
-        .map(name => path.join(skillsDir, name, 'SKILL.md'))
-        .filter(f => fs.existsSync(f));
-      for (const skillFile of skillFiles) {
-        args.push('--append-system-prompt-file', skillFile);
-      }
-    }
-  }
+  // CLI mode: Claude reads skill files via the Read tool when needed.
+  // This simulates a real user who has nexus skills installed — Claude can
+  // discover and read the relevant SKILL.md file rather than having all skills
+  // injected as noise. The skills dir path is already in the system prompt.
 
 
   if (sessionId) {
+    // --resume requires an active session which may not exist in non-interactive mode.
+    // Instead, pass prior context as a system prompt prefix (simpler, more reliable).
+    // The sessionId signals we're in a multi-turn — prefix was already built into actualPrompt.
     const idx = args.indexOf('--no-session-persistence');
-    if (idx >= 0) args.splice(idx, 1);
-    args.push('--resume', sessionId);
+    if (idx < 0) args.push('--no-session-persistence');
   }
 
-  const result = spawnSync(findClaudeBin(), args, {
-    encoding: 'utf-8',
-    timeout: 600000, // 10 minutes — complex tasks need more time
-    maxBuffer: 20 * 1024 * 1024,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
+  // Use spawn (async) instead of spawnSync so Ctrl+C (SIGINT) can kill the child.
+  // spawnSync blocks Node's event loop — SIGINT never reaches the child process.
+  const rawStream = await new Promise<string>((resolve, reject) => {
+    const { spawn } = require('child_process');
+    const child = spawn(findClaudeBin(), args, {
+      encoding: 'utf-8',
+      maxBuffer: 20 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
+    });
+    _currentChild = child;
+
+    let stdout = '';
+    let timedOut = false;
+    child.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, 600000);
+
+    // Forward Ctrl+C to child so the eval can be interrupted
+    const sigintHandler = () => {
+      child.kill('SIGTERM');
+      clearTimeout(timer);
+      console.log('\n\n[eval] Interrupted — cleaning up...');
+      process.exit(130);
+    };
+    process.once('SIGINT', sigintHandler);
+
+    child.on('close', () => {
+      clearTimeout(timer);
+      process.removeListener('SIGINT', sigintHandler);
+      if (timedOut) {
+        resolve(stdout); // partial output — treat as timeout
+      } else {
+        resolve(stdout);
+      }
+    });
+    child.on('error', reject);
   });
 
-  const rawStream = result.stdout || '';
+  const result = { stdout: rawStream, stderr: '' };
   const lines = rawStream.split('\n').filter(Boolean);
 
   let finalResultObj: any = null;
@@ -467,12 +495,25 @@ async function runCase(
   const start = Date.now();
   let sessionId: string | undefined;
   const allTurnData: TurnData[] = [];
+  let conversationContext = ''; // accumulates prior turn results for multi-turn context
 
   for (const turn of turns) {
     console.log(`    Turn ${turn.turn}: "${turn.prompt.slice(0, 60)}..."`);
 
-    const turnData = runClaudeP(turn.prompt, mode, evalCase.id, sessionId);
+    // For multi-turn cases: prepend prior conversation context so Claude has continuity.
+    // --resume doesn't reliably work in claude -p; explicit context is more reliable.
+    const promptWithContext = conversationContext
+      ? `${conversationContext}\n\nUser: ${turn.prompt}`
+      : turn.prompt;
+
+    const turnData = await runClaudeP(promptWithContext, mode, evalCase.id, sessionId);
     allTurnData.push(turnData);
+
+    // Build context for next turn
+    if (turnData.finalResult) {
+      conversationContext += (conversationContext ? '\n' : '') +
+        `User: ${turn.prompt}\nAssistant: ${turnData.finalResult}`;
+    }
 
     if (turnData.parsed) {
       const u = turnData.parsed.usage ?? {};
@@ -726,6 +767,15 @@ async function main(): Promise<void> {
   rl.close();
 }
 
+// Top-level SIGINT handler — fires when Ctrl+C is pressed.
+// Must be at module level (not inside a function) to intercept before Node's default handler.
+let _currentChild: ReturnType<typeof import('child_process').spawn> | null = null;
+process.on('SIGINT', () => {
+  console.log('\n\n[eval] Interrupted — stopping current case...');
+  if (_currentChild) { try { _currentChild.kill('SIGTERM'); } catch { /* ignore */ } }
+  process.exit(130);
+});
+
 main()
   .catch(err => { console.error(err); process.exit(1); })
-  .finally(() => { process.exit(0); }); // force exit — spawnSync leaves event loop pending
+  .finally(() => { process.exit(0); });

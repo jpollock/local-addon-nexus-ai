@@ -23,6 +23,7 @@ import { registerDbScannerTools } from './mcp/modules/db-scanner/index';
 import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
 import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence/index';
 import { registerTelemetryTools } from './mcp/modules/telemetry-tools';
+import { getGatewayUsageHandler } from './mcp/modules/ai-gateway/get-gateway-usage';
 import { registerTelemetryControlTools } from './mcp/modules/telemetry-control-tools';
 import { createSearchToolsHandler } from './mcp/modules/search-tools';
 import { registerTestTools } from './mcp/modules/test-tools';
@@ -216,6 +217,7 @@ export default function main(context: any): void {
   registerWpConnectorTools(registry);
   registerFleetIntelligenceTools(registry);
   registerTelemetryTools(registry);
+  registry.register(getGatewayUsageHandler);
   registerTelemetryControlTools(registry);
   // search_tools registered last so it can search all other tools
   registry.register(createSearchToolsHandler(registry));

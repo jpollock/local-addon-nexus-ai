@@ -1,45 +1,33 @@
 ---
 name: nexus-wp
-description: Run WP-CLI commands on a local WordPress site via nexus. Covers plugins, themes, core, database, posts, options, and health. Use for any WordPress management task on a local site.
-argument-hint: <site-name> <wp-cli-command>
+description: Run WP-CLI commands on a local WordPress site via nexus. Target format is <sitename>@local. For WPE remote installs use nexus-wpe skill instead.
+argument-hint: <site@local> <wp-cli-command>
 allowed-tools: Bash(nexus *)
 ---
 
-# WP-CLI via Nexus
+# WP-CLI via Nexus (local sites)
 
-Site: `$0`
-Command: `$1 $2 $3 $4 $5`
+For **local** sites only. WPE remote installs → use `nexus-wpe` skill.
 
-## Step 1: Verify site is running
+Target format: `<sitename>@local` or bare site name (auto-resolved from graph DB).
 
-```!
-nexus sites list
-```
-
-If `$0` is halted, start it first: `nexus sites start $0`
-
-## Step 2: Execute
-
-Run the requested WP-CLI command:
+**Common commands:**
 
 ```
-nexus wp $1 --site $0
+nexus wp core version <target>          # WP version
+nexus wp plugin list <target>           # list plugins
+nexus wp plugin update <target> --all   # update all plugins
+nexus wp health <target>                # site health check
+nexus wp option-get <target> siteurl    # get WP option
+nexus wp user-list <target>             # list users
+nexus wp db export <target>             # export database
 ```
 
-**Common patterns:**
+**Examples:**
+```
+nexus wp core version mysite@local
+nexus wp core version jppblank          # bare name — auto-resolves local or WPE
+nexus wp plugin list mysite@local --json
+```
 
-| Task | Command |
-|------|---------|
-| List plugins | `nexus wp plugin list --site $0` |
-| Activate plugin | `nexus wp plugin activate <slug> --site $0` |
-| Update all plugins | `nexus wp plugin update --all --site $0` |
-| Check WP version | `nexus wp core version --site $0` |
-| Export database | `nexus wp db export --site $0` |
-| Search/replace URL | `nexus wp search-replace old.com new.local --site $0` |
-| List users | `nexus wp user-list --site $0` |
-| Get option | `nexus wp option-get siteurl --site $0` |
-| Site health | `nexus wp health --site $0` |
-
-If the full command wasn't provided in arguments, ask the user what WP-CLI operation they want to perform.
-
-After running, show the output and explain what it means.
+Show the output and explain what it means.
