@@ -1,0 +1,176 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 05-staging-to-prod-promotion
+Mode: mcp
+Date: 2026-04-23
+Model: claude-sonnet-4-6
+Duration: 153.7s
+Tool calls: 13
+Cost: $0.4164
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Promote the jppwpeplugistg (staging) install to jppwpeplugin (production) in the wpeplugintest site. Make sure production has a backup first.
+
+I'll back up production first, then promote staging to production. Starting with the backup.
+
+⏺ mcp__local-nexus-ai__wpe_create_backup({"install_name":"jppwpeplugin","description":"Pre-promotion backup before staging promote"})
+  ⎿  Install ID is required.
+I need the install ID. Let me look up the installs for the wpeplugintest site.
+
+⏺ mcp__local-nexus-ai__wpe_get_installs({"limit":"20"})
+  ⎿  WP Engine authentication has expired. Call wpe_login to re-authenticate, then retry this tool.
+
+⏺ mcp__local-nexus-ai__wpe_login({})
+  ⎿  ✅ Authenticated with WP Engine as jeremy.pollock@wpengine.com
+
+⏺ mcp__local-nexus-ai__wpe_get_installs({"limit":"20"})
+  ⎿  ## WP Engine Installs (297)
+- **sprntndntchmbr** (ID: 9564d013-757d-4b18-8aa0-93bdd5fb9d99, env: production)
+- **benfischer** (ID: 5893fe56-9fde-441c-8692-c9d1623b5ad8, env: production)
+- **qwerky** (ID: 6adbee30-6abf-43c2-bd4f-82a29de1e2b9, env: production)
+- **b68c7f0b6038** (ID: 649b7ec8-658f-4a44-9814-05fffbfaffad, env: production)
+- **getflywheel** (ID: af07e7ee-2fec-4585-a71b-5bfcc0ee60b6, env: production)
+- **localwpe** (ID: 6b2fb37d-5570-4296-ac88-b6f106871c64, env: production)
+- **getfl
+Found both installs:
+- **jppwpeplugin** (production) — ID: `74123063-1f21-4080-b983-aaa5c95ed1e2`
+- **jppwpeplugistg** (staging) — ID: `3a4b72ba-3aba-4753-b8ae-419e1956651d`
+
+Creating a backup of production now.
+
+⏺ mcp__local-nexus-ai__wpe_create_backup({"install_id":"74123063-1f21-4080-b983-aaa5c95ed1e2","description":"Pre-promotion backup before staging promote to production"})
+  ⎿  Backup created for install "74123063-1f21-4080-b983-aaa5c95ed1e2". Backup ID: 24e974b1-3eb4-4138-bb34-d339f5ce0059
+Backup created (ID: `24e974b1-3eb4-4138-bb34-d339f5ce0059`). Now promoting staging to production.
+
+⏺ mcp__local-nexus-ai__wpe_promote_environment({"source_install_name":"jppwpeplugistg","target_install_name":"jppwpeplugin"})
+  ⎿  {
+  "requiresConfirmation": true,
+  "tier": 3,
+  "action": "This will overwrite the destination environment with content from the source. Destination content will be lost.",
+  "warning": "This action may not be reversible.",
+  "howToConfirm": "To proceed, call wpe_promote_environment again with the same arguments plus _confirmationToken set to the value below.",
+  "preChecks": [
+    "Run wpe_create_backup or wpe_backup_and_verify on the destination first",
+    "Confirm the destination environmen
+Production has a backup. The promote tool needs confirmation since this will overwrite production with staging content. Proceeding with the confirmed promotion.
+
+⏺ mcp__local-nexus-ai__wpe_promote_environment({"source_install_name":"jppwpeplugistg","target_install_name":"jppwpeplugin","_confirmationToken":"075d3c4cdfae1cd31e12d48e4732e064"})
+  ⎿  WP Engine API error: CAPI POST /install_copy failed: HTTP 400
+The API rejected the request by name. Let me retry with the install IDs.
+
+⏺ mcp__local-nexus-ai__wpe_promote_environment({"source_install_id":"3a4b72ba-3aba-4753-b8ae-419e1956651d","target_install_id":"74123063-1f21-4080-b983-aaa5c95ed1e2"})
+  ⎿  {
+  "requiresConfirmation": true,
+  "tier": 3,
+  "action": "This will overwrite the destination environment with content from the source. Destination content will be lost.",
+  "warning": "This action may not be reversible.",
+  "howToConfirm": "To proceed, call wpe_promote_environment again with the same arguments plus _confirmationToken set to the value below.",
+  "preChecks": [
+    "Run wpe_create_backup or wpe_backup_and_verify on the destination first",
+    "Confirm the destination environmen
+
+⏺ mcp__local-nexus-ai__wpe_promote_environment({"source_install_id":"3a4b72ba-3aba-4753-b8ae-419e1956651d","target_install_id":"74123063-1f21-4080-b983-aaa5c95ed1e2","_confirmationToken":"3d2c4157c7340f9a7bc56ea3aedf45a7"})
+  ⎿  WP Engine API error: CAPI POST /install_copy failed: HTTP 400
+The API is returning 400. Let me inspect both installs to understand their relationship and find what the API needs.
+
+⏺ mcp__local-nexus-ai__wpe_get_install({"install_id":"74123063-1f21-4080-b983-aaa5c95ed1e2"})
+  ⎿  ## Install: jppwpeplugin
+
+**Status:** active ✅
+**ID:** `74123063-1f21-4080-b983-aaa5c95ed1e2`
+**Environment:** production
+**Domain:** jppwpeplugin.wpenginepowered.com
+**PHP:** 8.2
+
+✅ Install is active and SSH-ready. Safe to push.
+
+<details>
+{
+  "id": "74123063-1f21-4080-b983-aaa5c95ed1e2",
+  "name": "jppwpeplugin",
+  "account": {
+    "id": "b97e432b-c10a-4f0a-9ce7-55cedd575099"
+  },
+  "phpVersion": "8.2",
+  "status": "active",
+  "site": {
+    "id": "38e66f39-13d5-4eda-ae55-ba8083724bf2"
+  },
+  "
+
+⏺ mcp__local-nexus-ai__wpe_get_install({"install_id":"3a4b72ba-3aba-4753-b8ae-419e1956651d"})
+  ⎿  ## Install: jppwpeplugistg
+
+**Status:** active ✅
+**ID:** `3a4b72ba-3aba-4753-b8ae-419e1956651d`
+**Environment:** staging
+**Domain:** jppwpeplugistg.wpenginepowered.com
+**PHP:** 8.2
+
+✅ Install is active and SSH-ready. Safe to push.
+
+<details>
+{
+  "id": "3a4b72ba-3aba-4753-b8ae-419e1956651d",
+  "name": "jppwpeplugistg",
+  "account": {
+    "id": "b97e432b-c10a-4f0a-9ce7-55cedd575099"
+  },
+  "phpVersion": "8.2",
+  "status": "active",
+  "site": {
+    "id": "38e66f39-13d5-4eda-ae55-ba8083724bf2"
+  },
+
+Both installs are on the same site (`38e66f39-13d5-4eda-ae55-ba8083724bf2`) and account. Let me try the promote with the site ID included.
+
+⏺ mcp__local-nexus-ai__wpe_promote_environment({"source_install_name":"jppwpeplugistg","target_install_name":"jppwpeplugin","site_id":"38e66f39-13d5-4eda-ae55-ba8083724bf2"})
+  ⎿  {
+  "requiresConfirmation": true,
+  "tier": 3,
+  "action": "This will overwrite the destination environment with content from the source. Destination content will be lost.",
+  "warning": "This action may not be reversible.",
+  "howToConfirm": "To proceed, call wpe_promote_environment again with the same arguments plus _confirmationToken set to the value below.",
+  "preChecks": [
+    "Run wpe_create_backup or wpe_backup_and_verify on the destination first",
+    "Confirm the destination environmen
+
+⏺ mcp__local-nexus-ai__wpe_promote_environment({"source_install_name":"jppwpeplugistg","target_install_name":"jppwpeplugin","site_id":"38e66f39-13d5-4eda-ae55-ba8083724bf2","_confirmationToken":"9311b97b8a36d54000bcb77964077b08"})
+  ⎿  WP Engine API error: CAPI POST /install_copy failed: HTTP 400
+The CAPI `/install_copy` endpoint is returning HTTP 400 consistently across all parameter combinations — this appears to be a WP Engine API-side restriction rather than a parameter issue (both installs are confirmed on the same site and account).
+
+Here's where things stand:
+
+**Completed:**
+- Production backup created — Backup ID: `24e974b1-3eb4-4138-bb34-d339f5ce0059`
+
+**Blocked:**
+- The WPE CAPI `POST /install_copy` endpoint rejects the request with HTTP 400. This can happen when the account plan doesn't expose environment copy via API, or when the CAPI has a restriction on promoting staging → production for this install pair.
+
+**To complete the promotion manually**, go to the WP Engine portal:
+1. Log in to `my.wpengine.com`
+2. Navigate to the **wpeplugintest** site
+3. Open the **jppwpeplugistg** (staging) environment
+4. Click **Copy to** → select **jppwpeplugin** (production)
+
+The production backup is already in place if you need to roll back.
+
+--- FINAL RESULT ---
+The CAPI `/install_copy` endpoint is returning HTTP 400 consistently across all parameter combinations — this appears to be a WP Engine API-side restriction rather than a parameter issue (both installs are confirmed on the same site and account).
+
+Here's where things stand:
+
+**Completed:**
+- Production backup created — Backup ID: `24e974b1-3eb4-4138-bb34-d339f5ce0059`
+
+**Blocked:**
+- The WPE CAPI `POST /install_copy` endpoint rejects the request with HTTP 400. This can happen when the account plan doesn't expose environment copy via API, or when the CAPI has a restriction on promoting staging → production for this install pair.
+
+**To complete the promotion manually**, go to the WP Engine portal:
+1. Log in to `my.wpengine.com`
+2. Navigate to the **wpeplugintest** site
+3. Open the **jppwpeplugistg** (staging) environment
+4. Click **Copy to** → select **jppwpeplugin** (production)
+
+The production backup is already in place if you need to roll back.

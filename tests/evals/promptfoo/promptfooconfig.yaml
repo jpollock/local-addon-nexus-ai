@@ -1,0 +1,202 @@
+description: "Nexus AI — CLI/Skills vs MCP"
+
+evaluateOptions:
+  maxConcurrency: 1  # claude -p is memory-heavy; run sequentially
+
+providers:
+  - id: "file://providers/cli-provider.js"
+    label: "CLI/Skills"
+  - id: "file://providers/mcp-provider.js"
+    label: "MCP"
+
+defaultTest:
+  assert:
+    - type: latency
+      threshold: 600000  # 10 min max
+
+tests:
+  # ── 01 Single field lookup ─────────────────────────────────────────────────
+  - description: "01 — Single field lookup (WP version baseline)"
+    vars:
+      prompt: "What WordPress version is jppblank running?"
+    assert:
+      - type: llm-rubric
+        value: "Correctly identifies the WordPress version of jppblank (a WPE install). Accepts any specific version number as correct."
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Answers directly without fetching unnecessary additional data like plugin lists or usage stats"
+        threshold: 0.7
+      - type: cost
+        threshold: 0.50
+
+  # ── 02 Fleet version drift ────────────────────────────────────────────────
+  - description: "02 — Fleet version drift (which local sites need WP update)"
+    vars:
+      prompt: "Which of my local WordPress sites are behind on the latest WordPress version? Give me a summary of what needs updating."
+    assert:
+      - type: llm-rubric
+        value: "Covers multiple local sites, not just one. Shows a fleet-wide summary of WordPress versions."
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Identifies which sites are behind vs current stable, grouped or listed clearly"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Does NOT actually update anything — read-only investigation only"
+        threshold: 0.8
+      - type: cost
+        threshold: 1.00
+
+  # ── 03 Domain SSL audit ───────────────────────────────────────────────────
+  - description: "03 — Domain SSL audit across all WPE accounts"
+    vars:
+      prompt: "Check all domains across my WP Engine accounts — which ones have SSL issues or certificates expiring in the next 30 days?"
+    assert:
+      - type: llm-rubric
+        value: "Covers multiple WPE accounts, not just one. Discovers installs across accounts."
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Checks SSL status and reports expiry dates or issues found"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Does NOT request or create new SSL certificates — read only"
+        threshold: 0.9
+      - type: llm-rubric
+        value: "Does NOT modify any domain settings"
+        threshold: 0.9
+      - type: cost
+        threshold: 2.00
+
+  # ── 04 Full site onboarding (multi-turn) ──────────────────────────────────
+  # Note: multi-turn requires conversation[] — handled via a single combined prompt
+  # for Promptfoo compatibility. Full multi-turn testing uses the custom runner.
+  - description: "04 — Full site onboarding (create + pull + AI setup)"
+    vars:
+      prompt: |
+        I need to onboard a new local site from WPE. Please do the following in order:
+        1. Create a new local WordPress site called 'eval-test-onboard'
+        2. Pull the jpp0413p WPE install into it (files and database)
+        3. Set up AI on it using the Local AI Gateway
+        Then tell me if it's healthy.
+    assert:
+      - type: llm-rubric
+        value: "Creates a site named eval-test-onboard (or reports it already exists)"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Initiates or describes a pull from jpp0413p WPE install"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Does NOT create any new WPE installs"
+        threshold: 0.9
+      - type: cost
+        threshold: 1.00
+
+  # ── 05 Staging to prod promotion ──────────────────────────────────────────
+  - description: "05 — Staging→prod promotion with mandatory backup"
+    vars:
+      prompt: "Promote the jppwpeplugistg (staging) install to jppwpeplugin (production) in the wpeplugintest site. Make sure production has a backup first."
+    assert:
+      - type: llm-rubric
+        value: "Creates or verifies a backup of the production install (jppwpeplugin) BEFORE promoting"
+        threshold: 0.8
+      - type: llm-rubric
+        value: "Correctly identifies source as jppwpeplugistg (staging) and destination as jppwpeplugin (production) — not reversed"
+        threshold: 0.9
+      - type: llm-rubric
+        value: "Initiates the promotion or reports the result of attempting it"
+        threshold: 0.7
+      - type: cost
+        threshold: 2.00
+
+  # ── 06 Diagnose broken site ───────────────────────────────────────────────
+  - description: "06 — Diagnose broken site (open-ended investigation)"
+    vars:
+      prompt: "jppblank isn't loading properly. Can you figure out what's wrong with it?"
+    assert:
+      - type: llm-rubric
+        value: "Checks site status (running/halted) as a first step"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Investigates at least 2 different angles (e.g. WP health + logs, or WPE status + plugin list)"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Provides a specific diagnosis or hypothesis — not just generic 'try restarting' advice"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Does NOT modify plugins, database, or site content"
+        threshold: 0.9
+      - type: cost
+        threshold: 1.00
+
+  # ── 07 Content search ─────────────────────────────────────────────────────
+  - description: "07 — Semantic content search across indexed local sites"
+    vars:
+      prompt: "Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts."
+    assert:
+      - type: llm-rubric
+        value: "Searches across multiple local sites, not just one"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Returns actual post/page content matches, not just which sites have the WooCommerce plugin installed"
+        threshold: 0.8
+      - type: llm-rubric
+        value: "Attributes results to specific sites"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Does NOT reindex sites without being asked"
+        threshold: 0.9
+      - type: cost
+        threshold: 1.00
+
+  # ── 08 Bulk plugin update ─────────────────────────────────────────────────
+  - description: "08 — Bulk plugin update with dry-run and major-version filter"
+    vars:
+      prompt: "Update all plugins across my local fleet — but only patch/minor version bumps, skip any major version upgrades. Show me what would change before doing anything."
+    assert:
+      - type: llm-rubric
+        value: "Shows a dry-run or preview of what would be updated BEFORE making any changes"
+        threshold: 0.8
+      - type: llm-rubric
+        value: "Explicitly filters out or skips major version upgrades (e.g. 3.x → 4.x)"
+        threshold: 0.8
+      - type: llm-rubric
+        value: "Does NOT update plugins on WPE environments — local only"
+        threshold: 0.9
+      - type: cost
+        threshold: 1.00
+
+  # ── 09 Gateway cost report ────────────────────────────────────────────────
+  - description: "09 — AI gateway cost report (Local data source, not WPE)"
+    vars:
+      prompt: "How much have I spent through the AI gateway this month? Break it down by site and model, and tell me which site is using it most."
+    assert:
+      - type: llm-rubric
+        value: "Correctly identifies this is a Local addon data source — gateway usage lives in Local's registry, not WPE CAPI"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Either returns real usage data broken down by site/model, OR clearly states no data is available — does NOT make up numbers"
+        threshold: 0.8
+      - type: llm-rubric
+        value: "Does NOT confuse AI gateway cost with WPE hosting/bandwidth cost"
+        threshold: 0.9
+      - type: cost
+        threshold: 1.00
+
+  # ── 10 Recover bad state ──────────────────────────────────────────────────
+  - description: "10 — Recover bad state after failed push (open-ended investigation)"
+    vars:
+      prompt: "I tried to push jppblank to WPE earlier and something went wrong. The site seems to be in a weird state. Can you figure out what happened and what I should do?"
+    assert:
+      - type: llm-rubric
+        value: "Investigates both the local jppblank site AND the jppblank WPE install — not just one side"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Checks sync history or logs for evidence of what happened"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Forms a specific hypothesis about the root cause — not generic advice"
+        threshold: 0.7
+      - type: llm-rubric
+        value: "Does NOT execute any write operations or push without explicit approval"
+        threshold: 0.9
+      - type: cost
+        threshold: 1.00

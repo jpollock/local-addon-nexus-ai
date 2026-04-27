@@ -25,7 +25,7 @@ export const promoteEnvironmentHandler: McpToolHandler = {
         },
         _confirmationToken: {
           type: 'string',
-          description: 'Pass "confirm" after reviewing the warning to proceed.',
+          description: 'Confirmation token returned by the first call (Tier 3 safety flow). Pass the token exactly as returned.',
         },
       },
       required: ['source_install_id', 'destination_install_id'],
@@ -37,98 +37,19 @@ export const promoteEnvironmentHandler: McpToolHandler = {
     const sourceId = args.source_install_id as string;
     const destId = args.destination_install_id as string;
     const includeDatabase = args.include_database !== false;
-    const confirmationToken = args._confirmationToken as string | undefined;
 
-    if (!confirmationToken) {
-      // Fetch source and destination installs in parallel
-      const [sourceResult, destResult] = await Promise.allSettled([
-        services.localServices!.capiGetInstall(sourceId) as Promise<any>,
-        services.localServices!.capiGetInstall(destId) as Promise<any>,
-      ]);
-
-      if (sourceResult.status === 'rejected') {
-        return capiError(sourceResult.reason);
-      }
-      if (destResult.status === 'rejected') {
-        return capiError(destResult.reason);
-      }
-
-      const source = sourceResult.value as any;
-      const dest = destResult.value as any;
-
-      const sourceName = source?.name ?? sourceId;
-      const destName = dest?.name ?? destId;
-      const sourceEnv = source?.environment ?? 'unknown';
-      const destEnv = dest?.environment ?? 'unknown';
-
-      const isDestProduction = destEnv === 'production';
-
-      // Try to fetch the most recent backup for destination
-      let backupWarning = '';
-      try {
-        const backupData = await services.localServices!.capiDirect(
-          `/installs/${destId}/backups?limit=1`,
-        ) as any;
-        const backups: any[] = backupData?.results ?? [];
-        if (backups.length === 0) {
-          backupWarning = '\n\n> ⚠️ **No backups found** for the destination install. It is strongly recommended to create a backup before promoting.';
-        } else {
-          const latestBackup = backups[0];
-          const createdAt = latestBackup?.created_at ? new Date(latestBackup.created_at) : null;
-          if (createdAt) {
-            const ageMs = Date.now() - createdAt.getTime();
-            const ageHours = ageMs / 3600000;
-            if (ageHours > 24) {
-              const ageLabel = ageHours > 48
-                ? `${Math.round(ageHours / 24)} days`
-                : `${Math.round(ageHours)} hours`;
-              backupWarning = `\n\n> ⚠️ **Last backup is ${ageLabel} old** (${createdAt.toISOString()}). Consider creating a fresh backup before promoting.`;
-            } else {
-              backupWarning = `\n\n> ✅ Recent backup exists (${createdAt.toISOString()}).`;
-            }
-          } else {
-            backupWarning = '\n\n> ⚠️ Could not determine backup age. Verify a recent backup exists before promoting.';
-          }
-        }
-      } catch {
-        backupWarning = '\n\n> ⚠️ Could not check backup status for destination. Verify a recent backup exists before promoting.';
-      }
-
-      const productionWarning = isDestProduction
-        ? '\n\n## 🚨 PRODUCTION DESTINATION\n\nThe destination is a **production** environment. This will overwrite live site content. This action cannot be undone.'
-        : '';
-
-      const dbLine = includeDatabase
-        ? '- **Database:** included in copy'
-        : '- **Database:** NOT included (files only)';
-
-      const lines = [
-        `## ⚠️ Confirm Environment Copy`,
-        '',
-        `Copy **${sourceName}** (${sourceEnv}) → **${destName}** (${destEnv})`,
-        '',
-        '### Details',
-        `- **Source:** ${sourceName} (ID: ${sourceId}, env: ${sourceEnv})`,
-        `- **Destination:** ${destName} (ID: ${destId}, env: ${destEnv})`,
-        dbLine,
-        productionWarning,
-        backupWarning,
-        '',
-        '---',
-        '',
-        'To confirm, call this tool again with the same parameters plus `_confirmationToken: "confirm"`.',
-      ];
-
-      return ok(lines.join('\n'));
-    }
-
-    // Proceed with the copy
+    // Proceed with the copy (confirmation handled by McpSafetyWrapper Tier 3 flow)
     try {
+      // Resolve names to UUIDs — CAPI /install_copy requires environment UUIDs not names
+      const [srcInstall, dstInstall] = await Promise.all([
+        services.localServices!.capiDirect(`/installs/${sourceId}`) as Promise<any>,
+        services.localServices!.capiDirect(`/installs/${destId}`) as Promise<any>,
+      ]);
       // Swagger: source_environment_id / destination_environment_id (not install_id)
       // include_db goes inside custom_options, not at top level
       const result = await services.localServices!.capiDirect('/install_copy', 'POST', {
-        source_environment_id: sourceId,
-        destination_environment_id: destId,
+        source_environment_id: (srcInstall as any)?.id ?? sourceId,
+        destination_environment_id: (dstInstall as any)?.id ?? destId,
         custom_options: { include_files: true, include_db: includeDatabase },
       }) as any;
 

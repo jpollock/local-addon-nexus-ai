@@ -190,3 +190,34 @@ describe('nexus wpe portfolio', () => {
     expect(r.output.length).toBeGreaterThan(0);
   });
 });
+
+describe('nexus wp core version — WPE bare name resolution', () => {
+  it('resolves a bare WPE install name and returns WordPress version', async () => {
+    // Regression: bare name (no @local or wpe: prefix) must resolve via graph DB
+    // to WPE install and run WP-CLI over SSH. Tests the full MCP→GraphQL path.
+    // SSH to WPE can take 20-60s — use a generous timeout.
+    if (!firstInstallId) { skipTest('Not authenticated to WPE'); return; }
+
+    // Get the install name from the first install
+    const installsResult = await runCli(`wpe installs ${firstAccountId} --json`);
+    if (installsResult.exitCode !== 0) { skipTest('Could not get WPE installs'); return; }
+    let installName: string;
+    try {
+      const installs = JSON.parse(installsResult.stdout);
+      if (!installs.length) { skipTest('No installs in first account'); return; }
+      installName = installs[0].name;
+    } catch { skipTest('Could not parse installs'); return; }
+
+    const r = await runCli(`wp core version ${installName}`, { timeout: 60000 });
+
+    // Must resolve and attempt execution (exit 0 = version found, exit 1 = SSH timeout/error is ok)
+    // What we're testing: bare name resolution routes to WPE, not that SSH succeeds fast
+    expect([0, 1]).toContain(r.exitCode);
+    // On success, output must contain a version number
+    if (r.exitCode === 0) {
+      expect(r.stdout).toMatch(/WordPress \d+\.\d+/);
+    }
+    // On failure, must be a real error (not hang/crash) — output should be non-empty
+    expect(r.output.length).toBeGreaterThan(0);
+  });
+});

@@ -19,6 +19,17 @@ import {
 const REQUIRES_WPE_AUTH = 'Not authenticated with WP Engine. Use wpe_login or authenticate in Local.';
 
 export function createWpeResolvers(services: NexusServices) {
+  // WPE CAPI accepts install names for the root /installs/{id} endpoint but
+  // requires UUID for all sub-resource paths (/domains, /ssl_certificates, etc.)
+  async function resolveInstallUuid(installId: string): Promise<string> {
+    try {
+      const install = await services.localServices!.capiGetInstall(installId) as any;
+      return install?.id ?? installId;
+    } catch {
+      return installId;
+    }
+  }
+
   return {
     nexusWpeStatus: async () => {
       try {
@@ -98,7 +109,8 @@ export function createWpeResolvers(services: NexusServices) {
         const cached = getUsageCached(cacheKey);
         if (cached) return { success: true, data: JSON.stringify(cached), cached: true };
 
-        const data = await services.localServices!.capiDirect(`/installs/${installId}/usage?first_date=${firstDate}&last_date=${lastDate}`);
+        const uuid = await resolveInstallUuid(installId);
+        const data = await services.localServices!.capiDirect(`/installs/${uuid}/usage?first_date=${firstDate}&last_date=${lastDate}`);
         setUsageCached(cacheKey, data, isCurrentMonthRange(firstDate, lastDate));
 
         return { success: true, data: JSON.stringify(data), cached: false };
@@ -395,10 +407,11 @@ export function createWpeResolvers(services: NexusServices) {
     nexusWpeUpdateInstall: async (_parent: ResolverParent, { installId, phpVersion, environment }: { installId: string; phpVersion?: string; environment?: string }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
+        const uuid = await resolveInstallUuid(installId);
         const body: Record<string, string> = {};
         if (phpVersion) body.php_version = phpVersion;
         if (environment) body.environment = environment;
-        const data = await services.localServices.capiDirect(`/installs/${installId}`, 'PATCH', body) as any;
+        const data = await services.localServices.capiDirect(`/installs/${uuid}`, 'PATCH', body) as any;
         return { success: true, data: JSON.stringify(data) };
       } catch (err: any) { return { success: false, error: err.message }; }
     },
@@ -407,8 +420,9 @@ export function createWpeResolvers(services: NexusServices) {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         if (!confirmName) return { success: false, error: 'Pass --confirm-name with the install name to confirm deletion' };
+        const uuid = await resolveInstallUuid(installId);
         const body = confirmName ? { name: confirmName } : {};
-        await services.localServices.capiDirect(`/installs/${installId}`, 'DELETE', body);
+        await services.localServices.capiDirect(`/installs/${uuid}`, 'DELETE', body);
         return { success: true, message: `Install ${installId} deleted` };
       } catch (err: any) { return { success: false, error: err.message }; }
     },
@@ -416,7 +430,8 @@ export function createWpeResolvers(services: NexusServices) {
     nexusWpeBackupStatus: async (_parent: ResolverParent, { installId, backupId }: { installId: string; backupId: string }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
-        const data = await services.localServices.capiDirect(`/installs/${installId}/backups/${backupId}`) as any;
+        const uuid = await resolveInstallUuid(installId);
+        const data = await services.localServices.capiDirect(`/installs/${uuid}/backups/${backupId}`) as any;
         return { success: true, data: JSON.stringify(data) };
       } catch (err: any) { return { success: false, error: err.message }; }
     },
@@ -424,7 +439,8 @@ export function createWpeResolvers(services: NexusServices) {
     nexusWpeBackupVerify: async (_parent: ResolverParent, { installId, description }: { installId: string; description?: string }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
-        const backups = await services.localServices.capiDirect(`/installs/${installId}/backups?limit=5`) as any;
+        const uuid = await resolveInstallUuid(installId);
+        const backups = await services.localServices.capiDirect(`/installs/${uuid}/backups?limit=5`) as any;
         const latestBackup = ((backups as any)?.results ?? [])[0];
         if (!latestBackup) return { success: false, error: 'No backups found for this install' };
         return { success: true, data: JSON.stringify(latestBackup) };
@@ -434,7 +450,8 @@ export function createWpeResolvers(services: NexusServices) {
     nexusWpeDomains: async (_parent: ResolverParent, { installId }: { installId: string }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
-        const data = await services.localServices.capiDirect(`/installs/${installId}/domains`) as any;
+        const uuid = await resolveInstallUuid(installId);
+        const data = await services.localServices.capiDirect(`/installs/${uuid}/domains`) as any;
         return { success: true, data: JSON.stringify(data) };
       } catch (err: any) { return { success: false, error: err.message }; }
     },
@@ -442,7 +459,8 @@ export function createWpeResolvers(services: NexusServices) {
     nexusWpeDomainAdd: async (_parent: ResolverParent, { installId, domain }: { installId: string; domain: string }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
-        const data = await services.localServices.capiDirect(`/installs/${installId}/domains`, 'POST', { name: domain }) as any;
+        const uuid = await resolveInstallUuid(installId);
+        const data = await services.localServices.capiDirect(`/installs/${uuid}/domains`, 'POST', { name: domain }) as any;
         return { success: true, data: JSON.stringify(data) };
       } catch (err: any) { return { success: false, error: err.message }; }
     },
@@ -451,7 +469,8 @@ export function createWpeResolvers(services: NexusServices) {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         if (!confirm) return { success: false, error: 'Pass --confirm to remove this domain' };
-        await services.localServices.capiDirect(`/installs/${installId}/domains/${domainId}`, 'DELETE');
+        const uuid = await resolveInstallUuid(installId);
+        await services.localServices.capiDirect(`/installs/${uuid}/domains/${domainId}`, 'DELETE');
         return { success: true, message: `Domain ${domainId} removed` };
       } catch (err: any) { return { success: false, error: err.message }; }
     },
@@ -459,7 +478,8 @@ export function createWpeResolvers(services: NexusServices) {
     nexusWpeDomainCheck: async (_parent: ResolverParent, { installId, domainId }: { installId: string; domainId: string }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
-        const data = await services.localServices.capiDirect(`/installs/${installId}/domains/${domainId}/check`) as any;
+        const uuid = await resolveInstallUuid(installId);
+        const data = await services.localServices.capiDirect(`/installs/${uuid}/domains/${domainId}/check`) as any;
         return { success: true, data: JSON.stringify(data) };
       } catch (err: any) { return { success: false, error: err.message }; }
     },
@@ -467,7 +487,8 @@ export function createWpeResolvers(services: NexusServices) {
     nexusWpeSslCertificates: async (_parent: ResolverParent, { installId }: { installId: string }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
-        const data = await services.localServices.capiDirect(`/installs/${installId}/ssl_certificates`) as any;
+        const uuid = await resolveInstallUuid(installId);
+        const data = await services.localServices.capiDirect(`/installs/${uuid}/ssl_certificates`) as any;
         return { success: true, data: JSON.stringify(data) };
       } catch (err: any) { return { success: false, error: err.message }; }
     },
@@ -475,7 +496,8 @@ export function createWpeResolvers(services: NexusServices) {
     nexusWpeSslRequest: async (_parent: ResolverParent, { installId, domainIds }: { installId: string; domainIds: string[] }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
-        await services.localServices.capiDirect(`/installs/${installId}/ssl_certificates`, 'POST', { domain_ids: domainIds });
+        const uuid = await resolveInstallUuid(installId);
+        await services.localServices.capiDirect(`/installs/${uuid}/ssl_certificates`, 'POST', { domain_ids: domainIds });
         return { success: true, message: 'SSL certificate provisioning requested' };
       } catch (err: any) { return { success: false, error: err.message }; }
     },
@@ -508,11 +530,11 @@ export function createWpeResolvers(services: NexusServices) {
     nexusWpePromote: async (_parent: ResolverParent, { sourceInstallId, destInstallId, includeDatabase, confirm }: { sourceInstallId: string; destInstallId: string; includeDatabase?: boolean; confirm?: boolean }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
+        const [src, dst] = await Promise.all([
+          services.localServices.capiDirect(`/installs/${sourceInstallId}`) as Promise<any>,
+          services.localServices.capiDirect(`/installs/${destInstallId}`) as Promise<any>,
+        ]);
         if (!confirm) {
-          const [src, dst] = await Promise.all([
-            services.localServices.capiDirect(`/installs/${sourceInstallId}`) as Promise<any>,
-            services.localServices.capiDirect(`/installs/${destInstallId}`) as Promise<any>,
-          ]);
           return {
             success: true,
             requiresConfirmation: true,
@@ -520,9 +542,9 @@ export function createWpeResolvers(services: NexusServices) {
           };
         }
         await services.localServices.capiDirect('/install_copy', 'POST', {
-          source_install_id: sourceInstallId,
-          destination_install_id: destInstallId,
-          include_database: includeDatabase !== false,
+          source_environment_id: (src as any)?.id ?? sourceInstallId,
+          destination_environment_id: (dst as any)?.id ?? destInstallId,
+          custom_options: { include_files: true, include_db: includeDatabase !== false },
         });
         return { success: true, message: `Promotion started from ${sourceInstallId} to ${destInstallId}` };
       } catch (err: any) { return { success: false, error: err.message }; }
@@ -531,11 +553,13 @@ export function createWpeResolvers(services: NexusServices) {
     nexusWpeDiagnose: async (_parent: ResolverParent, { installId }: { installId: string }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
-        const [install, domains, ssl, backups] = await Promise.all([
-          services.localServices.capiDirect(`/installs/${installId}`) as Promise<any>,
-          services.localServices.capiDirect(`/installs/${installId}/domains`).catch(() => null) as Promise<any>,
-          services.localServices.capiDirect(`/installs/${installId}/ssl_certificates`).catch(() => null) as Promise<any>,
-          services.localServices.capiDirect(`/installs/${installId}/backups?limit=1`).catch(() => null) as Promise<any>,
+        const install = await services.localServices.capiGetInstall(installId) as any;
+        if (!install) return { success: false, error: `Install "${installId}" not found` };
+        const uuid = install.id ?? installId;
+        const [domains, ssl, backups] = await Promise.all([
+          services.localServices.capiDirect(`/installs/${uuid}/domains`).catch(() => null) as Promise<any>,
+          services.localServices.capiDirect(`/installs/${uuid}/ssl_certificates`).catch(() => null) as Promise<any>,
+          services.localServices.capiDirect(`/installs/${uuid}/backups?limit=1`).catch(() => null) as Promise<any>,
         ]);
         return { success: true, data: JSON.stringify({ install, domains, ssl, backups }) };
       } catch (err: any) { return { success: false, error: err.message }; }
@@ -544,9 +568,10 @@ export function createWpeResolvers(services: NexusServices) {
     nexusWpeGoLiveCheck: async (_parent: ResolverParent, { installId, domain }: { installId: string; domain: string }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
+        const uuid = await resolveInstallUuid(installId);
         const [domainsData, ssl] = await Promise.all([
-          services.localServices.capiDirect(`/installs/${installId}/domains`) as Promise<any>,
-          services.localServices.capiDirect(`/installs/${installId}/ssl_certificates`).catch(() => null) as Promise<any>,
+          services.localServices.capiDirect(`/installs/${uuid}/domains`) as Promise<any>,
+          services.localServices.capiDirect(`/installs/${uuid}/ssl_certificates`).catch(() => null) as Promise<any>,
         ]);
         const domainEntry = ((domainsData as any)?.results ?? []).find((d: any) => d.name === domain);
         return { success: true, data: JSON.stringify({ domain, domainAdded: !!domainEntry, domainId: domainEntry?.id, ssl }) };

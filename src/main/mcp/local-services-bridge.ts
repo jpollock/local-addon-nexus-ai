@@ -475,7 +475,8 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       if (!res.ok) throw new Error(`CAPI ${method} ${path} failed: HTTP ${res.status}`);
-      return res.json();
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
     },
 
     capiGetAccounts: async () => {

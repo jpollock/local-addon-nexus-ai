@@ -1,0 +1,28 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: mcp
+Date: 2026-04-23
+Model: claude-sonnet-4-6
+Duration: 38.1s
+Tool calls: 3
+Cost: $0.1115
+
+============================================================
+TURN 1
+============================================================
+PROMPT: What WordPress version is jppblank running?
+
+
+⏺ ToolSearch({"query":"select:mcp__local-nexus-ai__wp_core_version","max_results":1})
+  ⎿  
+
+⏺ mcp__local-nexus-ai__wp_core_version({"site":"jppblank"})
+  ⎿  Site "jppblank" not found.
+The site "jppblank" wasn't found locally. Let me check if it's a WPE install instead.
+
+⏺ mcp__local-nexus-ai__wp_core_version({"install_name":"jppblank"})
+  ⎿  WordPress 6.9.4
+**jppblank** is running **WordPress 6.9.4** (as a WPE install, accessed via SSH).
+
+--- FINAL RESULT ---
+**jppblank** is running **WordPress 6.9.4** (as a WPE install, accessed via SSH).

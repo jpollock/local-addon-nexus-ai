@@ -1,0 +1,97 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 09-gateway-cost-report
+Mode: mcp
+Date: 2026-04-24
+Model: claude-sonnet-4-6
+Duration: 73.5s
+Tool calls: 2
+Cost: $0.2215
+
+============================================================
+TURN 1
+============================================================
+PROMPT: How much have I spent through the AI gateway this month? Break it down by site and model, and tell me which site is using it most.
+
+Let me check what metrics and site data are available to answer this.
+
+⏺ mcp__local-nexus-ai__get_metrics({})
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+  ⎿  {
+  "uptime_ms": 40846083,
+  "uptime_hours": "11.35",
+  "counters": [
+    {
+      "name": "mcp_tool_calls_total",
+      "value": 1,
+      "labels": {
+        "tool": "wp_core_version"
+      }
+    },
+    {
+      "name": "mcp_tool_calls_total",
+      "value": 1,
+      "labels": {
+        "tool": "find_outdated_sites"
+      }
+    },
+    {
+      "name": "mcp_tool_calls_total",
+      "value": 2,
+      "labels": {
+        "tool": "nexus_list_sites"
+      }
+    },
+    {
+      "name": "mcp_tool_calls_to
+  ⎿  ## Fleet (30 local, 296 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **eval-test-onboard** (eval-test-onboard.local) [running]
+- jeremypollock.blog (jeremypollockblog.local) [halted]
+- nexus (nexus.local) [halted]
+- mu-plugin (mu-plugin.local) [halted]
+- offload-media-clean (offload-media-clean.local) [halted]
+- nitropack-1 (nitropack-1.local) [halted]
+- pm-toolkit-hub (pm-toolkit
+The `get_metrics` data only shows MCP tool call counts — not AI gateway spending. There's no MCP tool currently exposed for querying gateway usage by site and model.
+
+Here's what the gateway usage feature looks like across the different access modes:
+
+| Access Mode | Status |
+|---|---|
+| **Local UI** | Available — the gateway dashboard in the addon shows usage and auto-refreshes |
+| **CLI** (`nexus gateway usage`) | Recently added (commit `4f21853`) |
+| **MCP** | **Not yet exposed** — no MCP tool exists for gateway usage data |
+
+The gateway usage data lives in the Nexus AI SQLite database and is surfaced through the Local app's UI and the CLI, but it hasn't been wrapped into an MCP tool yet.
+
+**To get the breakdown you're looking for, your options are:**
+
+1. **Local UI** — open Local, go to the Nexus AI panel, and check the gateway usage dashboard
+2. **CLI** — run `nexus gateway usage` in terminal (if you're on the latest build from the `testing-and-evals` branch)
+
+Adding a `gateway_usage_summary` MCP tool that returns cost/token breakdowns by site and model would be a straightforward addition if you want that data accessible from Claude Desktop.
+
+--- FINAL RESULT ---
+The `get_metrics` data only shows MCP tool call counts — not AI gateway spending. There's no MCP tool currently exposed for querying gateway usage by site and model.
+
+Here's what the gateway usage feature looks like across the different access modes:
+
+| Access Mode | Status |
+|---|---|
+| **Local UI** | Available — the gateway dashboard in the addon shows usage and auto-refreshes |
+| **CLI** (`nexus gateway usage`) | Recently added (commit `4f21853`) |
+| **MCP** | **Not yet exposed** — no MCP tool exists for gateway usage data |
+
+The gateway usage data lives in the Nexus AI SQLite database and is surfaced through the Local app's UI and the CLI, but it hasn't been wrapped into an MCP tool yet.
+
+**To get the breakdown you're looking for, your options are:**
+
+1. **Local UI** — open Local, go to the Nexus AI panel, and check the gateway usage dashboard
+2. **CLI** — run `nexus gateway usage` in terminal (if you're on the latest build from the `testing-and-evals` branch)
+
+Adding a `gateway_usage_summary` MCP tool that returns cost/token breakdowns by site and model would be a straightforward addition if you want that data accessible from Claude Desktop.

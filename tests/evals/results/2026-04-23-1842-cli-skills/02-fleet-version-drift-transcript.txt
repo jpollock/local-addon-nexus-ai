@@ -1,0 +1,219 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 02-fleet-version-drift
+Mode: cli-skills
+Date: 2026-04-23
+Model: claude-sonnet-4-6
+Duration: 125.3s
+Tool calls: 9
+Cost: $0.2248
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local WordPress sites are behind on the latest WordPress version? Give me a summary of what needs updating.
+
+Running fleet health check to see WordPress version status across all local sites.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet health 2>&1","timeout":60000})
+  ⎿  Fleet Health Summary
+──────────────────────────────────────────────────
+Sites:         31 total (0 running, 31 halted)
+Health:        0 healthy, 2 warnings, 3 critical
+Plugins:       0 total (0 outdated)
+Themes:        0 total (0 outdated)
+The summary doesn't break down WP versions. Let me get more detail.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet health --json 2>&1 | head -200","timeout":60000})
+  ⎿  {
+  "totalSites": 31,
+  "runningSites": 0,
+  "haltedSites": 31,
+  "healthyCount": 0,
+  "warningCount": 2,
+  "criticalCount": 3,
+  "totalPlugins": 0,
+  "outdatedPlugins": 0,
+  "totalThemes": 0,
+  "outdatedThemes": 0
+}
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites list --json 2>&1 | head -100","timeout":60000})
+  ⎿  Error: HTTP 500: Internal Server Error
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites list 2>&1 | head -80","timeout":60000})
+  ⎿  Error: HTTP 500: Internal Server Error
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet --help 2>&1","timeout":30000})
+  ⎿  Usage: nexus fleet [options] [command]
+
+Fleet intelligence and analytics
+
+Options:
+  -h, --help                             display help for command
+
+Commands:
+  health [options]                       Overall fleet health summary
+  site-health [options] <target>         Individual site health details
+  search [options] <query>               Search across all sites
+  filter [options]                       Filter sites by criteria
+  groups                                 Manage site groups
+  bulk 
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet summary 2>&1","timeout":60000})
+  ⎿  Fleet Summary — 361 sites (263 with full WP-CLI data)
+─────────────────────────────────────────────────────
+
+WordPress versions:
+  6.9.4     ████████████████████  222 sites
+  6.9.1     █                     15 sites
+  6.9       █                     6 sites
+  6.8.3                           4 sites
+  6.8.1                           3 sites
+  7.0-beta6                        3 sites
+  7.0-RC2                         3 sites
+  6.2.2                           2 sites
+  6.8.2                        
+Good data. Let me check which specific sites are on outdated versions.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet wp 6.9.1 2>&1 && echo \"---\" && node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-a)
+  ⎿  Sites on WordPress 6.9.1 — 15 found
+
+  newsroom-admin-columns-poc [local] · PHP 8.2
+  atlasshopify [WPE] · PHP 8.2
+  atlasshopifstg [WPE] · PHP 8.2
+  donaghtestsit1 [WPE] · PHP 8.2
+  foruxdemo [WPE] · PHP 8.2
+  bulkserp06 [WPE] · PHP 8.2
+  newsroomdemstg [WPE] · PHP 8.4
+  localcopyjpp [WPE] · PHP 8.4
+  asaitkprod [WPE] · PHP 8.4
+  ainewsroomstg [WPE] · PHP 8.4
+  jsvectordbtest [WPE] · PHP 8.4
+  aitoolkitdemo [WPE] · PHP 8.4
+  nitropackio [WPE] · PHP 8.4
+  kruchmireviews [WPE] · PHP 8.4
+  dcxsn [
+
+⏺ Bash({"command":"for v in \"6.8.3\" \"6.8.2\" \"6.8.1\" \"6.7.5\" \"6.7.1\" \"6.6.5\" \"6.3\" \"6.2.2\" \"6.1.1\"; do\n  echo \"=== WP $v ===\"\n  node /Users/jeremy.pollock/development/wpengine/local-addo)
+  ⎿  === WP 6.8.3 ===
+
+Sites on WordPress 6.8.3 — 4 found
+
+  pm-toolkit-hub [local] · PHP 8.3
+  wp-events-analyzer [local] · PHP 8.2
+  nitropack-2 [local] · PHP 8.2
+  erinstestsite [WPE] · PHP 8.2
+
+
+=== WP 6.8.2 ===
+
+Sites on WordPress 6.8.2 — 1 found
+
+  offload-media-clean [local] · PHP 8.2
+
+
+=== WP 6.8.1 ===
+
+Sites on WordPress 6.8.1 — 3 found
+
+  jeremypollock.blog [local] · PHP 8.2
+  nexus [local] · PHP 8.2
+  mu-plugin [local] · PHP 8.2
+
+
+=== WP 6.7.5 ===
+
+Sites on WordPress 6.7.5 — 1 found
+
+  jsc
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet wp \"6.6.5\" 2>&1","timeout":60000})
+  ⎿  Sites on WordPress 6.6.5 — 1 found
+
+  ezinnesproduct [WPE] · PHP 8.2
+Here's a full breakdown of your 37 sites running outdated WordPress versions (current stable: **6.9.4**):
+
+---
+
+## WordPress Version Drift Summary
+
+### Minor behind — 6.9.x (21 sites)
+
+| Version | Count | Sites |
+|---------|-------|-------|
+| **6.9.1** | 15 | `newsroom-admin-columns-poc` [local], `atlasshopify`, `atlasshopifstg`, `donaghtestsit1`, `foruxdemo`, `bulkserp06`, `newsroomdemstg`, `localcopyjpp`, `asaitkprod`, `ainewsroomstg`, `jsvectordbtest`, `aitoolkitdemo`, `nitropackio`, `kruchmireviews`, `dcxsn` [all WPE unless noted] |
+| **6.9** | 6 | `wp-archaeologist`, `migrate`, `cli-test`, `wp-migrate-receiver-new`, `wp-migrate-pusher` [all local], `testblankjpp1` [WPE] |
+
+### One major version behind — 6.8.x (8 sites)
+
+| Version | Count | Sites |
+|---------|-------|-------|
+| **6.8.3** | 4 | `pm-toolkit-hub`, `wp-events-analyzer`, `nitropack-2` [local], `erinstestsite` [WPE] |
+| **6.8.2** | 1 | `offload-media-clean` [local] |
+| **6.8.1** | 3 | `jeremypollock.blog`, `nexus`, `mu-plugin` [local] |
+
+### Significantly behind — 6.7 and older (8 sites)
+
+| Version | Count | Sites |
+|---------|-------|-------|
+| 6.7.5 | 1 | `jsctransfer547` [WPE] |
+| 6.7.1 | 1 | `atlascommerce` [WPE] |
+| 6.6.5 | 1 | `ezinnesproduct` [WPE] |
+| 6.3 | 1 | `benfischerstg` [WPE] |
+| 6.2.2 | 2 | `e2e-test-fresh` [local], `atlasportfolio` [WPE — also on PHP 7.4!] |
+| 6.1.1 | 1 | `atlasshopifdev` [WPE] |
+
+---
+
+## Priority Actions
+
+1. **`atlasportfolio`** — WP 6.2.2 + PHP 7.4 (both EOL) — highest risk
+2. **`atlasshopifdev`** — WP 6.1.1 on a WPE environment
+3. **`benfischerstg`** — WP 6.3, three major versions behind
+4. **Local test sites** (`cli-test`, `migrate`, etc.) — 6.9 is close, easy wins with `wp core update`
+
+Also worth noting: **92 sites have unknown WP versions** — `nexus fleet refresh --deep` would populate those and may surface more outdated sites.
+
+--- FINAL RESULT ---
+Here's a full breakdown of your 37 sites running outdated WordPress versions (current stable: **6.9.4**):
+
+---
+
+## WordPress Version Drift Summary
+
+### Minor behind — 6.9.x (21 sites)
+
+| Version | Count | Sites |
+|---------|-------|-------|
+| **6.9.1** | 15 | `newsroom-admin-columns-poc` [local], `atlasshopify`, `atlasshopifstg`, `donaghtestsit1`, `foruxdemo`, `bulkserp06`, `newsroomdemstg`, `localcopyjpp`, `asaitkprod`, `ainewsroomstg`, `jsvectordbtest`, `aitoolkitdemo`, `nitropackio`, `kruchmireviews`, `dcxsn` [all WPE unless noted] |
+| **6.9** | 6 | `wp-archaeologist`, `migrate`, `cli-test`, `wp-migrate-receiver-new`, `wp-migrate-pusher` [all local], `testblankjpp1` [WPE] |
+
+### One major version behind — 6.8.x (8 sites)
+
+| Version | Count | Sites |
+|---------|-------|-------|
+| **6.8.3** | 4 | `pm-toolkit-hub`, `wp-events-analyzer`, `nitropack-2` [local], `erinstestsite` [WPE] |
+| **6.8.2** | 1 | `offload-media-clean` [local] |
+| **6.8.1** | 3 | `jeremypollock.blog`, `nexus`, `mu-plugin` [local] |
+
+### Significantly behind — 6.7 and older (8 sites)
+
+| Version | Count | Sites |
+|---------|-------|-------|
+| 6.7.5 | 1 | `jsctransfer547` [WPE] |
+| 6.7.1 | 1 | `atlascommerce` [WPE] |
+| 6.6.5 | 1 | `ezinnesproduct` [WPE] |
+| 6.3 | 1 | `benfischerstg` [WPE] |
+| 6.2.2 | 2 | `e2e-test-fresh` [local], `atlasportfolio` [WPE — also on PHP 7.4!] |
+| 6.1.1 | 1 | `atlasshopifdev` [WPE] |
+
+---
+
+## Priority Actions
+
+1. **`atlasportfolio`** — WP 6.2.2 + PHP 7.4 (both EOL) — highest risk
+2. **`atlasshopifdev`** — WP 6.1.1 on a WPE environment
+3. **`benfischerstg`** — WP 6.3, three major versions behind
+4. **Local test sites** (`cli-test`, `migrate`, etc.) — 6.9 is close, easy wins with `wp core update`
+
+Also worth noting: **92 sites have unknown WP versions** — `nexus fleet refresh --deep` would populate those and may surface more outdated sites.

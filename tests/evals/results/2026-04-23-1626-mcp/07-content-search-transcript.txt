@@ -1,0 +1,68 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 07-content-search
+Mode: mcp
+Date: 2026-04-23
+Model: claude-sonnet-4-6
+Duration: 58.3s
+Tool calls: 6
+Cost: $0.3607
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts.
+
+I'll search across your local sites for WooCommerce and e-commerce content using the MCP tools.
+
+⏺ Agent({"description":"Search local sites for WooCommerce/e-commerce content","prompt":"You are running in MCP-only mode. Use the available MCP tools to search for WooCommerce and e-commerce content across l)
+
+⏺ ToolSearch({"query":"select:mcp__local-nexus-ai__search_across_sites,mcp__local-nexus-ai__list_indexed_sites","max_results":5})
+  ⎿  No matching deferred tools found. Some MCP servers are still connecting: local-nexus-ai. Their tools will become available shortly — try searching again.
+
+⏺ ToolSearch({"query":"select:mcp__local-nexus-ai__search_across_sites,mcp__local-nexus-ai__list_indexed_sites","max_results":5})
+  ⎿  No matching deferred tools found. Some MCP servers are still connecting: local-nexus-ai. Their tools will become available shortly — try searching again.
+
+⏺ ToolSearch({"query":"local-nexus-ai search sites indexed","max_results":5})
+  ⎿  
+
+⏺ ToolSearch({"query":"select:mcp__local-nexus-ai__search_across_sites,mcp__local-nexus-ai__list_indexed_sites","max_results":5})
+  ⎿  No matching deferred tools found
+  ⎿  The `mcp__local-nexus-ai__search_across_sites` and `mcp__local-nexus-ai__list_indexed_sites` tools are not available — the `local-nexus-ai` MCP server did not appear in the deferred tool list at all, which means it either failed to connect or is not currently running.
+
+Here is what I found:
+
+**MCP Server Status:** The `local-nexus-ai` MCP server was listed as "still connecting" initially, but after repeated attempts its tools never appeared in the available tool registry. This indicates the serv
+Let me try calling the tools directly from here.
+
+⏺ ToolSearch({"query":"select:TodoWrite","max_results":1})
+  ⎿  
+The `local-nexus-ai` MCP server isn't showing up as connected — its tools aren't available in this session. This means the Nexus AI addon is either not running or the MCP server failed to start.
+
+**What's likely happening:**
+
+- Local isn't running, or the Nexus AI addon isn't active in Local's addon manager
+- The MCP server process failed to start (e.g., native module mismatch after a build)
+
+**To fix it:**
+
+1. Open **Local** and confirm the Nexus AI addon is enabled
+2. From a terminal, run `nexus doctor` — it checks MCP server connectivity and prints the exact fix command for any failure
+3. If you recently ran `npm install`, run `npm run rebuild` to recompile better-sqlite3 for Electron, then restart Local
+
+Once the MCP server is back online and Claude Desktop reconnects to it, I can search across your sites for WooCommerce/e-commerce content using `search_across_sites` and show you the relevant posts.
+
+--- FINAL RESULT ---
+The `local-nexus-ai` MCP server isn't showing up as connected — its tools aren't available in this session. This means the Nexus AI addon is either not running or the MCP server failed to start.
+
+**What's likely happening:**
+
+- Local isn't running, or the Nexus AI addon isn't active in Local's addon manager
+- The MCP server process failed to start (e.g., native module mismatch after a build)
+
+**To fix it:**
+
+1. Open **Local** and confirm the Nexus AI addon is enabled
+2. From a terminal, run `nexus doctor` — it checks MCP server connectivity and prints the exact fix command for any failure
+3. If you recently ran `npm install`, run `npm run rebuild` to recompile better-sqlite3 for Electron, then restart Local
+
+Once the MCP server is back online and Claude Desktop reconnects to it, I can search across your sites for WooCommerce/e-commerce content using `search_across_sites` and show you the relevant posts.

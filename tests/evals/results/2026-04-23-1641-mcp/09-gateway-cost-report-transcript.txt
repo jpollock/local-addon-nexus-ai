@@ -1,0 +1,65 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 09-gateway-cost-report
+Mode: mcp
+Date: 2026-04-23
+Model: claude-sonnet-4-6
+Duration: 72.5s
+Tool calls: 3
+Cost: $0.2579
+
+============================================================
+TURN 1
+============================================================
+PROMPT: How much have I spent through the AI gateway this month? Break it down by site and model, and tell me which site is using it most.
+
+I'll pull your AI gateway usage data — let me start with the metrics tool.
+
+⏺ ToolSearch({"query":"select:TodoWrite","max_results":1})
+  ⎿  
+
+⏺ ToolSearch({"query":"select:mcp__local-nexus-ai__get_metrics,mcp__local-nexus-ai__get_tool_metrics","max_results":2})
+  ⎿  
+Those tools track MCP performance, not AI spending. Let me check if there's a dedicated gateway usage tool in the available tools list by searching more specifically.
+
+⏺ ToolSearch({"query":"gateway usage spending cost","max_results":5})
+  ⎿  
+The AI gateway spending breakdown (per-site, per-model token costs) isn't exposed through any current MCP tool. Here's what's actually available and where the data lives:
+
+**What the MCP tools can see:**
+- `wpe_get_account_usage` — WPE hosting metrics (bandwidth, storage, visits) — not AI costs
+- `get_metrics` — MCP tool performance (call counts, latency) — not AI costs
+
+**Where your gateway spending data actually lives:**
+
+1. **Local app UI** — The gateway usage dashboard (Operations tab) shows per-site, per-model usage and auto-refreshes. That's the most direct view.
+
+2. **`nexus gateway usage` CLI** — Added recently (commit `4f21853`), this command pulls gateway usage from the local database. In a terminal: `nexus gateway usage --breakdown site,model`
+
+3. **Cloudflare telemetry worker** — Aggregate events are pushed to `nexus-analytics.jeremy7746.workers.dev`, but there's no MCP tool that queries it.
+
+**Why it's missing from MCP:** The gateway tracks usage internally and exposes it to the Local UI via IPC, but no `nexus_gateway_usage` or similar MCP tool has been built yet to surface that data to agents like me.
+
+**Workaround:** If you open the Operations tab in Local's Nexus AI panel, you'll get the full breakdown you're looking for. Or run `nexus gateway usage` in a terminal if you have the CLI installed.
+
+This would be a useful MCP tool to add — `get_gateway_usage` with site/model/date filters.
+
+--- FINAL RESULT ---
+The AI gateway spending breakdown (per-site, per-model token costs) isn't exposed through any current MCP tool. Here's what's actually available and where the data lives:
+
+**What the MCP tools can see:**
+- `wpe_get_account_usage` — WPE hosting metrics (bandwidth, storage, visits) — not AI costs
+- `get_metrics` — MCP tool performance (call counts, latency) — not AI costs
+
+**Where your gateway spending data actually lives:**
+
+1. **Local app UI** — The gateway usage dashboard (Operations tab) shows per-site, per-model usage and auto-refreshes. That's the most direct view.
+
+2. **`nexus gateway usage` CLI** — Added recently (commit `4f21853`), this command pulls gateway usage from the local database. In a terminal: `nexus gateway usage --breakdown site,model`
+
+3. **Cloudflare telemetry worker** — Aggregate events are pushed to `nexus-analytics.jeremy7746.workers.dev`, but there's no MCP tool that queries it.
+
+**Why it's missing from MCP:** The gateway tracks usage internally and exposes it to the Local UI via IPC, but no `nexus_gateway_usage` or similar MCP tool has been built yet to surface that data to agents like me.
+
+**Workaround:** If you open the Operations tab in Local's Nexus AI panel, you'll get the full breakdown you're looking for. Or run `nexus gateway usage` in a terminal if you have the CLI installed.
+
+This would be a useful MCP tool to add — `get_gateway_usage` with site/model/date filters.

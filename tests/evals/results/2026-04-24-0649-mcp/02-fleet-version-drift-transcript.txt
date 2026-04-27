@@ -1,0 +1,148 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 02-fleet-version-drift
+Mode: mcp
+Date: 2026-04-24
+Model: claude-sonnet-4-6
+Duration: 87.6s
+Tool calls: 2
+Cost: $0.2108
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local WordPress sites are behind on the latest WordPress version? Give me a summary of what needs updating.
+
+I'll check your local sites for outdated WordPress versions using a couple of tools in parallel.
+
+⏺ mcp__local-nexus-ai__find_outdated_sites({"component":"wordpress","source":"local"})
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+  ⎿  ## Outdated Sites Report (local sites only)
+348 sites in scope
+
+### WordPress
+- Latest: 7.0-beta6 (3 sites)
+- Outdated: 7.0-RC2 (6 sites) — cli-target [local], nexus-e2e-test [local], testjpp1 [local], testjppdev [local], jppblank [local], jppblank [local]
+- Outdated: 7.0-RC1 (1 site) — The Curated Shelf [local]
+- Outdated: 7.0-RC1-62112 (1 site) — nexus-test-site [local]
+- Outdated: 7.0-RC2-62241 (2 sites) — another-test [local], nexustestsite1 [local]
+- Outdated: 6.9.4 (65 sites) — heath.biz [
+  ⎿  ## Fleet (30 local, 297 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **eval-test-onboard** (eval-test-onboard.local) [running]
+- jeremypollock.blog (jeremypollockblog.local) [halted]
+- nexus (nexus.local) [halted]
+- mu-plugin (mu-plugin.local) [halted]
+- offload-media-clean (offload-media-clean.local) [halted]
+- nitropack-1 (nitropack-1.local) [halted]
+- pm-toolkit-hub (pm-toolkit
+Here's a summary of your **local sites** (30 sites in Local) and their WordPress version status:
+
+> **Note:** The content index is 53 days stale, so these versions may not reflect recent updates. The "latest" detected across the fleet is 7.0-beta6 (pre-release); latest **stable** is 6.9.4.
+
+---
+
+### RC / Pre-release sites (close to current)
+| Site | Version | Gap |
+|------|---------|-----|
+| cli-target | 7.0-RC2 | 1 RC behind |
+| another-test | 7.0-RC2-62241 | Build behind |
+| nexustestsite1 | 7.0-RC2-62241 | Build behind |
+| The Curated Shelf | 7.0-RC1 | 1 RC behind |
+| nexus-test-site | 7.0-RC1-62112 | Build behind |
+
+### On stable 6.9.x (current stable branch)
+| Site | Version |
+|------|---------|
+| heath.biz | 6.9.4 |
+| local-copy-jpp | 6.9.4 |
+| jpp0413p | 6.9.4 |
+| acflikebutton | 6.9.4 |
+| frostscape | 6.9.4 |
+| nexus-e2e-test | 6.9.4 / 6.9.1 (multiple snapshots) |
+| newsroom-admin-columns-poc | 6.9.1 |
+| wp-archaeologist | 6.9 |
+| cli-test | 6.9 |
+| migrate | 6.9 |
+| wp-migrate-receiver-new | 6.9 |
+| wp-migrate-pusher | 6.9 |
+
+### Most behind — needs attention
+| Site | Version | How far behind |
+|------|---------|----------------|
+| nitropack-2 | 6.8.3 | ~1 major behind |
+| wp-events-analyzer | 6.8.3 | ~1 major behind |
+| pm-toolkit-hub | 6.8.3 | ~1 major behind |
+| offload-media-clean | 6.8.2 | ~1 major behind |
+| nexus | 6.8.1 | ~1 major behind |
+| jeremypollock.blog | 6.8.1 | ~1 major behind |
+| mu-plugin | 6.8.1 | ~1 major behind |
+| **e2e-test-fresh** | **6.2.2** | **Very old — 5+ major versions** |
+
+### No version data (4 sites)
+`nitropack-1`, `wp-archaeologist-saas`, `test-cli-poc`, `sync-test` — index has no WP version recorded for these.
+
+---
+
+**Priority actions:**
+1. **e2e-test-fresh** (6.2.2) — extreme outlier, update or delete if it's a throwaway test site
+2. The **6.8.x cluster** (nexus, jeremypollock.blog, mu-plugin, nitropack-2, wp-events-analyzer, pm-toolkit-hub) — 7 sites about a major version behind
+3. Run `reindex_site` on key sites to get fresh version data before taking action — the 53-day-old index means some may already be updated
+
+--- FINAL RESULT ---
+Here's a summary of your **local sites** (30 sites in Local) and their WordPress version status:
+
+> **Note:** The content index is 53 days stale, so these versions may not reflect recent updates. The "latest" detected across the fleet is 7.0-beta6 (pre-release); latest **stable** is 6.9.4.
+
+---
+
+### RC / Pre-release sites (close to current)
+| Site | Version | Gap |
+|------|---------|-----|
+| cli-target | 7.0-RC2 | 1 RC behind |
+| another-test | 7.0-RC2-62241 | Build behind |
+| nexustestsite1 | 7.0-RC2-62241 | Build behind |
+| The Curated Shelf | 7.0-RC1 | 1 RC behind |
+| nexus-test-site | 7.0-RC1-62112 | Build behind |
+
+### On stable 6.9.x (current stable branch)
+| Site | Version |
+|------|---------|
+| heath.biz | 6.9.4 |
+| local-copy-jpp | 6.9.4 |
+| jpp0413p | 6.9.4 |
+| acflikebutton | 6.9.4 |
+| frostscape | 6.9.4 |
+| nexus-e2e-test | 6.9.4 / 6.9.1 (multiple snapshots) |
+| newsroom-admin-columns-poc | 6.9.1 |
+| wp-archaeologist | 6.9 |
+| cli-test | 6.9 |
+| migrate | 6.9 |
+| wp-migrate-receiver-new | 6.9 |
+| wp-migrate-pusher | 6.9 |
+
+### Most behind — needs attention
+| Site | Version | How far behind |
+|------|---------|----------------|
+| nitropack-2 | 6.8.3 | ~1 major behind |
+| wp-events-analyzer | 6.8.3 | ~1 major behind |
+| pm-toolkit-hub | 6.8.3 | ~1 major behind |
+| offload-media-clean | 6.8.2 | ~1 major behind |
+| nexus | 6.8.1 | ~1 major behind |
+| jeremypollock.blog | 6.8.1 | ~1 major behind |
+| mu-plugin | 6.8.1 | ~1 major behind |
+| **e2e-test-fresh** | **6.2.2** | **Very old — 5+ major versions** |
+
+### No version data (4 sites)
+`nitropack-1`, `wp-archaeologist-saas`, `test-cli-poc`, `sync-test` — index has no WP version recorded for these.
+
+---
+
+**Priority actions:**
+1. **e2e-test-fresh** (6.2.2) — extreme outlier, update or delete if it's a throwaway test site
+2. The **6.8.x cluster** (nexus, jeremypollock.blog, mu-plugin, nitropack-2, wp-events-analyzer, pm-toolkit-hub) — 7 sites about a major version behind
+3. Run `reindex_site` on key sites to get fresh version data before taking action — the 53-day-old index means some may already be updated

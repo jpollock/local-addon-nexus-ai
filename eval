@@ -21,6 +21,10 @@
 
 set -e
 RUNNER="npx ts-node tests/evals/runner"
+
+# Ctrl+C handler — kills the entire process group so npx/ts-node/claude all die
+_cleanup() { echo -e "\n[eval] Interrupted."; kill 0 2>/dev/null; exit 130; }
+trap '_cleanup' INT
 RESULTS="tests/evals/results"
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; BOLD='\033[1m'; RESET='\033[0m'
 
@@ -129,23 +133,43 @@ list_cases() {
   echo ""
 }
 
+E2E_SITE="nexus-e2e-cli-test-site"
+
+ensure_e2e_site_running() {
+  local status=$(nexus sites list --json 2>/dev/null | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+s=[s for s in d.get('local',[]) if s.get('name')=='$E2E_SITE']
+print(s[0]['status'] if s else 'missing')
+" 2>/dev/null || echo "missing")
+
+  if [ "$status" = "running" ]; then
+    echo -e "  ${GREEN}✅ $E2E_SITE already running${RESET}"
+  elif [ "$status" = "missing" ]; then
+    echo -e "${YELLOW}⚠  $E2E_SITE not found — evals need a running site${RESET}"
+  else
+    echo -e "  Starting $E2E_SITE..."
+    nexus sites start "$E2E_SITE@local" 2>/dev/null && \
+      echo -e "  ${GREEN}✅ $E2E_SITE started${RESET}" || \
+      echo -e "${YELLOW}⚠  Could not start $E2E_SITE${RESET}"
+  fi
+}
+
 check_prereqs() {
   echo -e "${BOLD}Checking prerequisites...${RESET}"
   if ! nexus doctor 2>/dev/null | grep -q "✅"; then
     echo -e "${YELLOW}⚠  Run 'nexus doctor' to check Local and addon status${RESET}"
   fi
-  local running=$(nexus sites list --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len([s for s in d.get('local',[]) if s.get('status')=='running']))" 2>/dev/null || echo "?")
-  if [ "$running" = "0" ] || [ "$running" = "?" ]; then
-    echo -e "${YELLOW}⚠  No running local sites — evals work better with at least one running.${RESET}"
-    echo -e "   Start some with: nexus sites start jppblank@local"
-    echo -e "   ${BOLD}Continuing in 5 seconds... (Ctrl+C to abort)${RESET}"
-    sleep 5
-  else
-    echo -e "  ${GREEN}✅ $running local site(s) running${RESET}"
-  fi
+  ensure_e2e_site_running
 }
 
 # ── commands ─────────────────────────────────────────────────────────────────
+
+# Ctrl+C doesn't reliably kill bash→npx→ts-node→claude chains.
+# Use: ./eval kill   (in another terminal)
+kill_eval() {
+  pkill -f "auto-eval.ts" 2>/dev/null && echo "Eval stopped." || echo "No eval running."
+}
 
 cmd=${1:-""}
 shift 2>/dev/null || true
@@ -154,14 +178,30 @@ case "$cmd" in
 
   "run")
     mode=${1:-""}
+    case_arg=""
+    if [ "${2:-}" != "" ]; then case_arg="--case $2"; fi
     if [ "$mode" = "mcp" ]; then
       check_prereqs
-      echo -e "\n${BOLD}Running MCP eval (10 cases)...${RESET}\n"
-      $RUNNER/auto-eval.ts --mode mcp
+      # Hide skills so MCP mode is pure MCP (simulates Claude Desktop)
+      GLOBAL_SKILLS="$HOME/.claude/skills"
+      GLOBAL_BAK="$HOME/.claude/skills.eval-bak"
+      LOCAL_SKILLS="$(pwd)/.claude/skills"
+      LOCAL_BAK="$(pwd)/.claude/skills.eval-bak"
+      [ -d "$GLOBAL_SKILLS" ] && mv "$GLOBAL_SKILLS" "$GLOBAL_BAK"
+      [ -d "$LOCAL_SKILLS" ] && mv "$LOCAL_SKILLS" "$LOCAL_BAK"
+      echo -e "  ${YELLOW}Skills hidden for MCP eval (pure MCP mode)${RESET}"
+      trap '[ -d "$GLOBAL_BAK" ] && mv "$GLOBAL_BAK" "$GLOBAL_SKILLS"; [ -d "$LOCAL_BAK" ] && mv "$LOCAL_BAK" "$LOCAL_SKILLS"; echo -e "  Skills restored."' EXIT INT TERM
+      echo -e "\n${BOLD}Running MCP eval...${RESET}\n"
+      $RUNNER/auto-eval.ts --mode mcp --skip-mcp-check $case_arg
+      # Restore skills (trap handles unexpected exits too)
+      trap - EXIT INT TERM
+      [ -d "$GLOBAL_BAK" ] && mv "$GLOBAL_BAK" "$GLOBAL_SKILLS"
+      [ -d "$LOCAL_BAK" ] && mv "$LOCAL_BAK" "$LOCAL_SKILLS"
+      echo -e "\n  ${GREEN}Skills restored.${RESET}"
     elif [ "$mode" = "cli" ]; then
       check_prereqs
-      echo -e "\n${BOLD}Running CLI/Skills eval (10 cases)...${RESET}\n"
-      $RUNNER/auto-eval.ts --mode cli-skills
+      echo -e "\n${BOLD}Running CLI/Skills eval...${RESET}\n"
+      $RUNNER/auto-eval.ts --mode cli-skills --skip-mcp-check $case_arg
     else
       echo "Usage: ./eval run mcp | cli"
     fi
@@ -174,11 +214,20 @@ case "$cmd" in
 
   "score")
     case_id=${1:-""}
+    PORT=4242
+    VIEWER="tests/evals/viewer/server.js"
+
+    # Always restart server to pick up latest results
+    kill $(lsof -ti:$PORT 2>/dev/null) 2>/dev/null || true; sleep 0.5
+    node "$VIEWER" &
+    sleep 1
+
     if [ -z "$case_id" ]; then
-      list_cases
+      open "http://localhost:$PORT"
     else
-      $RUNNER/compare-eval.ts --case "$case_id"
+      open "http://localhost:$PORT?case=$case_id"
     fi
+    echo -e "  ${GREEN}Eval scorer open at http://localhost:$PORT${RESET}"
     ;;
 
   "mcp-on")
@@ -196,6 +245,10 @@ case "$cmd" in
       echo -e "${GREEN}✅ local-nexus-ai disconnected${RESET}" || \
       echo -e "${YELLOW}⚠  local-nexus-ai was not connected${RESET}"
     echo ""
+    ;;
+
+  "kill")
+    kill_eval
     ;;
 
   "open")

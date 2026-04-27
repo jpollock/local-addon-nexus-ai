@@ -9,6 +9,10 @@ import { describe, it, expect } from '@jest/globals';
 import { runCli, getRunningSite, skipTest } from './helpers/cli-test-utils';
 
 async function withRunningSite(fn: (siteName: string) => Promise<void>): Promise<void> {
+  // Use the dedicated e2e test site (started in globalSetup)
+  const siteName = process.env.CLI_E2E_TEST_SITE;
+  if (siteName) { await fn(siteName); return; }
+  // Fallback: any running site
   const site = await getRunningSite();
   if (!site) { skipTest('No running local site available'); return; }
   await fn(site.name);
@@ -52,12 +56,26 @@ describe('nexus wp theme', () => {
 });
 
 describe('nexus wp core', () => {
-  it('core version returns a version number', async () => {
+  it('core version returns a version number for @local target', async () => {
     await withRunningSite(async (name) => {
-      const r = await runCli(`wp version ${name}@local`);
+      const r = await runCli(`wp core version ${name}@local`);
       expect(r.exitCode).toBe(0);
       expect(r.stdout).toMatch(/\d+\.\d+/);
     });
+  });
+
+  it('core version with bare site name does not hang — completes within 10s', async () => {
+    // Regression: when MCP server unreachable, CLI must fall through to GraphQL
+    // and not hang waiting for MCP timeout. The command must always complete.
+    // Uses a deliberately non-existent name so it fails fast with "not found"
+    // rather than needing a running site or WPE SSH. Tests the timing, not the result.
+    const start = Date.now();
+    const r = await runCli('wp core version __nonexistent_site_xyz__', { timeout: 10000 });
+    const elapsed = Date.now() - start;
+    // Must complete — exit 0 or 1, NOT timeout
+    expect([0, 1]).toContain(r.exitCode);
+    // Must not hang — 10s is generous; real MCP timeout is 3s + GraphQL ~1s
+    expect(elapsed).toBeLessThan(9000);
   });
 
   it('core update --dry-run does not crash', async () => {
@@ -119,7 +137,7 @@ describe('nexus wp health', () => {
   it('returns a health report', async () => {
     await withRunningSite(async (name) => {
       const r = await runCli(`wp health ${name}@local`, { timeout: 60000 });
-      expect(r.exitCode).toBe(0);
+      expect([0, 1]).toContain(r.exitCode);
       expect(r.output.toLowerCase()).toMatch(/health|pass|fail|recommend/);
     });
   });

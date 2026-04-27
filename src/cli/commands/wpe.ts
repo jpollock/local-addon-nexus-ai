@@ -1560,16 +1560,24 @@ wpeCommand
       const { success, error, data } = result.nexusWpeSslCertificates;
       if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }
       const parsed = JSON.parse(data);
-      const certs = parsed.results ?? parsed;
+      const certs: any[] = parsed.results ?? parsed.certificates ?? (Array.isArray(parsed) ? parsed : []);
       if (options.json) { console.log(JSON.stringify(certs, null, 2)); return; }
       console.log(`\nSSL Certificates for install ${installId}:`);
       console.log('─'.repeat(70));
-      console.log(`  ${'Domains'.padEnd(36)} ${'Expiry'.padEnd(14)} Status`);
+      console.log(`  ${'Domains'.padEnd(36)} ${'Expiry'.padEnd(22)} Status`);
       console.log('─'.repeat(70));
+      const now = Date.now();
       for (const c of certs) {
         const domains = Array.isArray(c.domains) ? c.domains.join(', ') : (c.domain ?? '');
-        const expiry = c.expires_at ?? c.expiry ?? '';
-        console.log(`  ${domains.padEnd(36)} ${expiry.padEnd(14)} ${c.status ?? ''}`);
+        const rawExpiry = c.expires_time ?? c.expires_at ?? c.expiry ?? '';
+        let expiryLabel = rawExpiry;
+        if (rawExpiry) {
+          const expMs = new Date(rawExpiry).getTime();
+          const days = Math.round((expMs - now) / 86400000);
+          const flag = days < 0 ? `🔴 expired ${Math.abs(days)}d ago` : days <= 30 ? `⚠️  expires in ${days}d` : `✅ expires in ${days}d`;
+          expiryLabel = flag;
+        }
+        console.log(`  ${domains.padEnd(36)} ${expiryLabel.padEnd(22)} ${c.status ?? ''}`);
       }
       console.log('');
     } catch (err: any) {

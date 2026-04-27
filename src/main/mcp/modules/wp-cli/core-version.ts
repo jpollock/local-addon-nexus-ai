@@ -20,9 +20,51 @@ export const coreVersionHandler: McpToolHandler = {
 
   async execute(args, services): Promise<McpToolResult> {
     const target = await resolveTarget(args, services);
-    if ('content' in target) return target;
+
+    // If local site lookup failed, check if the name matches a WPE install in the graph DB.
+    // Claude often passes bare names as site= — this recovers gracefully instead of "not found".
+    if ('content' in target) {
+      const query = (args.site ?? args.install_name) as string | undefined;
+      if (query) {
+        const db = services.graphService?.getDb?.();
+        if (db) {
+          try {
+            const row = db.prepare(
+              "SELECT name, wp_version, last_sync_at FROM sites WHERE source='wpe' AND LOWER(name)=? AND wp_version IS NOT NULL LIMIT 1"
+            ).get(query.toLowerCase()) as { name: string; wp_version: string; last_sync_at: number } | undefined;
+            if (row?.wp_version) {
+              const ageMs = Date.now() - (row.last_sync_at ?? 0);
+              const ageHours = Math.floor(ageMs / 3600000);
+              const ageNote = ageHours < 1 ? 'synced recently'
+                : ageHours < 24 ? `synced ${ageHours}h ago`
+                : `synced ${Math.floor(ageHours / 24)}d ago`;
+              return ok(`WordPress ${row.wp_version} _(${ageNote} — run \`nexus wpe sync\` to refresh)_`);
+            }
+          } catch { /* graph not ready */ }
+        }
+      }
+      return target; // original error
+    }
 
     if (target.type === 'remote') {
+      // Check graph DB cache first — avoids SSH for data we already have
+      const db = services.graphService?.getDb?.();
+      if (db) {
+        try {
+          const row = db.prepare(
+            "SELECT wp_version, last_sync_at FROM sites WHERE source='wpe' AND name=? AND wp_version IS NOT NULL LIMIT 1"
+          ).get(target.installName) as { wp_version: string; last_sync_at: number } | undefined;
+          if (row?.wp_version) {
+            const ageMs = Date.now() - (row.last_sync_at ?? 0);
+            const ageHours = Math.floor(ageMs / 3600000);
+            const ageNote = ageHours < 1 ? 'synced recently'
+              : ageHours < 24 ? `synced ${ageHours}h ago`
+              : `synced ${Math.floor(ageHours / 24)}d ago`;
+            return ok(`WordPress ${row.wp_version} _(${ageNote} — run \`nexus wpe sync\` to refresh)_`);
+          }
+        } catch { /* graph not ready — fall through to SSH */ }
+      }
+
       const result = await remoteWpCliRun(target.installName, ['core', 'version'], services);
       if (!result.success) {
         return error(`Remote WP-CLI error: ${result.stdout}`);
