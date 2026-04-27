@@ -49,12 +49,47 @@ import { StartupSiteScanner } from './startup/StartupSiteScanner';
 import { HaltedSiteRefreshScheduler } from './startup/HaltedSiteRefreshScheduler';
 import { WpeRefreshScheduler } from './startup/WpeRefreshScheduler';
 import { SiteDigitalTwinService } from './twin/SiteDigitalTwinService';
+import type { StartupStatus } from '../common/types';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
 const { ipcMain } = require('electron');
 
 let mcpServer: McpServer | null = null;
+
+// Startup lifecycle state, exposed to the renderer via GET_STARTUP_STATUS so
+// the dashboard can surface a real error instead of an indefinite "waiting"
+// banner when a service fails to boot. The phase string is updated as each
+// await in the async init IIFE advances, so if we catch we know where.
+let currentStartupPhase: string | null = null;
+let startupStatus: StartupStatus = {
+  ready: false,
+  phase: null,
+  error: null,
+};
+
+function setStartupPhase(phase: string): void {
+  currentStartupPhase = phase;
+  startupStatus = { ...startupStatus, phase };
+}
+
+/**
+ * Map recognizable runtime errors to a user-actionable hint. Today we handle
+ * the NODE_MODULE_VERSION mismatch that happens when `npm install` is run
+ * outside Local (rebuilding native modules for system Node instead of Electron
+ * Node) — see docs/NATIVE_MODULES.md. Extend as we see other recurring
+ * failure modes.
+ */
+function hintForError(err: unknown): string | null {
+  const message = (err as Error)?.message ?? '';
+  if (message.includes('NODE_MODULE_VERSION')) {
+    return 'Native module was built for a different Node ABI than Electron. Run `npm run rebuild` in the addon directory, then restart Local.';
+  }
+  if ((err as NodeJS.ErrnoException)?.code === 'ENOENT' && message.includes('all-MiniLM')) {
+    return 'Embedding model files are missing. Ensure `models/all-MiniLM-L6-v2-quantized/` is present in the addon directory.';
+  }
+  return null;
+}
 
 export default function main(context: any): void {
   console.log('[NexusAI] 🟢🟢🟢 MAIN ENTRY POINT CALLED');
@@ -262,18 +297,23 @@ export default function main(context: any): void {
   // Async initialization
   (async () => {
     try {
+      setStartupPhase('VectorStore');
       await vectorStore.initialize();
       localLogger.info('[NexusAI] VectorStore initialized');
 
+      setStartupPhase('EmbeddingService');
       await embeddingService.initialize();
       localLogger.info('[NexusAI] EmbeddingService initialized');
 
+      setStartupPhase('GraphService');
       await graphService.initialize();
       localLogger.info('[NexusAI] GraphService initialized');
 
+      setStartupPhase('EventProcessor');
       await eventProcessor.initialize();
       localLogger.info('[NexusAI] EventProcessor initialized');
 
+      setStartupPhase('HttpEventInterface');
       const httpInfo = await httpEventInterface.start();
       localLogger.info(`[NexusAI] HTTP Event Interface running on ${httpInfo.url}`);
       localLogger.info(`[NexusAI] WordPress webhook endpoint: ${httpInfo.url}/wp-events`);
@@ -292,6 +332,7 @@ export default function main(context: any): void {
 
       // Reuse token and preferred port from previous run so HTTP configs stay stable
       const previousConnectionInfo = loadConnectionInfo();
+      setStartupPhase('McpServer');
       mcpServer = new McpServer({
         services: nexusServices,
         registry,
@@ -306,6 +347,7 @@ export default function main(context: any): void {
       localLogger.info(`[NexusAI] MCP server running on ${connectionInfo.url}`);
       localLogger.info(`[NexusAI] Tools: ${connectionInfo.tools.join(', ')}`);
 
+      setStartupPhase('AiProxyServer');
       // Start AI Proxy Server (OpenAI-compatible endpoint backed by Ollama)
       const aiProxyServer = new AiProxyServer({
         logger: localLogger,
@@ -486,6 +528,8 @@ export default function main(context: any): void {
           // Ignore telemetry errors
         }
       }, 3600000); // 1 hour
+
+      startupStatus = { ready: true, phase: null, error: null };
     } catch (err) {
       const error = err as any;
       rejectReady!(err as Error);
@@ -498,7 +542,22 @@ export default function main(context: any): void {
         name: error?.name || 'Unknown',
       };
 
-      localLogger.error('[NexusAI] Failed to start:', errorDetails);
+      startupStatus = {
+        ready: false,
+        phase: currentStartupPhase,
+        error: {
+          message: errorDetails.message,
+          name: errorDetails.name,
+          code: error?.code ?? null,
+          phase: currentStartupPhase ?? 'unknown',
+          hint: hintForError(err),
+        },
+      };
+
+      localLogger.error(
+        `[NexusAI] Startup failed in phase '${currentStartupPhase ?? 'unknown'}': ${errorDetails.message}`,
+        errorDetails,
+      );
       console.error('[NexusAI] Startup error details:', errorDetails);
     }
   })();
@@ -516,6 +575,7 @@ export default function main(context: any): void {
     registryStorage,
     localLogger,
     getMcpServer: () => mcpServer,
+    getStartupStatus: () => startupStatus,
     graphService,
     eventProcessor,
     vectorDbPath: vectorDbDir,

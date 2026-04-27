@@ -1,4 +1,31 @@
 // ---------------------------------------------------------------------------
+// Startup lifecycle
+// ---------------------------------------------------------------------------
+
+/**
+ * Status of the addon's async initialization pipeline. Exposed to the renderer
+ * so the dashboard can show an actionable error (with a hint when we recognize
+ * the failure mode) instead of an indefinite "Waiting for initialization..."
+ * when a service fails to boot.
+ */
+export interface StartupStatus {
+  /** true once every phase has resolved and the MCP server is listening */
+  ready: boolean;
+  /** name of the phase currently running, or the phase that failed */
+  phase: string | null;
+  /** null while healthy; set when the outer init catch block fires */
+  error: {
+    message: string;
+    name: string;
+    code: string | null;
+    /** phase that was active when the error was thrown */
+    phase: string;
+    /** user-actionable remediation when we recognize the error shape */
+    hint: string | null;
+  } | null;
+}
+
+// ---------------------------------------------------------------------------
 // Vector Store
 // ---------------------------------------------------------------------------
 
