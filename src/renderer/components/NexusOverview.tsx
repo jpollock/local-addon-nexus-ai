@@ -49,6 +49,18 @@ interface McpInfo {
   stdioPath: string;
 }
 
+interface StartupStatus {
+  ready: boolean;
+  phase: string | null;
+  error: {
+    message: string;
+    name: string;
+    code: string | null;
+    phase: string;
+    hint: string | null;
+  } | null;
+}
+
 interface SiteListItem {
   id: string;
   name: string;
@@ -126,6 +138,7 @@ interface FleetPlugin {
 interface NexusOverviewState {
   stats: DashboardStats | null;
   mcpInfo: McpInfo | null;
+  startupStatus: StartupStatus | null;
   sites: SiteListItem[];
   indexEntries: IndexEntry[];
   searchQuery: string;
@@ -304,6 +317,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   state: NexusOverviewState = {
     stats: null,
     mcpInfo: null,
+    startupStatus: null,
     sites: [],
     indexEntries: [],
     searchQuery: '',
@@ -422,7 +436,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   fetchAll = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult] = await Promise.all([
+      const [stats, mcpInfo, sites, indexEntries, proxyResult, settings, wpeSitesResult, syncStatus, wpeSyncStatsResult, fleetSummaryResult, startupStatus] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
@@ -433,6 +447,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         ipc.invoke(IPC_CHANNELS.GET_CREDENTIAL_SYNC_STATUS),
         ipc.invoke(IPC_CHANNELS.WPE_SYNC_STATS),
         ipc.invoke(IPC_CHANNELS.GET_FLEET_SUMMARY),
+        ipc.invoke(IPC_CHANNELS.GET_STARTUP_STATUS),
       ]);
       if (!this.mounted) return;
 
@@ -481,6 +496,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       this.setState({
         stats,
         mcpInfo: mcpInfo ?? null,
+        startupStatus: startupStatus ?? null,
         sites: sites ?? [],
         wpeSites,
         indexEntries: indexEntries ?? [],
@@ -982,11 +998,43 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   }
 
   renderMcpPanel(): React.ReactNode {
-    const { mcpInfo, copiedField } = this.state;
+    const { mcpInfo, copiedField, startupStatus } = this.state;
     if (!mcpInfo) {
+      // When async init failed, show the real error + actionable hint rather
+      // than an indefinite "waiting" banner — see issue #36.
+      if (startupStatus?.error) {
+        const err = startupStatus.error;
+        return React.createElement(
+          'div',
+          {
+            style: {
+              ...cardStyle,
+              marginBottom: '24px',
+              padding: '20px',
+              borderLeft: '4px solid var(--nxai-danger, #d14343)',
+              backgroundColor: 'var(--nxai-danger-bg, rgba(209, 67, 67, 0.06))',
+            },
+          },
+          React.createElement('div', {
+            style: { fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: '8px' },
+          }, `MCP server failed to start (phase: ${err.phase})`),
+          React.createElement('div', {
+            style: { fontFamily: 'monospace', fontSize: '12px', color: 'var(--nxai-card-text)', marginBottom: err.hint ? '12px' : '0', whiteSpace: 'pre-wrap' as const },
+          }, err.message),
+          err.hint
+            ? React.createElement('div', {
+              style: { fontSize: '13px', color: 'var(--nxai-card-text)' },
+            },
+              React.createElement('strong', null, 'Suggested fix: '),
+              err.hint,
+            )
+            : null,
+        );
+      }
+      const phaseLabel = startupStatus?.phase ? ` (${startupStatus.phase})` : '';
       return React.createElement('div', {
         style: { ...cardStyle, marginBottom: '24px', textAlign: 'center' as const, padding: '24px', color: 'var(--nxai-card-sub)' },
-      }, 'MCP server not yet running. Waiting for initialization...');
+      }, `MCP server not yet running. Waiting for initialization${phaseLabel}...`);
     }
 
     // Both Claude Code and Claude Desktop use the stdio bridge so configs

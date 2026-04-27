@@ -18,7 +18,7 @@ import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
 import { scanDatabase } from './mcp/modules/db-scanner/db-scanner';
 import { switchProviderForSite } from './mcp/modules/wp-connector/switch-provider';
 import { generateEventSummary } from './events/event-summary';
-import type { EventTimelineEntry, EventStats } from '../common/types';
+import type { EventTimelineEntry, EventStats, StartupStatus } from '../common/types';
 import { SearchService } from './search/SearchService';
 import { HealthScoreCalculator } from './health/HealthScoreCalculator';
 import { FilterEngine } from './search/FilterEngine';
@@ -100,6 +100,10 @@ export interface IpcHandlerDeps {
   registryStorage: RegistryStorage;
   localLogger: any;
   getMcpServer: () => McpServer | null;
+  /** Current startup lifecycle state (ready flag + phase + error). Exposed via
+   *  GET_STARTUP_STATUS so the dashboard can show a real error and hint when
+   *  async init fails instead of an indefinite "Waiting for initialization..." */
+  getStartupStatus: () => StartupStatus;
   graphService: GraphService;
   eventProcessor: EventProcessor;
   vectorDbPath: string;
@@ -251,6 +255,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   const {
     siteData, localServicesBridge, indexRegistry, embeddingService,
     contentPipeline, vectorStore, registryStorage, localLogger, getMcpServer,
+    getStartupStatus,
     graphService, eventProcessor, vectorDbPath, serviceContainer, metadataCache,
   } = deps;
   console.log('[NexusAI] 🟢 registerIpcHandlers() - deps destructured successfully');
@@ -289,6 +294,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   safeHandle(IPC_CHANNELS.GET_MCP_INFO, () => {
     return getMcpServer()?.getConnectionInfo() ?? null;
+  });
+
+  safeHandle(IPC_CHANNELS.GET_STARTUP_STATUS, () => {
+    return getStartupStatus();
   });
 
   safeHandle(IPC_CHANNELS.GET_FLEET_STATUS, () => {
