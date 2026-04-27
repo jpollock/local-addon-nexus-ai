@@ -21,3 +21,4 @@ tests/e2e/playwright-report/
 tests/e2e/.auth/
 archive/
 STRATEGIC_ANALYSIS.md
+.worktrees
