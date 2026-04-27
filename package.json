@@ -1,7 +1,7 @@
 {
   "name": "@local-labs-jpollock/local-addon-nexus-ai",
   "productName": "Nexus AI",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "engines": {
     "node": "22.x"
   },
