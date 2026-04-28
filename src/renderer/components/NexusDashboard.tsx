@@ -3,82 +3,104 @@ import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface SiteRow {
+interface LocalSite {
   id: string;
   name: string;
   domain: string;
-  siteStatus: string;
-  indexState: 'indexed' | 'indexing' | 'pending' | 'not_indexed' | 'error' | 'stale';
+  searchable: boolean;
+  adding: boolean; // in-progress add-to-search
   documentCount: number;
   lastIndexed: number | null;
+}
+
+interface WpeSite {
+  id: string;
+  name: string;
+  domain: string;
+  synced: boolean;
+  lastSynced: number | null;
 }
 
 interface SearchGroup {
   siteId: string;
   siteName: string;
   domain: string;
-  results: Array<{
-    id: string;
-    title: string;
-    content: string;
-    postType: string;
-  }>;
+  results: Array<{ id: string; title: string; content: string; postType: string }>;
 }
 
-type SortCol = 'name' | 'lastIndexed' | 'posts';
+type Tab = 'sites' | 'search';
 
 interface State {
   loading: boolean;
-  sites: SiteRow[];
-  mcpRunning: boolean;
-  mcpToolCount: number;
+  activeTab: Tab;
+
+  localSites: LocalSite[];
+  wpeSites: WpeSite[];
+  wpeAuthenticated: boolean;
+
+  makingAllSearchable: boolean;
+  indexProgress: { completed: number; total: number };
 
   searchQuery: string;
   searchResults: SearchGroup[];
   searching: boolean;
 
-  indexAllRunning: boolean;
-  indexProgress: { completed: number; total: number };
-
-  showAll: boolean;
-  sortBy: SortCol;
-  sortDir: 'asc' | 'desc';
+  mcpRunning: boolean;
+  mcpToolCount: number;
+  startupError: string | null;
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────────────────────
 
-const VISIBLE_DEFAULT = 8;
-
-const STYLES = `
-  @keyframes nxai-slide {
+const CSS = `
+  @keyframes nxai-shimmer {
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
   }
-  .nxai-indexing-bar {
+  .nxai-adding-bar {
     background: linear-gradient(90deg, #0ECAD4 25%, #6ee8ee 50%, #0ECAD4 75%);
     background-size: 200% 100%;
-    animation: nxai-slide 1.8s linear infinite;
+    animation: nxai-shimmer 1.6s linear infinite;
+    width: 60% !important;
   }
-  .nxai-search:focus {
+  .nxai-search-input:focus {
     outline: none;
     border-color: #0ECAD4 !important;
     box-shadow: 0 0 0 3px rgba(14,202,212,0.15) !important;
   }
-  .nxai-site-row:hover { background: var(--nxai-hover-bg, rgba(0,0,0,0.025)); }
-  .nxai-result-row:hover { background: var(--nxai-hover-bg, rgba(0,0,0,0.025)); }
-  .nxai-ghost-btn:hover { background: #0ECAD4 !important; color: #fff !important; border-color: #0ECAD4 !important; }
+  .nxai-row:hover { background: var(--nxai-hover, rgba(0,0,0,0.025)); }
+  .nxai-add-btn:hover {
+    background: #0ECAD4 !important;
+    color: #fff !important;
+    border-color: #0ECAD4 !important;
+  }
 `;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function relativeTime(ts: number | null): string | null {
+function ago(ts: number | null): string | null {
   if (!ts) return null;
-  const mins = Math.floor((Date.now() - ts) / 60000);
-  if (mins < 2) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  if (mins < 1440) return `${Math.floor(mins / 60)}h ago`;
-  return `${Math.floor(mins / 1440)}d ago`;
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 2) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  if (m < 1440) return `${Math.floor(m / 60)}h ago`;
+  return `${Math.floor(m / 1440)}d ago`;
 }
+
+const card: React.CSSProperties = {
+  border: '1px solid var(--nxai-card-border, #e5e7eb)',
+  borderRadius: '10px',
+  overflow: 'hidden',
+};
+
+const sectionLabel = (text: string): React.ReactNode =>
+  React.createElement('div', {
+    style: {
+      fontSize: '11px', fontWeight: 700, letterSpacing: '0.6px',
+      textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub)',
+      margin: '20px 0 8px',
+    },
+  }, text);
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -89,17 +111,18 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
 
   state: State = {
     loading: true,
-    sites: [],
-    mcpRunning: false,
-    mcpToolCount: 0,
+    activeTab: 'sites',
+    localSites: [],
+    wpeSites: [],
+    wpeAuthenticated: false,
+    makingAllSearchable: false,
+    indexProgress: { completed: 0, total: 0 },
     searchQuery: '',
     searchResults: [],
     searching: false,
-    indexAllRunning: false,
-    indexProgress: { completed: 0, total: 0 },
-    showAll: false,
-    sortBy: 'name',
-    sortDir: 'asc',
+    mcpRunning: false,
+    mcpToolCount: 0,
+    startupError: null,
   };
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -117,10 +140,10 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
   }
 
   private injectStyles() {
-    if (document.getElementById('nxai-dashboard-css')) return;
+    if (document.getElementById('nxai-dash-css')) return;
     const el = document.createElement('style');
-    el.id = 'nxai-dashboard-css';
-    el.textContent = STYLES;
+    el.id = 'nxai-dash-css';
+    el.textContent = CSS;
     document.head.appendChild(el);
   }
 
@@ -129,41 +152,125 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
   private fetchAll = async () => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [rawSites, indexEntries, mcpInfo] = await Promise.all([
+      const [rawSites, indexEntries, mcpInfo, wpeSitesResult, startupStatus] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_SITES),
         ipc.invoke(IPC_CHANNELS.GET_FLEET_STATUS),
         ipc.invoke(IPC_CHANNELS.GET_MCP_INFO),
+        ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES),
+        ipc.invoke(IPC_CHANNELS.GET_STARTUP_STATUS),
       ]);
       if (!this.mounted) return;
 
       const entryMap = new Map<string, any>();
       for (const e of (indexEntries ?? [])) entryMap.set(e.siteId, e);
 
-      const sites: SiteRow[] = (rawSites ?? [])
+      const localSites: LocalSite[] = (rawSites ?? [])
         .filter((s: any) => !s.isWpe)
         .map((s: any) => {
           const e = entryMap.get(s.id);
+          const state = e?.state ?? 'not_indexed';
           return {
             id: s.id,
             name: s.name,
             domain: s.domain ?? '',
-            siteStatus: s.status ?? 'halted',
-            indexState: e?.state ?? 'not_indexed',
+            searchable: state === 'indexed' || state === 'stale',
+            adding: state === 'indexing',
             documentCount: e?.documentCount ?? 0,
             lastIndexed: e?.lastIndexed ?? null,
           };
         });
 
+      const wpeSites: WpeSite[] = (wpeSitesResult?.sites ?? []).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        domain: s.domain ?? '',
+        synced: true,
+        lastSynced: s.lastSynced ?? null,
+      }));
+
       this.setState({
-        sites,
+        localSites,
+        wpeSites,
+        wpeAuthenticated: !wpeSitesResult?.wpeAuthError && wpeSites.length > 0,
         mcpRunning: !!(mcpInfo?.running ?? mcpInfo?.url),
         mcpToolCount: mcpInfo?.tools?.length ?? 0,
+        startupError: startupStatus?.error?.message ?? null,
         loading: false,
       });
     } catch {
       if (this.mounted) this.setState({ loading: false });
     }
   };
+
+  // ── Make searchable ─────────────────────────────────────────────────────────
+
+  private makeAllSearchable = async () => {
+    if (this.state.makingAllSearchable) return;
+    const total = this.state.localSites.filter(s => !s.searchable).length || this.state.localSites.length;
+    this.setState({ makingAllSearchable: true, indexProgress: { completed: 0, total } });
+
+    try {
+      const res = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_ALL_AUTO);
+      if (!this.mounted) return;
+      if (res?.opId) {
+        this.startPolling(res.opId);
+      } else {
+        this.setState({ makingAllSearchable: false });
+      }
+    } catch {
+      if (this.mounted) this.setState({ makingAllSearchable: false });
+    }
+  };
+
+  private addToSearch = async (siteId: string) => {
+    this.setLocalSite(siteId, { adding: true });
+    try {
+      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_SITE, siteId);
+      setTimeout(this.fetchAll, 3000);
+    } catch {
+      this.setLocalSite(siteId, { adding: false });
+    }
+  };
+
+  private setLocalSite(siteId: string, patch: Partial<LocalSite>) {
+    this.setState(prev => ({
+      localSites: prev.localSites.map(s => s.id === siteId ? { ...s, ...patch } : s),
+    }));
+  }
+
+  private startPolling(opId: string) {
+    this.pollTimer = setInterval(async () => {
+      try {
+        const status = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.BULK_STATUS, opId);
+        if (!this.mounted) return;
+
+        const progress = status?.progress ?? { completed: 0, total: 0 };
+        const siteResults: Record<string, { status: string }> = status?.siteResults ?? {};
+
+        this.setState(prev => ({
+          indexProgress: progress,
+          localSites: prev.localSites.map(s => {
+            const sr = siteResults[s.id];
+            if (!sr) return s;
+            if (sr.status === 'completed') return { ...s, searchable: true, adding: false };
+            if (sr.status === 'running') return { ...s, adding: true };
+            return s;
+          }),
+        }));
+
+        if (['completed', 'completed_with_errors', 'failed', 'cancelled'].includes(status?.status)) {
+          clearInterval(this.pollTimer!);
+          this.pollTimer = null;
+          this.setState({ makingAllSearchable: false });
+          await this.fetchAll();
+        }
+      } catch {
+        clearInterval(this.pollTimer!);
+        this.pollTimer = null;
+        if (this.mounted) this.setState({ makingAllSearchable: false });
+      }
+    }, 2000);
+  }
 
   // ── Search ──────────────────────────────────────────────────────────────────
 
@@ -184,24 +291,17 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
         );
         if (!this.mounted) return;
 
-        const domainById = new Map(this.state.sites.map(s => [s.id, s.domain]));
-        const groupMap = new Map<string, SearchGroup>();
+        const domainMap = new Map([
+          ...this.state.localSites.map(s => [s.id, s.domain] as [string, string]),
+          ...this.state.wpeSites.map(s => [s.id, s.domain] as [string, string]),
+        ]);
 
+        const groupMap = new Map<string, SearchGroup>();
         for (const r of (res?.results ?? [])) {
           if (!groupMap.has(r.siteId)) {
-            groupMap.set(r.siteId, {
-              siteId: r.siteId,
-              siteName: r.siteName,
-              domain: domainById.get(r.siteId) ?? '',
-              results: [],
-            });
+            groupMap.set(r.siteId, { siteId: r.siteId, siteName: r.siteName, domain: domainMap.get(r.siteId) ?? '', results: [] });
           }
-          groupMap.get(r.siteId)!.results.push({
-            id: r.id,
-            title: r.title,
-            content: r.content,
-            postType: r.postType,
-          });
+          groupMap.get(r.siteId)!.results.push({ id: r.id, title: r.title, content: r.content, postType: r.postType });
         }
 
         this.setState({ searchResults: Array.from(groupMap.values()), searching: false });
@@ -211,431 +311,388 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
     }, 250);
   };
 
-  private clearSearch = () => this.setState({ searchQuery: '', searchResults: [] });
+  // ── Render: tab bar ─────────────────────────────────────────────────────────
 
-  // ── Indexing ────────────────────────────────────────────────────────────────
+  private renderTabBar(): React.ReactNode {
+    const { activeTab, localSites } = this.state;
+    const searchableCount = localSites.filter(s => s.searchable).length;
 
-  private handleIndexAll = async () => {
-    if (this.state.indexAllRunning) return;
-    const total = this.state.sites.length;
-    this.setState({ indexAllRunning: true, indexProgress: { completed: 0, total } });
+    const tab = (key: Tab, label: string) => {
+      const active = activeTab === key;
+      return React.createElement('button', {
+        key,
+        onClick: () => this.setState({ activeTab: key }),
+        style: {
+          padding: '10px 18px',
+          fontSize: '13px', fontWeight: 600,
+          background: 'none', border: 'none', cursor: 'pointer',
+          borderBottom: active ? `2.5px solid ${UI_COLORS.WPE_BRAND}` : '2.5px solid transparent',
+          color: active ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
+          marginBottom: '-1px',
+        },
+      }, label);
+    };
 
-    try {
-      const res = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_ALL_AUTO);
-      if (!this.mounted) return;
-      if (res?.opId) {
-        this.startPolling(res.opId);
-      } else {
-        this.setState({ indexAllRunning: false });
-      }
-    } catch {
-      if (this.mounted) this.setState({ indexAllRunning: false });
-    }
-  };
-
-  private handleIndexSite = async (siteId: string) => {
-    this.setSiteState(siteId, 'indexing');
-    try {
-      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_SITE, siteId);
-      setTimeout(this.fetchAll, 3000);
-    } catch {
-      this.setSiteState(siteId, 'not_indexed');
-    }
-  };
-
-  private setSiteState(siteId: string, indexState: SiteRow['indexState']) {
-    this.setState(prev => ({
-      sites: prev.sites.map(s => s.id === siteId ? { ...s, indexState } : s),
-    }));
-  }
-
-  private startPolling(opId: string) {
-    this.pollTimer = setInterval(async () => {
-      try {
-        const status = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.BULK_STATUS, opId);
-        if (!this.mounted) return;
-
-        const progress = status?.progress ?? { completed: 0, total: 0 };
-        const siteResults: Record<string, { status: string }> = status?.siteResults ?? {};
-
-        this.setState(prev => ({
-          indexProgress: progress,
-          sites: prev.sites.map(s => {
-            const sr = siteResults[s.id];
-            if (!sr) return s;
-            if (sr.status === 'completed') return { ...s, indexState: 'indexed' };
-            if (sr.status === 'running') return { ...s, indexState: 'indexing' };
-            if (sr.status === 'failed') return { ...s, indexState: 'error' };
-            if (sr.status === 'pending') return { ...s, indexState: 'pending' };
-            return s;
-          }),
-        }));
-
-        const done = ['completed', 'completed_with_errors', 'failed', 'cancelled'].includes(status?.status);
-        if (done) {
-          clearInterval(this.pollTimer!);
-          this.pollTimer = null;
-          this.setState({ indexAllRunning: false });
-          await this.fetchAll();
-        }
-      } catch {
-        clearInterval(this.pollTimer!);
-        this.pollTimer = null;
-        if (this.mounted) this.setState({ indexAllRunning: false });
-      }
-    }, 2000);
-  }
-
-  // ── Sorting ─────────────────────────────────────────────────────────────────
-
-  private toggleSort = (col: SortCol) => {
-    this.setState(prev => ({
-      sortBy: col,
-      sortDir: prev.sortBy === col && prev.sortDir === 'asc' ? 'desc' : 'asc',
-    }));
-  };
-
-  private getSortedSites(): SiteRow[] {
-    const { sites, sortBy, sortDir } = this.state;
-    const sorted = [...sites].sort((a, b) => {
-      let cmp = 0;
-      if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
-      else if (sortBy === 'lastIndexed') cmp = (b.lastIndexed ?? 0) - (a.lastIndexed ?? 0);
-      else if (sortBy === 'posts') cmp = b.documentCount - a.documentCount;
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-
-    // Indexing first, then indexed, then not indexed
-    const order = ['indexing', 'pending', 'indexed', 'stale', 'not_indexed', 'error'];
-    return sorted.sort((a, b) => order.indexOf(a.indexState) - order.indexOf(b.indexState));
-  }
-
-  // ── Render helpers ──────────────────────────────────────────────────────────
-
-  private btn(
-    label: string,
-    onClick: () => void,
-    opts: { color?: string; bg?: string; disabled?: boolean; ghost?: boolean; className?: string } = {},
-  ): React.ReactNode {
-    const { color = 'var(--nxai-card-sub)', bg = 'transparent', disabled = false, ghost = false, className } = opts;
-    return React.createElement('button', {
-      className,
-      onClick,
-      disabled,
+    return React.createElement('div', {
       style: {
-        padding: '4px 10px', fontSize: '11px', fontWeight: 600,
-        borderRadius: '6px', border: '1px solid var(--nxai-card-border, #e5e7eb)',
-        backgroundColor: bg, color, cursor: disabled ? 'default' : 'pointer',
-        whiteSpace: 'nowrap' as const, transition: 'all 0.12s',
-        opacity: disabled ? 0.5 : 1,
+        display: 'flex',
+        borderBottom: '1px solid var(--nxai-card-border, #e5e7eb)',
+        marginBottom: '0',
       },
-    }, label);
+    },
+      tab('search', 'Search'),
+      tab('sites', searchableCount > 0 ? `Sites · ${searchableCount} searchable` : 'Sites'),
+    );
   }
 
-  // ── Search bar ──────────────────────────────────────────────────────────────
+  // ── Render: banners ─────────────────────────────────────────────────────────
 
-  private renderSearchBar(): React.ReactNode {
-    const { searchQuery, indexAllRunning, indexProgress, sites } = this.state;
-    const indexedCount = sites.filter(s => s.indexState === 'indexed' || s.indexState === 'stale').length;
-    const totalCount = sites.length;
-    const hasIndexed = indexedCount > 0;
-    const lastTs = hasIndexed
-      ? Math.max(...sites.filter(s => s.lastIndexed).map(s => s.lastIndexed!))
+  private renderBanners(): React.ReactNode {
+    const { startupError, wpeAuthenticated, wpeSites } = this.state;
+    const banners: React.ReactNode[] = [];
+
+    if (startupError) {
+      banners.push(React.createElement('div', {
+        key: 'startup',
+        style: {
+          padding: '10px 14px', borderRadius: '8px', fontSize: '12px',
+          backgroundColor: 'rgba(239,68,68,0.08)', border: `1px solid ${UI_COLORS.STATUS_ERROR}`,
+          color: UI_COLORS.STATUS_ERROR, marginBottom: '12px',
+          display: 'flex', alignItems: 'center', gap: '8px',
+        },
+      },
+        React.createElement('span', null, '⚠'),
+        React.createElement('span', null, `System error: ${startupError}`),
+      ));
+    }
+
+    if (!wpeAuthenticated && wpeSites.length === 0) {
+      banners.push(React.createElement('div', {
+        key: 'wpe-auth',
+        style: {
+          padding: '10px 14px', borderRadius: '8px', fontSize: '12px',
+          backgroundColor: 'rgba(245,158,11,0.08)', border: `1px solid ${UI_COLORS.STATUS_WARNING}`,
+          color: UI_COLORS.STATUS_WARNING, marginBottom: '12px',
+          display: 'flex', alignItems: 'center', gap: '8px',
+        },
+      },
+        React.createElement('span', null, '⚠'),
+        React.createElement('span', null, 'Not connected to WP Engine — your WPE sites won\'t appear here.'),
+      ));
+    }
+
+    return banners.length > 0
+      ? React.createElement('div', null, ...banners)
       : null;
+  }
+
+  // ── Render: search tab ──────────────────────────────────────────────────────
+
+  private renderSearchTab(): React.ReactNode {
+    const { searchQuery, searchResults, searching, localSites } = this.state;
+    const searchableCount = localSites.filter(s => s.searchable).length;
+    const hasSearchable = searchableCount > 0;
+    const hasQuery = searchQuery.trim().length > 0;
 
     return React.createElement('div', null,
-      React.createElement('div', { style: { display: 'flex', gap: '10px', alignItems: 'center' } },
-        // Input
-        React.createElement('div', { style: { position: 'relative' as const, flex: 1 } },
+      // Search input
+      React.createElement('div', { style: { marginBottom: '24px' } },
+        React.createElement('div', { style: { position: 'relative' as const } },
           React.createElement('span', {
-            style: { position: 'absolute' as const, left: '13px', top: '50%', transform: 'translateY(-50%)', color: 'var(--nxai-card-sub)', pointerEvents: 'none' as const, fontSize: '15px' },
+            style: {
+              position: 'absolute' as const, left: '14px', top: '50%',
+              transform: 'translateY(-50%)', fontSize: '16px',
+              color: 'var(--nxai-card-sub)', pointerEvents: 'none' as const,
+            },
           }, '🔍'),
           React.createElement('input', {
-            className: 'nxai-search',
+            className: 'nxai-search-input',
             type: 'text',
+            autoFocus: true,
             value: searchQuery,
-            disabled: !hasIndexed,
-            placeholder: hasIndexed
-              ? `Search across ${indexedCount} indexed site${indexedCount !== 1 ? 's' : ''}...`
-              : 'Index your sites to search across all of them',
+            disabled: !hasSearchable,
+            placeholder: hasSearchable
+              ? `Search across ${searchableCount} searchable site${searchableCount !== 1 ? 's' : ''}...`
+              : 'No sites are searchable yet — go to Sites to get started',
             onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.handleSearch(e.target.value),
             style: {
               width: '100%', boxSizing: 'border-box' as const,
-              padding: '11px 36px 11px 40px',
-              fontSize: '14px',
+              padding: '13px 40px 13px 44px', fontSize: '15px',
               border: '1.5px solid var(--nxai-input-border, #d1d5db)',
               borderRadius: '10px',
-              backgroundColor: hasIndexed ? 'var(--nxai-input-bg, #fff)' : 'var(--nxai-score-bg)',
+              backgroundColor: hasSearchable ? 'var(--nxai-input-bg, #fff)' : 'var(--nxai-score-bg)',
               color: 'var(--nxai-card-text)',
-              opacity: hasIndexed ? 1 : 0.65,
+              opacity: hasSearchable ? 1 : 0.65,
               transition: 'border-color 0.15s, box-shadow 0.15s',
             },
           }),
           searchQuery && React.createElement('button', {
-            onClick: this.clearSearch,
+            onClick: () => this.setState({ searchQuery: '', searchResults: [] }),
             style: {
-              position: 'absolute' as const, right: '11px', top: '50%', transform: 'translateY(-50%)',
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--nxai-card-sub)', fontSize: '18px', lineHeight: 1, padding: '0',
+              position: 'absolute' as const, right: '12px', top: '50%',
+              transform: 'translateY(-50%)', background: 'none', border: 'none',
+              cursor: 'pointer', color: 'var(--nxai-card-sub)', fontSize: '20px',
+              lineHeight: 1, padding: 0,
             },
           }, '×'),
         ),
-        // Index All
-        React.createElement('button', {
-          onClick: this.handleIndexAll,
-          disabled: indexAllRunning,
-          style: {
-            padding: '11px 18px', fontSize: '13px', fontWeight: 600,
-            borderRadius: '10px', border: 'none', flexShrink: 0,
-            cursor: indexAllRunning ? 'default' : 'pointer',
-            backgroundColor: indexAllRunning ? 'var(--nxai-card-border)' : UI_COLORS.WPE_BRAND,
-            color: indexAllRunning ? 'var(--nxai-card-sub)' : '#fff',
-            transition: 'background 0.15s',
-          },
-        }, indexAllRunning
-          ? `Indexing ${indexProgress.completed} / ${indexProgress.total}...`
-          : indexedCount === totalCount && totalCount > 0 ? 'Re-index All' : 'Index All Sites',
-        ),
       ),
-      // Status line
-      React.createElement('div', {
-        style: { marginTop: '7px', fontSize: '12px', color: 'var(--nxai-card-sub)', display: 'flex', gap: '6px' },
-      },
-        React.createElement('span', null, `${indexedCount} of ${totalCount} sites indexed`),
-        lastTs && React.createElement('span', null, `· last indexed ${relativeTime(lastTs)}`),
-      ),
+
+      // Body
+      !hasSearchable
+        ? this.renderSearchEmptyState()
+        : !hasQuery
+          ? null
+          : searching
+            ? React.createElement('div', { style: { textAlign: 'center' as const, padding: '48px 0', fontSize: '13px', color: 'var(--nxai-card-sub)' } }, 'Searching...')
+            : searchResults.length === 0
+              ? this.renderNoResults()
+              : this.renderSearchResults(),
     );
   }
 
-  // ── Site table ──────────────────────────────────────────────────────────────
-
-  private renderSiteTable(): React.ReactNode {
-    const { showAll, sortBy, sortDir } = this.state;
-    const sorted = this.getSortedSites();
-    const visible = showAll ? sorted : sorted.slice(0, VISIBLE_DEFAULT);
-    const hasMore = sorted.length > VISIBLE_DEFAULT;
-
-    const sortLabel = (col: SortCol, label: string) => {
-      const active = sortBy === col;
-      return React.createElement('button', {
-        onClick: () => this.toggleSort(col),
-        style: {
-          background: 'none', border: 'none', cursor: 'pointer', padding: '0',
-          fontSize: '11px', fontWeight: active ? 700 : 500,
-          color: active ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
-        },
-      }, label + (active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''));
-    };
-
-    return React.createElement('div', null,
-      // Header row
-      React.createElement('div', {
-        style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', padding: '0 2px' },
-      },
-        React.createElement('span', {
-          style: { flex: 1, fontSize: '11px', fontWeight: 700, color: 'var(--nxai-card-sub)', textTransform: 'uppercase' as const, letterSpacing: '0.6px' },
-        }, 'Sites'),
-        React.createElement('span', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)' } }, 'Sort by'),
-        sortLabel('name', 'Name'),
-        sortLabel('lastIndexed', 'Indexed'),
-        sortLabel('posts', 'Posts'),
-      ),
-      // Table
-      React.createElement('div', {
-        style: {
-          border: '1px solid var(--nxai-card-border, #e5e7eb)',
-          borderRadius: '10px',
-          overflow: 'hidden',
-        },
-      },
-        ...visible.map((site, i) => this.renderSiteRow(site, i === visible.length - 1)),
-      ),
-      // Show more
-      hasMore && React.createElement('button', {
-        onClick: () => this.setState(prev => ({ showAll: !prev.showAll })),
-        style: {
-          marginTop: '8px', background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: '12px', color: UI_COLORS.WPE_BRAND, fontWeight: 600, padding: '4px 0',
-          display: 'block',
-        },
-      }, showAll ? 'Show less ↑' : `Show all ${sorted.length} sites ↓`),
-    );
-  }
-
-  private renderSiteRow(site: SiteRow, isLast: boolean): React.ReactNode {
-    const ipc = this.props.electron.ipcRenderer;
-    const openInLocal = () => ipc.invoke(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, { siteId: site.id });
-    const openWpAdmin = () => this.props.electron.shell?.openExternal(`http://${site.domain}/wp-admin/`);
-
-    const isIndexed = site.indexState === 'indexed' || site.indexState === 'stale';
-    const isIndexing = site.indexState === 'indexing' || site.indexState === 'pending';
-    const isError = site.indexState === 'error';
-
-    // Progress bar
-    const bar = React.createElement('div', {
-      style: { height: '3px', borderRadius: '2px', backgroundColor: 'var(--nxai-card-border, #e5e7eb)', overflow: 'hidden', marginBottom: '4px' },
-    },
-      (isIndexed || isIndexing) && React.createElement('div', {
-        className: isIndexing ? 'nxai-indexing-bar' : undefined,
-        style: {
-          height: '100%', borderRadius: '2px',
-          width: isIndexed ? '100%' : '50%',
-          backgroundColor: isIndexing ? undefined : isError ? UI_COLORS.STATUS_ERROR : UI_COLORS.WPE_BRAND,
-        },
-      }),
-    );
-
-    const statusText = isIndexed
-      ? `${site.documentCount} post${site.documentCount !== 1 ? 's' : ''}${relativeTime(site.lastIndexed) ? ' · ' + relativeTime(site.lastIndexed) : ''}`
-      : isIndexing ? 'indexing...'
-      : isError ? 'index failed'
-      : 'not indexed';
-
+  private renderSearchEmptyState(): React.ReactNode {
     return React.createElement('div', {
-      key: site.id,
-      className: 'nxai-site-row',
-      style: {
-        display: 'grid',
-        gridTemplateColumns: '1fr 180px auto',
-        alignItems: 'center',
-        gap: '20px',
-        padding: '12px 16px',
-        borderBottom: isLast ? 'none' : '1px solid var(--nxai-card-border, #e5e7eb)',
-        transition: 'background 0.1s',
-      },
+      style: { textAlign: 'center' as const, padding: '64px 32px' },
     },
-      // Name + domain
-      React.createElement('div', null,
-        React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: '1px' } }, site.name),
-        React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)' } }, site.domain),
-      ),
-      // Progress + status
-      React.createElement('div', null,
-        bar,
-        React.createElement('div', {
-          style: { fontSize: '11px', color: isError ? UI_COLORS.STATUS_ERROR : 'var(--nxai-card-sub)' },
-        }, statusText),
-      ),
-      // Actions
-      React.createElement('div', { style: { display: 'flex', gap: '6px' } },
-        !isIndexed && !isIndexing && this.btn('Index', () => this.handleIndexSite(site.id), { className: 'nxai-ghost-btn' }),
-        this.btn('Open', openInLocal, { color: UI_COLORS.WPE_BRAND }),
-        site.domain && this.btn('WP Admin', openWpAdmin),
-      ),
+      React.createElement('div', { style: { fontSize: '36px', marginBottom: '16px' } }, '🔍'),
+      React.createElement('div', { style: { fontSize: '16px', fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: '8px' } },
+        'Your sites aren\'t searchable yet'),
+      React.createElement('div', { style: { fontSize: '13px', color: 'var(--nxai-card-sub)', marginBottom: '24px', lineHeight: 1.5 } },
+        'Add sites to search and find anything across\nyour WordPress content instantly.'),
+      React.createElement('button', {
+        onClick: () => this.setState({ activeTab: 'sites' }),
+        style: {
+          padding: '10px 20px', fontSize: '13px', fontWeight: 600,
+          borderRadius: '8px', border: 'none', cursor: 'pointer',
+          backgroundColor: UI_COLORS.WPE_BRAND, color: '#fff',
+        },
+      }, 'Make Sites Searchable →'),
     );
   }
 
-  // ── Search results ──────────────────────────────────────────────────────────
+  private renderNoResults(): React.ReactNode {
+    const { searchQuery } = this.state;
+    return React.createElement('div', { style: { textAlign: 'center' as const, padding: '48px 0' } },
+      React.createElement('div', { style: { fontSize: '14px', fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: '6px' } },
+        `No results for "${searchQuery}"`),
+      React.createElement('div', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } },
+        'Try different words, or make more sites searchable'),
+    );
+  }
 
   private renderSearchResults(): React.ReactNode {
-    const { searchQuery, searchResults, searching } = this.state;
-
-    if (searching) {
-      return React.createElement('div', {
-        style: { padding: '48px 0', textAlign: 'center' as const, color: 'var(--nxai-card-sub)', fontSize: '13px' },
-      }, 'Searching...');
-    }
-
-    if (!searchResults.length) {
-      return React.createElement('div', {
-        style: { padding: '48px 0', textAlign: 'center' as const },
-      },
-        React.createElement('div', { style: { fontSize: '14px', color: 'var(--nxai-card-text)', marginBottom: '4px' } },
-          `No results for "${searchQuery}"`),
-        React.createElement('div', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } },
-          'Try different words, or index more sites'),
-      );
-    }
-
+    const { searchResults } = this.state;
     const total = searchResults.reduce((n, g) => n + g.results.length, 0);
+    const ipc = this.props.electron.ipcRenderer;
 
     return React.createElement('div', null,
       React.createElement('div', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)', marginBottom: '14px' } },
         `${total} result${total !== 1 ? 's' : ''} across ${searchResults.length} site${searchResults.length !== 1 ? 's' : ''}`),
       React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '12px' } },
-        ...searchResults.map(g => this.renderResultGroup(g)),
+        ...searchResults.map(group => {
+          const openInLocal = () => ipc.invoke(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, { siteId: group.siteId });
+          const openWpAdmin = () => group.domain && this.props.electron.shell?.openExternal(`http://${group.domain}/wp-admin/`);
+
+          return React.createElement('div', { key: group.siteId, style: card },
+            // Group header
+            React.createElement('div', {
+              style: {
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 14px',
+                backgroundColor: 'var(--nxai-score-bg, rgba(0,0,0,0.025))',
+                borderBottom: '1px solid var(--nxai-card-border, #e5e7eb)',
+              },
+            },
+              React.createElement('span', {
+                style: { fontSize: '11px', fontWeight: 700, color: 'var(--nxai-card-text)', textTransform: 'uppercase' as const, letterSpacing: '0.5px' },
+              }, group.siteName),
+              React.createElement('div', { style: { display: 'flex', gap: '6px' } },
+                this.ghostBtn('Open in Local', openInLocal, { color: UI_COLORS.WPE_BRAND }),
+                group.domain && this.ghostBtn('WP Admin', openWpAdmin),
+              ),
+            ),
+            // Results
+            ...group.results.map((r, i) =>
+              React.createElement('div', {
+                key: r.id,
+                className: 'nxai-row',
+                style: {
+                  padding: '10px 14px',
+                  borderBottom: i < group.results.length - 1 ? '1px solid var(--nxai-card-border)' : 'none',
+                  transition: 'background 0.1s',
+                },
+              },
+                React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '3px' } },
+                  React.createElement('span', {
+                    style: {
+                      fontSize: '10px', fontWeight: 600, padding: '1px 5px', borderRadius: '4px',
+                      backgroundColor: 'var(--nxai-score-bg)', color: 'var(--nxai-card-sub)',
+                      textTransform: 'uppercase' as const, letterSpacing: '0.4px', flexShrink: 0,
+                    },
+                  }, r.postType),
+                  React.createElement('span', { style: { fontSize: '13px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, r.title || '(untitled)'),
+                ),
+                React.createElement('p', {
+                  style: {
+                    margin: 0, fontSize: '12px', color: 'var(--nxai-card-sub)', lineHeight: 1.5,
+                    display: '-webkit-box', WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical' as const, overflow: 'hidden',
+                  },
+                }, r.content),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
 
-  private renderResultGroup(group: SearchGroup): React.ReactNode {
-    const ipc = this.props.electron.ipcRenderer;
-    const openInLocal = () => ipc.invoke(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, { siteId: group.siteId });
-    const openWpAdmin = () => group.domain && this.props.electron.shell?.openExternal(`http://${group.domain}/wp-admin/`);
+  // ── Render: sites tab ───────────────────────────────────────────────────────
 
-    return React.createElement('div', {
-      key: group.siteId,
-      style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: '10px', overflow: 'hidden' },
-    },
-      // Group header
-      React.createElement('div', {
+  private renderSitesTab(): React.ReactNode {
+    const { localSites, wpeSites, wpeAuthenticated, makingAllSearchable, indexProgress } = this.state;
+    const searchableCount = localSites.filter(s => s.searchable).length;
+    const allSearchable = searchableCount === localSites.length && localSites.length > 0;
+
+    return React.createElement('div', null,
+      // Progress banner when running
+      makingAllSearchable && React.createElement('div', {
         style: {
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '8px 14px',
-          backgroundColor: 'var(--nxai-score-bg, rgba(0,0,0,0.025))',
-          borderBottom: '1px solid var(--nxai-card-border)',
+          padding: '10px 14px', borderRadius: '8px', fontSize: '12px',
+          backgroundColor: 'rgba(14,202,212,0.08)',
+          border: `1px solid ${UI_COLORS.WPE_BRAND}`,
+          color: UI_COLORS.WPE_BRAND, marginBottom: '16px',
+          display: 'flex', alignItems: 'center', gap: '8px',
         },
       },
-        React.createElement('span', {
-          style: { fontSize: '11px', fontWeight: 700, color: 'var(--nxai-card-text)', textTransform: 'uppercase' as const, letterSpacing: '0.5px' },
-        }, group.siteName),
-        React.createElement('div', { style: { display: 'flex', gap: '6px' } },
-          this.btn('Open in Local', openInLocal, { color: UI_COLORS.WPE_BRAND }),
-          group.domain && this.btn('WP Admin', openWpAdmin),
+        React.createElement('span', { style: { animation: 'nxai-shimmer 1s linear infinite' } }, '⟳'),
+        React.createElement('span', null,
+          `Making sites searchable... ${indexProgress.completed} of ${indexProgress.total} done`),
+      ),
+
+      // Local sites
+      sectionLabel('Local Sites'),
+      localSites.length === 0
+        ? React.createElement('div', { style: { fontSize: '13px', color: 'var(--nxai-card-sub)', padding: '12px 0' } }, 'No local sites found.')
+        : React.createElement('div', null,
+            React.createElement('div', { style: card },
+              ...localSites.map((site, i) => this.renderLocalSiteRow(site, i === localSites.length - 1)),
+            ),
+            !allSearchable && React.createElement('button', {
+              onClick: this.makeAllSearchable,
+              disabled: makingAllSearchable,
+              style: {
+                marginTop: '10px', padding: '9px 16px', fontSize: '12px', fontWeight: 600,
+                borderRadius: '8px', border: `1px solid ${UI_COLORS.WPE_BRAND}`,
+                backgroundColor: 'transparent', color: UI_COLORS.WPE_BRAND,
+                cursor: makingAllSearchable ? 'default' : 'pointer',
+                opacity: makingAllSearchable ? 0.6 : 1,
+              },
+            }, makingAllSearchable ? 'Working...' : 'Make All Local Sites Searchable'),
+          ),
+
+      // WPE sites
+      sectionLabel('WP Engine Sites'),
+      !wpeAuthenticated
+        ? React.createElement('div', { style: { fontSize: '13px', color: 'var(--nxai-card-sub)', padding: '12px 0' } },
+            'Connect to WP Engine to see your remote sites here.')
+        : wpeSites.length === 0
+          ? React.createElement('div', { style: { fontSize: '13px', color: 'var(--nxai-card-sub)', padding: '12px 0' } },
+              'No WPE sites synced yet.')
+          : React.createElement('div', { style: card },
+              ...wpeSites.map((site, i) => this.renderWpeSiteRow(site, i === wpeSites.length - 1)),
+            ),
+    );
+  }
+
+  private renderLocalSiteRow(site: LocalSite, isLast: boolean): React.ReactNode {
+    const ipc = this.props.electron.ipcRenderer;
+    const openInLocal = () => ipc.invoke(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, { siteId: site.id });
+    const openWpAdmin = () => site.domain && this.props.electron.shell?.openExternal(`http://${site.domain}/wp-admin/`);
+
+    return React.createElement('div', {
+      key: site.id,
+      className: 'nxai-row',
+      style: {
+        display: 'grid', gridTemplateColumns: '1fr 160px auto',
+        alignItems: 'center', gap: '16px',
+        padding: '12px 16px',
+        borderBottom: isLast ? 'none' : '1px solid var(--nxai-card-border, #e5e7eb)',
+        transition: 'background 0.1s',
+      },
+    },
+      // Name
+      React.createElement('div', null,
+        React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: '1px' } }, site.name),
+        React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)' } }, site.domain),
+      ),
+      // Status
+      React.createElement('div', null,
+        React.createElement('div', {
+          style: { height: '3px', borderRadius: '2px', backgroundColor: 'var(--nxai-card-border, #e5e7eb)', overflow: 'hidden', marginBottom: '4px' },
+        },
+          (site.searchable || site.adding) && React.createElement('div', {
+            className: site.adding ? 'nxai-adding-bar' : undefined,
+            style: {
+              height: '100%', borderRadius: '2px',
+              width: site.searchable ? '100%' : undefined,
+              backgroundColor: site.adding ? undefined : UI_COLORS.WPE_BRAND,
+            },
+          }),
+        ),
+        React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)' } },
+          site.searchable
+            ? `${site.documentCount} post${site.documentCount !== 1 ? 's' : ''} · ${ago(site.lastIndexed) ?? ''}`
+            : site.adding ? 'making searchable...'
+            : 'not in search',
         ),
       ),
-      // Results
-      ...group.results.map((r, i) =>
-        React.createElement('div', {
-          key: r.id,
-          className: 'nxai-result-row',
-          style: {
-            padding: '10px 14px',
-            borderBottom: i < group.results.length - 1 ? '1px solid var(--nxai-card-border)' : 'none',
-            transition: 'background 0.1s',
-          },
-        },
-          React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '3px' } },
-            React.createElement('span', {
-              style: {
-                fontSize: '10px', fontWeight: 600, letterSpacing: '0.4px',
-                padding: '1px 5px', borderRadius: '4px',
-                backgroundColor: 'var(--nxai-score-bg)',
-                color: 'var(--nxai-card-sub)',
-                textTransform: 'uppercase' as const, flexShrink: 0,
-              },
-            }, r.postType),
-            React.createElement('span', { style: { fontSize: '13px', fontWeight: 600, color: 'var(--nxai-card-text)' } },
-              r.title || '(untitled)'),
-          ),
-          React.createElement('p', {
-            style: {
-              margin: 0, fontSize: '12px', color: 'var(--nxai-card-sub)', lineHeight: 1.5,
-              display: '-webkit-box', WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical' as const, overflow: 'hidden',
-            },
-          }, r.content),
-        ),
+      // Actions
+      React.createElement('div', { style: { display: 'flex', gap: '6px' } },
+        !site.searchable && !site.adding && this.ghostBtn('Add to Search', () => this.addToSearch(site.id), { className: 'nxai-add-btn' }),
+        this.ghostBtn('Open', openInLocal, { color: UI_COLORS.WPE_BRAND }),
+        site.domain && this.ghostBtn('WP Admin', openWpAdmin),
       ),
     );
   }
 
-  // ── Footer ──────────────────────────────────────────────────────────────────
+  private renderWpeSiteRow(site: WpeSite, isLast: boolean): React.ReactNode {
+    return React.createElement('div', {
+      key: site.id,
+      style: {
+        display: 'grid', gridTemplateColumns: '1fr 160px',
+        alignItems: 'center', gap: '16px',
+        padding: '12px 16px',
+        borderBottom: isLast ? 'none' : '1px solid var(--nxai-card-border, #e5e7eb)',
+      },
+    },
+      React.createElement('div', null,
+        React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: '1px' } }, site.name),
+        React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)' } }, site.domain),
+      ),
+      React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)' } },
+        site.synced ? `synced${ago(site.lastSynced) ? ' · ' + ago(site.lastSynced) : ''}` : 'not synced',
+      ),
+    );
+  }
+
+  // ── Render: footer ──────────────────────────────────────────────────────────
 
   private renderFooter(): React.ReactNode {
-    const { mcpRunning, mcpToolCount } = this.state;
+    const { mcpRunning, mcpToolCount, wpeAuthenticated } = this.state;
 
     const pill = (active: boolean, label: string) =>
       React.createElement('div', {
         style: {
-          display: 'flex', alignItems: 'center', gap: '6px',
-          padding: '5px 10px', borderRadius: '20px',
+          display: 'flex', alignItems: 'center', gap: '5px',
+          padding: '4px 10px', borderRadius: '20px',
           border: '1px solid var(--nxai-card-border, #e5e7eb)',
           fontSize: '11px', color: 'var(--nxai-card-sub)',
         },
       },
         React.createElement('span', {
-          style: { width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, backgroundColor: active ? UI_COLORS.WPE_BRAND : UI_COLORS.STATUS_HALTED },
+          style: { width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, backgroundColor: active ? UI_COLORS.WPE_BRAND : '#9ca3af' },
         }),
         label,
       );
@@ -643,19 +700,38 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
     return React.createElement('div', {
       style: {
         display: 'flex', gap: '8px', flexWrap: 'wrap' as const,
-        paddingTop: '16px', marginTop: '20px',
-        borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
+        padding: '14px 32px', borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
+        flexShrink: 0,
       },
     },
-      pill(mcpRunning, mcpRunning ? `MCP connected · ${mcpToolCount} tools` : 'MCP not connected'),
+      pill(mcpRunning, mcpRunning ? `MCP · ${mcpToolCount} tools` : 'MCP not connected'),
+      pill(wpeAuthenticated, wpeAuthenticated ? 'WPE authenticated' : 'WPE not connected'),
     );
+  }
+
+  // ── Shared UI ───────────────────────────────────────────────────────────────
+
+  private ghostBtn(
+    label: string,
+    onClick: () => void,
+    opts: { color?: string; className?: string } = {},
+  ): React.ReactNode {
+    return React.createElement('button', {
+      className: opts.className,
+      onClick,
+      style: {
+        padding: '4px 10px', fontSize: '11px', fontWeight: 600,
+        borderRadius: '6px', border: '1px solid var(--nxai-card-border, #e5e7eb)',
+        backgroundColor: 'transparent', color: opts.color ?? 'var(--nxai-card-sub)',
+        cursor: 'pointer', whiteSpace: 'nowrap' as const, transition: 'all 0.12s',
+      },
+    }, label);
   }
 
   // ── Root render ─────────────────────────────────────────────────────────────
 
   render(): React.ReactNode {
-    const { loading, searchQuery } = this.state;
-    const isSearchActive = searchQuery.trim().length > 0;
+    const { loading, activeTab } = this.state;
 
     if (loading) {
       return React.createElement('div', {
@@ -669,25 +745,24 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
         height: '100%', overflow: 'hidden', color: 'var(--nxai-card-text)',
       },
     },
-      // Fixed header
-      React.createElement('div', { style: { flexShrink: 0, padding: '28px 32px 16px' } },
-        React.createElement('div', { style: { marginBottom: '20px' } },
-          React.createElement('h1', {
-            style: { fontSize: '20px', fontWeight: 700, margin: '0 0 3px', color: 'var(--nxai-card-text)' },
-          }, 'Nexus AI'),
-          React.createElement('p', {
-            style: { fontSize: '13px', color: 'var(--nxai-card-sub)', margin: 0 },
-          }, 'Search and manage your WordPress sites'),
-        ),
-        this.renderSearchBar(),
+      // Header
+      React.createElement('div', { style: { flexShrink: 0, padding: '24px 32px 0' } },
+        React.createElement('h1', {
+          style: { fontSize: '20px', fontWeight: 700, margin: '0 0 16px', color: 'var(--nxai-card-text)' },
+        }, 'Nexus AI'),
+        this.renderTabBar(),
       ),
-      // Scrollable body
+
+      // Body
       React.createElement('div', {
-        style: { flex: 1, overflowY: 'auto' as const, padding: '0 32px 28px' },
+        style: { flex: 1, overflowY: 'auto' as const, padding: '20px 32px' },
       },
-        isSearchActive ? this.renderSearchResults() : this.renderSiteTable(),
-        this.renderFooter(),
+        this.renderBanners(),
+        activeTab === 'search' ? this.renderSearchTab() : this.renderSitesTab(),
       ),
+
+      // Footer
+      this.renderFooter(),
     );
   }
 }
