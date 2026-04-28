@@ -1,0 +1,91 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 09-gateway-cost-report
+Mode: mcp
+Date: 2026-04-25
+Model: claude-sonnet-4-6
+Duration: 67.7s
+Tool calls: 2
+Cost: $0.1951
+
+============================================================
+TURN 1
+============================================================
+PROMPT: How much have I spent through the AI gateway this month? Break it down by site and model, and tell me which site is using it most.
+
+Let me check what's available for gateway usage data through the MCP tools.
+
+⏺ mcp__local-nexus-ai__get_metrics({})
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+  ⎿  {
+  "uptime_ms": 675850,
+  "uptime_hours": "0.19",
+  "counters": [
+    {
+      "name": "mcp_tool_calls_total",
+      "value": 2,
+      "labels": {
+        "tool": "wp_core_version"
+      }
+    },
+    {
+      "name": "mcp_tool_calls_total",
+      "value": 2,
+      "labels": {
+        "tool": "find_outdated_sites"
+      }
+    },
+    {
+      "name": "mcp_tool_calls_total",
+      "value": 3,
+      "labels": {
+        "tool": "nexus_list_sites"
+      }
+    },
+    {
+      "name": "mcp_tool_calls_total
+  ⎿  ## Fleet (31 local, 299 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- jeremypollock.blog (jeremypollockblog.local) [halted]
+- nexus (nexus.local) [halted]
+- mu-plugin (mu-plugin.local) [halted]
+- offload-media-clean (offload-media-clean.local) [halted]
+- nitropack-1 (nitropack-1.local) [halted]
+- pm-toolkit-hub (pm-toolkit-hub.local) [halted]
+- wp-events-analyzer (wp-events-analyze
+The `get_metrics` tool only tracks MCP tool call counts and latency — not AI gateway usage or token costs. There's no MCP tool in the current server that exposes per-site, per-model gateway spending data.
+
+Here's why: the AI gateway usage stats live in two places neither of which is reachable via MCP:
+
+1. **In-app dashboard** — the Local addon tracks gateway requests in-memory and surfaces them via the Local UI (the "Gateway Usage" panel in the addon's preferences). You'd need to open Local and look there.
+
+2. **Cloudflare Worker telemetry** — aggregated usage is sent to `nexus-analytics.jeremy7746.workers.dev`, but that's an external HTTP endpoint with no MCP binding.
+
+**To get the breakdown you want, you have two options:**
+
+- **In Local:** Open the Nexus AI addon → Preferences (or the site info panel) → Gateway Usage dashboard. It shows per-request logs with model and site info.
+
+- **Via CLI (if you have terminal access):** The `nexus analytics` command (if implemented) or checking `~/Library/Application Support/Local/nexus-ai/config.json` and the associated telemetry logs would get you there.
+
+If you want this data queryable via MCP in the future, it would need a new tool like `get_gateway_usage` that reads from the addon's internal usage store and returns a per-site, per-model breakdown. Happy to scope that out if it's useful.
+
+--- FINAL RESULT ---
+The `get_metrics` tool only tracks MCP tool call counts and latency — not AI gateway usage or token costs. There's no MCP tool in the current server that exposes per-site, per-model gateway spending data.
+
+Here's why: the AI gateway usage stats live in two places neither of which is reachable via MCP:
+
+1. **In-app dashboard** — the Local addon tracks gateway requests in-memory and surfaces them via the Local UI (the "Gateway Usage" panel in the addon's preferences). You'd need to open Local and look there.
+
+2. **Cloudflare Worker telemetry** — aggregated usage is sent to `nexus-analytics.jeremy7746.workers.dev`, but that's an external HTTP endpoint with no MCP binding.
+
+**To get the breakdown you want, you have two options:**
+
+- **In Local:** Open the Nexus AI addon → Preferences (or the site info panel) → Gateway Usage dashboard. It shows per-request logs with model and site info.
+
+- **Via CLI (if you have terminal access):** The `nexus analytics` command (if implemented) or checking `~/Library/Application Support/Local/nexus-ai/config.json` and the associated telemetry logs would get you there.
+
+If you want this data queryable via MCP in the future, it would need a new tool like `get_gateway_usage` that reads from the addon's internal usage store and returns a per-site, per-model breakdown. Happy to scope that out if it's useful.

@@ -1,0 +1,84 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 05-staging-to-prod-promotion
+Mode: mcp
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 63.5s
+Tool calls: 5
+Cost: $0.6481
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Promote the jppwpeplugistg (staging) install to jppwpeplugin (production) in the wpeplugintest site. Make sure production has a backup first.
+
+I'll start by reading the fleet state to get the install IDs, then back up production before promoting.
+
+⏺ ReadMcpResourceTool({"server":"local-nexus-ai","uri":"nexus://fleet/state"})
+  ⎿  <persisted-output>
+Output too large (53.5KB). Full output saved to: /Users/jeremy.pollock/.claude/projects/-Users-jeremy-pollock-development-wpengine-local-addon-nexus-ai/261ea6ec-86d8-4b2f-bfc4-a065aafc7682/tool-results/toolu_vrtx_017ufCFztTL763Xz19pmv2LP.txt
+
+Preview (first 2KB):
+{"contents":[{"uri":"nexus://fleet/state","mimeType":"text/markdown","text":"# Fleet State (from local cache)\n\n## WP Engine Installs (299 installs, synced 29m ago)\n\n| install_name | install_id | environment | prim
+Let me search for the specific installs in that large output.
+
+⏺ mcp__local-nexus-ai__wpe_get_installs({})
+  ⎿  ## WP Engine Installs (299)
+- **sprntndntchmbr** (ID: 9564d013-757d-4b18-8aa0-93bdd5fb9d99, env: production)
+- **benfischer** (ID: 5893fe56-9fde-441c-8692-c9d1623b5ad8, env: production)
+- **qwerky** (ID: 6adbee30-6abf-43c2-bd4f-82a29de1e2b9, env: production)
+- **b68c7f0b6038** (ID: 649b7ec8-658f-4a44-9814-05fffbfaffad, env: production)
+- **getflywheel** (ID: af07e7ee-2fec-4585-a71b-5bfcc0ee60b6, env: production)
+- **localwpe** (ID: 6b2fb37d-5570-4296-ac88-b6f106871c64, env: production)
+- **getfl
+Found the install IDs:
+- **jppwpeplugin** (production): `74123063-1f21-4080-b983-aaa5c95ed1e2`
+- **jppwpeplugistg** (staging): `3a4b72ba-3aba-4753-b8ae-419e1956651d`
+
+Now I'll check backup credentials and create a verified backup of production before promoting.
+
+⏺ mcp__local-nexus-ai__wpe_credentials_status({})
+  ⎿  ✅ WP Engine API credentials are configured.
+
+Username: d5497214-2e80-475d-b62c-d101a967a885
+Backup creation will use basic authentication.
+
+To update: run wpe_set_api_credentials
+To remove: run wpe_clear_api_credentials
+Credentials are ready. Creating a verified backup of production now (this blocks until confirmed complete).
+
+⏺ mcp__local-nexus-ai__wpe_backup_and_verify({"install_id":"74123063-1f21-4080-b983-aaa5c95ed1e2","description":"Pre-promotion backup before jppwpeplugistg → jppwpeplugin promote"})
+  ⎿  ## Backup Completed
+Backup for install `74123063-1f21-4080-b983-aaa5c95ed1e2` completed successfully.
+- **Backup ID:** 5cf452e0-c547-4f4f-b9e1-c3d83e477a53
+- **Status:** completed
+Backup verified (ID: `5cf452e0-c547-4f4f-b9e1-c3d83e477a53`). Now initiating the promote — first call to get the confirmation token.
+
+⏺ mcp__local-nexus-ai__wpe_promote_environment({"source_install_id":"3a4b72ba-3aba-4753-b8ae-419e1956651d","destination_install_id":"74123063-1f21-4080-b983-aaa5c95ed1e2","include_database":true})
+  ⎿  {
+  "requiresConfirmation": true,
+  "tier": 3,
+  "action": "This will overwrite the destination environment with content from the source. Destination content will be lost.",
+  "warning": "This action may not be reversible.",
+  "howToConfirm": "To proceed, call wpe_promote_environment again with the same arguments plus _confirmationToken set to the value below.",
+  "preChecks": [
+    "Run wpe_create_backup or wpe_backup_and_verify on the destination first",
+    "Confirm the destination environmen
+Production backup is verified. Here's what's about to happen:
+
+- **Source:** `jppwpeplugistg` (staging) → **Destination:** `jppwpeplugin` (production)
+- Includes database
+- Production will be **overwritten** — existing content replaced by staging
+- Restore point: backup `5cf452e0-c547-4f4f-b9e1-c3d83e477a53` (available in WPE portal if needed)
+
+Confirm you want to proceed with the promotion?
+
+--- FINAL RESULT ---
+Production backup is verified. Here's what's about to happen:
+
+- **Source:** `jppwpeplugistg` (staging) → **Destination:** `jppwpeplugin` (production)
+- Includes database
+- Production will be **overwritten** — existing content replaced by staging
+- Restore point: backup `5cf452e0-c547-4f4f-b9e1-c3d83e477a53` (available in WPE portal if needed)
+
+Confirm you want to proceed with the promotion?

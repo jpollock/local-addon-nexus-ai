@@ -1,0 +1,95 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 09-gateway-cost-report
+Mode: mcp
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 23.0s
+Tool calls: 1
+Cost: $0.4421
+
+============================================================
+TURN 1
+============================================================
+PROMPT: How much have I spent through the AI gateway this month? Break it down by site and model, and tell me which site is using it most.
+
+Fetching your AI gateway usage for this month.
+
+⏺ mcp__local-nexus-ai__get_gateway_usage({})
+  ⎿  ## AI Gateway Usage — 2026-04
+
+**Total: $0.3466 · 57 requests · 27.8k tokens**
+
+### By Site
+| Site | Cost | Requests |
+|------|------|----------|
+| frostscape | $0.2049 | 18 req |
+| jppblank | $0.1395 | 33 req |
+| testjppdev | $0.0014 | 3 req |
+| wK9vE-gUp | $0.0007 | 3 req |
+
+### By Model
+| Model | Cost | Requests |
+|-------|------|----------|
+| gpt-image-1 | $0.2800 | 7 req |
+| gpt-4.1 | $0.0444 | 19 req |
+| claude-opus-4-6 | $0.0104 | 1 req |
+| claude-haiku-4-5-20251001 | $0.0094 | 18 req |
+|
+Here's a breakdown of your April 2026 AI gateway spend:
+
+**Total: $0.35 across 57 requests and ~27.8k tokens**
+
+### By Site
+
+| Site | Cost | Requests |
+|---|---|---|
+| **frostscape** | $0.2049 | 18 |
+| jppblank | $0.1395 | 33 |
+| testjppdev | $0.0014 | 3 |
+| wK9vE-gUp | $0.0007 | 3 |
+
+**frostscape is your top spender** — $0.20 for 18 requests, meaning a high average cost per request (~$0.011). That points to expensive model usage, likely image generation.
+
+### By Model
+
+| Model | Cost | Requests |
+|---|---|---|
+| **gpt-image-1** | $0.2800 | 7 req |
+| gpt-4.1 | $0.0444 | 19 req |
+| claude-opus-4-6 | $0.0104 | 1 req |
+| claude-haiku-4-5-20251001 | $0.0094 | 18 req |
+| gpt-4o-mini | $0.0024 | 12 req |
+
+**Image generation (gpt-image-1) is 81% of your total spend** — just 7 requests cost $0.28. That's ~$0.04/image, which is typical for gpt-image-1. Everything else is cheap by comparison.
+
+**Key insight:** If you want to cut costs, frostscape + gpt-image-1 is the combination to watch. The text model usage (Haiku, gpt-4o-mini) is very economical.
+
+--- FINAL RESULT ---
+Here's a breakdown of your April 2026 AI gateway spend:
+
+**Total: $0.35 across 57 requests and ~27.8k tokens**
+
+### By Site
+
+| Site | Cost | Requests |
+|---|---|---|
+| **frostscape** | $0.2049 | 18 |
+| jppblank | $0.1395 | 33 |
+| testjppdev | $0.0014 | 3 |
+| wK9vE-gUp | $0.0007 | 3 |
+
+**frostscape is your top spender** — $0.20 for 18 requests, meaning a high average cost per request (~$0.011). That points to expensive model usage, likely image generation.
+
+### By Model
+
+| Model | Cost | Requests |
+|---|---|---|
+| **gpt-image-1** | $0.2800 | 7 req |
+| gpt-4.1 | $0.0444 | 19 req |
+| claude-opus-4-6 | $0.0104 | 1 req |
+| claude-haiku-4-5-20251001 | $0.0094 | 18 req |
+| gpt-4o-mini | $0.0024 | 12 req |
+
+**Image generation (gpt-image-1) is 81% of your total spend** — just 7 requests cost $0.28. That's ~$0.04/image, which is typical for gpt-image-1. Everything else is cheap by comparison.
+
+**Key insight:** If you want to cut costs, frostscape + gpt-image-1 is the combination to watch. The text model usage (Haiku, gpt-4o-mini) is very economical.

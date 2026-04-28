@@ -1,0 +1,53 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: mcp
+Date: 2026-04-25
+Model: claude-sonnet-4-6
+Duration: 64.1s
+Tool calls: 3
+Cost: $0.6800
+
+============================================================
+TURN 1
+============================================================
+PROMPT: What WordPress version is jppblank running?
+
+I'll check the WordPress version for jppblank using the MCP tool.
+
+⏺ Agent({"description":"Check WP version for jppblank","prompt":"Use the mcp__local-nexus-ai__wp_core_version tool to check the WordPress version for the site \"jppblank\". Return the result directly."})
+
+⏺ Bash({"command":"cat package.json | grep -A5 '\"mcp\"'","description":"Check MCP tool configuration"})
+  ⎿  (Bash completed with no output)
+  ⎿  The tool `mcp__local-nexus-ai__wp_core_version` is not available in this session — it is not listed among the MCP tools I have access to. The MCP servers available here are `atlassian`, `context7`, and the `compound-engineering`/`testing-suite`/`PubNub` plugins. The Nexus AI local MCP server is not connected to this Claude Code session.
+
+To use `wp_core_version` for "jppblank", you can run it directly from the CLI:
+
+```
+nexus wp core version --site jppblank
+```
+
+Or, if you want to call it via MC
+Let me call the tool directly instead.
+
+⏺ mcp__local-nexus-ai__wp_core_version({"site":"jppblank"})
+  ⎿  <tool_use_error>Error: No such tool available: mcp__local-nexus-ai__wp_core_version</tool_use_error>
+The Nexus AI MCP server (`local-nexus-ai`) isn't connected to this Claude session — the `wp_core_version` tool isn't available here. The MCP tools listed in your constraints don't appear to be registered in this environment.
+
+To get the WordPress version for jppblank, you can run from the CLI:
+
+```bash
+nexus wp core version --site jppblank
+```
+
+Or check that the Nexus AI MCP server is running and connected (`nexus doctor` will confirm MCP server status).
+
+--- FINAL RESULT ---
+The Nexus AI MCP server (`local-nexus-ai`) isn't connected to this Claude session — the `wp_core_version` tool isn't available here. The MCP tools listed in your constraints don't appear to be registered in this environment.
+
+To get the WordPress version for jppblank, you can run from the CLI:
+
+```bash
+nexus wp core version --site jppblank
+```
+
+Or check that the Nexus AI MCP server is running and connected (`nexus doctor` will confirm MCP server status).

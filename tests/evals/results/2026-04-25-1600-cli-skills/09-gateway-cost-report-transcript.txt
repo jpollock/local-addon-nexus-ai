@@ -1,0 +1,132 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 09-gateway-cost-report
+Mode: cli-skills
+Date: 2026-04-25
+Model: claude-sonnet-4-6
+Duration: 38.7s
+Tool calls: 4
+Cost: $0.1802
+
+============================================================
+TURN 1
+============================================================
+PROMPT: How much have I spent through the AI gateway this month? Break it down by site and model, and tell me which site is using it most.
+
+Let me check what the nexus CLI has for gateway usage data.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js --help 2>&1 | head -60","description":"Check available nexus CLI commands"})
+  ⎿  Usage: nexus [options] [command]
+
+Nexus AI CLI - WordPress site management with AI superpowers
+
+Options:
+  -V, --version           output the version number
+  -h, --help              display help for command
+
+Commands:
+  sites                   Manage Local and WPE sites
+  wp                      Run WP-CLI commands on sites
+  sync                    Sync sites between local and WPE
+  wpe                     Manage WP Engine accounts and installs
+  blueprints              Manage Local blueprints
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js gateway --help 2>&1","description":"Check gateway subcommands"})
+  ⎿  Usage: nexus gateway [options] [command]
+
+AI gateway usage and cost reporting
+
+Options:
+  -h, --help       display help for command
+
+Commands:
+  usage [options]  Show AI gateway spend by site and model
+  help [command]   display help for command
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js gateway usage --help 2>&1","description":"Check gateway usage options"})
+  ⎿  Usage: nexus gateway usage [options]
+
+Show AI gateway spend by site and model
+
+Options:
+  --month <YYYY-MM>  Month to report (default: current month)
+  --site <name>      Filter to a specific site
+  --json             Output as JSON
+  -h, --help         display help for command
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js gateway usage 2>&1","description":"Get gateway usage for current month"})
+  ⎿  AI Gateway Usage — 2026-04
+──────────────────────────────────────────────────
+Total: $0.3466 · 57 requests · 27.8k tokens
+
+By site:
+  frostscape                     $0.2049  59%  (18 req)
+  jppblank                       $0.1395  40%  (33 req)
+  testjppdev                     $0.0014  0%  (3 req)
+  wK9vE-gUp                      $0.0007  0%  (3 req)
+
+By model:
+  gpt-image-1                    $0.2800  (7 req)
+  gpt-4.1                        $0.0444  (19 req)
+  claude-opus-4-6                $0.
+Here's your April 2026 gateway breakdown:
+
+**Total: $0.35 across 57 requests**
+
+---
+
+**By site:**
+
+| Site | Spent | Share | Requests |
+|------|-------|-------|----------|
+| frostscape | $0.2049 | 59% | 18 |
+| jppblank | $0.1395 | 40% | 33 |
+| testjppdev | $0.0014 | <1% | 3 |
+| wK9vE-gUp | $0.0007 | <1% | 3 |
+
+**frostscape is your top spender by cost** (59% of spend), even though jppblank made nearly twice as many requests. That gap is entirely explained by...
+
+---
+
+**By model:**
+
+| Model | Spent | Requests |
+|-------|-------|----------|
+| gpt-image-1 | $0.2800 | 7 |
+| gpt-4.1 | $0.0444 | 19 |
+| claude-opus-4-6 | $0.0104 | 1 |
+| claude-haiku-4-5-20251001 | $0.0094 | 18 |
+| gpt-4o-mini | $0.0024 | 12 |
+
+**Image generation is driving 81% of your total cost.** The 7 `gpt-image-1` calls ($0.28) almost certainly belong to frostscape — that's why frostscape's per-request cost is so much higher than jppblank's (which is mostly running cheap Haiku or gpt-4o-mini).
+
+--- FINAL RESULT ---
+Here's your April 2026 gateway breakdown:
+
+**Total: $0.35 across 57 requests**
+
+---
+
+**By site:**
+
+| Site | Spent | Share | Requests |
+|------|-------|-------|----------|
+| frostscape | $0.2049 | 59% | 18 |
+| jppblank | $0.1395 | 40% | 33 |
+| testjppdev | $0.0014 | <1% | 3 |
+| wK9vE-gUp | $0.0007 | <1% | 3 |
+
+**frostscape is your top spender by cost** (59% of spend), even though jppblank made nearly twice as many requests. That gap is entirely explained by...
+
+---
+
+**By model:**
+
+| Model | Spent | Requests |
+|-------|-------|----------|
+| gpt-image-1 | $0.2800 | 7 |
+| gpt-4.1 | $0.0444 | 19 |
+| claude-opus-4-6 | $0.0104 | 1 |
+| claude-haiku-4-5-20251001 | $0.0094 | 18 |
+| gpt-4o-mini | $0.0024 | 12 |
+
+**Image generation is driving 81% of your total cost.** The 7 `gpt-image-1` calls ($0.28) almost certainly belong to frostscape — that's why frostscape's per-request cost is so much higher than jppblank's (which is mostly running cheap Haiku or gpt-4o-mini).

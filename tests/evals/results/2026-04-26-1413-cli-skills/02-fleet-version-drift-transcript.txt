@@ -1,0 +1,265 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 02-fleet-version-drift
+Mode: cli-skills
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 107.4s
+Tool calls: 12
+Cost: $1.2997
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local WordPress sites are behind on the latest WordPress version? Give me a summary of what needs updating.
+
+Reading the fleet skill to get the right syntax.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-fleet/SKILL.md"})
+  ⎿  1	---
+2	name: nexus-fleet
+3	description: Get health, status, and analytics across all local WordPress sites. Shows plugin outdates, WP version drift, site issues, and bulk action opportunities. Use for fleet-wide monitoring and maintenance planning.
+4	allowed-tools: Bash(nexus *)
+5	---
+6	
+7	# Fleet Health Overview
+8	
+9	```!
+10	nexus fleet health
+11	```
+12	
+13	Analyze the fleet report:
+14	
+15	1. **Critical issues** — any ❌ failures that need immediate attention (name the sites)
+16	2. **Plugin upd
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet health 2>&1","timeout":30000})
+  ⎿  Fleet Health Summary
+──────────────────────────────────────────────────
+Sites:         30 total (1 running, 29 halted)
+Health:        0 healthy, 3 warnings, 4 critical
+Plugins:       0 total (0 outdated)
+Themes:        0 total (0 outdated)
+That gives health scores but no WP version detail. Let me pull the full site list with version info.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet summary 2>&1","timeout":30000})
+  ⎿  Fleet Summary — 372 sites (263 with full WP-CLI data)
+─────────────────────────────────────────────────────
+
+WordPress versions:
+  6.9.4     ████████████████████  222 sites
+  6.9.1     █                     14 sites
+  6.9       █                     6 sites
+  6.8.3                           4 sites
+  6.8.1                           3 sites
+  7.0-beta6                        3 sites
+  7.0-RC2                         3 sites
+  6.2.2                           2 sites
+  6.8.2                        
+Good data. Let me get the per-site WP version breakdown for local sites specifically.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js find-outdated-sites --source local 2>&1","timeout":30000})
+  ⎿  Exit code 1
+error: unknown command 'find-outdated-sites'
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js list sites 2>&1 | head -80","timeout":30000})
+  ⎿  error: unknown command 'list'
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites 2>&1 | head -100","timeout":30000})
+  ⎿  Usage: nexus sites [options] [command]
+
+Manage Local and WPE sites
+
+Options:
+  -h, --help                        display help for command
+
+Commands:
+  get [options] <target>            Get detailed information about a site
+  clone <source> <newName>          Clone an existing site
+  rename <target> <newName>         Rename a site
+  export <target> [outputPath]      Export a site to archive
+  import [options] <archivePath>    Import a site from archive
+  logs [options] <target>           View sit
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites list --local 2>&1 | head -120","timeout":30000})
+  ⎿  error: unknown option '--local'
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites list 2>&1 | head -120","timeout":30000})
+  ⎿  Local Sites:
+  ⚫ jeremypollock.blog (halted) → not linked
+  ⚫ nexus (halted) → not linked
+  ⚫ mu-plugin (halted) → not linked
+  ⚫ offload-media-clean (halted) → not linked
+  ⚫ nitropack-1 (halted) → not linked
+  ⚫ pm-toolkit-hub (halted) → not linked
+  ⚫ wp-events-analyzer (halted) → not linked
+  ⚫ nitropack-2 (halted) → not linked
+  ⚫ wp-archaeologist (halted) → not linked
+  ⚫ wp-archaeologist-saas (halted) → not linked
+  ⚫ migrate (halted) → not linked
+  ⚫ cli-test (halted) → not linked
+  ⚫ cl
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet --help 2>&1","timeout":15000})
+  ⎿  Usage: nexus fleet [options] [command]
+
+Fleet intelligence and analytics
+
+Options:
+  -h, --help                             display help for command
+
+Commands:
+  health [options]                       Overall fleet health summary
+  site-health [options] <target>         Individual site health details
+  search [options] <query>               Search across all sites
+  filter [options]                       Filter sites by criteria
+  groups                                 Manage site groups
+  bulk 
+`nexus fleet wp` is exactly what I need.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet wp --help 2>&1","timeout":15000})
+  ⎿  Usage: nexus fleet wp [options] <version>
+
+List all sites running a specific WordPress version (from twin cache)
+
+Options:
+  --json      Output as JSON
+  -h, --help  display help for command
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet wp 6.9.1 2>&1\nnode /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fle)
+  ⎿  Sites on WordPress 6.9.1 — 14 found
+
+  atlasshopify [WPE] · PHP 8.2
+  atlasshopifstg [WPE] · PHP 8.2
+  donaghtestsit1 [WPE] · PHP 8.2
+  foruxdemo [WPE] · PHP 8.2
+  bulkserp06 [WPE] · PHP 8.2
+  newsroomdemstg [WPE] · PHP 8.4
+  localcopyjpp [WPE] · PHP 8.4
+  asaitkprod [WPE] · PHP 8.4
+  ainewsroomstg [WPE] · PHP 8.4
+  jsvectordbtest [WPE] · PHP 8.4
+  aitoolkitdemo [WPE] · PHP 8.4
+  nitropackio [WPE] · PHP 8.4
+  kruchmireviews [WPE] · PHP 8.4
+  dcxsn [WPE] · PHP 8.4
+
+
+Sites on WordPress 6.9 — 6 fou
+Let me also check which local sites are already on 6.9.4 to complete the picture.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet wp 6.9.4 --json 2>&1 | grep -E '\"name\"|\"source\"'","timeout":30000})
+  ⎿      "name": "acflikebutton",
+    "source": "local"
+    "name": "heath.biz",
+    "source": "local"
+    "name": "local-copy-jpp",
+    "source": "local"
+    "name": "jpp0413p",
+    "source": "local"
+    "name": "nexus-e2e-cli-test-site",
+    "source": "local"
+    "name": "sprntndntchmbr",
+    "source": "wpe"
+    "name": "benfischer",
+    "source": "wpe"
+    "name": "qwerky",
+    "source": "wpe"
+    "name": "b68c7f0b6038",
+    "source": "wpe"
+    "name": "getflywheel",
+    "source": "wpe"
+    "name"
+Here's a clean summary of your **local sites and their WordPress update status** (latest stable is 6.9.4):
+
+---
+
+## WordPress Version Summary — Local Sites
+
+### Up to date (6.9.4) — 5 sites
+- acflikebutton, heath.biz, local-copy-jpp, jpp0413p, nexus-e2e-cli-test-site
+
+---
+
+### Needs patch update (6.9.0 → 6.9.4) — 5 sites
+- **wp-archaeologist**, **migrate**, **cli-test**, **wp-migrate-receiver-new**, **wp-migrate-pusher**
+
+```bash
+nexus wp core update <site>@local
+```
+
+---
+
+### Needs minor update (6.8.x → 6.9.4) — 7 sites
+| Site | Current |
+|---|---|
+| jeremypollock.blog | 6.8.1 |
+| nexus | 6.8.1 |
+| mu-plugin | 6.8.1 |
+| offload-media-clean | 6.8.2 |
+| pm-toolkit-hub | 6.8.3 |
+| wp-events-analyzer | 6.8.3 |
+| nitropack-2 | 6.8.3 |
+
+---
+
+### Significantly behind — 1 site
+- **e2e-test-fresh** is on **6.2.2** — likely intentional as a test fixture, but worth verifying.
+
+---
+
+### Unknown / no scan data — ~12 sites
+- nitropack-1, wp-archaeologist-saas, cli-target, The Curated Shelf, nexus-test-site, test-cli-poc, another-test, sync-test, nexus-e2e-test, frostscape, nexustestsite1, eval-test-onboard
+
+Run `nexus fleet refresh --deep` to populate these.
+
+---
+
+**Bottom line:** 13 sites need updates (12 if e2e-test-fresh is intentional). The 6.8.x group is highest priority — two minor versions behind. Start those, then mop up the 6.9.0 patch group.
+
+--- FINAL RESULT ---
+Here's a clean summary of your **local sites and their WordPress update status** (latest stable is 6.9.4):
+
+---
+
+## WordPress Version Summary — Local Sites
+
+### Up to date (6.9.4) — 5 sites
+- acflikebutton, heath.biz, local-copy-jpp, jpp0413p, nexus-e2e-cli-test-site
+
+---
+
+### Needs patch update (6.9.0 → 6.9.4) — 5 sites
+- **wp-archaeologist**, **migrate**, **cli-test**, **wp-migrate-receiver-new**, **wp-migrate-pusher**
+
+```bash
+nexus wp core update <site>@local
+```
+
+---
+
+### Needs minor update (6.8.x → 6.9.4) — 7 sites
+| Site | Current |
+|---|---|
+| jeremypollock.blog | 6.8.1 |
+| nexus | 6.8.1 |
+| mu-plugin | 6.8.1 |
+| offload-media-clean | 6.8.2 |
+| pm-toolkit-hub | 6.8.3 |
+| wp-events-analyzer | 6.8.3 |
+| nitropack-2 | 6.8.3 |
+
+---
+
+### Significantly behind — 1 site
+- **e2e-test-fresh** is on **6.2.2** — likely intentional as a test fixture, but worth verifying.
+
+---
+
+### Unknown / no scan data — ~12 sites
+- nitropack-1, wp-archaeologist-saas, cli-target, The Curated Shelf, nexus-test-site, test-cli-poc, another-test, sync-test, nexus-e2e-test, frostscape, nexustestsite1, eval-test-onboard
+
+Run `nexus fleet refresh --deep` to populate these.
+
+---
+
+**Bottom line:** 13 sites need updates (12 if e2e-test-fresh is intentional). The 6.8.x group is highest priority — two minor versions behind. Start those, then mop up the 6.9.0 patch group.

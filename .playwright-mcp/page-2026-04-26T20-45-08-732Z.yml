@@ -1,0 +1,32 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - text:  
+      - generic [ref=e5]:
+        - generic [ref=e7]:
+          - heading "Jeremy Pollock Site" [level=1] [ref=e8]:
+            - link "Jeremy Pollock Site" [ref=e9] [cursor=pointer]:
+              - /url: https://jppblank.wpenginepowered.com/
+          - paragraph [ref=e10]: Your SUPER-powered WP Engine Site
+        - generic:
+          - navigation "Main"
+  - main [ref=e14]:
+    - article "Hello world!" [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - heading "Hello world!" [level=2] [ref=e19]:
+            - link "Hello world!" [ref=e20] [cursor=pointer]:
+              - /url: https://jppblank.wpenginepowered.com/?p=1
+          - paragraph [ref=e21]:
+            - link "Posts by jppblank" [ref=e22] [cursor=pointer]:
+              - /url: https://jppblank.wpenginepowered.com/?author=1
+            - link "jppblank" [ref=e23] [cursor=pointer]:
+              - /url: https://jppblank.wpenginepowered.com/?author=1
+            - text: on August 21, 2025
+        - paragraph [ref=e25]: Welcome to WordPress. This is your first post. Edit or delete it, then start writing!
+  - contentinfo [ref=e26]:
+    - generic [ref=e30]:
+      - text: Theme by
+      - link "StudioPress" [ref=e31] [cursor=pointer]:
+        - /url: https://www.studiopress.com/
+      - text: .

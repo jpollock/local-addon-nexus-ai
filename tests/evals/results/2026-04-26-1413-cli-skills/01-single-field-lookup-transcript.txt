@@ -1,0 +1,39 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: cli-skills
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 25.4s
+Tool calls: 2
+Cost: $0.8209
+
+============================================================
+TURN 1
+============================================================
+PROMPT: What WordPress version is jppblank running?
+
+Let me read the nexus-wp skill to get the right syntax.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-wp/SKILL.md"})
+  ⎿  1	---
+2	name: nexus-wp
+3	description: Run WP-CLI commands on a local WordPress site via nexus. Target format is <sitename>@local. For WPE remote installs use nexus-wpe skill instead.
+4	argument-hint: <site@local> <wp-cli-command>
+5	allowed-tools: Bash(nexus *)
+6	---
+7	
+8	# WP-CLI via Nexus (local sites)
+9	
+10	For **local** sites only. WPE remote installs → use `nexus-wpe` skill.
+11	
+12	Target format: `<sitename>@local` or bare site name (auto-resolved from graph DB).
+13	
+14	**Common commands:**
+
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp core version jppblank"})
+  ⎿  WordPress 6.9.4 _(synced 2d ago — run `nexus wpe sync` to refresh)_
+`jppblank` is running **WordPress 6.9.4** (data synced 2 days ago from the graph DB cache).
+
+--- FINAL RESULT ---
+`jppblank` is running **WordPress 6.9.4** (data synced 2 days ago from the graph DB cache).

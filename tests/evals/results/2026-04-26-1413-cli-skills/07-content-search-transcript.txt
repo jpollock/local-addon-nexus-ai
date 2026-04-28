@@ -1,0 +1,90 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 07-content-search
+Mode: cli-skills
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 33.0s
+Tool calls: 2
+Cost: $0.1963
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts.
+
+Reading the nexus-search skill to get the correct command syntax.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-search/SKILL.md"})
+  ⎿  1	---
+2	name: nexus-search
+3	description: Search across all indexed local WordPress sites by content. Use when looking for sites that contain specific content, posts, or pages. Pass the search query as args.
+4	argument-hint: <search query>
+5	allowed-tools: Bash(node *)
+6	---
+7	
+8	# Cross-Site Content Search
+9	
+10	Search query: `$ARGUMENTS`
+11	
+12	Run this command to search all indexed local sites:
+13	
+14	```
+15	nexus content search-all "$ARGUMENTS"
+16	```
+17	
+18	Then present the results clearly:
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js content search-all \"WooCommerce e-commerce\" 2>&1","timeout":30000})
+  ⎿  Cross-Site Search: "WooCommerce e-commerce"
+──────────────────────────────────────────────────
+  Faker Incorporated: How to Get More Out of Your WooCommerce Store
+    Type: post | Score: 0.67
+    WooCommerce is the most popular e-commerce platform on the planet — but out of the box, it's just the beginning. Here's how we help our clients squeeze every dollar out of their WooCommerce stores. Sp
+
+  wpe-6b14e194-b607-45f1-bba9-8d2089e3dff3: Cart
+    Type: page | Score: 0.67
+    [woocommerce_cart]
+
+
+Here's what was found across your local sites:
+
+---
+
+**1 site with real e-commerce content:**
+
+**Faker Incorporated** — `How to Get More Out of Your WooCommerce Store` (post, score: 0.67)
+> "WooCommerce is the most popular e-commerce platform on the planet — but out of the box, it's just the beginning. Here's how we help our clients squeeze every dollar out of their WooCommerce stores..."
+
+This is the only site with actual authored content about WooCommerce/e-commerce.
+
+---
+
+**Many sites with default WooCommerce boilerplate pages:**
+
+All the `wpe-*` sites matched on auto-generated WooCommerce pages — **Cart** (`[woocommerce_cart]`) and **My account** (`[woocommerce_my_account]`). These are default pages WooCommerce creates on install, not real content.
+
+---
+
+**Summary:** Only **Faker Incorporated** has meaningful WooCommerce content. The rest are WPE-linked installs that happen to have WooCommerce installed (evidenced by the default shortcode pages), but no authored posts or pages about e-commerce.
+
+--- FINAL RESULT ---
+Here's what was found across your local sites:
+
+---
+
+**1 site with real e-commerce content:**
+
+**Faker Incorporated** — `How to Get More Out of Your WooCommerce Store` (post, score: 0.67)
+> "WooCommerce is the most popular e-commerce platform on the planet — but out of the box, it's just the beginning. Here's how we help our clients squeeze every dollar out of their WooCommerce stores..."
+
+This is the only site with actual authored content about WooCommerce/e-commerce.
+
+---
+
+**Many sites with default WooCommerce boilerplate pages:**
+
+All the `wpe-*` sites matched on auto-generated WooCommerce pages — **Cart** (`[woocommerce_cart]`) and **My account** (`[woocommerce_my_account]`). These are default pages WooCommerce creates on install, not real content.
+
+---
+
+**Summary:** Only **Faker Incorporated** has meaningful WooCommerce content. The rest are WPE-linked installs that happen to have WooCommerce installed (evidenced by the default shortcode pages), but no authored posts or pages about e-commerce.

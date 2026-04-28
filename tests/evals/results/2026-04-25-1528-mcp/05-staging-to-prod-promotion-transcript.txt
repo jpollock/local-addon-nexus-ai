@@ -1,0 +1,69 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 05-staging-to-prod-promotion
+Mode: mcp
+Date: 2026-04-25
+Model: claude-sonnet-4-6
+Duration: 69.1s
+Tool calls: 4
+Cost: $0.2945
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Promote the jppwpeplugistg (staging) install to jppwpeplugin (production) in the wpeplugintest site. Make sure production has a backup first.
+
+I'll handle this Tier 3 promotion carefully — backup production first, then promote. Let me start by discovering the install IDs for both environments.
+
+⏺ mcp__local-nexus-ai__wpe_get_installs({})
+  ⎿  ## WP Engine Installs (299)
+- **sprntndntchmbr** (ID: 9564d013-757d-4b18-8aa0-93bdd5fb9d99, env: production)
+- **benfischer** (ID: 5893fe56-9fde-441c-8692-c9d1623b5ad8, env: production)
+- **qwerky** (ID: 6adbee30-6abf-43c2-bd4f-82a29de1e2b9, env: production)
+- **b68c7f0b6038** (ID: 649b7ec8-658f-4a44-9814-05fffbfaffad, env: production)
+- **getflywheel** (ID: af07e7ee-2fec-4585-a71b-5bfcc0ee60b6, env: production)
+- **localwpe** (ID: 6b2fb37d-5570-4296-ac88-b6f106871c64, env: production)
+- **getfl
+Found both installs:
+- **jppwpeplugin** (production): `74123063-1f21-4080-b983-aaa5c95ed1e2`
+- **jppwpeplugistg** (staging): `3a4b72ba-3aba-4753-b8ae-419e1956651d`
+
+Now creating a verified backup of production before promoting. This blocks until complete.
+
+⏺ mcp__local-nexus-ai__wpe_backup_and_verify({"install_id":"74123063-1f21-4080-b983-aaa5c95ed1e2","description":"Pre-promotion backup — staging jppwpeplugistg → production jppwpeplugin"})
+  ⎿  ## Backup Completed
+Backup for install `74123063-1f21-4080-b983-aaa5c95ed1e2` completed successfully.
+- **Backup ID:** 52976d2f-d99f-4964-9ff7-ebeff41a2cf3
+- **Status:** completed
+Production backup is verified (ID: `52976d2f-d99f-4964-9ff7-ebeff41a2cf3`). Now initiating the promotion — Tier 3 requires a two-step confirmation.
+
+⏺ mcp__local-nexus-ai__wpe_promote_environment({"source_install_id":"3a4b72ba-3aba-4753-b8ae-419e1956651d","destination_install_id":"74123063-1f21-4080-b983-aaa5c95ed1e2","include_database":true})
+  ⎿  {
+  "requiresConfirmation": true,
+  "tier": 3,
+  "action": "This will overwrite the destination environment with content from the source. Destination content will be lost.",
+  "warning": "This action may not be reversible.",
+  "howToConfirm": "To proceed, call wpe_promote_environment again with the same arguments plus _confirmationToken set to the value below.",
+  "preChecks": [
+    "Run wpe_create_backup or wpe_backup_and_verify on the destination first",
+    "Confirm the destination environmen
+Pre-checks satisfied — backup is verified. Proceeding with the confirmed promotion.
+
+⏺ mcp__local-nexus-ai__wpe_promote_environment({"source_install_id":"3a4b72ba-3aba-4753-b8ae-419e1956651d","destination_install_id":"74123063-1f21-4080-b983-aaa5c95ed1e2","include_database":true,"_confirmationToken":"a3cd317384ecba442ac8449581776b)
+  ⎿  ## Environment Copy Started
+Copy from `3a4b72ba-3aba-4753-b8ae-419e1956651d` → `74123063-1f21-4080-b983-aaa5c95ed1e2` has been initiated.
+- **Include database:** yes
+The copy typically takes several minutes. Check the WP Engine portal for progress.
+The promotion is underway. Here's what was done:
+
+1. **Backup created & verified** — production `jppwpeplugin` backup ID `52976d2f` completed before anything was touched.
+2. **Promotion initiated** — `jppwpeplugistg` (staging) → `jppwpeplugin` (production), files + database included.
+
+The copy typically takes a few minutes. You can monitor progress in the WP Engine portal, and once it completes, it's worth running `wpe_purge_cache` on production to ensure visitors get fresh content.
+
+--- FINAL RESULT ---
+The promotion is underway. Here's what was done:
+
+1. **Backup created & verified** — production `jppwpeplugin` backup ID `52976d2f` completed before anything was touched.
+2. **Promotion initiated** — `jppwpeplugistg` (staging) → `jppwpeplugin` (production), files + database included.
+
+The copy typically takes a few minutes. You can monitor progress in the WP Engine portal, and once it completes, it's worth running `wpe_purge_cache` on production to ensure visitors get fresh content.

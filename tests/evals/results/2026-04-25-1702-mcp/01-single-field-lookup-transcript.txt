@@ -1,0 +1,43 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: mcp
+Date: 2026-04-25
+Model: claude-sonnet-4-6
+Duration: 470.3s
+Tool calls: 3
+Cost: $1.2029
+
+============================================================
+TURN 1
+============================================================
+PROMPT: What WordPress version is jppblank running?
+
+I'll check the WordPress version for jppblank using the MCP tool.
+
+⏺ Agent({"description":"Check WordPress version for jppblank","prompt":"Use the mcp__local-nexus-ai__wp_core_version tool to check the WordPress version for the site \"jppblank\". Return the result."})
+
+⏺ mcp__local-nexus-ai__wp_core_version({"site":"jppblank"})
+  ⎿  Site "jppblank" not found.
+
+⏺ mcp__local-nexus-ai__local_list_sites({})
+  ⎿  ## Local Sites (30 total, 1 running)
+
+### Running
+- **nexus-e2e-cli-test-site** (nexus-e2e-cli-test-site.local) [id: hV1JJ2J4N, indexed: yes]
+
+### Halted
+- jeremypollock.blog (jeremypollockblog.local) [id: mDSZDt3S6, halted]
+- nexus (nexus.local) [id: oahyb7b0P, halted]
+- mu-plugin (mu-plugin.local) [id: f95o8kDEU, halted]
+- offload-media-clean (offload-media-clean.local) [id: sk4daPsDs, halted]
+- nitropack-1 (nitropack-1.local) [id: xXdVoSUzJ, halted]
+- pm-toolkit-hub (pm-toolkit-hub.local) [id
+  ⎿  There is no site named "jppblank" in Local. The available sites do not include one by that name. The closest match might be "jpp0413p" (id: LfH-OGEJm).
+
+The `wp_core_version` tool returned: **Site "jppblank" not found.**
+
+There is no Local site with that name. The 30 available sites include names like `jpp0413p`, `nexus`, `cli-test`, etc., but no "jppblank". If you meant a different site, let me know the correct name and I can retry.agentId: a16dcda5a704580fe (use SendMessage with to: 'a16dcda5a
+No site named "jppblank" was found in Local. The closest match is **jpp0413p**. Would you like me to check the WordPress version for that site instead, or do you know the correct site name?
+
+--- FINAL RESULT ---
+No site named "jppblank" was found in Local. The closest match is **jpp0413p**. Would you like me to check the WordPress version for that site instead, or do you know the correct site name?

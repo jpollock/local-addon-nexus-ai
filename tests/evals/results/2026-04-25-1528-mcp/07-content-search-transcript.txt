@@ -1,0 +1,105 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 07-content-search
+Mode: mcp
+Date: 2026-04-25
+Model: claude-sonnet-4-6
+Duration: 30.7s
+Tool calls: 2
+Cost: $0.5121
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts.
+
+I'll search across your indexed local sites for WooCommerce and e-commerce content in parallel.
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"WooCommerce e-commerce shop products","limit":10,"min_score":0.3})
+
+⏺ mcp__local-nexus-ai__list_indexed_sites({})
+  ⎿  Found 31 results across 8 sites for "WooCommerce e-commerce shop products":
+
+### The Curated Shelf (index may be stale)
+  1. **Shop** (page, score: 0.569)
+     Shop
+
+  2. **My account** (page, score: 0.382)
+     [woocommerce_my_account]
+
+  3. **Cart** (page, score: 0.348)
+     You may be interested in… Your cart is currently empty! New in store
+
+### nexus-test-site (index may be stale)
+  1. **Shop** (page, score: 0.584)
+     Shop
+
+  2. **My account** (page, score: 0.358)
+     [woocommerce_my_acc
+  ⎿  ## Indexed Sites
+
+- [STALE] **The Curated Shelf** — 44 docs, 44 chunks, last indexed: 2026-04-17T20:53:20.756Z
+- [STALE] **ACF Auto Car Finder** — 141 docs, 149 chunks, last indexed: 2026-03-26T02:15:26.556Z
+- [STALE] **IlTvA7yCC** — 0 docs, 0 chunks, last indexed: never
+- [STALE] **nexus-e2e-test** — 2 docs, 2 chunks, last indexed: 2026-03-01T20:05:57.416Z
+- [STALE] **nexus-e2e-test** — 0 docs, 0 chunks, last indexed: 2026-03-01T19:58:53.131Z
+- [STALE] **nexus-e2e-crud-test** — 2 docs, 2 chunks
+Here's what I found across your local sites:
+
+---
+
+## Sites with WooCommerce / E-Commerce Content
+
+### 1. Faker Incorporated — most relevant
+This is the richest WooCommerce site with actual content:
+
+| Post | Type | Excerpt |
+|------|------|---------|
+| **Shop** | page | Standard WooCommerce shop page |
+| **How to Get More Out of Your WooCommerce Store** | post | *"WooCommerce is the most popular e-commerce platform on the planet — but out of the box, it's just the beginning. Here's how we help our clients squeeze..."* |
+| **Custom WooCommerce Store Build** | product | *"A fully designed, custom WooCommerce storefront built on Astra — optimized for speed, mobile, and conv..."* |
+| **Cart** | page | `[woocommerce_cart]` shortcode |
+| **Checkout** | page | `[woocommerce_checkout]` shortcode |
+| **My account** | page | `[woocommerce_my_account]` shortcode |
+
+### 2. The Curated Shelf, nexus-test-site, nexustestsite1
+All have WooCommerce core pages (Shop, Cart, My account) with `[woocommerce_*]` shortcodes, but no custom WooCommerce-specific posts or products.
+
+### 3. pm-toolkit-hub — tangentially relevant
+Has e-commerce references in PM guides (customer segments mentioning "e-commerce site owners", TAM analysis), but it's planning content, not a WooCommerce-powered site.
+
+---
+
+**The standout is Faker Incorporated** — it has an actual WooCommerce blog post and a product listing, making it the only site with substantive e-commerce editorial content.
+
+Note: All indexes are stale (last indexed Apr 17 or earlier). If you've added content since then, run `reindex_site` on these sites to get fresh results.
+
+--- FINAL RESULT ---
+Here's what I found across your local sites:
+
+---
+
+## Sites with WooCommerce / E-Commerce Content
+
+### 1. Faker Incorporated — most relevant
+This is the richest WooCommerce site with actual content:
+
+| Post | Type | Excerpt |
+|------|------|---------|
+| **Shop** | page | Standard WooCommerce shop page |
+| **How to Get More Out of Your WooCommerce Store** | post | *"WooCommerce is the most popular e-commerce platform on the planet — but out of the box, it's just the beginning. Here's how we help our clients squeeze..."* |
+| **Custom WooCommerce Store Build** | product | *"A fully designed, custom WooCommerce storefront built on Astra — optimized for speed, mobile, and conv..."* |
+| **Cart** | page | `[woocommerce_cart]` shortcode |
+| **Checkout** | page | `[woocommerce_checkout]` shortcode |
+| **My account** | page | `[woocommerce_my_account]` shortcode |
+
+### 2. The Curated Shelf, nexus-test-site, nexustestsite1
+All have WooCommerce core pages (Shop, Cart, My account) with `[woocommerce_*]` shortcodes, but no custom WooCommerce-specific posts or products.
+
+### 3. pm-toolkit-hub — tangentially relevant
+Has e-commerce references in PM guides (customer segments mentioning "e-commerce site owners", TAM analysis), but it's planning content, not a WooCommerce-powered site.
+
+---
+
+**The standout is Faker Incorporated** — it has an actual WooCommerce blog post and a product listing, making it the only site with substantive e-commerce editorial content.
+
+Note: All indexes are stale (last indexed Apr 17 or earlier). If you've added content since then, run `reindex_site` on these sites to get fresh results.

@@ -1,0 +1,59 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 08-bulk-plugin-update
+Mode: mcp
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 27.7s
+Tool calls: 1
+Cost: $0.1153
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Update all plugins across my local fleet — but only patch/minor version bumps, skip any major version upgrades. Show me what would change before doing anything.
+
+I'll run a fleet-wide plugin audit first to see what's installed and what updates are available.
+
+⏺ mcp__local-nexus-ai__nexus_plugin_audit({})
+  ⎿  ## Fleet Plugin Audit (2 sites)
+
+### nexus-e2e-cli-test-site
+No plugins installed.
+
+### eval-test-onboard
+2 plugins, 1 updates available
+
+| Plugin | Current | Available |
+|--------|---------|-----------|
+| akismet | v5.6 | v5.7 |
+
+---
+**Total:** 2 plugins across 2 sites, 1 updates available
+Only one update is available across your fleet. Let me parse the version bump to confirm it qualifies as a patch/minor (not major):
+
+- **akismet** on `eval-test-onboard`: `5.6` → `5.7` — this is a **minor** version bump (5.x → 5.y), not a major upgrade.
+
+**Proposed changes:**
+
+| Site | Plugin | Current | New | Bump Type |
+|------|--------|---------|-----|-----------|
+| eval-test-onboard | akismet | 5.6 | 5.7 | minor ✓ |
+
+No major version upgrades were found — nothing to skip.
+
+Want me to apply this update to `akismet` on `eval-test-onboard`?
+
+--- FINAL RESULT ---
+Only one update is available across your fleet. Let me parse the version bump to confirm it qualifies as a patch/minor (not major):
+
+- **akismet** on `eval-test-onboard`: `5.6` → `5.7` — this is a **minor** version bump (5.x → 5.y), not a major upgrade.
+
+**Proposed changes:**
+
+| Site | Plugin | Current | New | Bump Type |
+|------|--------|---------|-----|-----------|
+| eval-test-onboard | akismet | 5.6 | 5.7 | minor ✓ |
+
+No major version upgrades were found — nothing to skip.
+
+Want me to apply this update to `akismet` on `eval-test-onboard`?

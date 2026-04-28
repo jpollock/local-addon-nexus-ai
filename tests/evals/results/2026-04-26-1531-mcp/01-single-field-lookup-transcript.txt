@@ -1,0 +1,28 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: mcp
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 25.8s
+Tool calls: 2
+Cost: $0.8155
+
+============================================================
+TURN 1
+============================================================
+PROMPT: What WordPress version is jppblank running?
+
+
+⏺ ReadMcpResourceTool({"server":"local-nexus-ai","uri":"nexus://fleet/state"})
+  ⎿  <persisted-output>
+Output too large (53.6KB). Full output saved to: /Users/jeremy.pollock/.claude/projects/-Users-jeremy-pollock-development-wpengine-local-addon-nexus-ai/9945f47a-e21a-4b82-971f-4e7001d6788d/tool-results/toolu_vrtx_015mbCFvtMgiYjHn36Ya1q5f.txt
+
+Preview (first 2KB):
+{"contents":[{"uri":"nexus://fleet/state","mimeType":"text/markdown","text":"# Fleet State (from local cache)\n\n## WP Engine Installs (299 installs, synced 25m ago)\n\n| install_name | install_id | environment | prim
+
+⏺ mcp__local-nexus-ai__wp_core_version({"site":"jppblank"})
+  ⎿  WordPress 6.9.4 _(synced 2d ago — run `nexus wpe sync` to refresh)_
+**jppblank** is running **WordPress 6.9.4**.
+
+--- FINAL RESULT ---
+**jppblank** is running **WordPress 6.9.4**.

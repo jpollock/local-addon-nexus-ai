@@ -1,0 +1,80 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 04-full-site-onboarding
+Mode: cli-skills
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 73.2s
+Tool calls: 4
+Cost: $0.1844
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Create a new local WordPress site called 'eval-test-onboard'.
+
+I'll check what site creation commands are available in the nexus CLI first.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites --help 2>&1","description":"Check nexus sites subcommands"})
+  ⎿  Usage: nexus sites [options] [command]
+
+Manage Local and WPE sites
+
+Options:
+  -h, --help                        display help for command
+
+Commands:
+  get [options] <target>            Get detailed information about a site
+  clone <source> <newName>          Clone an existing site
+  rename <target> <newName>         Rename a site
+  export <target> [outputPath]      Export a site to archive
+  import [options] <archivePath>    Import a site from archive
+  logs [options] <target>           View sit
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites create --help 2>&1","description":"Check create command options"})
+  ⎿  Usage: nexus sites create [options] <target>
+
+Create a new local site
+
+Options:
+  --blueprint <name>  Create from Local blueprint
+  --php <version>     PHP version (e.g., 8.2, 8.1, 7.4)
+  --wp <version>      WordPress version (e.g., 6.4, 6.3)
+  -h, --help          display help for command
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites create 'eval-test-onboard' 2>&1","description":"Create new local WordPress site named eval-test-onbo)
+  ⎿  Exit code 1
+
+❌ Sites can only be created locally.
+   Use: nexus sites create eval-test-onboard@local
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites create 'eval-test-onboard@local' 2>&1","description":"Create new local WordPress site with @local su)
+  ⎿  Creating site: eval-test-onboard...
+
+✅ Site created: eval-test-onboard
+   Domain: eval-test-onboard.local
+
+Start the site: nexus sites start eval-test-onboard@local
+Site `eval-test-onboard` was created successfully. It's available at `eval-test-onboard.local`. You can start it with:
+
+```
+nexus sites start eval-test-onboard@local
+```
+
+--- FINAL RESULT ---
+Site `eval-test-onboard` was created successfully. It's available at `eval-test-onboard.local`. You can start it with:
+
+```
+nexus sites start eval-test-onboard@local
+```
+
+============================================================
+TURN 2
+============================================================
+PROMPT: Good. Now pull jpp0413p from WP Engine into it — files and database.
+
+
+============================================================
+TURN 3
+============================================================
+PROMPT: Set up AI on it using the gateway. Then tell me if it's healthy.
+

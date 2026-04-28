@@ -1,0 +1,192 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 08-bulk-plugin-update
+Mode: mcp
+Date: 2026-04-25
+Model: claude-sonnet-4-6
+Duration: 109.1s
+Tool calls: 6
+Cost: $0.6828
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Update all plugins across my local fleet — but only patch/minor version bumps, skip any major version upgrades. Show me what would change before doing anything.
+
+I'll start by checking what skills might apply, then audit your local fleet's plugins before touching anything.
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+
+⏺ mcp__local-nexus-ai__nexus_plugin_audit({})
+  ⎿  ## Fleet (31 local, 299 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- jeremypollock.blog (jeremypollockblog.local) [halted]
+- nexus (nexus.local) [halted]
+- mu-plugin (mu-plugin.local) [halted]
+- offload-media-clean (offload-media-clean.local) [halted]
+- nitropack-1 (nitropack-1.local) [halted]
+- pm-toolkit-hub (pm-toolkit-hub.local) [halted]
+- wp-events-analyzer (wp-events-analyze
+  ⎿  No running sites found. Start at least one site first.
+All 31 local sites are halted — the plugin audit tool needs running sites. Let me check the digital twin cache, which has plugin data without needing sites to be running.
+
+⏺ mcp__local-nexus-ai__nexus_fleet_plugins({})
+
+⏺ mcp__local-nexus-ai__nexus_get_fleet_twins({})
+  ⎿  ## Fleet Plugins
+
+**48 plugins found** across 31 sites (24 with full WP-CLI data)
+
+| Plugin | Active on | Installed on | Sites |
+|--------|-----------|--------------|-------|
+| Nexus AI Connector (`nexus-ai-connector`) | 22 | 25 | jeremypollock.blog, nexus, mu-plugin, +19 more |
+| AI (`ai`) | 7 | 9 | nitropack-1, cli-target, The Curated Shelf, +4 more |
+| AI Provider for Local Gateway (`ai-provider-for-local-gateway`) | 7 | 7 | nitropack-1, cli-target, nexus-test-site, +4 more |
+| Advanced Custo
+  ⎿  ## Fleet twin overview — 31 sites
+
+### 🔍 Indexed (3)
+- **another-test** — 2d ago ⚠️
+- **local-copy-jpp** — 4d ago ⚠️
+- **jpp0413p** — 2d ago ⚠️
+
+### ✅ Metadata (21)
+- **jeremypollock.blog** — 10h ago
+- **nexus** — 7d ago ⚠️
+- **mu-plugin** — 7d ago ⚠️
+- **offload-media-clean** — 7d ago ⚠️
+- **nitropack-1** — 7d ago ⚠️
+- **pm-toolkit-hub** — 7d ago ⚠️
+- **wp-events-analyzer** — 7d ago ⚠️
+- **nitropack-2** — 7d ago ⚠️
+- **wp-archaeologist** — 7d ago ⚠️
+- **migrate** — 7d ago ⚠️
+- **cli-test** — 7
+The twin cache has plugin lists but no version data. Let me check if a single site's twin has version info before proposing to start all 31 sites.
+
+⏺ mcp__local-nexus-ai__nexus_get_site_twin({"site":"nitropack-1"})
+  ⎿  ### nitropack-1
+**Completeness:** ✅ Metadata (WP-CLI)  |  **As of:** 7d ago
+
+- **WordPress:** 7.0-beta6
+- **PHP:** 8.2.29
+- **URL:** http://nitropack-1.local
+- **Plugins:** 7 active / 10 installed
+- **Active theme:** twentytwentyfive
+- **Posts:** 3 published
+- **Index:** ⚠️ stale (2 docs)
+
+_Data: WP-CLI scan · 7d ago · nexus sites refresh nitropack-1 to update_
+No version data in the cache — just plugin counts. Let me check if the outdated-sites finder has anything from the graph DB.
+
+⏺ mcp__local-nexus-ai__find_outdated_sites({"component":"plugins","source":"local"})
+  ⎿  ## Outdated Sites Report (local sites only)
+359 sites in scope
+
+### Plugin Version Mismatches
+- ai-provider-for-ollama: 1.0.3 (nexus-e2e-test [local]) vs 1.0.0 (sync-test [local], The Curated Shelf [local])
+- akismet: 5.6 (11 sites) vs 5.2 (jeremypollock.blog [local])
+- ai: 0.6.0 (8 sites) vs 0.3.1 (The Curated Shelf [local])
+- ai-provider-for-anthropic: 1.0.2 (5 sites) vs 1.0.1 (The Curated Shelf [local])
+- advanced-custom-fields: 6.7.0 (local-copy-jpp [local]) vs 6.4.3 (The Curated Shelf [loca
+Good news — I can work with what the graph DB has. Here's the full picture before touching anything:
+
+---
+
+## Plugin Update Preview — Local Fleet
+
+**Methodology note:** All 31 local sites are halted, so I can't hit WordPress.org for live update data. The version info below comes from cross-site comparison in the graph DB (index is 55 days stale — actual WordPress.org versions may be higher). Treat this as a preview; a live audit would require starting sites.
+
+---
+
+### Patch/Minor bumps — safe to update (same major version)
+
+| Plugin | Site(s) behind | Current → Target | Bump type |
+|--------|---------------|-----------------|-----------|
+| `akismet` | jeremypollock.blog | 5.2 → 5.6 | minor |
+| `ai-provider-for-ollama` | sync-test, The Curated Shelf | 1.0.0 → 1.0.3 | patch |
+| `ai-provider-for-anthropic` | The Curated Shelf | 1.0.1 → 1.0.2 | patch |
+| `ai` | The Curated Shelf | 0.3.1 → 0.6.0 | minor |
+| `advanced-custom-fields` | The Curated Shelf | 6.4.3 → 6.7.0 | minor |
+| `advanced-custom-fields-pro` | pm-toolkit-hub | 6.3.5 → 6.8.0-beta2 | minor |
+| `advanced-custom-fields-pro` | local-copy-jpp | 6.7.0.2 → 6.8.0-beta2 | patch |
+| `nitropack` | nitropack-1, nitropack-2 | 1.18.5 → 1.18.9 | patch |
+| `atlas-search` | The Curated Shelf | 0.3.1 → 0.3.11 | patch |
+| `woocommerce` | The Curated Shelf | 10.0.6 → 10.5.2 | minor |
+| `amazon-s3-and-cloudfront` | offload-media-clean | 3.2.11 → 3.3.0 | minor |
+
+**11 updates across 8 sites** would be applied.
+
+---
+
+### Major bumps — SKIPPED (breaking change risk)
+
+| Plugin | Site(s) | Current → Available | Bump type |
+|--------|---------|-------------------|-----------|
+| `gutenberg` | jeremypollock.blog | 16.5.0 → 22.4.3 | **major** |
+| `admin-columns-pro` | newsroom-admin-columns-poc | 6.4.24 → 7.0.10 | **major** |
+
+---
+
+### Caveats before proceeding
+
+1. **Data is 55 days stale** — WordPress.org may have newer versions. This preview compares your local sites against each other, not against the live plugin repo.
+2. **`advanced-custom-fields-pro` target is a beta** (`6.8.0-beta2`) — you may want to skip that one or hold for the stable release.
+3. **Sites need to start** to run the actual `wp plugin update` commands. I'd start each affected site, update, then stop it.
+
+---
+
+Want me to proceed? If yes, I'll start each affected site, run the updates (patch/minor only), and stop them again. You can also exclude specific plugins (like the ACF Pro beta) if you'd prefer to skip those.
+
+--- FINAL RESULT ---
+Good news — I can work with what the graph DB has. Here's the full picture before touching anything:
+
+---
+
+## Plugin Update Preview — Local Fleet
+
+**Methodology note:** All 31 local sites are halted, so I can't hit WordPress.org for live update data. The version info below comes from cross-site comparison in the graph DB (index is 55 days stale — actual WordPress.org versions may be higher). Treat this as a preview; a live audit would require starting sites.
+
+---
+
+### Patch/Minor bumps — safe to update (same major version)
+
+| Plugin | Site(s) behind | Current → Target | Bump type |
+|--------|---------------|-----------------|-----------|
+| `akismet` | jeremypollock.blog | 5.2 → 5.6 | minor |
+| `ai-provider-for-ollama` | sync-test, The Curated Shelf | 1.0.0 → 1.0.3 | patch |
+| `ai-provider-for-anthropic` | The Curated Shelf | 1.0.1 → 1.0.2 | patch |
+| `ai` | The Curated Shelf | 0.3.1 → 0.6.0 | minor |
+| `advanced-custom-fields` | The Curated Shelf | 6.4.3 → 6.7.0 | minor |
+| `advanced-custom-fields-pro` | pm-toolkit-hub | 6.3.5 → 6.8.0-beta2 | minor |
+| `advanced-custom-fields-pro` | local-copy-jpp | 6.7.0.2 → 6.8.0-beta2 | patch |
+| `nitropack` | nitropack-1, nitropack-2 | 1.18.5 → 1.18.9 | patch |
+| `atlas-search` | The Curated Shelf | 0.3.1 → 0.3.11 | patch |
+| `woocommerce` | The Curated Shelf | 10.0.6 → 10.5.2 | minor |
+| `amazon-s3-and-cloudfront` | offload-media-clean | 3.2.11 → 3.3.0 | minor |
+
+**11 updates across 8 sites** would be applied.
+
+---
+
+### Major bumps — SKIPPED (breaking change risk)
+
+| Plugin | Site(s) | Current → Available | Bump type |
+|--------|---------|-------------------|-----------|
+| `gutenberg` | jeremypollock.blog | 16.5.0 → 22.4.3 | **major** |
+| `admin-columns-pro` | newsroom-admin-columns-poc | 6.4.24 → 7.0.10 | **major** |
+
+---
+
+### Caveats before proceeding
+
+1. **Data is 55 days stale** — WordPress.org may have newer versions. This preview compares your local sites against each other, not against the live plugin repo.
+2. **`advanced-custom-fields-pro` target is a beta** (`6.8.0-beta2`) — you may want to skip that one or hold for the stable release.
+3. **Sites need to start** to run the actual `wp plugin update` commands. I'd start each affected site, update, then stop it.
+
+---
+
+Want me to proceed? If yes, I'll start each affected site, run the updates (patch/minor only), and stop them again. You can also exclude specific plugins (like the ACF Pro beta) if you'd prefer to skip those.

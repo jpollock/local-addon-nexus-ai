@@ -1,0 +1,110 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 02-fleet-version-drift
+Mode: mcp
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 41.9s
+Tool calls: 2
+Cost: $0.4668
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local WordPress sites are behind on the latest WordPress version? Give me a summary of what needs updating.
+
+Let me check the fleet state and find outdated sites in parallel.
+
+⏺ ReadMcpResourceTool({"server":"local-nexus-ai","uri":"nexus://fleet/state"})
+
+⏺ mcp__local-nexus-ai__find_outdated_sites({"component":"wordpress","source":"local"})
+  ⎿  <persisted-output>
+Output too large (53.6KB). Full output saved to: /Users/jeremy.pollock/.claude/projects/-Users-jeremy-pollock-development-wpengine-local-addon-nexus-ai/5507ea4a-1317-4673-b489-fa112c258ecb/tool-results/toolu_vrtx_0159zYRSiS6UAs6AmP5SrMia.txt
+
+Preview (first 2KB):
+{"contents":[{"uri":"nexus://fleet/state","mimeType":"text/markdown","text":"# Fleet State (from local cache)\n\n## WP Engine Installs (299 installs, synced 26m ago)\n\n| install_name | install_id | environment | prim
+  ⎿  ## Outdated Sites Report (local sites only)
+364 sites in scope
+
+### WordPress
+- Latest: 7.0-beta6 (3 sites)
+- Outdated: 7.0-RC2 (6 sites) — cli-target [local], nexus-e2e-test [local], testjpp1 [local], testjppdev [local], jppblank [local], jppblank [local]
+- Outdated: 7.0-RC1 (1 site) — The Curated Shelf [local]
+- Outdated: 7.0-RC1-62112 (1 site) — nexus-test-site [local]
+- Outdated: 7.0-RC2-62241 (2 sites) — another-test [local], nexustestsite1 [local]
+- Outdated: 6.9.4 (71 sites) — heath.biz [
+Here's a summary of your local WordPress sites and their update status:
+
+## WordPress Version Summary
+
+The tool found **364 local sites** in scope. The latest stable is **6.9.4** (7.0 is still in beta/RC).
+
+### Sites on 7.0 Pre-release (10 sites)
+These are ahead of stable — on beta/RC builds:
+| Version | Sites |
+|---|---|
+| 7.0-RC2 | cli-target, nexus-e2e-test, testjpp1, testjppdev, jppblank (×2) |
+| 7.0-RC1 | The Curated Shelf |
+| 7.0-RC1-62112 | nexus-test-site |
+| 7.0-RC2-62241 | another-test, nexustestsite1 |
+
+### Sites Behind 6.9.4 (40 named sites, mostly test sites)
+| Version | Count | Notable sites |
+|---|---|---|
+| 6.9.1 | 20 | newsroom-admin-columns-poc, nexus-e2e-crud-test, my-site, jppblankdev |
+| 6.9 | 6 | wp-archaeologist, cli-test, migrate, wp-migrate-pusher/receiver, hello-wp-engine |
+| 6.8.3 | 3 | nitropack-2, wp-events-analyzer, pm-toolkit-hub |
+| 6.8.2 | 1 | offload-media-clean |
+| 6.8.1 | 6 | nexus, jeremypollock.blog, mu-plugin, wave, spanishsummertrip, FamilyFourSpanishTour |
+| 6.8 | 1 | simulator |
+| 6.4.3 | 1 | Faker Incorporated |
+| 6.3.2 | 1 | faker-incorporated |
+| 6.2.2 | 1 | e2e-test-fresh |
+
+### Real sites to prioritize updating
+The ones most worth updating (non-test sites noticeably behind):
+- **jeremypollock.blog**, **nexus**, **mu-plugin**, **wave** — on 6.8.1
+- **offload-media-clean** — on 6.8.2
+- **nitropack-2**, **wp-events-analyzer** — on 6.8.3
+- **my-site**, **jppblankdev** — on 6.9.1
+- **wp-archaeologist**, **hello-wp-engine** — on 6.9
+
+240 sites show no version data — those need to be running for WP version detection to work.
+
+--- FINAL RESULT ---
+Here's a summary of your local WordPress sites and their update status:
+
+## WordPress Version Summary
+
+The tool found **364 local sites** in scope. The latest stable is **6.9.4** (7.0 is still in beta/RC).
+
+### Sites on 7.0 Pre-release (10 sites)
+These are ahead of stable — on beta/RC builds:
+| Version | Sites |
+|---|---|
+| 7.0-RC2 | cli-target, nexus-e2e-test, testjpp1, testjppdev, jppblank (×2) |
+| 7.0-RC1 | The Curated Shelf |
+| 7.0-RC1-62112 | nexus-test-site |
+| 7.0-RC2-62241 | another-test, nexustestsite1 |
+
+### Sites Behind 6.9.4 (40 named sites, mostly test sites)
+| Version | Count | Notable sites |
+|---|---|---|
+| 6.9.1 | 20 | newsroom-admin-columns-poc, nexus-e2e-crud-test, my-site, jppblankdev |
+| 6.9 | 6 | wp-archaeologist, cli-test, migrate, wp-migrate-pusher/receiver, hello-wp-engine |
+| 6.8.3 | 3 | nitropack-2, wp-events-analyzer, pm-toolkit-hub |
+| 6.8.2 | 1 | offload-media-clean |
+| 6.8.1 | 6 | nexus, jeremypollock.blog, mu-plugin, wave, spanishsummertrip, FamilyFourSpanishTour |
+| 6.8 | 1 | simulator |
+| 6.4.3 | 1 | Faker Incorporated |
+| 6.3.2 | 1 | faker-incorporated |
+| 6.2.2 | 1 | e2e-test-fresh |
+
+### Real sites to prioritize updating
+The ones most worth updating (non-test sites noticeably behind):
+- **jeremypollock.blog**, **nexus**, **mu-plugin**, **wave** — on 6.8.1
+- **offload-media-clean** — on 6.8.2
+- **nitropack-2**, **wp-events-analyzer** — on 6.8.3
+- **my-site**, **jppblankdev** — on 6.9.1
+- **wp-archaeologist**, **hello-wp-engine** — on 6.9
+
+240 sites show no version data — those need to be running for WP version detection to work.

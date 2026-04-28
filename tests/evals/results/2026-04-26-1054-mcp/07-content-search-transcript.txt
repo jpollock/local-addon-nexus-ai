@@ -1,0 +1,127 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 07-content-search
+Mode: mcp
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 38.9s
+Tool calls: 2
+Cost: $0.1248
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts.
+
+I'll search across all your indexed local sites for WooCommerce and e-commerce content.
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"WooCommerce e-commerce shop products","limit":5})
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"online store checkout cart payment","limit":5})
+  ⎿  Found 28 results across 8 sites for "WooCommerce e-commerce shop products":
+
+### The Curated Shelf (index may be stale)
+  1. **Shop** (page, score: 0.569)
+     Shop
+
+  2. **My account** (page, score: 0.382)
+     [woocommerce_my_account]
+
+  3. **Cart** (page, score: 0.348)
+     You may be interested in… Your cart is currently empty! New in store
+
+### nexus-test-site (index may be stale)
+  1. **Shop** (page, score: 0.584)
+     Shop
+
+  2. **My account** (page, score: 0.358)
+     [woocommerce_my_acc
+  ⎿  Found 19 results across 6 sites for "online store checkout cart payment":
+
+### The Curated Shelf (index may be stale)
+  1. **Checkout** (page, score: 0.422)
+     Checkout
+
+  2. **Cart** (page, score: 0.408)
+     You may be interested in… Your cart is currently empty! New in store
+
+  3. **Shop** (page, score: 0.329)
+     Shop
+
+### nexus-test-site (index may be stale)
+  1. **Checkout** (page, score: 0.442)
+     Checkout
+
+  2. **Cart** (page, score: 0.394)
+     You may be interested in… Your cart i
+Here's what I found. **6 sites have WooCommerce/e-commerce content**, with varying depth:
+
+---
+
+## Sites With WooCommerce Content
+
+### Faker Incorporated — Most Content-Rich
+This is your best candidate. It has actual WooCommerce posts and products, not just the default pages:
+- **"How to Get More Out of Your WooCommerce Store"** (post) — article about extending WooCommerce for clients
+- **"Custom WooCommerce Store Build"** (product) — a WooCommerce product listing (Astra theme, speed/mobile optimized)
+- Standard WC pages: Shop, Cart, Checkout, My Account
+
+> Note: there appear to be 3 sites named "Faker Incorporated" (possibly different environments or duplicates) plus one named `faker-incorporated`. All have WooCommerce installed with the standard page set.
+
+### The Curated Shelf
+WooCommerce is installed with all the standard pages (Shop, Cart, Checkout, My Account). No custom posts found beyond the default WC pages — likely a newer/empty store setup.
+
+### nexus-test-site / nexustestsite1
+Both have WooCommerce standard pages (Shop, Cart, Checkout, My Account) but no custom post content — test sites with WooCommerce scaffolding.
+
+### pm-toolkit-hub
+Not a WooCommerce site — matched on e-commerce *topic* in PM planning docs (customer segment descriptions, TAM analysis referencing e-commerce site owners).
+
+---
+
+## Summary
+
+| Site | WooCommerce Posts/Products | Store Pages |
+|---|---|---|
+| Faker Incorporated | Yes — 1 blog post + 1 product | Shop, Cart, Checkout, My Account |
+| The Curated Shelf | No | Shop, Cart, Checkout, My Account |
+| nexus-test-site | No | Shop, Cart, Checkout, My Account |
+| nexustestsite1 | No | Shop, Cart, Checkout, My Account |
+
+**Note:** All indexes are stale (>7 days). To get fresh results, run `reindex_site` on any of these before doing deeper content work.
+
+--- FINAL RESULT ---
+Here's what I found. **6 sites have WooCommerce/e-commerce content**, with varying depth:
+
+---
+
+## Sites With WooCommerce Content
+
+### Faker Incorporated — Most Content-Rich
+This is your best candidate. It has actual WooCommerce posts and products, not just the default pages:
+- **"How to Get More Out of Your WooCommerce Store"** (post) — article about extending WooCommerce for clients
+- **"Custom WooCommerce Store Build"** (product) — a WooCommerce product listing (Astra theme, speed/mobile optimized)
+- Standard WC pages: Shop, Cart, Checkout, My Account
+
+> Note: there appear to be 3 sites named "Faker Incorporated" (possibly different environments or duplicates) plus one named `faker-incorporated`. All have WooCommerce installed with the standard page set.
+
+### The Curated Shelf
+WooCommerce is installed with all the standard pages (Shop, Cart, Checkout, My Account). No custom posts found beyond the default WC pages — likely a newer/empty store setup.
+
+### nexus-test-site / nexustestsite1
+Both have WooCommerce standard pages (Shop, Cart, Checkout, My Account) but no custom post content — test sites with WooCommerce scaffolding.
+
+### pm-toolkit-hub
+Not a WooCommerce site — matched on e-commerce *topic* in PM planning docs (customer segment descriptions, TAM analysis referencing e-commerce site owners).
+
+---
+
+## Summary
+
+| Site | WooCommerce Posts/Products | Store Pages |
+|---|---|---|
+| Faker Incorporated | Yes — 1 blog post + 1 product | Shop, Cart, Checkout, My Account |
+| The Curated Shelf | No | Shop, Cart, Checkout, My Account |
+| nexus-test-site | No | Shop, Cart, Checkout, My Account |
+| nexustestsite1 | No | Shop, Cart, Checkout, My Account |
+
+**Note:** All indexes are stale (>7 days). To get fresh results, run `reindex_site` on any of these before doing deeper content work.

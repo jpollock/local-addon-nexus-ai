@@ -1,0 +1,46 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 09-gateway-cost-report
+Mode: mcp
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 30.0s
+Tool calls: 0
+Cost: $0.4089
+
+============================================================
+TURN 1
+============================================================
+PROMPT: How much have I spent through the AI gateway this month? Break it down by site and model, and tell me which site is using it most.
+
+Looking at the available MCP tools, there's no tool in the current toolset that exposes AI gateway usage, cost, or token consumption data.
+
+The gateway usage dashboard exists in the Local UI (it auto-refreshes via IPC push + 30s poll), but that data isn't surfaced through any MCP tool — it lives in Local's addon storage, not in WordPress or anywhere the MCP server can query.
+
+**What I can't do from MCP-only mode:**
+- Query Local's internal gateway usage logs
+- Break down costs by site or model
+- Access the `~/Library/Application Support/Local/nexus-ai/` storage directly
+
+**Your options to get this data:**
+1. **Local UI** — open the Nexus AI section in Local; the usage dashboard shows per-site and per-model breakdowns with a manual Refresh button
+2. **Cloudflare Worker analytics** — your telemetry worker at `nexus-analytics.jeremy7746.workers.dev` may have aggregated data if usage events are being transmitted
+3. **Add an MCP tool** — `get_gateway_usage_summary` returning monthly spend by site/model would close this gap; it's not currently in the toolset
+
+This looks like a missing tool in the MCP surface — worth adding if you want Claude Desktop to answer this question autonomously in the future.
+
+--- FINAL RESULT ---
+Looking at the available MCP tools, there's no tool in the current toolset that exposes AI gateway usage, cost, or token consumption data.
+
+The gateway usage dashboard exists in the Local UI (it auto-refreshes via IPC push + 30s poll), but that data isn't surfaced through any MCP tool — it lives in Local's addon storage, not in WordPress or anywhere the MCP server can query.
+
+**What I can't do from MCP-only mode:**
+- Query Local's internal gateway usage logs
+- Break down costs by site or model
+- Access the `~/Library/Application Support/Local/nexus-ai/` storage directly
+
+**Your options to get this data:**
+1. **Local UI** — open the Nexus AI section in Local; the usage dashboard shows per-site and per-model breakdowns with a manual Refresh button
+2. **Cloudflare Worker analytics** — your telemetry worker at `nexus-analytics.jeremy7746.workers.dev` may have aggregated data if usage events are being transmitted
+3. **Add an MCP tool** — `get_gateway_usage_summary` returning monthly spend by site/model would close this gap; it's not currently in the toolset
+
+This looks like a missing tool in the MCP surface — worth adding if you want Claude Desktop to answer this question autonomously in the future.

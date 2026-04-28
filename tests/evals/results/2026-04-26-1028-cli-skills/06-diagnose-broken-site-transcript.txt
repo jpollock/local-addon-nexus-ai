@@ -1,0 +1,236 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 06-diagnose-broken-site
+Mode: cli-skills
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 217.2s
+Tool calls: 20
+Cost: $0.5217
+
+============================================================
+TURN 1
+============================================================
+PROMPT: jppblank isn't loading properly. Can you figure out what's wrong with it?
+
+I'll start with `nexus doctor` and check the site status in parallel.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js doctor 2>&1","description":"Run nexus doctor diagnostics"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites list 2>&1","description":"List all sites to find jppblank"})
+  ⎿  Nexus AI v0.2.4 — System Health
+──────────────────────────────────────────────────
+  ✅  Local app           Installed
+  ✅  Local running       Running
+  ✅  Nexus AI addon      Active (v0.2.4) · dev
+  ✅  Version match       v0.2.4
+  ✅  GraphQL server      Connected (port 4000)
+  ✅  MCP server          Running · 171 tools (v0.1.0)
+  ✅  AI agent config     Claude Desktop
+  ✅  AI provider         Anthropic (Claude)
+  ✅  Local Gateway       Enabled
+  ✅  Sites with AI       13 / 30 sites configured · 
+  ⎿  <persisted-output>
+Output too large (37KB). Full output saved to: /Users/jeremy.pollock/.claude/projects/-Users-jeremy-pollock-development-wpengine-local-addon-nexus-ai/2bfe159a-923b-4071-99c7-163ce3741c1c/tool-results/brmby0rnv.txt
+
+Preview (first 2KB):
+Local Sites:
+  ⚫ jeremypollock.blog (halted) → not linked
+  ⚫ nexus (halted) → not linked
+  ⚫ mu-plugin (halted) → not linked
+  ⚫ offload-media-clean (halted) → not linked
+  ⚫ nitropack-1 (halted) → not linked
+  ⚫ pm-toolkit-hub (halted) → not l
+
+⏺ Bash({"command":"grep -i \"jppblank\" /Users/jeremy.pollock/.claude/projects/-Users-jeremy-pollock-development-wpengine-local-addon-nexus-ai/2bfe159a-923b-4071-99c7-163ce3741c1c/tool-results/brmby0rnv.txt")
+  ⎿    jppblank (production)
+    Target: wpe:w7579/jppblank@production
+    Domain: jppblank.wpenginepowered.com
+  jppblankdev (development)
+    Target: wpe:w7579/jppblankdev@development
+    Domain: jppblankdev.wpenginepowered.com
+Found it — it's a WPE production site. Let me run the site diagnosis.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe diagnose jppblank 2>&1","description":"Diagnose jppblank WPE site"})
+  ⎿  Diagnostic: jppblank
+────────────────────────────────────────
+  Environment: production
+
+  ✅ Has primary domain
+  ❌ SSL certificate
+  ❌ Recent backup
+Two issues found. Let me get details on both.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe ssl jppblank 2>&1","description":"Check SSL status for jppblank"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe domains jppblank 2>&1","description":"Check domains for jppblank"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe install jppblank 2>&1","description":"Get install details for jppblank"})
+  ⎿  Exit code 1
+
+❌ CAPI GET /installs/jppblank/ssl_certificates failed: HTTP 404
+  ⎿  Exit code 1
+
+❌ CAPI GET /installs/jppblank/domains failed: HTTP 404
+  ⎿  jppblank
+────────────────────────────────────────
+Environment:  production
+Account:      w7579
+Domain:       jppblank.wpenginepowered.com
+PHP:          8.2
+Target:       wpe:b97e432b-c10a-4f0a-9ce7-55cedd575099/jppblank@production
+The domains/SSL APIs return 404 — no custom domains configured, no SSL cert provisioned. Let me check if the site itself responds and look for backup info.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp --site jppblank core version 2>&1","description":"Check WP core version via WP-CLI to see if site respo)
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe go-live-check jppblank jppblank.wpenginepowered.com 2>&1","description":"Run go-live check on jppblank)
+  ⎿  Exit code 1
+error: unknown option '--site'
+  ⎿  Exit code 1
+
+❌ CAPI GET /installs/jppblank/domains failed: HTTP 404
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp jppblank core version 2>&1","description":"Check WP core version on jppblank"})
+
+⏺ Bash({"command":"curl -sI \"https://jppblank.wpenginepowered.com\" 2>&1 | head -20","description":"Check HTTP response from jppblank"})
+  ⎿  Exit code 1
+error: unknown command 'jppblank'
+  ⎿  HTTP/2 200 
+date: Sun, 26 Apr 2026 15:38:05 GMT
+content-type: text/html; charset=UTF-8
+server: cloudflare
+vary: Accept-Encoding
+vary: Accept-Encoding
+vary: Accept-Encoding
+vary: Accept-Encoding,Cookie
+link: <https://jppblank.wpenginepowered.com/index.php?rest_route=/>; rel="https://api.w.org/"
+x-powered-by: WP Engine
+x-cacheable: SHORT
+cache-control: max-age=600, must-revalidate
+x-cache: MISS
+x-cache-group: normal
+set-cookie: __cf_bm=cHYYzcFTxfdNNujJHnOfUwn18FrWnsG8Dn9IZg5OvxM-1777
+The site returns HTTP 200, so it's reachable. Let me check what it's actually serving.
+
+⏺ Bash({"command":"curl -s \"https://jppblank.wpenginepowered.com\" 2>&1 | head -50","description":"Check what content jppblank is serving"})
+  ⎿  <!DOCTYPE html>
+<html lang="en-US" class="no-js">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="profile" href="http://gmpg.org/xfn/11">
+	<link rel="pingback" href="https://jppblank.wpenginepowered.com/xmlrpc.php">
+
+	<title>Jeremy Pollock Site &#8211; Your SUPER-powered WP Engine Site</title>
+<meta name='robots' content='noindex, nofollow' />
+<script>document.documentElement.className = document.documentElement.className.replace("
+The site loads fine publicly (HTTP 200, WordPress serving content). Let me check if there's a WP-level issue.
+
+⏺ Bash({"command":"curl -s \"https://jppblank.wpenginepowered.com/wp-json/wp/v2\" 2>&1 | head -5","description":"Check WP REST API status"})
+
+⏺ Bash({"command":"curl -sI \"https://jppblank.wpenginepowered.com/wp-admin/\" 2>&1 | head -10","description":"Check WP admin redirect status"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe account w7579 2>&1","description":"Check WPE account status"})
+  ⎿  (Bash completed with no output)
+  ⎿  HTTP/2 302 
+date: Sun, 26 Apr 2026 15:39:25 GMT
+content-type: text/html; charset=UTF-8
+location: https://jppblank.wpenginepowered.com/wp-login.php?redirect_to=https%3A%2F%2Fjppblank.wpenginepowered.com%2Fwp-admin%2F&reauth=1
+server: cloudflare
+cache-control: no-cache, must-revalidate, max-age=0, no-store, private
+expires: Wed, 11 Jan 1984 05:00:00 GMT
+status: 302 Found
+x-powered-by: WP Engine
+x-redirect-by: WordPress
+  ⎿  Exit code 1
+
+❌ CAPI GET /accounts/w7579 failed: HTTP 404
+The WP REST API returned empty and the account ID `w7579` isn't found in CAPI. Let me try the UUID account ID from the install data.
+
+⏺ Bash({"command":"curl -s \"https://jppblank.wpenginepowered.com/index.php?rest_route=/wp/v2\" 2>&1 | python3 -m json.tool 2>/dev/null | head -20","description":"Check WP REST API via query string route"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe account b97e432b-c10a-4f0a-9ce7-55cedd575099 2>&1","description":"Check WPE account by UUID"})
+  ⎿  {
+    "namespace": "wp/v2",
+    "routes": {
+        "/wp/v2": {
+            "namespace": "wp/v2",
+            "methods": [
+                "GET"
+            ],
+            "endpoints": [
+                {
+                    "methods": [
+                        "GET"
+                    ],
+                    "args": {
+                        "namespace": {
+                            "default": "wp/v2",
+                            "required": false
+                        },
+                   
+  ⎿  Account: w7579
+────────────────────────────────────────
+  ID:      b97e432b-c10a-4f0a-9ce7-55cedd575099
+  Name:    w7579
+Found the root cause candidate — the REST API link uses `index.php?rest_route=` which means pretty permalinks are disabled. Let me confirm with WP health check.
+
+⏺ Bash({"command":"curl -s \"https://jppblank.wpenginepowered.com/index.php?rest_route=/wp-site-health/v1/tests/loopback-requests\" 2>&1 | python3 -m json.tool 2>/dev/null | head -30","description":"Check WP)
+
+⏺ Bash({"command":"curl -s \"https://jppblank.wpenginepowered.com/?p=1\" -I 2>&1 | head -5","description":"Check if pretty permalinks work"})
+
+⏺ Bash({"command":"curl -s \"https://jppblank.wpenginepowered.com/wp-json/\" 2>&1 | python3 -m json.tool 2>/dev/null | head -5","description":"Confirm /wp-json/ pretty permalink structure"})
+  ⎿  {
+    "code": "rest_forbidden",
+    "message": "Sorry, you are not allowed to do that.",
+    "data": {
+        "status": 401
+    }
+}
+  ⎿  HTTP/2 200 
+date: Sun, 26 Apr 2026 15:39:58 GMT
+content-type: text/html; charset=UTF-8
+server: cloudflare
+vary: Accept-Encoding
+  ⎿  (Bash completed with no output)
+Confirmed: `/wp-json/` returns empty — pretty permalinks are disabled. Here's the full picture:
+
+**What I found with jppblank:**
+
+1. **Pretty permalinks are disabled** — the REST API link in the page source uses `index.php?rest_route=/` instead of the standard `/wp-json/` path. The clean URL endpoint returns nothing, so any plugin or integration that hits `/wp-json/` won't work. This is likely why things feel broken.
+
+2. **No recent backup** — `nexus wpe diagnose` flagged this. Either WPE backups aren't running or the site hasn't had activity that triggers one.
+
+3. **No SSL cert in CAPI** (minor) — no custom domain configured; the site just uses the default `jppblank.wpenginepowered.com` wildcard cert, which works fine in the browser but shows up as a gap in the diagnostic.
+
+**The site itself is up** — HTTP 200, WordPress serving full HTML, WP admin login redirecting correctly.
+
+**Root cause:** Go to the WP admin → Settings → Permalinks, save any permalink structure (e.g. Post name). That will flush the rewrite rules and enable `/wp-json/`. You can also fix it via WP-CLI if you have SSH access to the WPE environment:
+
+```bash
+wp rewrite structure '/%postname%/' --hard
+wp rewrite flush
+```
+
+The pretty permalinks issue would break nexus AI features, REST API-dependent plugins, and make URLs look like `?p=123` instead of clean paths.
+
+--- FINAL RESULT ---
+Confirmed: `/wp-json/` returns empty — pretty permalinks are disabled. Here's the full picture:
+
+**What I found with jppblank:**
+
+1. **Pretty permalinks are disabled** — the REST API link in the page source uses `index.php?rest_route=/` instead of the standard `/wp-json/` path. The clean URL endpoint returns nothing, so any plugin or integration that hits `/wp-json/` won't work. This is likely why things feel broken.
+
+2. **No recent backup** — `nexus wpe diagnose` flagged this. Either WPE backups aren't running or the site hasn't had activity that triggers one.
+
+3. **No SSL cert in CAPI** (minor) — no custom domain configured; the site just uses the default `jppblank.wpenginepowered.com` wildcard cert, which works fine in the browser but shows up as a gap in the diagnostic.
+
+**The site itself is up** — HTTP 200, WordPress serving full HTML, WP admin login redirecting correctly.
+
+**Root cause:** Go to the WP admin → Settings → Permalinks, save any permalink structure (e.g. Post name). That will flush the rewrite rules and enable `/wp-json/`. You can also fix it via WP-CLI if you have SSH access to the WPE environment:
+
+```bash
+wp rewrite structure '/%postname%/' --hard
+wp rewrite flush
+```
+
+The pretty permalinks issue would break nexus AI features, REST API-dependent plugins, and make URLs look like `?p=123` instead of clean paths.

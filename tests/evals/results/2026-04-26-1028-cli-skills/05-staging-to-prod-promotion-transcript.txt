@@ -1,0 +1,164 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 05-staging-to-prod-promotion
+Mode: cli-skills
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 121.8s
+Tool calls: 14
+Cost: $0.7010
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Promote the jppwpeplugistg (staging) install to jppwpeplugin (production) in the wpeplugintest site. Make sure production has a backup first.
+
+I'll start by getting the install details for the wpeplugintest site and checking available WPE commands.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe --help 2>&1 | head -60","description":"Check available WPE commands"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe portfolio 2>&1 | head -80","description":"Get WPE portfolio to find account/install IDs"})
+  ⎿  Usage: nexus wpe [options] [command]
+
+Manage WP Engine accounts and installs
+
+Options:
+  -h, --help                                           display help for command
+
+Commands:
+  accounts [options]                                   List WP Engine accounts
+  installs [options] [account]                         List installs for an account (or all accounts)
+  install [options] <installId>                        Get details about a specific install
+  backup [options] <target>                      
+  ⎿  Portfolio Overview — 2026-04
+──────────────────────────────────────────────────
+  Accounts:  10
+  Installs:  299
+  Visits:    444,276
+  Bandwidth: 755.96 GB
+
+By Account (sorted by visits):
+──────────────────────────────────────────────────────────────────────
+  Account                    Installs   Visits       Bandwidth
+──────────────────────────────────────────────────────────────────────
+  getflywheel                5          290,500      746.89 GB
+  esmy9dign4hoqz             73         95,
+Good — there's a `promote` command. Now let me find the wpeplugintest site and its installs.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe sites 2>&1 | grep -i \"wpeplugin\" -A 3 -B 3","description":"Find wpeplugintest site"})
+  ⎿    For UX Demo                    5df4d67b-0214-4cb9-bf7c-9d3caa9801bd [object Object]
+  transfer test                  cafd74c9-6969-4d22-b762-1dd93bc26c84 [object Object]
+  My WordPress Site              a63f38e3-d564-46c7-8900-d1270474dff7 [object Object]
+  wpeplugintest                  38e66f39-13d5-4eda-ae55-ba8083724bf2 [object Object]
+  wpe-atlas-sandbox              d7a39279-368e-41ca-81c8-9cb25a1dad77 [object Object]
+  transfersite23098urfojdnposdjn 8e50aff3-eda2-461d-bc75-db21dda6bafc 
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe installs 38e66f39-13d5-4eda-ae55-ba8083724bf2 2>&1","description":"List installs for wpeplugintest sit)
+  ⎿  WP Engine Installs:
+  (none)
+Let me try finding the installs by name directly.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe installs --help 2>&1","description":"Check installs command options"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe install jppwpeplugin 2>&1; node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/ne)
+  ⎿  Usage: nexus wpe installs [options] [account]
+
+List installs for an account (or all accounts)
+
+Options:
+  --json      Output as JSON
+  -h, --help  display help for command
+  ⎿  jppwpeplugin
+────────────────────────────────────────
+Environment:  production
+Account:      w7579
+Domain:       jppwpeplugin.wpenginepowered.com
+PHP:          8.2
+Target:       wpe:b97e432b-c10a-4f0a-9ce7-55cedd575099/jppwpeplugin@production
+
+
+jppwpeplugistg
+────────────────────────────────────────
+Environment:  staging
+Account:      w7579
+Domain:       jppwpeplugistg.wpenginepowered.com
+PHP:          8.2
+Target:       wpe:b97e432b-c10a-4f0a-9ce7-55cedd575099/jppwpeplugistg@staging
+Got both installs. Now I need their UUIDs for the promote command. Let me get the full details.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe install jppwpeplugin --json 2>&1; echo \"---\"; node /Users/jeremy.pollock/development/wpengine/local-)
+  ⎿  {
+  "id": "74123063-1f21-4080-b983-aaa5c95ed1e2",
+  "name": "jppwpeplugin",
+  "account": "b97e432b-c10a-4f0a-9ce7-55cedd575099",
+  "accountName": "w7579",
+  "environment": "production",
+  "domain": "jppwpeplugin.wpenginepowered.com",
+  "phpVersion": "8.2",
+  "wpVersion": null
+}
+---
+{
+  "id": "3a4b72ba-3aba-4753-b8ae-419e1956651d",
+  "name": "jppwpeplugistg",
+  "account": "b97e432b-c10a-4f0a-9ce7-55cedd575099",
+  "accountName": "w7579",
+  "environment": "staging",
+  "domain": "jppwpeplugistg.wpen
+Got the IDs. Now I'll create a verified backup of production first, then promote.
+
+- **Production** (`jppwpeplugin`): `74123063-1f21-4080-b983-aaa5c95ed1e2`
+- **Staging** (`jppwpeplugistg`): `3a4b72ba-3aba-4753-b8ae-419e1956651d`
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe backup-verify --help 2>&1","description":"Check backup-verify options"})
+  ⎿  Usage: nexus wpe backup-verify [options] <installId>
+
+Create a backup and poll until complete
+
+Options:
+  --description <text>  Backup description
+  --json                Output as JSON
+  -h, --help            display help for command
+
+⏺ TodoWrite({"todos":[{"content":"Create and verify production backup (jppwpeplugin)","status":"in_progress","activeForm":"Creating and verifying production backup"},{"content":"Promote staging to production","st)
+  ⎿  Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe backup-verify 74123063-1f21-4080-b983-aaa5c95ed1e2 --description \"Pre-promote backup before staging p)
+  ⎿  Creating backup and polling for completion...
+
+✅ Backup completed
+   ID: 125a5160-be27-410c-9aed-2f4368a5f6df
+
+⏺ TodoWrite({"todos":[{"content":"Create and verify production backup (jppwpeplugin)","status":"completed","activeForm":"Creating and verifying production backup"},{"content":"Promote staging to production","stat)
+  ⎿  Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable
+Production backup is confirmed (`125a5160-be27-410c-9aed-2f4368a5f6df`). Now promoting staging → production.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe promote --help 2>&1","description":"Check promote command options"})
+  ⎿  Usage: nexus wpe promote [options] <sourceInstallId> <destInstallId>
+
+Promote (copy) one WP Engine install to another
+
+Options:
+  --no-database  Exclude database from promotion
+  --confirm      Confirm promotion (required for destructive action)
+  -h, --help     display help for command
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe promote 3a4b72ba-3aba-4753-b8ae-419e1956651d 74123063-1f21-4080-b983-aaa5c95ed1e2 --confirm 2>&1","des)
+  ⎿  ✅ Promotion complete
+   Promotion started from 3a4b72ba-3aba-4753-b8ae-419e1956651d to 74123063-1f21-4080-b983-aaa5c95ed1e2
+
+⏺ TodoWrite({"todos":[{"content":"Create and verify production backup (jppwpeplugin)","status":"completed","activeForm":"Creating and verifying production backup"},{"content":"Promote staging to production","stat)
+  ⎿  Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable
+Done. Here's a summary of what happened:
+
+1. **Backup created** — Production (`jppwpeplugin`) backed up with ID `125a5160-be27-410c-9aed-2f4368a5f6df`. Polled until confirmed complete before proceeding.
+2. **Promote completed** — `jppwpeplugistg` (staging) → `jppwpeplugin` (production) promoted successfully.
+
+WP Engine handles the actual copy asynchronously on their end, but the promotion job has been initiated. The rollback point (that backup) is available if anything looks off on production.
+
+--- FINAL RESULT ---
+Done. Here's a summary of what happened:
+
+1. **Backup created** — Production (`jppwpeplugin`) backed up with ID `125a5160-be27-410c-9aed-2f4368a5f6df`. Polled until confirmed complete before proceeding.
+2. **Promote completed** — `jppwpeplugistg` (staging) → `jppwpeplugin` (production) promoted successfully.
+
+WP Engine handles the actual copy asynchronously on their end, but the promotion job has been initiated. The rollback point (that backup) is available if anything looks off on production.

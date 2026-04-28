@@ -1,0 +1,96 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 07-content-search
+Mode: cli-skills
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 29.8s
+Tool calls: 2
+Cost: $0.1080
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites have content about WooCommerce or e-commerce? Show me the relevant posts.
+
+Searching all local sites for WooCommerce and e-commerce content.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js content search-all \"WooCommerce\" 2>&1"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js content search-all \"e-commerce\" 2>&1"})
+  ⎿  Cross-Site Search: "WooCommerce"
+──────────────────────────────────────────────────
+  wpe-e270b92b-d2ef-40c1-a45d-32147c650ce1: My account
+    Type: page | Score: 0.73
+    [woocommerce_my_account]
+
+  wpe-e49cae08-4b99-45d1-9fca-86be5aa2bcba: My account
+    Type: page | Score: 0.72
+    [woocommerce_my_account]
+
+  wpe-d609c75c-4a3b-477b-b0c8-0ac35ec8928e: My account
+    Type: page | Score: 0.72
+    [woocommerce_my_account]
+
+  wpe-d6b1a946-c7da-41d6-80f4-5565e5c3bf1f: My account
+    Type: page | Sc
+  ⎿  Cross-Site Search: "e-commerce"
+──────────────────────────────────────────────────
+  Faker Incorporated: Services
+    Type: page | Score: 0.52
+    From strategy to implementation, our service portfolio covers every stage of your digital journey. What We Offer Digital Strategy Roadmaps built around your goals, your market, and your team's capabil
+
+  Faker Incorporated: How to Get More Out of Your WooCommerce Store
+    Type: post | Score: 0.52
+    WooCommerce is the most popular e-commerce platfor
+Here's what I found across your local sites:
+
+---
+
+## Sites with WooCommerce / E-commerce Content
+
+### Most Relevant: **Faker Incorporated**
+This site has actual e-commerce *content* (not just WooCommerce boilerplate):
+
+- **Post: "How to Get More Out of Your WooCommerce Store"** — discusses WooCommerce as an e-commerce platform with actionable advice for clients
+- **Page: Services** — mentions digital strategy including e-commerce work
+- **Pages: Shop, Cart** — active WooCommerce store pages
+
+### Sites with WooCommerce Installed (boilerplate pages only)
+These sites have WooCommerce active but no substantive content — just the default shortcode pages (`[woocommerce_my_account]`, `[woocommerce_cart]`, Shop):
+
+- **The Curated Shelf** — has a Shop page
+- **faker-incorporated** (local copy) — Shop + Cart
+- **nexustestsite1** — Shop page
+- **nexus-test-site** — Shop page
+- Many **wpe-\*** installs — all have the standard WooCommerce My Account + Cart pages
+
+---
+
+**Bottom line:** "Faker Incorporated" is the only site with real e-commerce editorial content. The rest have WooCommerce installed but only auto-generated store pages. If you want to dig into the Faker Incorporated post, I can pull the full content.
+
+--- FINAL RESULT ---
+Here's what I found across your local sites:
+
+---
+
+## Sites with WooCommerce / E-commerce Content
+
+### Most Relevant: **Faker Incorporated**
+This site has actual e-commerce *content* (not just WooCommerce boilerplate):
+
+- **Post: "How to Get More Out of Your WooCommerce Store"** — discusses WooCommerce as an e-commerce platform with actionable advice for clients
+- **Page: Services** — mentions digital strategy including e-commerce work
+- **Pages: Shop, Cart** — active WooCommerce store pages
+
+### Sites with WooCommerce Installed (boilerplate pages only)
+These sites have WooCommerce active but no substantive content — just the default shortcode pages (`[woocommerce_my_account]`, `[woocommerce_cart]`, Shop):
+
+- **The Curated Shelf** — has a Shop page
+- **faker-incorporated** (local copy) — Shop + Cart
+- **nexustestsite1** — Shop page
+- **nexus-test-site** — Shop page
+- Many **wpe-\*** installs — all have the standard WooCommerce My Account + Cart pages
+
+---
+
+**Bottom line:** "Faker Incorporated" is the only site with real e-commerce editorial content. The rest have WooCommerce installed but only auto-generated store pages. If you want to dig into the Faker Incorporated post, I can pull the full content.

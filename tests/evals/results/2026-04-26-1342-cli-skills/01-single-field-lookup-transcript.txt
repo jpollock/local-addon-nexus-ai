@@ -1,0 +1,33 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: cli-skills
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 44.0s
+Tool calls: 4
+Cost: $0.8755
+
+============================================================
+TURN 1
+============================================================
+PROMPT: What WordPress version is jppblank running?
+
+Reading the nexus-wp skill to get the right command syntax.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-wp/SKILL.md"})
+  ⎿  File does not exist. Note: your current working directory is /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai.
+
+⏺ Glob({"pattern":".claude/skills/*/SKILL.md"})
+  ⎿  No files found
+The skill files aren't present (they show as deleted in git status). Let me run the wp core version command directly.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp core version --site jppblank 2>&1"})
+  ⎿  Exit code 1
+error: unknown option '--site'
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp core version jppblank 2>&1"})
+  ⎿  WordPress 6.9.4 _(synced 2d ago — run `nexus wpe sync` to refresh)_
+**jppblank** is running **WordPress 6.9.4** (synced 2 days ago).
+
+--- FINAL RESULT ---
+**jppblank** is running **WordPress 6.9.4** (synced 2 days ago).

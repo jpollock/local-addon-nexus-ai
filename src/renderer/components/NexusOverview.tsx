@@ -558,7 +558,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     this.searchTimer = setTimeout(async () => {
       try {
         const result = await this.props.electron.ipcRenderer.invoke(
-          IPC_CHANNELS.SEARCH, query, undefined, 10,
+          IPC_CHANNELS.SEARCH_UNIFIED, { query, options: { limit: 20 } },
         );
         if (!this.mounted) return;
         this.setState({ searchResults: result?.results ?? [], searching: false });
@@ -1479,6 +1479,47 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     );
   }
 
+  renderSiteContentSummary(): React.ReactNode {
+    const { sites, indexEntries } = this.state;
+    const localSites = sites.filter((s) => s.source === 'local' || !s.isWpe);
+    if (localSites.length === 0) return null;
+
+    const entryBySiteId = new Map(indexEntries.map((e) => [e.siteId, e]));
+
+    return React.createElement('div', {
+      style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: '10px', overflow: 'hidden', marginBottom: '0' },
+    },
+      ...localSites.map((site, i) => {
+        const entry = entryBySiteId.get(site.id);
+        const isIndexed = entry?.state === 'indexed';
+        const docCount = entry?.documentCount ?? 0;
+        const lastIndexed = entry?.lastIndexed;
+        const daysAgo = lastIndexed ? Math.floor((Date.now() - lastIndexed) / 86400000) : null;
+        const recencyLabel = daysAgo === null ? null : daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo}d ago`;
+
+        return React.createElement('div', {
+          key: site.id,
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            padding: '9px 14px',
+            borderBottom: i < localSites.length - 1 ? '1px solid var(--nxai-card-border, #e5e7eb)' : 'none',
+            gap: '10px',
+          },
+        },
+          React.createElement('span', {
+            style: { width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, backgroundColor: isIndexed ? UI_COLORS.WPE_BRAND : 'var(--nxai-card-border)' },
+          }),
+          React.createElement('span', { style: { flex: 1, fontSize: '13px', fontWeight: 600, color: 'var(--nxai-card-text)' } }, site.name),
+          isIndexed
+            ? React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)' } },
+                `${docCount} post${docCount !== 1 ? 's' : ''}${recencyLabel ? ` · indexed ${recencyLabel}` : ''}`)
+            : React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub)', fontStyle: 'italic' } }, 'Not indexed'),
+        );
+      }),
+    );
+  }
+
   renderOverviewTab(): React.ReactNode {
     const { stats } = this.state;
     if (!stats) return null;
@@ -1492,7 +1533,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       this.renderMcpPanel(),
 
       this.renderSectionLabel('Sites'),
-      React.createElement('div', { style: cardContainerStyle },
+      this.renderSiteContentSummary(),
+      React.createElement('div', { style: { ...cardContainerStyle, marginTop: '12px' } },
         this.renderLocalSitesCard(stats),
         this.renderWpeConnectedCard(stats),
         this.renderRemoteSitesCard(stats),
@@ -1541,7 +1583,170 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     );
   }
 
-renderTabBar(): React.ReactNode {
+renderSearchBar(): React.ReactNode {
+    const { searchQuery, searching, indexEntries, sites, indexAllAutoRunning } = this.state;
+    const localSites = sites.filter((s) => s.source === 'local' || !s.isWpe);
+    const indexedCount = indexEntries.filter((e) => e.state === 'indexed').length;
+    const totalLocal = localSites.length;
+    const noneIndexed = totalLocal > 0 && indexedCount === 0;
+
+    return React.createElement('div', {
+      style: { marginBottom: '16px' },
+    },
+      // Search input row
+      React.createElement('div', {
+        style: { position: 'relative' as const, display: 'flex', alignItems: 'center', gap: '10px' },
+      },
+        React.createElement('div', {
+          style: { position: 'relative' as const, flex: 1 },
+        },
+          React.createElement('span', {
+            style: { position: 'absolute' as const, left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--nxai-card-sub)', pointerEvents: 'none' as const, fontSize: '15px' },
+          }, '🔍'),
+          React.createElement('input', {
+            type: 'text',
+            placeholder: noneIndexed ? 'Index your sites to search across all of them' : `Search across ${indexedCount} indexed site${indexedCount !== 1 ? 's' : ''}...`,
+            value: searchQuery,
+            disabled: noneIndexed,
+            onChange: this.handleSearch,
+            style: {
+              width: '100%',
+              padding: '10px 12px 10px 36px',
+              fontSize: '14px',
+              border: '1px solid var(--nxai-input-border, #d1d5db)',
+              borderRadius: '8px',
+              backgroundColor: noneIndexed ? 'var(--nxai-score-bg, #404040)' : 'var(--nxai-input-bg, #fff)',
+              color: 'var(--nxai-card-text)',
+              opacity: noneIndexed ? 0.6 : 1,
+              outline: 'none',
+              boxSizing: 'border-box' as const,
+            },
+          }),
+          searching && React.createElement('span', {
+            style: { position: 'absolute' as const, right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--nxai-card-sub)', fontSize: '12px' },
+          }, 'Searching...'),
+        ),
+        // Index status badge + CTA
+        totalLocal > 0 && React.createElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 },
+        },
+          React.createElement('span', {
+            style: { fontSize: '12px', color: noneIndexed ? UI_COLORS.STATUS_WARNING : 'var(--nxai-card-sub)', whiteSpace: 'nowrap' as const },
+          }, noneIndexed ? `${totalLocal} sites not indexed` : `${indexedCount} / ${totalLocal} indexed`),
+          React.createElement('button', {
+            onClick: this.handleIndexAllAuto,
+            disabled: indexAllAutoRunning,
+            style: {
+              padding: '8px 14px',
+              fontSize: '12px',
+              fontWeight: 600,
+              borderRadius: '6px',
+              border: 'none',
+              cursor: indexAllAutoRunning ? 'not-allowed' : 'pointer',
+              backgroundColor: noneIndexed ? UI_COLORS.WPE_BRAND : 'var(--nxai-card-border, #e5e7eb)',
+              color: noneIndexed ? '#fff' : 'var(--nxai-card-text)',
+              whiteSpace: 'nowrap' as const,
+            },
+          }, indexAllAutoRunning ? 'Indexing...' : noneIndexed ? 'Index All Sites' : 'Re-index All'),
+        ),
+      ),
+    );
+  }
+
+  renderSearchResults(): React.ReactNode {
+    const { searchQuery, searchResults, searching, sites } = this.state;
+    const ipc = this.props.electron.ipcRenderer;
+
+    // Build domain map for WP Admin links
+    const domainBySiteId = new Map<string, string>();
+    for (const s of sites) {
+      if (s.domain) domainBySiteId.set(s.id, s.domain);
+    }
+
+    const openWpAdmin = (siteId: string) => {
+      const domain = domainBySiteId.get(siteId);
+      if (domain) this.props.electron.shell?.openExternal(`http://${domain}/wp-admin/`);
+    };
+
+    const openInLocal = (siteId: string) => {
+      ipc.invoke(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, { siteId });
+    };
+
+    if (searching) {
+      return React.createElement('div', {
+        style: { padding: '40px', textAlign: 'center' as const, color: 'var(--nxai-card-sub)' },
+      }, 'Searching...');
+    }
+
+    if (searchQuery.trim() && searchResults.length === 0) {
+      return React.createElement('div', {
+        style: { padding: '40px', textAlign: 'center' as const, color: 'var(--nxai-card-sub)' },
+      }, `No results for "${searchQuery}"`);
+    }
+
+    // Group results by site
+    const bySite = new Map<string, { siteName: string; siteId: string; results: UISearchResult[] }>();
+    for (const r of searchResults) {
+      if (!bySite.has(r.siteId)) bySite.set(r.siteId, { siteName: r.siteName, siteId: r.siteId, results: [] });
+      bySite.get(r.siteId)!.results.push(r);
+    }
+
+    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: '16px' } },
+      ...Array.from(bySite.values()).map((group) =>
+        React.createElement('div', {
+          key: group.siteId,
+          style: { border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: '10px', overflow: 'hidden' },
+        },
+          // Site header
+          React.createElement('div', {
+            style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--nxai-score-bg, #f3f4f6)', borderBottom: '1px solid var(--nxai-card-border, #e5e7eb)' },
+          },
+            React.createElement('span', {
+              style: { fontSize: '13px', fontWeight: 700, color: 'var(--nxai-card-text)' },
+            }, group.siteName),
+            React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+              React.createElement('button', {
+                onClick: () => openInLocal(group.siteId),
+                style: { padding: '4px 10px', fontSize: '11px', borderRadius: '5px', border: '1px solid var(--nxai-card-border)', backgroundColor: 'transparent', color: UI_COLORS.WPE_BRAND, cursor: 'pointer', fontWeight: 600 },
+              }, 'Open in Local'),
+              domainBySiteId.has(group.siteId) && React.createElement('button', {
+                onClick: () => openWpAdmin(group.siteId),
+                style: { padding: '4px 10px', fontSize: '11px', borderRadius: '5px', border: '1px solid var(--nxai-card-border)', backgroundColor: 'transparent', color: 'var(--nxai-card-sub)', cursor: 'pointer', fontWeight: 600 },
+              }, 'WP Admin'),
+            ),
+          ),
+          // Results list
+          ...group.results.map((r, i) =>
+            React.createElement('div', {
+              key: r.id,
+              style: {
+                padding: '10px 14px',
+                borderBottom: i < group.results.length - 1 ? '1px solid var(--nxai-card-border, #e5e7eb)' : 'none',
+                display: 'flex',
+                flexDirection: 'column' as const,
+                gap: '3px',
+              },
+            },
+              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                React.createElement('span', {
+                  style: { fontSize: '13px', fontWeight: 600, color: 'var(--nxai-card-text)', flex: 1 },
+                }, r.title || '(untitled)'),
+                React.createElement('span', {
+                  style: { fontSize: '10px', padding: '2px 6px', borderRadius: '4px', backgroundColor: 'var(--nxai-score-bg)', color: 'var(--nxai-card-sub)', textTransform: 'uppercase' as const, fontWeight: 600, letterSpacing: '0.5px' },
+                }, r.postType),
+              ),
+              React.createElement('p', {
+                style: { fontSize: '12px', color: 'var(--nxai-card-sub)', margin: 0, lineHeight: 1.4,
+                  overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const },
+              }, r.content),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  renderTabBar(): React.ReactNode {
     const { activeTab } = this.state;
     const tabs: { key: NexusOverviewState['activeTab']; label: string }[] = [
       { key: 'overview', label: 'Overview' },
@@ -2421,17 +2626,18 @@ renderTabBar(): React.ReactNode {
     return React.createElement('div', {
       style: { display: 'flex', flexDirection: 'column' as const, height: '100%', overflow: 'hidden', color: 'var(--nxai-card-text)', userSelect: 'text' as const },
     },
-      // Header: title + tab bar (fixed)
+      // Header: title + search bar + tab bar (fixed)
       React.createElement('div', {
         style: { flexShrink: 0, padding: '24px 32px 0' },
       },
         React.createElement('h1', {
           style: { fontSize: '22px', fontWeight: 600, marginBottom: '16px', color: 'var(--nxai-card-text)' },
         }, 'Nexus AI Dashboard'),
-        this.renderTabBar(),
+        stats ? this.renderSearchBar() : null,
+        !this.state.searchQuery.trim() ? this.renderTabBar() : null,
       ),
 
-      // Content: each tab fills remaining height and scrolls independently
+      // Content: search results when query active, otherwise tab content
       React.createElement('div', {
         style: { flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' as const },
       },
@@ -2446,7 +2652,7 @@ renderTabBar(): React.ReactNode {
             : stats
               ? React.createElement('div', {
                   style: { flex: 1, overflowY: 'auto' as const, padding: '24px 32px', display: 'flex', flexDirection: 'column' as const },
-                }, this.renderActiveTab())
+                }, this.state.searchQuery.trim() ? this.renderSearchResults() : this.renderActiveTab())
               : null,
       ),
     );

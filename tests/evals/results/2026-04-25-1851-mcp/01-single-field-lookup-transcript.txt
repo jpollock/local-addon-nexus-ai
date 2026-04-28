@@ -1,0 +1,50 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: mcp
+Date: 2026-04-25
+Model: claude-sonnet-4-6
+Duration: 80.0s
+Tool calls: 4
+Cost: $0.4177
+
+============================================================
+TURN 1
+============================================================
+PROMPT: What WordPress version is jppblank running?
+
+I'll check the WordPress version for jppblank using the MCP tool.
+
+⏺ Agent({"description":"Check WP version for jppblank","prompt":"Call the mcp__local-nexus-ai__wp_core_version tool with site=\"jppblank\" and return the result. Do not use any bash or file tools — only the M)
+
+⏺ mcp__local-nexus-ai__wp_core_version({"site":"jppblank"})
+  ⎿  <tool_use_error>Error: No such tool available: mcp__local-nexus-ai__wp_core_version</tool_use_error>
+  ⎿  The tool `mcp__local-nexus-ai__wp_core_version` is not available in this session. The MCP server `local-nexus-ai` is not currently connected or registered as an available tool.
+
+This could be because:
+
+1. The Nexus AI addon MCP server is not running — Local may not be running, or the addon may not be active.
+2. The MCP server is not configured in the Claude Code session's MCP tool registry.
+
+To diagnose: run `nexus doctor` from the terminal (outside this session, since you've restricted tool use
+The subagent can't access MCP tools — let me call it directly.
+
+⏺ mcp__local-nexus-ai__wp_core_version({"site":"jppblank"})
+  ⎿  <tool_use_error>Error: No such tool available: mcp__local-nexus-ai__wp_core_version</tool_use_error>
+The `local-nexus-ai` MCP server isn't connected in this session. Let me try the other available tools to see what's reachable.
+
+⏺ mcp__local-nexus-ai__local_list_sites({})
+  ⎿  <tool_use_error>Error: No such tool available: mcp__local-nexus-ai__local_list_sites</tool_use_error>
+The `local-nexus-ai` MCP server isn't connected in this Claude Code session — none of its tools are reachable. This is expected since Claude Code doesn't automatically connect to the Nexus AI MCP server (that's a Claude Desktop / MCP client concern).
+
+To get the WordPress version for jppblank, you have a couple of options:
+
+1. **From the terminal:** `nexus wp jppblank -- core version`
+2. **Run `nexus doctor`** to confirm the MCP server is healthy, then query from Claude Desktop where the `local-nexus-ai` MCP server is configured.
+
+--- FINAL RESULT ---
+The `local-nexus-ai` MCP server isn't connected in this Claude Code session — none of its tools are reachable. This is expected since Claude Code doesn't automatically connect to the Nexus AI MCP server (that's a Claude Desktop / MCP client concern).
+
+To get the WordPress version for jppblank, you have a couple of options:
+
+1. **From the terminal:** `nexus wp jppblank -- core version`
+2. **Run `nexus doctor`** to confirm the MCP server is healthy, then query from Claude Desktop where the `local-nexus-ai` MCP server is configured.

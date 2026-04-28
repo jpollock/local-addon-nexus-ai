@@ -1,0 +1,22 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: mcp
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 17.4s
+Tool calls: 1
+Cost: $0.4327
+
+============================================================
+TURN 1
+============================================================
+PROMPT: What WordPress version is jppblank running?
+
+Checking the WordPress version for jppblank now.
+
+⏺ mcp__local-nexus-ai__wp_core_version({"site":"jppblank"})
+  ⎿  WordPress 6.9.4 _(synced 2d ago — run `nexus wpe sync` to refresh)_
+jppblank is running **WordPress 6.9.4** (data synced 2 days ago).
+
+--- FINAL RESULT ---
+jppblank is running **WordPress 6.9.4** (data synced 2 days ago).

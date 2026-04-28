@@ -1,0 +1,55 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: cli-skills
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 42.7s
+Tool calls: 5
+Cost: $0.6526
+
+============================================================
+TURN 1
+============================================================
+PROMPT: What WordPress version is jppblank running?
+
+Running `wp core version` on jppblank.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp jppblank core version"})
+  ⎿  Exit code 1
+error: unknown command 'jppblank'
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp --site=jppblank core version"})
+  ⎿  Exit code 1
+error: unknown option '--site=jppblank'
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp --help 2>&1 | head -30"})
+  ⎿  Usage: nexus wp [options] [command]
+
+Run WP-CLI commands on sites
+
+Options:
+  -h, --help                    display help for command
+
+Commands:
+  user-list [options] <target>  List WordPress users
+  option-get <target> <key>     Get WordPress option value
+  health [options] <target>     Check site health
+  plugin                        Manage WordPress plugins
+  theme                         Manage WordPress themes
+  core                          Manage WordPress core
+  db                       
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp core version --help 2>&1"})
+  ⎿  Usage: nexus wp core version [options] <target>
+
+Get WordPress version
+
+Options:
+  -h, --help  display help for command
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp core version jppblank"})
+  ⎿  WordPress 6.9.4 _(synced 2d ago — run `nexus wpe sync` to refresh)_
+**jppblank** is running **WordPress 6.9.4** (cached 2 days ago).
+
+--- FINAL RESULT ---
+**jppblank** is running **WordPress 6.9.4** (cached 2 days ago).

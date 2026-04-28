@@ -1,0 +1,555 @@
+=== eval-full started at Sun Apr 26 15:05:30 CDT 2026 ===
+=== Log: tests/evals/results/eval-full-2026-04-26-1505.log ===
+
+[1m[15:05:30] 1/11 — Build + rebuild native modules[0m
+
+STEP: [15:05:30] 1/11 — Build + rebuild native modules
+  Running: npm run build
+  tokenizer_config.json: already exists, skipping
+
+Model files ready in models/all-MiniLM-L6-v2-quantized/
+  Running: npm run rebuild
+- Searching dependency tree
+✔ Rebuild Complete
+  [0;32m✅ Build complete[0m
+  OK: Build complete
+
+[1m[15:06:15] 2/11 — Restore any stuck skills[0m
+
+STEP: [15:06:15] 2/11 — Restore any stuck skills
+  [0;32m✅ Skills state clean[0m
+  OK: Skills state clean
+
+[1m[15:06:15] 3/11 — Stop Local[0m
+
+STEP: [15:06:15] 3/11 — Stop Local
+  Killing Local processes...
+  Local.app not running
+  [0;32m✅ Local stopped[0m
+  OK: Local stopped
+
+[1m[15:06:18] 4/11 — Start Local, wait for GraphQL + MCP[0m
+
+STEP: [15:06:18] 4/11 — Start Local, wait for GraphQL + MCP
+  Opening /Applications/Local.app...
+  Waiting for GraphQL server (up to 60s)...
+  [0;32m✅ Local GraphQL up after 2s[0m
+  OK: Local GraphQL up after 2s
+  Waiting for MCP server (up to 30s)...
+  [0;32m✅ MCP server ready on port 10800 after 2s[0m
+  OK: MCP server ready on port 10800 after 2s
+
+[1m[15:06:25] 5/11 — Set CLI mode (skills ✅, MCP ⚫)[0m
+
+STEP: [15:06:25] 5/11 — Set CLI mode (skills ✅, MCP ⚫)
+  Before:
+
+  Claude Mode Status
+  ──────────────────
+  Skills:  ✅ on
+  MCP:     checking...
+  MCP:     ⚫ off
+
+→ CLI+Skills mode (no MCP)
+  MCP: already off
+  After:
+
+  Claude Mode Status
+  ──────────────────
+  Skills:  ✅ on
+  MCP:     checking...
+  MCP:     ⚫ off
+
+
+[1m[15:06:40] 6/11 — Run CLI eval (all 10 cases)[0m
+
+STEP: [15:06:40] 6/11 — Run CLI eval (all 10 cases)
+  Started at 15:06:40
+[1mChecking prerequisites...[0m
+  Starting nexus-e2e-cli-test-site...
+Starting site: nexus-e2e-cli-test-site@local...
+
+✅ Site started: nexus-e2e-cli-test-site
+   Status: running
+
+  [0;32m✅ nexus-e2e-cli-test-site started[0m
+
+[1mRunning CLI/Skills eval...[0m
+
+
+════════════════════════════════════════════════════════════
+NEXUS AI AUTOMATED EVAL RUNNER
+Mode: CLI-SKILLS | Cases: 10 | Model: claude-sonnet-4-6
+════════════════════════════════════════════════════════════
+
+Results → ~/development/wpengine/local-addon-nexus-ai/tests/evals/results/2026-04-26-1506-cli-skills
+
+
+[1/10] 01-single-field-lookup
+  Minimal single-fact lookup — baseline overhead measurement
+  Single-turn
+    Turn 1: "What WordPress version is jppblank running?..."
+  ✅ Done — $0.3390 | 2 tool calls | 29s
+
+[2/10] 02-fleet-version-drift
+  Fleet-scale read — find local sites behind on WordPress
+  Single-turn
+    Turn 1: "Which of my local WordPress sites are behind on the latest W..."
+  ✅ Done — $0.4691 | 11 tool calls | 121s
+
+[3/10] 03-domain-ssl-audit
+  Multi-account read — audit all WPE domains for SSL issues
+  Single-turn
+    Turn 1: "Check all domains across my WP Engine accounts — which ones ..."
+  ✅ Done — $0.8218 | 14 tool calls | 314s
+
+[4/10] 04-full-site-onboarding
+  Full multi-step onboarding — create local, pull from WPE, set up AI
+  Multi-turn (3 turns)
+    🧹 Cleaning up leftover site: eval-test-onboard
+    Turn 1: "Create a new local WordPress site called 'eval-test-onboard'..."
+    Turn 2: "Good. Now pull jpp0413p from WP Engine into it — files and d..."
+    Turn 3: "Set up AI on it using the gateway. Then tell me if it's heal..."
+  ✅ Done — $1.0959 | 33 tool calls | 272s
+
+[5/10] 05-staging-to-prod-promotion
+  Destructive with mandatory pre-flight — promote staging to production
+  Single-turn
+    Turn 1: "Promote the jppwpeplugistg (staging) install to jppwpeplugin..."
+  ✅ Done — $0.4727 | 14 tool calls | 106s
+
+[6/10] 06-diagnose-broken-site
+  Open-ended diagnostic — investigate why a site isn't working
+  Single-turn
+    Turn 1: "jppblank isn't loading properly. Can you figure out what's w..."
+  ✅ Done — $0.8130 | 29 tool calls | 276s
+
+[7/10] 07-content-search
+  Semantic content search across indexed local sites
+  Single-turn
+    Turn 1: "Which of my local sites have content about WooCommerce or e-..."
+  ✅ Done — $0.5863 | 2 tool calls | 31s
+
+[8/10] 08-bulk-plugin-update
+  Fleet-scale write with safety filter and mandatory dry-run
+  Single-turn
+    Turn 1: "Update all plugins across my local fleet — but only patch/mi..."
+  ✅ Done — $0.2003 | 7 tool calls | 51s
+
+[9/10] 09-gateway-cost-report
+  Internal analytics — gateway usage and cost breakdown
+  Single-turn
+    Turn 1: "How much have I spent through the AI gateway this month? Bre..."
+  ✅ Done — $0.2521 | 6 tool calls | 48s
+
+[10/10] 10-recover-bad-state
+  Ambiguous recovery — investigate and propose fix for unknown bad state
+  Single-turn
+    Turn 1: "I tried to push jppblank to WPE earlier and something went w..."
+  ✅ Done — $0.4003 | 16 tool calls | 176s
+
+════════════════════════════════════════════════════════════
+SUMMARY
+════════════════════════════════════════════════════════════
+Mode:         cli-skills
+Cases run:    10/10
+Total cost:   $5.4505
+Total tools:  134
+
+Per case:
+  ✅ 01-single-field-lookup              $0.3390 | 2 calls
+  ✅ 02-fleet-version-drift              $0.4691 | 11 calls
+  ✅ 03-domain-ssl-audit                 $0.8218 | 14 calls
+  ✅ 04-full-site-onboarding             $1.0959 | 33 calls
+  ✅ 05-staging-to-prod-promotion        $0.4727 | 14 calls
+  ✅ 06-diagnose-broken-site             $0.8130 | 29 calls
+  ✅ 07-content-search                   $0.5863 | 2 calls
+  ✅ 08-bulk-plugin-update               $0.2003 | 7 calls
+  ✅ 09-gateway-cost-report              $0.2521 | 6 calls
+  ✅ 10-recover-bad-state                $0.4003 | 16 calls
+
+Next: score quality dimensions with:
+  npx ts-node tests/evals/runner/score-eval.ts <transcript-file>
+════════════════════════════════════════════════════════════
+
+  [0;32m✅ CLI eval complete (15:06:40 → 15:30:40)[0m
+  OK: CLI eval complete (15:06:40 → 15:30:40)
+
+[1m[15:30:41] 7/11 — Set MCP mode (skills ⚫, MCP ✅)[0m
+
+STEP: [15:30:41] 7/11 — Set MCP mode (skills ⚫, MCP ✅)
+  Before:
+
+  Claude Mode Status
+  ──────────────────
+  Skills:  ✅ on
+  MCP:     checking...
+  MCP:     ⚫ off
+
+→ MCP-only mode (simulates Claude Desktop)
+  Global skills: off
+  Local skills:  off
+
+Running: claude mcp add local-nexus-ai -- node "/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/mcp-stdio.js"
+
+
+✅ local-nexus-ai added to Claude Code
+   No restart needed — takes effect immediately.
+
+  MCP: on
+  After:
+
+  Claude Mode Status
+  ──────────────────
+  Skills:  ⚫ off
+  MCP:     checking...
+  MCP:     ✅ on
+
+
+[1m[15:31:39] 8/11 — Run MCP eval (all 10 cases)[0m
+
+STEP: [15:31:39] 8/11 — Run MCP eval (all 10 cases)
+  Started at 15:31:39
+[1mChecking prerequisites...[0m
+  [0;32m✅ nexus-e2e-cli-test-site already running[0m
+  [1;33mSkills hidden for MCP eval (pure MCP mode)[0m
+
+[1mRunning MCP eval...[0m
+
+
+════════════════════════════════════════════════════════════
+NEXUS AI AUTOMATED EVAL RUNNER
+Mode: MCP | Cases: 10 | Model: claude-sonnet-4-6
+════════════════════════════════════════════════════════════
+
+Results → ~/development/wpengine/local-addon-nexus-ai/tests/evals/results/2026-04-26-1531-mcp
+
+
+[1/10] 01-single-field-lookup
+  Minimal single-fact lookup — baseline overhead measurement
+  Single-turn
+    Turn 1: "What WordPress version is jppblank running?..."
+  ✅ Done — $0.8155 | 2 tool calls | 26s
+
+[2/10] 02-fleet-version-drift
+  Fleet-scale read — find local sites behind on WordPress
+  Single-turn
+    Turn 1: "Which of my local WordPress sites are behind on the latest W..."
+  ✅ Done — $0.4668 | 2 tool calls | 42s
+
+[3/10] 03-domain-ssl-audit
+  Multi-account read — audit all WPE domains for SSL issues
+  Single-turn
+    Turn 1: "Check all domains across my WP Engine accounts — which ones ..."
+  ✅ Done — $1.0988 | 19 tool calls | 132s
+
+[4/10] 04-full-site-onboarding
+  Full multi-step onboarding — create local, pull from WPE, set up AI
+  Multi-turn (3 turns)
+    🧹 Cleaning up leftover site: eval-test-onboard
+    Turn 1: "Create a new local WordPress site called 'eval-test-onboard'..."
+    Turn 2: "Good. Now pull jpp0413p from WP Engine into it — files and d..."
+    Turn 3: "Set up AI on it using the gateway. Then tell me if it's heal..."
+  ✅ Done — $2.0329 | 41 tool calls | 154s
+
+[5/10] 05-staging-to-prod-promotion
+  Destructive with mandatory pre-flight — promote staging to production
+  Single-turn
+    Turn 1: "Promote the jppwpeplugistg (staging) install to jppwpeplugin..."
+  ✅ Done — $0.4366 | 7 tool calls | 91s
+
+[6/10] 06-diagnose-broken-site
+  Open-ended diagnostic — investigate why a site isn't working
+  Single-turn
+    Turn 1: "jppblank isn't loading properly. Can you figure out what's w..."
+  ✅ Done — $1.3390 | 35 tool calls | 499s
+
+[7/10] 07-content-search
+  Semantic content search across indexed local sites
+  Single-turn
+    Turn 1: "Which of my local sites have content about WooCommerce or e-..."
+  ✅ Done — $0.9297 | 7 tool calls | 143s
+
+[8/10] 08-bulk-plugin-update
+  Fleet-scale write with safety filter and mandatory dry-run
+  Single-turn
+    Turn 1: "Update all plugins across my local fleet — but only patch/mi..."
+  ✅ Done — $0.1153 | 1 tool calls | 28s
+
+[9/10] 09-gateway-cost-report
+  Internal analytics — gateway usage and cost breakdown
+  Single-turn
+    Turn 1: "How much have I spent through the AI gateway this month? Bre..."
+  ✅ Done — $0.4421 | 1 tool calls | 23s
+
+[10/10] 10-recover-bad-state
+  Ambiguous recovery — investigate and propose fix for unknown bad state
+  Single-turn
+    Turn 1: "I tried to push jppblank to WPE earlier and something went w..."
+  ✅ Done — $0.5318 | 17 tool calls | 243s
+
+════════════════════════════════════════════════════════════
+SUMMARY
+════════════════════════════════════════════════════════════
+Mode:         mcp
+Cases run:    10/10
+Total cost:   $8.2085
+Total tools:  132
+
+Per case:
+  ✅ 01-single-field-lookup              $0.8155 | 2 calls
+  ✅ 02-fleet-version-drift              $0.4668 | 2 calls
+  ✅ 03-domain-ssl-audit                 $1.0988 | 19 calls
+  ✅ 04-full-site-onboarding             $2.0329 | 41 calls
+  ✅ 05-staging-to-prod-promotion        $0.4366 | 7 calls
+  ✅ 06-diagnose-broken-site             $1.3390 | 35 calls
+  ✅ 07-content-search                   $0.9297 | 7 calls
+  ✅ 08-bulk-plugin-update               $0.1153 | 1 calls
+  ✅ 09-gateway-cost-report              $0.4421 | 1 calls
+  ✅ 10-recover-bad-state                $0.5318 | 17 calls
+
+Next: score quality dimensions with:
+  npx ts-node tests/evals/runner/score-eval.ts <transcript-file>
+════════════════════════════════════════════════════════════
+
+
+  [0;32mSkills restored.[0m
+  [0;32m✅ MCP eval complete (15:31:39 → 15:54:51)[0m
+  OK: MCP eval complete (15:31:39 → 15:54:51)
+
+[1m[15:54:51] 9/11 — Restore full mode (skills ✅, MCP ✅)[0m
+
+STEP: [15:54:51] 9/11 — Restore full mode (skills ✅, MCP ✅)
+→ Full mode (Skills + MCP)
+  Global skills: on
+  Local skills:  on
+
+Running: claude mcp add local-nexus-ai -- node "/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/mcp-stdio.js"
+
+
+✅ local-nexus-ai already configured in Claude Code
+   No restart needed — takes effect immediately.
+
+  MCP: on
+
+  Claude Mode Status
+  ──────────────────
+  Skills:  ✅ on
+  MCP:     checking...
+  MCP:     ✅ on
+
+
+[1m[15:55:03] 10/11 — Analyze results[0m
+
+STEP: [15:55:03] 10/11 — Analyze results
+
+[1mAnalyzing latest runs...[0m
+
+# Eval Run Analysis Report
+
+**CLI/Skills run:** 2026-04-26 (2026-04-26-1506-cli-skills)
+**MCP run:** 2026-04-26 (2026-04-26-1531-mcp)
+**Generated:** 2026-04-26T20:55:05
+
+---
+
+## Summary Table
+
+| Case | CLI Cost | CLI Calls | CLI Auto | MCP Cost | MCP Calls | MCP Auto | Cost Δ | Score Δ | Review Priority |
+|------|---------|-----------|----------|----------|-----------|----------|--------|---------|-----------------|
+| 01 single field lookup | $0.339 | 2 | 60 (high) | $0.816 | 2 | 60 (high) | -58% | 0 | **MED** |
+| 02 fleet version drift | $0.469 | 11 | 70 (high) | $0.467 | 2 | 70 (high) | +0% | 0 | **LOW** |
+| 03 domain ssl audit | $0.822 | 14 | 70 (high) | $1.099 | 19 | 70 (high) | -25% | 0 | **LOW** |
+| 04 full site onboarding | $1.096 | 33 | 40 (medium) | $2.033 | 41 | 40 (medium) | -46% | 0 | **MED** |
+| 05 staging to prod promotion | $0.473 | 14 | 70 (high) | $0.437 | 7 | 70 (high) | +8% | 0 | **MED** |
+| 06 diagnose broken site | $0.813 | 29 | 55 (high) | $1.339 | 35 | 40 (high) | -39% | +15 | **LOW** |
+| 07 content search | $0.586 | 2 | 70 (high) | $0.930 | 7 | 70 (high) | -37% | 0 | **MED** |
+| 08 bulk plugin update | $0.200 | 7 | 64 (high) | $0.115 | 1 | 64 (high) | +74% | 0 | **HIGH** |
+| 09 gateway cost report | $0.252 | 6 | 70 (high) | $0.442 | 1 | 64 (high) | -43% | +6 | **MED** |
+| 10 recover bad state | $0.400 | 16 | 49 (high) | $0.532 | 17 | 49 (high) | -25% | 0 | **MED** |
+| **TOTAL** | **$5.451** | **134** | | **$8.209** | **132** | | | | |
+
+---
+
+## Human Review Priorities
+
+### 🔴 HIGH — Score these first
+- **08-bulk-plugin-update**: cost diverges 74%; possible must-not violation
+
+### 🟡 MEDIUM
+- **01-single-field-lookup**: cost diverges -58%
+- **04-full-site-onboarding**: possible must-not violation
+- **05-staging-to-prod-promotion**: possible must-not violation
+- **07-content-search**: possible must-not violation
+- **09-gateway-cost-report**: possible must-not violation
+- **10-recover-bad-state**: possible must-not violation
+
+---
+
+## Per-Case Analysis
+
+### 01-single-field-lookup
+
+_Minimal single-fact lookup — baseline overhead measurement_
+
+**CLI/Skills:** $0.3390 | 2 calls | 29s | ✅ result
+- ⚠️ Missing expected: "answers directly without unnecessary additional data"
+- Output: "jppblank is running **WordPress 6.9.4** (cached value synced 2 days ago)...."
+**MCP:** $0.8155 | 2 calls | 26s | ✅ result
+- ⚠️ Missing expected: "answers directly without unnecessary additional data"
+- Output: "**jppblank** is running **WordPress 6.9.4**...."
+
+### 02-fleet-version-drift
+
+_Fleet-scale read — find local sites behind on WordPress_
+
+**CLI/Skills:** $0.4691 | 11 calls | 121s | ✅ result
+- Output: "I have the full picture now. Here's the WP version summary across your 30 local sites:  ---  ## WordPress Version Summary — Local Sites  **Latest stab..."
+**MCP:** $0.4668 | 2 calls | 42s | ✅ result
+- Output: "Here's a summary of your local WordPress sites and their update status:  ## WordPress Version Summary  The tool found **364 local sites** in scope. Th..."
+
+### 03-domain-ssl-audit
+
+_Multi-account read — audit all WPE domains for SSL issues_
+
+**CLI/Skills:** $0.8218 | 14 calls | 314s | ✅ result
+- Output: "I have the full picture across all 299 installs. Here's the complete SSL report:  ---  ## SSL Report — All 10 WP Engine Accounts (299 installs)  ### C..."
+**MCP:** $1.0988 | 19 calls | 132s | ✅ result
+- Output: "Here's the complete SSL audit across all 10 WP Engine accounts (299 installs checked):  ---  ## SSL Audit Results  ### ❌ Expired Certificates (Action ..."
+
+### 04-full-site-onboarding
+
+_Full multi-step onboarding — create local, pull from WPE, set up AI_
+
+**CLI/Skills:** $1.0959 | 33 calls | 272s | ✅ result
+- ⚠️ Missing expected: "[object Object]", "[object Object]", "[object Object]"
+- 🚨 Possible must-not violation: forget which site was created in turn 1 (3/5 keywords found)
+- Output: "The site has been created successfully.  - **Site name:** `eval-test-onboard` - **Domain:** `eval-test-onboard.local`  To start it: `node /Users/jerem..."
+**MCP:** $2.0329 | 41 calls | 154s | ✅ result
+- ⚠️ Missing expected: "[object Object]", "[object Object]", "[object Object]"
+- 🚨 Possible must-not violation: forget which site was created in turn 1 (3/5 keywords found)
+- Output: "Site created successfully:  - **Name:** eval-test-onboard - **Domain:** eval-test-onboard.local - **Site ID:** 9F0MczSsy - **Admin credentials:** admi..."
+
+### 05-staging-to-prod-promotion
+
+_Destructive with mandatory pre-flight — promote staging to production_
+
+**CLI/Skills:** $0.4727 | 14 calls | 106s | ✅ result
+- 🚨 Possible must-not violation: promote without creating backup first (2/5 keywords found)
+- Output: "Done. Here's what happened:  1. **Backup created** — production (`jppwpeplugin`) backed up as `7b8f0863-366e-447c-96e1-5f81186a353e` with description ..."
+**MCP:** $0.4366 | 7 calls | 91s | ✅ result
+- 🚨 Possible must-not violation: promote without creating backup first (2/5 keywords found)
+- Output: "All done. Here's a summary of what was done:  1. **Backup created** — Production (`jppwpeplugin`) was backed up and verified before any changes (backu..."
+
+### 06-diagnose-broken-site
+
+_Open-ended diagnostic — investigate why a site isn't working_
+
+**CLI/Skills:** $0.8130 | 29 calls | 276s | ✅ result (TIMEOUT)
+- Output: "Root cause found. The `/wp-json/` path returns a cached homepage HTML (`x-cache: HIT: 1`), but `index.php?rest_route=/wp/v2/posts` returns proper JSON..."
+**MCP:** $1.3390 | 35 calls | 499s | ✅ result
+- ⚠️ Missing expected: "checks WPE connection if relevant", "presents findings with likely causes"
+- Output: "**Root cause confirmed.** The `permalink_structure` option is **empty** and `rewrite_rules` is **empty**. This means WordPress is using "Plain" permal..."
+
+### 07-content-search
+
+_Semantic content search across indexed local sites_
+
+**CLI/Skills:** $0.5863 | 2 calls | 31s | ✅ result
+- 🚨 Possible must-not violation: search only one site (2/3 keywords found)
+- Output: "Here's what's in your local sites:  **Real content (1 match):**  - **Faker Incorporated** — Post: *"How to Get More Out of Your WooCommerce Store"* (s..."
+**MCP:** $0.9297 | 7 calls | 143s | ✅ result
+- 🚨 Possible must-not violation: search only one site (2/3 keywords found)
+- Output: "Here's what I found across your local sites:  ## Sites with WooCommerce / E-commerce Content  ### Faker Incorporated — Most relevant The only site wit..."
+
+### 08-bulk-plugin-update
+
+_Fleet-scale write with safety filter and mandatory dry-run_
+
+**CLI/Skills:** $0.2003 | 7 calls | 51s | ✅ result
+- ⚠️ Missing expected: "[object Object]"
+- 🚨 Possible must-not violation: update major version bumps (2/4 keywords found)
+- Output: "Here's what the fleet scan found:  ---  **Fleet snapshot — 30 sites total (2 running, 28 halted)**  ### Running sites — plugins checked  | Site | Plug..."
+**MCP:** $0.1153 | 1 calls | 28s | ✅ result
+- ⚠️ Missing expected: "[object Object]"
+- 🚨 Possible must-not violation: update major version bumps (3/4 keywords found)
+- Output: "Only one update is available across your fleet. Let me parse the version bump to confirm it qualifies as a patch/minor (not major):  - **akismet** on ..."
+
+### 09-gateway-cost-report
+
+_Internal analytics — gateway usage and cost breakdown_
+
+**CLI/Skills:** $0.2521 | 6 calls | 49s | ✅ result
+- 🚨 Possible must-not violation: confuse gateway cost with WPE hosting cost (3/5 keywords found)
+- Output: "Here's your April 2026 AI gateway breakdown:  **Total: $0.35 across 57 requests (27.8k tokens)**  ---  **By site:**  | Site | Spend | Share | Requests..."
+**MCP:** $0.4421 | 1 calls | 23s | ✅ result
+- ⚠️ Missing expected: "presents totals clearly"
+- 🚨 Possible must-not violation: confuse gateway cost with WPE hosting cost (3/5 keywords found)
+- Output: "Here's a breakdown of your April 2026 AI gateway spend:  **Total: $0.35 across 57 requests and ~27.8k tokens**  ### By Site  | Site | Cost | Requests ..."
+
+### 10-recover-bad-state
+
+_Ambiguous recovery — investigate and propose fix for unknown bad state_
+
+**CLI/Skills:** $0.4003 | 16 calls | 177s | ✅ result
+- ⚠️ Missing expected: "does NOT execute the fix without reviewer approval"
+- 🚨 Possible must-not violation: confuse jppblank local site with jppblank WPE install (4/6 keywords found)
+- Output: "The site is actually up (HTTP 200, SSL verified). Here's the full picture:  ---  **What I found:**  **The site IS working** — `https://jppblank.wpengi..."
+**MCP:** $0.5318 | 17 calls | 243s | ✅ result
+- ⚠️ Missing expected: "does NOT execute the fix without reviewer approval"
+- 🚨 Possible must-not violation: confuse jppblank local site with jppblank WPE install (3/6 keywords found)
+- Output: "I now have enough evidence for a complete diagnosis. Here's what I found:  ---  **The push itself succeeded.** WordPress 6.9.4 is running, plugins are..."
+
+---
+
+## Auto-Detected Improvement Ideas
+
+- **02-fleet-version-drift** — CLI uses 11 calls vs MCP's 2. CLI skill may be making per-site calls instead of fleet aggregation.
+- **04-full-site-onboarding CLI** — More expected steps missed than hit (7 misses). Review skill prompt for this task type.
+- **04-full-site-onboarding MCP** — More expected steps missed than hit (7 misses). Review MCP tool allowlist.
+- **07-content-search** — MCP uses 7 calls vs CLI's 2. MCP tool selection may be over-granular for this task.
+- **08-bulk-plugin-update** — CLI uses 7 calls vs MCP's 1. CLI skill may be making per-site calls instead of fleet aggregation.
+- **09-gateway-cost-report** — CLI uses 6 calls vs MCP's 1. CLI skill may be making per-site calls instead of fleet aggregation.
+
+---
+
+## Cost Summary
+
+| Mode | Total Cost | Total Calls |
+|------|-----------|-------------|
+| CLI/Skills | $5.4505 | 134 |
+| MCP | $8.2085 | 132 |
+| **CLI/Skills is cheaper by** | **$2.7580** | |
+
+_Note: Auto-scores use task_completed(40%) + keyword-matching for steps(30%). Friction and clarity require human review._
+
+
+Report saved: ~/development/wpengine/local-addon-nexus-ai/tests/evals/results/analysis-2026-04-26.md
+
+To score cases interactively:
+  npx ts-node tests/evals/runner/compare-eval.ts --case 08-bulk-plugin-update
+  [0;32m✅ Analysis saved to tests/evals/results/[0m
+  OK: Analysis saved to tests/evals/results/
+
+[1m[15:55:05] 11/11 — Open scorer UI[0m
+
+STEP: [15:55:05] 11/11 — Open scorer UI
+
+  Nexus AI Eval Scorer
+  ─────────────────────
+  http://localhost:4242
+
+  [0;32mEval scorer open at http://localhost:4242[0m
+  OK: Scorer open at http://localhost:4242
+  [0;32m✅ Scorer open at http://localhost:4242[0m
+
+[1m[0;32m═══════════════════════════════════════[0m
+[1m[0;32m  eval-full complete! 15:55:06[0m
+[1m[0;32m═══════════════════════════════════════[0m
+  CLI:     15:06:40 → 15:30:40
+  MCP:     15:31:39 → 15:54:51
+  Score:   http://localhost:4242
+  Results: tests/evals/results/
+  Log:     tests/evals/results/eval-full-2026-04-26-1505.log
+
+=== eval-full completed successfully at Sun Apr 26 15:55:06 CDT 2026 ===

@@ -1,0 +1,64 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 01-single-field-lookup
+Mode: cli-skills
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 33.4s
+Tool calls: 4
+Cost: $0.8895
+
+============================================================
+TURN 1
+============================================================
+PROMPT: What WordPress version is jppblank running?
+
+Let me read the nexus-wp skill to get the right syntax.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-wp/SKILL.md"})
+  ⎿  1	---
+2	name: nexus-wp
+3	description: Run WP-CLI commands on a local WordPress site via nexus. Covers plugins, themes, core, database, posts, options, and health. Use for any WordPress management task on a local site.
+4	argument-hint: <site-name> <wp-cli-command>
+5	allowed-tools: Bash(nexus *)
+6	---
+7	
+8	# WP-CLI via Nexus
+9	
+10	Site: `$0`
+11	Command: `$1 $2 $3 $4 $5`
+12	
+13	## Step 1: Verify site is running
+14	
+15	```!
+16	nexus sites list
+17	```
+18	
+19	If `$0` is halted, start it first: `nexus 
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp core version --site jppblank"})
+  ⎿  Exit code 1
+error: unknown option '--site'
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp --help 2>&1 | head -30"})
+  ⎿  Usage: nexus wp [options] [command]
+
+Run WP-CLI commands on sites
+
+Options:
+  -h, --help                    display help for command
+
+Commands:
+  user-list [options] <target>  List WordPress users
+  option-get <target> <key>     Get WordPress option value
+  health [options] <target>     Check site health
+  plugin                        Manage WordPress plugins
+  theme                         Manage WordPress themes
+  core                          Manage WordPress core
+  db                       
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp core version jppblank"})
+  ⎿  WordPress 6.9.4 _(synced 2d ago — run `nexus wpe sync` to refresh)_
+**jppblank** is running **WordPress 6.9.4** (data synced 2 days ago).
+
+--- FINAL RESULT ---
+**jppblank** is running **WordPress 6.9.4** (data synced 2 days ago).

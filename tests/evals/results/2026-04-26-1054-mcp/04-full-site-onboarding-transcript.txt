@@ -1,0 +1,52 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 04-full-site-onboarding
+Mode: mcp
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 48.1s
+Tool calls: 1
+Cost: $0.4337
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Create a new local WordPress site called 'eval-test-onboard'.
+
+Creating the site now.
+
+⏺ mcp__local-nexus-ai__local_create_site({"name":"eval-test-onboard"})
+  ⎿  Site created:
+- **Name:** eval-test-onboard
+- **Domain:** eval-test-onboard.local
+- **ID:** 87WPhBLpx
+- **Credentials:** admin / admin
+Site created successfully:
+
+- **Name:** eval-test-onboard
+- **Domain:** eval-test-onboard.local
+- **ID:** `87WPhBLpx`
+- **Admin credentials:** `admin` / `admin`
+
+The site is running and accessible at `https://eval-test-onboard.local`. Change the admin password before using this for anything sensitive.
+
+--- FINAL RESULT ---
+Site created successfully:
+
+- **Name:** eval-test-onboard
+- **Domain:** eval-test-onboard.local
+- **ID:** `87WPhBLpx`
+- **Admin credentials:** `admin` / `admin`
+
+The site is running and accessible at `https://eval-test-onboard.local`. Change the admin password before using this for anything sensitive.
+
+============================================================
+TURN 2
+============================================================
+PROMPT: Good. Now pull jpp0413p from WP Engine into it — files and database.
+
+
+============================================================
+TURN 3
+============================================================
+PROMPT: Set up AI on it using the gateway. Then tell me if it's healthy.
+

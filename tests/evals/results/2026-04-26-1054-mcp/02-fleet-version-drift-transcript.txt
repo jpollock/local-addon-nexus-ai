@@ -1,0 +1,147 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 02-fleet-version-drift
+Mode: mcp
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 46.9s
+Tool calls: 2
+Cost: $0.4744
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local WordPress sites are behind on the latest WordPress version? Give me a summary of what needs updating.
+
+I'll query your fleet for outdated WordPress versions on local sites.
+
+⏺ mcp__local-nexus-ai__find_outdated_sites({"component":"wordpress","source":"local"})
+
+⏺ mcp__local-nexus-ai__local_list_sites({})
+  ⎿  ## Outdated Sites Report (local sites only)
+361 sites in scope
+
+### WordPress
+- Latest: 7.0-beta6 (3 sites)
+- Outdated: 7.0-RC2 (6 sites) — cli-target [local], nexus-e2e-test [local], testjpp1 [local], testjppdev [local], jppblank [local], jppblank [local]
+- Outdated: 7.0-RC1 (1 site) — The Curated Shelf [local]
+- Outdated: 7.0-RC1-62112 (1 site) — nexus-test-site [local]
+- Outdated: 7.0-RC2-62241 (2 sites) — another-test [local], nexustestsite1 [local]
+- Outdated: 6.9.4 (71 sites) — heath.biz [
+  ⎿  ## Local Sites (30 total, 2 running)
+
+### Running
+- **nexus-e2e-cli-test-site** (nexus-e2e-cli-test-site.local) [id: hV1JJ2J4N, indexed: yes]
+- **eval-test-onboard** (eval-test-onboard.local) [id: iqc6oiml-, indexed: yes]
+
+### Halted
+- jeremypollock.blog (jeremypollockblog.local) [id: mDSZDt3S6, halted]
+- nexus (nexus.local) [id: oahyb7b0P, halted]
+- mu-plugin (mu-plugin.local) [id: f95o8kDEU, halted]
+- offload-media-clean (offload-media-clean.local) [id: sk4daPsDs, halted]
+- nitropack-1 (nitrop
+Here's a summary focused on your 30 actual local sites (filtering out the noise from test/e2e sites):
+
+---
+
+## WordPress Update Summary
+
+**Latest available:** 7.0-beta6
+
+> ⚠️ Note: The index data is 55 days stale — versions shown reflect the last cached scan. Start sites and run `reindex_site` for current data.
+
+---
+
+### Significantly Out of Date
+
+| Site | Current Version | Gap |
+|------|----------------|-----|
+| `e2e-test-fresh` | **6.2.2** | 4+ major versions behind |
+| `jeremypollock.blog` | 6.8.1 | |
+| `nexus` | 6.8.1 | |
+| `mu-plugin` | 6.8.1 | |
+| `offload-media-clean` | 6.8.2 | |
+| `pm-toolkit-hub` | 6.8.3 | |
+| `wp-events-analyzer` | 6.8.3 | |
+| `nitropack-2` | 6.8.3 | |
+
+### One Minor Version Behind (6.9.x)
+
+| Site | Current Version |
+|------|----------------|
+| `wp-archaeologist` | 6.9 |
+| `migrate` | 6.9 |
+| `cli-test` | 6.9 |
+| `wp-migrate-receiver-new` | 6.9 |
+| `wp-migrate-pusher` | 6.9 |
+| `acflikebutton` | 6.9.4 |
+| `heath.biz` | 6.9.4 |
+| `local-copy-jpp` | 6.9.4 |
+| `frostscape` | 6.9.4 |
+| `jpp0413p` | 6.9.4 |
+| `eval-test-onboard` | 6.9.4 |
+
+### Close (RC builds — just behind beta6)
+
+`cli-target`, `another-test`, `nexustestsite1` → 7.0-RC2  
+`The Curated Shelf`, `nexus-test-site` → 7.0-RC1
+
+### No Data (version unknown)
+`nexus-e2e-cli-test-site`, `nitropack-1`, `wp-archaeologist-saas`, `test-cli-poc`, `sync-test`
+
+---
+
+**Bottom line:** 19 of your 30 sites need WordPress updates. The 6.8.x group (8 sites) is most overdue. The 6.9.x sites are one minor version behind. The RC sites are fine for dev use — they'll track to 7.0 GA when it ships.
+
+--- FINAL RESULT ---
+Here's a summary focused on your 30 actual local sites (filtering out the noise from test/e2e sites):
+
+---
+
+## WordPress Update Summary
+
+**Latest available:** 7.0-beta6
+
+> ⚠️ Note: The index data is 55 days stale — versions shown reflect the last cached scan. Start sites and run `reindex_site` for current data.
+
+---
+
+### Significantly Out of Date
+
+| Site | Current Version | Gap |
+|------|----------------|-----|
+| `e2e-test-fresh` | **6.2.2** | 4+ major versions behind |
+| `jeremypollock.blog` | 6.8.1 | |
+| `nexus` | 6.8.1 | |
+| `mu-plugin` | 6.8.1 | |
+| `offload-media-clean` | 6.8.2 | |
+| `pm-toolkit-hub` | 6.8.3 | |
+| `wp-events-analyzer` | 6.8.3 | |
+| `nitropack-2` | 6.8.3 | |
+
+### One Minor Version Behind (6.9.x)
+
+| Site | Current Version |
+|------|----------------|
+| `wp-archaeologist` | 6.9 |
+| `migrate` | 6.9 |
+| `cli-test` | 6.9 |
+| `wp-migrate-receiver-new` | 6.9 |
+| `wp-migrate-pusher` | 6.9 |
+| `acflikebutton` | 6.9.4 |
+| `heath.biz` | 6.9.4 |
+| `local-copy-jpp` | 6.9.4 |
+| `frostscape` | 6.9.4 |
+| `jpp0413p` | 6.9.4 |
+| `eval-test-onboard` | 6.9.4 |
+
+### Close (RC builds — just behind beta6)
+
+`cli-target`, `another-test`, `nexustestsite1` → 7.0-RC2  
+`The Curated Shelf`, `nexus-test-site` → 7.0-RC1
+
+### No Data (version unknown)
+`nexus-e2e-cli-test-site`, `nitropack-1`, `wp-archaeologist-saas`, `test-cli-poc`, `sync-test`
+
+---
+
+**Bottom line:** 19 of your 30 sites need WordPress updates. The 6.8.x group (8 sites) is most overdue. The 6.9.x sites are one minor version behind. The RC sites are fine for dev use — they'll track to 7.0 GA when it ships.

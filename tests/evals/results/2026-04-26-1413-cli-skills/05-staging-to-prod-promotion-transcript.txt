@@ -1,0 +1,67 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 05-staging-to-prod-promotion
+Mode: cli-skills
+Date: 2026-04-26
+Model: claude-sonnet-4-6
+Duration: 38.4s
+Tool calls: 5
+Cost: $0.2693
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Promote the jppwpeplugistg (staging) install to jppwpeplugin (production) in the wpeplugintest site. Make sure production has a backup first.
+
+Let me read the nexus-wpe skill file to understand the correct approach for WPE operations.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-wpe/SKILL.md"})
+  ⎿  1	---
+2	name: nexus-wpe
+3	description: Query WP Engine account data — sites, installs, usage metrics, bandwidth, visits, storage, domains, backups, SSL, users, and diagnostics. Use when asked about WPE environments, usage stats, storage, installs, traffic, or anything related to the WP Engine account.
+4	argument-hint: [topic] e.g. usage, installs, domains, backups, users, diagnose
+5	allowed-tools: Bash(nexus *)
+6	---
+7	
+8	# WP Engine Account Data
+9	
+10	Topic: `$ARGUMENTS`
+11	
+12	## Step 1: Get f
+The skill file doesn't cover promote/backup commands explicitly. Let me check the CLI for available WPE commands and find the install IDs.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe --help 2>&1 | head -80","description":"Show nexus wpe command help"})
+  ⎿  Usage: nexus wpe [options] [command]
+
+Manage WP Engine accounts and installs
+
+Options:
+  -h, --help                                           display help for command
+
+Commands:
+  accounts [options]                                   List WP Engine accounts
+  installs [options] [account]                         List installs for an account (or all accounts)
+  install [options] <installId>                        Get details about a specific install
+  backup [options] <target>                      
+Good, there's a `promote` command. Now let me find the install IDs for both installs.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe installs 2>&1 | grep -A 3 -i \"jppwpeplugi\"","description":"Find install IDs for jppwpeplugin and jpp)
+  ⎿  (Bash completed with no output)
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe installs 2>&1","description":"List all WPE installs"})
+  ⎿  Exit code 1
+
+❌ Failed to list installs: Not authenticated with WP Engine. Use wpe_login or authenticate in Local.
+Not authenticated — need to log in first.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe status 2>&1","description":"Check WPE auth status"})
+  ⎿  ⚫ Not authenticated with WP Engine
+
+Run: nexus wpe login
+You need to authenticate with WP Engine first. This will open a browser window.
+
+Should I run `nexus wpe login` to start the OAuth flow?
+
+--- FINAL RESULT ---
+You need to authenticate with WP Engine first. This will open a browser window.
+
+Should I run `nexus wpe login` to start the OAuth flow?

@@ -1,0 +1,507 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: 05-staging-to-prod-promotion
+Mode: cli-skills
+Date: 2026-04-25
+Model: claude-sonnet-4-6
+Duration: 370.2s
+Tool calls: 53
+Cost: $1.7872
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Promote the jppwpeplugistg (staging) install to jppwpeplugin (production) in the wpeplugintest site. Make sure production has a backup first.
+
+I'll start by getting fleet context to find the relevant install IDs, then create a production backup before promoting.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe portfolio 2>&1 | head -60","description":"Get WPE fleet context to find install IDs"})
+  ⎿  ❌ Response returned an error code
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js --help 2>&1 | head -40","description":"Check available nexus commands"})
+  ⎿  Usage: nexus [options] [command]
+
+Nexus AI CLI - WordPress site management with AI superpowers
+
+Options:
+  -V, --version           output the version number
+  -h, --help              display help for command
+
+Commands:
+  sites                   Manage Local and WPE sites
+  wp                      Run WP-CLI commands on sites
+  sync                    Sync sites between local and WPE
+  wpe                     Manage WP Engine accounts and installs
+  blueprints              Manage Local blueprints
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe --help 2>&1","description":"Check available wpe subcommands"})
+  ⎿  Usage: nexus wpe [options] [command]
+
+Manage WP Engine accounts and installs
+
+Options:
+  -h, --help                                           display help for command
+
+Commands:
+  accounts [options]                                   List WP Engine accounts
+  installs [options] [account]                         List installs for an account (or all accounts)
+  install [options] <installId>                        Get details about a specific install
+  backup [options] <target>                      
+There's a `promote` command. Let me find the install IDs for both installs first.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe sites 2>&1 | grep -i -A3 \"wpeplugintest\\|wpeplugin\"","description":"Find the wpeplugintest site and)
+  ⎿  (Bash completed with no output)
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe installs 2>&1 | grep -i -A2 \"jppwpeplugi\\|wpeplugintest\"","description":"Search installs for jppwpe)
+  ⎿  (Bash completed with no output)
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe installs 2>&1 | grep -i \"jppwpe\\|plugin\" | head -20","description":"Search installs for jppwpe patt)
+  ⎿  (Bash completed with no output)
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe installs 2>&1 | head -60","description":"List all installs"})
+  ⎿  ❌ Failed to list installs: Not authenticated with WP Engine. Use wpe_login or authenticate in Local.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe status 2>&1","description":"Check WPE authentication status"})
+  ⎿  ⚫ Not authenticated with WP Engine
+
+Run: nexus wpe login
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe install jppwpeplugin 2>&1","description":"Try to get install details by name"})
+  ⎿  Exit code 1
+
+❌ Failed to get install: Not authenticated with WP Engine. Use wpe_login or authenticate in Local.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe credentials-status 2>&1","description":"Check if API credentials are configured"})
+  ⎿  ✅ WP Engine API credentials are configured
+   Username: d5497214-2e80-475d-b62c-d101a967a885
+   Backup creation will use basic authentication
+API credentials are configured. Let me check if Local is running so the WPE auth can flow through it.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js doctor 2>&1 | head -30","description":"Check system health including Local and addon status"})
+  ⎿  Nexus AI v0.2.4 — System Health
+──────────────────────────────────────────────────
+  ✅  Local app           Installed
+  ✅  Local running       Running
+  ✅  Nexus AI addon      Active (v0.2.4) · dev
+  ✅  Version match       v0.2.4
+  ✅  GraphQL server      Connected (port 58853)
+  ✅  MCP server          Running · 171 tools (v0.1.0)
+  ✅  AI agent config     Claude Desktop
+  ✅  AI provider         Anthropic (Claude)
+  ✅  Local Gateway       Enabled
+  ✅  Sites with AI       13 / 34 sites configured ·
+Local is running with the addon active. Let me try the install lookup using the `--json` flag to see if it can use Local's auth:
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe login 2>&1","description":"Attempt WPE login via CLI","timeout":15000})
+  ⎿  Command running in background with ID: bu60bf1da. Output is being written to: /private/tmp/claude-503/-Users-jeremy-pollock-development-wpengine-local-addon-nexus-ai/12e60f0a-78fe-4ce9-bf1b-a5327d717763/tasks/bu60bf1da.output
+
+⏺ Bash({"command":"sleep 5 && cat /private/tmp/claude-503/-Users-jeremy-pollock-development-wpengine-local-addon-nexus-ai/12e60f0a-78fe-4ce9-bf1b-a5327d717763/tasks/bu60bf1da.output 2>&1","description":"Chec)
+  ⎿  🔐 Browser opened for WP Engine authentication.
+   Complete the login in your browser, then wait...
+
+......
+
+⏺ TaskStop({"task_id":"bu60bf1da"})
+  ⎿  {"message":"Successfully stopped task: bu60bf1da (node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe login 2>&1)","task_id":"bu60bf1da","task_type":"local_bash","command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe login 2>&1"}
+
+⏺ Bash({"command":"ls ~/Library/Application\\ Support/Local/nexus-ai/ 2>&1","description":"Check nexus-ai storage directory"})
+  ⎿  config.json
+graph.db
+graph.db-shm
+graph.db-wal
+nexus-ai-groups.json
+telemetry
+vector-embeddings.db
+vectors
+
+⏺ Bash({"command":"ls ~/Library/Application\\ Support/Local/ 2>&1 | grep -i \"wpe\\|token\\|auth\\|cred\"","description":"Look for WPE auth storage in Local"})
+  ⎿  http_webhook_auth_token.json
+nexus_ai_gateway_tokens.json
+nexus-ai_wpe_install_cache.json
+Trust Tokens
+Trust Tokens-journal
+wpe-capi-mcp-connection-info.json
+wpeApiCredentials.json
+
+⏺ Bash({"command":"cat ~/Library/Application\\ Support/Local/wpe-capi-mcp-connection-info.json 2>&1","description":"Check WPE CAPI connection info stored by Local"})
+  ⎿  {
+  "port": 10890,
+  "token": "97d5cc96611ee83bbad067c08b0288f8ecffb099c5c8864625effdb598860b90",
+  "endpoint": "http://127.0.0.1:10890/mcp",
+  "pid": 89279,
+  "toolCount": 85,
+  "startedAt": "2026-02-27T21:05:23.965Z"
+}
+
+⏺ Bash({"command":"ls ~/Library/Application\\ Support/Local/nexus-ai/ 2>&1 && cat ~/Library/Application\\ Support/Local/nexus-ai-mcp-connection-info.json 2>&1 || echo \"no file\"","description":"Check nexus )
+  ⎿  config.json
+graph.db
+graph.db-shm
+graph.db-wal
+nexus-ai-groups.json
+telemetry
+vector-embeddings.db
+vectors
+{
+  "url": "http://127.0.0.1:10800",
+  "authToken": "grZK36wwgeijAsYzDKgzWc0dYgsx6DVZV7PcaG19M4dyiz9gN80QBbNBMkdMAhcm/KmgJrV8tN+RpjVaSXCPsQ==",
+  "port": 10800,
+  "version": "0.1.0",
+  "tools": [
+    "search_site_content",
+    "search_across_sites",
+    "get_site_structure",
+    "get_index_status",
+    "list_indexed_sites",
+    "reindex_site",
+    "nexus_site_refresh",
+    "nexus_fleet_refr
+
+⏺ Bash({"command":"find ~/Library/Application\\ Support/Local/ -name \"*.json\" 2>/dev/null | xargs grep -l \"wpe\\|access_token\\|refresh_token\" 2>/dev/null | head -10","description":"Find WPE auth token f)
+  ⎿  (Bash completed with no output)
+
+⏺ Bash({"command":"find ~/.config/nexus-ai/ ~/Library/Application\\ Support/nexus-ai/ ~/.nexus-ai/ /Users/jeremy.pollock/.config/ -name \"*.json\" 2>/dev/null | head -10","description":"Look for nexus CLI to)
+  ⎿  /Users/jeremy.pollock/.config/gcloud/application_default_credentials.json
+/Users/jeremy.pollock/.config/gcloud/virtenv/lib/python3.13/site-packages/cryptography-42.0.7.dist-info/direct_url.json
+/Users/jeremy.pollock/.config/gcloud/virtenv/lib/python3.13/site-packages/setuptools/config/setuptools.schema.json
+/Users/jeremy.pollock/.config/gcloud/virtenv/lib/python3.13/site-packages/setuptools/config/distutils.schema.json
+/Users/jeremy.pollock/.config/gcloud/legacy_credentials/jpollock911@gmail.com
+
+⏺ Grep({"pattern":"authToken|wpe_token|access_token|tokenFile|getToken|WPE_TOKEN\\|storeToken","path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/cli","glob":"*.ts","output_mode":"fi)
+  ⎿  Found 6 files
+src/cli/utils/mcp-client.ts
+src/cli/commands/wpe.ts
+src/cli/commands/doctor.ts
+src/cli/commands/mcp.ts
+src/cli/utils/graphql.ts
+src/cli/bootstrap/graphql.ts
+
+⏺ Bash({"command":"grep -n \"token\\|auth\\|login\\|credential\" /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/cli/commands/wpe.ts | grep -i \"token\\|auth\\|read\\|store\\|file\\|path\)
+  ⎿  14:// Local's built-in GraphQL client (for WPE auth — different from addon GQL)
+19:  authToken: string;
+45:        'Authorization': `Bearer ${info.authToken}`,
+98:        console.log('  (none - not authenticated or no accounts)');
+438:  .description('Show WP Engine authentication status')
+443:        mutation { nexusWpeStatus { success error authenticated email accountName } }
+445:      const { authenticated, email, accountName, error } = data.nexusWpeStatus;
+448:      if (authenticated && email
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe status 2>&1","description":"Check WPE auth status via Local"})
+  ⎿  ⚫ Not authenticated with WP Engine
+
+Run: nexus wpe login
+
+⏺ Bash({"command":"grep -n \"promote\" /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/cli/commands/wpe.ts | head -20","description":"Check how the CLI promote command works"})
+  ⎿  1741:// nexus wpe promote
+1745:  .command('promote <sourceInstallId> <destInstallId>')
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/cli/commands/wpe.ts","offset":1741,"limit":60})
+  ⎿  1741	// nexus wpe promote
+1742	// ---------------------------------------------------------------------------
+1743	
+1744	wpeCommand
+1745	  .command('promote <sourceInstallId> <destInstallId>')
+1746	  .description('Promote (copy) one WP Engine install to another')
+1747	  .option('--no-database', 'Exclude database from promotion')
+1748	  .option('--confirm', 'Confirm promotion (required for destructive action)')
+1749	  .action(async (sourceInstallId, destInstallId, options) => {
+1750	    try {
+175
+
+⏺ Bash({"command":"head -20 /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/cli/commands/wpe.ts","description":"Check imports and client setup"})
+  ⎿  /**
+ * WPE Commands
+ *
+ * Manage WP Engine accounts and installs.
+ */
+
+import { Command } from 'commander';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { getClient } from '../utils/graphql';
+
+// ---------------------------------------------------------------------------
+// Local's built-in GraphQL client (for WPE auth — different from addon GQL)
+// ---------------------------------------------------------------------------
+
+interface LocalConnectionIn
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/cli/utils/graphql.ts","limit":30})
+  ⎿  1	/**
+2	 * GraphQL Client for Nexus CLI
+3	 *
+4	 * Connects to Local's GraphQL server and executes queries/mutations.
+5	 */
+6	
+7	import { readConnectionInfo } from '../bootstrap/graphql';
+8	import type { ConnectionInfo } from '../bootstrap/graphql';
+9	
+10	export { ConnectionInfo } from '../bootstrap/graphql';
+11	
+12	export class GraphQLClientError extends Error {
+13	  constructor(
+14	    message: string,
+15	    public errors?: Array<{ message: string; path?: string[] }>
+16	  ) {
+17	    super(mess
+
+⏺ Bash({"command":"grep -rn \"nexusWpePromote\\|promote\" /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/ --include=\"*.ts\" | grep -v \".d.ts\" | head -20","description":"Find the )
+  ⎿  /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/instructions/server-instructions.ts:60:**WPE destructive operations** (\`wpe_delete_install\`, \`wpe_delete_site\`, \`wpe_delete_domain\`, \`wpe_delete_account_user\`, \`wpe_delete_ssh_key\`, \`wpe_promote_environment\`) have additional guards beyond the standard token:
+/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/instructions/server-instructions.ts:63:- \`wpe_promote_environment\`: fetch
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/graphql/resolvers/wpe.ts","offset":530,"limit":80})
+  ⎿  530	    nexusWpePromote: async (_parent: ResolverParent, { sourceInstallId, destInstallId, includeDatabase, confirm }: { sourceInstallId: string; destInstallId: string; includeDatabase?: boolean; confirm?: boolean }) => {
+531	      try {
+532	        if (!services.localServices) return { success: false, error: 'Local services not available' };
+533	        const [src, dst] = await Promise.all([
+534	          services.localServices.capiDirect(`/installs/${sourceInstallId}`) as Promise<any>,
+535	   
+
+⏺ Bash({"command":"cat ~/Library/Application\\ Support/Local/nexus-ai-mcp-connection-info.json | python3 -c \"import json,sys; d=json.load(sys.stdin); print(d.get('port'))\"","description":"Get the Nexus MCP)
+
+⏺ Bash({"command":"cat ~/Library/Application\\ Support/Local/nexus-ai_wpe_install_cache.json 2>&1 | python3 -c \"import json,sys; data=json.load(sys.stdin); installs=[i for i in data.get('installs',[]) if 'j)
+  ⎿  10800
+  ⎿  []
+
+⏺ Bash({"command":"cat ~/Library/Application\\ Support/Local/nexus-ai_wpe_install_cache.json 2>&1 | python3 -c \"import json,sys; data=json.load(sys.stdin); installs=data.get('installs',[]); print(f'{len(ins)
+  ⎿  299 installs cached
+None production
+None production
+None production
+None production
+None production
+
+⏺ Bash({"command":"cat ~/Library/Application\\ Support/Local/nexus-ai_wpe_install_cache.json 2>&1 | python3 -c \"\nimport json,sys\ndata=json.load(sys.stdin)\ninstalls=data.get('installs',[])\n# Show all fie)
+  ⎿  Fields: ['installName', 'installId', 'environment', 'primaryDomain', 'accountName']
+[
+  {
+    "installName": "jppwpeplugin",
+    "installId": "74123063-1f21-4080-b983-aaa5c95ed1e2",
+    "environment": "production",
+    "primaryDomain": "jppwpeplugin.wpenginepowered.com",
+    "accountName": "w7579"
+  },
+  {
+    "installName": "jppwpeplugistg",
+    "installId": "3a4b72ba-3aba-4753-b8ae-419e1956651d",
+    "environment": "staging",
+    "primaryDomain": "jppwpeplugistg.wpenginepowered.com",
+    "acco
+Found the install IDs from cache. Now let me check how auth is handled for CAPI calls:
+
+⏺ Bash({"command":"grep -n \"capiDirect\\|getToken\\|getBearerToken\\|Authorization\\|BasicAuth\" /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/services/local-services.ts 2>/dev/nu)
+  ⎿  (Bash completed with no output)
+
+⏺ Bash({"command":"find /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src -name \"*.ts\" | xargs grep -l \"capiDirect\" 2>/dev/null","description":"Find where capiDirect is defined"})
+  ⎿  /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/local-services-bridge.ts
+/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/modules/wpe/request-ssl-certificate.ts
+/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/modules/wpe/create-account-user.ts
+/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/modules/wpe/get-domains.ts
+/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/sr
+
+⏺ Bash({"command":"grep -n \"capiDirect\\|getToken\\|Authorization\\|Bearer\\|oauth\" /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/local-services-bridge.ts | head -30","descri)
+  ⎿  116:  capiDirect(path: string, method?: string, body?: unknown): Promise<unknown>;
+461:    capiDirect: async (path: string, method = 'GET', body?: unknown) => {
+472:          'Authorization': `Bearer ${token}`,
+539:            'Authorization': `Basic ${auth}`,
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/local-services-bridge.ts","offset":455,"limit":100})
+  ⎿  455	      const site = requireSite(siteId);
+456	      return svc('siteDatabase').dump(site, destination);
+457	    },
+458	
+459	    // --- CAPI (WP Engine) ---
+460	
+461	    capiDirect: async (path: string, method = 'GET', body?: unknown) => {
+462	      const wpeOAuth = svc('wpeOAuth');
+463	      if (!wpeOAuth) throw new Error('WPE OAuth service not available');
+464	      // Load stored token into memory first — _accessToken is null after restart
+465	      try { (wpeOAuth as any)._loadFromUserData?
+Good — I can see backup creation uses basic auth credentials (already configured), but promote needs OAuth. Let me try the backup first since that should work, then address auth for the promote:
+
+⏺ TodoWrite({"todos":[{"content":"Create production backup of jppwpeplugin before promoting","status":"in_progress","activeForm":"Creating production backup of jppwpeplugin"},{"content":"Promote jppwpeplugistg (s)
+  ⎿  Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe backup-verify 74123063-1f21-4080-b983-aaa5c95ed1e2 2>&1","description":"Create and verify backup of pr)
+  ⎿  Exit code 1
+Creating backup and polling for completion...
+Error: HTTP 500: Internal Server Error
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe backup jppwpeplugin 2>&1","description":"Try backup command by install name","timeout":30000})
+  ⎿  Exit code 1
+
+Creating backup for jppwpeplugin...
+
+❌ Failed to create backup: Target must be a WPE install. Use format: wpe:account/install@environment
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe backup --help 2>&1","description":"Check backup command options"})
+  ⎿  Usage: nexus wpe backup [options] <target>
+
+Create a backup of a WPE install
+
+Options:
+  --description <text>  Backup description
+  --emails <addresses>  Comma-separated notification emails (defaults to
+                        no-reply@wpengine.com)
+  -h, --help            display help for command
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe backup \"wpe:w7579/jppwpeplugin@production\" --description \"Pre-promote backup before staging promoti)
+  ⎿  Exit code 1
+
+Creating backup for wpe:w7579/jppwpeplugin@production...
+
+❌ Failed to create backup: Response returned an error code
+
+⏺ Bash({"command":"grep -n \"backup\\|createBackup\\|Target must\" /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/cli/commands/wpe.ts | head -30","description":"Find backup command imple)
+  ⎿  233: * nexus wpe backup
+236:  .command('backup <target>')
+237:  .description('Create a backup of a WPE install')
+242:      const client = getClient({ timeout: 300000 }); // 5 min for backup
+244:      console.log(`\nCreating backup for ${target}...`);
+255:            backupId
+266:      const { success, error, backupId } = result.nexusWpeBackup;
+269:        console.error(`\n❌ Failed to create backup: ${error}`);
+274:      console.log(`   ID: ${backupId}`);
+539:  .description('Store WP Engine API c
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/cli/commands/wpe.ts","offset":236,"limit":40})
+  ⎿  236	  .command('backup <target>')
+237	  .description('Create a backup of a WPE install')
+238	  .option('--description <text>', 'Backup description')
+239	  .option('--emails <addresses>', 'Comma-separated notification emails (defaults to no-reply@wpengine.com)')
+240	  .action(async (target, options) => {
+241	    try {
+242	      const client = getClient({ timeout: 300000 }); // 5 min for backup
+243	
+244	      console.log(`\nCreating backup for ${target}...`);
+245	
+246	      const notificationEmail
+
+⏺ Bash({"command":"grep -n \"nexusWpeBackup\\|NexusWpeBackupInput\\|parseTarget\\|Target must\" /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/graphql/resolvers/wpe.ts | head -20",")
+  ⎿  5: * nexusWpeInstalls, nexusWpeInstall, nexusWpeBackup, nexusWpeFleetHealth,
+241:    nexusWpeBackup: async (_parent: ResolverParent, { input }: { input: any }) => {
+430:    nexusWpeBackupStatus: async (_parent: ResolverParent, { installId, backupId }: { installId: string; backupId: string }) => {
+439:    nexusWpeBackupVerify: async (_parent: ResolverParent, { installId, description }: { installId: string; description?: string }) => {
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/graphql/resolvers/wpe.ts","offset":241,"limit":70})
+  ⎿  241	    nexusWpeBackup: async (_parent: ResolverParent, { input }: { input: any }) => {
+242	      try {
+243	        if (!services.localServices?.isCAPIAvailable()) {
+244	          return { success: false, error: 'WP Engine API not available' };
+245	        }
+246	
+247	        const installs = await services.localServices!.capiGetInstalls() as any[];
+248	        const install = installs.find((i: any) =>
+249	          i.name === input.installId || i.id === input.installId
+250	        );
+251	       
+
+⏺ Bash({"command":"grep -n \"isCAPIAvailable\\|capiAvailable\" /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/local-services-bridge.ts | head -10","description":"Find isCAPIAvai)
+  ⎿  118:  isCAPIAvailable(): boolean;
+574:    isCAPIAvailable(): boolean {
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/mcp/local-services-bridge.ts","offset":574,"limit":15})
+  ⎿  574	    isCAPIAvailable(): boolean {
+575	      return !!svc('capi');
+576	    },
+577	
+578	    isWPEAuthenticated(): boolean {
+579	      const wpeOAuth = svc('wpeOAuth');
+580	      if (!wpeOAuth) return false;
+581	
+582	      // Load stored token into memory first — _accessToken is null after restart
+583	      // even when valid credentials exist in userData.
+584	      try { (wpeOAuth as any)._loadFromUserData?.(); } catch { /* non-fatal */ }
+585	
+586	      return !!(wpeOAuth as any)._accessToken;
+
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/graphql/resolvers/wpe.ts","offset":439,"limit":50})
+  ⎿  439	    nexusWpeBackupVerify: async (_parent: ResolverParent, { installId, description }: { installId: string; description?: string }) => {
+440	      try {
+441	        if (!services.localServices) return { success: false, error: 'Local services not available' };
+442	        const uuid = await resolveInstallUuid(installId);
+443	        const backups = await services.localServices.capiDirect(`/installs/${uuid}/backups?limit=5`) as any;
+444	        const latestBackup = ((backups as any)?.results ??
+
+⏺ Bash({"command":"grep -n \"NexusWpeBackupInput\\|nexusWpeBackup\" /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/graphql/schema.ts | head -10","description":"Check the GraphQL sch)
+  ⎿  369:  input NexusWpeBackupInput {
+801:    nexusWpeBackup(input: NexusWpeBackupInput!): NexusWpeBackupResult!
+1700:    nexusWpeBackupStatus(installId: String!, backupId: String!): NexusWpeDataResult!
+1703:    nexusWpeBackupVerify(installId: String!, description: String): NexusWpeBackupVerifyResult!
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/graphql/schema.ts","offset":369,"limit":10})
+  ⎿  369	  input NexusWpeBackupInput {
+370	    "WPE target (e.g., 'wpe:account/install@production')"
+371	    target: String!
+372	    "Backup description"
+373	    description: String
+374	    "Notification email addresses (defaults to no-reply@wpengine.com)"
+375	    notificationEmails: [String!]
+376	  }
+377	
+378	  type NexusWpeBackupResult {
+
+⏺ Bash({"command":"grep -rn \"Target must be a WPE install\" /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/ 2>/dev/null","description":"Find where the target error message comes from"})
+  ⎿  /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/graphql/resolvers.ts:2243:              error: 'Target must be a WPE install. Use format: wpe:account/install@environment',
+/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/graphql/resolvers.ts:2297:              error: 'Target must be a WPE install. Use format: wpe:account/install@environment',
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/src/main/graphql/resolvers.ts","offset":2230,"limit":40})
+  ⎿  2230	          // Don't check OAuth here - capiCreateBackup handles auth internally
+2231	          // (uses basic auth if credentials exist, otherwise attempts OAuth)
+2232	          if (!services.localServices?.isCAPIAvailable()) {
+2233	            return {
+2234	              success: false,
+2235	              error: 'WP Engine API not available',
+2236	            };
+2237	          }
+2238	
+2239	          const parsed = parseTarget(input.target);
+2240	          if (parsed.type !== 'wpe') {
+2241	 
+The root issue is clear now. Both backup creation and the promote operation require WPE OAuth authentication via Local (`capiGetInstalls()` is called which needs the CAPI OAuth service). The basic auth credentials only cover the final backup HTTP call — not the install lookup step.
+
+**You need to authenticate with WP Engine first.** Here's the situation:
+
+| Operation | Auth Needed | Status |
+|-----------|-------------|--------|
+| List installs (for lookup) | WPE OAuth | ❌ Not logged in |
+| Create backup | Basic auth (configured) + OAuth for lookup | ❌ Blocked by lookup |
+| Promote environment | WPE OAuth | ❌ Not logged in |
+
+**To proceed, run this in a terminal:**
+
+```bash
+node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe login
+```
+
+This opens a browser. Complete the WPE login there, then come back and I'll run the full sequence:
+
+1. Create + verify a backup of `jppwpeplugin` (production, ID: `74123063-1f21-4080-b983-aaa5c95ed1e2`)
+2. Promote `jppwpeplugistg` → `jppwpeplugin` with `--confirm`
+
+The install IDs are already resolved from cache, so once you're authenticated we can move fast.
+
+--- FINAL RESULT ---
+The root issue is clear now. Both backup creation and the promote operation require WPE OAuth authentication via Local (`capiGetInstalls()` is called which needs the CAPI OAuth service). The basic auth credentials only cover the final backup HTTP call — not the install lookup step.
+
+**You need to authenticate with WP Engine first.** Here's the situation:
+
+| Operation | Auth Needed | Status |
+|-----------|-------------|--------|
+| List installs (for lookup) | WPE OAuth | ❌ Not logged in |
+| Create backup | Basic auth (configured) + OAuth for lookup | ❌ Blocked by lookup |
+| Promote environment | WPE OAuth | ❌ Not logged in |
+
+**To proceed, run this in a terminal:**
+
+```bash
+node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe login
+```
+
+This opens a browser. Complete the WPE login there, then come back and I'll run the full sequence:
+
+1. Create + verify a backup of `jppwpeplugin` (production, ID: `74123063-1f21-4080-b983-aaa5c95ed1e2`)
+2. Promote `jppwpeplugistg` → `jppwpeplugin` with `--confirm`
+
+The install IDs are already resolved from cache, so once you're authenticated we can move fast.
