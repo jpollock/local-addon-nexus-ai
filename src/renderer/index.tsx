@@ -1,5 +1,5 @@
 import { NavItemInjector } from './NavItemInjector';
-import { NexusOverview } from './components/NexusOverview';
+import { NexusDashboard } from './components/NexusDashboard';
 import { NexusPreferences } from './components/NexusPreferences';
 import { SiteNexusSection } from './components/SiteNexusSection';
 import { NexusSiteTab } from './components/NexusSiteTab';
@@ -61,7 +61,7 @@ export default function renderer(context: any): void {
   hooks.addContent('routes[main]', () =>
     React.createElement(Route, {
       path: '/main/nexus',
-      render: () => React.createElement(NexusOverview, { NavLink, electron }),
+      render: () => React.createElement(NexusDashboard, { electron }),
     }),
   );
 
