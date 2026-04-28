@@ -14,6 +14,12 @@ models/all-MiniLM-L6-v2-quantized/tokenizer_config.json
 wp-plugins/advanced-custom-fields-pro
 # Test database files
 tests/unit/events/test-graph-*.db*
+tests/unit/events/*.db-shm
+tests/unit/events/*.db-wal
+# Eval results and screenshots
+tests/evals/results/
+*.png
+.playwright-mcp/
 .env.e2e.local
 tests/e2e/.auth/
 test-results/
