@@ -3,12 +3,16 @@ import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+// Staleness threshold: 7 days without re-indexing
+const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
+
 interface LocalSite {
   id: string;
   name: string;
   domain: string;
   searchable: boolean;
-  adding: boolean; // in-progress add-to-search
+  stale: boolean;      // backend flagged OR time-based
+  adding: boolean;
   documentCount: number;
   lastIndexed: number | null;
 }
@@ -169,14 +173,17 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
         .map((s: any) => {
           const e = entryMap.get(s.id);
           const state = e?.state ?? 'not_indexed';
+          const lastIndexed: number | null = e?.lastIndexed ?? null;
+          const timeStale = !!lastIndexed && (Date.now() - lastIndexed) > STALE_THRESHOLD_MS;
           return {
             id: s.id,
             name: s.name,
             domain: s.domain ?? '',
             searchable: state === 'indexed' || state === 'stale',
+            stale: state === 'stale' || timeStale,
             adding: state === 'indexing',
             documentCount: e?.documentCount ?? 0,
-            lastIndexed: e?.lastIndexed ?? null,
+            lastIndexed,
           };
         });
 
@@ -316,6 +323,13 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
   private renderTabBar(): React.ReactNode {
     const { activeTab, localSites } = this.state;
     const searchableCount = localSites.filter(s => s.searchable).length;
+    const staleCount = localSites.filter(s => s.stale).length;
+
+    const sitesLabel = searchableCount === 0
+      ? 'Sites'
+      : staleCount > 0
+        ? `Sites · ${searchableCount} searchable, ${staleCount} stale`
+        : `Sites · ${searchableCount} searchable`;
 
     const tab = (key: Tab, label: string) => {
       const active = activeTab === key;
@@ -341,7 +355,7 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
       },
     },
       tab('search', 'Search'),
-      tab('sites', searchableCount > 0 ? `Sites · ${searchableCount} searchable` : 'Sites'),
+      tab('sites', sitesLabel),
     );
   }
 
@@ -553,7 +567,8 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
   private renderSitesTab(): React.ReactNode {
     const { localSites, wpeSites, wpeAuthenticated, makingAllSearchable, indexProgress } = this.state;
     const searchableCount = localSites.filter(s => s.searchable).length;
-    const allSearchable = searchableCount === localSites.length && localSites.length > 0;
+    const staleCount = localSites.filter(s => s.stale).length;
+    const allFresh = searchableCount === localSites.length && staleCount === 0 && localSites.length > 0;
 
     return React.createElement('div', null,
       // Progress banner when running
@@ -579,17 +594,22 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
             React.createElement('div', { style: card },
               ...localSites.map((site, i) => this.renderLocalSiteRow(site, i === localSites.length - 1)),
             ),
-            !allSearchable && React.createElement('button', {
+            !allFresh && React.createElement('button', {
               onClick: this.makeAllSearchable,
               disabled: makingAllSearchable,
               style: {
                 marginTop: '10px', padding: '9px 16px', fontSize: '12px', fontWeight: 600,
-                borderRadius: '8px', border: `1px solid ${UI_COLORS.WPE_BRAND}`,
-                backgroundColor: 'transparent', color: UI_COLORS.WPE_BRAND,
+                borderRadius: '8px',
+                border: `1px solid ${staleCount > 0 ? UI_COLORS.STATUS_WARNING : UI_COLORS.WPE_BRAND}`,
+                backgroundColor: 'transparent',
+                color: staleCount > 0 ? UI_COLORS.STATUS_WARNING : UI_COLORS.WPE_BRAND,
                 cursor: makingAllSearchable ? 'default' : 'pointer',
                 opacity: makingAllSearchable ? 0.6 : 1,
               },
-            }, makingAllSearchable ? 'Working...' : 'Make All Local Sites Searchable'),
+            }, makingAllSearchable ? 'Working...'
+              : staleCount > 0 && searchableCount === localSites.length
+                ? `Update ${staleCount} Stale Site${staleCount !== 1 ? 's' : ''}`
+                : 'Make All Local Sites Searchable'),
           ),
 
       // WPE sites
@@ -611,11 +631,23 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
     const openInLocal = () => ipc.invoke(IPC_CHANNELS.SIDEBAR_NAVIGATE_TO_SITE, { siteId: site.id });
     const openWpAdmin = () => site.domain && this.props.electron.shell?.openExternal(`http://${site.domain}/wp-admin/`);
 
+    const barColor = site.adding ? undefined
+      : site.stale ? UI_COLORS.STATUS_WARNING
+      : site.searchable ? UI_COLORS.WPE_BRAND
+      : undefined;
+
+    const statusText = site.adding ? 'updating...'
+      : site.stale ? `stale · ${site.documentCount} posts · ${ago(site.lastIndexed) ?? 'unknown'}`
+      : site.searchable ? `${site.documentCount} post${site.documentCount !== 1 ? 's' : ''} · ${ago(site.lastIndexed) ?? ''}`
+      : 'not in search';
+
+    const statusColor = site.stale ? UI_COLORS.STATUS_WARNING : 'var(--nxai-card-sub)';
+
     return React.createElement('div', {
       key: site.id,
       className: 'nxai-row',
       style: {
-        display: 'grid', gridTemplateColumns: '1fr 160px auto',
+        display: 'grid', gridTemplateColumns: '1fr 200px auto',
         alignItems: 'center', gap: '16px',
         padding: '12px 16px',
         borderBottom: isLast ? 'none' : '1px solid var(--nxai-card-border, #e5e7eb)',
@@ -627,7 +659,7 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
         React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: '1px' } }, site.name),
         React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)' } }, site.domain),
       ),
-      // Status
+      // Status bar + text
       React.createElement('div', null,
         React.createElement('div', {
           style: { height: '3px', borderRadius: '2px', backgroundColor: 'var(--nxai-card-border, #e5e7eb)', overflow: 'hidden', marginBottom: '4px' },
@@ -637,20 +669,18 @@ export class NexusDashboard extends React.Component<{ electron: any }, State> {
             style: {
               height: '100%', borderRadius: '2px',
               width: site.searchable ? '100%' : undefined,
-              backgroundColor: site.adding ? undefined : UI_COLORS.WPE_BRAND,
+              backgroundColor: barColor,
             },
           }),
         ),
-        React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub)' } },
-          site.searchable
-            ? `${site.documentCount} post${site.documentCount !== 1 ? 's' : ''} · ${ago(site.lastIndexed) ?? ''}`
-            : site.adding ? 'making searchable...'
-            : 'not in search',
-        ),
+        React.createElement('div', { style: { fontSize: '11px', color: statusColor } }, statusText),
       ),
       // Actions
       React.createElement('div', { style: { display: 'flex', gap: '6px' } },
-        !site.searchable && !site.adding && this.ghostBtn('Add to Search', () => this.addToSearch(site.id), { className: 'nxai-add-btn' }),
+        !site.searchable && !site.adding
+          && this.ghostBtn('Add to Search', () => this.addToSearch(site.id), { className: 'nxai-add-btn' }),
+        site.stale && !site.adding
+          && this.ghostBtn('Update', () => this.addToSearch(site.id), { color: UI_COLORS.STATUS_WARNING }),
         this.ghostBtn('Open', openInLocal, { color: UI_COLORS.WPE_BRAND }),
         site.domain && this.ghostBtn('WP Admin', openWpAdmin),
       ),
