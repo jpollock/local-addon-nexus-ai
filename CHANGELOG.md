@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Python cache artifacts (`__pycache__/`, `*.pyc`, `*.pyo`, `*.pyd`) are now ignored so local `ask_self` runs do not leave noisy untracked files in the repo.
+
 ## [0.2.2] — 2026-04-12
 
 ### Fixed

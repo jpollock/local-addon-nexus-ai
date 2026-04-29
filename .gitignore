@@ -22,6 +22,8 @@ tests/e2e/.auth/
 archive/
 STRATEGIC_ANALYSIS.md
 .worktrees
+__pycache__/
+*.py[cod]
 # ask_self RAG outputs (DB, registry, env files) — never commit
 temp/
 scratch/
