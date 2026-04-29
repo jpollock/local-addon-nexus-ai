@@ -1,0 +1,170 @@
+{
+  "repo_label": "Nexus AI (Local Addon)",
+  "repo_kind": "local-addon",
+  "repo_slug": "local-addon-nexus-ai",
+  "db_filename": "nexus-ai-self-ask.sqlite",
+  "system_instructions_path": "ask_self/ask_self_system_instructions.json",
+  "env_file_path": "temp/ask-self-rag.env",
+  "ingest_command": "python3 ask_self/ask_self_ingest.py --harness-config ask_self/nexus_ai_harness.json --mode all",
+  "tenancy_env_var": "NEXUS_AI_SELF_ASK_TEAM_ID",
+  "github": {
+    "owner": "",
+    "repo": "",
+    "default_fetch_limit": 200,
+    "token_env_vars": [
+      "GITHUB_TOKEN"
+    ]
+  },
+  "docs": {
+    "extensions": [
+      ".md",
+      ".txt"
+    ],
+    "include_patterns": [
+      "^[^/]+\\.md$",
+      "^docs/.+\\.md$",
+      "^docs-site/.+\\.md$",
+      "^requirements/.+\\.md$",
+      "^tests/.+\\.md$",
+      "^\\.github/.+\\.md$"
+    ],
+    "exclude_patterns": [
+      "^\\.git/",
+      "^node_modules/",
+      "^lib/",
+      "^dist/",
+      "^build/",
+      "^coverage/",
+      "^temp/",
+      "^scratch/",
+      "(?:^|/)\\.venv[^/]*/",
+      "^models/",
+      "^eval/",
+      "^eval-full/",
+      "^\\.playwright-mcp/",
+      "(?:^|/)node_modules/"
+    ]
+  },
+  "source": {
+    "extensions": [
+      ".ts",
+      ".tsx",
+      ".js",
+      ".mjs",
+      ".cjs",
+      ".jsx",
+      ".php",
+      ".py",
+      ".sh",
+      ".json"
+    ],
+    "include_patterns": [
+      "^src/.+\\.(?:ts|tsx|js|mjs|cjs|jsx)$",
+      "^bin/.+\\.(?:js|sh)$",
+      "^scripts/.+\\.(?:js|mjs|cjs|sh)$",
+      "^tests/.+\\.(?:ts|tsx|js|mjs|cjs|jsx)$",
+      "^ask_self/.+\\.py$",
+      "^wp-plugins/.+\\.php$",
+      "^(?:package|tsconfig|jest\\.config)\\.json$",
+      "^\\.github/workflows/.+\\.ya?ml$"
+    ],
+    "exclude_patterns": [
+      "^\\.git/",
+      "^node_modules/",
+      "^lib/",
+      "^dist/",
+      "^build/",
+      "^coverage/",
+      "^temp/",
+      "^scratch/",
+      "(?:^|/)\\.venv[^/]*/",
+      "^models/",
+      "^eval/",
+      "^eval-full/",
+      "^\\.playwright-mcp/",
+      "(?:^|/)node_modules/",
+      "(?:^|/)vendor/",
+      "\\.min\\.(?:js|css)$",
+      "\\.d\\.ts$"
+    ]
+  },
+  "classification_rules": [
+    {
+      "pattern": "(?i)changelog\\.md$",
+      "source": "changelog",
+      "priority": 5,
+      "chunker": "changelog"
+    },
+    {
+      "pattern": "^(?:README|CLAUDE|CONTRIBUTING|ROADMAP_STATUS|PRODUCTION_READY_STATUS|AI_AUTH_RESOLUTION|E2E_REAL_WORLD_CONFIRMATION)\\.md$",
+      "source": "doc",
+      "priority": 5,
+      "chunker": "text"
+    },
+    {
+      "pattern": "^requirements/.+\\.md$",
+      "source": "strategy",
+      "priority": 5,
+      "chunker": "text"
+    },
+    {
+      "pattern": "^docs(?:-site)?/.+\\.md$",
+      "source": "doc",
+      "priority": 4,
+      "chunker": "text"
+    },
+    {
+      "pattern": "^(?:package|tsconfig|jest\\.config)\\.json$",
+      "source": "config",
+      "priority": 4,
+      "chunker": "text"
+    },
+    {
+      "pattern": "(?:^|/)tests?/.+\\.(?:ts|tsx|js|mjs|cjs|jsx)$",
+      "source": "test",
+      "priority": 1,
+      "chunker": "javascript"
+    },
+    {
+      "pattern": "^src/.+\\.(?:ts|tsx|js|mjs|cjs|jsx)$",
+      "source": "module",
+      "priority": 4,
+      "chunker": "javascript"
+    },
+    {
+      "pattern": "^(?:bin|scripts)/.+\\.(?:js|mjs|cjs)$",
+      "source": "script",
+      "priority": 3,
+      "chunker": "javascript"
+    },
+    {
+      "pattern": "\\.php$",
+      "source": "php",
+      "priority": 3,
+      "chunker": "php"
+    },
+    {
+      "pattern": "^ask_self/.+\\.py$",
+      "source": "module",
+      "priority": 3,
+      "chunker": "python"
+    },
+    {
+      "pattern": "\\.sh$",
+      "source": "script",
+      "priority": 2,
+      "chunker": "line"
+    },
+    {
+      "pattern": "\\.ya?ml$",
+      "source": "config",
+      "priority": 2,
+      "chunker": "line"
+    }
+  ],
+  "default_classification": {
+    "source": "doc",
+    "priority": 1,
+    "chunker": "text"
+  }
+}

@@ -22,3 +22,10 @@ tests/e2e/.auth/
 archive/
 STRATEGIC_ANALYSIS.md
 .worktrees
+# ask_self RAG outputs (DB, registry, env files) — never commit
+temp/
+scratch/
+*.env
+!.env.e2e
+!tests/e2e/.env.playwright
+.venv-asksef/
