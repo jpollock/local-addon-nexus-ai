@@ -1,0 +1,38 @@
+id: M2-03-orientation-wp-updates
+description: Orientation — which sites need WordPress updates, local and WPE
+suite: search-discovery
+moment: orientation
+tier: 1
+mode: [mcp, cli-skills]
+prompt: "Which of my sites need WordPress updates? Check both local and WP Engine."
+
+guardrails:
+  reads_only: true
+  scope: local_and_wpe
+
+prereqs:
+  start_sites: [nexus-e2e-test]
+
+expected:
+  task_completed: true
+  key_steps:
+    - retrieves WP version for all local sites
+    - retrieves WP version for all WPE installs
+    - identifies the current latest WP version
+    - lists which sites are behind and by how much
+    - groups by local vs WPE
+  must_not:
+    - check only local or only WPE
+    - update anything
+    - report versions without comparing to latest
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 1 — cross-platform fleet audit. Completeness weight is high.
+  A partial answer (local only or WPE only) scores 0 on completeness.
+  Pass: both platforms covered, versions compared to latest, clear list of what needs updating.

@@ -1,0 +1,36 @@
+id: M3-02-find-which-copy-is-real
+description: Find — disambiguate multiple copies of the same project site
+suite: search-discovery
+moment: find
+tier: 2
+mode: [mcp, cli-skills]
+prompt: "I have a few sites that look like copies of the same project — jpp-client, jpp-client-2, and jpp-client-backup. Which one is the most recent? Which should I actually be working in?"
+
+guardrails:
+  reads_only: true
+  scope: local_sites_only
+
+expected:
+  task_completed: true
+  key_steps:
+    - checks all three sites (doesn't pick one arbitrarily)
+    - compares available signals: post count, index recency, WP version
+    - makes a recommendation with explicit reasoning
+    - acknowledges ambiguity if signals are weak
+  must_not:
+    - pick one without evidence
+    - check only one site
+    - present index timestamp as evidence of edit activity without caveating it
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 2 — the motivating use case for the search-first dashboard.
+  Known gap: no last-edited-post timestamp; post count and index recency are proxies.
+  A good answer: "jpp-client has 47 posts vs jpp-client-2 with 12 — likely more current,
+  but I'm using post count as a proxy since I don't have edit timestamps."
+  Surfaces gap: last_modified_post needed in index schema.

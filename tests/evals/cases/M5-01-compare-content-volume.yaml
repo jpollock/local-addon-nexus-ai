@@ -1,0 +1,39 @@
+id: M5-01-compare-content-volume
+description: Compare — rank local sites by content volume
+suite: search-discovery
+moment: compare
+tier: 2
+mode: [mcp, cli-skills]
+prompt: "Rank my local sites by how much content they have. Which has the most?"
+
+guardrails:
+  reads_only: true
+  scope: local_sites_only
+
+prereqs:
+  start_sites: [nexus-e2e-test]
+
+expected:
+  task_completed: true
+  key_steps:
+    - retrieves post/page counts for all indexed sites
+    - ranks by content volume, highest first
+    - explicitly separates indexed sites (can rank) from unindexed (cannot)
+    - does not present unindexed sites as having zero content
+    - offers to index remaining sites to complete the picture
+  must_not:
+    - rank unindexed sites as zero (misleading)
+    - silently omit unindexed sites from results
+    - reindex without being asked
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 2 — tests honest partial coverage handling.
+  Key signal: does the agent distinguish "no content" from "not indexed"?
+  A complete answer: "Ranked 4 of 8 sites — the other 4 aren't indexed yet."
+  Surfaces gap: unindexed sites should show as unknown, not absent.

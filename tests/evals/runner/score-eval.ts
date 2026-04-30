@@ -128,43 +128,39 @@ async function main(): Promise<void> {
     evalCase.expected.must_not.forEach((s, i) => console.log(`  ${i + 1}. ${s}`));
   }
 
+  const weights = evalCase?.scoring_weights ?? { task_completed: 40, steps_correct: 30, completeness: 20, output_clarity: 10 };
+
+  // task_completed is always y/n — all other dimensions are 0-100 scored by the reviewer
+  const dynamicDimensions = Object.keys(weights).filter(k => k !== 'task_completed');
+
   let taskCompleted: string;
-  let stepsScore: string;
-  let frictionScore: string;
-  let clarityScore: string;
+  const dimensionScores: Record<string, number> = {};
   let reviewerNotes: string;
 
   if (nonInteractive) {
-    // --scores "y,90,85,90" --notes "text"
     const scoresParts = (args[scoresIdx + 1] || 'y,80,80,80').split(',');
     taskCompleted = scoresParts[0] || 'y';
-    stepsScore = scoresParts[1] || '80';
-    frictionScore = scoresParts[2] || '80';
-    clarityScore = scoresParts[3] || '80';
+    dynamicDimensions.forEach((dim, i) => {
+      dimensionScores[dim] = parseInt(scoresParts[i + 1]) || 80;
+    });
     reviewerNotes = notesIdx >= 0 ? args[notesIdx + 1] : '_Non-interactive run_';
     rl.close();
   } else {
     console.log('');
     taskCompleted = await prompt(rl, 'Did the task complete successfully? (y/n): ');
-    stepsScore = await prompt(rl, 'Steps correct (0-100): ');
-    frictionScore = await prompt(rl, 'Friction score 0-100 (100=zero friction, 0=total failure): ');
-    clarityScore = await prompt(rl, 'Output clarity (0-100): ');
+    for (const dim of dynamicDimensions) {
+      const label = dim.replace(/_/g, ' ');
+      const weight = weights[dim];
+      dimensionScores[dim] = parseInt(await prompt(rl, `${label} (0-100, weight ${weight}%): `)) || 0;
+    }
     reviewerNotes = await prompt(rl, 'Reviewer notes (what worked, what broke, surprises): ');
     rl.close();
   }
 
-  // Calculate weighted score
-  const weights = evalCase?.scoring_weights ?? { task_completed: 40, steps_correct: 30, friction_count: 20, output_clarity: 10 };
   const taskScore = taskCompleted.toLowerCase() === 'y' ? 100 : 0;
-  const steps = parseInt(stepsScore) || 0;
-  const friction = parseInt(frictionScore) || 0;
-  const clarity = parseInt(clarityScore) || 0;
-
   const weightedScore =
     (taskScore * (weights.task_completed || 40) / 100) +
-    (steps * (weights.steps_correct || 30) / 100) +
-    (friction * (weights.friction_count || 20) / 100) +
-    (clarity * (weights.output_clarity || 10) / 100);
+    dynamicDimensions.reduce((sum, dim) => sum + (dimensionScores[dim] * (weights[dim] || 0) / 100), 0);
 
   // Build markdown scorecard
   const date = new Date().toISOString().slice(0, 10);
@@ -204,9 +200,9 @@ async function main(): Promise<void> {
     `| Dimension | Score | Weight |`,
     `|-----------|-------|--------|`,
     `| Task completed | ${taskScore} | ${weights.task_completed}% |`,
-    `| Steps correct | ${steps} | ${weights.steps_correct}% |`,
-    `| Friction (100=zero) | ${friction} | ${weights.friction_count}% |`,
-    `| Output clarity | ${clarity} | ${weights.output_clarity}% |`,
+    ...dynamicDimensions.map(dim =>
+      `| ${dim.replace(/_/g, ' ')} | ${dimensionScores[dim]} | ${weights[dim]}% |`
+    ),
     `| **Weighted total** | **${weightedScore.toFixed(1)}** | |`,
     '',
     '## Reviewer Notes',

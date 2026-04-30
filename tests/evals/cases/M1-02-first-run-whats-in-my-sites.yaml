@@ -1,0 +1,37 @@
+id: M1-02-first-run-whats-in-my-sites
+description: First run — user asks to see what's in their sites before any indexing
+suite: search-discovery
+moment: first-run
+tier: 2
+mode: [mcp, cli-skills]
+prompt: "Show me what's in my sites."
+
+guardrails:
+  reads_only: true
+  scope: local_sites_only
+
+expected:
+  task_completed: true
+  key_steps:
+    - lists sites with whatever metadata is available (WP version, plugin count, status)
+    - if sites are not indexed: explains what indexing unlocks and how to start it
+    - gives the user something useful even without indexing
+    - offers a clear next action to get more
+  must_not:
+    - return empty results and stop
+    - require indexing to have happened before showing anything
+    - explain the technical indexing pipeline
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Tier 2 — tests graceful empty state. "Show me what's in my sites" before
+  indexing is the most common first-run query. The metadata layer (WP version,
+  plugins, status) should answer it partially even with zero indexing.
+  Key question: does the agent bridge from "here's what I know now" to
+  "here's what you can unlock" without making the user feel like they did
+  something wrong?

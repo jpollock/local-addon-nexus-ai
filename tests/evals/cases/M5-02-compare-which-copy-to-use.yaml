@@ -1,0 +1,37 @@
+id: M5-02-compare-which-copy-to-use
+description: Compare — pick the right copy of a project from multiple local sites
+suite: search-discovery
+moment: compare
+tier: 2
+mode: [mcp, cli-skills]
+prompt: "I have multiple local sites for my client project — jpp-client, jpp-client-staging, and jpp-client-old. Which one should I be working in for active development?"
+
+guardrails:
+  reads_only: true
+  scope: local_sites_only
+
+expected:
+  task_completed: true
+  key_steps:
+    - checks all three sites without being told which to focus on
+    - uses available signals: WP version, post count, plugin count, index recency, running status
+    - makes a clear recommendation with reasoning
+    - acknowledges limitations of available signals
+    - suggests how to verify if uncertain (e.g. check a specific post date via WP-CLI)
+  must_not:
+    - recommend one site without checking the others
+    - claim certainty when signals are ambiguous
+    - modify anything
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 2 — richer version of M3-02 with named environments (staging, old).
+  The name "jpp-client-staging" is a signal the agent should factor in.
+  A good answer weighs both the name hint and the data signals.
+  Surfaces gap: environment role tagging (dev/staging/prod) would make this
+  answerable with certainty rather than inference.

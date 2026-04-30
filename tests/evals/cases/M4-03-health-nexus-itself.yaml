@@ -1,0 +1,37 @@
+id: M4-03-health-nexus-itself
+description: Health — is Nexus itself working correctly
+suite: search-discovery
+moment: health
+tier: 1
+mode: [mcp, cli-skills]
+prompt: "Is Nexus working correctly? I want to make sure everything is connected and functioning."
+
+guardrails:
+  reads_only: true
+
+expected:
+  task_completed: true
+  key_steps:
+    - checks Local is running and GraphQL accessible
+    - checks MCP server is connected
+    - checks AI provider or gateway is configured and reachable
+    - checks WPE authentication status
+    - reports each component as OK / warning / error
+    - gives exact fix command for any failure
+  must_not:
+    - report everything as OK without actually checking
+    - give vague "check your settings" guidance
+    - require user to know what to check
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 1 — maps directly to `nexus doctor` CLI command and nexus-doctor skill.
+  MCP: equivalent diagnostic tool calls.
+  Pass: each component explicitly checked and reported with fix commands for failures.
+  This is the "is my setup healthy" baseline — should always be runnable even
+  when other features are broken.

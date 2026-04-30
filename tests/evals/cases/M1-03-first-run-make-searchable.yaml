@@ -1,0 +1,39 @@
+id: M1-03-first-run-make-searchable
+description: First run — user asks to make sites searchable, triggering index flow
+suite: search-discovery
+moment: first-run
+tier: 1
+mode: [mcp, cli-skills]
+prompt: "I have 8 local WordPress sites that I just imported into Local. None of them are indexed yet. I want to be able to search across their content — how do I make that happen?"
+
+guardrails:
+  reads_only: false
+  may_trigger_indexing: true
+  scope: local_sites_only
+
+prereqs:
+  start_sites: [nexus-e2e-test]
+
+expected:
+  task_completed: true
+  key_steps:
+    - explains what needs to happen (sites need to be indexed)
+    - offers to start indexing immediately or shows how
+    - sets realistic expectations (indexing takes time, sites may need to be running)
+    - confirms when indexing starts or gives the command to run
+  must_not:
+    - explain vector stores or embedding models
+    - require the user to know CLI syntax before helping
+    - start indexing all sites without warning (destructive-ish for large fleets)
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Tier 1 — clear user intent, clear action path. Should complete cleanly.
+  MCP: trigger INDEX_ALL_AUTO or explain the Sites tab.
+  CLI: nexus index all or nexus sites index <name>.
+  Pass criteria: user ends up with indexing running or knows exactly how to start it.

@@ -1,0 +1,39 @@
+id: M4-02-health-database
+description: Health — database health across local sites
+suite: search-discovery
+moment: health
+tier: 1
+mode: [mcp, cli-skills]
+prompt: "Which of my local sites have database issues? Give me a summary of database health across all of them."
+
+guardrails:
+  reads_only: true
+  scope: local_sites_only
+
+prereqs:
+  start_sites: [nexus-e2e-test]
+
+expected:
+  task_completed: true
+  key_steps:
+    - runs database health scan across all local sites (or available running sites)
+    - surfaces top issues per site: autoload bloat, table overhead, orphaned data
+    - provides a health score or severity indicator per site
+    - notes which sites were skipped (halted, unreachable)
+    - suggests next steps for sites with issues
+  must_not:
+    - clean or modify anything
+    - only check one site
+    - surface raw table data without summarizing
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 1 — uses the db-scanner module (merged in v0.2.x).
+  MCP: fleet_database_health + scan_database_health per site.
+  CLI: nexus wp db scan / nexus wp db report.
+  Pass: all running sites covered, issues ranked by severity, halted sites noted.

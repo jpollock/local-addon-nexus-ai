@@ -1,0 +1,37 @@
+id: M1-01-first-run-what-can-i-do
+description: First run — user has no context, asks what Nexus does
+suite: search-discovery
+moment: first-run
+tier: 1
+mode: [mcp, cli-skills]
+prompt: "I just installed Nexus. What can I do with it right now?"
+
+guardrails:
+  reads_only: true
+
+expected:
+  task_completed: true
+  key_steps:
+    - describes real, concrete capabilities (not marketing copy)
+    - mentions at least: search across sites, fleet status, WPE integration
+    - suggests a clear first action the user can take immediately
+    - does not require the user to know anything in advance
+  must_not:
+    - list features abstractly without explaining what they do
+    - describe infrastructure (MCP server, vector store, graph DB)
+    - give a wall of text with no clear starting point
+    - ask for clarification before responding
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  This is the activation test. Pass criteria: a new user reads the response
+  and immediately knows what to try first.
+  High output_clarity weight — this is a UX question as much as a capability question.
+  Watch for: does it lead with mechanism ("index your sites") or value ("search your sites")?
+  A good answer: "Here's what you can do right now: [1] See all your sites... [2] Search content..."
+  A bad answer: "Nexus provides an MCP server that exposes your WordPress environment..."

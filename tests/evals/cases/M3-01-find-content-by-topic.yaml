@@ -1,0 +1,39 @@
+id: M3-01-find-content-by-topic
+description: Find — semantic content search across all indexed sites
+suite: search-discovery
+moment: find
+tier: 1
+mode: [mcp, cli-skills]
+prompt: "Find content about e-commerce or online shopping across all my sites. Show me what's there."
+
+guardrails:
+  reads_only: true
+  requires_indexed_sites: true
+  scope: local_sites_only
+
+prereqs:
+  start_sites: [nexus-e2e-test]
+
+expected:
+  task_completed: true
+  key_steps:
+    - searches across all indexed sites simultaneously
+    - returns results grouped by site with post title, type, and snippet
+    - notes sites that are not indexed and couldn't be searched
+    - distinguishes content mentions from plugin presence
+  must_not:
+    - search only one site
+    - return raw IDs or technical metadata
+    - claim to search unindexed sites
+    - reindex without being asked
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 1 — core content search. Completeness weight high: must cover all indexed sites.
+  Pass: results from multiple sites, clearly attributed, with coverage note for unindexed ones.
+  Key distinction: content about e-commerce (posts, pages) vs WooCommerce plugin installed.

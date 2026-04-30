@@ -1,0 +1,34 @@
+id: M1-N1-first-run-no-provider
+description: First run negative — AI provider not configured, user asks what they can do
+suite: search-discovery
+moment: first-run
+tier: 1
+negative: true
+mode: [mcp, cli-skills]
+prompt: "I just installed Nexus but I haven't configured anything yet. What works right now and what do I still need to set up?"
+
+guardrails:
+  reads_only: true
+
+expected:
+  task_completed: true
+  key_steps:
+    - correctly identifies what works without AI config (search, fleet status, WPE read)
+    - correctly identifies what needs setup (AI provider for AI features)
+    - gives the exact command to configure ("nexus ai config")
+    - does not claim AI features work when they don't
+  must_not:
+    - claim everything is working when AI provider is missing
+    - give vague "check settings" guidance
+    - refuse to answer because setup is incomplete
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Negative test — system is partially configured. Pass criteria: honest gap
+  analysis that separates what works now from what needs setup, with exact
+  fix commands. This is the "graceful partial state" UX test.

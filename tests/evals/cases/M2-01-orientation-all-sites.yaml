@@ -1,0 +1,36 @@
+id: M2-01-orientation-all-sites
+description: Orientation — show all sites, local and WPE, in one view
+suite: search-discovery
+moment: orientation
+tier: 1
+mode: [mcp, cli-skills]
+prompt: "Show me all my sites — local and WP Engine."
+
+guardrails:
+  reads_only: true
+  scope: local_and_wpe
+
+expected:
+  task_completed: true
+  key_steps:
+    - lists all local sites with name, domain, running status
+    - lists all WPE installs with name, domain, environment type
+    - clearly separates the two groups
+    - includes totals ("8 local, 23 WPE installs")
+  must_not:
+    - show only local or only WPE
+    - require authentication prompts mid-response
+    - paginate without warning (show all or explain truncation)
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 1 — the most fundamental orientation query.
+  Completeness is weighted highest: partial coverage (local only or WPE only) is a failure.
+  MCP: list_local_sites + list_wpe_sites.
+  CLI: nexus sites list + nexus wpe portfolio.
+  Pass criteria: both groups present, clearly labeled, no missing sites.
