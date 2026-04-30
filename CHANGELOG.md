@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- Experimental `AI Finder` and `AI Chat` tabs are re-exposed in the main Nexus dashboard for renderer-side UI testing. The older dashboard finder is mounted again, and the chat prompt stays editable even before provider setup so the input surface can be exercised without a working model.
+
 ## [0.2.2] — 2026-04-12
 
 ### Fixed

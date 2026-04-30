@@ -135,6 +135,7 @@ Nexus AI indexes your WordPress sites into a local vector database for semantic 
 - Visual feedback with toast notifications for all operations
 - Real-time loading indicators for sync and search operations
 - Filter count badges show active search results
+- Experimental `AI Finder` and `AI Chat` tabs are available in the Nexus dashboard for UI testing. The sidebar `Cmd+K` / `Ctrl+K` finder remains the primary mounted search surface.
 
 ## Your Choice For AI Integration
 

@@ -182,16 +182,13 @@ const approvalCardStyle: React.CSSProperties = {
 };
 
 const configErrorStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  height: '100%',
-  gap: '12px',
+  marginBottom: '12px',
+  borderRadius: '8px',
+  border: `1px solid ${UI_COLORS.STATUS_WARNING}`,
+  backgroundColor: 'rgba(245, 158, 11, 0.08)',
   color: 'var(--nxai-card-sub, #6b7280)',
-  fontSize: '14px',
-  textAlign: 'center',
-  padding: '40px',
+  fontSize: '13px',
+  padding: '12px 16px',
   userSelect: 'text',
 };
 
@@ -684,13 +681,12 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
         value: inputValue,
         onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => this.setState({ inputValue: e.target.value }),
         onKeyDown: this.handleKeyDown,
-        placeholder: providerReady ? 'Ask about your WordPress sites...' : 'Configure a provider in Preferences',
-        disabled: !providerReady,
+        placeholder: providerReady
+          ? 'Ask about your WordPress sites...'
+          : 'Type here to test the UI. Configure a provider in Preferences to send.',
+        disabled: isGenerating,
         rows: 1,
-        style: {
-          ...inputStyle,
-          opacity: providerReady ? 1 : 0.5,
-        },
+        style: inputStyle,
       }),
 
       isGenerating
@@ -717,13 +713,13 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
 
   renderConfigError(): React.ReactNode {
     return React.createElement('div', { style: configErrorStyle },
-      React.createElement('div', { style: { fontSize: '16px', fontWeight: 600, color: 'var(--nxai-card-text)' } },
-        'AI Chat',
+      React.createElement('div', { style: { fontSize: '14px', fontWeight: 600, color: 'var(--nxai-card-text)', marginBottom: '4px' } },
+        'Provider setup needed before sending',
       ),
       React.createElement('div', null, this.state.error),
       React.createElement('div', {
-        style: { fontSize: '13px', marginTop: '8px' },
-      }, 'Go to Preferences \u2192 Nexus AI to set up a provider.'),
+        style: { fontSize: '12px', marginTop: '6px' },
+      }, 'You can still type here to test the UI. Go to Preferences \u2192 Nexus AI to enable sending.'),
     );
   }
 
@@ -748,18 +744,17 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
     this.injectCursorAnimation();
 
     return React.createElement('div', { style: containerStyle },
-      !providerReady && error
-        ? this.renderConfigError()
-        : React.createElement(React.Fragment, null,
-            React.createElement('div', {
-              ref: (el: HTMLDivElement | null) => { this.messageListRef = el; },
-              style: messageListStyle,
-            },
-              messages.length === 0 ? this.renderEmptyState() : null,
-              messages.map((msg) => this.renderMessage(msg)),
-            ),
-            this.renderInput(),
-          ),
+      React.createElement(React.Fragment, null,
+        !providerReady && error ? this.renderConfigError() : null,
+        React.createElement('div', {
+          ref: (el: HTMLDivElement | null) => { this.messageListRef = el; },
+          style: messageListStyle,
+        },
+          messages.length === 0 ? this.renderEmptyState() : null,
+          messages.map((msg) => this.renderMessage(msg)),
+        ),
+        this.renderInput(),
+      ),
     );
   }
 

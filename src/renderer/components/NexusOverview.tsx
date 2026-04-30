@@ -1,8 +1,7 @@
 /**
  * Nexus Overview Dashboard
  *
- * Simplified addon dashboard with Overview and Operations tabs only.
- * Sites, Content, and Chat have been extracted to separate interfaces.
+ * Main addon dashboard with operational views plus experimental AI panels.
  * Class-based — Local uses older React, no hooks allowed.
  */
 import * as React from 'react';
@@ -15,6 +14,8 @@ import { TopIssuesPanel } from './TopIssuesPanel';
 import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
 import { AIGatewayPanel } from './AIGatewayPanel';
+import { AISiteFinderPanel } from './AISiteFinderPanel';
+import { ChatTab } from './ChatTab';
 import { LoadingSpinner } from './LoadingSpinner';
 // Local's native notification components
 let toast: any = null;
@@ -150,7 +151,7 @@ interface NexusOverviewState {
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'activity' | 'operations';
+  activeTab: 'overview' | 'activity' | 'operations' | 'ai-finder' | 'chat';
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -1547,6 +1548,8 @@ renderTabBar(): React.ReactNode {
       { key: 'overview', label: 'Overview' },
       { key: 'activity', label: 'Activity' },
       { key: 'operations', label: 'Operations' },
+      { key: 'ai-finder', label: 'AI Finder' },
+      { key: 'chat', label: 'AI Chat' },
     ];
 
     return React.createElement('div', {
@@ -1953,11 +1956,61 @@ renderTabBar(): React.ReactNode {
     );
   }
 
+  renderAiFinderTab(): React.ReactNode {
+    return React.createElement('div', {
+      style: { display: 'flex', flexDirection: 'column' as const, gap: '16px' },
+    },
+      React.createElement(AISiteFinderPanel, {
+        electron: this.props.electron,
+        onFilterApply: (siteIds: string[]) => {
+          this.setState({ filteredSiteIds: siteIds.length > 0 ? siteIds : null });
+        },
+      }),
+      React.createElement('div', {
+        style: {
+          fontSize: '12px',
+          color: 'var(--nxai-card-sub, #6b7280)',
+          padding: '0 4px',
+        },
+      }, 'Experimental UI: this revives the older dashboard finder while the sidebar AI Site Finder remains the primary mounted search surface.'),
+    );
+  }
+
+  renderChatTab(): React.ReactNode {
+    return React.createElement('div', {
+      style: { display: 'flex', flexDirection: 'column' as const, minHeight: 0, flex: 1 },
+    },
+      React.createElement('div', {
+        style: {
+          fontSize: '12px',
+          color: 'var(--nxai-card-sub, #6b7280)',
+          marginBottom: '12px',
+        },
+      }, 'Experimental UI: backend-capable chat panel re-mounted for local testing.'),
+      React.createElement('div', {
+        style: {
+          display: 'flex',
+          flexDirection: 'column' as const,
+          flex: 1,
+          minHeight: '520px',
+          border: '1px solid var(--nxai-card-border, #e5e7eb)',
+          borderRadius: '10px',
+          padding: '20px',
+          backgroundColor: 'var(--nxai-card-bg, #fff)',
+        },
+      },
+        React.createElement(ChatTab, { electron: this.props.electron }),
+      ),
+    );
+  }
+
   renderActiveTab(): React.ReactNode {
     switch (this.state.activeTab) {
       case 'overview': return this.renderOverviewTab();
       case 'activity': return this.renderActivityTab();
       case 'operations': return this.renderOperationsTab();
+      case 'ai-finder': return this.renderAiFinderTab();
+      case 'chat': return this.renderChatTab();
       default: return this.renderOverviewTab();
     }
   }
