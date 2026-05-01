@@ -1,10 +1,10 @@
 id: M1-03-first-run-make-searchable
-description: First run — user asks to make sites searchable, triggering index flow
+description: First run — user wants to search their sites, system demonstrates capability
 suite: search-discovery
 moment: first-run
 tier: 1
 mode: [mcp, cli-skills]
-prompt: "I have 8 local WordPress sites that I just imported into Local. None of them are indexed yet. I want to be able to search across their content — how do I make that happen?"
+prompt: "I just set up Nexus on my Local installation. I want to search across all my WordPress sites — can you show me how it works and what I can find?"
 
 guardrails:
   reads_only: false
@@ -17,14 +17,15 @@ prereqs:
 expected:
   task_completed: true
   key_steps:
-    - explains what needs to happen (sites need to be indexed)
-    - offers to start indexing immediately or shows how
-    - sets realistic expectations (indexing takes time, sites may need to be running)
-    - confirms when indexing starts or gives the command to run
+    - checks what sites are indexed (not assumed)
+    - if indexed: demonstrates search with a real example query
+    - if not indexed: explains how to index and offers to start
+    - shows the user something concrete they can do right now
+    - does not dump a feature list — shows, doesn't tell
   must_not:
     - explain vector stores or embedding models
     - require the user to know CLI syntax before helping
-    - start indexing all sites without warning (destructive-ish for large fleets)
+    - just list features without demonstrating anything
 
 scoring_weights:
   task_completed: 40
@@ -33,7 +34,8 @@ scoring_weights:
   output_clarity: 20
 
 notes: |
-  Tier 1 — clear user intent, clear action path. Should complete cleanly.
-  MCP: trigger INDEX_ALL_AUTO or explain the Sites tab.
-  CLI: nexus index all or nexus sites index <name>.
-  Pass criteria: user ends up with indexing running or knows exactly how to start it.
+  Tier 1 — environment-agnostic first-run search demo.
+  Pass criteria: user sees something concrete (search results OR indexing started).
+  The key quality signal: does it SHOW or just TELL? A great answer runs a search
+  and returns real results. A mediocre one explains what search could do.
+  Works whether sites are indexed or not — the path differs, the value is clear either way.
