@@ -3,6 +3,8 @@ description: First run — user has no context, asks what Nexus does
 suite: search-discovery
 moment: first-run
 tier: 1
+frequency: rare
+stakes: high
 mode: [mcp, cli-skills]
 prompt: "I just installed Nexus. What can I do with it right now?"
 

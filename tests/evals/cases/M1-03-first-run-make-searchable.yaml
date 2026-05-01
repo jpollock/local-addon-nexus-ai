@@ -3,6 +3,8 @@ description: First run — user wants to search their sites, system demonstrates
 suite: search-discovery
 moment: first-run
 tier: 1
+frequency: rare
+stakes: medium
 mode: [mcp, cli-skills]
 prompt: "I just set up Nexus on my Local installation. I want to search across all my WordPress sites — can you show me how it works and what I can find?"
 

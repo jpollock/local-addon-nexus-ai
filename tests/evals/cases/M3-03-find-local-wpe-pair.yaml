@@ -3,6 +3,8 @@ description: Find — does a local copy of a WPE site exist, and how in sync is 
 suite: search-discovery
 moment: find
 tier: 2
+frequency: occasional
+stakes: high
 mode: [mcp, cli-skills]
 prompt: "Do I have a local copy of my WP Engine site jppblank? If so, how in sync are they?"
 

@@ -3,6 +3,8 @@ description: Find — semantic content search across all indexed sites
 suite: search-discovery
 moment: find
 tier: 1
+frequency: weekly
+stakes: medium
 mode: [mcp, cli-skills]
 prompt: "Find content about e-commerce or online shopping across all my sites. Show me what's there."
 

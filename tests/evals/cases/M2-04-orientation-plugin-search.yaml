@@ -3,6 +3,8 @@ description: Orientation — find all sites with a specific plugin installed
 suite: search-discovery
 moment: orientation
 tier: 1
+frequency: occasional
+stakes: medium
 mode: [mcp, cli-skills]
 prompt: "Which of my sites have WooCommerce installed? Include both local and WPE sites."
 
@@ -12,6 +14,10 @@ guardrails:
 
 prereqs:
   start_sites: [nexus-e2e-test]
+
+context:
+  description: "WPE may or may not have cached plugin data"
+  notes: "Tests all three data tiers: cached → SSH fetch (if WPE authenticated) → name heuristics"
 
 expected:
   task_completed: true

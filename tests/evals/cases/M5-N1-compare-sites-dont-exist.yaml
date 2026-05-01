@@ -3,6 +3,8 @@ description: Compare negative — disambiguation when named sites don't exist
 suite: search-discovery
 moment: compare
 tier: 1
+frequency: occasional
+stakes: low
 negative: true
 mode: [mcp, cli-skills]
 prompt: "I need to figure out which of my sites — client-acme, client-acme-v2, or client-acme-backup — is the most up to date. Can you check?"

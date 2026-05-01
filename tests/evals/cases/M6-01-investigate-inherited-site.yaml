@@ -1,0 +1,51 @@
+id: M6-01-investigate-inherited-site
+description: Investigate — developer given sudden ownership of an unfamiliar site
+suite: search-discovery
+moment: investigate
+tier: 2
+frequency: occasional
+stakes: high
+mode: [mcp, cli-skills]
+prompt: "I've just been handed ownership of local-copy-jpp — I've never worked on it before and I don't know what it is. Can you give me a full picture of this site? What is it, what's in it, what's it built with, and what should I know before touching anything?"
+
+guardrails:
+  reads_only: true
+  installs: [local-copy-jpp]
+
+prereqs:
+  start_sites: [local-copy-jpp]
+
+context:
+  description: "Developer has zero prior knowledge of the site"
+  site: local-copy-jpp
+  site_has: "190 indexed docs, WPE-linked (localcopyjpp production), running after prereq"
+
+expected:
+  task_completed: true
+  key_steps:
+    - surfaces site purpose from content (not just metadata)
+    - lists installed plugins with role interpretation (not just names)
+    - identifies theme and notes if custom code is present
+    - flags any risk areas (outdated plugins, DB issues, large autoload)
+    - notes the WPE production link and what that means for care
+    - suggests what to investigate further and what to leave alone
+  must_not:
+    - return a raw plugin list with no interpretation
+    - require the user to ask follow-up questions to get basic context
+    - flag everything as risky (alarm fatigue)
+    - flag nothing as risky (false confidence)
+    - use implementation jargon without explanation
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Tier 2 — synthesis across multiple data sources (content + plugins + health + WPE link).
+  local-copy-jpp has 190 indexed docs and is linked to WPE production localcopyjpp.
+  Key quality signal: does it synthesize across sources, or just list them?
+  A great answer reads like a handoff brief — purpose, stack, risks, next steps.
+  A poor answer reads like a database dump.
+  Scenario card: docs/scenarios/investigate.md S-M6-01

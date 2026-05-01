@@ -131,6 +131,9 @@ interface EvalCase {
   prompt?: string;
   conversation?: Array<{ turn: number; prompt: string }>;
   prereqs?: { start_sites?: string[] };
+  context?: Record<string, string>;   // documentation only — state the system should be in
+  frequency?: 'daily' | 'weekly' | 'occasional' | 'monthly' | 'rare';
+  stakes?: 'high' | 'medium' | 'low';
   expected: { task_completed: boolean; key_steps: string[]; must_not: string[] };
   scoring_weights: Record<string, number>;
   notes?: string;
@@ -768,8 +771,12 @@ async function main(): Promise<void> {
       results.push(result);
 
       const taskOk = result.turns.some(t => t.result && t.result !== '[no result]');
-      console.log(`  ✅ Done — $${result.totalCost.toFixed(4)} | ${result.toolCallCount} tool calls | ${(result.durationMs / 1000).toFixed(0)}s`);
-      if (!taskOk) console.log('  ⚠️  No result returned — check transcript');
+      const stakesTag = evalCase.stakes === 'high' ? ' 🔴' : evalCase.stakes === 'medium' ? ' 🟡' : '';
+      console.log(`  ✅ Done — $${result.totalCost.toFixed(4)} | ${result.toolCallCount} tool calls | ${(result.durationMs / 1000).toFixed(0)}s${stakesTag}`);
+      if (!taskOk) {
+        const urgency = evalCase.stakes === 'high' ? '🔴 HIGH STAKES — ' : '';
+        console.log(`  ⚠️  ${urgency}No result returned — check transcript`);
+      }
     } catch (err: any) {
       console.error(`  ❌ Failed: ${err.message}`);
     }
@@ -788,9 +795,24 @@ async function main(): Promise<void> {
   console.log(`Total tools:  ${totalTools}`);
   console.log('');
   console.log('Per case:');
+  const failedHighStakes = results.filter(r => {
+    const ok = r.turns.some(t => t.result && t.result !== '[no result]');
+    const c = cases.find(c => c.id === r.caseId);
+    return !ok && c?.stakes === 'high';
+  });
+
   for (const r of results) {
     const ok = r.turns.some(t => t.result && t.result !== '[no result]');
-    console.log(`  ${ok ? '✅' : '❌'} ${r.caseId.padEnd(35)} $${r.totalCost.toFixed(4)} | ${r.toolCallCount} calls`);
+    const c = cases.find(c => c.id === r.caseId);
+    const tag = c?.stakes === 'high' ? ' 🔴' : c?.stakes === 'medium' ? ' 🟡' : '   ';
+    const freq = c?.frequency ? ` [${c.frequency}]` : '';
+    console.log(`  ${ok ? '✅' : '❌'}${tag} ${r.caseId.padEnd(35)} $${r.totalCost.toFixed(4)} | ${r.toolCallCount} calls${freq}`);
+  }
+
+  if (failedHighStakes.length > 0) {
+    console.log('');
+    console.log(`🔴 ${failedHighStakes.length} HIGH-STAKES case(s) failed — prioritize investigation:`);
+    failedHighStakes.forEach(r => console.log(`   • ${r.caseId}`));
   }
   console.log('');
   console.log('Next: score quality dimensions with:');

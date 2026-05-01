@@ -3,6 +3,8 @@ description: Health — WPE SSL certificate audit sorted by urgency
 suite: search-discovery
 moment: health
 tier: 1
+frequency: monthly
+stakes: high
 mode: [mcp, cli-skills]
 prompt: "Which of my WP Engine sites have SSL issues or certificates expiring soon?"
 

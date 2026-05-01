@@ -3,6 +3,8 @@ description: Orientation — which local sites are currently running
 suite: search-discovery
 moment: orientation
 tier: 1
+frequency: daily
+stakes: low
 mode: [mcp, cli-skills]
 prompt: "Which of my local sites are running right now?"
 

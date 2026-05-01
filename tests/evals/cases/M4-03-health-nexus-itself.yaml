@@ -3,6 +3,8 @@ description: Health — is Nexus itself working correctly
 suite: search-discovery
 moment: health
 tier: 1
+frequency: occasional
+stakes: high
 mode: [mcp, cli-skills]
 prompt: "Is Nexus working correctly? I want to make sure everything is connected and functioning."
 

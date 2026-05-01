@@ -3,6 +3,8 @@ description: Find — search for a specific page or post type across all sites
 suite: search-discovery
 moment: find
 tier: 1
+frequency: weekly
+stakes: medium
 mode: [mcp, cli-skills]
 prompt: "Find any posts or pages about pricing across all my sites."
 

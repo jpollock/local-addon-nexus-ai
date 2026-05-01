@@ -3,6 +3,8 @@ description: First run negative — AI provider not configured, user asks what t
 suite: search-discovery
 moment: first-run
 tier: 1
+frequency: occasional
+stakes: medium
 negative: true
 mode: [mcp, cli-skills]
 prompt: "I just installed Nexus but I haven't configured anything yet. What works right now and what do I still need to set up?"

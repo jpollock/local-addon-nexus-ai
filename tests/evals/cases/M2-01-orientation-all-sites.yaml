@@ -3,6 +3,8 @@ description: Orientation — show all sites, local and WPE, in one view
 suite: search-discovery
 moment: orientation
 tier: 1
+frequency: weekly
+stakes: low
 mode: [mcp, cli-skills]
 prompt: "Show me all my sites — local and WP Engine."
 

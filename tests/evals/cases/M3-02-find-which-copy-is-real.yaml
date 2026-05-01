@@ -3,6 +3,8 @@ description: Find — disambiguate multiple copies of the same project site
 suite: search-discovery
 moment: find
 tier: 2
+frequency: occasional
+stakes: high
 mode: [mcp, cli-skills]
 prompt: "I have a few sites that look like copies of the same project — jpp-client, jpp-client-2, and jpp-client-backup. Which one is the most recent? Which should I actually be working in?"
 

@@ -3,6 +3,8 @@ description: Orientation — which sites need WordPress updates, local and WPE
 suite: search-discovery
 moment: orientation
 tier: 1
+frequency: weekly
+stakes: high
 mode: [mcp, cli-skills]
 prompt: "Which of my sites need WordPress updates? Check both local and WP Engine."
 

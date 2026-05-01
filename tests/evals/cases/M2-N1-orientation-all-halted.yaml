@@ -3,6 +3,8 @@ description: Orientation negative — plugin/version query when all sites are ha
 suite: search-discovery
 moment: orientation
 tier: 1
+frequency: daily
+stakes: low
 negative: true
 mode: [mcp, cli-skills]
 prompt: "Which of my local sites have WooCommerce installed? All my sites are currently stopped."
@@ -10,6 +12,10 @@ prompt: "Which of my local sites have WooCommerce installed? All my sites are cu
 guardrails:
   reads_only: true
   scope: local_sites_only
+
+context:
+  description: "All local sites halted, varying cache state"
+  notes: "Tests filesystem scan and cached data paths — halted != no data"
 
 expected:
   task_completed: true

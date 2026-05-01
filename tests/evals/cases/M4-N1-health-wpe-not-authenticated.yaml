@@ -3,6 +3,8 @@ description: Health negative — WPE SSL audit when not authenticated
 suite: search-discovery
 moment: health
 tier: 1
+frequency: occasional
+stakes: medium
 negative: true
 mode: [mcp, cli-skills]
 prompt: "Check my WP Engine sites for SSL issues. I'm not sure if I'm logged in to WPE."
@@ -10,6 +12,10 @@ prompt: "Check my WP Engine sites for SSL issues. I'm not sure if I'm logged in 
 guardrails:
   reads_only: true
   scope: wpe_only
+
+context:
+  description: "WPE authentication state unknown to user"
+  notes: "System should check auth before making CAPI calls, not after"
 
 expected:
   task_completed: true

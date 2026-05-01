@@ -3,6 +3,8 @@ description: Compare — rank local sites by content volume
 suite: search-discovery
 moment: compare
 tier: 2
+frequency: occasional
+stakes: low
 mode: [mcp, cli-skills]
 prompt: "Rank my local sites by how much content they have. Which has the most?"
 

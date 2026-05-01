@@ -3,6 +3,8 @@ description: Compare — map all local sites to their WPE counterparts
 suite: search-discovery
 moment: compare
 tier: 2
+frequency: occasional
+stakes: medium
 mode: [mcp, cli-skills]
 prompt: "For each of my local sites, tell me if there's a matching WP Engine site. Show me which are paired and which are local-only or WPE-only."
 

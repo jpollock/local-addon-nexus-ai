@@ -3,6 +3,8 @@ description: Health — database health across local sites
 suite: search-discovery
 moment: health
 tier: 1
+frequency: monthly
+stakes: medium
 mode: [mcp, cli-skills]
 prompt: "Which of my local sites have database issues? Give me a summary of database health across all of them."
 

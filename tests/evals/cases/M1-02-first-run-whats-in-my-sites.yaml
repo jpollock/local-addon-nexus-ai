@@ -3,6 +3,8 @@ description: First run — user asks to see what's in their sites before any ind
 suite: search-discovery
 moment: first-run
 tier: 2
+frequency: occasional
+stakes: medium
 mode: [mcp, cli-skills]
 prompt: "Show me what's in my sites."
 

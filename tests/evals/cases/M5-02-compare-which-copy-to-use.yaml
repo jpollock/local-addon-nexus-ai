@@ -3,6 +3,8 @@ description: Compare — pick the right copy of a project from multiple local si
 suite: search-discovery
 moment: compare
 tier: 2
+frequency: occasional
+stakes: high
 mode: [mcp, cli-skills]
 prompt: "I have multiple local sites for my client project — jpp-client, jpp-client-staging, and jpp-client-old. Which one should I be working in for active development?"
 
