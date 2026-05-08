@@ -203,12 +203,12 @@ export class HttpEventInterface {
         return;
       }
       if (!this.smartSearchHandler) {
-        res.writeHead(503);
+        res.writeHead(503, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ errors: [{ message: 'SmartSearch not initialized' }] }));
         return;
       }
       this.smartSearchHandler.handle(req, res).catch((err) => {
-        res.writeHead(500);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ errors: [{ message: err?.message ?? 'Internal error' }] }));
       });
       return;
