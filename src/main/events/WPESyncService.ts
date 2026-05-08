@@ -434,6 +434,9 @@ export class WPESyncService {
             source: 'wpe',
           }),
           indexedAt: Date.now(),
+          post_date_gmt: '',
+          post_modified_gmt: '',
+          doc_url: '',
         });
       }
 

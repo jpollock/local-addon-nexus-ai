@@ -51,13 +51,40 @@ export class VectorStore {
     const existing = await db.tableNames();
 
     if (existing.includes(name)) {
-      return db.openTable(name);
+      const table = await db.openTable(name);
+      // Migrate: add new Smart Search columns if absent
+      await this.migrateTableSchema(table);
+      return table;
     }
 
     // Create table with seed record to establish schema, then delete seed
     const table = await db.createTable(name, [createSeedRecord()]);
     await table.delete('id = "__seed__"');
     return table;
+  }
+
+  private async migrateTableSchema(table: lancedb.Table): Promise<void> {
+    try {
+      const schema = await table.schema();
+      const fieldNames = schema.fields.map((f: any) => f.name);
+      const newCols: Array<{ name: string; valueSql: string }> = [];
+
+      if (!fieldNames.includes('post_date_gmt')) {
+        newCols.push({ name: 'post_date_gmt', valueSql: "cast('' as varchar)" });
+      }
+      if (!fieldNames.includes('post_modified_gmt')) {
+        newCols.push({ name: 'post_modified_gmt', valueSql: "cast('' as varchar)" });
+      }
+      if (!fieldNames.includes('doc_url')) {
+        newCols.push({ name: 'doc_url', valueSql: "cast('' as varchar)" });
+      }
+
+      if (newCols.length > 0) {
+        await table.addColumns(newCols);
+      }
+    } catch {
+      // Migration is best-effort — search still works without new columns
+    }
   }
 
   async upsert(siteId: string, documents: VectorDocument[]): Promise<void> {
