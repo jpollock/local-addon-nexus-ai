@@ -370,6 +370,19 @@ export class VectorStore {
   }
 
   async delete(siteId: string, documentIds: string[]): Promise<void> {
+    // Sentinel: ['__all__'] clears the entire site table
+    if (documentIds.length === 1 && documentIds[0] === '__all__') {
+      try {
+        const table = await this.getTable(siteId);
+        if (table) {
+          await table.delete('id IS NOT NULL');
+        }
+      } catch (err) {
+        console.warn('[VectorStore] deleteAll failed:', err);
+      }
+      return;
+    }
+
     const table = await this.getTable(siteId);
 
     if (!table) return;
