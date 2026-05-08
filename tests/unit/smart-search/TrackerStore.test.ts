@@ -56,6 +56,14 @@ describe('TrackerStore', () => {
       expect(analytics[0].documentID).toBe('post:42');
       expect(analytics[0].totalImpressions).toBe(1);
     });
+
+    it('calculates click-through rate correctly', () => {
+      store.trackPageView('site1', { sessionId: 's1', userId: 'u1', documentId: 'post:42' });
+      store.trackPageView('site1', { sessionId: 's2', userId: 'u2', documentId: 'post:42' });
+      store.trackSearchClick('site1', { sessionId: 's1', userId: 'u1', documentId: 'post:42', position: 1 });
+      const analytics = store.getSiteAnalytics('site1', 10);
+      expect(analytics[0].clickThroughRate.total).toBe(50); // 1 click / 2 views = 50%
+    });
   });
 
   describe('TTL cleanup', () => {
