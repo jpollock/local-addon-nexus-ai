@@ -394,6 +394,21 @@ async function installNexusAiConnectorPlugin(
       const aiProxyInfo = settingsStorage.get('ai_proxy_info') as any;
       const nexusSettings = (settingsStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
 
+      // Detect atlas-search plugin — override Smart Search backend URL if active
+      let smartSearchUrl: string | undefined;
+      let smartSearchToken: string | undefined;
+      try {
+        const atlasSearchCheck = await localServices.wpCliRun(site.id, ['plugin', 'is-active', 'atlas-search']);
+        if (atlasSearchCheck.success) {
+          const webhookBase = webhookInfo.url.replace(/\/+$/, '');
+          smartSearchUrl = `${webhookBase}/smart-search/graphql`;
+          smartSearchToken = webhookInfo.authToken;
+          logger.info(`[NexusAI] atlas-search active in ${site.name} — Smart Search backend override enabled`);
+        }
+      } catch {
+        // atlas-search not active or check failed — omit Smart Search config
+      }
+
       // Generate MU plugin content with caller detection
       const muPluginContent = generateMuPluginContent({
         webhookUrl: webhookInfo.url,
@@ -402,6 +417,8 @@ async function installNexusAiConnectorPlugin(
         aiGatewayUrl: aiProxyInfo?.url,
         aiGatewayToken: aiProxyInfo?.authToken,
         aiProvider: nexusSettings.aiProvider ?? 'anthropic',
+        smartSearchUrl,
+        smartSearchToken,
       });
 
       // Clean up old MU plugin file if it exists (pre-unified template)
