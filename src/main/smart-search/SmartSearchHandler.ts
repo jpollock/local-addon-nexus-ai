@@ -7,10 +7,22 @@ import type { TrackerStore } from './TrackerStore';
 import { expandSynonyms, applySearchBias, applyPostProcess, computeAggregations, type FindDoc } from './find-pipeline';
 import { matchesFilter } from './filter-parser';
 
+const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', (chunk: Buffer | string) => { data += chunk.toString(); });
+    let size = 0;
+    req.on('data', (chunk: Buffer | string) => {
+      const str = chunk.toString();
+      size += Buffer.byteLength(str);
+      if (size > MAX_BODY_BYTES) {
+        req.destroy();
+        reject(new Error('Request body too large'));
+        return;
+      }
+      data += str;
+    });
     req.on('end', () => resolve(data));
     req.on('error', reject);
   });
@@ -152,6 +164,10 @@ export class SmartSearchHandler {
     const expanded = expandSynonyms(query, rules);
     const bias = semanticSearch?.searchBias ?? 5;
     const vectorWeight = applySearchBias(bias);
+    // Note: VectorStore.search does hybrid vector+FTS internally and doesn't
+    // expose per-query weighting. We use vectorWeight to gate embedding generation:
+    // bias=0 → skip embedding (FTS-only), bias>0 → use semantic vector.
+    // Full per-query weight blending is tracked as a future enhancement.
 
     let queryVector: Float32Array | undefined;
     if (vectorWeight > 0 && this.embeddingService.isReady()) {
@@ -295,15 +311,26 @@ export class SmartSearchHandler {
     const count = vars?.count ?? 5;
 
     if (vars?.docID !== undefined) {
-      // Related documents: vector similarity to reference doc
-      const allResults = await this.vectorStore.search(siteId, new Float32Array(384), { limit: 1000 });
-      const ref = allResults.find(r => r.id === vars.docID);
-      if (!ref) {
+      // Look up the reference document directly by ID via a WHERE query
+      // rather than a zero-vector scan that may miss it
+      let refContent: string | undefined;
+      try {
+        // @ts-ignore — accessing private getTable to perform a direct WHERE query
+        const table = await (this.vectorStore as any).getTable(siteId);
+        if (table) {
+          const rows = await table.query().where(`id = '${vars.docID.replace(/'/g, "\\'")}'`).limit(1).toArray();
+          refContent = rows[0]?.content;
+        }
+      } catch { /* table may not exist */ }
+
+      if (!refContent) {
         return jsonResponse(res, { data: { recommendations: { relatedDocuments: [] } } });
       }
+
       const refVec = this.embeddingService.isReady()
-        ? await this.embeddingService.embed(ref.content)
+        ? await this.embeddingService.embed(refContent)
         : new Float32Array(384);
+
       const similar = await this.vectorStore.search(siteId, refVec, { limit: count + 1 });
       const related = similar
         .filter(r => r.id !== vars.docID)

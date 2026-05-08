@@ -29,7 +29,10 @@ export class SynonymStore {
       this.db.prepare(
         'UPDATE smart_search_synonyms SET synonyms = ? WHERE id = ? AND site_id = ?'
       ).run(synonyms, id, siteId);
-      return { id, siteId, synonyms, createdAt: Date.now() };
+      const existing = this.db.prepare(
+        'SELECT created_at FROM smart_search_synonyms WHERE id = ? AND site_id = ?'
+      ).get(id, siteId) as any;
+      return { id, siteId, synonyms, createdAt: existing?.created_at ?? Date.now() };
     }
     const newId = randomUUID();
     const now = Date.now();
