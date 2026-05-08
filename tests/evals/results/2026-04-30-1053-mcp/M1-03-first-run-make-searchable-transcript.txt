@@ -1,0 +1,163 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M1-03-first-run-make-searchable
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 134.7s
+Tool calls: 17
+Cost: $0.3248
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I have 8 local WordPress sites that I just imported into Local. None of them are indexed yet. I want to be able to search across their content — how do I make that happen?
+
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so I'll use the MCP tools directly. Let me discover your sites first.
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+  ⎿  ## Fleet (8 local, 306 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **nexus-e2e-test** (nexus-e2e-test.local) [running]
+- jeremypollockblog (jeremypollockblog.local) [halted]
+- jpp0413p (jpp0413p.local) [halted]
+- nexus (nexus.local) [halted]
+- nitropack-1 (nitropack-1.local) [halted]
+- ACF Auto Car Finder (acf-auto-car-finder.local) [halted]
+- local-copy-jpp (local-copy-jpp.local
+I can see your 8 local sites. 7 of them are halted — indexing requires sites to be **running** (the indexer reads directly from the WordPress database). I'll start all halted sites, then kick off a bulk reindex.
+
+Starting all 7 halted sites in parallel now.
+
+⏺ mcp__local-nexus-ai__local_start_site({"site":"jeremypollockblog"})
+
+⏺ mcp__local-nexus-ai__local_start_site({"site":"jpp0413p"})
+
+⏺ mcp__local-nexus-ai__local_start_site({"site":"nexus"})
+
+⏺ mcp__local-nexus-ai__local_start_site({"site":"nitropack-1"})
+
+⏺ mcp__local-nexus-ai__local_start_site({"site":"ACF Auto Car Finder"})
+
+⏺ mcp__local-nexus-ai__local_start_site({"site":"local-copy-jpp"})
+
+⏺ mcp__local-nexus-ai__local_start_site({"site":"Newsroom Demo"})
+  ⎿  Site "jeremypollockblog" started.
+  ⎿  Site "jpp0413p" started.
+  ⎿  Site "nexus" started.
+  ⎿  Site "nitropack-1" started.
+  ⎿  Site "ACF Auto Car Finder" started.
+  ⎿  Site "local-copy-jpp" started.
+  ⎿  Site "Newsroom Demo" started.
+All 7 sites are up. Now I need each site's ID for the bulk reindex call — fetching them all in parallel.
+
+⏺ mcp__local-nexus-ai__local_get_site({"site":"nexus-e2e-test"})
+
+⏺ mcp__local-nexus-ai__local_get_site({"site":"jeremypollockblog"})
+
+⏺ mcp__local-nexus-ai__local_get_site({"site":"jpp0413p"})
+
+⏺ mcp__local-nexus-ai__local_get_site({"site":"nexus"})
+
+⏺ mcp__local-nexus-ai__local_get_site({"site":"nitropack-1"})
+
+⏺ mcp__local-nexus-ai__local_get_site({"site":"ACF Auto Car Finder"})
+
+⏺ mcp__local-nexus-ai__local_get_site({"site":"local-copy-jpp"})
+
+⏺ mcp__local-nexus-ai__local_get_site({"site":"Newsroom Demo"})
+  ⎿  ## nexus-e2e-test
+- **ID:** 6BJ5_1BUz
+- **Domain:** nexus-e2e-test.local
+- **Path:** /Users/jeremy.pollock/Local Sites/nexus-e2e-test
+- **Status:** running
+- **Indexed:** yes (528 docs, 528 chunks)
+- **Last indexed:** 2026-04-30T15:55:12.786Z
+  ⎿  ## jeremypollockblog
+- **ID:** At8fkqcKD
+- **Domain:** jeremypollockblog.local
+- **Path:** /Users/jeremy.pollock/Local Sites/jeremypollockblog
+- **Status:** running
+- **Indexed:** yes (2 docs, 2 chunks)
+- **Last indexed:** 2026-04-30T15:56:30.122Z
+  ⎿  ## jpp0413p
+- **ID:** zs6yHfXgd
+- **Domain:** jpp0413p.local
+- **Path:** /Users/jeremy.pollock/Local Sites/jpp0413p
+- **Status:** running
+- **Indexed:** yes (2 docs, 2 chunks)
+- **Last indexed:** 2026-04-30T15:56:33.292Z
+  ⎿  ## nexus
+- **ID:** QfFx8PJAR
+- **Domain:** nexus.local
+- **Path:** /Users/jeremy.pollock/Local Sites/nexus
+- **Status:** running
+- **Indexed:** yes (3 docs, 3 chunks)
+- **Last indexed:** 2026-04-30T15:56:36.423Z
+  ⎿  ## nitropack-1
+- **ID:** Fec1MGsPP
+- **Domain:** nitropack-1.local
+- **Path:** /Users/jeremy.pollock/Local Sites/nitropack-1
+- **Status:** running
+- **Indexed:** yes (2 docs, 2 chunks)
+- **Last indexed:** 2026-04-30T15:56:39.627Z
+  ⎿  ## ACF Auto Car Finder
+- **ID:** mmWgjXGRS
+- **Domain:** acf-auto-car-finder.local
+- **Path:** /Users/jeremy.pollock/Local Sites/acf-auto-car-finder
+- **Status:** running
+- **Indexed:** yes (63 docs, 71 chunks)
+- **Last indexed:** 2026-04-30T15:56:50.730Z
+  ⎿  ## local-copy-jpp
+- **ID:** x8ZbkgLim
+- **Domain:** local-copy-jpp.local
+- **Path:** /Users/jeremy.pollock/Local Sites/local-copy-jpp
+- **Status:** running
+- **Indexed:** yes (190 docs, 222 chunks)
+- **Last indexed:** 2026-04-30T15:56:54.722Z
+  ⎿  ## Newsroom Demo
+- **ID:** nGjg-3i1-
+- **Domain:** newsroom-demo.local
+- **Path:** /Users/jeremy.pollock/Local Sites/newsroom-demo
+- **Status:** running
+- **Indexed:** yes (121 docs, 151 chunks)
+- **Last indexed:** 2026-04-30T15:56:58.146Z
+All 8 sites are already indexed — starting them triggered automatic indexing. Here's the summary:
+
+| Site | Docs indexed |
+|---|---|
+| nexus-e2e-test | 528 |
+| Newsroom Demo | 121 |
+| local-copy-jpp | 190 |
+| ACF Auto Car Finder | 63 |
+| nexus | 3 |
+| jeremypollockblog | 2 |
+| jpp0413p | 2 |
+| nitropack-1 | 2 |
+
+You're ready to search. You can ask me things like "find posts about car listings across all my sites" or "which sites have content about NitroPack?" and I'll run a cross-site search for you.
+
+--- FINAL RESULT ---
+All 8 sites are already indexed — starting them triggered automatic indexing. Here's the summary:
+
+| Site | Docs indexed |
+|---|---|
+| nexus-e2e-test | 528 |
+| Newsroom Demo | 121 |
+| local-copy-jpp | 190 |
+| ACF Auto Car Finder | 63 |
+| nexus | 3 |
+| jeremypollockblog | 2 |
+| jpp0413p | 2 |
+| nitropack-1 | 2 |
+
+You're ready to search. You can ask me things like "find posts about car listings across all my sites" or "which sites have content about NitroPack?" and I'll run a cross-site search for you.

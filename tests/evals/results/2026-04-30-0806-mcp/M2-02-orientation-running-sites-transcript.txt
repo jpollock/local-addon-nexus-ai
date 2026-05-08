@@ -1,0 +1,42 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M2-02-orientation-running-sites
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 39.8s
+Tool calls: 2
+Cost: $0.0914
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites are running right now?
+
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so I need to use the MCP tools directly instead of the CLI. Let me check what's available.
+
+⏺ ListMcpResourcesTool({})
+  ⎿  No resources found. MCP servers may still provide tools even if they have no resources.
+The Nexus MCP tools don't appear to be registered in this session — they're not showing up in my available tool list. This usually means either the MCP server isn't running, or this Claude Code session wasn't started with the Nexus MCP server configured.
+
+A few things to check:
+
+1. **Is Local running?** The Nexus MCP server only starts when Local is active and the addon is loaded.
+2. **Is the MCP server configured?** In Claude Desktop (or Claude Code with MCP), the Nexus server needs to be in your `claude_desktop_config.json` or equivalent.
+
+You can diagnose with `nexus doctor` in your terminal — it checks all of this and prints the exact fix for each failure. If you want me to run that for you, switch out of MCP-only mode and I can use the CLI directly.
+
+--- FINAL RESULT ---
+The Nexus MCP tools don't appear to be registered in this session — they're not showing up in my available tool list. This usually means either the MCP server isn't running, or this Claude Code session wasn't started with the Nexus MCP server configured.
+
+A few things to check:
+
+1. **Is Local running?** The Nexus MCP server only starts when Local is active and the addon is loaded.
+2. **Is the MCP server configured?** In Claude Desktop (or Claude Code with MCP), the Nexus server needs to be in your `claude_desktop_config.json` or equivalent.
+
+You can diagnose with `nexus doctor` in your terminal — it checks all of this and prints the exact fix for each failure. If you want me to run that for you, switch out of MCP-only mode and I can use the CLI directly.

@@ -1,0 +1,26 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M2-N1-orientation-all-halted
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 31.5s
+Tool calls: 1
+Cost: $0.5325
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites have WooCommerce installed? All my sites are currently stopped.
+
+I'll search for WooCommerce across your local sites using the plugin finder, which works even on stopped sites.
+
+⏺ mcp__local-nexus-ai__find_sites_with_plugin({"plugin":"woocommerce"})
+  ⎿  No indexed sites have a plugin matching "woocommerce".
+No local sites have WooCommerce installed based on the current index. This could mean either none of your sites actually have it, or the sites haven't been indexed yet (the search reads from the content index, not a live filesystem scan).
+
+If you think WooCommerce should be there, you could start one or more sites and run a reindex to pick up their plugin data.
+
+--- FINAL RESULT ---
+No local sites have WooCommerce installed based on the current index. This could mean either none of your sites actually have it, or the sites haven't been indexed yet (the search reads from the content index, not a live filesystem scan).
+
+If you think WooCommerce should be there, you could start one or more sites and run a reindex to pick up their plugin data.

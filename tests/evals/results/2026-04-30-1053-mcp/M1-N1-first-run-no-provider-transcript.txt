@@ -1,0 +1,179 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M1-N1-first-run-no-provider
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 86.9s
+Tool calls: 7
+Cost: $0.2765
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I just installed Nexus but I haven't configured anything yet. What works right now and what do I still need to set up?
+
+
+⏺ Skill({"skill":"nexus-doctor"})
+  ⎿  Shell command failed for pattern "```!
+nexus doctor
+```": [stderr]
+(eval):1: command not found: nexus
+Since I'm in MCP-only mode, I'll use the MCP tools directly to run diagnostics.
+
+⏺ mcp__local-nexus-ai__get_system_health({})
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+  ⎿  {
+  "status": "healthy",
+  "uptime_ms": 504102,
+  "memory": {
+    "rss_mb": 189.203125,
+    "heap_used_mb": 81.22451400756836,
+    "heap_total_mb": 141.3125,
+    "external_mb": 9.553238868713379
+  },
+  "event_queue": {
+    "pending": 0,
+    "processing": 0,
+    "failed_last_hour": 0
+  },
+  "mcp_tools": {
+    "total_calls": 19,
+    "error_rate": 0,
+    "avg_duration_ms": 4540.421052631579
+  },
+  "search": {
+    "total_queries": 0,
+    "avg_duration_ms": 0,
+    "cache_hit_rate": 0
+  },
+  "issues":
+  ⎿  ## Fleet (8 local, 306 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **nexus-e2e-test** (nexus-e2e-test.local) [running]
+- **jeremypollockblog** (jeremypollockblog.local) [running]
+- **jpp0413p** (jpp0413p.local) [running]
+- **nexus** (nexus.local) [running]
+- **nitropack-1** (nitropack-1.local) [running]
+- **ACF Auto Car Finder** (acf-auto-car-finder.local) [running]
+- **local-cop
+Now let me check if any sites have AI configured and get graph stats.
+
+⏺ mcp__local-nexus-ai__get_graph_stats({})
+
+⏺ mcp__local-nexus-ai__list_indexed_sites({})
+
+⏺ mcp__local-nexus-ai__get_telemetry_status({})
+  ⎿  {
+  "total_content": 4090,
+  "total_plugins": 3571,
+  "total_users": 1248,
+  "total_relationships": 0,
+  "storage_size_bytes": 6717440
+}
+  ⎿  ## Indexed Sites
+
+- [OK] **nexus-e2e-test** — 528 docs, 528 chunks, last indexed: 2026-04-30T15:55:12.786Z
+- [OK] **jeremypollockblog** — 2 docs, 2 chunks, last indexed: 2026-04-30T15:56:30.122Z
+- [OK] **jpp0413p** — 2 docs, 2 chunks, last indexed: 2026-04-30T15:56:33.292Z
+- [OK] **nexus** — 3 docs, 3 chunks, last indexed: 2026-04-30T15:56:36.423Z
+- [OK] **nitropack-1** — 2 docs, 2 chunks, last indexed: 2026-04-30T15:56:39.627Z
+- [OK] **ACF Auto Car Finder** — 63 docs, 71 chunks, last indexed: 2
+  ⎿  {
+  "enabled": true,
+  "installation_id": "a5edd63f-4d0a-487a-9b9a-9c40929c686c",
+  "registered": true,
+  "registered_at": "2026-04-29T14:04:24.252Z",
+  "prompted_at": null,
+  "queued_events": 163,
+  "privacy_note": "Only anonymous metrics collected. No PII, site names, or WordPress data.",
+  "opt_out": "Use set_telemetry_enabled with enabled=false to disable"
+}
+Let me check if any of the local sites have AI configured.
+
+⏺ mcp__local-nexus-ai__nexus_get_fleet_twins({})
+  ⎿  ## Fleet twin overview — 8 sites
+
+### 🔍 Indexed (8)
+- **nexus-e2e-test** — 3m ago
+- **jeremypollockblog** — 1m ago
+- **jpp0413p** — 1m ago
+- **nexus** — 1m ago
+- **nitropack-1** — 1m ago
+- **ACF Auto Car Finder** — 1m ago
+- **local-copy-jpp** — 1m ago
+- **Newsroom Demo** — 1m ago
+
+**Summary:** 8 indexed, 0 metadata, 0 filesystem, 0 no data
+Here's your current status based on the diagnostics:
+
+## What's working right now ✅
+
+**Core infrastructure**
+- MCP server is healthy (up ~8 min, 0 errors)
+- WP Engine account connected — 306 installs visible
+- All 8 local sites discovered and running
+
+**Fleet management (ready to use)**
+- Site content indexed across all 8 local sites (happened automatically)
+- Knowledge graph populated: 4,090 content items, 3,571 plugins
+- WPE tools: pull/push, domains, SSL, backups, plugin management
+- Database scanning (`scan_database_health`, `clean_database_items`)
+- Fleet health, drift detection, search across sites
+
+**Telemetry** — enabled and registered (since yesterday)
+
+---
+
+## What still needs setup ⚠️
+
+**AI features on WordPress sites (the main gap)**
+
+You'll need to:
+
+1. **Configure an AI provider** — add an API key for Anthropic, OpenAI, or Google in Local's Nexus AI preferences (or set up Ollama locally, or enable the Local AI Gateway)
+
+2. **Run AI setup on each site** — once a provider is configured, use `wp_setup_ai` per site to install the WordPress AI plugin, activate it, and sync credentials
+
+Until those two steps are done, tools like `wp_run_ability`, `wp_list_abilities`, and the WordPress block editor AI features won't work. Everything else (fleet management, WPE tools, search, database scanning) is ready to go now.
+
+Which AI provider are you planning to use?
+
+--- FINAL RESULT ---
+Here's your current status based on the diagnostics:
+
+## What's working right now ✅
+
+**Core infrastructure**
+- MCP server is healthy (up ~8 min, 0 errors)
+- WP Engine account connected — 306 installs visible
+- All 8 local sites discovered and running
+
+**Fleet management (ready to use)**
+- Site content indexed across all 8 local sites (happened automatically)
+- Knowledge graph populated: 4,090 content items, 3,571 plugins
+- WPE tools: pull/push, domains, SSL, backups, plugin management
+- Database scanning (`scan_database_health`, `clean_database_items`)
+- Fleet health, drift detection, search across sites
+
+**Telemetry** — enabled and registered (since yesterday)
+
+---
+
+## What still needs setup ⚠️
+
+**AI features on WordPress sites (the main gap)**
+
+You'll need to:
+
+1. **Configure an AI provider** — add an API key for Anthropic, OpenAI, or Google in Local's Nexus AI preferences (or set up Ollama locally, or enable the Local AI Gateway)
+
+2. **Run AI setup on each site** — once a provider is configured, use `wp_setup_ai` per site to install the WordPress AI plugin, activate it, and sync credentials
+
+Until those two steps are done, tools like `wp_run_ability`, `wp_list_abilities`, and the WordPress block editor AI features won't work. Everything else (fleet management, WPE tools, search, database scanning) is ready to go now.
+
+Which AI provider are you planning to use?

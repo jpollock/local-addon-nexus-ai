@@ -1,0 +1,61 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M3-02-find-which-copy-is-real
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 51.8s
+Tool calls: 3
+Cost: $0.2419
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I have a few sites that look like copies of the same project — jpp-client, jpp-client-2, and jpp-client-backup. Which one is the most recent? Which should I actually be working in?
+
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so I'll use the MCP tools directly to compare those three sites.
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+
+⏺ ReadMcpResourceTool({"server":"local-nexus-ai","uri":"nexus://fleet/state"})
+  ⎿  ## Fleet (8 local, 311 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **nexus-e2e-test** (nexus-e2e-test.local) [running]
+- **jeremypollockblog** (jeremypollockblog.local) [running]
+- **jpp0413p** (jpp0413p.local) [running]
+- **nexus** (nexus.local) [running]
+- **nitropack-1** (nitropack-1.local) [running]
+- **ACF Auto Car Finder** (acf-auto-car-finder.local) [running]
+- **local-cop
+  ⎿  {"contents":[{"uri":"nexus://fleet/state","mimeType":"text/markdown","text":"# Fleet State (from local cache)\n\n## WP Engine Installs (310 installs, synced 7m ago)\n\n| install_name | install_id | environment | primary_domain | account |\n|---|---|---|---|---|\n| sprntndntchmbr | 9564d013-757d-4b18-8aa0-93bdd5fb9d99 | production | sprntndntchmbr.wpenginepowered.com | esmy9dign4hoqz |\n| benfischer | 5893fe56-9fde-441c-8692-c9d1623b5ad8 | production | benfischer.wpenginepowered.com | qawpeproduc
+Neither **jpp-client**, **jpp-client-2**, nor **jpp-client-backup** appear in your fleet — they're not among your 8 local sites or 310+ WPE installs.
+
+Your local sites are: `ACF Auto Car Finder`, `jeremypollockblog`, `jpp0413p`, `local-copy-jpp`, `Newsroom Demo`, `nexus`, `nexus-e2e-test`, and `nitropack-1`.
+
+A few possibilities:
+- The sites may exist under different names (e.g. `jpp0413p` or `local-copy-jpp` look like they could be related to your "jpp" work)
+- They may be halted and not yet synced to the index
+- They could be on a different machine
+
+Do any of those existing site names ring a bell? Or do you know roughly what the sites contain — I can search for content across indexed sites to help narrow it down.
+
+--- FINAL RESULT ---
+Neither **jpp-client**, **jpp-client-2**, nor **jpp-client-backup** appear in your fleet — they're not among your 8 local sites or 310+ WPE installs.
+
+Your local sites are: `ACF Auto Car Finder`, `jeremypollockblog`, `jpp0413p`, `local-copy-jpp`, `Newsroom Demo`, `nexus`, `nexus-e2e-test`, and `nitropack-1`.
+
+A few possibilities:
+- The sites may exist under different names (e.g. `jpp0413p` or `local-copy-jpp` look like they could be related to your "jpp" work)
+- They may be halted and not yet synced to the index
+- They could be on a different machine
+
+Do any of those existing site names ring a bell? Or do you know roughly what the sites contain — I can search for content across indexed sites to help narrow it down.

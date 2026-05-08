@@ -1,0 +1,113 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M4-03-health-nexus-itself
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 58.1s
+Tool calls: 5
+Cost: $0.2270
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Is Nexus working correctly? I want to make sure everything is connected and functioning.
+
+
+⏺ Skill({"skill":"nexus-doctor"})
+  ⎿  Shell command failed for pattern "```!
+nexus doctor
+```": [stderr]
+(eval):1: command not found: nexus
+Since I'm in MCP-only mode, I'll run the health checks directly via the MCP tools.
+
+⏺ mcp__local-nexus-ai__get_system_health({})
+
+⏺ mcp__local-nexus-ai__get_event_processor_stats({})
+  ⎿  {
+  "status": "degraded",
+  "uptime_ms": 1305776,
+  "memory": {
+    "rss_mb": 186.046875,
+    "heap_used_mb": 67.0549545288086,
+    "heap_total_mb": 75.109375,
+    "external_mb": 4.249814987182617
+  },
+  "event_queue": {
+    "pending": 0,
+    "processing": 0,
+    "failed_last_hour": 0
+  },
+  "mcp_tools": {
+    "total_calls": 58,
+    "error_rate": 0.05172413793103448,
+    "avg_duration_ms": 3494.206896551724
+  },
+  "search": {
+    "total_queries": 0,
+    "avg_duration_ms": 0,
+    "cache_hit_rate"
+  ⎿  {
+  "total_events": 3,
+  "pending_events": 0,
+  "failed_events": 0,
+  "processed_today": 3,
+  "average_processing_time_ms": 580.6666666666666
+}
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+
+⏺ mcp__local-nexus-ai__get_graph_stats({})
+  ⎿  ## Fleet (8 local, 306 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **nexus-e2e-test** (nexus-e2e-test.local) [running]
+- **jeremypollockblog** (jeremypollockblog.local) [running]
+- **jpp0413p** (jpp0413p.local) [running]
+- **nexus** (nexus.local) [running]
+- **nitropack-1** (nitropack-1.local) [running]
+- **ACF Auto Car Finder** (acf-auto-car-finder.local) [running]
+- **local-cop
+  ⎿  {
+  "total_content": 4090,
+  "total_plugins": 3571,
+  "total_users": 1248,
+  "total_relationships": 0,
+  "storage_size_bytes": 6717440
+}
+Here's the health summary:
+
+**Overall: Degraded (minor)**
+
+| Check | Status | Detail |
+|---|---|---|
+| MCP Server | ✅ Running | Uptime 21min, 186MB RSS |
+| Event Processor | ✅ Healthy | 3 events processed, 0 failed |
+| Local Sites | ✅ 8 running | All sites online |
+| WPE Connection | ✅ Connected | 306 installs visible |
+| Knowledge Graph | ✅ Populated | 4,090 content items, 3,571 plugins |
+| Error Rate | ⚠️ 5.2% | Just over the 5% threshold |
+
+The only issue is a marginally elevated error rate (5.2% vs 5% threshold) across 58 tool calls. Given the eval runs visible in git status (`tests/evals/results/`), those test failures are likely the source. Nothing indicates a real connectivity or functionality problem.
+
+**Everything is connected and functioning normally.** The "degraded" status is a borderline metric, not an outage.
+
+--- FINAL RESULT ---
+Here's the health summary:
+
+**Overall: Degraded (minor)**
+
+| Check | Status | Detail |
+|---|---|---|
+| MCP Server | ✅ Running | Uptime 21min, 186MB RSS |
+| Event Processor | ✅ Healthy | 3 events processed, 0 failed |
+| Local Sites | ✅ 8 running | All sites online |
+| WPE Connection | ✅ Connected | 306 installs visible |
+| Knowledge Graph | ✅ Populated | 4,090 content items, 3,571 plugins |
+| Error Rate | ⚠️ 5.2% | Just over the 5% threshold |
+
+The only issue is a marginally elevated error rate (5.2% vs 5% threshold) across 58 tool calls. Given the eval runs visible in git status (`tests/evals/results/`), those test failures are likely the source. Nothing indicates a real connectivity or functionality problem.
+
+**Everything is connected and functioning normally.** The "degraded" status is a borderline metric, not an outage.

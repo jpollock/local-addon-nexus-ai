@@ -1,0 +1,97 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M1-01-first-run-what-can-i-do
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 59.2s
+Tool calls: 3
+Cost: $0.1441
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I just installed Nexus. What can I do with it right now?
+
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so let me use the Nexus MCP tools directly to show you what's available.
+
+⏺ ListMcpResourcesTool({})
+  ⎿  No resources found. MCP servers may still provide tools even if they have no resources.
+Let me try to discover the available Nexus tools directly.
+
+⏺ Skill({"skill":"nexus-doctor"})
+  ⎿  Shell command failed for pattern "```!
+nexus doctor
+```": [stderr]
+(eval):1: command not found: nexus
+The Nexus MCP tools aren't currently connected to this session, but I can tell you what Nexus enables based on my knowledge of the addon. Here's what you can do right now:
+
+---
+
+**Search across all your local sites**
+Ask me things like "which of my sites has a post about checkout errors?" or "find any pages mentioning pricing" — Nexus indexes your site content and searches across all of them at once.
+
+**Get a fleet overview**
+"Show me all my sites" — see which are running vs halted, their WordPress versions, and quick links to WP Engine environments if connected.
+
+**Check site health**
+- SSL certificate status
+- Database health — autoload bloat, orphaned tables, meta key breakdown
+- Plugin version drift across sites
+- "Which sites need WordPress core updates?"
+
+**Run WP-CLI commands via natural language**
+"Check the WordPress version on my staging site" or "list active plugins on my-site" — Nexus translates these to WP-CLI and runs them.
+
+**Database scanning and cleanup**
+"Scan the database on my-site for issues" — gets a health score, top issues, and safe cleanup recommendations.
+
+**Connect to WP Engine**
+If your sites have WP Engine counterparts, Nexus can query your WPE account for bandwidth, storage, backups, and installs.
+
+---
+
+**To verify everything is wired up correctly**, try asking:
+
+> "Run a health check on Nexus" or "Show me my sites"
+
+That'll confirm the MCP server is connected and your sites are indexed. What would you like to explore first?
+
+--- FINAL RESULT ---
+The Nexus MCP tools aren't currently connected to this session, but I can tell you what Nexus enables based on my knowledge of the addon. Here's what you can do right now:
+
+---
+
+**Search across all your local sites**
+Ask me things like "which of my sites has a post about checkout errors?" or "find any pages mentioning pricing" — Nexus indexes your site content and searches across all of them at once.
+
+**Get a fleet overview**
+"Show me all my sites" — see which are running vs halted, their WordPress versions, and quick links to WP Engine environments if connected.
+
+**Check site health**
+- SSL certificate status
+- Database health — autoload bloat, orphaned tables, meta key breakdown
+- Plugin version drift across sites
+- "Which sites need WordPress core updates?"
+
+**Run WP-CLI commands via natural language**
+"Check the WordPress version on my staging site" or "list active plugins on my-site" — Nexus translates these to WP-CLI and runs them.
+
+**Database scanning and cleanup**
+"Scan the database on my-site for issues" — gets a health score, top issues, and safe cleanup recommendations.
+
+**Connect to WP Engine**
+If your sites have WP Engine counterparts, Nexus can query your WPE account for bandwidth, storage, backups, and installs.
+
+---
+
+**To verify everything is wired up correctly**, try asking:
+
+> "Run a health check on Nexus" or "Show me my sites"
+
+That'll confirm the MCP server is connected and your sites are indexed. What would you like to explore first?

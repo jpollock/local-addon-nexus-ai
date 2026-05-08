@@ -1,0 +1,81 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M4-01-health-ssl
+Mode: cli-skills
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 29.6s
+Tool calls: 5
+Cost: $0.1353
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my WP Engine sites have SSL issues or certificates expiring soon?
+
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-wpe/SKILL.md"})
+  ⎿  1	---
+2	name: nexus-wpe
+3	description: Query WP Engine account data — sites, installs, usage metrics, bandwidth, visits, storage, domains, backups, SSL, users, and diagnostics. Use when asked about WPE environments, usage stats, storage, installs, traffic, or anything related to the WP Engine account.
+4	argument-hint: [topic] e.g. usage, installs, domains, backups, users, diagnose
+5	allowed-tools: Bash(nexus *)
+6	---
+7	
+8	# WP Engine Account Data
+9	
+10	Topic: `$ARGUMENTS`
+11	
+12	## Step 1: Get f
+I'll start by getting all installs from the portfolio, then check SSL for each one.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe portfolio 2>&1","timeout":30000})
+  ⎿  Exit code 1
+💡 No AI provider configured. Run: nexus ai config
+
+
+❌ Response returned an error code
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe installs 2>&1","timeout":30000})
+  ⎿  Exit code 1
+💡 No AI provider configured. Run: nexus ai config
+
+
+❌ Failed to list installs: Not authenticated with WP Engine. Use wpe_login or authenticate in Local.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe --help 2>&1","timeout":15000})
+  ⎿  Usage: nexus wpe [options] [command]
+
+Manage WP Engine accounts and installs
+
+Options:
+  -h, --help                                           display help for command
+
+Commands:
+  accounts [options]                                   List WP Engine accounts
+  installs [options] [account]                         List installs for an account (or all accounts)
+  install [options] <installId>                        Get details about a specific install
+  backup [options] <target>                      
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe status 2>&1","timeout":15000})
+  ⎿  💡 No AI provider configured. Run: nexus ai config
+
+
+⚫ Not authenticated with WP Engine
+
+Run: nexus wpe login
+The CLI isn't authenticated with WP Engine. You need to log in first:
+
+```
+node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe login
+```
+
+This opens a browser for OAuth authentication. Once logged in, run the command again and I'll pull SSL status across all your installs — checking `nexus wpe fleet-health` for a quick overview and then `nexus wpe ssl <installId>` for any installs that look problematic.
+
+--- FINAL RESULT ---
+The CLI isn't authenticated with WP Engine. You need to log in first:
+
+```
+node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wpe login
+```
+
+This opens a browser for OAuth authentication. Once logged in, run the command again and I'll pull SSL status across all your installs — checking `nexus wpe fleet-health` for a quick overview and then `nexus wpe ssl <installId>` for any installs that look problematic.

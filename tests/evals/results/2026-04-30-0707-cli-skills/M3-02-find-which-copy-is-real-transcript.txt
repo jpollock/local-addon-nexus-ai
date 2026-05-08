@@ -1,0 +1,165 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M3-02-find-which-copy-is-real
+Mode: cli-skills
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 191.8s
+Tool calls: 9
+Cost: $0.1877
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I have a few sites that look like copies of the same project — jpp-client, jpp-client-2, and jpp-client-backup. Which one is the most recent? Which should I actually be working in?
+
+I'll read the relevant skill files to get the right approach, then investigate all three sites in parallel.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-sites/SKILL.md"})
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-search/SKILL.md"})
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-wp/SKILL.md"})
+  ⎿  1	---
+2	name: nexus-sites
+3	description: Discover and show all local and WP Engine sites with status. Groups running vs halted, shows WPE links, and surfaces next actions. Use at the start of any workflow involving sites — always call this first before acting on a site.
+4	allowed-tools: Bash(nexus *)
+5	---
+6	
+7	# Site Discovery
+8	
+9	```!
+10	nexus sites list
+11	```
+12	
+13	Present the results clearly:
+14	
+15	1. **Running local sites** (ready to use) — name, domain, WPE link if any
+16	2. **Halted l
+  ⎿  1	---
+2	name: nexus-wp
+3	description: Run WP-CLI commands on a local WordPress site via nexus. Target format is <sitename>@local. For WPE remote installs use nexus-wpe skill instead.
+4	argument-hint: <site@local> <wp-cli-command>
+5	allowed-tools: Bash(nexus *)
+6	---
+7	
+8	# WP-CLI via Nexus (local sites)
+9	
+10	For **local** sites only. WPE remote installs → use `nexus-wpe` skill.
+11	
+12	Target format: `<sitename>@local` or bare site name (auto-resolved from graph DB).
+13	
+14	**Common commands:**
+
+  ⎿  1	---
+2	name: nexus-search
+3	description: Search across all indexed local WordPress sites by content. Use when looking for sites that contain specific content, posts, or pages. Pass the search query as args.
+4	argument-hint: <search query>
+5	allowed-tools: Bash(node *)
+6	---
+7	
+8	# Cross-Site Content Search
+9	
+10	Search query: `$ARGUMENTS`
+11	
+12	Run this command to search all indexed local sites:
+13	
+14	```
+15	nexus content search-all "$ARGUMENTS"
+16	```
+17	
+18	Then present the results clearly:
+Now let me check the site list and query all three sites in parallel for recency signals.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites list 2>&1","description":"List all local sites"})
+  ⎿  💡 No AI provider configured. Run: nexus ai config
+
+
+Local Sites:
+  🟢 nexus-e2e-test (running) → not linked
+  ⚫ jeremypollockblog (halted) → not linked
+  ⚫ jpp0413p (halted) → not linked
+  ⚫ nexus (halted) → not linked
+  ⚫ nitropack-1 (halted) → not linked
+  ⚫ ACF Auto Car Finder (halted) → wpe:41b8c1d0-3084-4430-81f0-8d95a2c6182d/d4ee23be-bef3-4fe4-93ed-91e111c6764a@production
+  ⚫ local-copy-jpp (halted) → wpe:6d5f288a-62c5-4b45-bee8-50ebd02b66b5/7576b9e6-64de-45fd-809f-9fd659a91cc1@production
+The sites list doesn't show those three by name. Let me check if they exist with slightly different names.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites get jpp-client 2>&1; echo \"---\"; node /Users/jeremy.pollock/development/wpengine/local-addon-nexus)
+  ⎿  Exit code 1
+💡 No AI provider configured. Run: nexus ai config
+
+
+❌ Site "jpp-client" not found. Try 'nexus sites list' to see available sites.
+---
+💡 No AI provider configured. Run: nexus ai config
+
+
+❌ Site "jpp-client-2" not found. Try 'nexus sites list' to see available sites.
+---
+💡 No AI provider configured. Run: nexus ai config
+
+
+❌ Site "jpp-client-backup" not found. Try 'nexus sites list' to see available sites.
+Those sites aren't in Nexus. Let me look for them in Local's site data directory directly.
+
+⏺ Bash({"command":"ls ~/Library/Application\\ Support/Local/sites/ 2>/dev/null | sort; echo \"---\"; ls ~/Local\\ Sites/ 2>/dev/null | sort","description":"Check Local site directories"})
+  ⎿  ---
+acf-auto-car-finder
+jeremypollockblog
+jpp0413p
+local-copy-jpp
+newsroom-demo
+nexus
+nexus-e2e-test
+nitropack-1
+Not finding them there either. Let me search more broadly across common Local site locations.
+
+⏺ Bash({"command":"find ~ -maxdepth 5 -type d -name \"*jpp-client*\" 2>/dev/null; find ~ -maxdepth 5 -type d -name \"*jpp_client*\" 2>/dev/null","description":"Search home directory for jpp-client site folde)
+  ⎿  Command running in background with ID: bq3eiftqo. Output is being written to: /private/tmp/claude-502/-Users-jeremy-pollock-development-wpengine-local-addon-nexus-ai/9ee00c8c-23a4-4594-a062-ada4140e52ef/tasks/bq3eiftqo.output
+
+⏺ TaskOutput({"task_id":"bq3eiftqo","block":true,"timeout":30000})
+  ⎿  <retrieval_status>success</retrieval_status>
+
+<task_id>bq3eiftqo</task_id>
+
+<task_type>local_bash</task_type>
+
+<status>failed</status>
+
+<exit_code>1</exit_code>
+
+⏺ Bash({"command":"cat ~/Library/Application\\ Support/Local/sites.json 2>/dev/null | python3 -c \"import sys,json; sites=json.load(sys.stdin); [print(s.get('name','?'), s.get('path','?')) for s in sites.val)
+  ⎿  nexus-e2e-test /Users/jeremy.pollock/Local Sites/nexus-e2e-test
+jeremypollockblog /Users/jeremy.pollock/Local Sites/jeremypollockblog
+jpp0413p /Users/jeremy.pollock/Local Sites/jpp0413p
+nexus /Users/jeremy.pollock/Local Sites/nexus
+nitropack-1 /Users/jeremy.pollock/Local Sites/nitropack-1
+ACF Auto Car Finder /Users/jeremy.pollock/Local Sites/acf-auto-car-finder
+local-copy-jpp /Users/jeremy.pollock/Local Sites/local-copy-jpp
+Newsroom Demo /Users/jeremy.pollock/Local Sites/newsroom-demo
+Those three sites don't exist in Local. Here's what I found across all the places Local stores site data — no `jpp-client`, `jpp-client-2`, or `jpp-client-backup` anywhere.
+
+**What does exist with "jpp" in the name:**
+- `jpp0413p` — halted, not linked to WPE
+- `local-copy-jpp` — halted, linked to a WPE production install
+
+A few possibilities:
+1. **They were deleted from Local** — the sites may have been removed, taking their data with them.
+2. **Wrong name** — they might be under different names (the two above are your only jpp-related sites).
+3. **On a different machine or disk** — not accessible here.
+
+Want me to dig into `jpp0413p` and `local-copy-jpp` to compare them and figure out which is the one you should be working in?
+
+--- FINAL RESULT ---
+Those three sites don't exist in Local. Here's what I found across all the places Local stores site data — no `jpp-client`, `jpp-client-2`, or `jpp-client-backup` anywhere.
+
+**What does exist with "jpp" in the name:**
+- `jpp0413p` — halted, not linked to WPE
+- `local-copy-jpp` — halted, linked to a WPE production install
+
+A few possibilities:
+1. **They were deleted from Local** — the sites may have been removed, taking their data with them.
+2. **Wrong name** — they might be under different names (the two above are your only jpp-related sites).
+3. **On a different machine or disk** — not accessible here.
+
+Want me to dig into `jpp0413p` and `local-copy-jpp` to compare them and figure out which is the one you should be working in?

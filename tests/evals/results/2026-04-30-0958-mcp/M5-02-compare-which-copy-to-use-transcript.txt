@@ -1,0 +1,70 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M5-02-compare-which-copy-to-use
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 67.6s
+Tool calls: 3
+Cost: $0.2049
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I have multiple local sites for my client project — jpp-client, jpp-client-staging, and jpp-client-old. Which one should I be working in for active development?
+
+Using the `nexus-sites` skill to discover and compare the sites before recommending.
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so I'll use the MCP tools directly to compare the three sites.
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+  ⎿  ## Fleet (8 local, 307 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **nexus-e2e-test** (nexus-e2e-test.local) [running]
+- **jeremypollockblog** (jeremypollockblog.local) [running]
+- **jpp0413p** (jpp0413p.local) [running]
+- **nexus** (nexus.local) [running]
+- **nitropack-1** (nitropack-1.local) [running]
+- **ACF Auto Car Finder** (acf-auto-car-finder.local) [running]
+- **local-cop
+I don't see jpp-client, jpp-client-staging, or jpp-client-old in the running sites. Let me check for halted sites too.
+
+⏺ mcp__local-nexus-ai__local_list_sites({})
+  ⎿  ## Local Sites (8 total, 8 running)
+
+### Running
+- **nexus-e2e-test** (nexus-e2e-test.local) [id: 6BJ5_1BUz, indexed: yes]
+- **jeremypollockblog** (jeremypollockblog.local) [id: At8fkqcKD, indexed: yes]
+- **jpp0413p** (jpp0413p.local) [id: zs6yHfXgd, indexed: yes]
+- **nexus** (nexus.local) [id: QfFx8PJAR, indexed: yes]
+- **nitropack-1** (nitropack-1.local) [id: Fec1MGsPP, indexed: yes]
+- **ACF Auto Car Finder** (acf-auto-car-finder.local) [id: mmWgjXGRS, indexed: yes]
+- **local-copy-jpp** (local
+None of the three sites you mentioned — **jpp-client**, **jpp-client-staging**, or **jpp-client-old** — exist in your Local installation. Your 8 local sites are all different names (nexus-e2e-test, jeremypollockblog, jpp0413p, nexus, nitropack-1, ACF Auto Car Finder, local-copy-jpp, Newsroom Demo).
+
+A few possibilities:
+
+- **Could they be on a different machine?** Local sites are per-machine.
+- **Might they have different names?** The closest match I see is **`jpp0413p`** and **`local-copy-jpp`** — could either of those be your client project?
+- **Do they need to be created?** If you have a WPE install for this client, I can help you pull it down into a new local site.
+
+Which of those seems closest, or do you have a different site name in mind?
+
+--- FINAL RESULT ---
+None of the three sites you mentioned — **jpp-client**, **jpp-client-staging**, or **jpp-client-old** — exist in your Local installation. Your 8 local sites are all different names (nexus-e2e-test, jeremypollockblog, jpp0413p, nexus, nitropack-1, ACF Auto Car Finder, local-copy-jpp, Newsroom Demo).
+
+A few possibilities:
+
+- **Could they be on a different machine?** Local sites are per-machine.
+- **Might they have different names?** The closest match I see is **`jpp0413p`** and **`local-copy-jpp`** — could either of those be your client project?
+- **Do they need to be created?** If you have a WPE install for this client, I can help you pull it down into a new local site.
+
+Which of those seems closest, or do you have a different site name in mind?

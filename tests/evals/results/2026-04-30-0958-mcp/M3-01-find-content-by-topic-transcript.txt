@@ -1,0 +1,104 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M3-01-find-content-by-topic
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 50.8s
+Tool calls: 7
+Cost: $0.1989
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Find content about e-commerce or online shopping across all my sites. Show me what's there.
+
+
+⏺ Skill({"skill":"nexus-search","args":"e-commerce online shopping"})
+  ⎿  Launching skill: nexus-search
+I'm in MCP-only mode, so I'll use the fleet search tool directly instead of the CLI.
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"e-commerce online shopping","limit":5})
+  ⎿  Found 1 results across 1 sites for "e-commerce online shopping":
+
+### Newsroom Demo
+  1. **Do you buy souvenirs on holiday?** (poll, score: 0.318)
+     Do you buy souvenirs on holiday?
+One result so far. Let me broaden the search with related terms.
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"WooCommerce shop product store","limit":5})
+  ⎿  Found 1 results across 1 sites for "WooCommerce shop product store":
+
+### Newsroom Demo
+  1. **Do you buy souvenirs on holiday?** (poll, score: 0.318)
+     Do you buy souvenirs on holiday?
+Same site. Let me check what's indexed across your fleet.
+
+⏺ mcp__local-nexus-ai__list_indexed_sites({})
+  ⎿  ## Indexed Sites
+
+- [OK] **nexus-e2e-test** — 528 docs, 528 chunks, last indexed: 2026-04-30T15:24:45.623Z
+- [OK] **jeremypollockblog** — 2 docs, 2 chunks, last indexed: 2026-04-30T15:03:02.942Z
+- [OK] **jpp0413p** — 2 docs, 2 chunks, last indexed: 2026-04-30T15:03:03.139Z
+- [OK] **nexus** — 3 docs, 3 chunks, last indexed: 2026-04-30T15:03:02.928Z
+- [OK] **nitropack-1** — 2 docs, 2 chunks, last indexed: 2026-04-30T15:03:05.144Z
+- [OK] **ACF Auto Car Finder** — 63 docs, 71 chunks, last indexed: 2
+Let me search the richer sites individually for more e-commerce signals.
+
+⏺ mcp__local-nexus-ai__search_site_content({"site":"ACF Auto Car Finder","query":"shop buy price purchase product","limit":5})
+
+⏺ mcp__local-nexus-ai__search_site_content({"site":"local-copy-jpp","query":"shop buy price purchase product e-commerce","limit":5})
+
+⏺ mcp__local-nexus-ai__search_site_content({"site":"nexus-e2e-test","query":"shop buy price purchase product e-commerce","limit":5})
+  ⎿  No results found for "shop buy price purchase product" in ACF Auto Car Finder.
+  ⎿  No results found for "shop buy price purchase product e-commerce" in local-copy-jpp.
+  ⎿  No results found for "shop buy price purchase product e-commerce" in nexus-e2e-test.
+Here's what turned up across your fleet:
+
+---
+
+**Matches found: 1 result across 1 site**
+
+| Site | Content | Type | Notes |
+|---|---|---|---|
+| Newsroom Demo | "Do you buy souvenirs on holiday?" | Poll | Tangentially shopping-related — not true e-commerce content |
+
+---
+
+**No e-commerce content found on:**
+- `nexus-e2e-test` (528 docs — test content, not product/shop content)
+- `local-copy-jpp` (190 docs)
+- `ACF Auto Car Finder` (63 docs — car listings, not a shop)
+- `jeremypollockblog`, `jpp0413p`, `nexus`, `nitropack-1` (minimal content, 2–3 docs each)
+
+**Bottom line:** None of your indexed sites have meaningful e-commerce or online shopping content. The fleet doesn't appear to have a WooCommerce store or similar set up with real product/cart/checkout content.
+
+If you were expecting to find something, a few possibilities:
+1. A site hasn't been indexed yet — run `reindex_site` on it
+2. The relevant site is halted and wasn't indexed with live DB access (halted sites get shallow indexes)
+3. The content lives on a WPE environment that hasn't been synced via `wpe_sync_sites`
+
+--- FINAL RESULT ---
+Here's what turned up across your fleet:
+
+---
+
+**Matches found: 1 result across 1 site**
+
+| Site | Content | Type | Notes |
+|---|---|---|---|
+| Newsroom Demo | "Do you buy souvenirs on holiday?" | Poll | Tangentially shopping-related — not true e-commerce content |
+
+---
+
+**No e-commerce content found on:**
+- `nexus-e2e-test` (528 docs — test content, not product/shop content)
+- `local-copy-jpp` (190 docs)
+- `ACF Auto Car Finder` (63 docs — car listings, not a shop)
+- `jeremypollockblog`, `jpp0413p`, `nexus`, `nitropack-1` (minimal content, 2–3 docs each)
+
+**Bottom line:** None of your indexed sites have meaningful e-commerce or online shopping content. The fleet doesn't appear to have a WooCommerce store or similar set up with real product/cart/checkout content.
+
+If you were expecting to find something, a few possibilities:
+1. A site hasn't been indexed yet — run `reindex_site` on it
+2. The relevant site is halted and wasn't indexed with live DB access (halted sites get shallow indexes)
+3. The content lives on a WPE environment that hasn't been synced via `wpe_sync_sites`

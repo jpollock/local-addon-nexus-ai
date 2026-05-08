@@ -1,0 +1,44 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M1-02-first-run-whats-in-my-sites
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 57.4s
+Tool calls: 2
+Cost: $0.1251
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Show me what's in my sites.
+
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so let me discover the available MCP tools directly.
+
+⏺ ListMcpResourcesTool({})
+  ⎿  No resources found. MCP servers may still provide tools even if they have no resources.
+The Nexus AI MCP tools aren't registered in this Claude Code session — they'd be available in Claude Desktop where the addon's MCP server connects directly. In this session I have the WPE PM toolkit MCP tools but not the local addon's nexus tools.
+
+To see your sites, you have two options:
+
+**In Claude Desktop** (with Nexus AI MCP configured): the `list_sites` tool would be available and I could call it directly.
+
+**Via CLI** (if you open a terminal): `nexus sites list`
+
+Would you like help configuring the Nexus AI MCP server for Claude Desktop, or is there something else I can help with using the tools I do have available?
+
+--- FINAL RESULT ---
+The Nexus AI MCP tools aren't registered in this Claude Code session — they'd be available in Claude Desktop where the addon's MCP server connects directly. In this session I have the WPE PM toolkit MCP tools but not the local addon's nexus tools.
+
+To see your sites, you have two options:
+
+**In Claude Desktop** (with Nexus AI MCP configured): the `list_sites` tool would be available and I could call it directly.
+
+**Via CLI** (if you open a terminal): `nexus sites list`
+
+Would you like help configuring the Nexus AI MCP server for Claude Desktop, or is there something else I can help with using the tools I do have available?

@@ -1,0 +1,96 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M3-01-find-content-by-topic
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 42.7s
+Tool calls: 5
+Cost: $0.1672
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Find content about e-commerce or online shopping across all my sites. Show me what's there.
+
+
+⏺ Skill({"skill":"nexus-search","args":"e-commerce online shopping"})
+  ⎿  Launching skill: nexus-search
+Searching across all indexed sites using the MCP tools (no CLI available in this mode).
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"e-commerce online shopping","limit":10})
+  ⎿  Found 1 results across 1 sites for "e-commerce online shopping":
+
+### Newsroom Demo
+  1. **Do you buy souvenirs on holiday?** (poll, score: 0.318)
+     Do you buy souvenirs on holiday?
+Let me broaden the search with related terms to make sure I'm not missing anything.
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"WooCommerce store products cart checkout","limit":10})
+
+⏺ mcp__local-nexus-ai__list_indexed_sites({})
+  ⎿  No results found for "WooCommerce store products cart checkout" across 8 indexed sites.
+  ⎿  ## Indexed Sites
+
+- [OK] **nexus-e2e-test** — 528 docs, 528 chunks, last indexed: 2026-04-30T16:03:54.680Z
+- [OK] **jeremypollockblog** — 2 docs, 2 chunks, last indexed: 2026-04-30T15:56:30.122Z
+- [OK] **jpp0413p** — 2 docs, 2 chunks, last indexed: 2026-04-30T15:56:33.292Z
+- [OK] **nexus** — 3 docs, 3 chunks, last indexed: 2026-04-30T15:56:36.423Z
+- [OK] **nitropack-1** — 2 docs, 2 chunks, last indexed: 2026-04-30T15:56:39.627Z
+- [OK] **ACF Auto Car Finder** — 63 docs, 71 chunks, last indexed: 2
+
+⏺ mcp__local-nexus-ai__search_across_sites({"query":"shop buy purchase product price","limit":10})
+  ⎿  Found 1 results across 1 sites for "shop buy purchase product price":
+
+### Newsroom Demo
+  1. **Do you buy souvenirs on holiday?** (poll, score: 0.323)
+     Do you buy souvenirs on holiday?
+Here's what's across your 8 indexed sites:
+
+---
+
+**E-commerce content: essentially none.**
+
+The only match across all searches is a single poll post on **Newsroom Demo** — "Do you buy souvenirs on holiday?" — which is tangentially related (buying) but not actual e-commerce content.
+
+**Sites indexed and their content volume:**
+
+| Site | Docs | Notes |
+|------|------|-------|
+| nexus-e2e-test | 528 | Test site — no e-commerce content |
+| local-copy-jpp | 190 | No matches |
+| Newsroom Demo | 121 | 1 weak match (souvenir poll) |
+| ACF Auto Car Finder | 63 | No matches — car finder app, not shop |
+| nexus | 3 | Minimal content |
+| jeremypollockblog | 2 | Minimal content |
+| jpp0413p | 2 | Minimal content |
+| nitropack-1 | 2 | Minimal content |
+
+**Summary:** None of your sites appear to have WooCommerce stores, product listings, cart/checkout pages, or shopping-focused content. The fleet looks like it's dev/demo/blog sites rather than e-commerce builds.
+
+If you expected to find something, it's possible a relevant site isn't indexed yet — you can trigger indexing with `reindex_site` on any running site.
+
+--- FINAL RESULT ---
+Here's what's across your 8 indexed sites:
+
+---
+
+**E-commerce content: essentially none.**
+
+The only match across all searches is a single poll post on **Newsroom Demo** — "Do you buy souvenirs on holiday?" — which is tangentially related (buying) but not actual e-commerce content.
+
+**Sites indexed and their content volume:**
+
+| Site | Docs | Notes |
+|------|------|-------|
+| nexus-e2e-test | 528 | Test site — no e-commerce content |
+| local-copy-jpp | 190 | No matches |
+| Newsroom Demo | 121 | 1 weak match (souvenir poll) |
+| ACF Auto Car Finder | 63 | No matches — car finder app, not shop |
+| nexus | 3 | Minimal content |
+| jeremypollockblog | 2 | Minimal content |
+| jpp0413p | 2 | Minimal content |
+| nitropack-1 | 2 | Minimal content |
+
+**Summary:** None of your sites appear to have WooCommerce stores, product listings, cart/checkout pages, or shopping-focused content. The fleet looks like it's dev/demo/blog sites rather than e-commerce builds.
+
+If you expected to find something, it's possible a relevant site isn't indexed yet — you can trigger indexing with `reindex_site` on any running site.
