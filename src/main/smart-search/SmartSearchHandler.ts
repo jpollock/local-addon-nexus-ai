@@ -88,6 +88,10 @@ export class SmartSearchHandler {
     if (!docs.length) {
       return jsonResponse(res, { data: { bulkIndex: { code: '200', success: true, documents: [] } } });
     }
+    const invalid = docs.filter(d => !d.id || !d.data);
+    if (invalid.length) {
+      return errorResponse(res, `bulkIndex: ${invalid.length} document(s) missing id or data`);
+    }
     await this.upsertDocuments(siteId, docs);
     jsonResponse(res, { data: { bulkIndex: { code: '200', success: true, documents: docs.map(d => ({ id: d.id })) } } });
   }
@@ -198,15 +202,16 @@ export class SmartSearchHandler {
 
     // Apply orderBy by date fields
     if (orderBy?.length) {
-      for (const ob of [...orderBy].reverse()) {
-        if (ob.field === 'post_date_gmt' || ob.field === 'post_modified_gmt') {
-          docs.sort((a, b) => {
-            const aDate = new Date(a.data[ob.field] ?? 0).getTime();
-            const bDate = new Date(b.data[ob.field] ?? 0).getTime();
-            return ob.direction === 'asc' ? aDate - bDate : bDate - aDate;
-          });
+      docs.sort((a, b) => {
+        for (const ob of orderBy) {
+          if (ob.field !== 'post_date_gmt' && ob.field !== 'post_modified_gmt') continue;
+          const aDate = new Date(a.data[ob.field] ?? 0).getTime();
+          const bDate = new Date(b.data[ob.field] ?? 0).getTime();
+          const cmp = ob.direction === 'asc' ? aDate - bDate : bDate - aDate;
+          if (cmp !== 0) return cmp;
         }
-      }
+        return 0;
+      });
     }
 
     const processed = applyPostProcess(docs, {
@@ -233,11 +238,11 @@ export class SmartSearchHandler {
   // ── Config: synonyms ──────────────────────────────────────────────────────
 
   private handleSynonyms(res: ServerResponse, siteId: string, query: string, vars: any): void {
-    if (/deleteAllRules/.test(query)) {
+    if (/\bdeleteAllRules\b/.test(query)) {
       this.synonymStore.deleteAllRules(siteId);
       return jsonResponse(res, { data: { config: { synonyms: { deleteAllRules: true } } } });
     }
-    if (/deleteRule/.test(query) && vars?.id) {
+    if (/\bdeleteRule\b/.test(query) && vars?.id) {
       this.synonymStore.deleteRule(siteId, vars.id);
       return jsonResponse(res, { data: { config: { synonyms: { deleteRule: { success: true, code: '200' } } } } });
     }
@@ -269,15 +274,15 @@ export class SmartSearchHandler {
   // ── Tracker ───────────────────────────────────────────────────────────────
 
   private handleTracker(res: ServerResponse, siteId: string, query: string, vars: any): void {
-    if (/trackPageView/.test(query) && vars?.data?.documentID) {
+    if (/\btrackPageView\b/.test(query) && vars?.data?.documentID) {
       this.trackerStore.trackPageView(siteId, { sessionId: vars.session?.id ?? '', userId: vars.userID, documentId: vars.data.documentID });
       return jsonResponse(res, { data: { tracker: { trackPageView: { success: true, message: 'ok' } } } });
     }
-    if (/trackSearchClick/.test(query) && vars?.data?.documentID) {
+    if (/\btrackSearchClick\b/.test(query) && vars?.data?.documentID) {
       this.trackerStore.trackSearchClick(siteId, { sessionId: vars.session?.id ?? '', userId: vars.userID, documentId: vars.data.documentID, position: vars.data.position ?? 0 });
       return jsonResponse(res, { data: { tracker: { trackSearchClick: { success: true, message: 'ok' } } } });
     }
-    if (/trackSearch/.test(query) && vars?.data?.search?.query !== undefined) {
+    if (/\btrackSearch\b/.test(query) && vars?.data?.search?.query !== undefined) {
       this.trackerStore.trackSearch(siteId, { sessionId: vars.session?.id ?? '', userId: vars.userID, query: vars.data.search.query, resultCount: vars.data.search.results?.length ?? 0 });
       return jsonResponse(res, { data: { tracker: { trackSearch: { success: true, message: 'ok' } } } });
     }
@@ -293,7 +298,10 @@ export class SmartSearchHandler {
       // Related documents: vector similarity to reference doc
       const allResults = await this.vectorStore.search(siteId, new Float32Array(384), { limit: 1000 });
       const ref = allResults.find(r => r.id === vars.docID);
-      const refVec = ref && this.embeddingService.isReady()
+      if (!ref) {
+        return jsonResponse(res, { data: { recommendations: { relatedDocuments: [] } } });
+      }
+      const refVec = this.embeddingService.isReady()
         ? await this.embeddingService.embed(ref.content)
         : new Float32Array(384);
       const similar = await this.vectorStore.search(siteId, refVec, { limit: count + 1 });
