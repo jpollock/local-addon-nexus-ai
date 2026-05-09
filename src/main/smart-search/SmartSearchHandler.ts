@@ -191,6 +191,7 @@ export class SmartSearchHandler {
     const rawResults = await this.vectorStore.search(siteId, queryVector ?? new Float32Array(384), {
       limit: searchLimit,
       postType: undefined,
+      relevanceFloor: 0, // let the plugin rank; don't pre-filter by score
     });
 
     let docs: FindDoc[] = rawResults.map(r => {
