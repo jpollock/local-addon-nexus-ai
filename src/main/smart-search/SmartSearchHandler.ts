@@ -38,6 +38,7 @@ function errorResponse(res: ServerResponse, message: string): void {
 }
 
 function detectOperation(query: string, variables: Record<string, any>): string {
+  if (/\bcapabilities\b/.test(query)) return 'capabilities';
   if (/\bdeleteAll\b/.test(query)) return 'deleteAll';
   if (/\bdelete\b/.test(query) && variables?.id) return 'delete';
   if (/\bbulkIndex\b/.test(query)) return 'bulkIndex';
@@ -69,6 +70,7 @@ export class SmartSearchHandler {
       const op = detectOperation(query, variables);
 
       switch (op) {
+        case 'capabilities': return this.handleCapabilities(res);
         case 'index': return await this.handleIndex(res, siteId, variables.input);
         case 'bulkIndex': return await this.handleBulkIndex(res, siteId, variables.docs ?? variables.input?.documents ?? []);
         case 'delete': return await this.handleDelete(res, siteId, variables.id);
@@ -84,6 +86,17 @@ export class SmartSearchHandler {
     } catch (err: any) {
       errorResponse(res, err?.message ?? 'Internal error');
     }
+  }
+
+  // ── Capabilities ─────────────────────────────────────────────────────────
+
+  private handleCapabilities(res: ServerResponse): void {
+    // Return all capabilities we support — the plugin gates features on these strings
+    jsonResponse(res, {
+      data: {
+        capabilities: ['SEARCH', 'HYBRID_SEARCH', 'SIMILARITY_SEARCH', 'RECOMMENDATIONS', 'VECTOR_DB'],
+      },
+    });
   }
 
   // ── Write path ────────────────────────────────────────────────────────────
