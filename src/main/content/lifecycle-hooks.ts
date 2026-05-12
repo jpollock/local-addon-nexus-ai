@@ -336,6 +336,18 @@ export function registerLifecycleHooks(
 }
 
 /**
+ * Check if the WP Engine AI Toolkit (atlas-search) plugin is installed on a site.
+ * Uses a filesystem check rather than WP-CLI to avoid a race condition where
+ * siteStarted fires before MySQL is ready.
+ */
+export function detectAtlasSearch(sitePath: string): boolean {
+  const pluginFile = require('path').join(
+    sitePath, 'app', 'public', 'wp-content', 'plugins', 'atlas-search', 'atlas-search.php',
+  );
+  return require('fs-extra').existsSync(pluginFile);
+}
+
+/**
  * Install and activate Nexus AI Connector plugin
  */
 async function installNexusAiConnectorPlugin(
@@ -399,10 +411,7 @@ async function installNexusAiConnectorPlugin(
       // The MU plugin filter is safe to include even if the plugin is inactive.
       let smartSearchUrl: string | undefined;
       let smartSearchToken: string | undefined;
-      const atlasSearchPath = path.join(
-        site.path, 'app', 'public', 'wp-content', 'plugins', 'atlas-search', 'atlas-search.php',
-      );
-      if (fs.existsSync(atlasSearchPath)) {
+      if (detectAtlasSearch(site.path)) {
         const webhookBase = webhookInfo.url.replace(/\/+$/, '');
         smartSearchUrl = `${webhookBase}/smart-search/graphql`;
         smartSearchToken = webhookInfo.authToken;
