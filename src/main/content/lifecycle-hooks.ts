@@ -394,19 +394,21 @@ async function installNexusAiConnectorPlugin(
       const aiProxyInfo = settingsStorage.get('ai_proxy_info') as any;
       const nexusSettings = (settingsStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
 
-      // Detect atlas-search plugin — override Smart Search backend URL if active
+      // Detect atlas-search plugin by filesystem — avoids a race condition where
+      // wp plugin is-active fails because MySQL isn't ready when siteStarted fires.
+      // The MU plugin filter is safe to include even if the plugin is inactive.
       let smartSearchUrl: string | undefined;
       let smartSearchToken: string | undefined;
-      try {
-        const atlasSearchCheck = await localServices.wpCliRun(site.id, ['plugin', 'is-active', 'atlas-search']);
-        if (atlasSearchCheck.success) {
-          const webhookBase = webhookInfo.url.replace(/\/+$/, '');
-          smartSearchUrl = `${webhookBase}/smart-search/graphql`;
-          smartSearchToken = webhookInfo.authToken;
-          logger.info(`[NexusAI] atlas-search active in ${site.name} — Smart Search backend override enabled`);
-        }
-      } catch {
-        // atlas-search not active or check failed — omit Smart Search config
+      const atlasSearchPath = path.join(
+        site.path, 'app', 'public', 'wp-content', 'plugins', 'atlas-search', 'atlas-search.php',
+      );
+      if (fs.existsSync(atlasSearchPath)) {
+        const webhookBase = webhookInfo.url.replace(/\/+$/, '');
+        smartSearchUrl = `${webhookBase}/smart-search/graphql`;
+        smartSearchToken = webhookInfo.authToken;
+        logger.info(`[NexusAI] atlas-search installed in ${site.name} — Smart Search backend override enabled`);
+      } else {
+        logger.info(`[NexusAI] atlas-search not found in ${site.name} — skipping Smart Search backend`);
       }
 
       // Generate MU plugin content with caller detection
