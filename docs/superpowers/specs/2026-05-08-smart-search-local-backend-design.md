@@ -378,3 +378,31 @@ All errors return HTTP 200 with a GraphQL error envelope (plugin expects this):
 - LanceDB schema migration is additive (new nullable columns); no data loss
 - The three new SQLite tables are created in `GraphService.initialize()` with `CREATE TABLE IF NOT EXISTS`
 - Branch: `feature/smart-search-local-backend`
+
+---
+
+## Post-Implementation Addendum
+
+Changes discovered during live validation that differ from the original design:
+
+### Capabilities Query (not in original spec)
+
+The `atlas-search` plugin sends `query GetCapabilities { capabilities }` on every page load before attempting any other operations. The handler returns:
+
+```json
+["SEARCH", "HYBRID_SEARCH", "SIMILARITY_SEARCH", "RECOMMENDATIONS", "VECTOR_DB"]
+```
+
+Without this, the plugin shows "Failed to query capabilities: Unknown operation" and disables all tabs.
+
+### Relevance Floor Removed for `find`
+
+The original design assumed `VectorStore.search`'s default `relevanceFloor: 0.3` was appropriate. In practice, this filtered out typo queries ("roade" → 0 results) because semantic embeddings for misspellings score just below 0.3 against the correct content. The `find` handler now passes `relevanceFloor: 0`, letting the plugin's own ranking handle result quality.
+
+### Filesystem Detection Replaces WP-CLI for Atlas-Search
+
+The original design used `wp plugin is-active atlas-search` via WP-CLI. This fails intermittently because `siteStarted` fires before MySQL is fully up — WP-CLI gets ECONNREFUSED and returns `success: false`. The fix uses `fs.existsSync(atlas-search.php)` instead, which has no MySQL dependency and is immune to the race condition.
+
+### PHP Template `is_plugin_active` Guard Removed
+
+The generated MU plugin originally included an `is_plugin_active()` check inside the `option_wpe_content_engine_option_name` filter. This check fires during early WordPress bootstrap before plugins are registered, causing it to always return false. The guard was removed — the Node.js filesystem check at site-start time is the single point of control.
