@@ -1,3 +1,6 @@
+/**
+ * @jest-environment ./tests/environments/onnx-environment.js
+ */
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -174,6 +177,45 @@ describe('Smart Search integration', () => {
       expect(trending.length).toBeGreaterThan(0);
       expect(trending[0].docID).toBe('post:2');
       expect(trending[0].count).toBe(2);
+    });
+  });
+
+  describe('typo tolerance (relevance floor = 0)', () => {
+    it('finds content matching a misspelled query via semantic similarity', async () => {
+      if (!hasModel) {
+        console.log('Skipping typo test — ONNX model not present (semantic similarity unavailable)');
+        return;
+      }
+
+      await callHandler(handler, {
+        query: 'mutation IndexRecord($input: DocumentInput!) { index(input: $input) { success } }',
+        variables: {
+          input: {
+            id: 'post:road-test',
+            data: {
+              post_title: 'Road trip planning guide',
+              post_content: 'Everything you need to know for planning the perfect road trip across America.',
+              post_type: 'post',
+              post_date_gmt: '2024-01-01T00:00:00',
+              post_modified_gmt: '2024-01-01T00:00:00',
+              post_url: 'http://example.com/road-trip',
+            },
+          },
+        },
+      });
+
+      // "roade" is a 1-char typo for "road" — semantic embedding should still match
+      const findResp = await callHandler(handler, {
+        query: 'query Search($query: String!) { find(query: $query limit: 5 offset: 0) { total documents { id score } } }',
+        variables: { query: 'roade', limit: 5, offset: 0 },
+      });
+
+      expect(findResp.data.find.total).toBeGreaterThan(0);
+      expect(findResp.data.find.documents.some((d: any) => d.id === 'post:road-test')).toBe(true);
+      // Verify score is non-zero but low (typo match, not exact)
+      const roadDoc = findResp.data.find.documents.find((d: any) => d.id === 'post:road-test');
+      expect(roadDoc.score).toBeGreaterThan(0);
+      expect(roadDoc.score).toBeLessThan(0.5);
     });
   });
 });
