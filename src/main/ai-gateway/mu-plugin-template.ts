@@ -313,14 +313,10 @@ ${(smartSearchUrl && smartSearchToken) ? `
 // Smart Search Local Backend (WP Engine AI Toolkit)
 // ============================================================================
 
+// This filter is only included when atlas-search is detected on disk (by the
+// Nexus addon on site start). The is_plugin_active check was removed because it
+// fires too early in WordPress bootstrap — before plugins are registered.
 add_filter('option_wpe_content_engine_option_name', function($value) {
-    // is_plugin_active() requires plugin.php — not auto-loaded in MU plugin context
-    if (!function_exists('is_plugin_active')) {
-        require_once ABSPATH . 'wp-admin/includes/plugin.php';
-    }
-    if (!is_plugin_active('atlas-search/atlas-search.php')) {
-        return $value;
-    }
     return [
         'url'          => '${smartSearchUrl}',
         'access_token' => '${smartSearchToken}',
