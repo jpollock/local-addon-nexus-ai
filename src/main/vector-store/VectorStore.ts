@@ -84,6 +84,29 @@ export class VectorStore {
     return table;
   }
 
+  /**
+   * Look up a single document by its exact ID. Returns null if not found or table missing.
+   * Used by SmartSearchHandler to retrieve a reference document for similarity search.
+   */
+  async lookupById(siteId: string, docId: string): Promise<{ id: string; content: string; title: string } | null> {
+    // Validate docId — atlas-search IDs are "type:number" or plain alphanumeric slugs.
+    // Reject anything that could break the LanceDB WHERE clause.
+    if (!/^[a-zA-Z0-9:_\-]+$/.test(docId)) return null;
+    const table = await this.getTable(siteId);
+    if (!table) return null;
+    try {
+      const rows = await table.query().where(`id = '${docId}'`).limit(1).toArray();
+      if (!rows.length) return null;
+      return {
+        id: rows[0].id as string,
+        content: rows[0].content as string,
+        title: rows[0].title as string,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   private async migrateTableSchema(table: lancedb.Table): Promise<void> {
     try {
       const schema = await table.schema();

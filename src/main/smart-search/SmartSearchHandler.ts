@@ -327,19 +327,11 @@ export class SmartSearchHandler {
     if (vars?.docID !== undefined) {
       // Look up the reference document directly by ID via a WHERE query
       // rather than a zero-vector scan that may miss it
-      let refContent: string | undefined;
-      try {
-        // @ts-ignore — accessing private getTable to perform a direct WHERE query
-        const table = await (this.vectorStore as any).getTable(siteId);
-        if (table) {
-          const rows = await table.query().where(`id = '${vars.docID.replace(/'/g, "\\'")}'`).limit(1).toArray();
-          refContent = rows[0]?.content;
-        }
-      } catch { /* table may not exist */ }
-
-      if (!refContent) {
+      const ref = await this.vectorStore.lookupById(siteId, vars.docID);
+      if (!ref) {
         return jsonResponse(res, { data: { recommendations: { relatedDocuments: [] } } });
       }
+      const refContent = ref.content;
 
       const refVec = this.embeddingService.isReady()
         ? await this.embeddingService.embed(refContent)
