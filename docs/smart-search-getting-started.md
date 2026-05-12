@@ -4,10 +4,23 @@ Nexus AI makes WP Engine Smart Search work in Local, backed by LanceDB and ONNX 
 
 ## Prerequisites
 
-- Local site with WP Engine AI Toolkit (`atlas-search`) plugin **installed**
 - Nexus AI addon active in Local
+- WP Engine AI Toolkit (`atlas-search`) plugin installed on the site
 
-The plugin can be downloaded from the WordPress admin or copied from another site that has it.
+## Installing the Plugin
+
+The plugin is free and publicly available on WordPress.org.
+
+**From WP Admin:** Plugins → Add New → search "WP Engine AI Toolkit" → Install Now → Activate
+
+**Via WP-CLI (via Nexus):**
+```bash
+nexus wp "plugin install atlas-search --activate" yoursite@local
+```
+
+**Direct download:** https://wordpress.org/plugins/atlas-search/
+
+> **Note:** On production WPE, the plugin normally requires a Smart Search subscription and WPE-provisioned credentials. Locally, Nexus provides its own backend — no WPE subscription required for local development.
 
 ## Setup (automatic)
 
