@@ -6,19 +6,19 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Parallel execution patterns">
+        <meta name="description" content="How Nexus AI makes WP Engine Smart Search work in Local without a WPE hosting connection">
       
       
         <meta name="author" content="Jeremy Pollock">
       
       
-        <link rel="canonical" href="https://jpollock.github.io/local-addon-nexus-ai/cli/bulk-operations/">
+        <link rel="canonical" href="https://jpollock.github.io/local-addon-nexus-ai/features/smart-search/">
       
       
-        <link rel="prev" href="../wp-cli/">
+        <link rel="prev" href="../database-health/">
       
       
-        <link rel="next" href="../error-handling/">
+        <link rel="next" href="getting-started/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>Bulk Operations - Nexus AI Documentation</title>
+        <title>WP Engine Smart Search — Locally - Nexus AI Documentation</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#bulk-operations" class="md-skip">
+        <a href="#wp-engine-smart-search-locally" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Bulk Operations
+              WP Engine Smart Search — Locally
             
           </span>
         </div>
@@ -270,13 +270,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../cli/" class="md-tabs__link">
           
   
   
@@ -372,11 +370,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../features/semantic-search/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../semantic-search/" class="md-tabs__link">
           
   
   
@@ -761,31 +761,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   
@@ -803,7 +800,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -821,7 +818,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../cli/" class="md-nav__link">
         
   
   
@@ -849,7 +846,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../installation/" class="md-nav__link">
+      <a href="../../cli/installation/" class="md-nav__link">
         
   
   
@@ -877,7 +874,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../mcp-setup/" class="md-nav__link">
+      <a href="../../cli/mcp-setup/" class="md-nav__link">
         
   
   
@@ -905,7 +902,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../authentication/" class="md-nav__link">
+      <a href="../../cli/authentication/" class="md-nav__link">
         
   
   
@@ -933,7 +930,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../commands/" class="md-nav__link">
+      <a href="../../cli/commands/" class="md-nav__link">
         
   
   
@@ -961,7 +958,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/" class="md-nav__link">
+      <a href="../../cli/examples/" class="md-nav__link">
         
   
   
@@ -989,7 +986,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../local-sites/" class="md-nav__link">
+      <a href="../../cli/local-sites/" class="md-nav__link">
         
   
   
@@ -1017,7 +1014,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../wpe-sites/" class="md-nav__link">
+      <a href="../../cli/wpe-sites/" class="md-nav__link">
         
   
   
@@ -1045,7 +1042,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../wp-cli/" class="md-nav__link">
+      <a href="../../cli/wp-cli/" class="md-nav__link">
         
   
   
@@ -1070,37 +1067,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Bulk Operations
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../cli/bulk-operations/" class="md-nav__link">
         
   
   
@@ -1116,59 +1086,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Start
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Next Steps
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1181,7 +1098,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../error-handling/" class="md-nav__link">
+      <a href="../../cli/error-handling/" class="md-nav__link">
         
   
   
@@ -1209,7 +1126,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../performance/" class="md-nav__link">
+      <a href="../../cli/performance/" class="md-nav__link">
         
   
   
@@ -1237,7 +1154,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../troubleshooting/" class="md-nav__link">
+      <a href="../../cli/troubleshooting/" class="md-nav__link">
         
   
   
@@ -2297,28 +2214,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
-        
-          
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
             
   
   
@@ -2336,7 +2256,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2354,7 +2274,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/semantic-search/" class="md-nav__link">
+      <a href="../semantic-search/" class="md-nav__link">
         
   
   
@@ -2382,7 +2302,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/content-extraction/" class="md-nav__link">
+      <a href="../content-extraction/" class="md-nav__link">
         
   
   
@@ -2410,7 +2330,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/wp-cli-integration/" class="md-nav__link">
+      <a href="../wp-cli-integration/" class="md-nav__link">
         
   
   
@@ -2438,7 +2358,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/safety-system/" class="md-nav__link">
+      <a href="../safety-system/" class="md-nav__link">
         
   
   
@@ -2466,7 +2386,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/database-health/" class="md-nav__link">
+      <a href="../database-health/" class="md-nav__link">
         
   
   
@@ -2491,28 +2411,31 @@
                 
   
   
+    
   
   
+  
     
     
     
     
       
       
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
         
           
+          
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8_6" >
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_8_6" id="__nav_8_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8_6" id="__nav_8_6_label" tabindex="">
             
   
   
@@ -2530,7 +2453,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_6_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_6_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2545,10 +2468,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../features/smart-search/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview & Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2564,6 +2514,120 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-wp-engine-smart-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Is WP Engine Smart Search?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-normally-works-wpe-hosting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Normally Works (WPE Hosting)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-nexus-makes-it-work-locally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Nexus Makes It Work Locally
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How Nexus Makes It Work Locally">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-mu-plugin-intercept" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The MU Plugin Intercept
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#auto-setup-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Setup Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-works-locally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Works Locally
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-carries-to-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Carries to Production
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#further-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Further Reading
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2576,7 +2640,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/smart-search/getting-started/" class="md-nav__link">
+      <a href="getting-started/" class="md-nav__link">
         
   
   
@@ -2604,7 +2668,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/smart-search/limitations/" class="md-nav__link">
+      <a href="limitations/" class="md-nav__link">
         
   
   
@@ -3013,10 +3077,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#what-is-wp-engine-smart-search" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        What Is WP Engine Smart Search?
       
     </span>
   </a>
@@ -3024,10 +3088,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#how-it-normally-works-wpe-hosting" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        How It Normally Works (WPE Hosting)
       
     </span>
   </a>
@@ -3035,10 +3099,71 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
+  <a href="#how-nexus-makes-it-work-locally" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Next Steps
+        How Nexus Makes It Work Locally
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How Nexus Makes It Work Locally">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-mu-plugin-intercept" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The MU Plugin Intercept
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#auto-setup-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Setup Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-works-locally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Works Locally
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-carries-to-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Carries to Production
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#further-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Further Reading
       
     </span>
   </a>
@@ -3065,19 +3190,174 @@
   
 
 
-<h1 id="bulk-operations">Bulk Operations<a class="headerlink" href="#bulk-operations" title="Permanent link">&para;</a></h1>
-<div class="admonition warning">
-<p class="admonition-title">Work in Progress</p>
-<p>This page is under construction. Check back soon for complete documentation.</p>
-</div>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>TODO: Add overview content</p>
-<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<p>TODO: Add quick start guide</p>
-<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<h1 id="wp-engine-smart-search-locally">WP Engine Smart Search — Locally<a class="headerlink" href="#wp-engine-smart-search-locally" title="Permanent link">&para;</a></h1>
+<p>Nexus AI makes <strong>WP Engine Smart Search</strong> work in Local by acting as a local drop-in for WPE's cloud backend — running the same GraphQL API on your machine using LanceDB and ONNX embeddings.</p>
+<h2 id="what-is-wp-engine-smart-search">What Is WP Engine Smart Search?<a class="headerlink" href="#what-is-wp-engine-smart-search" title="Permanent link">&para;</a></h2>
+<p><a href="https://wpengine.com/support/wp-engine-smart-search/">WP Engine Smart Search</a> (part of the <a href="https://developers.wpengine.com/docs/ai-toolkit">WP Engine AI Toolkit</a>) replaces WordPress's default keyword search with semantic understanding.</p>
+<p>Key capabilities:</p>
 <ul>
-<li><a href="../../">Home</a></li>
-<li><a href="../../getting-started/">Getting Started</a></li>
+<li><strong>Semantic / hybrid search</strong> — finds relevant content even when the exact words don't appear</li>
+<li><strong>Typo tolerance</strong> — "roade" finds "road trip" content</li>
+<li><strong>Recommendations</strong> — "you might also like" powered by vector similarity  </li>
+<li><strong>Insights</strong> — what people search for, what returns no results</li>
+<li><strong>Synonyms</strong> — "laptop" finds "notebook" content</li>
+<li><strong>ACF field indexing</strong> — custom fields are searchable</li>
+</ul>
+<h2 id="how-it-normally-works-wpe-hosting">How It Normally Works (WPE Hosting)<a class="headerlink" href="#how-it-normally-works-wpe-hosting" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>WordPress Site (WPE hosted)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    └── WP Engine AI Toolkit plugin
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>            └── POST /graphql → WPE Smart Search Cloud
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>                    ├── Vector index + AI embeddings
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>                    ├── Recommendations engine
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                    └── Analytics
+</code></pre></div>
+<p>The plugin sends all queries and content to WPE's cloud. Credentials are provisioned automatically when Smart Search is enabled on a WPE plan.</p>
+<h2 id="how-nexus-makes-it-work-locally">How Nexus Makes It Work Locally<a class="headerlink" href="#how-nexus-makes-it-work-locally" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>WordPress Site (Local)
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    └── WP Engine AI Toolkit plugin
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>            └── Reads endpoint from WP option
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    ← Nexus MU Plugin filter intercepts option read →
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>            Returns: http://127.0.0.1:13000/smart-search/graphql
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>            └── POST /smart-search/graphql → Nexus AI
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>                    ├── ONNX embeddings (all-MiniLM-L6-v2, local)
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>                    ├── LanceDB vector store (local)
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>                    └── SQLite (synonyms, tracker, config)
+</code></pre></div>
+<p><strong>The plugin doesn't know it's talking to Nexus.</strong> It sends the same GraphQL it would send to WPE cloud, and Nexus responds in the same shape.</p>
+<h3 id="the-mu-plugin-intercept">The MU Plugin Intercept<a class="headerlink" href="#the-mu-plugin-intercept" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Plugin calls:  get_option(&#39;wpe_content_engine_option_name&#39;)
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>                         │
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>              MU Plugin filter fires (early WP bootstrap)
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>                         │
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>              Returns: { url: &#39;http://127.0.0.1:13000/smart-search/graphql&#39;,
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>                          access_token: &#39;{local-token}&#39; }
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>                         │
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>              Plugin uses Nexus — no code changes needed
+</code></pre></div>
+<p>The MU plugin (<code>nexus-ai-connector-config.php</code>) is auto-generated when your site starts. It is <strong>excluded from WPE file pushes</strong> via <code>.wpe-push-ignore</code> so production keeps its real WPE credentials.</p>
+<h2 id="auto-setup-flow">Auto-Setup Flow<a class="headerlink" href="#auto-setup-flow" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>1. Site starts in Local
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>         │
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>2. Nexus detects atlas-search files on disk
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>         │
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>         ├── Site has AI config but NO atlas-search?
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>         │         └── Auto-installs from wordpress.org
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>         │
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>3. Nexus generates MU plugin with Smart Search endpoint
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>         │
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>4. atlas-search routes all traffic to Nexus
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>         │
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>5. Developer syncs content (WP Admin → Smart Search → Sync)
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>         │
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>6. atlas-search sends bulkIndex → Nexus embeds + stores in LanceDB
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>         │
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>7. WordPress search uses local semantic index ✅
+</code></pre></div>
+<h2 id="what-works-locally">What Works Locally<a class="headerlink" href="#what-works-locally" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Full-text search</td>
+<td>✅ Full</td>
+</tr>
+<tr>
+<td>Semantic / hybrid search</td>
+<td>✅ Full</td>
+</tr>
+<tr>
+<td>Typo tolerance</td>
+<td>✅ Full</td>
+</tr>
+<tr>
+<td>Synonyms</td>
+<td>✅ Full</td>
+</tr>
+<tr>
+<td>Recommendations (related)</td>
+<td>✅ Full</td>
+</tr>
+<tr>
+<td>Recommendations (trending)</td>
+<td>✅ Full</td>
+</tr>
+<tr>
+<td>Tracker (views, clicks, searches)</td>
+<td>✅ Full</td>
+</tr>
+<tr>
+<td>Insights analytics</td>
+<td>✅ Full</td>
+</tr>
+<tr>
+<td>Promotions / custom results</td>
+<td>✅ Full</td>
+</tr>
+<tr>
+<td>ACF field indexing</td>
+<td>✅ Full</td>
+</tr>
+<tr>
+<td>Aggregations / facets</td>
+<td>⚠️ Post-query</td>
+</tr>
+<tr>
+<td>Geographic search</td>
+<td>⚠️ Ignored</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="limitations/">Known Limitations</a> for details on partial support.</p>
+<h2 id="what-carries-to-production">What Carries to Production<a class="headerlink" href="#what-carries-to-production" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Local (Nexus)</th>
+<th>WPE Production</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Backend</td>
+<td><code>127.0.0.1:13000</code></td>
+<td>WPE Smart Search cloud</td>
+</tr>
+<tr>
+<td>Credentials</td>
+<td>Local token</td>
+<td>WPE-provisioned</td>
+</tr>
+<tr>
+<td>Vector index</td>
+<td>LanceDB on your Mac</td>
+<td>WPE managed cloud</td>
+</tr>
+<tr>
+<td>MU plugin</td>
+<td>Auto-generated, excluded from push</td>
+<td>Not present</td>
+</tr>
+<tr>
+<td>Synonyms / tracker</td>
+<td>Local SQLite</td>
+<td>WPE cloud</td>
+</tr>
+</tbody>
+</table>
+<h2 id="further-reading">Further Reading<a class="headerlink" href="#further-reading" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="getting-started/">Getting Started</a> — step-by-step setup</li>
+<li><a href="limitations/">Known Limitations</a> — where local differs from cloud</li>
+<li><a href="https://wpengine.com/support/wp-engine-smart-search/">WPE Smart Search Docs</a> — official product docs</li>
+<li><a href="https://developers.wpengine.com/docs/ai-toolkit/smart-search/find-api/">Smart Search API Reference</a> — GraphQL reference</li>
 </ul>
 
 
