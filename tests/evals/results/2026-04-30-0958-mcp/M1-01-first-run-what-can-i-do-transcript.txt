@@ -1,0 +1,127 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M1-01-first-run-what-can-i-do
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 79.0s
+Tool calls: 3
+Cost: $0.3943
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I just installed Nexus. What can I do with it right now?
+
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so let me use the MCP tools directly to discover your setup.
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+
+⏺ mcp__local-nexus-ai__get_system_health({})
+  ⎿  ## Fleet (8 local, 310 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **nexus-e2e-test** (nexus-e2e-test.local) [running]
+- **jpp0413p** (jpp0413p.local) [running]
+- **local-copy-jpp** (local-copy-jpp.local) [running]
+- jeremypollockblog (jeremypollockblog.local) [halted]
+- nexus (nexus.local) [halted]
+- nitropack-1 (nitropack-1.local) [halted]
+- ACF Auto Car Finder (acf-auto-car-fi
+  ⎿  {
+  "status": "unhealthy",
+  "uptime_ms": 13614664,
+  "memory": {
+    "rss_mb": 385.453125,
+    "heap_used_mb": 66.11685180664062,
+    "heap_total_mb": 72.609375,
+    "external_mb": 11.881476402282715
+  },
+  "event_queue": {
+    "pending": 0,
+    "processing": 0,
+    "failed_last_hour": 0
+  },
+  "mcp_tools": {
+    "total_calls": 31,
+    "error_rate": 0.12903225806451613,
+    "avg_duration_ms": 721.0322580645161
+  },
+  "search": {
+    "total_queries": 0,
+    "avg_duration_ms": 0,
+    "cache_hit_r
+Here's what you've got and what you can do right now:
+
+**Your fleet:** 8 local sites (3 running), 310 WPE environments
+
+---
+
+## What you can do right now
+
+**1. Explore your WPE fleet**
+With 310 WPE environments connected, you can query them immediately — no setup needed:
+- "Show me all my WPE installs" → `nexus_list_sites`
+- "Check SSL across my fleet" → `wpe_account_ssl_status`
+- "Which installs are on old PHP?" → `find_outdated_sites`
+- "How much bandwidth am I using?" → `wpe_portfolio_usage`
+
+**2. Work with your running local sites**
+Three local sites are up (`nexus-e2e-test`, `jpp0413p`, `local-copy-jpp`):
+- Check plugin versions: "List plugins on jpp0413p"
+- Run WP-CLI: "What WP version is jpp0413p running?"
+- Pull from WPE: "Sync jpp0413p from production"
+- Scan database health: "Scan jpp0413p's database"
+
+**3. Index local sites for content search**
+This requires one setup step per site, then you can ask things like "Which of my local sites has a post about checkout?":
+
+> "Make nexus-e2e-test searchable"
+
+---
+
+**One thing to note:** System health shows a 12.9% MCP tool error rate (threshold is 5%). This may just be from initial startup calls. If things feel slow or broken, try: "Run Nexus diagnostics."
+
+What would you like to start with?
+
+--- FINAL RESULT ---
+Here's what you've got and what you can do right now:
+
+**Your fleet:** 8 local sites (3 running), 310 WPE environments
+
+---
+
+## What you can do right now
+
+**1. Explore your WPE fleet**
+With 310 WPE environments connected, you can query them immediately — no setup needed:
+- "Show me all my WPE installs" → `nexus_list_sites`
+- "Check SSL across my fleet" → `wpe_account_ssl_status`
+- "Which installs are on old PHP?" → `find_outdated_sites`
+- "How much bandwidth am I using?" → `wpe_portfolio_usage`
+
+**2. Work with your running local sites**
+Three local sites are up (`nexus-e2e-test`, `jpp0413p`, `local-copy-jpp`):
+- Check plugin versions: "List plugins on jpp0413p"
+- Run WP-CLI: "What WP version is jpp0413p running?"
+- Pull from WPE: "Sync jpp0413p from production"
+- Scan database health: "Scan jpp0413p's database"
+
+**3. Index local sites for content search**
+This requires one setup step per site, then you can ask things like "Which of my local sites has a post about checkout?":
+
+> "Make nexus-e2e-test searchable"
+
+---
+
+**One thing to note:** System health shows a 12.9% MCP tool error rate (threshold is 5%). This may just be from initial startup calls. If things feel slow or broken, try: "Run Nexus diagnostics."
+
+What would you like to start with?

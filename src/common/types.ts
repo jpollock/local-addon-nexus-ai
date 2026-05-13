@@ -42,6 +42,10 @@ export interface VectorDocument {
   /** JSON-serialized metadata (excerpt, author, date, categories, tags, etc.) */
   metadata: string;
   indexedAt: number;
+  // Smart Search fields (empty string default for Nexus-indexed docs)
+  post_date_gmt: string;
+  post_modified_gmt: string;
+  doc_url: string;
 }
 
 export interface SearchOptions {

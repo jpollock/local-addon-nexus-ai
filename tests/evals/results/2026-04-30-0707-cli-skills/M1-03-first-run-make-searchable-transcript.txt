@@ -1,0 +1,123 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M1-03-first-run-make-searchable
+Mode: cli-skills
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 25.4s
+Tool calls: 3
+Cost: $0.0910
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I want to be able to search my sites. How do I get started?
+
+Let me check the setup and search skill files to give you accurate guidance.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-doctor/SKILL.md"})
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-search/SKILL.md"})
+  ⎿  1	---
+2	name: nexus-search
+3	description: Search across all indexed local WordPress sites by content. Use when looking for sites that contain specific content, posts, or pages. Pass the search query as args.
+4	argument-hint: <search query>
+5	allowed-tools: Bash(node *)
+6	---
+7	
+8	# Cross-Site Content Search
+9	
+10	Search query: `$ARGUMENTS`
+11	
+12	Run this command to search all indexed local sites:
+13	
+14	```
+15	nexus content search-all "$ARGUMENTS"
+16	```
+17	
+18	Then present the results clearly:
+  ⎿  1	---
+2	name: nexus-doctor
+3	description: Run Nexus AI diagnostics. Checks Local running, addon active, MCP server, gateway, AI provider, API key, and site count. Auto-suggests the exact fix command for every failure. Use when troubleshooting Nexus or verifying a working setup.
+4	allowed-tools: Bash(nexus *)
+5	---
+6	
+7	# Nexus AI Diagnostic
+8	
+9	Current system status:
+10	
+11	```!
+12	nexus doctor
+13	```
+14	
+15	Based on the output above:
+16	
+17	1. **Triage**: Separate ✅ passing, ⚠️ warnings, ❌ fai
+Let me run a quick health check first to see where things stand.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js doctor 2>&1"})
+  ⎿  💡 No AI provider configured. Run: nexus ai config
+
+
+Nexus AI v0.2.5 — System Health
+──────────────────────────────────────────────────
+  ✅  Local app           Installed
+  ✅  Local running       Running
+  ✅  Nexus AI addon      Active (v0.2.5) · dev
+  ✅  Version match       v0.2.5
+  ✅  GraphQL server      Connected (port 4000)
+  ✅  MCP server          Running · 172 tools (v0.1.0)
+  ✅  AI agent config     Claude Desktop
+  ⚠️   AI provider         Not configured
+  ○   Local Gateway       Disabled
+Good news — the core is healthy. **310 sites have fresh data**, so search should work right away. Here's how to get started:
+
+## Searching your sites
+
+Run this command to search across all indexed sites:
+
+```bash
+node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js content search-all "your search term"
+```
+
+For example:
+```bash
+node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js content search-all "hello world"
+```
+
+To see what's indexed first:
+```bash
+node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js content list-indexed
+```
+
+---
+
+The two warnings in your health check (`AI provider not configured`, `0/8 sites with AI`) are about the *AI chat features* — not search. Search works independently of AI configuration, so you can use it immediately.
+
+Want me to run a test search now to confirm everything works?
+
+--- FINAL RESULT ---
+Good news — the core is healthy. **310 sites have fresh data**, so search should work right away. Here's how to get started:
+
+## Searching your sites
+
+Run this command to search across all indexed sites:
+
+```bash
+node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js content search-all "your search term"
+```
+
+For example:
+```bash
+node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js content search-all "hello world"
+```
+
+To see what's indexed first:
+```bash
+node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js content list-indexed
+```
+
+---
+
+The two warnings in your health check (`AI provider not configured`, `0/8 sites with AI`) are about the *AI chat features* — not search. Search works independently of AI configuration, so you can use it immediately.
+
+Want me to run a test search now to confirm everything works?

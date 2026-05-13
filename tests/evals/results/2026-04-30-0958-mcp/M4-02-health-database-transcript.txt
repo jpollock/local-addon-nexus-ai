@@ -1,0 +1,100 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M4-02-health-database
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 52.4s
+Tool calls: 2
+Cost: $0.1264
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites have database issues? Give me a summary of database health across all of them.
+
+I'll check the nexus-fleet skill first before running the database health scan.
+
+⏺ Skill({"skill":"nexus-fleet"})
+  ⎿  Shell command failed for pattern "```!
+nexus fleet health
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so I'll use the MCP tools directly. Let me run the fleet database health scan.
+
+⏺ mcp__local-nexus-ai__fleet_database_health({})
+  ⎿  {
+  "scannedAt": 1777563143165,
+  "sitesScanned": 8,
+  "sitesFailed": 0,
+  "sites": [
+    {
+      "siteId": "nGjg-3i1-",
+      "siteName": "Newsroom Demo",
+      "healthScore": 78,
+      "wpVersion": "6.9.4",
+      "isWooCommerceActive": false,
+      "revisionCount": 59,
+      "expiredTransients": 0,
+      "leftoverTables": 0,
+      "topIssue": "59 post revisions (~1.1 MB)",
+      "summary": [
+        "59 post revisions (~1.1 MB)",
+        "3,866 orphaned post meta rows — mostly `_mediapress_rev
+Here's the database health summary across all 8 running sites:
+
+---
+
+**Fleet Overview:** 8 scanned, 0 failures. 4 sites are clean (score 100), 4 need attention.
+
+---
+
+### Sites Needing Attention
+
+| Site | Score | Top Issue |
+|---|---|---|
+| **Newsroom Demo** | 78 | 3,866 orphaned postmeta rows + 59 revisions + 23 trashed posts |
+| **nexus-e2e-test** | 88 | 417 post revisions accumulating (recommend `WP_POST_REVISIONS = 5`) |
+| **local-copy-jpp** | 88 | 376 orphaned postmeta + WP Rocket autoload bloat (0.1 MB/request) |
+| **ACF Auto Car Finder** | 90 | 205 orphaned postmeta rows + ACF autoload bloat |
+
+**Newsroom Demo is the worst offender** — the 3,866 orphaned postmeta rows look like leftover data from a removed plugin (`_mediapress_revisions_revision_name`). That's worth cleaning up.
+
+---
+
+### Clean Sites (Score 100)
+
+`jeremypollockblog`, `jpp0413p`, `nexus`, `nitropack-1` — no actionable issues.
+
+---
+
+**Want me to run `clean_database_items` on any of these?** It defaults to a dry run first so you can see exactly what would be removed before anything is deleted.
+
+--- FINAL RESULT ---
+Here's the database health summary across all 8 running sites:
+
+---
+
+**Fleet Overview:** 8 scanned, 0 failures. 4 sites are clean (score 100), 4 need attention.
+
+---
+
+### Sites Needing Attention
+
+| Site | Score | Top Issue |
+|---|---|---|
+| **Newsroom Demo** | 78 | 3,866 orphaned postmeta rows + 59 revisions + 23 trashed posts |
+| **nexus-e2e-test** | 88 | 417 post revisions accumulating (recommend `WP_POST_REVISIONS = 5`) |
+| **local-copy-jpp** | 88 | 376 orphaned postmeta + WP Rocket autoload bloat (0.1 MB/request) |
+| **ACF Auto Car Finder** | 90 | 205 orphaned postmeta rows + ACF autoload bloat |
+
+**Newsroom Demo is the worst offender** — the 3,866 orphaned postmeta rows look like leftover data from a removed plugin (`_mediapress_revisions_revision_name`). That's worth cleaning up.
+
+---
+
+### Clean Sites (Score 100)
+
+`jeremypollockblog`, `jpp0413p`, `nexus`, `nitropack-1` — no actionable issues.
+
+---
+
+**Want me to run `clean_database_items` on any of these?** It defaults to a dry run first so you can see exactly what would be removed before anything is deleted.

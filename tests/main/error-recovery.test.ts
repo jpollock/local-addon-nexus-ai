@@ -186,6 +186,9 @@ describe('Error Recovery', () => {
             vector: makeFakeVector(),
             metadata: '{}',
             indexedAt: Date.now(),
+            post_date_gmt: '',
+            post_modified_gmt: '',
+            doc_url: '',
           },
         ]),
       ).rejects.toThrow(/not initialized/i);

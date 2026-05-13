@@ -1,0 +1,275 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M4-02-health-database
+Mode: cli-skills
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 88.5s
+Tool calls: 17
+Cost: $0.2705
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my local sites have database issues? Give me a summary of database health across all of them.
+
+Let me read the relevant skill files to understand the right commands for database health scanning.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-fleet/SKILL.md"})
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-sites/SKILL.md"})
+  ⎿  1	---
+2	name: nexus-fleet
+3	description: Get health, status, and analytics across all local WordPress sites. Shows plugin outdates, WP version drift, site issues, and bulk action opportunities. Use for fleet-wide monitoring and maintenance planning.
+4	allowed-tools: Bash(nexus *)
+5	---
+6	
+7	# Fleet Health Overview
+8	
+9	```!
+10	nexus fleet health
+11	```
+12	
+13	Analyze the fleet report:
+14	
+15	1. **Critical issues** — any ❌ failures that need immediate attention (name the sites)
+16	2. **Plugin upd
+  ⎿  1	---
+2	name: nexus-sites
+3	description: Discover and show all local and WP Engine sites with status. Groups running vs halted, shows WPE links, and surfaces next actions. Use at the start of any workflow involving sites — always call this first before acting on a site.
+4	allowed-tools: Bash(nexus *)
+5	---
+6	
+7	# Site Discovery
+8	
+9	```!
+10	nexus sites list
+11	```
+12	
+13	Present the results clearly:
+14	
+15	1. **Running local sites** (ready to use) — name, domain, WPE link if any
+16	2. **Halted l
+Now let me read the nexus-wp skill for the db scan command syntax.
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-wp/SKILL.md"})
+  ⎿  1	---
+2	name: nexus-wp
+3	description: Run WP-CLI commands on a local WordPress site via nexus. Target format is <sitename>@local. For WPE remote installs use nexus-wpe skill instead.
+4	argument-hint: <site@local> <wp-cli-command>
+5	allowed-tools: Bash(nexus *)
+6	---
+7	
+8	# WP-CLI via Nexus (local sites)
+9	
+10	For **local** sites only. WPE remote installs → use `nexus-wpe` skill.
+11	
+12	Target format: `<sitename>@local` or bare site name (auto-resolved from graph DB).
+13	
+14	**Common commands:**
+
+I'll get the list of sites and fleet health in parallel, then run database scans across all running sites.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites list 2>&1","description":"List all local and WPE sites"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js fleet health 2>&1","description":"Get fleet health overview"})
+  ⎿  💡 No AI provider configured. Run: nexus ai config
+
+
+Local Sites:
+  🟢 nexus-e2e-test (running) → not linked
+  ⚫ jeremypollockblog (halted) → not linked
+  🟢 jpp0413p (running) → not linked
+  ⚫ nexus (halted) → not linked
+  ⚫ nitropack-1 (halted) → not linked
+  ⚫ ACF Auto Car Finder (halted) → wpe:41b8c1d0-3084-4430-81f0-8d95a2c6182d/d4ee23be-bef3-4fe4-93ed-91e111c6764a@production
+  🟢 local-copy-jpp (running) → wpe:6d5f288a-62c5-4b45-bee8-50ebd02b66b5/7576b9e6-64de-45fd-809f-9fd659a91cc1@produc
+  ⎿  💡 No AI provider configured. Run: nexus ai config
+
+
+Fleet Health Summary
+──────────────────────────────────────────────────
+Sites:         8 total (3 running, 5 halted)
+Health:        0 healthy, 3 warnings, 0 critical
+Plugins:       0 total (0 outdated)
+Themes:        0 total (0 outdated)
+3 running sites: `nexus-e2e-test`, `jpp0413p`, and `local-copy-jpp`. Let me run database health scans on all three in parallel.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp db scan nexus-e2e-test@local 2>&1","description":"Run database health scan on nexus-e2e-test"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp db scan jpp0413p@local 2>&1","description":"Run database health scan on jpp0413p"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp db scan local-copy-jpp@local 2>&1","description":"Run database health scan on local-copy-jpp"})
+  ⎿  Exit code 1
+💡 No AI provider configured. Run: nexus ai config
+
+Error: HTTP 400: Bad Request
+  ⎿  Exit code 1
+💡 No AI provider configured. Run: nexus ai config
+
+Error: HTTP 400: Bad Request
+  ⎿  Exit code 1
+💡 No AI provider configured. Run: nexus ai config
+
+Error: HTTP 400: Bad Request
+Getting HTTP 400 errors. Let me check the CLI help to see what db subcommands are available.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp --help 2>&1","description":"Show wp subcommand help"})
+  ⎿  Usage: nexus wp [options] [command]
+
+Run WP-CLI commands on sites
+
+Options:
+  -h, --help                    display help for command
+
+Commands:
+  user-list [options] <target>  List WordPress users
+  option-get <target> <key>     Get WordPress option value
+  health [options] <target>     Check site health
+  plugin                        Manage WordPress plugins
+  theme                         Manage WordPress themes
+  core                          Manage WordPress core
+  db                       
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp db --help 2>&1","description":"Show wp db subcommand help"})
+  ⎿  Usage: nexus wp db [options] [command]
+
+Manage WordPress database
+
+Options:
+  -h, --help                                     display help for command
+
+Commands:
+  export <target> [output]                       Export database
+  import <target> <file>                         Import database
+  scan [options] <target>                        Scan database for bloat and health issues
+  clean [options] <target>                       Clean database bloat (dry-run by default)
+  report [options]         
+There's a fleet `report` command. Let me run that plus check scan's options.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp db report 2>&1","description":"Run fleet database health report across all running sites"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp db scan --help 2>&1","description":"Show db scan options"})
+  ⎿  💡 No AI provider configured. Run: nexus ai config
+
+
+Fleet Database Health Report
+Sites scanned: 3
+
+  Site             Score  WP Version   Top Issue
+  -----------------------------------------------------------------
+  nexus-e2e-test   [32m88 [0m/100  7.0-RC2      417 post revisions (~49.7 KB) — add d...
+  local-copy-jpp   [32m88 [0m/100  6.9.4        2 expired transients — wp transient d...
+  jpp0413p         [32m100[0m/100  6.9.4        —
+  ⎿  Usage: nexus wp db scan [options] <target>
+
+Scan database for bloat and health issues
+
+Options:
+  --json      Output as JSON
+  -h, --help  display help for command
+Good fleet overview. Now let me get detailed scans on the two sites with issues.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp db scan nexus-e2e-test@local 2>&1","description":"Detailed database scan for nexus-e2e-test"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp db scan local-copy-jpp@local 2>&1","description":"Detailed database scan for local-copy-jpp"})
+  ⎿  Exit code 1
+💡 No AI provider configured. Run: nexus ai config
+
+Error: HTTP 400: Bad Request
+  ⎿  Exit code 1
+💡 No AI provider configured. Run: nexus ai config
+
+Error: HTTP 400: Bad Request
+The `@local` suffix seems to cause issues with db scan. Let me try bare site names.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp db scan nexus-e2e-test 2>&1","description":"Detailed database scan for nexus-e2e-test using bare name"})
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp db scan local-copy-jpp 2>&1","description":"Detailed database scan for local-copy-jpp using bare name"})
+  ⎿  Exit code 1
+💡 No AI provider configured. Run: nexus ai config
+
+Error: HTTP 400: Bad Request
+  ⎿  Exit code 1
+💡 No AI provider configured. Run: nexus ai config
+
+Error: HTTP 400: Bad Request
+The per-site scan has a routing issue, but the fleet report already captured the key data. Let me get the JSON output for full details.
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js wp db report --json 2>&1","description":"Fleet database health report in JSON for full detail"})
+  ⎿  💡 No AI provider configured. Run: nexus ai config
+
+{
+  "scannedAt": 1777551601299,
+  "sitesScanned": 3,
+  "sitesFailed": 0,
+  "sites": [
+    {
+      "siteId": "6BJ5_1BUz",
+      "siteName": "nexus-e2e-test",
+      "healthScore": 88,
+      "wpVersion": "7.0-RC2",
+      "isWooCommerceActive": false,
+      "revisionCount": 417,
+      "expiredTransients": 1,
+      "leftoverTables": 0,
+      "topIssue": "417 post revisions (~49.7 KB) — add define('WP_POST_REVISIONS', 5) to wp-config.php to prevent f
+Here's your database health summary across all 3 running sites:
+
+---
+
+## Database Health — 3 Sites Scanned
+
+| Site | Score | Issues |
+|---|---|---|
+| jpp0413p | **100/100** | None — clean |
+| nexus-e2e-test | **88/100** | Post revisions + expired transient |
+| local-copy-jpp | **88/100** | Expired transients |
+
+---
+
+### nexus-e2e-test (88/100) — Biggest issue
+- **417 post revisions** (~49.7 KB of bloat) — this is the main culprit
+- 1 expired transient
+- **Fix:** Add `define('WP_POST_REVISIONS', 5);` to `wp-config.php` to cap future revisions, then clean: `nexus wp db clean nexus-e2e-test --dry-run` (remove `--dry-run` to execute)
+
+### local-copy-jpp (88/100) — Minor
+- 2 expired transients, 1 post revision (negligible size)
+- **Fix:** `nexus wp db clean local-copy-jpp --dry-run`
+
+### jpp0413p (100/100) — All clear
+- No issues.
+
+---
+
+**5 halted sites** (jeremypollockblog, nexus, nitropack-1, ACF Auto Car Finder, Newsroom Demo) weren't scanned — start them and re-run `nexus wp db report` to check those too.
+
+--- FINAL RESULT ---
+Here's your database health summary across all 3 running sites:
+
+---
+
+## Database Health — 3 Sites Scanned
+
+| Site | Score | Issues |
+|---|---|---|
+| jpp0413p | **100/100** | None — clean |
+| nexus-e2e-test | **88/100** | Post revisions + expired transient |
+| local-copy-jpp | **88/100** | Expired transients |
+
+---
+
+### nexus-e2e-test (88/100) — Biggest issue
+- **417 post revisions** (~49.7 KB of bloat) — this is the main culprit
+- 1 expired transient
+- **Fix:** Add `define('WP_POST_REVISIONS', 5);` to `wp-config.php` to cap future revisions, then clean: `nexus wp db clean nexus-e2e-test --dry-run` (remove `--dry-run` to execute)
+
+### local-copy-jpp (88/100) — Minor
+- 2 expired transients, 1 post revision (negligible size)
+- **Fix:** `nexus wp db clean local-copy-jpp --dry-run`
+
+### jpp0413p (100/100) — All clear
+- No issues.
+
+---
+
+**5 halted sites** (jeremypollockblog, nexus, nitropack-1, ACF Auto Car Finder, Newsroom Demo) weren't scanned — start them and re-run `nexus wp db report` to check those too.

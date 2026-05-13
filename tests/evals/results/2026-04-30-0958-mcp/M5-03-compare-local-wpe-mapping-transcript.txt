@@ -1,0 +1,104 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M5-03-compare-local-wpe-mapping
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 85.7s
+Tool calls: 3
+Cost: $0.2625
+
+============================================================
+TURN 1
+============================================================
+PROMPT: For each of my local sites, tell me if there's a matching WP Engine site. Show me which are paired and which are local-only or WPE-only.
+
+Using the `nexus-sites` skill to discover all sites and their pairings.
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+The skill tried CLI, but we're in MCP-only mode. Falling back to the MCP tools directly — let me call `nexus_list_sites` and check the fleet state resource in parallel.
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+
+⏺ ReadMcpResourceTool({"server":"local-nexus-ai","uri":"nexus://fleet/state"})
+  ⎿  ## Fleet (8 local, 307 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **nexus-e2e-test** (nexus-e2e-test.local) [running]
+- **jeremypollockblog** (jeremypollockblog.local) [running]
+- **jpp0413p** (jpp0413p.local) [running]
+- **nexus** (nexus.local) [running]
+- **nitropack-1** (nitropack-1.local) [running]
+- **ACF Auto Car Finder** (acf-auto-car-finder.local) [running]
+- **local-cop
+  ⎿  {"contents":[{"uri":"nexus://fleet/state","mimeType":"text/markdown","text":"# Fleet State (from local cache)\n\n## WP Engine Installs (310 installs, synced 18m ago)\n\n| install_name | install_id | environment | primary_domain | account |\n|---|---|---|---|---|\n| sprntndntchmbr | 9564d013-757d-4b18-8aa0-93bdd5fb9d99 | production | sprntndntchmbr.wpenginepowered.com | esmy9dign4hoqz |\n| benfischer | 5893fe56-9fde-441c-8692-c9d1623b5ad8 | production | benfischer.wpenginepowered.com | qawpeprodu
+Here's the breakdown. No local sites show the `↔` formal Local Connect link, so none are officially linked via Local's Connect UI. But matching by name reveals clear counterparts:
+
+---
+
+### Paired (name match with WPE install)
+
+| Local Site | WPE Install | WPE Domain |
+|---|---|---|
+| **jpp0413p** | `jpp0413p` (production) | jpp0413p.wpenginepowered.com |
+| **local-copy-jpp** | `localcopyjpp` (production) | localcopyjpp.wpenginepowered.com |
+| **Newsroom Demo** | `newsroomdemo` (production) + `newsroomdemstg` (staging) | newsroomdemo.wpenginepowered.com |
+| **ACF Auto Car Finder** | `autocarfinder` (production) + `autocarfindstg` (staging) | autocarfinder.wpenginepowered.com |
+
+**Likely pair** (related by purpose/name, less exact):
+
+| Local Site | WPE Install | Note |
+|---|---|---|
+| **jeremypollockblog** | `jeremypollock2` (production) | WPE site is `jeremypollock.blog` account |
+
+---
+
+### Local-only (no WPE counterpart found)
+
+- **nexus-e2e-test** — test/dev only
+- **nexus** — development sandbox
+- **nitropack-1** — local test
+
+---
+
+### Key note
+None of these are *formally linked* via Local Connect (no `↔` symbol appeared). That means push/pull won't auto-populate — you'd need to pass the install name explicitly (e.g., `remote_install_id=jpp0413p`) or connect them in Local's UI first.
+
+--- FINAL RESULT ---
+Here's the breakdown. No local sites show the `↔` formal Local Connect link, so none are officially linked via Local's Connect UI. But matching by name reveals clear counterparts:
+
+---
+
+### Paired (name match with WPE install)
+
+| Local Site | WPE Install | WPE Domain |
+|---|---|---|
+| **jpp0413p** | `jpp0413p` (production) | jpp0413p.wpenginepowered.com |
+| **local-copy-jpp** | `localcopyjpp` (production) | localcopyjpp.wpenginepowered.com |
+| **Newsroom Demo** | `newsroomdemo` (production) + `newsroomdemstg` (staging) | newsroomdemo.wpenginepowered.com |
+| **ACF Auto Car Finder** | `autocarfinder` (production) + `autocarfindstg` (staging) | autocarfinder.wpenginepowered.com |
+
+**Likely pair** (related by purpose/name, less exact):
+
+| Local Site | WPE Install | Note |
+|---|---|---|
+| **jeremypollockblog** | `jeremypollock2` (production) | WPE site is `jeremypollock.blog` account |
+
+---
+
+### Local-only (no WPE counterpart found)
+
+- **nexus-e2e-test** — test/dev only
+- **nexus** — development sandbox
+- **nitropack-1** — local test
+
+---
+
+### Key note
+None of these are *formally linked* via Local Connect (no `↔` symbol appeared). That means push/pull won't auto-populate — you'd need to pass the install name explicitly (e.g., `remote_install_id=jpp0413p`) or connect them in Local's UI first.

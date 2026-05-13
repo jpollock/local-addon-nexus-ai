@@ -1,0 +1,56 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M4-01-health-ssl
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 57.2s
+Tool calls: 2
+Cost: $0.1078
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Which of my WP Engine sites have SSL issues or certificates expiring soon?
+
+
+⏺ Skill({"skill":"nexus-wpe"})
+  ⎿  Shell command failed for pattern "```!
+nexus wpe portfolio
+```": [stderr]
+(eval):1: command not found: nexus
+The skill tried to run a shell command, which isn't available in MCP-only mode. Let me discover what nexus MCP tools are available.
+
+⏺ ListMcpResourcesTool({})
+  ⎿  No resources found. MCP servers may still provide tools even if they have no resources.
+The nexus MCP tools don't appear to be connected in this session — no nexus-specific tools are showing up in my available tool set (only the wpe-pm-toolkit tools are visible).
+
+This typically means the Nexus MCP server isn't running or isn't registered with this Claude instance. A few things to check:
+
+1. **Is Local running?** The Nexus MCP server starts when Local is open with the Nexus AI addon active.
+
+2. **Run the doctor** from a terminal:
+   ```
+   nexus doctor
+   ```
+   This will check whether the MCP server is up, the addon is active, and your WPE auth is configured — and print the exact fix command for any failure.
+
+3. **For Claude Desktop specifically** — make sure the Nexus MCP server is registered in your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`). The entry should point to the `nexus mcp` command.
+
+Once the MCP server is connected, I can query your WPE installs for SSL status directly. The SSL check pulls certificate expiry dates across all your WP Engine environments and flags anything expiring within 30 days or already expired.
+
+--- FINAL RESULT ---
+The nexus MCP tools don't appear to be connected in this session — no nexus-specific tools are showing up in my available tool set (only the wpe-pm-toolkit tools are visible).
+
+This typically means the Nexus MCP server isn't running or isn't registered with this Claude instance. A few things to check:
+
+1. **Is Local running?** The Nexus MCP server starts when Local is open with the Nexus AI addon active.
+
+2. **Run the doctor** from a terminal:
+   ```
+   nexus doctor
+   ```
+   This will check whether the MCP server is up, the addon is active, and your WPE auth is configured — and print the exact fix command for any failure.
+
+3. **For Claude Desktop specifically** — make sure the Nexus MCP server is registered in your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`). The entry should point to the `nexus mcp` command.
+
+Once the MCP server is connected, I can query your WPE installs for SSL status directly. The SSL check pulls certificate expiry dates across all your WP Engine environments and flags anything expiring within 30 days or already expired.

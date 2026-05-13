@@ -178,6 +178,10 @@ nav:
     - WP-CLI Integration: features/wp-cli-integration.md
     - Safety System: features/safety-system.md
     - Database Health: features/database-health.md
+    - Smart Search (WPE AI Toolkit):
+      - Overview & Architecture: features/smart-search/index.md
+      - Getting Started: features/smart-search/getting-started.md
+      - Local vs Cloud: features/smart-search/limitations.md
 
   - AI Context:
     - Overview: ai-context/index.md

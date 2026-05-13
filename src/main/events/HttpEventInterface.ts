@@ -8,6 +8,7 @@ import { WordPressEvent, EventType } from './types';
 import { AIGatewayRoutes } from '../ai-gateway/AIGatewayRoutes';
 import type { RegistryStorage } from '../content/IndexRegistry';
 import { IPC_CHANNELS } from '../../common/constants';
+import type { SmartSearchHandler } from '../smart-search/SmartSearchHandler';
 
 const EVENT_TYPES: EventType[] = [
   'post_created',
@@ -54,6 +55,7 @@ export class HttpEventInterface {
   private authToken: string;
   private running = false;
   private aiGatewayRoutes: AIGatewayRoutes;
+  private smartSearchHandler?: SmartSearchHandler;
 
   constructor(options: HttpEventInterfaceOptions) {
     this.eventProcessor = options.eventProcessor;
@@ -79,6 +81,10 @@ export class HttpEventInterface {
         }
       },
     });
+  }
+
+  setSmartSearchHandler(handler: SmartSearchHandler): void {
+    this.smartSearchHandler = handler;
   }
 
   private generateToken(): string {
@@ -166,7 +172,7 @@ export class HttpEventInterface {
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-Token, X-WP-Site-ID');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-Token, X-WP-Site-ID, X-Nexus-Site-Id');
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204);
@@ -186,6 +192,25 @@ export class HttpEventInterface {
     // Must be checked before the Bearer auth gate below.
     if (url.startsWith('/ai-gateway/v1/')) {
       this.handleAIGatewayRoute(url, req, res);
+      return;
+    }
+
+    // Smart Search GraphQL endpoint — handles its own Bearer auth check
+    if (url === '/smart-search/graphql' && req.method === 'POST') {
+      if (!this.validateAuth(req)) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
+      if (!this.smartSearchHandler) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ errors: [{ message: 'SmartSearch not initialized' }] }));
+        return;
+      }
+      this.smartSearchHandler.handle(req, res).catch((err) => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ errors: [{ message: err?.message ?? 'Internal error' }] }));
+      });
       return;
     }
 

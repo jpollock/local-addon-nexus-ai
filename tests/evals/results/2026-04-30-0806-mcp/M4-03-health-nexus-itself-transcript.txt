@@ -1,0 +1,77 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M4-03-health-nexus-itself
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 48.5s
+Tool calls: 3
+Cost: $0.1141
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Is Nexus working correctly? I want to make sure everything is connected and functioning.
+
+
+⏺ Skill({"skill":"nexus-doctor"})
+  ⎿  Shell command failed for pattern "```!
+nexus doctor
+```": [stderr]
+(eval):1: command not found: nexus
+Since we're in MCP-only mode, I'll check what Nexus diagnostic tools are available directly.
+
+⏺ ListMcpResourcesTool({})
+  ⎿  No resources found. MCP servers may still provide tools even if they have no resources.
+Let me try the nexus skills which route through MCP tools.
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+The diagnostic result itself is informative. Neither the CLI nor Nexus MCP tools are reachable from this session, which points to a connection issue. Here's what I can tell you:
+
+**What I'm seeing:**
+- No `nexus` CLI available (expected in MCP-only mode)
+- No Nexus MCP tools registered in my available tool list (this is the actual problem signal)
+- Only the `wpe-pm-toolkit` MCP server is connected
+
+**What this means:**
+The Nexus MCP server isn't connected to this Claude session. In a working Claude Desktop setup, the Nexus addon would expose tools like `list_sites`, `search_content`, `get_fleet_health`, etc. directly as callable tools — and they're not here.
+
+**Likely causes:**
+1. **Local isn't running** — the Nexus MCP server only starts when Local is open
+2. **Addon isn't active** — the Nexus AI addon may not be enabled in Local
+3. **MCP config not set up** — Claude Desktop's `claude_desktop_config.json` may not include the Nexus MCP server entry
+4. **Port conflict** — the MCP server may have failed to bind
+
+**Next steps to check:**
+1. Open Local by WP Engine and confirm it's running with the Nexus AI addon active
+2. In Claude Desktop → Settings → Developer → check that a Nexus entry appears in the MCP servers list with a green status
+3. If the server shows as red/disconnected, run `nexus doctor` from your terminal to get the specific failure point
+
+Would you like help diagnosing any of these specifically?
+
+--- FINAL RESULT ---
+The diagnostic result itself is informative. Neither the CLI nor Nexus MCP tools are reachable from this session, which points to a connection issue. Here's what I can tell you:
+
+**What I'm seeing:**
+- No `nexus` CLI available (expected in MCP-only mode)
+- No Nexus MCP tools registered in my available tool list (this is the actual problem signal)
+- Only the `wpe-pm-toolkit` MCP server is connected
+
+**What this means:**
+The Nexus MCP server isn't connected to this Claude session. In a working Claude Desktop setup, the Nexus addon would expose tools like `list_sites`, `search_content`, `get_fleet_health`, etc. directly as callable tools — and they're not here.
+
+**Likely causes:**
+1. **Local isn't running** — the Nexus MCP server only starts when Local is open
+2. **Addon isn't active** — the Nexus AI addon may not be enabled in Local
+3. **MCP config not set up** — Claude Desktop's `claude_desktop_config.json` may not include the Nexus MCP server entry
+4. **Port conflict** — the MCP server may have failed to bind
+
+**Next steps to check:**
+1. Open Local by WP Engine and confirm it's running with the Nexus AI addon active
+2. In Claude Desktop → Settings → Developer → check that a Nexus entry appears in the MCP servers list with a green status
+3. If the server shows as red/disconnected, run `nexus doctor` from your terminal to get the specific failure point
+
+Would you like help diagnosing any of these specifically?
