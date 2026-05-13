@@ -348,6 +348,18 @@ export function detectAtlasSearch(sitePath: string): boolean {
 }
 
 /**
+ * Return true when atlas-search should be auto-installed:
+ * the site has AI configured (SiteAIConfig entry exists) but atlas-search is not yet installed.
+ */
+export function shouldAutoInstallAtlasSearch(
+  sitePath: string,
+  siteId: string,
+  siteAiConfigs: Record<string, unknown>,
+): boolean {
+  return !!siteAiConfigs[siteId] && !detectAtlasSearch(sitePath);
+}
+
+/**
  * Install and activate Nexus AI Connector plugin
  */
 async function installNexusAiConnectorPlugin(
@@ -408,8 +420,8 @@ async function installNexusAiConnectorPlugin(
 
       // Auto-install atlas-search on AI-configured sites that don't have it yet.
       // The plugin is free on WordPress.org and unlocks Smart Search locally.
-      const siteAiConfigs = (settingsStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
-      if (siteAiConfigs[site.id] && !detectAtlasSearch(site.path)) {
+      const siteAiConfigs = (settingsStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, unknown>;
+      if (shouldAutoInstallAtlasSearch(site.path, site.id, siteAiConfigs)) {
         try {
           logger.info(`[NexusAI] Auto-installing atlas-search for AI-configured site ${site.name}...`);
           const installResult = await localServices.wpCliRun(site.id, [
