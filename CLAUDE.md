@@ -64,3 +64,9 @@ Jest has detected the following 1 open handle potentially keeping Jest from exit
 This is **expected and unfixable at the app level.** LanceDB's Rust native module registers a background GC thread with Node's event loop on import. There is no API to shut it down. `forceExit: true` is the correct fix — `detectOpenHandles: true` keeps it visible so new handles don't get silently masked.
 
 **See:** `docs/NATIVE_MODULES.md#lancedb-customgc-open-handle` for details.
+
+---
+
+## Known Pitfalls
+
+- [Smart Search MU plugin pitfalls](feedback_smart_search_mu_plugin.md) — `is_plugin_active()` fires too early in WordPress bootstrap; `siteStarted` races MySQL startup. Use filesystem checks in Node.js, not WP-CLI.

@@ -1,0 +1,158 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M5-03-compare-local-wpe-mapping
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 94.2s
+Tool calls: 10
+Cost: $0.2328
+
+============================================================
+TURN 1
+============================================================
+PROMPT: For each of my local sites, tell me if there's a matching WP Engine site. Show me which are paired and which are local-only or WPE-only.
+
+Using the `nexus-sites` skill to discover and pair local and WPE sites.
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so I'll use the MCP tools directly to get the unified site view.
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+  ⎿  ## Fleet (8 local, 306 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **nexus-e2e-test** (nexus-e2e-test.local) [running]
+- **jeremypollockblog** (jeremypollockblog.local) [running]
+- **jpp0413p** (jpp0413p.local) [running]
+- **nexus** (nexus.local) [running]
+- **nitropack-1** (nitropack-1.local) [running]
+- **ACF Auto Car Finder** (acf-auto-car-finder.local) [running]
+- **local-cop
+Now let me check the WPE link status for each of the 8 local sites in parallel.
+
+⏺ mcp__local-nexus-ai__local_wpe_link({"site":"nexus-e2e-test"})
+
+⏺ mcp__local-nexus-ai__local_wpe_link({"site":"jeremypollockblog"})
+
+⏺ mcp__local-nexus-ai__local_wpe_link({"site":"jpp0413p"})
+
+⏺ mcp__local-nexus-ai__local_wpe_link({"site":"nexus"})
+
+⏺ mcp__local-nexus-ai__local_wpe_link({"site":"nitropack-1"})
+
+⏺ mcp__local-nexus-ai__local_wpe_link({"site":"ACF Auto Car Finder"})
+
+⏺ mcp__local-nexus-ai__local_wpe_link({"site":"local-copy-jpp"})
+
+⏺ mcp__local-nexus-ai__local_wpe_link({"site":"Newsroom Demo"})
+  ⎿  Site "nexus-e2e-test" is not linked to any WP Engine environment.
+  ⎿  Site "jeremypollockblog" is not linked to any WP Engine environment.
+  ⎿  Site "jpp0413p" is not linked to any WP Engine environment.
+  ⎿  Site "nexus" is not linked to any WP Engine environment.
+  ⎿  Site "nitropack-1" is not linked to any WP Engine environment.
+  ⎿  ## WPE Link for "ACF Auto Car Finder"
+- **0:** d4ee23be-bef3-4fe4-93ed-91e111c6764a
+  ⎿  ## WPE Link for "local-copy-jpp"
+- **0:** 7576b9e6-64de-45fd-809f-9fd659a91cc1
+  ⎿  Site "Newsroom Demo" is not linked to any WP Engine environment.
+Here's the full pairing picture across your 8 local sites and 306 WPE installs:
+
+---
+
+## Formally Linked (↔)
+
+These two local sites have an active WPE connection (ready for push/pull):
+
+| Local Site | WPE Install | WPE Site Name |
+|---|---|---|
+| **ACF Auto Car Finder** | `autocarfinder` | ACF Auto Car Finder (production) |
+| **local-copy-jpp** | `localcopyjpp` | local-copy-jpp (production) |
+
+---
+
+## Local-Only (no WPE link)
+
+These 6 local sites exist only in Local — not connected to any WPE environment:
+
+| Local Site | Domain |
+|---|---|
+| **nexus-e2e-test** | nexus-e2e-test.local |
+| **jeremypollockblog** | jeremypollockblog.local |
+| **jpp0413p** | jpp0413p.local |
+| **nexus** | nexus.local |
+| **nitropack-1** | nitropack-1.local |
+| **Newsroom Demo** | newsroom-demo.local |
+
+**Note — likely matches by name, just not formally linked:**
+
+| Local | Probable WPE counterpart |
+|---|---|
+| jpp0413p | `jpp0413p` (jpp0413, production) |
+| jeremypollockblog | `jeremypollock2` (jeremypollock.blog, production) |
+| Newsroom Demo | `newsroomdemo` (Newsroom Demo, production) |
+| nexus | `nexustestsite1` (nexus-test-site, production) |
+
+---
+
+## WPE-Only
+
+The remaining **304 WPE installs** have no local counterpart. Most are team/test/demo environments (TAM, QA, support, blueprints, etc.) that aren't meant to be developed locally.
+
+---
+
+**Bottom line:** Only 2 of your 8 local sites are formally paired with WPE. If you want to link any of the name-matched ones (like `jpp0413p` or `Newsroom Demo`), you can do that via a pull using the `remote_install_id` parameter.
+
+--- FINAL RESULT ---
+Here's the full pairing picture across your 8 local sites and 306 WPE installs:
+
+---
+
+## Formally Linked (↔)
+
+These two local sites have an active WPE connection (ready for push/pull):
+
+| Local Site | WPE Install | WPE Site Name |
+|---|---|---|
+| **ACF Auto Car Finder** | `autocarfinder` | ACF Auto Car Finder (production) |
+| **local-copy-jpp** | `localcopyjpp` | local-copy-jpp (production) |
+
+---
+
+## Local-Only (no WPE link)
+
+These 6 local sites exist only in Local — not connected to any WPE environment:
+
+| Local Site | Domain |
+|---|---|
+| **nexus-e2e-test** | nexus-e2e-test.local |
+| **jeremypollockblog** | jeremypollockblog.local |
+| **jpp0413p** | jpp0413p.local |
+| **nexus** | nexus.local |
+| **nitropack-1** | nitropack-1.local |
+| **Newsroom Demo** | newsroom-demo.local |
+
+**Note — likely matches by name, just not formally linked:**
+
+| Local | Probable WPE counterpart |
+|---|---|
+| jpp0413p | `jpp0413p` (jpp0413, production) |
+| jeremypollockblog | `jeremypollock2` (jeremypollock.blog, production) |
+| Newsroom Demo | `newsroomdemo` (Newsroom Demo, production) |
+| nexus | `nexustestsite1` (nexus-test-site, production) |
+
+---
+
+## WPE-Only
+
+The remaining **304 WPE installs** have no local counterpart. Most are team/test/demo environments (TAM, QA, support, blueprints, etc.) that aren't meant to be developed locally.
+
+---
+
+**Bottom line:** Only 2 of your 8 local sites are formally paired with WPE. If you want to link any of the name-matched ones (like `jpp0413p` or `Newsroom Demo`), you can do that via a pull using the `remote_install_id` parameter.

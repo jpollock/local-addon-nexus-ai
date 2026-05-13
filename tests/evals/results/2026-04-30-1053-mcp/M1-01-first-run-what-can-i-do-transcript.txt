@@ -1,0 +1,119 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M1-01-first-run-what-can-i-do
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 66.2s
+Tool calls: 3
+Cost: $0.6168
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I just installed Nexus. What can I do with it right now?
+
+I'll run the Nexus doctor skill to check your setup status first.
+
+⏺ Skill({"skill":"nexus-doctor"})
+  ⎿  Shell command failed for pattern "```!
+nexus doctor
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so let me check your system health and sites directly via the MCP tools.
+
+⏺ mcp__local-nexus-ai__get_system_health({})
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+  ⎿  {
+  "status": "healthy",
+  "uptime_ms": 258057,
+  "memory": {
+    "rss_mb": 185.515625,
+    "heap_used_mb": 66.81645202636719,
+    "heap_total_mb": 72.859375,
+    "external_mb": 4.389055252075195
+  },
+  "event_queue": {
+    "pending": 0,
+    "processing": 0,
+    "failed_last_hour": 0
+  },
+  "mcp_tools": {
+    "total_calls": 0,
+    "error_rate": 0,
+    "avg_duration_ms": 0
+  },
+  "search": {
+    "total_queries": 0,
+    "avg_duration_ms": 0,
+    "cache_hit_rate": 0
+  },
+  "issues": []
+}
+  ⎿  ## Fleet (8 local, 306 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- nexus-e2e-test (nexus-e2e-test.local) [halted]
+- jeremypollockblog (jeremypollockblog.local) [halted]
+- jpp0413p (jpp0413p.local) [halted]
+- nexus (nexus.local) [halted]
+- nitropack-1 (nitropack-1.local) [halted]
+- ACF Auto Car Finder (acf-auto-car-finder.local) [halted]
+- local-copy-jpp (local-copy-jpp.local) [ha
+Your Nexus setup is healthy and connected. Here's what you can do right now:
+
+## Your Fleet
+- **8 local sites** in Local (all currently halted)
+- **306 WP Engine environments** across prod/staging/dev
+
+## What You Can Do Right Now
+
+**Explore your WPE fleet:**
+- Check fleet health and outdated plugins across all WPE installs
+- View usage metrics (traffic, bandwidth, storage) for any install
+- Audit SSL certificates, domains, and user access
+
+**Work with local sites:**
+- Start a local site, then pull a WPE environment down to it (`local_wpe_pull`)
+- Update plugins, run WP-CLI commands, scan database health
+- Set up AI features on any local site
+
+**Common starting points — just ask me to:**
+- "Show me my WPE fleet health"
+- "Pull `jpp0413p` down to my local site"
+- "Check which plugins are outdated across my WPE installs"
+- "Scan the database health for my `nexus` local site"
+- "Show me usage/traffic for my top WPE installs"
+
+What would you like to do first?
+
+--- FINAL RESULT ---
+Your Nexus setup is healthy and connected. Here's what you can do right now:
+
+## Your Fleet
+- **8 local sites** in Local (all currently halted)
+- **306 WP Engine environments** across prod/staging/dev
+
+## What You Can Do Right Now
+
+**Explore your WPE fleet:**
+- Check fleet health and outdated plugins across all WPE installs
+- View usage metrics (traffic, bandwidth, storage) for any install
+- Audit SSL certificates, domains, and user access
+
+**Work with local sites:**
+- Start a local site, then pull a WPE environment down to it (`local_wpe_pull`)
+- Update plugins, run WP-CLI commands, scan database health
+- Set up AI features on any local site
+
+**Common starting points — just ask me to:**
+- "Show me my WPE fleet health"
+- "Pull `jpp0413p` down to my local site"
+- "Check which plugins are outdated across my WPE installs"
+- "Scan the database health for my `nexus` local site"
+- "Show me usage/traffic for my top WPE installs"
+
+What would you like to do first?

@@ -9,6 +9,7 @@ import { createSeedRecord, toRecord } from './schema';
 export class VectorStore {
   private db: lancedb.Connection | null = null;
   private dbPath: string;
+  private migratedTables = new Set<string>();
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
@@ -51,13 +52,84 @@ export class VectorStore {
     const existing = await db.tableNames();
 
     if (existing.includes(name)) {
-      return db.openTable(name);
+      const table = await db.openTable(name);
+      if (!this.migratedTables.has(name)) {
+        await this.migrateTableSchema(table);
+        this.migratedTables.add(name);
+      }
+      return table;
     }
 
     // Create table with seed record to establish schema, then delete seed
     const table = await db.createTable(name, [createSeedRecord()]);
     await table.delete('id = "__seed__"');
+    this.migratedTables.add(name); // fresh table has correct schema
     return table;
+  }
+
+  /**
+   * Migration-aware table open for read paths. Returns null if the table does
+   * not exist yet. Runs schema migration exactly once per table per session.
+   */
+  private async getTable(siteId: string): Promise<lancedb.Table | null> {
+    const db = this.getDb();
+    const name = this.tableName(siteId);
+    const existing = await db.tableNames();
+    if (!existing.includes(name)) return null;
+    const table = await db.openTable(name);
+    if (!this.migratedTables.has(name)) {
+      await this.migrateTableSchema(table);
+      this.migratedTables.add(name);
+    }
+    return table;
+  }
+
+  /**
+   * Look up a single document by its exact ID. Returns null if not found or table missing.
+   * Used by SmartSearchHandler to retrieve a reference document for similarity search.
+   */
+  async lookupById(siteId: string, docId: string): Promise<{ id: string; content: string; title: string } | null> {
+    // Validate docId — atlas-search IDs are "type:number" or plain alphanumeric slugs.
+    // Reject anything that could break the LanceDB WHERE clause.
+    if (!/^[a-zA-Z0-9:_\-]+$/.test(docId)) return null;
+    const table = await this.getTable(siteId);
+    if (!table) return null;
+    try {
+      const rows = await table.query().where(`id = '${docId}'`).limit(1).toArray();
+      if (!rows.length) return null;
+      return {
+        id: rows[0].id as string,
+        content: rows[0].content as string,
+        title: rows[0].title as string,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private async migrateTableSchema(table: lancedb.Table): Promise<void> {
+    try {
+      const schema = await table.schema();
+      const fieldNames = schema.fields.map((f) => f.name);
+      const newCols: Array<{ name: string; valueSql: string }> = [];
+
+      if (!fieldNames.includes('post_date_gmt')) {
+        newCols.push({ name: 'post_date_gmt', valueSql: "cast('' as varchar)" });
+      }
+      if (!fieldNames.includes('post_modified_gmt')) {
+        newCols.push({ name: 'post_modified_gmt', valueSql: "cast('' as varchar)" });
+      }
+      if (!fieldNames.includes('doc_url')) {
+        newCols.push({ name: 'doc_url', valueSql: "cast('' as varchar)" });
+      }
+
+      if (newCols.length > 0) {
+        await table.addColumns(newCols);
+      }
+    } catch (err) {
+      console.warn('[VectorStore] Schema migration failed (non-fatal):', err);
+      // Migration is best-effort — search still works without new columns
+    }
   }
 
   async upsert(siteId: string, documents: VectorDocument[]): Promise<void> {
@@ -95,15 +167,11 @@ export class VectorStore {
    * Should be called periodically after data changes to maintain performance
    */
   async optimize(siteId: string): Promise<void> {
-    const db = this.getDb();
-    const name = this.tableName(siteId);
-    const existing = await db.tableNames();
+    const table = await this.getTable(siteId);
 
-    if (!existing.includes(name)) {
+    if (!table) {
       return; // Table doesn't exist, nothing to optimize
     }
-
-    const table = await db.openTable(name);
 
     // Run optimization:
     // - Compaction: merge small fragments into larger ones
@@ -117,15 +185,11 @@ export class VectorStore {
     queryVector: Float32Array | number[],
     options: SearchOptions
   ): Promise<SearchResult[]> {
-    const db = this.getDb();
-    const name = this.tableName(siteId);
-    const existing = await db.tableNames();
+    const table = await this.getTable(siteId);
 
-    if (!existing.includes(name)) {
+    if (!table) {
       return [];
     }
-
-    const table = await db.openTable(name);
     const vecArray = Array.from(queryVector);
 
     // Over-fetch for deduplication, then re-limit
@@ -209,7 +273,8 @@ export class VectorStore {
       const batch = searchable.slice(i, i + concurrency);
       await Promise.all(batch.map(async (siteId) => {
         try {
-          const table = await db.openTable(this.tableName(siteId));
+          const table = await this.getTable(siteId);
+          if (!table) return;
 
           // Vector search — primary signal, cosine similarity score
           let vecQuery = table.vectorSearch(vecArray).distanceType('cosine').limit(limit * 4);
@@ -301,6 +366,10 @@ export class VectorStore {
       onProgress?.(i + 1, tables.length, name);
       try {
         const table = await db.openTable(name);
+        if (!this.migratedTables.has(name)) {
+          await this.migrateTableSchema(table);
+          this.migratedTables.add(name);
+        }
         // Count before to know if anything was removed
         const before = (await table.query().select(['postType']).where(whereClause).limit(10000).toArray()).length;
         if (before > 0) {
@@ -324,13 +393,23 @@ export class VectorStore {
   }
 
   async delete(siteId: string, documentIds: string[]): Promise<void> {
-    const db = this.getDb();
-    const name = this.tableName(siteId);
-    const existing = await db.tableNames();
+    // Sentinel: ['__all__'] clears the entire site table
+    if (documentIds.length === 1 && documentIds[0] === '__all__') {
+      try {
+        const table = await this.getTable(siteId);
+        if (table) {
+          await table.delete('id IS NOT NULL');
+        }
+      } catch (err) {
+        console.warn('[VectorStore] deleteAll failed:', err);
+      }
+      return;
+    }
 
-    if (!existing.includes(name)) return;
+    const table = await this.getTable(siteId);
 
-    const table = await db.openTable(name);
+    if (!table) return;
+
     for (const id of documentIds) {
       try {
         await table.delete(`id = "${id}"`);
@@ -351,15 +430,11 @@ export class VectorStore {
   }
 
   async getSiteStats(siteId: string): Promise<SiteIndexStats> {
-    const db = this.getDb();
-    const name = this.tableName(siteId);
-    const existing = await db.tableNames();
+    const table = await this.getTable(siteId);
 
-    if (!existing.includes(name)) {
+    if (!table) {
       return { siteId, documentCount: 0, chunkCount: 0, lastIndexed: 0 };
     }
-
-    const table = await db.openTable(name);
     const count = await table.countRows();
 
     // Get the most recent indexedAt value

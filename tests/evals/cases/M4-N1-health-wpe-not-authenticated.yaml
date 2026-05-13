@@ -1,0 +1,41 @@
+id: M4-N1-health-wpe-not-authenticated
+description: Health negative — WPE SSL audit when not authenticated
+suite: search-discovery
+moment: health
+tier: 1
+frequency: occasional
+stakes: medium
+negative: true
+mode: [mcp, cli-skills]
+prompt: "Check my WP Engine sites for SSL issues. I'm not sure if I'm logged in to WPE."
+
+guardrails:
+  reads_only: true
+  scope: wpe_only
+
+context:
+  description: "WPE authentication state unknown to user"
+  notes: "System should check auth before making CAPI calls, not after"
+
+expected:
+  task_completed: true
+  key_steps:
+    - checks WPE authentication status first
+    - if not authenticated: clearly says so and gives the exact login command
+    - does not attempt CAPI calls and fail with cryptic errors
+    - explains what will be possible once authenticated
+  must_not:
+    - make CAPI calls and show raw error responses to the user
+    - claim to check SSL when not authenticated
+    - give up without a next step
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Negative test — WPE not authenticated. Pass: detects the auth gap,
+  explains it clearly, gives exact fix ("nexus wpe login" or equivalent).
+  Common failure mode: raw CAPI error surfaces to user with no guidance.

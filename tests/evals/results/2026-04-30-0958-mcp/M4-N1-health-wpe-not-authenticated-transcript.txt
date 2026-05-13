@@ -1,0 +1,114 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M4-N1-health-wpe-not-authenticated
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 74.5s
+Tool calls: 5
+Cost: $0.2366
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Check my WP Engine sites for SSL issues. I'm not sure if I'm logged in to WPE.
+
+
+⏺ Skill({"skill":"nexus-wpe"})
+  ⎿  Shell command failed for pattern "```!
+nexus wpe portfolio
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so I'll use the tools directly. Let me check your WPE auth status first.
+
+⏺ mcp__local-nexus-ai__wpe_status({})
+  ⎿  Error checking WPE status: Cannot query field "wpeStatus" on type "Query".
+The status check failed. Let me try to list your accounts to see if authentication is working.
+
+⏺ mcp__local-nexus-ai__wpe_get_accounts({})
+  ⎿  ## WP Engine Accounts (10)
+- **devrel** (ID: 41b8c1d0-3084-4430-81f0-8d95a2c6182d)
+- **getflywheel** (ID: 142eeed6-2b43-42bb-96b3-a327b2ff7eef)
+- **jpollock911** (ID: 1d071342-5591-4ddb-8fd7-e7190674fd88)
+- **w7579** (ID: b97e432b-c10a-4f0a-9ce7-55cedd575099)
+- **esmv7us1l20jdr** (ID: fec28ece-0d02-4d99-831a-e2ed7acefffd)
+- **goldenecomm** (ID: c5e3787e-bea8-4164-96c7-dfbfbd9f6664)
+- **btwpe** (ID: effc36bd-8de2-4105-a021-6d1755661cb7)
+- **qawpeproduct** (ID: 111e0292-9560-4214-a8e9-e3ae5306a393
+You're logged in with 10 accounts. Let me run the SSL status check and fleet health scan in parallel.
+
+⏺ mcp__local-nexus-ai__wpe_fleet_health({})
+
+⏺ mcp__local-nexus-ai__wpe_account_ssl_status({"account_id":"1d071342-5591-4ddb-8fd7-e7190674fd88"})
+  ⎿  ## Fleet Health — 309 Installs
+
+| Install | Env | PHP | Domain | SSL | Flags |
+|---------|-----|-----|--------|-----|-------|
+| sprntndntchmbr | production | — | sprntndntchmbr.wpengine.com | ⚠️ Error fetching SSL | ⚠️ SSL expiring |
+| benfischer | production | — | benfischer.wpengine.com | ⚠️ Error fetching SSL | ⚠️ SSL expiring |
+| qwerky | production | — | qwerky.wpengine.com | ⚠️ Error fetching SSL | ⚠️ SSL expiring |
+| b68c7f0b6038 | production | — | b68c7f0b6038.wpengine.com | ⚠️ Error fet
+  ⎿  ## SSL Certificate Status — Account 1d071342-5591-4ddb-8fd7-e7190674fd88
+2 installs
+
+| Install | Environment | Domain(s) | Expiry | Status |
+|---------|------------|-----------|--------|--------|
+| testjpp1 | production | — | — | ⚠️ Error fetching certs |
+| testblankjpp1 | production | — | — | ⚠️ Error fetching certs |
+
+### Summary
+- ✅ Valid: 0
+- ⚠️ Expiring soon (≤30 days): 0
+- ❌ Expired: 0
+- ❌ No certificate: 0
+You're authenticated. Here's what the scan found across **309 installs**:
+
+## SSL Summary
+
+### 🚨 Critical — No Certificate (3 production installs)
+These sites have no SSL at all and will show as insecure to visitors:
+
+| Install | Domain |
+|---------|--------|
+| `localwpe` | localwpe.wpengine.com |
+| `frostwpe` | frostwpe.wpengine.com |
+| `frostscape` | frostscape.wpengine.com |
+
+### ⚠️ Note on "SSL expiring" warnings
+Nearly every other install shows "⚠️ Error fetching SSL / SSL expiring" — this is almost certainly a rate-limiting or API availability issue with the SSL cert endpoint, not 209 sites actually expiring. WPE auto-renews Let's Encrypt certs on `.wpengine.com` subdomains, so mass expiry would be very unusual.
+
+## Recommended action
+The 3 `❌ No cert` installs are the real concern. Want me to drill into one of them to check what domains are configured and request a certificate? For example:
+
+```
+wpe_get_domains → localwpe install ID
+wpe_request_ssl_certificate → for each uncovered domain
+```
+
+Just say which one you'd like to fix first, or if you want me to pull all three install IDs and check them in parallel.
+
+--- FINAL RESULT ---
+You're authenticated. Here's what the scan found across **309 installs**:
+
+## SSL Summary
+
+### 🚨 Critical — No Certificate (3 production installs)
+These sites have no SSL at all and will show as insecure to visitors:
+
+| Install | Domain |
+|---------|--------|
+| `localwpe` | localwpe.wpengine.com |
+| `frostwpe` | frostwpe.wpengine.com |
+| `frostscape` | frostscape.wpengine.com |
+
+### ⚠️ Note on "SSL expiring" warnings
+Nearly every other install shows "⚠️ Error fetching SSL / SSL expiring" — this is almost certainly a rate-limiting or API availability issue with the SSL cert endpoint, not 209 sites actually expiring. WPE auto-renews Let's Encrypt certs on `.wpengine.com` subdomains, so mass expiry would be very unusual.
+
+## Recommended action
+The 3 `❌ No cert` installs are the real concern. Want me to drill into one of them to check what domains are configured and request a certificate? For example:
+
+```
+wpe_get_domains → localwpe install ID
+wpe_request_ssl_certificate → for each uncovered domain
+```
+
+Just say which one you'd like to fix first, or if you want me to pull all three install IDs and check them in parallel.

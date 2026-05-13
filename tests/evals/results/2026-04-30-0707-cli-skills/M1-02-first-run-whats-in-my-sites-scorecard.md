@@ -1,0 +1,112 @@
+# Eval Scorecard: M1-02-first-run-whats-in-my-sites
+
+**Date:** 2026-04-30  
+**Mode:** cli-skills  
+**Model:** claude-sonnet-4-6  
+**Weighted Score:** 88.0/100
+
+## Auto-Extracted Metrics
+
+| Metric | Value |
+|--------|-------|
+| Tool calls | 2 |
+| Error events | 0 |
+| Retries | 0 |
+
+## Token Cost Estimate (Plan 3)
+
+| Metric | Value |
+|--------|-------|
+| Input tokens | 480 |
+| Output tokens | 190 |
+| Total tokens | 670 |
+| Estimated cost | $0.0043 |
+
+### Token Breakdown
+
+| Component | Tokens |
+|-----------|--------|
+| Tool calls | 60 |
+| Tool results | 137 |
+| Skill prompts | 0 |
+| Conversation | 473 |
+
+## Human Scores
+
+| Dimension | Score | Weight |
+|-----------|-------|--------|
+| Task completed | 100 | 40% |
+| steps correct | 80 | 20% |
+| completeness | 80 | 20% |
+| output clarity | 80 | 20% |
+| **Weighted total** | **88.0** | |
+
+## Reviewer Notes
+
+Listed sites with status. Good empty-state handling.
+
+## Transcript
+
+```
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M1-02-first-run-whats-in-my-sites
+Mode: cli-skills
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 17.6s
+Tool calls: 2
+Cost: $0.0839
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Show me what's in my sites.
+
+
+⏺ Read({"file_path":"/Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/.claude/skills/nexus-sites/SKILL.md"})
+  ⎿  1	---
+2	name: nexus-sites
+3	description: Discover and show all local and WP Engine sites with status. Groups running vs halted, shows WPE links, and surfaces next actions. Use at the start of any workflow involving sites — always call this first before acting on a site.
+4	allowed-tools: Bash(nexus *)
+5	---
+6	
+7	# Site Discovery
+8	
+9	```!
+10	nexus sites list
+11	```
+12	
+13	Present the results clearly:
+14	
+15	1. **Running local sites** (ready to use) — name, domain, WPE link if any
+16	2. **Halted l
+
+⏺ Bash({"command":"node /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/bin/nexus.js sites list"})
+  ⎿  💡 No AI provider configured. Run: nexus ai config
+
+
+Local Sites:
+  🟢 nexus-e2e-test (running) → not linked
+  ⚫ jeremypollockblog (halted) → not linked
+  ⚫ jpp0413p (halted) → not linked
+  ⚫ nexus (halted) → not linked
+  ⚫ nitropack-1 (halted) → not linked
+  ⚫ ACF Auto Car Finder (halted) → wpe:41b8c1d0-3084-4430-81f0-8d95a2c6182d/d4ee23be-bef3-4fe4-93ed-91e111c6764a@production
+  ⚫ local-copy-jpp (halted) → wpe:6d5f288a-62c5-4b45-bee8-50ebd02b66b5/7576b9e6-64de-45fd-809f-9fd659a91cc1@production
+Here's what's in your sites:
+
+**Running**
+- `nexus-e2e-test` — local only, no WPE link
+
+**Halted** (need to start before most operations)
+- `jeremypollockblog` — local only
+- `jpp0413p` — local only
+- `nexus` — local only
+- `nitropack-1` — local only
+- `ACF Auto Car Finder` — linked to a WPE production install
+- `local-copy-jpp` — linked to a WPE production install
+- `Newsroom Demo` — local only
+
+8 local s
+... [truncated]
+```

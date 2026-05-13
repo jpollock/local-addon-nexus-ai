@@ -1,0 +1,36 @@
+id: M4-01-health-ssl
+description: Health — WPE SSL certificate audit sorted by urgency
+suite: search-discovery
+moment: health
+tier: 1
+frequency: monthly
+stakes: high
+mode: [mcp, cli-skills]
+prompt: "Which of my WP Engine sites have SSL issues or certificates expiring soon?"
+
+guardrails:
+  reads_only: true
+  scope: wpe_only
+
+expected:
+  task_completed: true
+  key_steps:
+    - retrieves SSL data for all WPE installs with custom domains
+    - flags expired, expiring within 30 days, and mismatched certs
+    - sorts by urgency (soonest expiry or already expired first)
+    - notes installs with no custom domain or no SSL data
+  must_not:
+    - report raw expiry dates without urgency framing
+    - check only one account when multiple exist
+    - omit installs with missing SSL data without explaining why
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 1 — actionable health check. Output should read like a priority list,
+  not a raw data dump.
+  Pass: sorted list with days-remaining per cert, clear flag on critical ones.

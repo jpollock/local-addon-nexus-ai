@@ -50,6 +50,10 @@ import { StartupSiteScanner } from './startup/StartupSiteScanner';
 import { HaltedSiteRefreshScheduler } from './startup/HaltedSiteRefreshScheduler';
 import { WpeRefreshScheduler } from './startup/WpeRefreshScheduler';
 import { SiteDigitalTwinService } from './twin/SiteDigitalTwinService';
+import { SmartSearchHandler } from './smart-search/SmartSearchHandler';
+import { SynonymStore } from './smart-search/SynonymStore';
+import { SemanticConfig } from './smart-search/SemanticConfig';
+import { TrackerStore } from './smart-search/TrackerStore';
 import type { StartupStatus } from '../common/types';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -310,6 +314,30 @@ export default function main(context: any): void {
       setStartupPhase('GraphService');
       await graphService.initialize();
       localLogger.info('[NexusAI] GraphService initialized');
+
+      // Wire SmartSearch stores + handler into the HTTP interface
+      const graphDb = graphService.getDb();
+      if (graphDb) {
+        const synonymStore = new SynonymStore(graphDb);
+        synonymStore.initialize();
+        const semanticConfig = new SemanticConfig(graphDb);
+        semanticConfig.initialize();
+        const trackerStore = new TrackerStore(graphDb);
+        trackerStore.initialize();
+        trackerStore.cleanup(); // purge tracker events older than 7 days
+
+        const smartSearchHandler = new SmartSearchHandler(
+          vectorStore,
+          embeddingService,
+          synonymStore,
+          semanticConfig,
+          trackerStore,
+        );
+        httpEventInterface.setSmartSearchHandler(smartSearchHandler);
+        localLogger.info('[NexusAI] SmartSearchHandler wired to /smart-search/graphql');
+      } else {
+        localLogger.warn('[NexusAI] GraphDB not available — SmartSearch disabled');
+      }
 
       setStartupPhase('EventProcessor');
       await eventProcessor.initialize();

@@ -1,0 +1,98 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M2-01-orientation-all-sites
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 60.5s
+Tool calls: 2
+Cost: $0.1704
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Show me all my sites — local and WP Engine.
+
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+In MCP-only mode, I'll use the MCP tool directly.
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+  ⎿  ## Fleet (8 local, 310 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **nexus-e2e-test** (nexus-e2e-test.local) [running]
+- **jeremypollockblog** (jeremypollockblog.local) [running]
+- **jpp0413p** (jpp0413p.local) [running]
+- **nexus** (nexus.local) [running]
+- **nitropack-1** (nitropack-1.local) [running]
+- **ACF Auto Car Finder** (acf-auto-car-finder.local) [running]
+- **local-cop
+Here's your fleet at a glance:
+
+---
+
+### Local Sites (8) — all running
+| Site | Domain |
+|------|--------|
+| nexus-e2e-test | nexus-e2e-test.local |
+| jeremypollockblog | jeremypollockblog.local |
+| jpp0413p | jpp0413p.local |
+| nexus | nexus.local |
+| nitropack-1 | nitropack-1.local |
+| ACF Auto Car Finder | acf-auto-car-finder.local |
+| local-copy-jpp | local-copy-jpp.local |
+| Newsroom Demo | newsroom-demo.local |
+
+---
+
+### WP Engine Environments (310)
+A large fleet — highlights include:
+
+- **Your personal sites**: `jeremypollock2` (prod/stg/dev), `jpmeautoscale` (LIVE: jeremypollock.me), `jpp0413p`
+- **Key demo/test sites**: `localwpe`, `newsroomdemo`, `acfrecipes`, `autocarfinder`, `fakerincdemo`, `ecommtruspice`
+- **Autoscale tests**: `newsroomauto`, `imjlargeauto`, `imjomeosesauto`, numerous `*fluid*` and `*autoscal*` installs
+- **Blueprints**: `atlascommerce`, `atlasshopify`, `atlasportfolio`, `faustscaffold1`, `bpheadlessb*`
+- **Support/QA sites**: `tamtesting`, `ciantester`, `goldenpeter1/2/3`, `basetestsite4`, many more
+- **NitroPack support**: `lilyswebsite`, `panayot`, `nikolradanova`, `kruchmireviews` (marked "do not touch")
+- **Café test series**: `cafe001`, `cafe03302601`, `cafe0424001`, `cafe0430001`, and more
+
+No linked pairs (↔) were flagged in this result — none of your 8 local sites appear to be explicitly linked to a WPE install via the connect workflow.
+
+--- FINAL RESULT ---
+Here's your fleet at a glance:
+
+---
+
+### Local Sites (8) — all running
+| Site | Domain |
+|------|--------|
+| nexus-e2e-test | nexus-e2e-test.local |
+| jeremypollockblog | jeremypollockblog.local |
+| jpp0413p | jpp0413p.local |
+| nexus | nexus.local |
+| nitropack-1 | nitropack-1.local |
+| ACF Auto Car Finder | acf-auto-car-finder.local |
+| local-copy-jpp | local-copy-jpp.local |
+| Newsroom Demo | newsroom-demo.local |
+
+---
+
+### WP Engine Environments (310)
+A large fleet — highlights include:
+
+- **Your personal sites**: `jeremypollock2` (prod/stg/dev), `jpmeautoscale` (LIVE: jeremypollock.me), `jpp0413p`
+- **Key demo/test sites**: `localwpe`, `newsroomdemo`, `acfrecipes`, `autocarfinder`, `fakerincdemo`, `ecommtruspice`
+- **Autoscale tests**: `newsroomauto`, `imjlargeauto`, `imjomeosesauto`, numerous `*fluid*` and `*autoscal*` installs
+- **Blueprints**: `atlascommerce`, `atlasshopify`, `atlasportfolio`, `faustscaffold1`, `bpheadlessb*`
+- **Support/QA sites**: `tamtesting`, `ciantester`, `goldenpeter1/2/3`, `basetestsite4`, many more
+- **NitroPack support**: `lilyswebsite`, `panayot`, `nikolradanova`, `kruchmireviews` (marked "do not touch")
+- **Café test series**: `cafe001`, `cafe03302601`, `cafe0424001`, `cafe0430001`, and more
+
+No linked pairs (↔) were flagged in this result — none of your 8 local sites appear to be explicitly linked to a WPE install via the connect workflow.

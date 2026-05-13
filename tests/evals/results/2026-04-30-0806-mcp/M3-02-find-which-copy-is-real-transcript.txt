@@ -1,0 +1,54 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M3-02-find-which-copy-is-real
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 61.2s
+Tool calls: 3
+Cost: $0.1283
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I have a few sites that look like copies of the same project — jpp-client, jpp-client-2, and jpp-client-backup. Which one is the most recent? Which should I actually be working in?
+
+Using the `nexus-sites` skill to get the status and details on those three sites before digging deeper.
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+The CLI isn't available here. Let me discover the Nexus MCP tools directly.
+
+⏺ ListMcpResourcesTool({})
+  ⎿  No resources found. MCP servers may still provide tools even if they have no resources.
+The Nexus MCP tools aren't showing up in my registered tool list — I can only see `wpe-pm-toolkit` MCP tools in this session. The nexus skills tried to run the CLI, which isn't available in MCP-only mode.
+
+Let me try the fleet skill to see if it can reach nexus via a different path:
+
+⏺ Skill({"skill":"nexus-fleet"})
+  ⎿  Shell command failed for pattern "```!
+nexus fleet health
+```": [stderr]
+(eval):1: command not found: nexus
+The Nexus MCP tools aren't registering in this session — both skills are falling through to the CLI, which isn't available in MCP-only mode. This points to a setup issue: the Nexus MCP server either isn't connected to Claude Desktop, or its tools haven't been exposed to this session.
+
+A few things to check:
+
+1. **Is Local running?** The Nexus MCP server only starts when Local is active and the addon is loaded.
+2. **Is the MCP server connected?** In Claude Desktop, open Settings → Developer → MCP Servers and verify `nexus-ai` shows as connected (green).
+3. **Run the doctor** — if you have a terminal handy, `nexus doctor` will diagnose exactly what's broken and print the fix command.
+
+Once the Nexus MCP server is connected, I'll be able to call tools like `list_sites` and `search_content` directly to compare your three `jpp-client` sites — looking at last-modified dates, post counts, and recent content to tell you which is the working copy.
+
+--- FINAL RESULT ---
+The Nexus MCP tools aren't registering in this session — both skills are falling through to the CLI, which isn't available in MCP-only mode. This points to a setup issue: the Nexus MCP server either isn't connected to Claude Desktop, or its tools haven't been exposed to this session.
+
+A few things to check:
+
+1. **Is Local running?** The Nexus MCP server only starts when Local is active and the addon is loaded.
+2. **Is the MCP server connected?** In Claude Desktop, open Settings → Developer → MCP Servers and verify `nexus-ai` shows as connected (green).
+3. **Run the doctor** — if you have a terminal handy, `nexus doctor` will diagnose exactly what's broken and print the fix command.
+
+Once the Nexus MCP server is connected, I'll be able to call tools like `list_sites` and `search_content` directly to compare your three `jpp-client` sites — looking at last-modified dates, post counts, and recent content to tell you which is the working copy.

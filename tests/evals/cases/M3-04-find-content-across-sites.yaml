@@ -1,0 +1,40 @@
+id: M3-04-find-content-across-sites
+description: Find — search for a specific page or post type across all sites
+suite: search-discovery
+moment: find
+tier: 1
+frequency: weekly
+stakes: medium
+mode: [mcp, cli-skills]
+prompt: "Find any posts or pages about pricing across all my sites."
+
+guardrails:
+  reads_only: true
+  requires_indexed_sites: true
+  scope: local_sites_only
+
+prereqs:
+  start_sites: [nexus-e2e-test]
+
+expected:
+  task_completed: true
+  key_steps:
+    - runs semantic search for "pricing" across all indexed sites
+    - returns results grouped by site with title, post type, and snippet
+    - clearly notes sites not indexed and excluded from search
+    - presents results in a scannable format
+  must_not:
+    - search only one site
+    - return more than 3-5 results per site without summarizing
+    - omit unindexed sites without mentioning them
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 1 — targeted content search. Simpler than M3-01 (specific term, not broad topic).
+  Pass: multi-site results, attribution clear, unindexed sites noted.
+  Output clarity test: are results scannable or a wall of text?

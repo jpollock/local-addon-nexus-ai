@@ -1,0 +1,41 @@
+id: M3-03-find-local-wpe-pair
+description: Find — does a local copy of a WPE site exist, and how in sync is it
+suite: search-discovery
+moment: find
+tier: 2
+frequency: occasional
+stakes: high
+mode: [mcp, cli-skills]
+prompt: "Do I have a local copy of my WP Engine site jppblank? If so, how in sync are they?"
+
+guardrails:
+  reads_only: true
+  scope: local_and_wpe
+
+prereqs:
+  start_sites: [jpp0413p]
+
+expected:
+  task_completed: true
+  key_steps:
+    - looks up jppblank on WPE (install metadata, domain)
+    - scans local sites for a name or domain match
+    - if match found: compares WP version, PHP version, plugin list
+    - if no match: says so clearly and offers to create/pull one
+    - does not claim sync without evidence
+  must_not:
+    - pull or modify anything
+    - claim sites are in sync without comparing versions/plugins
+    - fail if domain lookup requires multiple CAPI calls
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 2 — local↔WPE bridging by domain/name matching.
+  Surfaces gap: no explicit pairing table; agent must infer from name/domain similarity.
+  Partial pass: correctly identifies WPE install but can't confidently match a local copy.
+  Full pass: finds both, reports version delta, notes last sync date if available.

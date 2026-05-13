@@ -1,0 +1,50 @@
+id: M6-02-investigate-business-owner
+description: Investigate — non-technical owner wants to understand their site as a business asset
+suite: search-discovery
+moment: investigate
+tier: 2
+frequency: rare
+stakes: high
+mode: [mcp, cli-skills]
+prompt: "I own local-copy-jpp but I'm not very technical. Can you explain what this site does, who it's for, whether it's healthy, and what I'd need to know if I wanted to make changes to it?"
+
+guardrails:
+  reads_only: true
+  installs: [local-copy-jpp]
+
+prereqs:
+  start_sites: [local-copy-jpp]
+
+context:
+  description: "Non-technical business owner, no prior technical knowledge of the site"
+  site: local-copy-jpp
+  site_has: "190 indexed docs, WPE-linked (localcopyjpp production)"
+
+expected:
+  task_completed: true
+  key_steps:
+    - describes site purpose in plain language from content analysis
+    - identifies main user journeys without technical jargon
+    - translates any technical health issues into business terms
+    - explains what "WPE production link" means for a non-technical owner
+    - gives a plain-language answer to "is it healthy?"
+    - describes what kinds of changes are easy vs risky — in business terms
+  must_not:
+    - list plugins without explaining what they do for the business
+    - use terms like "CPT", "shortcode", "REST endpoint" without plain-language translation
+    - respond with a technical audit formatted for a developer
+    - omit health status
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Tier 2 — same underlying data as M6-01, completely different framing.
+  The key test: does the response adapt to a non-technical reader?
+  Output clarity weight is highest because language register is the main
+  quality dimension here — technically correct but jargon-heavy = failure.
+  A great answer sounds like what you'd tell a client in a kickoff call.
+  Scenario card: docs/scenarios/investigate.md S-M6-02

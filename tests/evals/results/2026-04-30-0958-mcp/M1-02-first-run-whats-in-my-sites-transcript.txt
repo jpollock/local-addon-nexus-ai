@@ -1,0 +1,78 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M1-02-first-run-whats-in-my-sites
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 57.9s
+Tool calls: 2
+Cost: $0.1688
+
+============================================================
+TURN 1
+============================================================
+PROMPT: Show me what's in my sites.
+
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+I'm in MCP-only mode, so I'll use the MCP tools directly to discover your sites.
+
+⏺ mcp__local-nexus-ai__nexus_list_sites({})
+  ⎿  ## Fleet (8 local, 310 WPE)
+
+Local sites = development copies. WP Engine installs = live environments.
+↔ indicates a linked pair (same site, different environments).
+
+### Local Sites
+- **nexus-e2e-test** (nexus-e2e-test.local) [running]
+- **jpp0413p** (jpp0413p.local) [running]
+- **local-copy-jpp** (local-copy-jpp.local) [running]
+- jeremypollockblog (jeremypollockblog.local) [halted]
+- nexus (nexus.local) [halted]
+- nitropack-1 (nitropack-1.local) [halted]
+- ACF Auto Car Finder (acf-auto-car-fi
+Here's your fleet overview:
+
+### Local Sites (8)
+**Running:**
+- `nexus-e2e-test` — nexus-e2e-test.local
+- `jpp0413p` — jpp0413p.local
+- `local-copy-jpp` — local-copy-jpp.local
+
+**Halted:**
+- `jeremypollockblog`, `nexus`, `nitropack-1`, `ACF Auto Car Finder`, `Newsroom Demo`
+
+### WP Engine (310 installs)
+You have a large WPE fleet. Notable ones include:
+- **jpp0413p** (production) — matches your running local site
+- **localwpe** + **localstg2** — the Local product's own WPE environments
+- **jeremypollock2** + staging/dev — your personal blog
+- **benfischer** — full prod/staging/dev set
+- Various test/demo/support/autoscale installs (most recent: `cafe0430001`, `kwh20260429`, `seamlesstest1`)
+
+None of your local sites appear to be explicitly linked (↔) to WPE installs in this view, though `jpp0413p` shares a name with the WPE install `jpp0413p`. Want me to dig into any specific site or check indexing/health status?
+
+--- FINAL RESULT ---
+Here's your fleet overview:
+
+### Local Sites (8)
+**Running:**
+- `nexus-e2e-test` — nexus-e2e-test.local
+- `jpp0413p` — jpp0413p.local
+- `local-copy-jpp` — local-copy-jpp.local
+
+**Halted:**
+- `jeremypollockblog`, `nexus`, `nitropack-1`, `ACF Auto Car Finder`, `Newsroom Demo`
+
+### WP Engine (310 installs)
+You have a large WPE fleet. Notable ones include:
+- **jpp0413p** (production) — matches your running local site
+- **localwpe** + **localstg2** — the Local product's own WPE environments
+- **jeremypollock2** + staging/dev — your personal blog
+- **benfischer** — full prod/staging/dev set
+- Various test/demo/support/autoscale installs (most recent: `cafe0430001`, `kwh20260429`, `seamlesstest1`)
+
+None of your local sites appear to be explicitly linked (↔) to WPE installs in this view, though `jpp0413p` shares a name with the WPE install `jpp0413p`. Want me to dig into any specific site or check indexing/health status?

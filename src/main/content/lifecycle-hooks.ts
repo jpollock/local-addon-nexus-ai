@@ -336,6 +336,30 @@ export function registerLifecycleHooks(
 }
 
 /**
+ * Check if the WP Engine AI Toolkit (atlas-search) plugin is installed on a site.
+ * Uses a filesystem check rather than WP-CLI to avoid a race condition where
+ * siteStarted fires before MySQL is ready.
+ */
+export function detectAtlasSearch(sitePath: string): boolean {
+  const pluginFile = require('path').join(
+    sitePath, 'app', 'public', 'wp-content', 'plugins', 'atlas-search', 'atlas-search.php',
+  );
+  return require('fs-extra').existsSync(pluginFile);
+}
+
+/**
+ * Return true when atlas-search should be auto-installed:
+ * the site has AI configured (SiteAIConfig entry exists) but atlas-search is not yet installed.
+ */
+export function shouldAutoInstallAtlasSearch(
+  sitePath: string,
+  siteId: string,
+  siteAiConfigs: Record<string, unknown>,
+): boolean {
+  return !!siteAiConfigs[siteId] && !detectAtlasSearch(sitePath);
+}
+
+/**
  * Install and activate Nexus AI Connector plugin
  */
 async function installNexusAiConnectorPlugin(
@@ -394,6 +418,37 @@ async function installNexusAiConnectorPlugin(
       const aiProxyInfo = settingsStorage.get('ai_proxy_info') as any;
       const nexusSettings = (settingsStorage.get(STORAGE_KEYS.SETTINGS) ?? {}) as any;
 
+      // Auto-install atlas-search on AI-configured sites that don't have it yet.
+      // The plugin is free on WordPress.org and unlocks Smart Search locally.
+      const siteAiConfigs = (settingsStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, unknown>;
+      if (shouldAutoInstallAtlasSearch(site.path, site.id, siteAiConfigs)) {
+        try {
+          logger.info(`[NexusAI] Auto-installing atlas-search for AI-configured site ${site.name}...`);
+          const installResult = await localServices.wpCliRun(site.id, [
+            'plugin', 'install', 'atlas-search', '--activate',
+          ]);
+          if (installResult.success) {
+            logger.info(`[NexusAI] atlas-search installed and activated in ${site.name}`);
+          }
+        } catch {
+          logger.info(`[NexusAI] atlas-search auto-install skipped for ${site.name} — install manually from wordpress.org/plugins/atlas-search`);
+        }
+      }
+
+      // Detect atlas-search plugin by filesystem — avoids a race condition where
+      // wp plugin is-active fails because MySQL isn't ready when siteStarted fires.
+      // The MU plugin filter is safe to include even if the plugin is inactive.
+      let smartSearchUrl: string | undefined;
+      let smartSearchToken: string | undefined;
+      if (detectAtlasSearch(site.path)) {
+        const webhookBase = webhookInfo.url.replace(/\/+$/, '');
+        smartSearchUrl = `${webhookBase}/smart-search/graphql`;
+        smartSearchToken = webhookInfo.authToken;
+        logger.info(`[NexusAI] atlas-search installed in ${site.name} — Smart Search backend override enabled`);
+      } else {
+        logger.info(`[NexusAI] atlas-search not found in ${site.name} — skipping Smart Search backend`);
+      }
+
       // Generate MU plugin content with caller detection
       const muPluginContent = generateMuPluginContent({
         webhookUrl: webhookInfo.url,
@@ -402,6 +457,8 @@ async function installNexusAiConnectorPlugin(
         aiGatewayUrl: aiProxyInfo?.url,
         aiGatewayToken: aiProxyInfo?.authToken,
         aiProvider: nexusSettings.aiProvider ?? 'anthropic',
+        smartSearchUrl,
+        smartSearchToken,
       });
 
       // Clean up old MU plugin file if it exists (pre-unified template)

@@ -1,0 +1,38 @@
+id: M5-N1-compare-sites-dont-exist
+description: Compare negative — disambiguation when named sites don't exist
+suite: search-discovery
+moment: compare
+tier: 1
+frequency: occasional
+stakes: low
+negative: true
+mode: [mcp, cli-skills]
+prompt: "I need to figure out which of my sites — client-acme, client-acme-v2, or client-acme-backup — is the most up to date. Can you check?"
+
+guardrails:
+  reads_only: true
+  scope: local_sites_only
+
+expected:
+  task_completed: true
+  key_steps:
+    - checks site list and confirms named sites don't exist
+    - shows what sites DO exist in case user has the names wrong
+    - does not fabricate a comparison that can't be done
+    - offers to help once user identifies the correct site names
+  must_not:
+    - claim to compare sites that don't exist
+    - return an error and stop without showing what IS available
+    - ask for clarification without first checking what exists
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Negative test — named sites don't exist. This is the most common
+  failure mode for compare cases: user remembers the wrong name.
+  Pass: shows actual site list, offers to help with correct names.
+  Fail: errors out, fabricates, or just says "not found" with no context.

@@ -19,6 +19,9 @@ export function createSeedRecord() {
     vector: new Array(VECTOR_DIMENSIONS).fill(0),
     metadata: '{}',
     indexedAt: 0,
+    post_date_gmt: '',
+    post_modified_gmt: '',
+    doc_url: '',
   };
 }
 
@@ -37,6 +40,9 @@ export function toRecord(doc: {
   vector: Float32Array | number[];
   metadata: string;
   indexedAt: number;
+  post_date_gmt?: string;
+  post_modified_gmt?: string;
+  doc_url?: string;
 }) {
   return {
     id: doc.id,
@@ -49,5 +55,8 @@ export function toRecord(doc: {
     vector: Array.from(doc.vector),
     metadata: doc.metadata,
     indexedAt: doc.indexedAt,
+    post_date_gmt: doc.post_date_gmt ?? '',
+    post_modified_gmt: doc.post_modified_gmt ?? '',
+    doc_url: doc.doc_url ?? '',
   };
 }

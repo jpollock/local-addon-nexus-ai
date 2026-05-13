@@ -1,0 +1,36 @@
+id: M2-02-orientation-running-sites
+description: Orientation — which local sites are currently running
+suite: search-discovery
+moment: orientation
+tier: 1
+frequency: daily
+stakes: low
+mode: [mcp, cli-skills]
+prompt: "Which of my local sites are running right now?"
+
+guardrails:
+  reads_only: true
+  scope: local_sites_only
+
+expected:
+  task_completed: true
+  key_steps:
+    - returns status for all local sites
+    - clearly separates running from halted
+    - includes site name and URL for running sites
+    - offers start command for halted sites
+  must_not:
+    - start any sites
+    - show WPE sites (out of scope)
+    - return only running sites and omit halted
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 1 — single tool call, clear answer.
+  Actionability: a good response includes "to start a halted site: nexus sites start <name>@local"
+  Completeness: must show all sites, not just running ones.

@@ -1,0 +1,54 @@
+EVAL TRANSCRIPT (AUTOMATED)
+Case: M5-02-compare-which-copy-to-use
+Mode: mcp
+Date: 2026-04-30
+Model: claude-sonnet-4-6
+Duration: 57.3s
+Tool calls: 3
+Cost: $0.1240
+
+============================================================
+TURN 1
+============================================================
+PROMPT: I have multiple local sites for my client project — jpp-client, jpp-client-staging, and jpp-client-old. Which one should I be working in for active development?
+
+
+⏺ Skill({"skill":"nexus-sites"})
+  ⎿  Shell command failed for pattern "```!
+nexus sites list
+```": [stderr]
+(eval):1: command not found: nexus
+The skill tried to use the CLI, but I'm in MCP-only mode. Let me check available MCP resources directly.
+
+⏺ ListMcpResourcesTool({})
+  ⎿  No resources found. MCP servers may still provide tools even if they have no resources.
+
+⏺ Skill({"skill":"nexus-fleet"})
+  ⎿  Shell command failed for pattern "```!
+nexus fleet health
+```": [stderr]
+(eval):1: command not found: nexus
+The Nexus AI MCP tools aren't appearing as connected in this session — both site-inspection skills rely on the MCP server being registered, and it's not showing up. Without it, I can't inspect content, plugin states, or activity across those sites.
+
+Based on naming alone:
+
+- **`jpp-client`** — this is your active development site. It's the "clean" name, no qualifier.
+- **`jpp-client-staging`** — use this to test changes before deploying to production WPE. Develop in `jpp-client`, promote to staging when ready.
+- **`jpp-client-old`** — archived reference only; don't develop here.
+
+So: **`jpp-client`** for active work, **`jpp-client-staging`** as your pre-deploy validation environment.
+
+To confirm this with actual data (running status, WordPress versions, recent content), you'd need to check that the Nexus AI MCP server is connected to your Claude Desktop session. Run `nexus doctor` from the terminal or check the MCP server config — if it's connected, I'd be able to inspect those sites directly and give you a more definitive answer.
+
+--- FINAL RESULT ---
+The Nexus AI MCP tools aren't appearing as connected in this session — both site-inspection skills rely on the MCP server being registered, and it's not showing up. Without it, I can't inspect content, plugin states, or activity across those sites.
+
+Based on naming alone:
+
+- **`jpp-client`** — this is your active development site. It's the "clean" name, no qualifier.
+- **`jpp-client-staging`** — use this to test changes before deploying to production WPE. Develop in `jpp-client`, promote to staging when ready.
+- **`jpp-client-old`** — archived reference only; don't develop here.
+
+So: **`jpp-client`** for active work, **`jpp-client-staging`** as your pre-deploy validation environment.
+
+To confirm this with actual data (running status, WordPress versions, recent content), you'd need to check that the Nexus AI MCP server is connected to your Claude Desktop session. Run `nexus doctor` from the terminal or check the MCP server config — if it's connected, I'd be able to inspect those sites directly and give you a more definitive answer.

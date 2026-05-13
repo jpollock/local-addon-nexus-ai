@@ -1,0 +1,41 @@
+id: M2-N1-orientation-all-halted
+description: Orientation negative — plugin/version query when all sites are halted
+suite: search-discovery
+moment: orientation
+tier: 1
+frequency: daily
+stakes: low
+negative: true
+mode: [mcp, cli-skills]
+prompt: "Which of my local sites have WooCommerce installed? All my sites are currently stopped."
+
+guardrails:
+  reads_only: true
+  scope: local_sites_only
+
+context:
+  description: "All local sites halted, varying cache state"
+  notes: "Tests filesystem scan and cached data paths — halted != no data"
+
+expected:
+  task_completed: true
+  key_steps:
+    - acknowledges sites are halted and WP-CLI can't run against them
+    - explains what data IS available without running sites (index/graph DB cached data if any)
+    - tells user what to do to get the answer (start a site, then check)
+    - does not pretend to check halted sites
+  must_not:
+    - attempt WP-CLI on halted sites and fail silently
+    - return empty results without explaining why
+    - start sites without being asked
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Negative test — explicitly tells Claude the sites are halted.
+  Pass: honest explanation of the gap + actionable next step.
+  Fail: attempts WP-CLI anyway and errors, or just says "no plugins found".

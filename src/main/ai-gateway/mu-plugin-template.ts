@@ -15,6 +15,8 @@ export interface MuPluginConfig {
   aiGatewayToken?: string;
   /** The underlying AI provider routed by the gateway (e.g. 'anthropic', 'openai') */
   aiProvider?: string;
+  smartSearchUrl?: string;
+  smartSearchToken?: string;
 }
 
 export function generateMuPluginContent(config: MuPluginConfig): string {
@@ -25,6 +27,8 @@ export function generateMuPluginContent(config: MuPluginConfig): string {
     aiGatewayUrl,
     aiGatewayToken,
     aiProvider,
+    smartSearchUrl,
+    smartSearchToken,
   } = config;
 
   // Determine AI Gateway port from URL if available
@@ -304,5 +308,32 @@ add_filter('wpai_preferred_image_models', function($models) {
     // Prepend gateway models so they are tried first
     return array_merge($gateway_image_models, (array) $models);
 });
-`;
+${(smartSearchUrl && smartSearchToken) ? `
+// ============================================================================
+// Smart Search Local Backend (WP Engine AI Toolkit)
+// ============================================================================
+
+// This filter is only included when atlas-search is detected on disk (by the
+// Nexus addon on site start). The is_plugin_active check was removed because it
+// fires too early in WordPress bootstrap — before plugins are registered.
+add_filter('option_wpe_content_engine_option_name', function($value) {
+    return [
+        'url'          => '${smartSearchUrl}',
+        'access_token' => '${smartSearchToken}',
+    ];
+}, 10, 1);
+
+// Inject Nexus site ID header on Smart Search requests
+add_filter('http_request_args', function($args, $url) {
+    $smart_search_base = '${smartSearchUrl}';
+    if (strpos($url, $smart_search_base) === false) {
+        return $args;
+    }
+    if (!isset($args['headers'])) {
+        $args['headers'] = [];
+    }
+    $args['headers']['X-Nexus-Site-Id'] = defined('NEXUS_AI_SITE_ID') ? NEXUS_AI_SITE_ID : '';
+    return $args;
+}, 10, 2);
+` : ''}`;
 }

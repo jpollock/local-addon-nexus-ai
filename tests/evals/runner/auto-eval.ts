@@ -130,6 +130,10 @@ interface EvalCase {
   mode: string[];
   prompt?: string;
   conversation?: Array<{ turn: number; prompt: string }>;
+  prereqs?: { start_sites?: string[] };
+  context?: Record<string, string>;   // documentation only — state the system should be in
+  frequency?: 'daily' | 'weekly' | 'occasional' | 'monthly' | 'rare';
+  stakes?: 'high' | 'medium' | 'low';
   expected: { task_completed: boolean; key_steps: string[]; must_not: string[] };
   scoring_weights: Record<string, number>;
   notes?: string;
@@ -461,6 +465,30 @@ function cleanupEvalSites(nexusPath: string): void {
   } catch { /* non-fatal */ }
 }
 
+/** Start any sites listed in prereqs.start_sites if they are currently halted. */
+async function setupPrereqs(evalCase: EvalCase, nexusPath: string): Promise<void> {
+  const sites = evalCase.prereqs?.start_sites ?? [];
+  if (sites.length === 0) return;
+
+  for (const site of sites) {
+    const target = `${site}@local`;
+    console.log(`  ⚙️  Prereq: starting ${target}...`);
+    const result = spawnSync('node', [nexusPath.replace('node ', ''), 'sites', 'start', target], {
+      encoding: 'utf-8',
+      timeout: 120000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, CI: '1', NO_COLOR: '1' },
+    });
+    const out = (result.stdout || '') + (result.stderr || '');
+    if (result.status === 0 || out.includes('running') || out.includes('already')) {
+      console.log(`  ✅ ${site} running`);
+    } else {
+      console.log(`  ⚠️  Could not start ${site} — proceeding anyway`);
+      console.log(`     ${out.trim().split('\n')[0]}`);
+    }
+  }
+}
+
 async function runCase(
   evalCase: EvalCase,
   mode: 'mcp' | 'cli-skills',
@@ -470,11 +498,16 @@ async function runCase(
   const isMultiTurn = !!evalCase.conversation;
   const turns = evalCase.conversation ?? [{ turn: 1, prompt: evalCase.prompt! }];
 
+  const devRepoBin = path.resolve(__dirname, '..', '..', '..', 'bin', 'nexus.js');
+  const nexusBin = fs.existsSync(devRepoBin) ? devRepoBin : 'nexus.js';
+
   // Clean up eval-test-* sites before any case that creates local sites
   if (evalCase.id.includes('onboarding') || evalCase.id.includes('full-site')) {
-    const nexusPath = spawnSync('which', ['nexus'], { encoding: 'utf-8', env: process.env }).stdout.trim() || 'nexus';
-    cleanupEvalSites(nexusPath);
+    cleanupEvalSites(`node ${nexusBin}`);
   }
+
+  // Execute prereqs
+  await setupPrereqs(evalCase, `node ${nexusBin}`);
 
   const result: RunResult = {
     caseId: evalCase.id,
@@ -607,9 +640,9 @@ async function runCase(
     '| Dimension | Score | Weight | Notes |',
     '|-----------|-------|--------|-------|',
     `| Task completed (auto) | ${autoTaskScore} | ${weights.task_completed || 40}% | ${hasResult ? 'Got a result' : 'No result'} |`,
-    `| Steps correct | TBD | ${weights.steps_correct || 30}% | Human review |`,
-    `| Friction | TBD | ${weights.friction_count || 20}% | Human review |`,
-    `| Output clarity | TBD | ${weights.output_clarity || 10}% | Human review |`,
+    ...Object.entries(weights)
+      .filter(([k]) => k !== 'task_completed')
+      .map(([k, w]) => `| ${k.replace(/_/g, ' ')} | TBD | ${w}% | Human review |`),
     `| **Auto partial** | **${autoWeighted.toFixed(1)}** | | Steps/friction/clarity = TBD |`,
     '',
     '## Result Preview',
@@ -634,8 +667,10 @@ async function main(): Promise<void> {
   const modelIdx = args.indexOf('--model');
   const skipMcpCheck = args.includes('--skip-mcp-check');
 
+  const suiteIdx = args.indexOf('--suite');
   const mode = (modeIdx >= 0 ? args[modeIdx + 1] : 'cli-skills') as 'mcp' | 'cli-skills';
   const filterCase = caseIdx >= 0 ? args[caseIdx + 1] : undefined;
+  const filterSuite = suiteIdx >= 0 ? args[suiteIdx + 1] : undefined;
   const model = modelIdx >= 0 ? args[modelIdx + 1] : 'claude-sonnet-4-6';
 
   if (!['mcp', 'cli-skills'].includes(mode)) {
@@ -648,6 +683,7 @@ async function main(): Promise<void> {
   const cases = caseFiles
     .map(f => yaml.load(fs.readFileSync(path.join(CASES_DIR, f), 'utf-8')) as EvalCase)
     .filter(c => !filterCase || c.id === filterCase)
+    .filter(c => !filterSuite || (c as any).suite === filterSuite)
     .filter(c => c.mode.includes(mode));
 
   if (cases.length === 0) {
@@ -735,8 +771,12 @@ async function main(): Promise<void> {
       results.push(result);
 
       const taskOk = result.turns.some(t => t.result && t.result !== '[no result]');
-      console.log(`  ✅ Done — $${result.totalCost.toFixed(4)} | ${result.toolCallCount} tool calls | ${(result.durationMs / 1000).toFixed(0)}s`);
-      if (!taskOk) console.log('  ⚠️  No result returned — check transcript');
+      const stakesTag = evalCase.stakes === 'high' ? ' 🔴' : evalCase.stakes === 'medium' ? ' 🟡' : '';
+      console.log(`  ✅ Done — $${result.totalCost.toFixed(4)} | ${result.toolCallCount} tool calls | ${(result.durationMs / 1000).toFixed(0)}s${stakesTag}`);
+      if (!taskOk) {
+        const urgency = evalCase.stakes === 'high' ? '🔴 HIGH STAKES — ' : '';
+        console.log(`  ⚠️  ${urgency}No result returned — check transcript`);
+      }
     } catch (err: any) {
       console.error(`  ❌ Failed: ${err.message}`);
     }
@@ -755,9 +795,24 @@ async function main(): Promise<void> {
   console.log(`Total tools:  ${totalTools}`);
   console.log('');
   console.log('Per case:');
+  const failedHighStakes = results.filter(r => {
+    const ok = r.turns.some(t => t.result && t.result !== '[no result]');
+    const c = cases.find(c => c.id === r.caseId);
+    return !ok && c?.stakes === 'high';
+  });
+
   for (const r of results) {
     const ok = r.turns.some(t => t.result && t.result !== '[no result]');
-    console.log(`  ${ok ? '✅' : '❌'} ${r.caseId.padEnd(35)} $${r.totalCost.toFixed(4)} | ${r.toolCallCount} calls`);
+    const c = cases.find(c => c.id === r.caseId);
+    const tag = c?.stakes === 'high' ? ' 🔴' : c?.stakes === 'medium' ? ' 🟡' : '   ';
+    const freq = c?.frequency ? ` [${c.frequency}]` : '';
+    console.log(`  ${ok ? '✅' : '❌'}${tag} ${r.caseId.padEnd(35)} $${r.totalCost.toFixed(4)} | ${r.toolCallCount} calls${freq}`);
+  }
+
+  if (failedHighStakes.length > 0) {
+    console.log('');
+    console.log(`🔴 ${failedHighStakes.length} HIGH-STAKES case(s) failed — prioritize investigation:`);
+    failedHighStakes.forEach(r => console.log(`   • ${r.caseId}`));
   }
   console.log('');
   console.log('Next: score quality dimensions with:');

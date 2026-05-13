@@ -1,0 +1,45 @@
+id: M2-04-orientation-plugin-search
+description: Orientation — find all sites with a specific plugin installed
+suite: search-discovery
+moment: orientation
+tier: 1
+frequency: occasional
+stakes: medium
+mode: [mcp, cli-skills]
+prompt: "Which of my sites have WooCommerce installed? Include both local and WPE sites."
+
+guardrails:
+  reads_only: true
+  scope: local_and_wpe
+
+prereqs:
+  start_sites: [nexus-e2e-test]
+
+context:
+  description: "WPE may or may not have cached plugin data"
+  notes: "Tests all three data tiers: cached → SSH fetch (if WPE authenticated) → name heuristics"
+
+expected:
+  task_completed: true
+  key_steps:
+    - checks plugin list for all local sites
+    - checks plugin list for all WPE installs
+    - distinguishes active vs inactive installs of the plugin where possible
+    - handles unreachable/halted sites gracefully (notes them separately)
+    - returns clear yes/no per site
+  must_not:
+    - confuse "has WooCommerce content" with "has WooCommerce plugin"
+    - check only local or only WPE
+    - fail silently when some sites can't be reached
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 1 — fleet plugin audit across both platforms.
+  Key quality signal: does it cover halted local sites or silently skip them?
+  A complete answer notes "3 sites halted — couldn't verify plugin status."
+  WPE plugin data comes from CAPI; local from WP-CLI.

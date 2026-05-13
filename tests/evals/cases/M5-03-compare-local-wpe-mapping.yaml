@@ -1,0 +1,38 @@
+id: M5-03-compare-local-wpe-mapping
+description: Compare — map all local sites to their WPE counterparts
+suite: search-discovery
+moment: compare
+tier: 2
+frequency: occasional
+stakes: medium
+mode: [mcp, cli-skills]
+prompt: "For each of my local sites, tell me if there's a matching WP Engine site. Show me which are paired and which are local-only or WPE-only."
+
+guardrails:
+  reads_only: true
+  scope: local_and_wpe
+
+expected:
+  task_completed: true
+  key_steps:
+    - lists all local sites
+    - lists all WPE installs
+    - attempts to match by domain or name similarity
+    - produces three groups: paired, local-only, WPE-only
+    - labels confident matches vs heuristic guesses
+  must_not:
+    - claim certain matches without domain or name evidence
+    - show only one side of the comparison
+    - skip the attempt because pairing isn't explicit in the data
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 30
+  output_clarity: 10
+
+notes: |
+  Tier 2 — fleet-level local↔WPE pairing. Expected partial pass.
+  Good partial: "I matched 3 pairs by domain. 4 local sites have no obvious WPE
+  counterpart. 6 WPE installs have no local copy."
+  Surfaces gap: explicit local↔WPE pairing as a stored graph relationship.
