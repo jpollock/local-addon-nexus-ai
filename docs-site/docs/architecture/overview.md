@@ -26,6 +26,7 @@ graph TB
         B[CLI/MCP Server]
         C[UI Addon]
         D[Shared Core]
+        SS["Smart Search Backend\n/smart-search/graphql"]
     end
 
     subgraph "Data Layer"
@@ -37,6 +38,7 @@ graph TB
     subgraph "WordPress Sites"
         H[Local Sites]
         I[WP Engine Sites]
+        J["atlas-search plugin\nWP Engine AI Toolkit"]
     end
 
     A1 -->|MCP Protocol| B
@@ -50,6 +52,9 @@ graph TB
     D --> G
     D -->|WP-CLI| H
     D -->|CAPI+SSH| I
+    J -->|"GraphQL :13000"| SS
+    SS --> E
+    SS --> F
 ```
 
 ## Two Interfaces, One Core

@@ -164,6 +164,7 @@ nav:
     - MCP Protocol: architecture/mcp-protocol.md
     - Vector Database: architecture/vector-database.md
     - Shared Core: architecture/shared-core.md
+    - Smart Search Backend: architecture/smart-search.md
 
   - Integrations:
     - Claude Desktop: integrations/claude-desktop.md
