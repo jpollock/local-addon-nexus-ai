@@ -2474,6 +2474,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../smart-search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Smart Search Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3861,6 +3889,7 @@
         B[CLI/MCP Server]
         C[UI Addon]
         D[Shared Core]
+        SS["Smart Search Backend\n/smart-search/graphql"]
     end
 
     subgraph "Data Layer"
@@ -3872,6 +3901,7 @@
     subgraph "WordPress Sites"
         H[Local Sites]
         I[WP Engine Sites]
+        J["atlas-search plugin\nWP Engine AI Toolkit"]
     end
 
     A1 --&gt;|MCP Protocol| B
@@ -3884,7 +3914,10 @@
     D --&gt; F
     D --&gt; G
     D --&gt;|WP-CLI| H
-    D --&gt;|CAPI+SSH| I</code></pre>
+    D --&gt;|CAPI+SSH| I
+    J --&gt;|"GraphQL :13000"| SS
+    SS --&gt; E
+    SS --&gt; F</code></pre>
 <h2 id="two-interfaces-one-core">Two Interfaces, One Core<a class="headerlink" href="#two-interfaces-one-core" title="Permanent link">&para;</a></h2>
 <h3 id="climcp-server">CLI/MCP Server<a class="headerlink" href="#climcp-server" title="Permanent link">&para;</a></h3>
 <p><strong>Location:</strong> <code>cli/</code></p>

@@ -6,19 +6,19 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Manage WP Engine sites via CLI">
+        <meta name="description" content="How Nexus AI implements the WP Engine Smart Search local backend">
       
       
         <meta name="author" content="Jeremy Pollock">
       
       
-        <link rel="canonical" href="https://jpollock.github.io/local-addon-nexus-ai/cli/wpe-sites/">
+        <link rel="canonical" href="https://jpollock.github.io/local-addon-nexus-ai/architecture/smart-search/">
       
       
-        <link rel="prev" href="../local-sites/">
+        <link rel="prev" href="../shared-core/">
       
       
-        <link rel="next" href="../wp-cli/">
+        <link rel="next" href="../../integrations/claude-desktop/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>WPE Sites CLI - Nexus AI Documentation</title>
+        <title>Smart Search Architecture - Nexus AI Documentation</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#wpe-sites-cli" class="md-skip">
+        <a href="#smart-search-architecture" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              WPE Sites CLI
+              Smart Search Architecture
             
           </span>
         </div>
@@ -270,13 +270,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../cli/" class="md-tabs__link">
           
   
   
@@ -332,11 +330,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../architecture/overview/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../overview/" class="md-tabs__link">
           
   
   
@@ -761,31 +761,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   
@@ -803,7 +800,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -821,7 +818,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../cli/" class="md-nav__link">
         
   
   
@@ -849,7 +846,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../installation/" class="md-nav__link">
+      <a href="../../cli/installation/" class="md-nav__link">
         
   
   
@@ -877,7 +874,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../mcp-setup/" class="md-nav__link">
+      <a href="../../cli/mcp-setup/" class="md-nav__link">
         
   
   
@@ -905,7 +902,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../authentication/" class="md-nav__link">
+      <a href="../../cli/authentication/" class="md-nav__link">
         
   
   
@@ -933,7 +930,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../commands/" class="md-nav__link">
+      <a href="../../cli/commands/" class="md-nav__link">
         
   
   
@@ -961,7 +958,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/" class="md-nav__link">
+      <a href="../../cli/examples/" class="md-nav__link">
         
   
   
@@ -989,7 +986,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../local-sites/" class="md-nav__link">
+      <a href="../../cli/local-sites/" class="md-nav__link">
         
   
   
@@ -1014,37 +1011,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    WPE Sites
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../cli/wpe-sites/" class="md-nav__link">
         
   
   
@@ -1060,59 +1030,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Start
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Next Steps
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1125,7 +1042,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../wp-cli/" class="md-nav__link">
+      <a href="../../cli/wp-cli/" class="md-nav__link">
         
   
   
@@ -1153,7 +1070,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../bulk-operations/" class="md-nav__link">
+      <a href="../../cli/bulk-operations/" class="md-nav__link">
         
   
   
@@ -1181,7 +1098,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../error-handling/" class="md-nav__link">
+      <a href="../../cli/error-handling/" class="md-nav__link">
         
   
   
@@ -1209,7 +1126,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../performance/" class="md-nav__link">
+      <a href="../../cli/performance/" class="md-nav__link">
         
   
   
@@ -1237,7 +1154,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../troubleshooting/" class="md-nav__link">
+      <a href="../../cli/troubleshooting/" class="md-nav__link">
         
   
   
@@ -1839,28 +1756,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
-        
-          
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -1878,7 +1798,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1896,7 +1816,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/overview/" class="md-nav__link">
+      <a href="../overview/" class="md-nav__link">
         
   
   
@@ -1924,7 +1844,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/cli-architecture/" class="md-nav__link">
+      <a href="../cli-architecture/" class="md-nav__link">
         
   
   
@@ -1952,7 +1872,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/ui-architecture/" class="md-nav__link">
+      <a href="../ui-architecture/" class="md-nav__link">
         
   
   
@@ -1980,7 +1900,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/data-flow/" class="md-nav__link">
+      <a href="../data-flow/" class="md-nav__link">
         
   
   
@@ -2008,7 +1928,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/mcp-protocol/" class="md-nav__link">
+      <a href="../mcp-protocol/" class="md-nav__link">
         
   
   
@@ -2036,7 +1956,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/vector-database/" class="md-nav__link">
+      <a href="../vector-database/" class="md-nav__link">
         
   
   
@@ -2064,7 +1984,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/shared-core/" class="md-nav__link">
+      <a href="../shared-core/" class="md-nav__link">
         
   
   
@@ -2089,10 +2009,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../architecture/smart-search/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Smart Search Backend
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2108,6 +2055,114 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#system-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#request-flow-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request Flow: Search
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#request-flow-content-indexing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request Flow: Content Indexing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#auto-setup-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Setup Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mu-plugin-intercept" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MU Plugin Intercept
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capability-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capability Coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -3041,10 +3096,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#system-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        System Overview
       
     </span>
   </a>
@@ -3052,10 +3107,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#request-flow-search" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        Request Flow: Search
       
     </span>
   </a>
@@ -3063,10 +3118,65 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
+  <a href="#request-flow-content-indexing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Next Steps
+        Request Flow: Content Indexing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#auto-setup-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Setup Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mu-plugin-intercept" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MU Plugin Intercept
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capability-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capability Coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related
       
     </span>
   </a>
@@ -3093,19 +3203,236 @@
   
 
 
-<h1 id="wpe-sites-cli">WPE Sites CLI<a class="headerlink" href="#wpe-sites-cli" title="Permanent link">&para;</a></h1>
-<div class="admonition warning">
-<p class="admonition-title">Work in Progress</p>
-<p>This page is under construction. Check back soon for complete documentation.</p>
-</div>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>TODO: Add overview content</p>
-<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<p>TODO: Add quick start guide</p>
-<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<h1 id="smart-search-architecture">Smart Search Architecture<a class="headerlink" href="#smart-search-architecture" title="Permanent link">&para;</a></h1>
+<p>Nexus AI acts as a local replacement for WPE's Smart Search cloud backend. The <code>atlas-search</code> plugin (WP Engine AI Toolkit) is redirected from WPE's cloud GraphQL endpoint to Nexus's local <code>HttpEventInterface</code> server — with no changes to the plugin itself.</p>
+<h2 id="system-overview">System Overview<a class="headerlink" href="#system-overview" title="Permanent link">&para;</a></h2>
+<p>Where Smart Search fits in the Nexus architecture:</p>
+<pre class="mermaid"><code>graph TB
+    subgraph WP ["WordPress Site (Local)"]
+        WPCore[WordPress Core]
+        Plugin[atlas-search plugin\nWP Engine AI Toolkit]
+        MU[MU Plugin Filter\nnexus-ai-connector-config.php]
+    end
+
+    subgraph Nexus ["Nexus AI Addon"]
+        direction TB
+        HTTP["HttpEventInterface\n:13000"]
+
+        subgraph SSH ["SmartSearchHandler"]
+            direction LR
+            Find[find]
+            Write[index / bulkIndex\ndelete / deleteAll]
+            Config[config\nsynonyms · semanticSearch]
+            Track[tracker\nrecommendations\ninsights]
+            Caps[capabilities]
+        end
+
+        subgraph Storage ["Storage Layer"]
+            ONNX["EmbeddingService\nONNX all-MiniLM-L6-v2\n384 dimensions"]
+            Lance["VectorStore\nLanceDB"]
+            Sqlite["SQLite graph.db\nSynonyms · Tracker · Config"]
+        end
+    end
+
+    WPCore --&gt;|get_option| MU
+    MU --&gt;|returns 127.0.0.1:13000| Plugin
+    Plugin --&gt;|"POST /smart-search/graphql\nBearer token"| HTTP
+    HTTP --&gt; SSH
+    Find --&gt; ONNX --&gt; Lance
+    Find --&gt; Sqlite
+    Write --&gt; ONNX --&gt; Lance
+    Config --&gt; Sqlite
+    Track --&gt; Sqlite</code></pre>
+<h2 id="request-flow-search">Request Flow: Search<a class="headerlink" href="#request-flow-search" title="Permanent link">&para;</a></h2>
+<p>End-to-end flow for a WordPress search query:</p>
+<pre class="mermaid"><code>sequenceDiagram
+    actor User
+    participant WP as WordPress
+    participant MU as MU Plugin Filter
+    participant Plugin as atlas-search
+    participant HTTP as HttpEventInterface
+    participant Handler as SmartSearchHandler
+    participant ONNX as EmbeddingService
+    participant Lance as VectorStore (LanceDB)
+    participant SQLite as SQLite
+
+    User-&gt;&gt;WP: Search "road trip planning"
+    WP-&gt;&gt;MU: get_option('wpe_content_engine_option_name')
+    MU-&gt;&gt;WP: {url: "http://127.0.0.1:13000/smart-search/graphql"}
+    WP-&gt;&gt;Plugin: Use local endpoint
+
+    Plugin-&gt;&gt;HTTP: POST /smart-search/graphql\nquery: find("road trip planning")
+    HTTP-&gt;&gt;Handler: detectOperation → "find"
+
+    Handler-&gt;&gt;SQLite: getSynonymRules(siteId)
+    SQLite-&gt;&gt;Handler: [] (no rules)
+
+    Handler-&gt;&gt;ONNX: embed("road trip planning")
+    Note over ONNX: Generates 384-dim vector
+    ONNX-&gt;&gt;Handler: Float32Array[384]
+
+    Handler-&gt;&gt;Lance: search(siteId, vector, {limit, relevanceFloor: 0})
+    Lance-&gt;&gt;Handler: SearchResult[] sorted by cosine similarity
+
+    Handler-&gt;&gt;Handler: applyPostProcess\n(promotions, customResults,\nincludeFields, timeDecay)
+
+    Handler-&gt;&gt;HTTP: {data: {find: {total, documents}}}
+    HTTP-&gt;&gt;Plugin: 200 OK — document IDs + scores
+    Plugin-&gt;&gt;WP: Re-query WordPress by post IDs
+    WP-&gt;&gt;User: Search results</code></pre>
+<h2 id="request-flow-content-indexing">Request Flow: Content Indexing<a class="headerlink" href="#request-flow-content-indexing" title="Permanent link">&para;</a></h2>
+<p>How content gets into the local index:</p>
+<pre class="mermaid"><code>sequenceDiagram
+    actor Dev as Developer
+    participant WPAdmin as WP Admin
+    participant Plugin as atlas-search
+    participant HTTP as HttpEventInterface
+    participant Handler as SmartSearchHandler
+    participant ONNX as EmbeddingService
+    participant Lance as VectorStore (LanceDB)
+    participant SQLite as SQLite
+
+    Dev-&gt;&gt;WPAdmin: WP Engine AI Toolkit → Sync
+    WPAdmin-&gt;&gt;Plugin: Trigger full index
+
+    loop Each post batch (50–200 posts)
+        Plugin-&gt;&gt;HTTP: POST /smart-search/graphql\nmutation: bulkIndex([{id, data}])
+        HTTP-&gt;&gt;Handler: detectOperation → "bulkIndex"
+
+        Handler-&gt;&gt;SQLite: getSemanticConfig(siteId)
+        SQLite-&gt;&gt;Handler: {fields: ["post_title", "post_content"]}
+
+        Handler-&gt;&gt;ONNX: embedBatch(texts[])
+        Note over ONNX: Concatenates configured fields\nGenerates one vector per doc
+        ONNX-&gt;&gt;Handler: Float32Array[] batch
+
+        Handler-&gt;&gt;Lance: upsert(siteId, [{id, vector,\ncontent, postType,\npost_date_gmt, metadata}])
+    end
+
+    Plugin-&gt;&gt;Dev: Sync complete ✅</code></pre>
+<p>Real-time indexing uses the same <code>index</code> mutation path triggered by WordPress <code>save_post</code> hooks.</p>
+<h2 id="auto-setup-flow">Auto-Setup Flow<a class="headerlink" href="#auto-setup-flow" title="Permanent link">&para;</a></h2>
+<p>How Nexus configures a site automatically:</p>
+<pre class="mermaid"><code>flowchart TD
+    A([Site starts in Local]) --&gt; B{Site has AI configured?\nSiteAIConfig entry exists}
+
+    B --&gt;|No| Z([Skip Smart Search setup])
+    B --&gt;|Yes| C{atlas-search files\non disk?}
+
+    C --&gt;|No| D["wp plugin install atlas-search\n--activate\n(from wordpress.org)"]
+    D --&gt; E{Install success?}
+    E --&gt;|No| F([Log skip message\nmanual install URL shown])
+    E --&gt;|Yes| G[detectAtlasSearch = true]
+    C --&gt;|Yes| G
+
+    G --&gt; H["Generate MU plugin\nnexus-ai-connector-config.php\nwith Smart Search endpoint"]
+    H --&gt; I([atlas-search routes to\nhttp://127.0.0.1:13000])
+
+    style A fill:#4CAF50,color:#fff
+    style I fill:#2196F3,color:#fff
+    style F fill:#FF9800,color:#fff
+    style Z fill:#9E9E9E,color:#fff</code></pre>
+<h2 id="mu-plugin-intercept">MU Plugin Intercept<a class="headerlink" href="#mu-plugin-intercept" title="Permanent link">&para;</a></h2>
+<p>The WordPress option filter is the key to transparent redirection:</p>
+<pre class="mermaid"><code>sequenceDiagram
+    participant Plugin as atlas-search plugin
+    participant WP as WordPress Options API
+    participant MU as MU Plugin Filter
+    participant Nexus as Nexus Endpoint
+
+    Note over Plugin: Any atlas-search operation\n(search, sync, capabilities...)
+    Plugin-&gt;&gt;WP: get_option('wpe_content_engine_option_name')
+
+    Note over WP,MU: option_wpe_content_engine_option_name\nfilter fires early in bootstrap
+    WP-&gt;&gt;MU: apply_filters(option, false)
+    MU-&gt;&gt;WP: {url: "http://127.0.0.1:13000/smart-search/graphql",\naccess_token: "{local-token}"}
+
+    WP-&gt;&gt;Plugin: Return overridden value
+    Plugin-&gt;&gt;Nexus: All requests go here\ninstead of WPE cloud
+
+    Note over MU: This filter is excluded from\nWPE file pushes via .wpe-push-ignore\nProduction keeps its real WPE credentials</code></pre>
+<h2 id="data-architecture">Data Architecture<a class="headerlink" href="#data-architecture" title="Permanent link">&para;</a></h2>
+<p>Where Smart Search data lives:</p>
+<pre class="mermaid"><code>erDiagram
+    LANCE_DB {
+        string id PK "post:123 or wp_siteId_postId"
+        float32_384 vector "ONNX embedding"
+        string content "Embedded text (title + content)"
+        string postType "post, page, custom"
+        string post_date_gmt "ISO 8601"
+        string post_modified_gmt "ISO 8601"
+        string doc_url "Post permalink"
+        string metadata "Full document JSON"
+        string siteId "Site identifier"
+        integer indexedAt "Unix ms"
+    }
+
+    SMART_SEARCH_SYNONYMS {
+        string id PK
+        string site_id FK
+        string synonyms "laptop, notebook OR phone =&gt; smartphone"
+        integer created_at
+    }
+
+    SMART_SEARCH_TRACKER {
+        string id PK
+        string site_id FK
+        string event_type "page_view | search | search_click"
+        string session_id
+        string document_id
+        string query
+        integer result_count
+        integer position
+        integer created_at "7-day TTL"
+    }
+
+    SMART_SEARCH_SEMANTIC_CONFIG {
+        string site_id PK
+        string fields "JSON array of field names"
+        string type "BASIC"
+        integer updated_at
+    }
+
+    LANCE_DB ||--o{ SMART_SEARCH_SYNONYMS : "same siteId"
+    LANCE_DB ||--o{ SMART_SEARCH_TRACKER : "document_id refs id"
+    LANCE_DB ||--|| SMART_SEARCH_SEMANTIC_CONFIG : "determines embed fields"</code></pre>
+<h2 id="capability-coverage">Capability Coverage<a class="headerlink" href="#capability-coverage" title="Permanent link">&para;</a></h2>
+<p>What the local backend supports vs WPE cloud:</p>
+<pre class="mermaid"><code>graph LR
+    subgraph Full ["✅ Full Support"]
+        F1[find: full-text + semantic]
+        F2[index / bulkIndex / delete]
+        F3[capabilities]
+        F4[synonyms CRUD]
+        F5[tracker events]
+        F6[recommendations: trending + related]
+        F7[insights analytics]
+        F8[promotions + custom results]
+        F9[ACF field indexing]
+        F10[semantic config]
+    end
+
+    subgraph Partial ["⚠️ Partial"]
+        P1[aggregate / facets\npost-query only]
+        P2[fuzzyDistance\non/off only]
+        P3[searchBias\ngates embedding only]
+        P4[timeDecay\napproximated]
+        P5[searchAfter cursor\noffset simulation]
+    end
+
+    subgraph Stub ["🚫 Stubbed / Out of Scope"]
+        S1[geoConstraints\nsilently ignored]
+        S2[queryRescorer\nsilently ignored]
+        S3[Smart Attachment\ncloud vision only]
+        S4[ChatKit\nredirects to Local Gateway]
+    end</code></pre>
+<h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../../">Home</a></li>
-<li><a href="../../getting-started/">Getting Started</a></li>
+<li><a href="../../features/smart-search/">Feature Overview</a> — what Smart Search is and how the intercept works</li>
+<li><a href="../../features/smart-search/getting-started/">Getting Started</a> — step-by-step setup</li>
+<li><a href="../../features/smart-search/limitations/">Local vs Cloud</a> — detailed behavior differences</li>
+<li><a href="../overview/">Architecture Overview</a> — where Smart Search fits in the full Nexus picture</li>
+<li><a href="../vector-database/">Vector Database</a> — LanceDB internals</li>
 </ul>
 
 
