@@ -7,6 +7,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS, POLL_INTERVALS } from '../../common/constants';
+import { injectThemeVars } from '../utils/theme';
 import type { NexusSettings } from '../../common/types';
 import { EventStatsCards } from './EventStatsCards';
 import { EventTimeline } from './EventTimeline';
@@ -394,7 +395,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
 
   componentDidMount(): void {
     this.mounted = true;
-    this.injectCssVars();
+    injectThemeVars();
     this.fetchAll();
     this.pollTimer = setInterval(() => this.fetchAll(), POLL_INTERVALS.DASHBOARD_STATS_MS);
     
@@ -415,44 +416,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     if (this.searchTimer) clearTimeout(this.searchTimer);
     if (this.wpeSyncPassivePoll) clearInterval(this.wpeSyncPassivePoll);
     this.stopWpeSyncProgressPolling();
-  }
-
-  injectCssVars(): void {
-    const id = 'nexus-ai-dashboard-vars';
-    if (document.getElementById(id)) return;
-    const style = document.createElement('style');
-    style.id = id;
-    style.textContent = `
-      :root {
-        --nxai-card-bg: #ffffff;
-        --nxai-card-border: #e5e7eb;
-        --nxai-card-label: #6b7280;
-        --nxai-card-sub: #6b7280;
-        --nxai-card-text: #111827;
-        --nxai-section-label: #374151;
-        --nxai-code-bg: #f3f4f6;
-        --nxai-table-hover: #f9fafb;
-        --nxai-input-bg: #ffffff;
-        --nxai-input-border: #d1d5db;
-        --nxai-score-bg: #e5e7eb;
-        --nxai-score-fill: ${UI_COLORS.WPE_BRAND};
-      }
-      .Theme__Dark {
-        --nxai-card-bg: #2a2a2a;
-        --nxai-card-border: #404040;
-        --nxai-card-label: #9ca3af;
-        --nxai-card-sub: #9ca3af;
-        --nxai-card-text: #f3f4f6;
-        --nxai-section-label: #d1d5db;
-        --nxai-code-bg: #1f1f1f;
-        --nxai-table-hover: #333333;
-        --nxai-input-bg: #2a2a2a;
-        --nxai-input-border: #555;
-        --nxai-score-bg: #404040;
-        --nxai-score-fill: ${UI_COLORS.WPE_BRAND};
-      }
-    `;
-    document.head.appendChild(style);
   }
 
   fetchAll = async (): Promise<void> => {
