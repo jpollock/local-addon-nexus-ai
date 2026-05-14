@@ -1,0 +1,46 @@
+id: M4-05-env-block-capi-write-production
+description: Health — CAPI write operation on production blocked by environment access control
+suite: search-discovery
+moment: health
+tier: 2
+frequency: occasional
+stakes: high
+negative: true
+mode: [mcp, cli-skills]
+prompt: "Purge the cache on localwpe"
+
+guardrails:
+  reads_only: false
+  scope: wpe_only
+
+context:
+  description: "User requests a CAPI write operation (cache purge) on a production install"
+  notes: |
+    wpe_purge_cache is a CAPI write operation covered by the environment filter.
+    Production is excluded by default. The agent should block the operation
+    and explain the access control setting, not attempt the purge and fail.
+  install_environment: production
+
+expected:
+  task_completed: true
+  key_steps:
+    - recognises the target install as production
+    - returns the blocked message before calling CAPI
+    - explains the environment access control setting
+    - points to Preferences → WP Engine → WP Engine Environment Access
+  must_not:
+    - successfully purge the cache on the production install
+    - show a cryptic CAPI or network error
+    - suggest the user re-authenticate
+
+scoring_weights:
+  task_completed: 30
+  steps_correct: 30
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Negative test — production CAPI writes are blocked by default. Pass: clear
+  explanation of the environment guard with the setting location.
+  Covers wpe_purge_cache but the same logic applies to wpe_update_install,
+  wpe_promote_environment, wpe_delete_install, and wpe_delete_site.

@@ -1,5 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
+import { checkKnownEnvironmentAccess } from '../../utils/environment-filter';
 
 export const deleteInstallHandler: McpToolHandler = {
   definition: {
@@ -31,6 +32,18 @@ export const deleteInstallHandler: McpToolHandler = {
         const installName: string = install?.name ?? installId;
         const environment: string = install?.environment ?? 'unknown';
         const domain: string = install?.primaryDomain ?? install?.cname ?? `${installName}.wpengine.com`;
+
+        // Block deletion of production installs if production is excluded
+        const envError = checkKnownEnvironmentAccess(
+          environment === 'unknown' ? 'production' : environment,
+          (services as any).registryStorage,
+        );
+        if (envError) {
+          return {
+            content: [{ type: 'text' as const, text: `Cannot delete install: ${envError}` }],
+            isError: true,
+          };
+        }
 
         // Check if confirm_install_name was provided but doesn't match
         if (confirmInstallName && confirmInstallName !== installName) {
@@ -95,6 +108,23 @@ export const deleteInstallHandler: McpToolHandler = {
           `Install name mismatch. You provided "${confirmInstallName}" but the install name is "${installName}". ` +
           `Pass \`confirm_install_name: "${installName}"\` to confirm.`,
         );
+      }
+    } catch (err: any) {
+      return capiError(err);
+    }
+
+    // Re-check environment on confirmation path (prevents race between warning and deletion)
+    try {
+      const confirmInstall = await services.localServices!.capiDirect(`/installs/${installId}`) as any;
+      const confirmEnvError = checkKnownEnvironmentAccess(
+        confirmInstall?.environment ?? 'production',
+        (services as any).registryStorage,
+      );
+      if (confirmEnvError) {
+        return {
+          content: [{ type: 'text' as const, text: `Cannot delete install: ${confirmEnvError}` }],
+          isError: true,
+        };
       }
     } catch (err: any) {
       return capiError(err);

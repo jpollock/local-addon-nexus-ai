@@ -88,6 +88,17 @@ function makeLocalServices(capiAvailable = true): jest.Mocked<LocalServicesBridg
 }
 
 function makeServices(localServices?: jest.Mocked<LocalServicesBridge>): NexusServices {
+  // Provide a registry storage stub so environment-filter checks pass.
+  // Cache contains inst-1 as staging (allowed by default), inst-2 as staging.
+  const storageMap = new Map<string, unknown>([
+    ['nexus-ai_wpe_install_cache', {
+      installs: [
+        { installId: 'inst-1', installName: 'mysite-prod', environment: 'staging' },
+        { installId: 'inst-2', installName: 'mysite-stg', environment: 'staging' },
+      ],
+      syncedAt: Date.now(),
+    }],
+  ]);
   return {
     siteData: {
       getSite: (id: string) => id === 'site-1' ? site1 : null,
@@ -96,6 +107,7 @@ function makeServices(localServices?: jest.Mocked<LocalServicesBridge>): NexusSe
     indexRegistry: { get: () => null, listAll: () => [] },
     localServices: localServices ?? makeLocalServices(),
     logger: { info: jest.fn(), error: jest.fn() },
+    registryStorage: { get: (key: string) => storageMap.get(key) ?? null },
   } as unknown as NexusServices;
 }
 

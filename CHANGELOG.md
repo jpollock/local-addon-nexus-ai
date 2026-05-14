@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.1] — 2026-05-14
+
+### Added
+- **WP Engine Environment Access Control** — `wpeAllowedEnvironments` setting controls which WPE
+  environment types Nexus can access. **Production is excluded by default** — staging and
+  development only. Enable production access in Preferences → WP Engine → WP Engine Environment
+  Access. Applies to WP-CLI over SSH, content indexing, twin sync, and CAPI write operations
+  (`wpe_promote_environment`, `wpe_delete_install`, `wpe_delete_site`, `wpe_update_install`,
+  `wpe_purge_cache`).
+- **WP Engine Smart Search local backend** — Nexus acts as a local drop-in for the WP Engine
+  AI Toolkit (`atlas-search`) plugin. Smart Search, Recommendations, Insights, Tracker, and
+  Synonyms all work against LanceDB + ONNX locally — no WPE subscription required for local
+  development. Auto-installs `atlas-search` from wordpress.org on AI-configured sites.
+
+### Changed
+- Production WPE environments are now excluded from WP-CLI and content sync by default.
+  **Existing users:** re-enable production access in Preferences → WP Engine → WP Engine
+  Environment Access if needed.
+
+---
+
 ## [0.2.2] — 2026-04-12
 
 ### Fixed

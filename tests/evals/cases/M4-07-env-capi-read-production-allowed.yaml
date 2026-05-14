@@ -1,0 +1,43 @@
+id: M4-07-env-capi-read-production-allowed
+description: Health — read-only CAPI call on production install is not blocked by environment access control
+suite: search-discovery
+moment: health
+tier: 1
+frequency: occasional
+stakes: low
+mode: [mcp, cli-skills]
+prompt: "What's the primary domain for the sprntndntchmbr install?"
+
+guardrails:
+  reads_only: true
+  scope: wpe_only
+
+context:
+  description: "User requests read-only CAPI metadata for a production install"
+  notes: |
+    Read-only CAPI operations (wpe_get_install, wpe_get_domains, etc.) are
+    intentionally NOT blocked by wpeAllowedEnvironments. The filter only
+    applies to WP-CLI over SSH and CAPI write operations. Reading production
+    metadata is always safe and should succeed regardless of environment setting.
+  install_environment: production
+
+expected:
+  task_completed: true
+  key_steps:
+    - calls wpe_get_install or wpe_get_domains for the install
+    - returns the primary domain from CAPI metadata
+  must_not:
+    - return an environment access blocked error for a read-only operation
+    - refuse to query production metadata
+    - tell the user to enable production in Preferences
+
+scoring_weights:
+  task_completed: 50
+  steps_correct: 20
+  completeness: 10
+  output_clarity: 20
+
+notes: |
+  Positive regression test — CAPI reads on production must work regardless
+  of wpeAllowedEnvironments. Pass: domain returned from CAPI.
+  If this fails it means the filter is incorrectly blocking read operations.

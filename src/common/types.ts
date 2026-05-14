@@ -260,6 +260,9 @@ export interface NexusSettings {
   wpeRefreshIntervalHours?: number;         // How often to run WPE SSH refresh cycle (default: 24)
   wpeRefreshAutoEnabled?: boolean;          // Whether WPE SSH refresh is enabled (default: true)
   wpeAccountFilter?: string[] | null;       // Account IDs to deep-scan; null/undefined = all accounts
+  /** WPE environment types Nexus is allowed to access. Default: staging + development only.
+   *  Set to include 'production' to enable production access. */
+  wpeAllowedEnvironments?: ('production' | 'staging' | 'development')[];
 }
 
 export interface SiteAIConfig {

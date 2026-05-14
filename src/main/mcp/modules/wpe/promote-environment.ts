@@ -1,5 +1,6 @@
 import { McpToolHandler } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
+import { checkKnownEnvironmentAccess } from '../../utils/environment-filter';
 
 export const promoteEnvironmentHandler: McpToolHandler = {
   definition: {
@@ -45,6 +46,18 @@ export const promoteEnvironmentHandler: McpToolHandler = {
         services.localServices!.capiDirect(`/installs/${sourceId}`) as Promise<any>,
         services.localServices!.capiDirect(`/installs/${destId}`) as Promise<any>,
       ]);
+      // Block promotion to a production environment if production is excluded
+      const destEnvironment = (dstInstall as any)?.environment ?? 'production';
+      const envError = checkKnownEnvironmentAccess(
+        destEnvironment,
+        (services as any).registryStorage,
+      );
+      if (envError) {
+        return {
+          content: [{ type: 'text' as const, text: `Cannot promote to destination install: ${envError}` }],
+          isError: true,
+        };
+      }
       // Swagger: source_environment_id / destination_environment_id (not install_id)
       // include_db goes inside custom_options, not at top level
       const result = await services.localServices!.capiDirect('/install_copy', 'POST', {

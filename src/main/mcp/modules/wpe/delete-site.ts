@@ -1,5 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
+import { checkKnownEnvironmentAccess } from '../../utils/environment-filter';
 
 export const deleteSiteHandler: McpToolHandler = {
   definition: {
@@ -39,12 +40,29 @@ export const deleteSiteHandler: McpToolHandler = {
           );
         }
 
-        // Try to count installs for this site
+        // Try to count installs for this site, and check environment access
         let installCount = 'unknown number of';
         try {
           const installData = await services.localServices!.capiDirect(`/installs?site_id=${siteId}`) as any;
           const installs: any[] = installData?.results ?? installData ?? [];
           installCount = String(installs.length);
+
+          // Block if any install is in a restricted environment (e.g. production)
+          for (const inst of installs) {
+            const envErr = checkKnownEnvironmentAccess(
+              inst?.environment ?? 'production',
+              (services as any).registryStorage,
+            );
+            if (envErr) {
+              return {
+                content: [{
+                  type: 'text' as const,
+                  text: `Cannot delete site: install "${inst?.name ?? inst?.installName ?? inst?.install_name ?? inst?.id}" is in a blocked environment. ${envErr}`,
+                }],
+                isError: true,
+              };
+            }
+          }
         } catch {
           // Non-fatal — continue without install count
         }
@@ -83,6 +101,34 @@ export const deleteSiteHandler: McpToolHandler = {
       }
     } catch (err: any) {
       return capiError(err);
+    }
+
+    // Re-check environments before deletion
+    try {
+      const confirmInstallsData = await services.localServices!.capiDirect(
+        `/installs?site_id=${siteId}&limit=100`,
+      ).catch(() => null) as any;
+      const confirmInstalls: any[] = confirmInstallsData?.results ?? confirmInstallsData ?? [];
+      for (const inst of confirmInstalls) {
+        const envErr = checkKnownEnvironmentAccess(
+          inst?.environment ?? 'production',
+          (services as any).registryStorage,
+        );
+        if (envErr) {
+          return {
+            content: [{ type: 'text' as const, text: `Cannot delete site: ${envErr}` }],
+            isError: true,
+          };
+        }
+      }
+    } catch (err: any) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Cannot verify environment access for site deletion: ${err?.message ?? 'CAPI error'}. Retry when the API is available.`,
+        }],
+        isError: true,
+      };
     }
 
     try {

@@ -6,6 +6,8 @@ module.exports = {
     '^@getflywheel/local/main$': '<rootDir>/tests/__mocks__/local-main.ts',
     '^@getflywheel/local-components$': '<rootDir>/tests/__mocks__/local-components.ts',
     '^electron$': '<rootDir>/tests/__mocks__/electron.ts',
+    // p-limit v6+ is ESM-only; map to a CJS shim for Jest's CommonJS environment
+    '^p-limit$': '<rootDir>/tests/__mocks__/p-limit.js',
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   sandboxInjectedGlobals: ['Float32Array', 'BigInt64Array', 'Uint8Array', 'ArrayBuffer'],

@@ -1,5 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
+import { checkWpeInstallIdEnvironmentAccess } from '../../utils/environment-filter';
 
 export const purgeCacheHandler: McpToolHandler = {
   definition: {
@@ -19,6 +20,18 @@ export const purgeCacheHandler: McpToolHandler = {
     try {
       const installId = args.install_id as string;
       if (!installId) return error('Install ID is required.');
+
+      // Check environment before purging cache
+      const envError = checkWpeInstallIdEnvironmentAccess(
+        installId,
+        (services as any).registryStorage,
+      );
+      if (envError) {
+        return {
+          content: [{ type: 'text' as const, text: `Cannot purge cache: ${envError}` }],
+          isError: true,
+        };
+      }
 
       await services.localServices!.capiPurgeCache(installId);
       return ok(`Cache purged for install "${installId}".`);

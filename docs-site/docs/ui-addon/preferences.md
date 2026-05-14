@@ -488,6 +488,41 @@ Each WordPress site can use a different AI provider for its content generation f
 
 ## WP Engine Settings
 
+The WP Engine section opens with **Environment Access Control** first — the safety setting that governs what Nexus can touch on your WPE installs.
+
+### Environment Access Control
+
+Controls which WP Engine environment types Nexus can access for WP-CLI commands and content indexing.
+
+```
+┌─────────────────────────────────────────┐
+│ WP Engine Environment Access            │
+│                                         │
+│ Choose which environment types Nexus    │
+│ can access for WP-CLI and content       │
+│ indexing. Production is excluded by     │
+│ default.                                │
+│                                         │
+│ ☑ Development                          │
+│ ☑ Staging                              │
+│ ☐ Production                           │
+│   ⚠ Enables WP-CLI commands and        │
+│     content indexing on production      │
+│     sites                               │
+└─────────────────────────────────────────┘
+```
+
+**Default:** staging and development only. Production is opt-in.
+
+**What this controls:**
+- Remote WP-CLI over SSH (`wp_plugin_list`, `wp_core_version`, etc.)
+- Content indexing and twin sync
+- CAPI write operations (`wpe_promote_environment`, `wpe_delete_install`, `wpe_delete_site`, `wpe_update_install`, `wpe_purge_cache`)
+
+**What it does NOT block:** Read-only CAPI operations (`wpe_get_installs`, `wpe_get_install`, etc.) and `local_wpe_push` / `local_wpe_pull`.
+
+See [WP Engine Access Control](../reference/wpe-access-control.md) for the complete reference.
+
 ### Account Management
 
 ```

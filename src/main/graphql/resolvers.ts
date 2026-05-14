@@ -8,6 +8,7 @@
 
 import type { ToolRegistry } from '../mcp/tool-registry';
 import * as ollamaClient from '../helpers/ollama-client';
+import { checkWpeInstallEnvironmentAccess } from '../mcp/utils/environment-filter';
 import {
   buildDateRange,
   getUsageCached,
@@ -1624,6 +1625,10 @@ export function createResolvers(context: ResolverContext) {
                         exitCode: 1,
                       };
                     }
+                    const envError = checkWpeInstallEnvironmentAccess(wpeRow.name, services.registryStorage);
+                    if (envError) {
+                      return { success: false, error: envError, stdout: '', stderr: '', exitCode: 1 };
+                    }
                     const result = await services.localServices.remoteWpCliRun(wpeRow.name, command);
                     return {
                       success: result.success,
@@ -1676,6 +1681,11 @@ export function createResolvers(context: ResolverContext) {
                 stderr: '',
                 exitCode: 1,
               };
+            }
+
+            const envError = checkWpeInstallEnvironmentAccess(installNameOnly, services.registryStorage);
+            if (envError) {
+              return { success: false, error: envError, stdout: '', stderr: '', exitCode: 1 };
             }
 
             const result = await services.localServices.remoteWpCliRun(installNameOnly, command);
