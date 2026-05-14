@@ -137,7 +137,7 @@ describe('wpe_delete_site — Tier 3 flow', () => {
   it('without token: returns pre-confirmation listing all installs', async () => {
     const mockCapiDirect = jest.fn()
       .mockResolvedValueOnce({ id: 'site-1', name: 'My Store' })
-      .mockResolvedValueOnce({ results: [{ id: 'i1' }, { id: 'i2' }] });
+      .mockResolvedValueOnce({ results: [{ id: 'i1', environment: 'staging' }, { id: 'i2', environment: 'development' }] });
 
     const result = await deleteSiteHandler.execute(
       { site_id: 'site-1' },
@@ -195,58 +195,48 @@ describe('wpe_delete_site — Tier 3 flow', () => {
 // ============================================================
 
 describe('wpe_promote_environment — Tier 3 flow', () => {
-  it('without token: fetches both installs, shows warning, returns pre-confirmation', async () => {
-    const recentBackup = new Date(Date.now() - 2 * 3600 * 1000).toISOString(); // 2 hours ago (recent)
-    const mockCapiGetInstall = jest.fn()
-      .mockResolvedValueOnce({ id: 'inst-src', name: 'staging-site', environment: 'staging' })
-      .mockResolvedValueOnce({ id: 'inst-dst', name: 'prod-site', environment: 'staging' });
+  // Note: wpe_promote_environment runs directly via McpSafetyWrapper's Tier 3 token flow.
+  // The handler itself always executes the copy — pre-confirmation is handled at the MCP layer.
+
+  it('fetches both installs and runs copy (staging → staging)', async () => {
     const mockCapiDirect = jest.fn()
-      .mockResolvedValueOnce({ results: [{ created_at: recentBackup }] }); // backup check for dest
+      .mockResolvedValueOnce({ id: 'inst-src', name: 'staging-site', environment: 'staging' })
+      .mockResolvedValueOnce({ id: 'inst-dst', name: 'prod-site', environment: 'staging' })
+      .mockResolvedValueOnce({ id: 'op-abc', status: 'pending' }); // POST /install_copy
 
     const result = await promoteEnvironmentHandler.execute(
       { source_install_id: 'inst-src', destination_install_id: 'inst-dst' },
-      makeMockServices({ capiGetInstall: mockCapiGetInstall, capiDirect: mockCapiDirect }),
+      makeMockServices({ capiDirect: mockCapiDirect }),
     );
     expect(result.isError).toBeFalsy();
     const text = getText(result);
-    expect(text).toContain('⚠️ Confirm Environment Copy');
-    expect(text).toContain('staging-site');
-    expect(text).toContain('prod-site');
-    expect(text).toContain('_confirmationToken: "confirm"');
-    // Recent backup, so should show ✅
-    expect(text).toContain('✅ Recent backup exists');
+    expect(text).toContain('Environment Copy Started');
+    expect(text).toContain('op-abc');
   });
 
-  it('without token, production destination: shows extra strong production warning', async () => {
-    const recentBackup = new Date(Date.now() - 1 * 3600 * 1000).toISOString();
-    const mockCapiGetInstall = jest.fn()
-      .mockResolvedValueOnce({ id: 'inst-src', name: 'staging-site', environment: 'staging' })
-      .mockResolvedValueOnce({ id: 'inst-dst', name: 'prod-site', environment: 'production' }); // PRODUCTION
+  it('blocks copy to production destination when production is not allowed', async () => {
     const mockCapiDirect = jest.fn()
-      .mockResolvedValueOnce({ results: [{ created_at: recentBackup }] });
+      .mockResolvedValueOnce({ id: 'inst-src', name: 'staging-site', environment: 'staging' })
+      .mockResolvedValueOnce({ id: 'inst-dst', name: 'prod-site', environment: 'production' });
 
     const result = await promoteEnvironmentHandler.execute(
       { source_install_id: 'inst-src', destination_install_id: 'inst-dst' },
-      makeMockServices({ capiGetInstall: mockCapiGetInstall, capiDirect: mockCapiDirect }),
+      makeMockServices({ capiDirect: mockCapiDirect }),
     );
-    const text = getText(result);
-    expect(text).toContain('🚨 PRODUCTION DESTINATION');
-    expect(text).toContain('cannot be undone');
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain('Cannot promote to destination install');
   });
 
-  it('without token, no recent backup on destination: shows backup warning', async () => {
-    const mockCapiGetInstall = jest.fn()
-      .mockResolvedValueOnce({ id: 'inst-src', name: 'staging-site', environment: 'staging' })
-      .mockResolvedValueOnce({ id: 'inst-dst', name: 'prod-site', environment: 'staging' });
+  it('returns CAPI error when source install fetch fails', async () => {
     const mockCapiDirect = jest.fn()
-      .mockResolvedValueOnce({ results: [] }); // no backups for dest
+      .mockRejectedValueOnce(new Error('response returned an error code 401'));
 
     const result = await promoteEnvironmentHandler.execute(
       { source_install_id: 'inst-src', destination_install_id: 'inst-dst' },
-      makeMockServices({ capiGetInstall: mockCapiGetInstall, capiDirect: mockCapiDirect }),
+      makeMockServices({ capiDirect: mockCapiDirect }),
     );
-    const text = getText(result);
-    expect(text).toContain('⚠️ **No backups found**');
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain('wpe_login');
   });
 
   it('with token: calls POST /install_copy and returns success', async () => {
@@ -285,18 +275,6 @@ describe('wpe_promote_environment — Tier 3 flow', () => {
     expect(getText(result)).toContain('wpe_login');
   });
 
-  it('returns error when source install fetch fails', async () => {
-    const mockCapiGetInstall = jest.fn()
-      .mockRejectedValueOnce(new Error('response returned an error code 401'))
-      .mockResolvedValueOnce({ id: 'inst-dst', name: 'prod', environment: 'production' });
-
-    const result = await promoteEnvironmentHandler.execute(
-      { source_install_id: 'inst-src', destination_install_id: 'inst-dst' },
-      makeMockServices({ capiGetInstall: mockCapiGetInstall }),
-    );
-    expect(result.isError).toBe(true);
-    expect(getText(result)).toContain('wpe_login');
-  });
 });
 
 // ============================================================

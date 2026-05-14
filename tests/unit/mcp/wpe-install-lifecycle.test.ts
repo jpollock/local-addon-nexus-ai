@@ -17,6 +17,17 @@ function getText(result: any): string {
 }
 
 function makeMockServices(capiDirect: jest.Mock) {
+  // Provide a registryStorage stub so environment-filter checks pass.
+  // inst-1 and inst-2 are cached as staging/development (allowed by default).
+  const storageMap = new Map<string, unknown>([
+    ['nexus-ai_wpe_install_cache', {
+      installs: [
+        { installId: 'inst-1', installName: 'mysite', environment: 'staging' },
+        { installId: 'inst-2', installName: 'mysite-stg', environment: 'development' },
+      ],
+      syncedAt: Date.now(),
+    }],
+  ]);
   return {
     localServices: {
       capiDirect,
@@ -26,6 +37,7 @@ function makeMockServices(capiDirect: jest.Mock) {
       isCAPIAvailable: jest.fn().mockReturnValue(true),
     },
     siteData: { getSites: jest.fn().mockReturnValue({}) },
+    registryStorage: { get: (key: string) => storageMap.get(key) ?? null },
   } as any;
 }
 
@@ -193,7 +205,7 @@ describe('wpe_delete_site', () => {
     // First call: GET /sites/site-1, second call: GET /installs?site_id=site-1
     mockCapiDirect
       .mockResolvedValueOnce({ id: 'site-1', name: 'My Store' })
-      .mockResolvedValueOnce({ results: [{ id: 'i1' }, { id: 'i2' }, { id: 'i3' }] });
+      .mockResolvedValueOnce({ results: [{ id: 'i1', environment: 'staging' }, { id: 'i2', environment: 'development' }, { id: 'i3', environment: 'staging' }] });
 
     const result = await deleteSiteHandler.execute(
       { site_id: 'site-1' },
