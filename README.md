@@ -93,6 +93,7 @@ Nexus AI can sync your **WP Engine sites** into the same fleet view as your loca
 - 📊 **Full Metadata** — WordPress version, plugins, users extracted via remote WP-CLI
 - 🔗 **Link Detection** — Automatically identifies which WPE sites are already pulled to local
 - ⬇️ **Pull to Local** — One-click creation of local copies for development/testing
+- 🔒 **Production Safety** — Production environments are **excluded by default** from WP-CLI commands and content sync. Enable in Preferences → WP Engine → Environment Access.
 
 **Quick Start:**
 
