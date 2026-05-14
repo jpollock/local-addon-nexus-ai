@@ -121,8 +121,14 @@ export const deleteSiteHandler: McpToolHandler = {
           };
         }
       }
-    } catch {
-      // Non-fatal — proceed with delete if installs check fails
+    } catch (err: any) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Cannot verify environment access for site deletion: ${err?.message ?? 'CAPI error'}. Retry when the API is available.`,
+        }],
+        isError: true,
+      };
     }
 
     try {
