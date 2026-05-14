@@ -33,6 +33,11 @@ That's it. If you've run `nexus ai setup` on the site, Nexus handles the rest au
 !!! note
     On production WPE, the plugin requires a Smart Search subscription. **Locally with Nexus, no WPE subscription is needed.**
 
+!!! info "WP Engine Environment Access"
+    By default, Nexus only accesses **staging and development** WP Engine environments.
+    Production is excluded to prevent accidental indexing or commands on live sites.
+    To enable production access, go to **Nexus Preferences → WP Engine Environment Access**.
+
 ## Step 2: Start the Site
 
 Start (or restart) your site in Local. Nexus will:
