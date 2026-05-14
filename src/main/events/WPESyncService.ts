@@ -19,6 +19,8 @@ import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import type { RegistryStorage } from '../content/IndexRegistry';
 import { STORAGE_KEYS } from '../../common/constants';
 import pLimit from 'p-limit';
+import { isWpeEnvironmentAllowed } from '../mcp/utils/environment-filter';
+import type { NexusSettings } from '../../common/types';
 
 export interface WPESyncProgress {
   total: number;
@@ -167,6 +169,19 @@ export class WPESyncService {
         account_id: i.account?.id ?? undefined,
       }));
 
+      // Apply environment filter — production excluded by default
+      const nexusSettings = (this.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+      const beforeEnvFilter = wpeInstalls.length;
+      const wpeInstallsFiltered = wpeInstalls.filter((i) =>
+        isWpeEnvironmentAllowed(i.environment, nexusSettings)
+      );
+      if (wpeInstallsFiltered.length < beforeEnvFilter) {
+        this.logger.info(
+          `[WPESyncService] Environment filter: ${wpeInstallsFiltered.length} of ${beforeEnvFilter} installs in scope ` +
+          `(allowed: ${(nexusSettings.wpeAllowedEnvironments ?? ['staging', 'development']).join(', ')})`
+        );
+      }
+
       // Build a per-site last_sync_at map from graph for staleness filtering
       const graphDb = this.graphService.getDb();
       const lastSyncMap = new Map<string, number>();
@@ -184,14 +199,14 @@ export class WPESyncService {
       // Filter to stale installs only (never synced OR older than threshold)
       const thresholdMs = (staleThresholdHours ?? 8) * 60 * 60 * 1000;
       const now = Date.now();
-      const staleInstalls = wpeInstalls.filter((i) => {
+      const staleInstalls = wpeInstallsFiltered.filter((i) => {
         const last = lastSyncMap.get(i.install_id);
         return !last || (now - last) > thresholdMs;
       });
-      result.skipped = wpeInstalls.length - staleInstalls.length;
+      result.skipped = wpeInstallsFiltered.length - staleInstalls.length;
 
       this.logger.info(
-        `[WPESyncService] ${staleInstalls.length} stale, ${result.skipped} fresh (skipping) out of ${wpeInstalls.length} total`
+        `[WPESyncService] ${staleInstalls.length} stale, ${result.skipped} fresh (skipping) out of ${wpeInstallsFiltered.length} total`
       );
 
       // Apply limit if specified (after staleness filter)
