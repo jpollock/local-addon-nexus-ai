@@ -155,7 +155,8 @@ describe('wpe_delete_site — Tier 3 flow', () => {
 
   it('with token and correct confirm_site_name: calls DELETE and returns success', async () => {
     const mockCapiDirect = jest.fn()
-      .mockResolvedValueOnce({ id: 'site-1', name: 'My Store' })
+      .mockResolvedValueOnce({ id: 'site-1', name: 'My Store' }) // name-verify fetch
+      .mockResolvedValueOnce({ results: [{ id: 'inst-1', name: 'mystore', environment: 'staging' }] }) // installs env re-check
       .mockResolvedValueOnce({}); // DELETE response
 
     const result = await deleteSiteHandler.execute(

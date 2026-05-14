@@ -232,9 +232,10 @@ describe('wpe_delete_site', () => {
   });
 
   it('confirmed with correct site name: calls DELETE and returns success', async () => {
-    // 1. Fetch site to verify name
+    // 1. Fetch site to verify name, 2. installs env re-check, 3. DELETE
     mockCapiDirect
       .mockResolvedValueOnce({ id: 'site-1', name: 'My Store' })
+      .mockResolvedValueOnce({ results: [{ id: 'inst-1', name: 'mystore', environment: 'staging' }] }) // installs env re-check
       .mockResolvedValueOnce({});
 
     const result = await deleteSiteHandler.execute(
