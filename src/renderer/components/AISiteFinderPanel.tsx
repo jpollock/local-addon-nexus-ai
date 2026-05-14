@@ -137,7 +137,7 @@ const conversationStyle: React.CSSProperties = {
   marginTop: '16px',
   padding: '12px',
   borderRadius: '6px',
-  backgroundColor: '#f9fafb',
+  backgroundColor: 'var(--nxai-code-bg, #f3f4f6)',
   border: '1px solid var(--nxai-card-border, #e5e7eb)',
 };
 

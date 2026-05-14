@@ -432,7 +432,7 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
           this.renderBadge(op.status),
           React.createElement(
             'span',
-            { style: { fontSize: '14px', color: '#9ca3af', marginLeft: '6px', userSelect: 'none' } },
+            { style: { fontSize: '14px', color: 'var(--nxai-status-neutral, #9ca3af)', marginLeft: '6px', userSelect: 'none' } },
             isExpanded ? '▾' : '▸',
           ),
           isRunning
