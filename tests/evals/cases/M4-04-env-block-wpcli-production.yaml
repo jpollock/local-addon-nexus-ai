@@ -1,0 +1,49 @@
+id: M4-04-env-block-wpcli-production
+description: Health — WP-CLI on production install blocked by environment access control
+suite: search-discovery
+moment: health
+tier: 2
+frequency: occasional
+stakes: high
+negative: true
+mode: [mcp, cli-skills]
+prompt: "List the plugins on localwpe"
+
+guardrails:
+  reads_only: false
+  scope: wpe_only
+
+context:
+  description: "User targets a production WPE install via WP-CLI"
+  notes: |
+    wpeAllowedEnvironments defaults to ['staging', 'development'] — production
+    is excluded. The agent should detect the block and explain how to unblock
+    rather than returning a raw error or silently failing.
+  install_environment: production
+
+expected:
+  task_completed: true
+  key_steps:
+    - attempts to resolve the install target
+    - receives the environment access error
+    - clearly explains that production environments are blocked by default
+    - tells the user exactly where to change the setting (Preferences → WP Engine → WP Engine Environment Access)
+    - does NOT silently fail or show a cryptic internal error
+  must_not:
+    - successfully list plugins on the production install
+    - show the raw "Operation blocked" error string without any explanation
+    - claim the install doesn't exist
+    - suggest the user is not authenticated to WPE
+
+scoring_weights:
+  task_completed: 30
+  steps_correct: 30
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Negative test — production WP-CLI is blocked by default. Pass: agent
+  explains the environment access control, names the setting, and tells
+  the user how to enable production if they need it.
+  Common failure mode: raw error surfaces with no guidance, or agent
+  claims the install is unreachable.

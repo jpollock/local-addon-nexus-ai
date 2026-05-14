@@ -1,0 +1,42 @@
+id: M4-06-env-staging-allowed
+description: Health — WP-CLI on staging install succeeds (environment access control does not block staging)
+suite: search-discovery
+moment: health
+tier: 1
+frequency: occasional
+stakes: medium
+mode: [mcp, cli-skills]
+prompt: "List the plugins on aitoolkitdemo"
+
+guardrails:
+  reads_only: true
+  scope: wpe_only
+
+context:
+  description: "User targets a staging WPE install — should succeed normally"
+  notes: |
+    wpeAllowedEnvironments defaults to ['staging', 'development']. Staging
+    installs should work exactly as before. This is a regression guard to
+    confirm the environment filter does not over-block.
+  install_environment: staging
+
+expected:
+  task_completed: true
+  key_steps:
+    - resolves the install and connects via SSH
+    - returns the plugin list with name, version, and active/inactive status
+  must_not:
+    - return an environment access blocked error
+    - claim the install is unreachable
+    - ask the user to enable staging access in Preferences
+
+scoring_weights:
+  task_completed: 40
+  steps_correct: 20
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Positive regression test — staging must still work after the environment
+  filter is applied. Pass: plugin list returned normally.
+  If this fails it means the filter is over-blocking.
