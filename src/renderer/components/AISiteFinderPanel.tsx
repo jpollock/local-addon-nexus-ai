@@ -145,7 +145,7 @@ const messageStyle = (role: 'user' | 'assistant'): React.CSSProperties => ({
   padding: '8px 12px',
   marginBottom: '8px',
   borderRadius: '6px',
-  backgroundColor: role === 'user' ? '#e0f2fe' : '#fef3c7',
+  backgroundColor: role === 'user' ? 'var(--nxai-chat-user-bg, #e0f2fe)' : 'var(--nxai-chat-assistant-bg, #fef3c7)',
   fontSize: '13px',
   color: role === 'user' ? '#0c4a6e' : '#78350f', // Dark text on light backgrounds
 });
@@ -154,7 +154,7 @@ const filtersDisplayStyle: React.CSSProperties = {
   marginTop: '16px',
   padding: '12px',
   borderRadius: '6px',
-  backgroundColor: '#f0fdf4',
+  backgroundColor: 'var(--nxai-filter-bg, #f0fdf4)',
   border: '1px solid #86efac',
 };
 
@@ -180,7 +180,7 @@ const errorStyle: React.CSSProperties = {
   marginTop: '12px',
   padding: '12px',
   borderRadius: '6px',
-  backgroundColor: '#fef2f2',
+  backgroundColor: 'var(--nxai-error-bg, #fef2f2)',
   border: '1px solid #fca5a5',
   color: 'var(--color-error, #dc2626)',
   fontSize: '13px',

@@ -29,6 +29,10 @@ export function injectThemeVars(): void {
       --nxai-warn-text: #d97706;
       --nxai-status-neutral: #9ca3af;
       --nxai-danger-text: #ef4444;
+      --nxai-chat-user-bg: #e0f2fe;
+      --nxai-chat-assistant-bg: #fef3c7;
+      --nxai-filter-bg: #f0fdf4;
+      --nxai-error-bg: #fef2f2;
     }
     .Theme__Dark {
       --nxai-card-bg: #2a2a2a;
@@ -47,6 +51,10 @@ export function injectThemeVars(): void {
       --nxai-warn-text: #fbbf24;
       --nxai-status-neutral: #6b7280;
       --nxai-danger-text: #f87171;
+      --nxai-chat-user-bg: #0c4a6e;
+      --nxai-chat-assistant-bg: #78350f;
+      --nxai-filter-bg: #052e16;
+      --nxai-error-bg: #450a0a;
     }
   `;
   document.head.appendChild(style);
