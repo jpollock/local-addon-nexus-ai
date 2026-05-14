@@ -488,6 +488,8 @@ Each WordPress site can use a different AI provider for its content generation f
 
 ## WP Engine Settings
 
+The WP Engine section opens with **Environment Access Control** first — the safety setting that governs what Nexus can touch on your WPE installs.
+
 ### Environment Access Control
 
 Controls which WP Engine environment types Nexus can access for WP-CLI commands and content indexing.

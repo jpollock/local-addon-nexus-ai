@@ -972,6 +972,11 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     const section4 = React.createElement('div', { style: sectionStyle },
       this.renderSectionHeader('wpe', 'WP Engine'),
       wpeExpanded ? React.createElement('div', null,
+        // Environment Access Filter (first — production safety is highest priority)
+        this.renderWpeEnvironmentFilterSection(),
+
+        divider,
+
         // WPE API Credentials
         this.renderWpeCredsSection(),
 
@@ -1070,11 +1075,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
               )
             : null,
         ),
-
-        divider,
-
-        // Environment Access Filter (first — production safety is highest priority)
-        this.renderWpeEnvironmentFilterSection(),
 
         divider,
 
