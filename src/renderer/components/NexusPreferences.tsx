@@ -1073,13 +1073,13 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
         divider,
 
-        // Deep Scan Account Filter
-        this.renderWpeAccountFilterSection(),
+        // Environment Access Filter (first — production safety is highest priority)
+        this.renderWpeEnvironmentFilterSection(),
 
         divider,
 
-        // Environment Access Filter
-        this.renderWpeEnvironmentFilterSection(),
+        // Deep Scan Account Filter
+        this.renderWpeAccountFilterSection(),
 
         divider,
 
