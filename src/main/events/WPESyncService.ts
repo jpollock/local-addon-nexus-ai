@@ -19,7 +19,7 @@ import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import type { RegistryStorage } from '../content/IndexRegistry';
 import { STORAGE_KEYS } from '../../common/constants';
 import pLimit from 'p-limit';
-import { isWpeEnvironmentAllowed } from '../mcp/utils/environment-filter';
+import { isWpeEnvironmentAllowed, DEFAULT_WPE_ALLOWED_ENVIRONMENTS } from '../mcp/utils/environment-filter';
 import type { NexusSettings } from '../../common/types';
 
 export interface WPESyncProgress {
@@ -178,7 +178,7 @@ export class WPESyncService {
       if (wpeInstallsFiltered.length < beforeEnvFilter) {
         this.logger.info(
           `[WPESyncService] Environment filter: ${wpeInstallsFiltered.length} of ${beforeEnvFilter} installs in scope ` +
-          `(allowed: ${(nexusSettings.wpeAllowedEnvironments ?? ['staging', 'development']).join(', ')})`
+          `(allowed: ${(nexusSettings.wpeAllowedEnvironments ?? DEFAULT_WPE_ALLOWED_ENVIRONMENTS).join(', ')})`
         );
       }
 
@@ -729,6 +729,16 @@ export class WPESyncService {
         php_version: install.phpVersion ?? undefined,
         account_id: install.account?.id ?? undefined,
       };
+
+      // Check environment filter before syncing
+      const settings = (this.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+      if (!isWpeEnvironmentAllowed(wpeInstall.environment, settings)) {
+        this.logger?.info(
+          `[WPESyncService] Skipping ${wpeInstall.install_name} — ` +
+          `environment '${wpeInstall.environment}' not in allowed list`,
+        );
+        return;
+      }
 
       await this.syncInstall(wpeInstall);
       this.logger?.info(`[WPESyncService] Successfully re-synced: ${install.name}`);

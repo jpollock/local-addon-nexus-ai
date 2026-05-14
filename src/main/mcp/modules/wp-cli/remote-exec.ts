@@ -104,8 +104,7 @@ export async function resolveTarget(
     }
 
     // Read user settings for environment filter
-    const registryStorage = (services as any).registryStorage;
-    const settings = (registryStorage?.get?.(STORAGE_KEYS.SETTINGS) ?? {}) as { wpeAllowedEnvironments?: ('production' | 'staging' | 'development')[] };
+    const settings = (services.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as { wpeAllowedEnvironments?: ('production' | 'staging' | 'development')[] };
 
     // Resolve install_name: it could be a local site name (look up its WPE connection)
     // or a direct WPE install name. Try local site first.
@@ -132,8 +131,10 @@ export async function resolveTarget(
 
     // Not a local site — treat install_name as a direct WPE install name.
     // Look up environment from WPE install cache; default to 'production' when unknown (safe default).
-    const wpeCache = registryStorage?.get?.(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs: Array<{ install_name: string; environment: string; install_id: string }>; syncedAt: number } | null;
-    const cachedInstall = wpeCache?.installs?.find((i) => i.install_name === installName);
+    const wpeCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs: Array<{ installName?: string; install_name?: string; environment: string; installId?: string; install_id?: string }>; syncedAt: number } | null;
+    const cachedInstall = wpeCache?.installs?.find(
+      (i: any) => (i.installName ?? i.install_name) === installName
+    );
     const environment = cachedInstall?.environment ?? 'production';
 
     if (!isWpeEnvironmentAllowed(environment, settings)) {
@@ -149,7 +150,7 @@ export async function resolveTarget(
       installName,
       installInfo: {
         installName,
-        installId: cachedInstall?.install_id ?? '',
+        installId: cachedInstall?.installId ?? cachedInstall?.install_id ?? '',
         remoteSiteId: '',
         primaryDomain: `${installName}.wpengine.com`,
         environment,
