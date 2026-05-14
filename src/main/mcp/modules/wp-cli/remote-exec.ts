@@ -2,6 +2,8 @@ import { McpToolResult, NexusServices, LocalSiteInfo } from '../../types';
 import { WpCliResult, WpeInstallInfo } from '../../local-services-bridge';
 import { resolveSite } from '../../site-resolver';
 import { error } from './preflight';
+import { isWpeEnvironmentAllowed } from '../../utils/environment-filter';
+import { STORAGE_KEYS } from '../../../../common/constants';
 
 // ---------------------------------------------------------------------------
 // Command Security (blocklist + whitelist)
@@ -101,12 +103,25 @@ export async function resolveTarget(
       );
     }
 
+    // Read user settings for environment filter
+    const registryStorage = (services as any).registryStorage;
+    const settings = (registryStorage?.get?.(STORAGE_KEYS.SETTINGS) ?? {}) as { wpeAllowedEnvironments?: ('production' | 'staging' | 'development')[] };
+
     // Resolve install_name: it could be a local site name (look up its WPE connection)
     // or a direct WPE install name. Try local site first.
     const site = resolveSite(installName, services.siteData);
     if (site) {
       const installInfo = await services.localServices.resolveWpeInstall(site.id);
       if (installInfo) {
+        // Linked-site path: environment is known from installInfo
+        if (!isWpeEnvironmentAllowed(installInfo.environment, settings)) {
+          const environment = installInfo.environment ?? 'production';
+          return error(
+            `Remote WP-CLI is not allowed on "${environment}" environments. ` +
+            `Enable production access in Nexus Preferences → WP Engine Environment Access, ` +
+            `or target a staging/development install instead.`,
+          );
+        }
         return { type: 'remote', installName: installInfo.installName, installInfo };
       }
       return error(
@@ -115,15 +130,29 @@ export async function resolveTarget(
       );
     }
 
-    // Not a local site — treat install_name as a direct WPE install name
+    // Not a local site — treat install_name as a direct WPE install name.
+    // Look up environment from WPE install cache; default to 'production' when unknown (safe default).
+    const wpeCache = registryStorage?.get?.(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs: Array<{ install_name: string; environment: string; install_id: string }>; syncedAt: number } | null;
+    const cachedInstall = wpeCache?.installs?.find((i) => i.install_name === installName);
+    const environment = cachedInstall?.environment ?? 'production';
+
+    if (!isWpeEnvironmentAllowed(environment, settings)) {
+      return error(
+        `Remote WP-CLI is not allowed on "${environment}" environments. ` +
+        `Enable production access in Nexus Preferences → WP Engine Environment Access, ` +
+        `or target a staging/development install instead.`,
+      );
+    }
+
     return {
       type: 'remote',
       installName,
       installInfo: {
         installName,
-        installId: '',
+        installId: cachedInstall?.install_id ?? '',
         remoteSiteId: '',
         primaryDomain: `${installName}.wpengine.com`,
+        environment,
       },
     };
   }
