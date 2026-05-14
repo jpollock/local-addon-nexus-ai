@@ -334,6 +334,21 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     });
   };
 
+  handleWpeEnvironmentToggle = (env: 'production' | 'staging' | 'development', checked: boolean): void => {
+    this.setState((prev) => {
+      const current: Array<'production' | 'staging' | 'development'> =
+        prev.settings.wpeAllowedEnvironments
+          ? [...prev.settings.wpeAllowedEnvironments]
+          : ['staging', 'development'];
+      const updated = checked
+        ? [...new Set([...current, env])] as Array<'production' | 'staging' | 'development'>
+        : current.filter((e) => e !== env) as Array<'production' | 'staging' | 'development'>;
+      const next = { ...prev.settings, wpeAllowedEnvironments: updated };
+      this.notifyChange(next);
+      return { settings: next };
+    });
+  };
+
   renderWpeAccountFilterSection(): React.ReactNode {
     const { wpeAccounts, settings } = this.state;
     if (wpeAccounts.length === 0) return null;
@@ -370,6 +385,63 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
             React.createElement('span', { style: { fontSize: '13px' } },
               account.name + (account.nickname ? ` (${account.nickname})` : ''),
             ),
+          );
+        }),
+      ),
+    );
+  }
+
+  renderWpeEnvironmentFilterSection(): React.ReactNode {
+    const { settings } = this.state;
+    const allowed: Array<'production' | 'staging' | 'development'> =
+      settings.wpeAllowedEnvironments ?? ['staging', 'development'];
+
+    const environments: Array<{
+      id: 'production' | 'staging' | 'development';
+      label: string;
+      warning?: string;
+    }> = [
+      { id: 'development', label: 'Development' },
+      { id: 'staging', label: 'Staging' },
+      {
+        id: 'production',
+        label: 'Production',
+        warning: 'Enables WP-CLI commands and content indexing on production sites',
+      },
+    ];
+
+    return React.createElement('div', { style: sectionStyle },
+      React.createElement('div', { style: labelStyle }, 'WP Engine Environment Access'),
+      React.createElement('div', { style: descStyle },
+        'Choose which WP Engine environment types Nexus can access for WP-CLI commands and content indexing. ' +
+        'Production is excluded by default to prevent accidental changes.',
+      ),
+      React.createElement('div', { style: { marginTop: '8px' } },
+        ...environments.map(({ id, label, warning }) => {
+          const isChecked = allowed.includes(id);
+          return React.createElement('div', { key: id, style: { marginBottom: '6px' } },
+            React.createElement('label', { style: checkboxRowStyle },
+              React.createElement('input', {
+                type: 'checkbox',
+                checked: isChecked,
+                onChange: (e: any) =>
+                  this.handleWpeEnvironmentToggle(id, e.target.checked),
+                style: { width: '16px', height: '16px', cursor: 'pointer' },
+              }),
+              React.createElement('span', {
+                style: { fontSize: '13px', fontWeight: id === 'production' ? 600 : 400 },
+              }, label),
+            ),
+            warning && isChecked
+              ? React.createElement('div', {
+                  style: {
+                    marginLeft: '28px',
+                    marginTop: '2px',
+                    fontSize: '11px',
+                    color: '#f59e0b',
+                  },
+                }, `⚠ ${warning}`)
+              : null,
           );
         }),
       ),
@@ -1003,6 +1075,11 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
         // Deep Scan Account Filter
         this.renderWpeAccountFilterSection(),
+
+        divider,
+
+        // Environment Access Filter
+        this.renderWpeEnvironmentFilterSection(),
 
         divider,
 
