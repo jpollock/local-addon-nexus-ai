@@ -18,6 +18,25 @@ function getText(result: any): string {
   return result.content[0].text;
 }
 
+// Default registryStorage allows delete on staging + development (blocks production).
+// Tests that expect staging/development operations to succeed use this.
+// Tests that expect production to be blocked rely on default DEFAULT_OPERATION_PERMISSIONS.
+const makeRegistryStorage = (wpeOperationPermissions?: Record<string, any>) => ({
+  get: jest.fn().mockImplementation((key: string) => {
+    if (key === 'nexus-ai_settings') {
+      return {
+        wpeOperationPermissions: wpeOperationPermissions ?? {
+          pull:   { development: true,  staging: true,  production: true  },
+          wpcli:  { development: true,  staging: true,  production: false },
+          push:   { development: true,  staging: true,  production: false },
+          delete: { development: true,  staging: true,  production: false },
+        },
+      };
+    }
+    return null;
+  }),
+});
+
 function makeMockServices(overrides: Record<string, any> = {}) {
   return {
     localServices: {
@@ -30,6 +49,7 @@ function makeMockServices(overrides: Record<string, any> = {}) {
       ...overrides,
     },
     siteData: { getSites: jest.fn().mockReturnValue({}) },
+    registryStorage: makeRegistryStorage(),
   } as any;
 }
 
@@ -225,7 +245,7 @@ describe('wpe_promote_environment — Tier 3 flow', () => {
       makeMockServices({ capiDirect: mockCapiDirect }),
     );
     expect(result.isError).toBe(true);
-    expect(getText(result)).toContain('Cannot promote to destination install');
+    expect(getText(result)).toContain('Operation blocked');
   });
 
   it('returns CAPI error when source install fetch fails', async () => {

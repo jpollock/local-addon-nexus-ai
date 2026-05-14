@@ -1,6 +1,8 @@
 import { McpToolHandler } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
-import { checkKnownEnvironmentAccess } from '../../utils/environment-filter';
+import { isOperationAllowed } from '../../utils/operation-permissions';
+import { STORAGE_KEYS } from '../../../../common/constants';
+import type { NexusSettings } from '../../../../common/types';
 
 export const promoteEnvironmentHandler: McpToolHandler = {
   definition: {
@@ -46,15 +48,16 @@ export const promoteEnvironmentHandler: McpToolHandler = {
         services.localServices!.capiDirect(`/installs/${sourceId}`) as Promise<any>,
         services.localServices!.capiDirect(`/installs/${destId}`) as Promise<any>,
       ]);
-      // Block promotion to a production environment if production is excluded
+      // Block promotion to a restricted environment
       const destEnvironment = (dstInstall as any)?.environment ?? 'production';
-      const envError = checkKnownEnvironmentAccess(
-        destEnvironment,
-        (services as any).registryStorage,
-      );
-      if (envError) {
+      const destInstallName = (dstInstall as any)?.name ?? destId;
+      const settings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+      if (!isOperationAllowed('delete', destEnvironment, settings, destInstallName)) {
         return {
-          content: [{ type: 'text' as const, text: `Cannot promote to destination install: ${envError}` }],
+          content: [{ type: 'text' as const, text:
+            `Operation blocked: this operation is not permitted on "${destEnvironment}" environments. ` +
+            `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`
+          }],
           isError: true,
         };
       }

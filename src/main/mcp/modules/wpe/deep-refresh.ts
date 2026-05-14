@@ -10,7 +10,9 @@
  */
 import { McpToolHandler } from '../../types';
 import { requireLocalServices } from './helpers';
-import { checkWpeInstallEnvironmentAccess } from '../../utils/environment-filter';
+import { isOperationAllowed } from '../../utils/operation-permissions';
+import { STORAGE_KEYS } from '../../../../common/constants';
+import type { NexusSettings } from '../../../../common/types';
 
 export const deepRefreshHandler: McpToolHandler = {
   definition: {
@@ -55,10 +57,20 @@ export const deepRefreshHandler: McpToolHandler = {
       };
     }
 
-    // Check environment filter before running SSH commands
-    const envError = checkWpeInstallEnvironmentAccess(installName, (services as any).registryStorage);
-    if (envError) {
-      return { content: [{ type: 'text' as const, text: envError }], isError: true };
+    // Check operation permissions before running SSH commands
+    const settings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+    const cache = (services as any).registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
+    const cachedInstall = cache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installName);
+    const environment = cachedInstall?.environment ?? 'production';
+    if (!isOperationAllowed('wpcli', environment, settings, installName)) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Operation blocked: this operation is not permitted on "${environment}" environments. ` +
+            `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`,
+        }],
+        isError: true,
+      };
     }
 
     const graphService = (services as any).graphService;

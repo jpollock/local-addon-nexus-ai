@@ -1,6 +1,8 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
-import { checkWpeInstallIdEnvironmentAccess } from '../../utils/environment-filter';
+import { isOperationAllowed } from '../../utils/operation-permissions';
+import { STORAGE_KEYS } from '../../../../common/constants';
+import type { NexusSettings } from '../../../../common/types';
 
 export const purgeCacheHandler: McpToolHandler = {
   definition: {
@@ -21,14 +23,18 @@ export const purgeCacheHandler: McpToolHandler = {
       const installId = args.install_id as string;
       if (!installId) return error('Install ID is required.');
 
-      // Check environment before purging cache
-      const envError = checkWpeInstallIdEnvironmentAccess(
-        installId,
-        (services as any).registryStorage,
-      );
-      if (envError) {
+      // Check operation permissions before purging cache
+      const settings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+      const cache = (services as any).registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installId?: string; environment?: string; installName?: string; install_name?: string }> } | null;
+      const cachedInstall = cache?.installs?.find((i: any) => i.installId === installId);
+      const installEnvironment = cachedInstall?.environment ?? 'production';
+      const installNameForCheck = cachedInstall?.installName ?? cachedInstall?.install_name ?? installId;
+      if (!isOperationAllowed('delete', installEnvironment, settings, installNameForCheck)) {
         return {
-          content: [{ type: 'text' as const, text: `Cannot purge cache: ${envError}` }],
+          content: [{ type: 'text' as const, text:
+            `Operation blocked: this operation is not permitted on "${installEnvironment}" environments. ` +
+            `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`
+          }],
           isError: true,
         };
       }

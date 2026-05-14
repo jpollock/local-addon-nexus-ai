@@ -1,6 +1,8 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
-import { checkKnownEnvironmentAccess } from '../../utils/environment-filter';
+import { isOperationAllowed } from '../../utils/operation-permissions';
+import { STORAGE_KEYS } from '../../../../common/constants';
+import type { NexusSettings } from '../../../../common/types';
 
 export const deleteSiteHandler: McpToolHandler = {
   definition: {
@@ -48,16 +50,16 @@ export const deleteSiteHandler: McpToolHandler = {
           installCount = String(installs.length);
 
           // Block if any install is in a restricted environment (e.g. production)
+          const settings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
           for (const inst of installs) {
-            const envErr = checkKnownEnvironmentAccess(
-              inst?.environment ?? 'production',
-              (services as any).registryStorage,
-            );
-            if (envErr) {
+            const instEnv = inst?.environment ?? 'production';
+            const instName = inst?.name ?? inst?.installName ?? inst?.install_name ?? inst?.id;
+            if (!isOperationAllowed('delete', instEnv, settings, instName)) {
               return {
                 content: [{
                   type: 'text' as const,
-                  text: `Cannot delete site: install "${inst?.name ?? inst?.installName ?? inst?.install_name ?? inst?.id}" is in a blocked environment. ${envErr}`,
+                  text: `Operation blocked: this operation is not permitted on "${instEnv}" environments. ` +
+                    `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`,
                 }],
                 isError: true,
               };
@@ -103,20 +105,22 @@ export const deleteSiteHandler: McpToolHandler = {
       return capiError(err);
     }
 
-    // Re-check environments before deletion
+    // Re-check permissions before deletion
     try {
       const confirmInstallsData = await services.localServices!.capiDirect(
         `/installs?site_id=${siteId}&limit=100`,
       ).catch(() => null) as any;
       const confirmInstalls: any[] = confirmInstallsData?.results ?? confirmInstallsData ?? [];
+      const confirmSettings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
       for (const inst of confirmInstalls) {
-        const envErr = checkKnownEnvironmentAccess(
-          inst?.environment ?? 'production',
-          (services as any).registryStorage,
-        );
-        if (envErr) {
+        const instEnv = inst?.environment ?? 'production';
+        const instName = inst?.name ?? inst?.id;
+        if (!isOperationAllowed('delete', instEnv, confirmSettings, instName)) {
           return {
-            content: [{ type: 'text' as const, text: `Cannot delete site: ${envErr}` }],
+            content: [{ type: 'text' as const, text:
+              `Operation blocked: this operation is not permitted on "${instEnv}" environments. ` +
+              `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`
+            }],
             isError: true,
           };
         }
@@ -125,7 +129,7 @@ export const deleteSiteHandler: McpToolHandler = {
       return {
         content: [{
           type: 'text' as const,
-          text: `Cannot verify environment access for site deletion: ${err?.message ?? 'CAPI error'}. Retry when the API is available.`,
+          text: `Cannot verify operation permissions for site deletion: ${err?.message ?? 'CAPI error'}. Retry when the API is available.`,
         }],
         isError: true,
       };

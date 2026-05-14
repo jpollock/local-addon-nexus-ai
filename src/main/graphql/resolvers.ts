@@ -8,7 +8,7 @@
 
 import type { ToolRegistry } from '../mcp/tool-registry';
 import * as ollamaClient from '../helpers/ollama-client';
-import { checkWpeInstallEnvironmentAccess } from '../mcp/utils/environment-filter';
+import { isOperationAllowed } from '../mcp/utils/operation-permissions';
 import {
   buildDateRange,
   getUsageCached,
@@ -1625,9 +1625,12 @@ export function createResolvers(context: ResolverContext) {
                         exitCode: 1,
                       };
                     }
-                    const envError = checkWpeInstallEnvironmentAccess(wpeRow.name, services.registryStorage);
-                    if (envError) {
-                      return { success: false, error: envError, stdout: '', stderr: '', exitCode: 1 };
+                    const bareSettings = (services.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as import('../../common/types').NexusSettings;
+                    const bareCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
+                    const bareCached = bareCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === wpeRow.name);
+                    const bareEnv = bareCached?.environment ?? 'production';
+                    if (!isOperationAllowed('wpcli', bareEnv, bareSettings, wpeRow.name)) {
+                      return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${bareEnv}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
                     }
                     const result = await services.localServices.remoteWpCliRun(wpeRow.name, command);
                     return {
@@ -1683,9 +1686,12 @@ export function createResolvers(context: ResolverContext) {
               };
             }
 
-            const envError = checkWpeInstallEnvironmentAccess(installNameOnly, services.registryStorage);
-            if (envError) {
-              return { success: false, error: envError, stdout: '', stderr: '', exitCode: 1 };
+            const wpeSettings = (services.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as import('../../common/types').NexusSettings;
+            const wpeCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
+            const wpeCached = wpeCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installNameOnly);
+            const wpeEnv = wpeCached?.environment ?? 'production';
+            if (!isOperationAllowed('wpcli', wpeEnv, wpeSettings, installNameOnly)) {
+              return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${wpeEnv}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
             }
 
             const result = await services.localServices.remoteWpCliRun(installNameOnly, command);

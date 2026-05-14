@@ -1,6 +1,8 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
-import { checkKnownEnvironmentAccess } from '../../utils/environment-filter';
+import { isOperationAllowed } from '../../utils/operation-permissions';
+import { STORAGE_KEYS } from '../../../../common/constants';
+import type { NexusSettings } from '../../../../common/types';
 
 export const deleteInstallHandler: McpToolHandler = {
   definition: {
@@ -33,14 +35,15 @@ export const deleteInstallHandler: McpToolHandler = {
         const environment: string = install?.environment ?? 'unknown';
         const domain: string = install?.primaryDomain ?? install?.cname ?? `${installName}.wpengine.com`;
 
-        // Block deletion of production installs if production is excluded
-        const envError = checkKnownEnvironmentAccess(
-          environment === 'unknown' ? 'production' : environment,
-          (services as any).registryStorage,
-        );
-        if (envError) {
+        // Block deletion if environment is not permitted
+        const settings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+        const effectiveEnv = environment === 'unknown' ? 'production' : environment;
+        if (!isOperationAllowed('delete', effectiveEnv, settings, installName)) {
           return {
-            content: [{ type: 'text' as const, text: `Cannot delete install: ${envError}` }],
+            content: [{ type: 'text' as const, text:
+              `Operation blocked: this operation is not permitted on "${effectiveEnv}" environments. ` +
+              `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`
+            }],
             isError: true,
           };
         }
@@ -113,16 +116,17 @@ export const deleteInstallHandler: McpToolHandler = {
       return capiError(err);
     }
 
-    // Re-check environment on confirmation path (prevents race between warning and deletion)
+    // Re-check permissions on confirmation path (prevents race between warning and deletion)
     try {
       const confirmInstall = await services.localServices!.capiDirect(`/installs/${installId}`) as any;
-      const confirmEnvError = checkKnownEnvironmentAccess(
-        confirmInstall?.environment ?? 'production',
-        (services as any).registryStorage,
-      );
-      if (confirmEnvError) {
+      const confirmEnv = confirmInstall?.environment ?? 'production';
+      const confirmSettings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+      if (!isOperationAllowed('delete', confirmEnv, confirmSettings, confirmInstall?.name ?? installId)) {
         return {
-          content: [{ type: 'text' as const, text: `Cannot delete install: ${confirmEnvError}` }],
+          content: [{ type: 'text' as const, text:
+            `Operation blocked: this operation is not permitted on "${confirmEnv}" environments. ` +
+            `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`
+          }],
           isError: true,
         };
       }
