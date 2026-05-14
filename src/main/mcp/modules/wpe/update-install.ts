@@ -1,5 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
+import { checkWpeInstallIdEnvironmentAccess } from '../../utils/environment-filter';
 
 export const updateInstallHandler: McpToolHandler = {
   definition: {
@@ -20,6 +21,19 @@ export const updateInstallHandler: McpToolHandler = {
   async execute(args, services): Promise<McpToolResult> {
     try {
       const installId = args.install_id as string;
+
+      // Check environment before modifying install (cache lookup by install_id)
+      const envError = checkWpeInstallIdEnvironmentAccess(
+        installId,
+        (services as any).registryStorage,
+      );
+      if (envError) {
+        return {
+          content: [{ type: 'text' as const, text: `Cannot update install: ${envError}` }],
+          isError: true,
+        };
+      }
+
       const phpVersion = args.php_version as string | undefined;
       const environment = args.environment as string | undefined;
 

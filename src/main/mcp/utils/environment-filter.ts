@@ -51,6 +51,32 @@ export function checkWpeInstallEnvironmentAccess(
 }
 
 /**
+ * Check if an operation on a WPE install is allowed by the environment filter.
+ * Looks up the install by its UUID (install_id) in the local cache.
+ * Defaults to 'production' when the install is not in cache (safe default).
+ * Returns null if allowed, or an error message string if blocked.
+ */
+export function checkWpeInstallIdEnvironmentAccess(
+  installId: string,
+  registryStorage: { get(key: string): unknown } | null | undefined,
+): string | null {
+  const settings = (registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as { wpeAllowedEnvironments?: ('production' | 'staging' | 'development')[] };
+  const cache = registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as
+    { installs?: Array<{ installId?: string; environment?: string }> } | null;
+  const cached = cache?.installs?.find((i: any) => i.installId === installId);
+  const environment = cached?.environment ?? 'production';
+
+  if (!isWpeEnvironmentAllowed(environment, settings)) {
+    return (
+      `Operation blocked: "${environment}" environments are not enabled in Nexus. ` +
+      `Enable production access in Nexus Preferences → WP Engine Environment Access, ` +
+      `or target a staging/development install instead.`
+    );
+  }
+  return null;
+}
+
+/**
  * Check if an operation on a WPE install with a KNOWN environment string is allowed.
  * Use this when you already have the environment from a CAPI response or install data.
  * Returns null if allowed, or an error message string if blocked.
