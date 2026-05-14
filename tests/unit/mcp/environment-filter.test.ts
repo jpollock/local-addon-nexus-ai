@@ -1,4 +1,4 @@
-import { isWpeEnvironmentAllowed, DEFAULT_WPE_ALLOWED_ENVIRONMENTS, checkWpeInstallEnvironmentAccess } from '../../../src/main/mcp/utils/environment-filter';
+import { isWpeEnvironmentAllowed, DEFAULT_WPE_ALLOWED_ENVIRONMENTS, checkWpeInstallEnvironmentAccess, checkKnownEnvironmentAccess } from '../../../src/main/mcp/utils/environment-filter';
 
 describe('DEFAULT_WPE_ALLOWED_ENVIRONMENTS', () => {
   it('excludes production', () => {
@@ -84,5 +84,45 @@ describe('checkWpeInstallEnvironmentAccess', () => {
     const result = checkWpeInstallEnvironmentAccess('unknown-install', storage);
     expect(result).not.toBeNull();
     expect(result).toContain('production');
+  });
+});
+
+describe('checkKnownEnvironmentAccess', () => {
+  const makeStorage = (settings: object) => ({
+    get: (key: string): unknown => key === 'nexus-ai_settings' ? settings : null,
+  });
+
+  it('returns null for staging with default settings', () => {
+    expect(checkKnownEnvironmentAccess('staging', makeStorage({}))).toBeNull();
+  });
+
+  it('returns null for development with default settings', () => {
+    expect(checkKnownEnvironmentAccess('development', makeStorage({}))).toBeNull();
+  });
+
+  it('returns error string for production with default settings', () => {
+    const result = checkKnownEnvironmentAccess('production', makeStorage({}));
+    expect(result).not.toBeNull();
+    expect(result).toContain('production');
+    expect(result).toContain('Nexus Preferences');
+  });
+
+  it('returns null for production when production is explicitly allowed', () => {
+    const result = checkKnownEnvironmentAccess(
+      'production',
+      makeStorage({ wpeAllowedEnvironments: ['production', 'staging', 'development'] }),
+    );
+    expect(result).toBeNull();
+  });
+
+  it('returns error for undefined environment (defaults to production)', () => {
+    const result = checkKnownEnvironmentAccess(undefined, makeStorage({}));
+    expect(result).not.toBeNull();
+    expect(result).toContain('production');
+  });
+
+  it('accepts null registryStorage and blocks production', () => {
+    const result = checkKnownEnvironmentAccess('production', null);
+    expect(result).not.toBeNull();
   });
 });

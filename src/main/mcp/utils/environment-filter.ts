@@ -49,3 +49,24 @@ export function checkWpeInstallEnvironmentAccess(
   }
   return null;
 }
+
+/**
+ * Check if an operation on a WPE install with a KNOWN environment string is allowed.
+ * Use this when you already have the environment from a CAPI response or install data.
+ * Returns null if allowed, or an error message string if blocked.
+ */
+export function checkKnownEnvironmentAccess(
+  environment: string | undefined,
+  registryStorage: { get(key: string): unknown } | null | undefined,
+): string | null {
+  const settings = (registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as { wpeAllowedEnvironments?: ('production' | 'staging' | 'development')[] };
+  if (!isWpeEnvironmentAllowed(environment, settings)) {
+    const env = environment ?? 'production';
+    return (
+      `Operation blocked: "${env}" environments are not enabled in Nexus. ` +
+      `Enable production access in Nexus Preferences → WP Engine Environment Access, ` +
+      `or target a staging/development install instead.`
+    );
+  }
+  return null;
+}
