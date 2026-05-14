@@ -41,7 +41,7 @@ describe('wpe_delete_install — Tier 3 flow', () => {
   it('without token: returns pre-confirmation with install details', async () => {
     const recentBackup = new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString();
     const mockCapiDirect = jest.fn()
-      .mockResolvedValueOnce({ name: 'mysite', environment: 'production', cname: 'mysite.wpengine.com' })
+      .mockResolvedValueOnce({ name: 'mysite', environment: 'staging', cname: 'mysite.wpengine.com' })
       .mockResolvedValueOnce({ results: [{ created_at: recentBackup }] });
 
     const result = await deleteInstallHandler.execute(
@@ -52,7 +52,7 @@ describe('wpe_delete_install — Tier 3 flow', () => {
     const text = getText(result);
     expect(text).toContain('⚠️ Confirm Deletion of Install');
     expect(text).toContain('**Name:** mysite');
-    expect(text).toContain('**Environment:** production');
+    expect(text).toContain('**Environment:** staging');
     expect(text).toContain('confirm_install_name: "mysite"');
     expect(text).toContain('_confirmationToken: "confirm"');
   });
@@ -112,7 +112,8 @@ describe('wpe_delete_install — Tier 3 flow', () => {
 
   it('with token and correct confirm_install_name: proceeds with DELETE and returns success', async () => {
     const mockCapiDirect = jest.fn()
-      .mockResolvedValueOnce({ name: 'mysite', environment: 'staging' })
+      .mockResolvedValueOnce({ name: 'mysite', environment: 'staging' }) // name-verify fetch
+      .mockResolvedValueOnce({ name: 'mysite', environment: 'staging' }) // env re-check fetch
       .mockResolvedValueOnce({}); // DELETE response
 
     const result = await deleteInstallHandler.execute(
@@ -249,7 +250,10 @@ describe('wpe_promote_environment — Tier 3 flow', () => {
   });
 
   it('with token: calls POST /install_copy and returns success', async () => {
-    const mockCapiDirect = jest.fn().mockResolvedValueOnce({ id: 'op-xyz', status: 'pending' });
+    const mockCapiDirect = jest.fn()
+      .mockResolvedValueOnce({ id: 'inst-src', environment: 'staging' }) // src install fetch
+      .mockResolvedValueOnce({ id: 'inst-dst', environment: 'staging' }) // dst install fetch (env check)
+      .mockResolvedValueOnce({ id: 'op-xyz', status: 'pending' }); // POST /install_copy
 
     const result = await promoteEnvironmentHandler.execute(
       {

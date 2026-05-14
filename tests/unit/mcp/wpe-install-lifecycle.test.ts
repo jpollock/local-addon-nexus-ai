@@ -364,7 +364,7 @@ describe('wpe_delete_install', () => {
     // Backup is 30 days old
     const oldDate = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
     mockCapiDirect
-      .mockResolvedValueOnce({ name: 'mysite', environment: 'production', cname: 'mysite.wpengine.com' })
+      .mockResolvedValueOnce({ name: 'mysite', environment: 'staging', cname: 'mysite.wpengine.com' })
       .mockResolvedValueOnce({ results: [{ created_at: oldDate }] });
 
     const result = await deleteInstallHandler.execute(
@@ -391,8 +391,9 @@ describe('wpe_delete_install', () => {
 
   it('confirmed with correct install name: calls DELETE and returns success', async () => {
     mockCapiDirect
-      .mockResolvedValueOnce({ name: 'mysite', environment: 'staging' })
-      .mockResolvedValueOnce({});
+      .mockResolvedValueOnce({ name: 'mysite', environment: 'staging' }) // name-verify fetch
+      .mockResolvedValueOnce({ name: 'mysite', environment: 'staging' }) // env re-check fetch
+      .mockResolvedValueOnce({}); // DELETE response
 
     const result = await deleteInstallHandler.execute(
       { install_id: 'inst-1', confirm_install_name: 'mysite', _confirmationToken: 'confirm' },
