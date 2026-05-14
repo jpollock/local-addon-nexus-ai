@@ -2004,6 +2004,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#environment-access-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Access Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#account-management" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3574,6 +3585,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/wpe-access-control/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WPE Access Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3851,6 +3890,17 @@
   
     <nav class="md-nav" aria-label="WP Engine Settings">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#environment-access-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Access Control
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#account-management" class="md-nav__link">
@@ -4742,411 +4792,437 @@
 <a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h2 id="wp-engine-settings">WP Engine Settings<a class="headerlink" href="#wp-engine-settings" title="Permanent link">&para;</a></h2>
-<h3 id="account-management">Account Management<a class="headerlink" href="#account-management" title="Permanent link">&para;</a></h3>
+<p>The WP Engine section opens with <strong>Environment Access Control</strong> first — the safety setting that governs what Nexus can touch on your WPE installs.</p>
+<h3 id="environment-access-control">Environment Access Control<a class="headerlink" href="#environment-access-control" title="Permanent link">&para;</a></h3>
+<p>Controls which WP Engine environment types Nexus can access for WP-CLI commands and content indexing.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>│ Connected Accounts                      │
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>│ WP Engine Environment Access            │
 <a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>│                                         │
-<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>│ ● Personal Account                     │
-<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>│   Status: ✓ Connected                  │
-<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>│   Sites: 5 | Installs: 12              │
-<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>│   Last sync: 2 hours ago                │
-<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>│   [Refresh] [Disconnect]                │
-<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>│                                         │
-<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>│ ○ Agency Account                       │
-<a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>│   Status: ✓ Connected                  │
-<a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>│   Sites: 24 | Installs: 68             │
-<a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>│   Last sync: 1 day ago                  │
-<a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>│   [Refresh] [Disconnect]                │
-<a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a>│                                         │
-<a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>│ [+ Add Account]                         │
-<a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a>│                                         │
-<a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a>│ Default Account: Personal Account ▼     │
-<a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a>│ (Used for new sites and pull/push)      │
-<a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a>└─────────────────────────────────────────┘
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>│ Choose which environment types Nexus    │
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>│ can access for WP-CLI and content       │
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>│ indexing. Production is excluded by     │
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>│ default.                                │
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>│                                         │
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>│ ☑ Development                          │
+<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>│ ☑ Staging                              │
+<a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>│ ☐ Production                           │
+<a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>│   ⚠ Enables WP-CLI commands and        │
+<a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>│     content indexing on production      │
+<a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>│     sites                               │
+<a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a>└─────────────────────────────────────────┘
+</code></pre></div>
+<p><strong>Default:</strong> staging and development only. Production is opt-in.</p>
+<p><strong>What this controls:</strong>
+- Remote WP-CLI over SSH (<code>wp_plugin_list</code>, <code>wp_core_version</code>, etc.)
+- Content indexing and twin sync
+- CAPI write operations (<code>wpe_promote_environment</code>, <code>wpe_delete_install</code>, <code>wpe_delete_site</code>, <code>wpe_update_install</code>, <code>wpe_purge_cache</code>)</p>
+<p><strong>What it does NOT block:</strong> Read-only CAPI operations (<code>wpe_get_installs</code>, <code>wpe_get_install</code>, etc.) and <code>local_wpe_push</code> / <code>local_wpe_pull</code>.</p>
+<p>See <a href="../../reference/wpe-access-control/">WP Engine Access Control</a> for the complete reference.</p>
+<h3 id="account-management">Account Management<a class="headerlink" href="#account-management" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>┌─────────────────────────────────────────┐
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>│ Connected Accounts                      │
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>│                                         │
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>│ ● Personal Account                     │
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>│   Status: ✓ Connected                  │
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>│   Sites: 5 | Installs: 12              │
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>│   Last sync: 2 hours ago                │
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>│   [Refresh] [Disconnect]                │
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>│                                         │
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>│ ○ Agency Account                       │
+<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>│   Status: ✓ Connected                  │
+<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>│   Sites: 24 | Installs: 68             │
+<a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>│   Last sync: 1 day ago                  │
+<a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>│   [Refresh] [Disconnect]                │
+<a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>│                                         │
+<a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>│ [+ Add Account]                         │
+<a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>│                                         │
+<a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a>│ Default Account: Personal Account ▼     │
+<a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a>│ (Used for new sites and pull/push)      │
+<a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h3 id="sync-settings">Sync Settings<a class="headerlink" href="#sync-settings" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>│ Pull/Push Defaults                      │
-<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>│                                         │
-<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>│ Default Pull Options:                   │
-<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>│ ☑ Database                             │
-<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>│ ☑ Files (wp-content)                   │
-<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>│ ☐ Plugins                              │
-<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>│ ☐ Themes                               │
-<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>│ ☑ Create backup before pull            │
-<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>│                                         │
-<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>│ Default Push Options:                   │
-<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>│ ☑ Database                             │
-<a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>│ ☑ Files (wp-content)                   │
-<a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>│ ☐ Plugins                              │
-<a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>│ ☐ Themes                               │
-<a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>│ ☑ Create WPE backup first              │
-<a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>│ ☑ Dry run preview                      │
-<a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a>│                                         │
-<a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a>│ Search &amp; Replace:                       │
-<a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>│ ☑ Auto-replace domains                 │
-<a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a>│ ☑ Update site URL                      │
-<a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a>│ ☑ Update home URL                      │
-<a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a>│ Custom replacements: [Edit...]          │
-<a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a>│                                         │
-<a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a>│ Safety:                                 │
-<a id="__codelineno-16-26" name="__codelineno-16-26" href="#__codelineno-16-26"></a>│ ● Require confirmation for production  │
-<a id="__codelineno-16-27" name="__codelineno-16-27" href="#__codelineno-16-27"></a>│ ○ Allow all without confirmation       │
-<a id="__codelineno-16-28" name="__codelineno-16-28" href="#__codelineno-16-28"></a>└─────────────────────────────────────────┘
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>┌─────────────────────────────────────────┐
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>│ Pull/Push Defaults                      │
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>│                                         │
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>│ Default Pull Options:                   │
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>│ ☑ Database                             │
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>│ ☑ Files (wp-content)                   │
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>│ ☐ Plugins                              │
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>│ ☐ Themes                               │
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>│ ☑ Create backup before pull            │
+<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>│                                         │
+<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>│ Default Push Options:                   │
+<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>│ ☑ Database                             │
+<a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>│ ☑ Files (wp-content)                   │
+<a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>│ ☐ Plugins                              │
+<a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>│ ☐ Themes                               │
+<a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>│ ☑ Create WPE backup first              │
+<a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>│ ☑ Dry run preview                      │
+<a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>│                                         │
+<a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>│ Search &amp; Replace:                       │
+<a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>│ ☑ Auto-replace domains                 │
+<a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a>│ ☑ Update site URL                      │
+<a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a>│ ☑ Update home URL                      │
+<a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a>│ Custom replacements: [Edit...]          │
+<a id="__codelineno-17-24" name="__codelineno-17-24" href="#__codelineno-17-24"></a>│                                         │
+<a id="__codelineno-17-25" name="__codelineno-17-25" href="#__codelineno-17-25"></a>│ Safety:                                 │
+<a id="__codelineno-17-26" name="__codelineno-17-26" href="#__codelineno-17-26"></a>│ ● Require confirmation for production  │
+<a id="__codelineno-17-27" name="__codelineno-17-27" href="#__codelineno-17-27"></a>│ ○ Allow all without confirmation       │
+<a id="__codelineno-17-28" name="__codelineno-17-28" href="#__codelineno-17-28"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h3 id="ssh-configuration">SSH Configuration<a class="headerlink" href="#ssh-configuration" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>│ SSH Settings                            │
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>│                                         │
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>│ Connection Pooling:                     │
-<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>│ ☑ Enable ControlMaster                 │
-<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>│ Persist for: [10] minutes               │
-<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>│                                         │
-<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>│ SSH Key:                                │
-<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>│ ○ Use Local&#39;s SSH key                  │
-<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>│ ● Custom key path:                     │
-<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>│   ~/.ssh/wpe_rsa                        │
-<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>│   [Browse...]                           │
-<a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>│                                         │
-<a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>│ Timeout:                                │
-<a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>│ Connection: [30] seconds                │
-<a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>│ Command execution: [60] seconds         │
-<a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>│                                         │
-<a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>│ Diagnostics:                            │
-<a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>│ Active connections: 2                   │
-<a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>│ [View Connections] [Close All]          │
-<a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a>└─────────────────────────────────────────┘
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>┌─────────────────────────────────────────┐
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>│ SSH Settings                            │
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>│                                         │
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>│ Connection Pooling:                     │
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>│ ☑ Enable ControlMaster                 │
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>│ Persist for: [10] minutes               │
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>│                                         │
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>│ SSH Key:                                │
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>│ ○ Use Local&#39;s SSH key                  │
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>│ ● Custom key path:                     │
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>│   ~/.ssh/wpe_rsa                        │
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>│   [Browse...]                           │
+<a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>│                                         │
+<a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>│ Timeout:                                │
+<a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>│ Connection: [30] seconds                │
+<a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a>│ Command execution: [60] seconds         │
+<a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a>│                                         │
+<a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a>│ Diagnostics:                            │
+<a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a>│ Active connections: 2                   │
+<a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a>│ [View Connections] [Close All]          │
+<a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h2 id="safety-settings">Safety Settings<a class="headerlink" href="#safety-settings" title="Permanent link">&para;</a></h2>
 <h3 id="confirmation-levels">Confirmation Levels<a class="headerlink" href="#confirmation-levels" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>│ Operation Safety                        │
-<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>│                                         │
-<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>│ Tier 1 (Safe - Read-only):              │
-<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>│ ○ Always confirm                       │
-<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>│ ● Never confirm                        │
-<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>│                                         │
-<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>│ Tier 2 (Caution - Modifications):       │
-<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>│ ● Always confirm                       │
-<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>│ ○ Confirm on production only           │
-<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>│ ○ Never confirm                        │
-<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>│                                         │
-<a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>│ Tier 3 (Destructive - Deletions):       │
-<a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>│ ● Require confirmation token           │
-<a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>│ ○ Always confirm (no token)            │
-<a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a>│ ○ Confirm on production only           │
-<a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a>│                                         │
-<a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a>│ Custom Confirmation Token:               │
-<a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a>│ [DELETE] (type to confirm deletions)    │
-<a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a>└─────────────────────────────────────────┘
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>┌─────────────────────────────────────────┐
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>│ Operation Safety                        │
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>│                                         │
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>│ Tier 1 (Safe - Read-only):              │
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>│ ○ Always confirm                       │
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>│ ● Never confirm                        │
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>│                                         │
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>│ Tier 2 (Caution - Modifications):       │
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>│ ● Always confirm                       │
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>│ ○ Confirm on production only           │
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>│ ○ Never confirm                        │
+<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>│                                         │
+<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>│ Tier 3 (Destructive - Deletions):       │
+<a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>│ ● Require confirmation token           │
+<a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a>│ ○ Always confirm (no token)            │
+<a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a>│ ○ Confirm on production only           │
+<a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a>│                                         │
+<a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a>│ Custom Confirmation Token:               │
+<a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a>│ [DELETE] (type to confirm deletions)    │
+<a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h3 id="pre-flight-checks">Pre-Flight Checks<a class="headerlink" href="#pre-flight-checks" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>│ Safety Checks                           │
-<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>│                                         │
-<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>│ Before Operations:                      │
-<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>│ ☑ Verify site is running               │
-<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>│ ☑ Check disk space                     │
-<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>│ ☑ Verify WP-CLI available              │
-<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>│ ☑ Check for conflicting operations     │
-<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>│                                         │
-<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>│ Before Bulk Operations:                 │
-<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>│ ☑ Preview affected sites               │
-<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>│ ☑ Estimate operation time              │
-<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>│ ☑ Warn if &gt; 10 sites                   │
-<a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>│ ☑ Require explicit confirmation         │
-<a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a>│                                         │
-<a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a>│ Before Destructive Operations:          │
-<a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a>│ ☑ Create automatic backup              │
-<a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a>│ ☑ Verify backup is restorable          │
-<a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a>│ ☑ Show rollback instructions           │
-<a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a>│ ☑ Log all actions for audit            │
-<a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a>│                                         │
-<a id="__codelineno-19-22" name="__codelineno-19-22" href="#__codelineno-19-22"></a>│ Rollback:                               │
-<a id="__codelineno-19-23" name="__codelineno-19-23" href="#__codelineno-19-23"></a>│ ☑ Enable automatic rollback            │
-<a id="__codelineno-19-24" name="__codelineno-19-24" href="#__codelineno-19-24"></a>│ Rollback timeout: [5] minutes           │
-<a id="__codelineno-19-25" name="__codelineno-19-25" href="#__codelineno-19-25"></a>└─────────────────────────────────────────┘
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>┌─────────────────────────────────────────┐
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>│ Safety Checks                           │
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>│                                         │
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>│ Before Operations:                      │
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>│ ☑ Verify site is running               │
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>│ ☑ Check disk space                     │
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>│ ☑ Verify WP-CLI available              │
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>│ ☑ Check for conflicting operations     │
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>│                                         │
+<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>│ Before Bulk Operations:                 │
+<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>│ ☑ Preview affected sites               │
+<a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>│ ☑ Estimate operation time              │
+<a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>│ ☑ Warn if &gt; 10 sites                   │
+<a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a>│ ☑ Require explicit confirmation         │
+<a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a>│                                         │
+<a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a>│ Before Destructive Operations:          │
+<a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a>│ ☑ Create automatic backup              │
+<a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a>│ ☑ Verify backup is restorable          │
+<a id="__codelineno-20-19" name="__codelineno-20-19" href="#__codelineno-20-19"></a>│ ☑ Show rollback instructions           │
+<a id="__codelineno-20-20" name="__codelineno-20-20" href="#__codelineno-20-20"></a>│ ☑ Log all actions for audit            │
+<a id="__codelineno-20-21" name="__codelineno-20-21" href="#__codelineno-20-21"></a>│                                         │
+<a id="__codelineno-20-22" name="__codelineno-20-22" href="#__codelineno-20-22"></a>│ Rollback:                               │
+<a id="__codelineno-20-23" name="__codelineno-20-23" href="#__codelineno-20-23"></a>│ ☑ Enable automatic rollback            │
+<a id="__codelineno-20-24" name="__codelineno-20-24" href="#__codelineno-20-24"></a>│ Rollback timeout: [5] minutes           │
+<a id="__codelineno-20-25" name="__codelineno-20-25" href="#__codelineno-20-25"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h3 id="audit-logging">Audit Logging<a class="headerlink" href="#audit-logging" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>│ Audit Log Settings                      │
-<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>│                                         │
-<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>│ Logging:                                │
-<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>│ ☑ Enable audit log                    │
-<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>│ Log level: ● Detailed ○ Summary        │
-<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>│                                         │
-<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>│ Log Operations:                         │
-<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>│ ☑ Site scans                           │
-<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>│ ☑ Plugin installs/updates              │
-<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>│ ☑ WordPress updates                    │
-<a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>│ ☑ WP-CLI commands                      │
-<a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>│ ☑ Bulk operations                      │
-<a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a>│ ☑ WPE pull/push                        │
-<a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a>│ ☑ Deletions                            │
-<a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a>│                                         │
-<a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a>│ Storage:                                │
-<a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a>│ Location: ~/Library/.../audit.log       │
-<a id="__codelineno-20-19" name="__codelineno-20-19" href="#__codelineno-20-19"></a>│ Current size: 8.2 MB                    │
-<a id="__codelineno-20-20" name="__codelineno-20-20" href="#__codelineno-20-20"></a>│ Retention: [180] days                   │
-<a id="__codelineno-20-21" name="__codelineno-20-21" href="#__codelineno-20-21"></a>│                                         │
-<a id="__codelineno-20-22" name="__codelineno-20-22" href="#__codelineno-20-22"></a>│ Maintenance:                            │
-<a id="__codelineno-20-23" name="__codelineno-20-23" href="#__codelineno-20-23"></a>│ [View Log] [Export] [Clear Old Entries] │
-<a id="__codelineno-20-24" name="__codelineno-20-24" href="#__codelineno-20-24"></a>└─────────────────────────────────────────┘
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>┌─────────────────────────────────────────┐
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>│ Audit Log Settings                      │
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>│                                         │
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>│ Logging:                                │
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>│ ☑ Enable audit log                    │
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>│ Log level: ● Detailed ○ Summary        │
+<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>│                                         │
+<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>│ Log Operations:                         │
+<a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>│ ☑ Site scans                           │
+<a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>│ ☑ Plugin installs/updates              │
+<a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>│ ☑ WordPress updates                    │
+<a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a>│ ☑ WP-CLI commands                      │
+<a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a>│ ☑ Bulk operations                      │
+<a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a>│ ☑ WPE pull/push                        │
+<a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a>│ ☑ Deletions                            │
+<a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a>│                                         │
+<a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a>│ Storage:                                │
+<a id="__codelineno-21-18" name="__codelineno-21-18" href="#__codelineno-21-18"></a>│ Location: ~/Library/.../audit.log       │
+<a id="__codelineno-21-19" name="__codelineno-21-19" href="#__codelineno-21-19"></a>│ Current size: 8.2 MB                    │
+<a id="__codelineno-21-20" name="__codelineno-21-20" href="#__codelineno-21-20"></a>│ Retention: [180] days                   │
+<a id="__codelineno-21-21" name="__codelineno-21-21" href="#__codelineno-21-21"></a>│                                         │
+<a id="__codelineno-21-22" name="__codelineno-21-22" href="#__codelineno-21-22"></a>│ Maintenance:                            │
+<a id="__codelineno-21-23" name="__codelineno-21-23" href="#__codelineno-21-23"></a>│ [View Log] [Export] [Clear Old Entries] │
+<a id="__codelineno-21-24" name="__codelineno-21-24" href="#__codelineno-21-24"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h2 id="privacy-settings">Privacy Settings<a class="headerlink" href="#privacy-settings" title="Permanent link">&para;</a></h2>
 <h3 id="data-collection">Data Collection<a class="headerlink" href="#data-collection" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>│ Telemetry &amp; Analytics                   │
-<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>│                                         │
-<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>│ ☑ Enable anonymous usage data          │
-<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>│                                         │
-<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>│ What&#39;s Collected:                       │
-<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>│ ☑ Feature usage counts                 │
-<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>│ ☑ Error reports (no personal data)     │
-<a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>│ ☑ Performance metrics                  │
-<a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>│ ☐ Search queries (anonymized)          │
-<a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>│                                         │
-<a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a>│ What&#39;s NOT Collected:                   │
-<a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a>│ ✗ Site content                         │
-<a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a>│ ✗ Passwords or credentials             │
-<a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a>│ ✗ Personal information                 │
-<a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a>│ ✗ Database data                        │
-<a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a>│                                         │
-<a id="__codelineno-21-18" name="__codelineno-21-18" href="#__codelineno-21-18"></a>│ [View Privacy Policy] [Export My Data]  │
-<a id="__codelineno-21-19" name="__codelineno-21-19" href="#__codelineno-21-19"></a>└─────────────────────────────────────────┘
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>┌─────────────────────────────────────────┐
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>│ Telemetry &amp; Analytics                   │
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>│                                         │
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>│ ☑ Enable anonymous usage data          │
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>│                                         │
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>│ What&#39;s Collected:                       │
+<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>│ ☑ Feature usage counts                 │
+<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>│ ☑ Error reports (no personal data)     │
+<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>│ ☑ Performance metrics                  │
+<a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>│ ☐ Search queries (anonymized)          │
+<a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>│                                         │
+<a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>│ What&#39;s NOT Collected:                   │
+<a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>│ ✗ Site content                         │
+<a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a>│ ✗ Passwords or credentials             │
+<a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a>│ ✗ Personal information                 │
+<a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a>│ ✗ Database data                        │
+<a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a>│                                         │
+<a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a>│ [View Privacy Policy] [Export My Data]  │
+<a id="__codelineno-22-19" name="__codelineno-22-19" href="#__codelineno-22-19"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h3 id="data-storage">Data Storage<a class="headerlink" href="#data-storage" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>│ Local Data Storage                      │
-<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>│                                         │
-<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>│ Storage Location:                       │
-<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>│ ~/Library/Application Support/Local/    │
-<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>│ nexus-ai/                               │
-<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>│                                         │
-<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>│ Disk Usage:                             │
-<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>│ ├─ Vector indexes: 245 MB              │
-<a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>│ ├─ Database: 42 MB                     │
-<a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>│ ├─ Chat history: 12 MB                 │
-<a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>│ ├─ Logs: 8 MB                          │
-<a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>│ └─ Cache: 18 MB                        │
-<a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a>│ Total: 325 MB                           │
-<a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a>│                                         │
-<a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a>│ Data Security:                          │
-<a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a>│ ☑ Encrypt sensitive data               │
-<a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a>│ ☑ Secure file permissions              │
-<a id="__codelineno-22-19" name="__codelineno-22-19" href="#__codelineno-22-19"></a>│ Encryption: AES-256                     │
-<a id="__codelineno-22-20" name="__codelineno-22-20" href="#__codelineno-22-20"></a>│                                         │
-<a id="__codelineno-22-21" name="__codelineno-22-21" href="#__codelineno-22-21"></a>│ Cleanup:                                │
-<a id="__codelineno-22-22" name="__codelineno-22-22" href="#__codelineno-22-22"></a>│ [Clear Cache] [Optimize Storage]        │
-<a id="__codelineno-22-23" name="__codelineno-22-23" href="#__codelineno-22-23"></a>│ [Export All Data] [Delete All Data]     │
-<a id="__codelineno-22-24" name="__codelineno-22-24" href="#__codelineno-22-24"></a>└─────────────────────────────────────────┘
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>┌─────────────────────────────────────────┐
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>│ Local Data Storage                      │
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>│                                         │
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>│ Storage Location:                       │
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>│ ~/Library/Application Support/Local/    │
+<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>│ nexus-ai/                               │
+<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>│                                         │
+<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>│ Disk Usage:                             │
+<a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a>│ ├─ Vector indexes: 245 MB              │
+<a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>│ ├─ Database: 42 MB                     │
+<a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a>│ ├─ Chat history: 12 MB                 │
+<a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a>│ ├─ Logs: 8 MB                          │
+<a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a>│ └─ Cache: 18 MB                        │
+<a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a>│ Total: 325 MB                           │
+<a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a>│                                         │
+<a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a>│ Data Security:                          │
+<a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a>│ ☑ Encrypt sensitive data               │
+<a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a>│ ☑ Secure file permissions              │
+<a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a>│ Encryption: AES-256                     │
+<a id="__codelineno-23-20" name="__codelineno-23-20" href="#__codelineno-23-20"></a>│                                         │
+<a id="__codelineno-23-21" name="__codelineno-23-21" href="#__codelineno-23-21"></a>│ Cleanup:                                │
+<a id="__codelineno-23-22" name="__codelineno-23-22" href="#__codelineno-23-22"></a>│ [Clear Cache] [Optimize Storage]        │
+<a id="__codelineno-23-23" name="__codelineno-23-23" href="#__codelineno-23-23"></a>│ [Export All Data] [Delete All Data]     │
+<a id="__codelineno-23-24" name="__codelineno-23-24" href="#__codelineno-23-24"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h3 id="privacy-controls">Privacy Controls<a class="headerlink" href="#privacy-controls" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>│ Content Privacy                         │
-<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>│                                         │
-<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>│ Indexing Exclusions:                    │
-<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>│ ☑ Skip private posts                   │
-<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>│ ☑ Skip password-protected content      │
-<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>│ ☑ Skip user email addresses            │
-<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>│ ☑ Skip payment information             │
-<a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a>│ ☑ Skip sensitive ACF fields            │
-<a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>│                                         │
-<a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a>│ Sensitive Field Patterns:               │
-<a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a>│ password, secret, api_key, token,       │
-<a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a>│ credit_card, ssn, [Edit...]             │
-<a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a>│                                         │
-<a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a>│ AI Chat Privacy:                        │
-<a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a>│ ☑ Don&#39;t send sensitive data to AI      │
-<a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a>│ ☑ Redact credentials in responses      │
-<a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a>│ ☑ Clear context after session          │
-<a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a>│                                         │
-<a id="__codelineno-23-20" name="__codelineno-23-20" href="#__codelineno-23-20"></a>│ Data Retention:                         │
-<a id="__codelineno-23-21" name="__codelineno-23-21" href="#__codelineno-23-21"></a>│ ☑ Auto-delete old scan data (&gt; 90 days)│
-<a id="__codelineno-23-22" name="__codelineno-23-22" href="#__codelineno-23-22"></a>│ ☑ Auto-delete chat history (&gt; 90 days) │
-<a id="__codelineno-23-23" name="__codelineno-23-23" href="#__codelineno-23-23"></a>│ ☑ Auto-delete logs (&gt; 180 days)        │
-<a id="__codelineno-23-24" name="__codelineno-23-24" href="#__codelineno-23-24"></a>└─────────────────────────────────────────┘
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>┌─────────────────────────────────────────┐
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>│ Content Privacy                         │
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>│                                         │
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>│ Indexing Exclusions:                    │
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>│ ☑ Skip private posts                   │
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>│ ☑ Skip password-protected content      │
+<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>│ ☑ Skip user email addresses            │
+<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>│ ☑ Skip payment information             │
+<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>│ ☑ Skip sensitive ACF fields            │
+<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>│                                         │
+<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>│ Sensitive Field Patterns:               │
+<a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>│ password, secret, api_key, token,       │
+<a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>│ credit_card, ssn, [Edit...]             │
+<a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>│                                         │
+<a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a>│ AI Chat Privacy:                        │
+<a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a>│ ☑ Don&#39;t send sensitive data to AI      │
+<a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a>│ ☑ Redact credentials in responses      │
+<a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a>│ ☑ Clear context after session          │
+<a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a>│                                         │
+<a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a>│ Data Retention:                         │
+<a id="__codelineno-24-21" name="__codelineno-24-21" href="#__codelineno-24-21"></a>│ ☑ Auto-delete old scan data (&gt; 90 days)│
+<a id="__codelineno-24-22" name="__codelineno-24-22" href="#__codelineno-24-22"></a>│ ☑ Auto-delete chat history (&gt; 90 days) │
+<a id="__codelineno-24-23" name="__codelineno-24-23" href="#__codelineno-24-23"></a>│ ☑ Auto-delete logs (&gt; 180 days)        │
+<a id="__codelineno-24-24" name="__codelineno-24-24" href="#__codelineno-24-24"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h2 id="advanced-settings">Advanced Settings<a class="headerlink" href="#advanced-settings" title="Permanent link">&para;</a></h2>
 <h3 id="database">Database<a class="headerlink" href="#database" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>│ Database Configuration                  │
-<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>│                                         │
-<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>│ SQLite Database:                        │
-<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>│ Location: ~/Library/.../metadata.db     │
-<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>│ Size: 42 MB                             │
-<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>│ ☑ Enable WAL mode (better performance)  │
-<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>│                                         │
-<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>│ LanceDB Vector Index:                   │
-<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>│ Location: ~/Library/.../vector-index.db │
-<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>│ Size: 245 MB                            │
-<a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>│ Dimensions: 384                         │
-<a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>│                                         │
-<a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>│ Maintenance:                            │
-<a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a>│ Last vacuum: 5 days ago                 │
-<a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a>│ Last optimize: 2 days ago               │
-<a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a>│ [Vacuum] [Optimize] [Rebuild]           │
-<a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a>│                                         │
-<a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a>│ Backup:                                 │
-<a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a>│ ☑ Auto-backup before rebuild           │
-<a id="__codelineno-24-21" name="__codelineno-24-21" href="#__codelineno-24-21"></a>│ Backup location: ~/Library/.../backups/ │
-<a id="__codelineno-24-22" name="__codelineno-24-22" href="#__codelineno-24-22"></a>│ [Backup Now] [Restore from Backup]      │
-<a id="__codelineno-24-23" name="__codelineno-24-23" href="#__codelineno-24-23"></a>│                                         │
-<a id="__codelineno-24-24" name="__codelineno-24-24" href="#__codelineno-24-24"></a>│ Danger Zone:                            │
-<a id="__codelineno-24-25" name="__codelineno-24-25" href="#__codelineno-24-25"></a>│ [Reset Database] [Delete All Indexes]   │
-<a id="__codelineno-24-26" name="__codelineno-24-26" href="#__codelineno-24-26"></a>└─────────────────────────────────────────┘
-</code></pre></div>
-<h3 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>│ Debug Logging                           │
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>│ Database Configuration                  │
 <a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>│                                         │
-<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>│ Log Level:                              │
-<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>│ ○ Error (minimal)                      │
-<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>│ ● Info (recommended)                   │
-<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>│ ○ Debug (verbose)                      │
-<a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>│ ○ Trace (very verbose)                 │
-<a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>│                                         │
-<a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>│ Log Output:                             │
-<a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>│ ☑ File (~/Library/.../logs/)           │
-<a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>│ ☑ Console (developer tools)            │
-<a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a>│ ☐ Syslog                               │
-<a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a>│                                         │
-<a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a>│ Log Rotation:                           │
-<a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a>│ Max file size: [10] MB                  │
-<a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a>│ Keep [7] log files                      │
-<a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a>│ Compress old logs: ☑ Yes               │
-<a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a>│                                         │
-<a id="__codelineno-25-20" name="__codelineno-25-20" href="#__codelineno-25-20"></a>│ Current Logs:                           │
-<a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a>│ nexus-ai.log (2.4 MB)                   │
-<a id="__codelineno-25-22" name="__codelineno-25-22" href="#__codelineno-25-22"></a>│ nexus-ai.log.1.gz (8.1 MB)              │
-<a id="__codelineno-25-23" name="__codelineno-25-23" href="#__codelineno-25-23"></a>│ nexus-ai.log.2.gz (7.9 MB)              │
-<a id="__codelineno-25-24" name="__codelineno-25-24" href="#__codelineno-25-24"></a>│                                         │
-<a id="__codelineno-25-25" name="__codelineno-25-25" href="#__codelineno-25-25"></a>│ [Open Log Folder] [Clear Logs]          │
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>│ SQLite Database:                        │
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>│ Location: ~/Library/.../metadata.db     │
+<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>│ Size: 42 MB                             │
+<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>│ ☑ Enable WAL mode (better performance)  │
+<a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>│                                         │
+<a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>│ LanceDB Vector Index:                   │
+<a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>│ Location: ~/Library/.../vector-index.db │
+<a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>│ Size: 245 MB                            │
+<a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>│ Dimensions: 384                         │
+<a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a>│                                         │
+<a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a>│ Maintenance:                            │
+<a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a>│ Last vacuum: 5 days ago                 │
+<a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a>│ Last optimize: 2 days ago               │
+<a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a>│ [Vacuum] [Optimize] [Rebuild]           │
+<a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a>│                                         │
+<a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a>│ Backup:                                 │
+<a id="__codelineno-25-20" name="__codelineno-25-20" href="#__codelineno-25-20"></a>│ ☑ Auto-backup before rebuild           │
+<a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a>│ Backup location: ~/Library/.../backups/ │
+<a id="__codelineno-25-22" name="__codelineno-25-22" href="#__codelineno-25-22"></a>│ [Backup Now] [Restore from Backup]      │
+<a id="__codelineno-25-23" name="__codelineno-25-23" href="#__codelineno-25-23"></a>│                                         │
+<a id="__codelineno-25-24" name="__codelineno-25-24" href="#__codelineno-25-24"></a>│ Danger Zone:                            │
+<a id="__codelineno-25-25" name="__codelineno-25-25" href="#__codelineno-25-25"></a>│ [Reset Database] [Delete All Indexes]   │
 <a id="__codelineno-25-26" name="__codelineno-25-26" href="#__codelineno-25-26"></a>└─────────────────────────────────────────┘
 </code></pre></div>
-<h3 id="experimental-features">Experimental Features<a class="headerlink" href="#experimental-features" title="Permanent link">&para;</a></h3>
+<h3 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>│ Beta Features                           │
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>│ Debug Logging                           │
 <a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>│                                         │
-<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>│ ⚠️ These features are experimental      │
-<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>│                                         │
-<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>│ ☐ Hybrid search mode                   │
-<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>│   Combine semantic + keyword search     │
-<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>│                                         │
-<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>│ ☐ Multi-model AI chat                  │
-<a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>│   Use multiple AI providers             │
-<a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a>│                                         │
-<a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a>│ ☐ Auto-optimization                    │
-<a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a>│   AI-suggested performance improvements │
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>│ Log Level:                              │
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>│ ○ Error (minimal)                      │
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>│ ● Info (recommended)                   │
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>│ ○ Debug (verbose)                      │
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>│ ○ Trace (very verbose)                 │
+<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>│                                         │
+<a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>│ Log Output:                             │
+<a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a>│ ☑ File (~/Library/.../logs/)           │
+<a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a>│ ☑ Console (developer tools)            │
+<a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a>│ ☐ Syslog                               │
 <a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a>│                                         │
-<a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a>│ ☐ Predictive scanning                  │
-<a id="__codelineno-26-16" name="__codelineno-26-16" href="#__codelineno-26-16"></a>│   Predict when sites need scanning      │
-<a id="__codelineno-26-17" name="__codelineno-26-17" href="#__codelineno-26-17"></a>│                                         │
-<a id="__codelineno-26-18" name="__codelineno-26-18" href="#__codelineno-26-18"></a>│ ☐ Cross-site analytics                 │
-<a id="__codelineno-26-19" name="__codelineno-26-19" href="#__codelineno-26-19"></a>│   Compare metrics across sites          │
-<a id="__codelineno-26-20" name="__codelineno-26-20" href="#__codelineno-26-20"></a>│                                         │
-<a id="__codelineno-26-21" name="__codelineno-26-21" href="#__codelineno-26-21"></a>│ ☐ Advanced WPE integration             │
-<a id="__codelineno-26-22" name="__codelineno-26-22" href="#__codelineno-26-22"></a>│   Deploy, staging promotion, cache      │
-<a id="__codelineno-26-23" name="__codelineno-26-23" href="#__codelineno-26-23"></a>│                                         │
-<a id="__codelineno-26-24" name="__codelineno-26-24" href="#__codelineno-26-24"></a>│ [Learn More] [Report Feedback]          │
-<a id="__codelineno-26-25" name="__codelineno-26-25" href="#__codelineno-26-25"></a>└─────────────────────────────────────────┘
+<a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a>│ Log Rotation:                           │
+<a id="__codelineno-26-16" name="__codelineno-26-16" href="#__codelineno-26-16"></a>│ Max file size: [10] MB                  │
+<a id="__codelineno-26-17" name="__codelineno-26-17" href="#__codelineno-26-17"></a>│ Keep [7] log files                      │
+<a id="__codelineno-26-18" name="__codelineno-26-18" href="#__codelineno-26-18"></a>│ Compress old logs: ☑ Yes               │
+<a id="__codelineno-26-19" name="__codelineno-26-19" href="#__codelineno-26-19"></a>│                                         │
+<a id="__codelineno-26-20" name="__codelineno-26-20" href="#__codelineno-26-20"></a>│ Current Logs:                           │
+<a id="__codelineno-26-21" name="__codelineno-26-21" href="#__codelineno-26-21"></a>│ nexus-ai.log (2.4 MB)                   │
+<a id="__codelineno-26-22" name="__codelineno-26-22" href="#__codelineno-26-22"></a>│ nexus-ai.log.1.gz (8.1 MB)              │
+<a id="__codelineno-26-23" name="__codelineno-26-23" href="#__codelineno-26-23"></a>│ nexus-ai.log.2.gz (7.9 MB)              │
+<a id="__codelineno-26-24" name="__codelineno-26-24" href="#__codelineno-26-24"></a>│                                         │
+<a id="__codelineno-26-25" name="__codelineno-26-25" href="#__codelineno-26-25"></a>│ [Open Log Folder] [Clear Logs]          │
+<a id="__codelineno-26-26" name="__codelineno-26-26" href="#__codelineno-26-26"></a>└─────────────────────────────────────────┘
+</code></pre></div>
+<h3 id="experimental-features">Experimental Features<a class="headerlink" href="#experimental-features" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>┌─────────────────────────────────────────┐
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>│ Beta Features                           │
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>│                                         │
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>│ ⚠️ These features are experimental      │
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>│                                         │
+<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>│ ☐ Hybrid search mode                   │
+<a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>│   Combine semantic + keyword search     │
+<a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a>│                                         │
+<a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a>│ ☐ Multi-model AI chat                  │
+<a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a>│   Use multiple AI providers             │
+<a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a>│                                         │
+<a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a>│ ☐ Auto-optimization                    │
+<a id="__codelineno-27-13" name="__codelineno-27-13" href="#__codelineno-27-13"></a>│   AI-suggested performance improvements │
+<a id="__codelineno-27-14" name="__codelineno-27-14" href="#__codelineno-27-14"></a>│                                         │
+<a id="__codelineno-27-15" name="__codelineno-27-15" href="#__codelineno-27-15"></a>│ ☐ Predictive scanning                  │
+<a id="__codelineno-27-16" name="__codelineno-27-16" href="#__codelineno-27-16"></a>│   Predict when sites need scanning      │
+<a id="__codelineno-27-17" name="__codelineno-27-17" href="#__codelineno-27-17"></a>│                                         │
+<a id="__codelineno-27-18" name="__codelineno-27-18" href="#__codelineno-27-18"></a>│ ☐ Cross-site analytics                 │
+<a id="__codelineno-27-19" name="__codelineno-27-19" href="#__codelineno-27-19"></a>│   Compare metrics across sites          │
+<a id="__codelineno-27-20" name="__codelineno-27-20" href="#__codelineno-27-20"></a>│                                         │
+<a id="__codelineno-27-21" name="__codelineno-27-21" href="#__codelineno-27-21"></a>│ ☐ Advanced WPE integration             │
+<a id="__codelineno-27-22" name="__codelineno-27-22" href="#__codelineno-27-22"></a>│   Deploy, staging promotion, cache      │
+<a id="__codelineno-27-23" name="__codelineno-27-23" href="#__codelineno-27-23"></a>│                                         │
+<a id="__codelineno-27-24" name="__codelineno-27-24" href="#__codelineno-27-24"></a>│ [Learn More] [Report Feedback]          │
+<a id="__codelineno-27-25" name="__codelineno-27-25" href="#__codelineno-27-25"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h2 id="keyboard-shortcuts">Keyboard Shortcuts<a class="headerlink" href="#keyboard-shortcuts" title="Permanent link">&para;</a></h2>
 <h3 id="customization">Customization<a class="headerlink" href="#customization" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>┌─────────────────────────────────────────┐
-<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>│ Keyboard Shortcuts                      │
-<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>│                                         │
-<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>│ Open Preferences:                       │
-<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>│ [Cmd] + [,]                             │
-<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>│                                         │
-<a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>│ Site Finder:                            │
-<a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a>│ [Cmd] + [F]                             │
-<a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a>│                                         │
-<a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a>│ AI Chat:                                │
-<a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a>│ [Cmd] + [Shift] + [C]                   │
-<a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a>│                                         │
-<a id="__codelineno-27-13" name="__codelineno-27-13" href="#__codelineno-27-13"></a>│ Smart Filters:                          │
-<a id="__codelineno-27-14" name="__codelineno-27-14" href="#__codelineno-27-14"></a>│ [Cmd] + [Shift] + [F]                   │
-<a id="__codelineno-27-15" name="__codelineno-27-15" href="#__codelineno-27-15"></a>│                                         │
-<a id="__codelineno-27-16" name="__codelineno-27-16" href="#__codelineno-27-16"></a>│ Scan All Sites:                         │
-<a id="__codelineno-27-17" name="__codelineno-27-17" href="#__codelineno-27-17"></a>│ [Cmd] + [Shift] + [S]                   │
-<a id="__codelineno-27-18" name="__codelineno-27-18" href="#__codelineno-27-18"></a>│                                         │
-<a id="__codelineno-27-19" name="__codelineno-27-19" href="#__codelineno-27-19"></a>│ [Customize Shortcuts...]                │
-<a id="__codelineno-27-20" name="__codelineno-27-20" href="#__codelineno-27-20"></a>│ [Reset to Defaults]                     │
-<a id="__codelineno-27-21" name="__codelineno-27-21" href="#__codelineno-27-21"></a>└─────────────────────────────────────────┘
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>┌─────────────────────────────────────────┐
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>│ Keyboard Shortcuts                      │
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>│                                         │
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>│ Open Preferences:                       │
+<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>│ [Cmd] + [,]                             │
+<a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>│                                         │
+<a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a>│ Site Finder:                            │
+<a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a>│ [Cmd] + [F]                             │
+<a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>│                                         │
+<a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>│ AI Chat:                                │
+<a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a>│ [Cmd] + [Shift] + [C]                   │
+<a id="__codelineno-28-12" name="__codelineno-28-12" href="#__codelineno-28-12"></a>│                                         │
+<a id="__codelineno-28-13" name="__codelineno-28-13" href="#__codelineno-28-13"></a>│ Smart Filters:                          │
+<a id="__codelineno-28-14" name="__codelineno-28-14" href="#__codelineno-28-14"></a>│ [Cmd] + [Shift] + [F]                   │
+<a id="__codelineno-28-15" name="__codelineno-28-15" href="#__codelineno-28-15"></a>│                                         │
+<a id="__codelineno-28-16" name="__codelineno-28-16" href="#__codelineno-28-16"></a>│ Scan All Sites:                         │
+<a id="__codelineno-28-17" name="__codelineno-28-17" href="#__codelineno-28-17"></a>│ [Cmd] + [Shift] + [S]                   │
+<a id="__codelineno-28-18" name="__codelineno-28-18" href="#__codelineno-28-18"></a>│                                         │
+<a id="__codelineno-28-19" name="__codelineno-28-19" href="#__codelineno-28-19"></a>│ [Customize Shortcuts...]                │
+<a id="__codelineno-28-20" name="__codelineno-28-20" href="#__codelineno-28-20"></a>│ [Reset to Defaults]                     │
+<a id="__codelineno-28-21" name="__codelineno-28-21" href="#__codelineno-28-21"></a>└─────────────────────────────────────────┘
 </code></pre></div>
 <h2 id="importexport-settings">Import/Export Settings<a class="headerlink" href="#importexport-settings" title="Permanent link">&para;</a></h2>
 <h3 id="exporting-configuration">Exporting Configuration<a class="headerlink" href="#exporting-configuration" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>Export Settings
-<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>
-<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>Select categories to export:
-<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>☑ General settings
-<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>☑ Scanning preferences
-<a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>☑ Search configuration
-<a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a>☑ AI chat settings
-<a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a>☐ WPE credentials (security risk)
-<a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>☑ Safety settings
-<a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>☑ Saved filters
-<a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a>☑ Site groups
-<a id="__codelineno-28-12" name="__codelineno-28-12" href="#__codelineno-28-12"></a>
-<a id="__codelineno-28-13" name="__codelineno-28-13" href="#__codelineno-28-13"></a>Format: ● JSON ○ YAML
-<a id="__codelineno-28-14" name="__codelineno-28-14" href="#__codelineno-28-14"></a>
-<a id="__codelineno-28-15" name="__codelineno-28-15" href="#__codelineno-28-15"></a>[Export Settings]
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>Export Settings
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>Select categories to export:
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>☑ General settings
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>☑ Scanning preferences
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>☑ Search configuration
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>☑ AI chat settings
+<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>☐ WPE credentials (security risk)
+<a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a>☑ Safety settings
+<a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a>☑ Saved filters
+<a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>☑ Site groups
+<a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a>
+<a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a>Format: ● JSON ○ YAML
+<a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a>
+<a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a>[Export Settings]
 </code></pre></div>
 <h3 id="importing-configuration">Importing Configuration<a class="headerlink" href="#importing-configuration" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>Import Settings
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>
-<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>⚠️ This will overwrite current settings
-<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>
-<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>Source: [Browse...] nexus-ai-settings.json
-<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>
-<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>Preview:
-<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>┌─────────────────────────────────────┐
-<a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a>│ 127 settings will be imported       │
-<a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a>│ ├─ General: 15 settings            │
-<a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>│ ├─ Scanning: 23 settings           │
-<a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a>│ ├─ Search: 18 settings             │
-<a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a>│ └─ ...                             │
-<a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a>└─────────────────────────────────────┘
-<a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a>
-<a id="__codelineno-29-16" name="__codelineno-29-16" href="#__codelineno-29-16"></a>☑ Create backup before import
-<a id="__codelineno-29-17" name="__codelineno-29-17" href="#__codelineno-29-17"></a>
-<a id="__codelineno-29-18" name="__codelineno-29-18" href="#__codelineno-29-18"></a>[Import Settings] [Cancel]
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>Import Settings
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>⚠️ This will overwrite current settings
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>Source: [Browse...] nexus-ai-settings.json
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>
+<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>Preview:
+<a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>┌─────────────────────────────────────┐
+<a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>│ 127 settings will be imported       │
+<a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>│ ├─ General: 15 settings            │
+<a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>│ ├─ Scanning: 23 settings           │
+<a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a>│ ├─ Search: 18 settings             │
+<a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a>│ └─ ...                             │
+<a id="__codelineno-30-14" name="__codelineno-30-14" href="#__codelineno-30-14"></a>└─────────────────────────────────────┘
+<a id="__codelineno-30-15" name="__codelineno-30-15" href="#__codelineno-30-15"></a>
+<a id="__codelineno-30-16" name="__codelineno-30-16" href="#__codelineno-30-16"></a>☑ Create backup before import
+<a id="__codelineno-30-17" name="__codelineno-30-17" href="#__codelineno-30-17"></a>
+<a id="__codelineno-30-18" name="__codelineno-30-18" href="#__codelineno-30-18"></a>[Import Settings] [Cancel]
 </code></pre></div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="reset-to-defaults">Reset to Defaults<a class="headerlink" href="#reset-to-defaults" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>⚠️ Reset All Settings
-<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>
-<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>This will:
-<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>- Restore default preferences
-<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>- Clear saved filters (unless exported)
-<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>- Reset keyboard shortcuts
-<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>- Clear cache and temporary data
-<a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>- Preserve: WPE credentials, scan data, chat history
-<a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>
-<a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>Are you sure?
-<a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>
-<a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a>[Cancel] [Reset to Defaults]
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>⚠️ Reset All Settings
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>This will:
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>- Restore default preferences
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>- Clear saved filters (unless exported)
+<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>- Reset keyboard shortcuts
+<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a>- Clear cache and temporary data
+<a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a>- Preserve: WPE credentials, scan data, chat history
+<a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a>
+<a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a>Are you sure?
+<a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a>
+<a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a>[Cancel] [Reset to Defaults]
 </code></pre></div>
 <h3 id="diagnostic-tools">Diagnostic Tools<a class="headerlink" href="#diagnostic-tools" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>Diagnostics
-<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>
-<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>System Info:
-<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>├─ Local version: 9.0.5
-<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>├─ Addon version: 1.5.2
-<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>├─ Node.js: 22.16.0
-<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a>├─ Electron: 37.8.0
-<a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a>└─ OS: macOS 14.3.1
-<a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a>
-<a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a>Health Check:
-<a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a>✓ Database accessible
-<a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a>✓ Vector index readable
-<a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a>✓ WP-CLI available
-<a id="__codelineno-31-14" name="__codelineno-31-14" href="#__codelineno-31-14"></a>✓ Ollama running
-<a id="__codelineno-31-15" name="__codelineno-31-15" href="#__codelineno-31-15"></a>✗ WPE connection (check credentials)
-<a id="__codelineno-31-16" name="__codelineno-31-16" href="#__codelineno-31-16"></a>
-<a id="__codelineno-31-17" name="__codelineno-31-17" href="#__codelineno-31-17"></a>[Run Full Diagnostic] [Export Report]
-<a id="__codelineno-31-18" name="__codelineno-31-18" href="#__codelineno-31-18"></a>[Contact Support]
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>Diagnostics
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>System Info:
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>├─ Local version: 9.0.5
+<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a>├─ Addon version: 1.5.2
+<a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a>├─ Node.js: 22.16.0
+<a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a>├─ Electron: 37.8.0
+<a id="__codelineno-32-8" name="__codelineno-32-8" href="#__codelineno-32-8"></a>└─ OS: macOS 14.3.1
+<a id="__codelineno-32-9" name="__codelineno-32-9" href="#__codelineno-32-9"></a>
+<a id="__codelineno-32-10" name="__codelineno-32-10" href="#__codelineno-32-10"></a>Health Check:
+<a id="__codelineno-32-11" name="__codelineno-32-11" href="#__codelineno-32-11"></a>✓ Database accessible
+<a id="__codelineno-32-12" name="__codelineno-32-12" href="#__codelineno-32-12"></a>✓ Vector index readable
+<a id="__codelineno-32-13" name="__codelineno-32-13" href="#__codelineno-32-13"></a>✓ WP-CLI available
+<a id="__codelineno-32-14" name="__codelineno-32-14" href="#__codelineno-32-14"></a>✓ Ollama running
+<a id="__codelineno-32-15" name="__codelineno-32-15" href="#__codelineno-32-15"></a>✗ WPE connection (check credentials)
+<a id="__codelineno-32-16" name="__codelineno-32-16" href="#__codelineno-32-16"></a>
+<a id="__codelineno-32-17" name="__codelineno-32-17" href="#__codelineno-32-17"></a>[Run Full Diagnostic] [Export Report]
+<a id="__codelineno-32-18" name="__codelineno-32-18" href="#__codelineno-32-18"></a>[Contact Support]
 </code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <h3 id="performance-tuning">Performance Tuning<a class="headerlink" href="#performance-tuning" title="Permanent link">&para;</a></h3>
