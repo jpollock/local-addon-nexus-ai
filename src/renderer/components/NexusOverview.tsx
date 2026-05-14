@@ -7,6 +7,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS, POLL_INTERVALS } from '../../common/constants';
+import { injectThemeVars } from '../utils/theme';
 import type { NexusSettings } from '../../common/types';
 import { EventStatsCards } from './EventStatsCards';
 import { EventTimeline } from './EventTimeline';
@@ -394,7 +395,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
 
   componentDidMount(): void {
     this.mounted = true;
-    this.injectCssVars();
+    injectThemeVars();
     this.fetchAll();
     this.pollTimer = setInterval(() => this.fetchAll(), POLL_INTERVALS.DASHBOARD_STATS_MS);
     
@@ -415,44 +416,6 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     if (this.searchTimer) clearTimeout(this.searchTimer);
     if (this.wpeSyncPassivePoll) clearInterval(this.wpeSyncPassivePoll);
     this.stopWpeSyncProgressPolling();
-  }
-
-  injectCssVars(): void {
-    const id = 'nexus-ai-dashboard-vars';
-    if (document.getElementById(id)) return;
-    const style = document.createElement('style');
-    style.id = id;
-    style.textContent = `
-      :root {
-        --nxai-card-bg: #ffffff;
-        --nxai-card-border: #e5e7eb;
-        --nxai-card-label: #6b7280;
-        --nxai-card-sub: #6b7280;
-        --nxai-card-text: #111827;
-        --nxai-section-label: #374151;
-        --nxai-code-bg: #f3f4f6;
-        --nxai-table-hover: #f9fafb;
-        --nxai-input-bg: #ffffff;
-        --nxai-input-border: #d1d5db;
-        --nxai-score-bg: #e5e7eb;
-        --nxai-score-fill: ${UI_COLORS.WPE_BRAND};
-      }
-      .Theme__Dark {
-        --nxai-card-bg: #2a2a2a;
-        --nxai-card-border: #404040;
-        --nxai-card-label: #9ca3af;
-        --nxai-card-sub: #9ca3af;
-        --nxai-card-text: #f3f4f6;
-        --nxai-section-label: #d1d5db;
-        --nxai-code-bg: #1f1f1f;
-        --nxai-table-hover: #333333;
-        --nxai-input-bg: #2a2a2a;
-        --nxai-input-border: #555;
-        --nxai-score-bg: #404040;
-        --nxai-score-fill: ${UI_COLORS.WPE_BRAND};
-      }
-    `;
-    document.head.appendChild(style);
   }
 
   fetchAll = async (): Promise<void> => {
@@ -1589,9 +1552,9 @@ renderTabBar(): React.ReactNode {
     return React.createElement('div', {
       style: { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', border: '1px solid var(--nxai-card-border, #e5e7eb)', borderRadius: '8px', backgroundColor: 'var(--nxai-card-bg, #fff)', marginBottom: '20px', fontSize: '12px' },
     },
-      React.createElement('span', { style: { color: '#6b7280', fontWeight: 600 } }, 'Deep Scan Scope:'),
-      React.createElement('span', { style: { color: '#111827', flex: 1 } }, scopeLabel),
-      React.createElement('span', { style: { color: '#9ca3af' } }, '· Manage in Preferences → Nexus AI'),
+      React.createElement('span', { style: { color: 'var(--nxai-card-sub, #6b7280)', fontWeight: 600 } }, 'Deep Scan Scope:'),
+      React.createElement('span', { style: { color: 'var(--nxai-card-text, #111827)', flex: 1 } }, scopeLabel),
+      React.createElement('span', { style: { color: 'var(--nxai-status-neutral, #9ca3af)' } }, '· Manage in Preferences → Nexus AI'),
     );
   }
 
@@ -1615,7 +1578,7 @@ renderTabBar(): React.ReactNode {
         title: disabled ? 'Requires WP Engine login' : undefined,
       }, isRunning ? loadingLabel : label),
       description
-        ? React.createElement('div', { style: { fontSize: '11px', color: '#6b7280', marginTop: '4px', lineHeight: '1.3' } }, description)
+        ? React.createElement('div', { style: { fontSize: '11px', color: 'var(--nxai-card-sub, #6b7280)', marginTop: '4px', lineHeight: '1.3' } }, description)
         : null,
       opId
         ? React.createElement('div', { style: { fontSize: '12px', color: UI_COLORS.STATUS_RUNNING, marginTop: '4px' } }, 'Started — check progress below.')
@@ -1625,7 +1588,7 @@ renderTabBar(): React.ReactNode {
 
   renderOperationsTab(): React.ReactNode {
     const groupStyle = { display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' as const };
-    const groupLabelStyle = { fontSize: '12px', fontWeight: '600' as const, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '8px' };
+    const groupLabelStyle = { fontSize: '12px', fontWeight: '600' as const, color: 'var(--nxai-card-sub, #6b7280)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '8px' };
 
     const wpeDisabled = !(this.state.stats?.remoteSites.wpeAuthenticated ?? false);
 
@@ -1689,11 +1652,11 @@ renderTabBar(): React.ReactNode {
           },
             React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' } },
               React.createElement('span', { style: { fontSize: '13px', fontWeight: 600 } }, 'WPE SSH sync'),
-              React.createElement('span', { style: { fontSize: '12px', color: '#6b7280' } },
+              React.createElement('span', { style: { fontSize: '12px', color: 'var(--nxai-card-sub, #6b7280)' } },
                 `${this.state.wpeSyncProgress.current} / ${this.state.wpeSyncProgress.total} sites`,
               ),
             ),
-            React.createElement('div', { style: { fontSize: '12px', color: '#6b7280' } },
+            React.createElement('div', { style: { fontSize: '12px', color: 'var(--nxai-card-sub, #6b7280)' } },
               this.state.wpeSyncProgress.currentSite
                 ? `Syncing: ${this.state.wpeSyncProgress.currentSite}`
                 : 'Starting...',
@@ -2345,7 +2308,7 @@ renderTabBar(): React.ReactNode {
             ),
             wpeStopping
               ? React.createElement('div', {
-                  style: { fontSize: '12px', color: '#f59e0b', marginTop: '4px', fontWeight: 500 },
+                  style: { fontSize: '12px', color: 'var(--nxai-warn-text, #f59e0b)', marginTop: '4px', fontWeight: 500 },
                 }, '⚠ Stopping after current batch completes…')
               : null,
           )
@@ -2358,7 +2321,7 @@ renderTabBar(): React.ReactNode {
             React.createElement('div', { style: subStyle },
               `${wpeSyncStats.fresh_count}/${wpeSyncStats.total} fresh`,
               wpeSyncStats.stale_count > 0
-                ? React.createElement('span', { style: { color: '#f59e0b' } },
+                ? React.createElement('span', { style: { color: 'var(--nxai-warn-text, #f59e0b)' } },
                     ` · ${wpeSyncStats.stale_count} need refresh (>${wpeSyncThresholdHours}h old)`,
                   )
                 : React.createElement('span', { style: { color: '#51BB7B' } }, ' · all up to date ✓'),

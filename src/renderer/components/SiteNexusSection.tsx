@@ -8,6 +8,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
+import { injectThemeVars } from '../utils/theme';
 import type { NexusSettings, AIProvider, SiteAIConfig, DbScanResult } from '../../common/types';
 
 interface SiteNexusSectionProps {
@@ -154,6 +155,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
   };
 
   componentDidMount(): void {
+    injectThemeVars();
     this.mounted = true;
     this.fetchData();
     this._onSettingsApplied = () => { if (this.mounted) this.fetchData(); };

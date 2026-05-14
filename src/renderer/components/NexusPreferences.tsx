@@ -438,7 +438,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
                     marginLeft: '28px',
                     marginTop: '2px',
                     fontSize: '11px',
-                    color: '#f59e0b',
+                    color: 'var(--nxai-warn-text, #f59e0b)',
                   },
                 }, `⚠ ${warning}`)
               : null,
@@ -642,7 +642,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     const statusColor = currentStatus === 'valid' ? UI_COLORS.STATUS_RUNNING
       : currentStatus === 'invalid' ? UI_COLORS.STATUS_ERROR
       : currentStatus === 'checking' ? UI_COLORS.WPE_BRAND
-      : '#999';
+      : 'var(--nxai-status-neutral, #9ca3af)';
 
     const statusLabel = currentStatus === 'valid' ? 'Valid'
       : currentStatus === 'invalid' ? 'Invalid'
@@ -767,7 +767,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     const hasChanges = wpePendingClear ||
       (wpeUsernameInput.trim() !== '' && wpePasswordInput.trim() !== '');
 
-    const statusColor = wpeCredentialsConfigured ? UI_COLORS.STATUS_RUNNING : '#999';
+    const statusColor = wpeCredentialsConfigured ? UI_COLORS.STATUS_RUNNING : 'var(--nxai-status-neutral, #9ca3af)';
     const statusLabel = wpeCredentialsConfigured ? 'Configured' : 'Not configured';
 
     return React.createElement('div', { style: sectionStyle },
