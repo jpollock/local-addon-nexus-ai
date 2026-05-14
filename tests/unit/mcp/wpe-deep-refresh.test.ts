@@ -41,14 +41,26 @@ function makeGraphService(overrides: Partial<{
   };
 }
 
+function makeRegistryStorage(installName = 'mysite', environment = 'staging') {
+  return {
+    get: (key: string) => {
+      if (key === 'nexus-ai_settings') return {};
+      if (key === 'nexus-ai_wpe_install_cache') return { installs: [{ installName, environment }] };
+      return null;
+    },
+  };
+}
+
 function makeServices(overrides: {
   localServices?: any;
   graphService?: any;
+  registryStorage?: any;
   noLocalServices?: boolean;
 } = {}) {
   return {
     localServices: overrides.noLocalServices ? undefined : (overrides.localServices ?? makeLocalServices()),
     graphService: overrides.graphService ?? makeGraphService(),
+    registryStorage: overrides.registryStorage ?? makeRegistryStorage(),
     // minimal stubs for the rest of NexusServices
     vectorStore: {} as any,
     embeddingService: {} as any,

@@ -10,6 +10,7 @@
  */
 import { McpToolHandler } from '../../types';
 import { requireLocalServices } from './helpers';
+import { checkWpeInstallEnvironmentAccess } from '../../utils/environment-filter';
 
 export const deepRefreshHandler: McpToolHandler = {
   definition: {
@@ -52,6 +53,12 @@ export const deepRefreshHandler: McpToolHandler = {
         }],
         isError: true,
       };
+    }
+
+    // Check environment filter before running SSH commands
+    const envError = checkWpeInstallEnvironmentAccess(installName, (services as any).registryStorage);
+    if (envError) {
+      return { content: [{ type: 'text' as const, text: envError }], isError: true };
     }
 
     const graphService = (services as any).graphService;

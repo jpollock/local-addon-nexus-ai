@@ -70,3 +70,4 @@ This is **expected and unfixable at the app level.** LanceDB's Rust native modul
 ## Known Pitfalls
 
 - [Smart Search MU plugin pitfalls](feedback_smart_search_mu_plugin.md) — `is_plugin_active()` fires too early in WordPress bootstrap; `siteStarted` races MySQL startup. Use filesystem checks in Node.js, not WP-CLI.
+- `wpeAllowedEnvironments` blocks SSH/WP-CLI on excluded environments — default excludes production. CAPI operations and push/pull are NOT affected. See `src/main/mcp/utils/environment-filter.ts`.

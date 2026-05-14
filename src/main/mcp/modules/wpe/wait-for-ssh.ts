@@ -10,6 +10,7 @@
  */
 import { McpToolHandler } from '../../types';
 import { requireLocalServices, capiError } from './helpers';
+import { checkWpeInstallEnvironmentAccess } from '../../utils/environment-filter';
 
 export const waitForSshHandler: McpToolHandler = {
   definition: {
@@ -44,6 +45,12 @@ export const waitForSshHandler: McpToolHandler = {
     const pollIntervalMs = 30000;
     const started = Date.now();
     let attempts = 0;
+
+    // Check environment filter before attempting SSH
+    const envError = checkWpeInstallEnvironmentAccess(installName, (services as any).registryStorage);
+    if (envError) {
+      return { content: [{ type: 'text' as const, text: envError }], isError: true };
+    }
 
     while (Date.now() - started < maxMs) {
       attempts++;
