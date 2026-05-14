@@ -247,6 +247,36 @@ export interface IpcResponse<T = unknown> {
 
 export type AIProvider = 'anthropic' | 'openai' | 'google' | 'ollama' | 'local-gateway';
 
+/** Per-environment on/off flags for one WPE operation type */
+export interface WpeEnvFlags {
+  development?: boolean;
+  staging?: boolean;
+  production?: boolean;
+}
+
+/**
+ * Granular per-operation permissions for WPE access control.
+ * Replaces wpeAllowedEnvironments. Missing keys fall back to DEFAULT_OPERATION_PERMISSIONS.
+ */
+export interface WpeOperationPermissions {
+  pull?:   WpeEnvFlags;  // local_wpe_pull
+  wpcli?:  WpeEnvFlags;  // WP-CLI over SSH (includes deep-refresh, wait-for-ssh)
+  push?:   WpeEnvFlags;  // local_wpe_push
+  delete?: WpeEnvFlags;  // delete-install, delete-site, promote-environment, update-install, purge-cache
+}
+
+/** A site-level override for one or more operations on a specific install+environment */
+export interface WpeSiteException {
+  installName: string;   // WPE install name (e.g. "mystore")
+  environment: string;   // 'production' | 'staging' | 'development'
+  overrides: {
+    pull?:   boolean;
+    wpcli?:  boolean;
+    push?:   boolean;
+    delete?: boolean;
+  };
+}
+
 export interface NexusSettings {
   autoIndex: boolean;
   excludedSiteIds: string[];
@@ -263,6 +293,10 @@ export interface NexusSettings {
   /** WPE environment types Nexus is allowed to access. Default: staging + development only.
    *  Set to include 'production' to enable production access. */
   wpeAllowedEnvironments?: ('production' | 'staging' | 'development')[];
+  /** Granular per-operation permissions. Replaces wpeAllowedEnvironments. */
+  wpeOperationPermissions?: WpeOperationPermissions;
+  /** Per-install, per-environment overrides for individual operations. */
+  wpeSiteExceptions?: WpeSiteException[];
 }
 
 export interface SiteAIConfig {
