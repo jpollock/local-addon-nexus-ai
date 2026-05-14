@@ -26,16 +26,21 @@ Go to **Local → Nexus Preferences → WP Engine → WP Engine Environment Acce
 ## What the Filter Controls
 
 **Blocked on excluded environments:**
-- All `wp_*` MCP tools targeting a WPE install (plugin list/install/update, core version/update, user list, etc.)
+- All `wp_*` MCP tools targeting a WPE install (WP-CLI over SSH)
 - Content indexing and twin sync via `WPESyncService`
 - `wpe_site_deep_refresh` SSH commands
-- `wpe_wait_for_ssh` probing
-- `nexusWpCommand` GraphQL resolver (CLI fallback)
+- `wpe_promote_environment` — when the **destination** install is production
+- `wpe_delete_install` — when the install being deleted is production
+- `wpe_delete_site` — when any install on the site is production
+- `wpe_update_install` — when the install being modified is production
+- `wpe_purge_cache` — when the install being purged is production
 
 **Not affected by this filter:**
-- WPE CAPI (REST API) operations — `wpe_get_installs`, `wpe_create_backup`, `wpe_get_domains`, SSL/domain management, etc. These are read-only metadata calls, not code execution.
-- `local_wpe_push` / `local_wpe_pull` — these are Local's own file sync, not WP-CLI
-- Cached twin data — production sites already in the graph remain visible but won't refresh
+- WPE CAPI read operations — `wpe_get_installs`, `wpe_get_install`, `wpe_get_sites`, etc.
+- `wpe_create_backup` — protective operation, always allowed
+- `wpe_create_install`, `wpe_create_site` — creates new resources
+- `local_wpe_push` / `local_wpe_pull` — Local's file sync, not WP-CLI
+- Cached twin data — existing data is not cleared when environments are excluded
 
 ## CLI / MCP Setting
 
