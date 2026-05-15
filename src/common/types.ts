@@ -283,6 +283,10 @@ export interface NexusSettings {
   aiProvider?: AIProvider;
   aiModel?: string;      // Model name within provider
   onboardingDismissed?: boolean;
+  discoverProgress?: {
+    hasSearched?: boolean;    // user has run at least one comparison search
+    hasMcpDone?: boolean;     // user clicked "Done" on the MCP setup step
+  };
   useLocalGateway?: boolean; // Route all AI requests through Local AI Gateway
   wpeSyncIntervalHours?: number; // How often to auto-sync WPE sites (default: 8)
   wpeSyncAutoEnabled?: boolean;  // Whether auto-sync is enabled (default: true)

@@ -57,6 +57,10 @@ export const UpdateSettingsSchema = z.object({
   wpeOperationPermissions: WpeOperationPermissionsSchema,
   wpeSiteExceptions: z.array(WpeSiteExceptionSchema).nullable().optional(),
   wpeAllowedEnvironments: z.array(z.string()).optional(), // legacy — kept for migration
+  discoverProgress: z.object({
+    hasSearched: z.boolean().optional(),
+    hasMcpDone:  z.boolean().optional(),
+  }).optional(),
 }).strict();
 
 export const PluginSlugSchema = z

@@ -16,6 +16,7 @@ export const IPC_CHANNELS = {
   STOP_SITE: `${ADDON_PREFIX}:stop-site`,
   STATUS_CHANGE: `${ADDON_PREFIX}:status-change`,
   SEARCH: `${ADDON_PREFIX}:search`,
+  SEARCH_KEYWORD: `${ADDON_PREFIX}:search:keyword`,
   INDEX_SITE: `${ADDON_PREFIX}:index-site`,
   GET_SETTINGS: `${ADDON_PREFIX}:get-settings`,
   UPDATE_SETTINGS: `${ADDON_PREFIX}:update-settings`,
