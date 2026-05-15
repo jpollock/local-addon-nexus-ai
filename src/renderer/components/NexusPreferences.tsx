@@ -637,7 +637,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       const next = { ...prev.settings, wpeOperationPermissions: perms };
       this.notifyChange(next);
       return { settings: next };
-    });
+    }, () => { this.saveNow(this.state.settings); });
   };
 
   handleSiteExceptionToggle = (installName: string, environment: string, operation: WpeOperation, value: boolean): void => {
@@ -682,7 +682,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       const next = { ...prev.settings, wpeAccountFilter: updated };
       this.notifyChange(next);
       return { settings: next };
-    });
+    }, () => { this.saveNow(this.state.settings); });
   };
 
   handleAccountScopeSelectAll = (includeAll: boolean): void => {
@@ -690,7 +690,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       const next = { ...prev.settings, wpeAccountFilter: includeAll ? null : [] };
       this.notifyChange(next);
       return { settings: next };
-    });
+    }, () => { this.saveNow(this.state.settings); });
   };
 
   handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
