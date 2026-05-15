@@ -748,6 +748,20 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.GET_WPE_INSTALLS_CACHE, () => {
+    try {
+      const cache = registryStorage.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as
+        { installs?: Array<{ installName?: string; install_name?: string; environment?: string; primaryDomain?: string }> } | null;
+      return (cache?.installs ?? []).map((i) => ({
+        installName: i.installName ?? i.install_name ?? '',
+        environment: i.environment ?? 'production',
+        primaryDomain: i.primaryDomain ?? '',
+      })).filter((i) => i.installName);
+    } catch {
+      return [];
+    }
+  });
+
   safeHandle(IPC_CHANNELS.GET_SETTINGS, () => {
     try {
       const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;

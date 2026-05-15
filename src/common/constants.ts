@@ -179,6 +179,7 @@ export const IPC_CHANNELS = {
 
   // WPE Account Filter
   GET_WPE_ACCOUNTS: `${ADDON_PREFIX}:wpe:get-accounts`,
+  GET_WPE_INSTALLS_CACHE: `${ADDON_PREFIX}:wpe:get-installs-cache`,
 
   // UI Navigation
   NAVIGATE_TO_PREFERENCES: `${ADDON_PREFIX}:ui:navigate-to-preferences`,
