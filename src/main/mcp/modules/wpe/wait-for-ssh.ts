@@ -10,9 +10,8 @@
  */
 import { McpToolHandler } from '../../types';
 import { requireLocalServices, capiError } from './helpers';
-import { isOperationAllowed } from '../../utils/operation-permissions';
+import { isOperationAllowed, getEffectiveSettings } from '../../utils/operation-permissions';
 import { STORAGE_KEYS } from '../../../../common/constants';
-import type { NexusSettings } from '../../../../common/types';
 
 export const waitForSshHandler: McpToolHandler = {
   definition: {
@@ -49,7 +48,7 @@ export const waitForSshHandler: McpToolHandler = {
     let attempts = 0;
 
     // Check operation permissions before attempting SSH
-    const settings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+    const settings = getEffectiveSettings((services as any).registryStorage);
     const cache = (services as any).registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
     const cachedInstall = cache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installName);
     const environment = cachedInstall?.environment ?? 'production';

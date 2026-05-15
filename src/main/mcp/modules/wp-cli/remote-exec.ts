@@ -2,9 +2,8 @@ import { McpToolResult, NexusServices, LocalSiteInfo } from '../../types';
 import { WpCliResult, WpeInstallInfo } from '../../local-services-bridge';
 import { resolveSite } from '../../site-resolver';
 import { error } from './preflight';
-import { isOperationAllowed } from '../../utils/operation-permissions';
+import { isOperationAllowed, getEffectiveSettings } from '../../utils/operation-permissions';
 import { STORAGE_KEYS } from '../../../../common/constants';
-import type { NexusSettings } from '../../../../common/types';
 
 // ---------------------------------------------------------------------------
 // Command Security (blocklist + whitelist)
@@ -104,8 +103,8 @@ export async function resolveTarget(
       );
     }
 
-    // Read user settings for operation permissions
-    const settings = (services.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as Pick<NexusSettings, 'wpeOperationPermissions' | 'wpeSiteExceptions'>;
+    // Read user settings for operation permissions (with legacy migration applied)
+    const settings = getEffectiveSettings((services as any).registryStorage);
 
     // Resolve install_name: it could be a local site name (look up its WPE connection)
     // or a direct WPE install name. Try local site first.

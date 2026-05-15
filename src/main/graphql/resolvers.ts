@@ -8,7 +8,7 @@
 
 import type { ToolRegistry } from '../mcp/tool-registry';
 import * as ollamaClient from '../helpers/ollama-client';
-import { isOperationAllowed } from '../mcp/utils/operation-permissions';
+import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
 import {
   buildDateRange,
   getUsageCached,
@@ -1625,7 +1625,7 @@ export function createResolvers(context: ResolverContext) {
                         exitCode: 1,
                       };
                     }
-                    const bareSettings = (services.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as import('../../common/types').NexusSettings;
+                    const bareSettings = getEffectiveSettings(services.registryStorage);
                     const bareCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
                     const bareCached = bareCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === wpeRow.name);
                     const bareEnv = bareCached?.environment ?? 'production';
@@ -1686,7 +1686,7 @@ export function createResolvers(context: ResolverContext) {
               };
             }
 
-            const wpeSettings = (services.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as import('../../common/types').NexusSettings;
+            const wpeSettings = getEffectiveSettings(services.registryStorage);
             const wpeCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
             const wpeCached = wpeCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installNameOnly);
             const wpeEnv = wpeCached?.environment ?? 'production';

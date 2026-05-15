@@ -1,8 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
-import { isOperationAllowed } from '../../utils/operation-permissions';
-import { STORAGE_KEYS } from '../../../../common/constants';
-import type { NexusSettings } from '../../../../common/types';
+import { isOperationAllowed, getEffectiveSettings } from '../../utils/operation-permissions';
 
 export const deleteInstallHandler: McpToolHandler = {
   definition: {
@@ -36,7 +34,7 @@ export const deleteInstallHandler: McpToolHandler = {
         const domain: string = install?.primaryDomain ?? install?.cname ?? `${installName}.wpengine.com`;
 
         // Block deletion if environment is not permitted
-        const settings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+        const settings = getEffectiveSettings((services as any).registryStorage);
         const effectiveEnv = environment === 'unknown' ? 'production' : environment;
         if (!isOperationAllowed('delete', effectiveEnv, settings, installName)) {
           return {
@@ -120,7 +118,7 @@ export const deleteInstallHandler: McpToolHandler = {
     try {
       const confirmInstall = await services.localServices!.capiDirect(`/installs/${installId}`) as any;
       const confirmEnv = confirmInstall?.environment ?? 'production';
-      const confirmSettings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+      const confirmSettings = getEffectiveSettings((services as any).registryStorage);
       if (!isOperationAllowed('delete', confirmEnv, confirmSettings, confirmInstall?.name ?? installId)) {
         return {
           content: [{ type: 'text' as const, text:

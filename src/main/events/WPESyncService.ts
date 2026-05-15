@@ -19,8 +19,7 @@ import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import type { RegistryStorage } from '../content/IndexRegistry';
 import { STORAGE_KEYS } from '../../common/constants';
 import pLimit from 'p-limit';
-import { isOperationAllowed, migrateFromLegacyEnvFilter } from '../mcp/utils/operation-permissions';
-import type { NexusSettings } from '../../common/types';
+import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
 
 export interface WPESyncProgress {
   total: number;
@@ -170,11 +169,7 @@ export class WPESyncService {
       }));
 
       // Apply operation permissions filter — wpcli on production excluded by default
-      const nexusSettings = (this.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
-      const migratedPerms = migrateFromLegacyEnvFilter(nexusSettings);
-      const effectiveSettings = migratedPerms
-        ? { ...nexusSettings, wpeOperationPermissions: migratedPerms }
-        : nexusSettings;
+      const effectiveSettings = getEffectiveSettings(this.registryStorage);
       const beforeEnvFilter = wpeInstalls.length;
       const wpeInstallsFiltered = wpeInstalls.filter((i) =>
         isOperationAllowed('wpcli', i.environment, effectiveSettings, i.install_name)
@@ -735,12 +730,7 @@ export class WPESyncService {
       };
 
       // Check operation permissions before syncing
-      const settings = (this.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
-      const migratedPerms = migrateFromLegacyEnvFilter(settings);
-      const effectiveSettings = migratedPerms
-        ? { ...settings, wpeOperationPermissions: migratedPerms }
-        : settings;
-      if (!isOperationAllowed('wpcli', wpeInstall.environment, effectiveSettings, wpeInstall.install_name)) {
+      if (!isOperationAllowed('wpcli', wpeInstall.environment, getEffectiveSettings(this.registryStorage), wpeInstall.install_name)) {
         this.logger?.info(
           `[WPESyncService] Skipping ${wpeInstall.install_name} — ` +
           `wpcli not permitted on '${wpeInstall.environment}' environment`,

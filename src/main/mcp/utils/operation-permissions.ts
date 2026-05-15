@@ -1,4 +1,5 @@
 import type { NexusSettings, WpeOperationPermissions } from '../../../common/types';
+import { STORAGE_KEYS } from '../../../common/constants';
 
 type Operation = 'pull' | 'wpcli' | 'push' | 'delete';
 type EnvKey = 'development' | 'staging' | 'production';
@@ -6,8 +7,8 @@ type EnvKey = 'development' | 'staging' | 'production';
 export const DEFAULT_OPERATION_PERMISSIONS: Record<Operation, Record<EnvKey, boolean>> = {
   pull:   { development: true,  staging: true,  production: true  },
   wpcli:  { development: true,  staging: true,  production: false },
-  push:   { development: true,  staging: true,  production: false },
-  delete: { development: false, staging: false, production: false },
+  push:   { development: true,  staging: true,  production: false },  // also covers purge-cache, update-install
+  delete: { development: false, staging: false, production: false }, // true destructive: delete-install/site, promote-environment
 };
 
 /**
@@ -82,4 +83,19 @@ export function migrateFromLegacyEnvFilter(
     push:   { development: devAllowed,  staging: stagingAllowed, production: productionAllowed },
     delete: { development: false,       staging: false,          production: false },
   };
+}
+
+/**
+ * Get settings with legacy wpeAllowedEnvironments migrated to wpeOperationPermissions.
+ * Use this instead of reading registryStorage directly at enforcement points.
+ */
+export function getEffectiveSettings(
+  registryStorage: { get(key: string): unknown } | null | undefined,
+): Pick<NexusSettings, 'wpeOperationPermissions' | 'wpeSiteExceptions'> {
+  const raw = (registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+  const migrated = migrateFromLegacyEnvFilter(raw);
+  if (migrated) {
+    return { ...raw, wpeOperationPermissions: migrated };
+  }
+  return raw;
 }

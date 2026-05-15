@@ -1,8 +1,6 @@
 import { McpToolHandler } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
-import { isOperationAllowed } from '../../utils/operation-permissions';
-import { STORAGE_KEYS } from '../../../../common/constants';
-import type { NexusSettings } from '../../../../common/types';
+import { isOperationAllowed, getEffectiveSettings } from '../../utils/operation-permissions';
 
 export const promoteEnvironmentHandler: McpToolHandler = {
   definition: {
@@ -51,7 +49,7 @@ export const promoteEnvironmentHandler: McpToolHandler = {
       // Block promotion to a restricted environment
       const destEnvironment = (dstInstall as any)?.environment ?? 'production';
       const destInstallName = (dstInstall as any)?.name ?? destId;
-      const settings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+      const settings = getEffectiveSettings((services as any).registryStorage);
       if (!isOperationAllowed('delete', destEnvironment, settings, destInstallName)) {
         return {
           content: [{ type: 'text' as const, text:

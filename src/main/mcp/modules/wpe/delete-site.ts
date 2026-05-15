@@ -1,8 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
-import { isOperationAllowed } from '../../utils/operation-permissions';
-import { STORAGE_KEYS } from '../../../../common/constants';
-import type { NexusSettings } from '../../../../common/types';
+import { isOperationAllowed, getEffectiveSettings } from '../../utils/operation-permissions';
 
 export const deleteSiteHandler: McpToolHandler = {
   definition: {
@@ -50,7 +48,7 @@ export const deleteSiteHandler: McpToolHandler = {
           installCount = String(installs.length);
 
           // Block if any install is in a restricted environment (e.g. production)
-          const settings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+          const settings = getEffectiveSettings((services as any).registryStorage);
           for (const inst of installs) {
             const instEnv = inst?.environment ?? 'production';
             const instName = inst?.name ?? inst?.installName ?? inst?.install_name ?? inst?.id;
@@ -111,7 +109,7 @@ export const deleteSiteHandler: McpToolHandler = {
         `/installs?site_id=${siteId}&limit=100`,
       ).catch(() => null) as any;
       const confirmInstalls: any[] = confirmInstallsData?.results ?? confirmInstallsData ?? [];
-      const confirmSettings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+      const confirmSettings = getEffectiveSettings((services as any).registryStorage);
       for (const inst of confirmInstalls) {
         const instEnv = inst?.environment ?? 'production';
         const instName = inst?.name ?? inst?.id;

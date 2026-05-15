@@ -1,9 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
 import { ok, error, requireLocalServices } from './helpers';
-import { isOperationAllowed } from '../../utils/operation-permissions';
-import { STORAGE_KEYS } from '../../../../common/constants';
-import type { NexusSettings } from '../../../../common/types';
+import { isOperationAllowed, getEffectiveSettings } from '../../utils/operation-permissions';
 
 export const wpePushHandler: McpToolHandler = {
   definition: {
@@ -110,7 +108,7 @@ export const wpePushHandler: McpToolHandler = {
     }
 
     // Check push permission before firing the IPC call
-    const settings = ((services as any).registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+    const settings = getEffectiveSettings((services as any).registryStorage);
     if (!isOperationAllowed('push', environment, settings, installName)) {
       return {
         content: [{ type: 'text' as const, text:
