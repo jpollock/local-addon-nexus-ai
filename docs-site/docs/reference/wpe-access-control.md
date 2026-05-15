@@ -1,47 +1,57 @@
 ---
 title: WP Engine Environment Access Control
-description: Control which WP Engine environment types Nexus can access for WP-CLI and content sync
+description: Control which WP Engine accounts, operation types, and sites Nexus can access
 keywords: [wpe, environment, production, staging, development, access control, security]
 ---
 
-# WP Engine Environment Access Control
+# WP Engine Access Control
 
-Nexus can interact with WP Engine installs across three environment types: **production**, **staging**, and **development**. By default, production is excluded to prevent accidental changes to live sites.
+Nexus uses a three-gate model to control what it can do across your WP Engine fleet. All settings live in **Local → Nexus Preferences → WP Engine → WP Engine Access**.
 
-## Default Behaviour
+## Gate 1 — Account Scope
 
-| Environment | Default | What's affected |
-|-------------|---------|-----------------|
-| Development | Allowed | WP-CLI, content sync, twin refresh |
-| Staging | Allowed | WP-CLI, content sync, twin refresh |
-| Production | Blocked | WP-CLI, content sync, twin refresh |
+Controls which WP Engine accounts are visible in Nexus and included in operations. Excluded accounts are completely hidden — no metadata sync, no commands.
 
-## Enabling Production Access
+Click account chips in the header to quickly toggle individual accounts, or expand the full grid.
 
-Go to **Local → Nexus Preferences → WP Engine → WP Engine Environment Access** and check **Production**.
+## Gate 2 — Operation Permissions
 
-!!! warning "Production access"
-    Enabling production access allows Nexus to run WP-CLI commands and index content on live sites. Review any AI-suggested operations carefully before confirming them.
+Four operation types, each independently configurable per environment:
+
+| Operation | Dev default | Staging default | Production default |
+|-----------|-------------|-----------------|-------------------|
+| **Pull to local** | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **WP-CLI over SSH** | ✅ Allowed | ✅ Allowed | ❌ Blocked |
+| **Push to WPE** | ✅ Allowed | ✅ Allowed | ❌ Blocked |
+| **Delete / Promote** | ❌ Blocked | ❌ Blocked | ❌ Blocked |
+
+Click any operation card to expand it and toggle individual environment switches.
+
+**Read metadata** (installs, domains, SSL, usage via CAPI) is always permitted and cannot be disabled.
+
+## Gate 3 — Site Exceptions
+
+Override the defaults for specific installs. Expand an operation card and view the "Site exceptions" column. Exceptions show whether the override relaxes (↑) or tightens (↓) the global default.
+
+Site exceptions are manageable inline — click ✕ to remove one.
 
 ## What the Filter Controls
 
-**Blocked on excluded environments:**
-- All `wp_*` MCP tools targeting a WPE install (WP-CLI over SSH)
-- Content indexing and twin sync via `WPESyncService`
-- `wpe_site_deep_refresh` SSH commands
-- `wpe_promote_environment` — when the **destination** install is production
-- `wpe_delete_install` — when the install being deleted is production
-- `wpe_delete_site` — when any install on the site is production
-- `wpe_update_install` — when the install being modified is production
-- `wpe_purge_cache` — when the install being purged is production
+**WP-CLI blocked on excluded environments:**
+All `wp_*` MCP tools using `install_name`, WPESyncService content indexing, `wpe_site_deep_refresh`, and `wpe_wait_for_ssh`.
+
+**Push blocked on excluded environments:**
+`local_wpe_push`
+
+**Delete/Promote blocked on excluded environments:**
+`wpe_promote_environment` (destination check), `wpe_delete_install`, `wpe_delete_site`, `wpe_update_install`, `wpe_purge_cache`
 
 **Not affected by this filter:**
-- WPE CAPI read operations — `wpe_get_installs`, `wpe_get_install`, `wpe_get_sites`, etc.
+- WPE CAPI read operations (`wpe_get_installs`, `wpe_get_install`, `wpe_get_sites`, etc.)
 - `wpe_create_backup` — protective operation, always allowed
-- `wpe_create_install`, `wpe_create_site` — creates new resources
-- `local_wpe_push` / `local_wpe_pull` — Local's file sync, not WP-CLI
-- Cached twin data — existing data is not cleared when environments are excluded
+- `local_wpe_pull` — always configurable (default: allowed on all environments)
+- Cached twin data — existing data is not cleared when permissions change
 
-## CLI / MCP Setting
+## Migrating from v0.3.1
 
-The setting is currently configurable only via the Preferences UI. To check the current value programmatically, look for `wpeAllowedEnvironments` in the Nexus settings.
+In v0.3.1, the setting was `wpeAllowedEnvironments: ['staging', 'development']`. On first load, Nexus automatically converts this to the equivalent `wpeOperationPermissions` values. No manual action required.
