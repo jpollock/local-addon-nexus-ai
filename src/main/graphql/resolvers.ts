@@ -170,6 +170,81 @@ export function createResolvers(context: ResolverContext) {
   return {
     Mutation: {
       /**
+       * Get Nexus AI settings (all or single key by dotted path)
+       */
+      nexusGetSettings: (_: any, { key }: { key?: string }) => {
+        try {
+          const settings = (services.registryStorage!.get(STORAGE_KEYS.SETTINGS) ?? {}) as Record<string, any>;
+          if (key) {
+            const value = key.split('.').reduce((acc: any, k) => acc?.[k], settings);
+            if (value === undefined) {
+              return { success: false, error: `Key "${key}" not found in settings.` };
+            }
+            return { success: true, settings: JSON.stringify({ key, value }) };
+          }
+          return { success: true, settings: JSON.stringify(settings) };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      },
+
+      /**
+       * Update Nexus AI settings via key+value or a JSON patch object
+       */
+      nexusUpdateSettings: (_: any, { key, value, patch }: { key?: string; value?: string; patch?: string }) => {
+        try {
+          if (!key && !patch) {
+            return { success: false, error: 'Provide key+value to set a field, or patch with a JSON object.' };
+          }
+
+          let current = (services.registryStorage!.get(STORAGE_KEYS.SETTINGS) ?? {}) as Record<string, any>;
+
+          if (patch) {
+            let patchObj: Record<string, any>;
+            try { patchObj = JSON.parse(patch); } catch {
+              return { success: false, error: `patch is not valid JSON: ${patch}` };
+            }
+            for (const [k, v] of Object.entries(patchObj)) {
+              if (v !== null && typeof v === 'object' && !Array.isArray(v) &&
+                  current[k] !== null && typeof current[k] === 'object' && !Array.isArray(current[k])) {
+                current = { ...current, [k]: { ...current[k], ...v } };
+              } else {
+                current = { ...current, [k]: v };
+              }
+            }
+          } else if (key) {
+            if (value === undefined) {
+              return { success: false, error: 'Provide value= when using key=.' };
+            }
+            // Parse value
+            let parsed: unknown = value;
+            if (value === 'true') parsed = true;
+            else if (value === 'false') parsed = false;
+            else if (value === 'null') parsed = null;
+            else if (!isNaN(Number(value)) && value.trim() !== '') parsed = Number(value);
+            else { try { parsed = JSON.parse(value); } catch { /* string fallback */ } }
+
+            // Set by dotted path
+            const keys = key.split('.');
+            const result = { ...current };
+            let cur: Record<string, any> = result;
+            for (let i = 0; i < keys.length - 1; i++) {
+              cur[keys[i]] = cur[keys[i]] !== null && typeof cur[keys[i]] === 'object'
+                ? { ...cur[keys[i]] } : {};
+              cur = cur[keys[i]];
+            }
+            cur[keys[keys.length - 1]] = parsed;
+            current = result;
+          }
+
+          services.registryStorage!.set(STORAGE_KEYS.SETTINGS, current);
+          return { success: true, settings: JSON.stringify(current) };
+        } catch (err: any) {
+          return { success: false, error: err.message };
+        }
+      },
+
+      /**
        * Get current AI provider configuration
        */
       nexusAiGetConfig: () => {

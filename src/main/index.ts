@@ -25,6 +25,7 @@ import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence
 import { registerTelemetryTools } from './mcp/modules/telemetry-tools';
 import { getGatewayUsageHandler } from './mcp/modules/ai-gateway/get-gateway-usage';
 import { registerTelemetryControlTools } from './mcp/modules/telemetry-control-tools';
+import { registerNexusSettingsTools } from './mcp/modules/nexus-settings';
 import { createSearchToolsHandler } from './mcp/modules/search-tools';
 import { registerTestTools } from './mcp/modules/test-tools';
 import { saveConnectionInfo, loadConnectionInfo, deleteConnectionInfo } from './mcp/connection-info';
@@ -258,6 +259,7 @@ export default function main(context: any): void {
   registerTelemetryTools(registry);
   registry.register(getGatewayUsageHandler);
   registerTelemetryControlTools(registry);
+  registerNexusSettingsTools(registry);
   // search_tools registered last so it can search all other tools
   registry.register(createSearchToolsHandler(registry));
   if (process.env.NEXUS_E2E_MODE === '1') {

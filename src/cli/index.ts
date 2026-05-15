@@ -22,6 +22,7 @@ import { mcpCommand } from './commands/mcp';
 import { skillsCommand } from './commands/skills';
 import { doctorCommand } from './commands/doctor';
 import { troubleshootCommand } from './commands/troubleshoot';
+import { settingsCommand } from './commands/settings';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
 import { setBootstrapResult } from './utils/context';
@@ -50,6 +51,7 @@ program.addCommand(mcpCommand);
 program.addCommand(skillsCommand);
 program.addCommand(doctorCommand);
 program.addCommand(troubleshootCommand);
+program.addCommand(settingsCommand);
 
 // Global error handler
 process.on('unhandledRejection', (error: any) => {
