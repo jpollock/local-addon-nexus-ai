@@ -61,6 +61,8 @@ interface NexusPreferencesState {
   wpeCredsSaved: boolean;
   // Section expand/collapse state (Item 6)
   expandedSections: Set<string>;
+  expandedOps: Set<string>;
+  acctScopeExpanded: boolean;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -135,6 +137,16 @@ const rowStyle: React.CSSProperties = {
   marginBottom: '12px',
 };
 
+const WPE_OPERATION_DEFAULTS = {
+  pull:   { development: true,  staging: true,  production: true  },
+  wpcli:  { development: true,  staging: true,  production: false },
+  push:   { development: true,  staging: true,  production: false },
+  delete: { development: false, staging: false, production: false },
+} as const;
+
+type WpeOperation = keyof typeof WPE_OPERATION_DEFAULTS;
+type WpeEnv = 'development' | 'staging' | 'production';
+
 export class NexusPreferences extends React.Component<NexusPreferencesProps, NexusPreferencesState> {
   private mounted = false;
 
@@ -159,6 +171,8 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     wpePendingClear: false,
     wpeCredsSaved: false,
     expandedSections: new Set(['ai-provider']),
+    expandedOps: new Set<string>(),
+    acctScopeExpanded: false,
   };
 
   componentDidMount(): void {
@@ -308,149 +322,74 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     });
   };
 
-  handleWpeAccountFilterToggle = (accountId: string, checked: boolean): void => {
-    const { wpeAccounts } = this.state;
-    const allIds = wpeAccounts.map((a) => a.id);
-    this.setState((prev) => {
-      const current: string[] = prev.settings.wpeAccountFilter ?? allIds;
-      const next = checked
-        ? [...current.filter((id) => id !== accountId), accountId]
-        : current.filter((id) => id !== accountId);
-      const filter = next.length === allIds.length ? null : next.length === 0 ? [] : next;
-      const updated = { ...prev.settings, wpeAccountFilter: filter };
-      this.notifyChange(updated);
-      return { settings: updated };
-    });
-  };
 
-  handleWpeAccountFilterSelectAll = (checked: boolean): void => {
-    const { wpeAccounts } = this.state;
-    const allIds = wpeAccounts.map((a) => a.id);
-    this.setState((prev) => {
-      const filter = checked ? null : [];
-      const updated = { ...prev.settings, wpeAccountFilter: filter };
-      this.notifyChange(updated);
-      return { settings: updated };
-    });
-  };
-
-  handleWpeEnvironmentToggle = (env: 'production' | 'staging' | 'development', checked: boolean): void => {
-    this.setState((prev) => {
-      const current: Array<'production' | 'staging' | 'development'> =
-        prev.settings.wpeAllowedEnvironments
-          ? [...prev.settings.wpeAllowedEnvironments]
-          : ['staging', 'development'];
-      const updated = checked
-        ? [...new Set([...current, env])] as Array<'production' | 'staging' | 'development'>
-        : current.filter((e) => e !== env) as Array<'production' | 'staging' | 'development'>;
-      const next = { ...prev.settings, wpeAllowedEnvironments: updated };
-      this.notifyChange(next);
-      return { settings: next };
-    });
-  };
-
+  /** @deprecated Replaced by renderWpeAccessControlSection — stub retained for Task 4 cleanup */
   renderWpeAccountFilterSection(): React.ReactNode {
-    const { wpeAccounts, settings } = this.state;
-    if (wpeAccounts.length === 0) return null;
-
-    const allIds = wpeAccounts.map((a) => a.id);
-    const filter = settings.wpeAccountFilter;
-    const selectedIds: string[] = filter ?? allIds;
-    const allSelected = filter === null || filter === undefined || selectedIds.length === allIds.length;
-
-    return React.createElement('div', { style: sectionStyle },
-      React.createElement('div', { style: labelStyle }, 'Deep Scan Accounts'),
-      React.createElement('div', { style: descStyle },
-        'Choose which WP Engine accounts are included in SSH/WP-CLI deep scans and content indexing. Metadata sync (CAPI) always runs for all accounts.',
-      ),
-      React.createElement('label', { style: { ...checkboxRowStyle, fontWeight: 600 } },
-        React.createElement('input', {
-          type: 'checkbox',
-          checked: allSelected,
-          onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.handleWpeAccountFilterSelectAll(e.target.checked),
-          style: { width: '16px', height: '16px', cursor: 'pointer' },
-        }),
-        React.createElement('span', { style: { fontSize: '14px' } }, 'All accounts'),
-      ),
-      React.createElement('div', { style: { marginLeft: '4px', borderLeft: '2px solid rgba(128,128,128,0.15)', paddingLeft: '20px', marginTop: '4px' } },
-        ...wpeAccounts.map((account) => {
-          const isChecked = allSelected || selectedIds.includes(account.id);
-          return React.createElement('label', { key: account.id, style: checkboxRowStyle },
-            React.createElement('input', {
-              type: 'checkbox',
-              checked: isChecked,
-              onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.handleWpeAccountFilterToggle(account.id, e.target.checked),
-              style: { width: '16px', height: '16px', cursor: 'pointer' },
-            }),
-            React.createElement('span', { style: { fontSize: '13px' } },
-              account.name + (account.nickname ? ` (${account.nickname})` : ''),
-            ),
-          );
-        }),
-      ),
-    );
+    return null;
   }
 
+  /** @deprecated Replaced by renderWpeAccessControlSection — stub retained for Task 4 cleanup */
   renderWpeEnvironmentFilterSection(): React.ReactNode {
-    const { settings } = this.state;
-    const allowed: Array<'production' | 'staging' | 'development'> =
-      settings.wpeAllowedEnvironments ?? ['staging', 'development'];
-
-    const environments: Array<{
-      id: 'production' | 'staging' | 'development';
-      label: string;
-      warning?: string;
-    }> = [
-      { id: 'development', label: 'Development' },
-      { id: 'staging', label: 'Staging' },
-      {
-        id: 'production',
-        label: 'Production',
-        warning: 'Enables WP-CLI commands and content indexing on production sites',
-      },
-    ];
-
-    return React.createElement('div', { style: sectionStyle },
-      React.createElement('div', { style: labelStyle }, 'WP Engine Environment Access'),
-      React.createElement('div', { style: descStyle },
-        'Choose which WP Engine environment types Nexus can access for WP-CLI commands and content indexing. ' +
-        'Production is excluded by default to prevent accidental changes.',
-      ),
-      React.createElement('div', { style: { marginTop: '8px' } },
-        ...environments.map(({ id, label, warning }) => {
-          const isChecked = allowed.includes(id);
-          return React.createElement('div', { key: id, style: { marginBottom: '6px' } },
-            React.createElement('label', { style: checkboxRowStyle },
-              React.createElement('input', {
-                type: 'checkbox',
-                checked: isChecked,
-                onChange: (e: any) =>
-                  this.handleWpeEnvironmentToggle(id, e.target.checked),
-                style: { width: '16px', height: '16px', cursor: 'pointer' },
-              }),
-              React.createElement('span', {
-                style: { fontSize: '13px', fontWeight: id === 'production' ? 600 : 400 },
-              }, label),
-            ),
-            warning && isChecked
-              ? React.createElement('div', {
-                  style: {
-                    marginLeft: '28px',
-                    marginTop: '2px',
-                    fontSize: '11px',
-                    color: 'var(--nxai-warn-text, #f59e0b)',
-                  },
-                }, `⚠ ${warning}`)
-              : null,
-          );
-        }),
-      ),
-    );
+    return null;
   }
 
   handleWpeRefreshAutoEnabledToggle = (): void => {
     this.setState((prev) => {
       const next = { ...prev.settings, wpeRefreshAutoEnabled: prev.settings.wpeRefreshAutoEnabled === false ? true : false };
+      this.notifyChange(next);
+      return { settings: next };
+    });
+  };
+
+  handleOpCardToggle = (op: string): void => {
+    this.setState((prev) => {
+      const expandedOps = new Set(prev.expandedOps);
+      if (expandedOps.has(op)) { expandedOps.delete(op); } else { expandedOps.add(op); }
+      return { expandedOps };
+    });
+  };
+
+  handleOperationToggle = (operation: WpeOperation, env: WpeEnv, value: boolean): void => {
+    this.setState((prev) => {
+      const perms = { ...(prev.settings.wpeOperationPermissions ?? {}) };
+      perms[operation] = {
+        ...WPE_OPERATION_DEFAULTS[operation],
+        ...(perms[operation] ?? {}),
+        [env]: value,
+      };
+      const next = { ...prev.settings, wpeOperationPermissions: perms };
+      this.notifyChange(next);
+      return { settings: next };
+    });
+  };
+
+  handleSiteExceptionRemove = (installName: string, environment: string): void => {
+    this.setState((prev) => {
+      const exceptions = (prev.settings.wpeSiteExceptions ?? []).filter(
+        (e) => !(e.installName === installName && e.environment === environment),
+      );
+      const next = { ...prev.settings, wpeSiteExceptions: exceptions };
+      this.notifyChange(next);
+      return { settings: next };
+    });
+  };
+
+  handleAccountScopeToggle = (accountId: string, included: boolean): void => {
+    this.setState((prev) => {
+      const allIds = this.state.wpeAccounts.map((a) => a.id);
+      const current: string[] = prev.settings.wpeAccountFilter ?? allIds;
+      const updated = included
+        ? [...new Set([...current, accountId])]
+        : current.filter((id) => id !== accountId);
+      const next = { ...prev.settings, wpeAccountFilter: updated };
+      this.notifyChange(next);
+      return { settings: next };
+    });
+  };
+
+  handleAccountScopeSelectAll = (includeAll: boolean): void => {
+    this.setState((prev) => {
+      const next = { ...prev.settings, wpeAccountFilter: includeAll ? null : [] };
       this.notifyChange(next);
       return { settings: next };
     });
