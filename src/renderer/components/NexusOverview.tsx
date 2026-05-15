@@ -1436,7 +1436,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       },
         React.createElement('button', {
           onClick: this.handleDismissOnboarding,
-          style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', opacity: 0.6, padding: 0, textDecoration: 'underline' },
+          style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: 'var(--nxai-card-sub, #6b7280)', padding: 0, textDecoration: 'underline' },
         }, 'Dismiss — don\'t show again'),
       ),
     );
@@ -1811,8 +1811,9 @@ renderTabBar(): React.ReactNode {
     const { diagInstall, diagRunning, diagResults } = this.state;
     const sub: React.CSSProperties = { fontSize: '11px', color: 'var(--nxai-card-sub)' };
     const btnStyle: React.CSSProperties = {
-      padding: '5px 10px', borderRadius: '4px', border: '1px solid var(--color-border-primary, #ccc)',
-      backgroundColor: 'transparent', fontSize: '11px', cursor: diagRunning ? 'not-allowed' : 'pointer',
+      padding: '5px 10px', borderRadius: '4px', border: '1px solid var(--nxai-card-border, #30363d)',
+      backgroundColor: 'var(--nxai-card-bg, #21262d)', color: 'var(--nxai-card-text, #e6edf3)',
+      fontSize: '11px', cursor: diagRunning ? 'not-allowed' : 'pointer',
       opacity: diagRunning ? 0.5 : 1, fontFamily: 'monospace',
     };
 
@@ -1840,7 +1841,7 @@ renderTabBar(): React.ReactNode {
           style: {
             padding: '5px 10px', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace',
             border: '1px solid var(--color-border-primary, #ccc)', width: '220px',
-            backgroundColor: 'var(--color-background-secondary, #f9fafb)',
+            backgroundColor: 'var(--nxai-input-bg, transparent)',
           },
         }),
         diagRunning
@@ -1868,7 +1869,7 @@ renderTabBar(): React.ReactNode {
           style: {
             padding: '5px 10px', borderRadius: '4px', fontSize: '11px', fontFamily: 'monospace',
             border: '1px solid var(--color-border-primary, #ccc)',
-            backgroundColor: 'var(--color-background-secondary, #f9fafb)',
+            backgroundColor: 'var(--nxai-input-bg, transparent)',
             flex: 1,
           },
           onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -2348,7 +2349,7 @@ renderTabBar(): React.ReactNode {
               style: {
                 padding: '5px 10px', borderRadius: '5px', fontSize: '12px',
                 border: '1px solid var(--color-border-primary, #ccc)',
-                backgroundColor: 'var(--color-background-secondary, #f9fafb)',
+                backgroundColor: 'var(--nxai-input-bg, transparent)',
                 width: '180px',
               },
               onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {

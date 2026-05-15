@@ -125,7 +125,9 @@ const inputStyle: React.CSSProperties = {
 const btnSmallStyle: React.CSSProperties = {
   padding: '6px 12px',
   borderRadius: '6px',
-  border: '1px solid',
+  border: '1px solid var(--nxai-card-border, #30363d)',
+  background: 'var(--nxai-card-bg, transparent)',
+  color: 'inherit',
   fontSize: '12px',
   fontWeight: 500,
   cursor: 'pointer',
