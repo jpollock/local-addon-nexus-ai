@@ -9,6 +9,7 @@
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 import type { AIProvider, NexusSettings } from '../../common/types';
+import { injectThemeVars } from '../utils/theme';
 
 interface NexusPreferencesProps {
   electron: any;
@@ -102,7 +103,7 @@ const selectStyle: React.CSSProperties = {
   outline: 'none',
   minWidth: '200px',
   cursor: 'pointer',
-  background: 'var(--nxai-code-bg, #1f1f1f)',
+  background: 'var(--nxai-input-bg, transparent)',
   color: 'inherit',
 };
 
@@ -117,7 +118,7 @@ const inputStyle: React.CSSProperties = {
   maxWidth: '100%',
   fontFamily: 'monospace',
   boxSizing: 'border-box',
-  background: 'var(--nxai-code-bg, #1f1f1f)',
+  background: 'var(--nxai-input-bg, transparent)',
   color: 'inherit',
 };
 
@@ -191,6 +192,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
   componentDidMount(): void {
     this.mounted = true;
+    injectThemeVars();
     this.fetchData();
   }
 
@@ -1226,7 +1228,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
                   type: 'number', min: 1, max: 168,
                   value: settings.wpeSyncIntervalHours ?? 8,
                   onChange: this.handleWpeSyncIntervalChange,
-                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)', background: 'var(--nxai-card-bg, #21262d)', color: 'inherit', outline: 'none' },
+                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)', background: 'var(--nxai-input-bg, transparent)', color: 'inherit', outline: 'none' },
                 }),
                 React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } }, 'hrs'),
               ),
@@ -1242,7 +1244,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
                   type: 'number', min: 1, max: 168,
                   value: settings.wpeRefreshIntervalHours ?? 24,
                   onChange: this.handleWpeRefreshIntervalChange,
-                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)', background: 'var(--nxai-card-bg, #21262d)', color: 'inherit', outline: 'none' },
+                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)', background: 'var(--nxai-input-bg, transparent)', color: 'inherit', outline: 'none' },
                 }),
                 React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } }, 'hrs'),
               ),
@@ -1258,7 +1260,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
                   type: 'number', min: 1, max: 168,
                   value: settings.haltedSiteRefreshIntervalHours ?? 24,
                   onChange: this.handleHaltedRefreshIntervalChange,
-                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)', background: 'var(--nxai-card-bg, #21262d)', color: 'inherit', outline: 'none' },
+                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)', background: 'var(--nxai-input-bg, transparent)', color: 'inherit', outline: 'none' },
                 }),
                 React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } }, 'hrs'),
               ),
