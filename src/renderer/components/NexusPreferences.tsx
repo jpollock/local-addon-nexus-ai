@@ -834,19 +834,21 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       style: {
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        gap: '10px',
         cursor: 'pointer',
         padding: '10px 0',
-        borderBottom: expanded ? 'none' : '1px solid rgba(128,128,128,0.15)',
         marginBottom: expanded ? '4px' : '16px',
         userSelect: 'none' as const,
       },
     },
       React.createElement('span', {
-        style: { fontSize: '15px', fontWeight: 600 },
+        style: { fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: 'var(--nxai-card-sub, #6b7280)', whiteSpace: 'nowrap' as const },
       }, title),
+      React.createElement('div', {
+        style: { flex: 1, height: 1, background: 'rgba(128,128,128,0.15)' },
+      }),
       React.createElement('span', {
-        style: { fontSize: '12px', opacity: 0.6 },
+        style: { fontSize: '9px', opacity: 0.5 },
       }, expanded ? '\u25be' : '\u25b8'),
     );
   }
