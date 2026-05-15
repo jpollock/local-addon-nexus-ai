@@ -103,6 +103,10 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
       viewState = 'fresh';
     }
 
+    // Never revert from 'indexing' to 'fresh' — the user triggered indexing
+    // and props just haven't caught up yet. Only advance: indexing → ready.
+    if (this.state.viewState === 'indexing' && viewState === 'fresh') return;
+
     if (this.mounted) this.setState({ viewState, indexEntries });
   }
 
