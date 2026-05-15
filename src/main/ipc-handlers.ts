@@ -680,6 +680,31 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.SEARCH_KEYWORD, async (_event: any, query: string, limit?: number) => {
+    try {
+      const validated = validateInput(SearchContentSchema, { query, limit });
+      const maxResults = validated.limit ?? 10;
+      const { keywordSearch } = await import('./search/keyword-search');
+
+      const entries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
+      const allResults: any[] = [];
+
+      for (const entry of entries) {
+        const table = await (vectorStore as any).getTable(entry.siteId);
+        const results = await keywordSearch(table, validated.query, maxResults);
+        const site = siteData.getSite(entry.siteId);
+        for (const r of results) {
+          allResults.push({ ...r, siteId: entry.siteId, siteName: site?.name ?? entry.siteName });
+        }
+      }
+
+      return { results: allResults.slice(0, maxResults) };
+    } catch (err) {
+      localLogger.error('[NexusAI] keyword search failed:', (err as Error).message);
+      return { results: [], error: (err as Error).message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: any, params: { siteId: string }) => {
     const startTime = Date.now();
     try {
