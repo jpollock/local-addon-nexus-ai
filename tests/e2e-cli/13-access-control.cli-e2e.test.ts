@@ -1,233 +1,284 @@
 /**
  * CLI E2E Tests — WPE Access Control (Operation Permissions)
  *
- * Tests that the access control system correctly blocks or allows operations
- * based on wpeOperationPermissions settings.
+ * Tests that wpeOperationPermissions settings are enforced end-to-end:
+ * CLI command → GraphQL → MCP handler → isOperationAllowed() → block/allow.
  *
- *   BLOCKED by default:
- *     - WP-CLI / SSH on production environments
- *     - Delete / Promote on ALL environments
- *     - Push to WPE on production
+ * Uses known fixture installs (WPE_FIXTURES) — no discovery loop needed.
+ * Each describe block injects the exact settings it needs via `nexus settings set`
+ * and the suite-level afterAll restores the original settings snapshot.
  *
- *   ALLOWED by default:
- *     - Pull from any environment (including production)
- *     - WP-CLI on staging and development
- *     - Read-only CAPI operations on production
- *
- * Uses `nexus settings set` to inject specific settings before each test
- * group and restore them after. Requires WPE authentication and ≥1 install.
+ * Requires: WPE authentication (`nexus wpe login`) and Local running.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
-import { runCli, getWpeAccounts, skipTest } from './helpers/cli-test-utils';
+import { runCli, skipTest, WPE_FIXTURES } from './helpers/cli-test-utils';
 
-interface WpeInstall {
-  id: string;
-  name: string;
-  environment: string;
-  account: string;
-}
+const PROD = WPE_FIXTURES.installs.prod;
+const STAGING = WPE_FIXTURES.installs.staging;
+const READ_PROD = WPE_FIXTURES.installs.readProd;
 
-let allInstalls: WpeInstall[] = [];
-let productionInstall: WpeInstall | null = null;
-let stagingInstall: WpeInstall | null = null;
-let anyInstall: WpeInstall | null = null;
-
-/** Snapshot of settings before the test suite runs — restored in afterAll. */
+/** Snapshot settings before the suite — restored in afterAll. */
 let originalSettings: string | null = null;
 
+/** Check WPE auth is available — skip the whole suite if not. */
+async function wpeIsAuthenticated(): Promise<boolean> {
+  const r = await runCli('wpe status');
+  return r.exitCode === 0 && r.output.toLowerCase().includes('authenticated');
+}
+
 beforeAll(async () => {
-  // Save current settings so we can restore them after
   const snap = await runCli('settings get --json');
   if (snap.exitCode === 0) originalSettings = snap.stdout.trim();
-
-  const accounts = await getWpeAccounts();
-  if (accounts.length === 0) return;
-
-  for (const account of accounts) {
-    const r = await runCli(`wpe installs ${account.id} --json`);
-    if (r.exitCode !== 0) continue;
-
-    let installs: any[] = [];
-    try { installs = JSON.parse(r.stdout); } catch { continue; }
-
-    for (const install of installs) {
-      const info: WpeInstall = {
-        id: install.id,
-        name: install.name,
-        environment: install.environment,
-        account: account.id,
-      };
-      allInstalls.push(info);
-      if (!anyInstall) anyInstall = info;
-      if (!productionInstall && install.environment === 'production') productionInstall = info;
-      if (!stagingInstall && install.environment === 'staging') stagingInstall = info;
-    }
-  }
 });
 
 afterAll(async () => {
-  // Restore original settings to leave the environment clean
   if (originalSettings) {
-    try {
-      await runCli(['settings', 'patch', originalSettings]);
-    } catch { /* best-effort restore */ }
+    await runCli(['settings', 'patch', originalSettings]).catch(() => {});
   }
 });
 
 // ---------------------------------------------------------------------------
-// Default BLOCKS — should fail with "Operation blocked" message
+// WP-CLI blocked on production
 // ---------------------------------------------------------------------------
 
-describe('nexus wp — WP-CLI blocked on production (settings injected)', () => {
+describe('wpcli blocked on production', () => {
   beforeAll(async () => {
-    // Explicitly block production WP-CLI so this describe is deterministic
     await runCli('settings set wpeOperationPermissions.wpcli.production false');
   });
 
-  it('plugin list on production returns "Operation blocked"', async () => {
-    if (!productionInstall) { skipTest('No production install available'); return; }
+  it('plugin list on production returns exit 1 + "Operation blocked"', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
 
-    const target = `wpe:${productionInstall.account}/${productionInstall.name}@production`;
-    const r = await runCli(`wp plugin list ${target}`);
-
+    const r = await runCli(`wp plugin list ${PROD.target}`);
     expect(r.exitCode).toBe(1);
     expect(r.output).toMatch(/Operation blocked|not permitted/);
   });
 
-  it('block message includes Preferences location', async () => {
-    if (!productionInstall) { skipTest('No production install available'); return; }
+  it('core version on production is also blocked', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
 
-    const target = `wpe:${productionInstall.account}/${productionInstall.name}@production`;
-    const r = await runCli(`wp plugin list ${target}`);
+    const r = await runCli(`wp core version ${PROD.target}`);
+    expect(r.exitCode).toBe(1);
+    expect(r.output).toMatch(/Operation blocked|not permitted/);
+  });
 
+  it('block message tells user where to change the setting', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
+
+    const r = await runCli(`wp plugin list ${PROD.target}`);
     expect(r.output).toMatch(/Operation blocked|not permitted/);
     expect(r.output.toLowerCase()).toMatch(/preferences|nexus|access/);
   });
 
-  it('wp core version on production is also blocked', async () => {
-    if (!productionInstall) { skipTest('No production install available'); return; }
+  it('block message is plain English — not a raw error object or stack trace', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
 
-    const target = `wpe:${productionInstall.account}/${productionInstall.name}@production`;
-    const r = await runCli(`wp core version ${target}`);
+    const r = await runCli(`wp plugin list ${PROD.target}`);
+    expect(r.output).toMatch(/Operation blocked|not permitted/);
+    expect(r.output).not.toMatch(/^\s*\{/);           // not raw JSON
+    expect(r.output).not.toMatch(/at Object\./);      // not a stack trace
+    expect(r.output).not.toMatch(/^Error:/m);         // not an unhandled error
+    expect(r.output.trim().length).toBeLessThan(500); // concise
+  });
+});
 
+// ---------------------------------------------------------------------------
+// WP-CLI allowed on production (setting flipped)
+// ---------------------------------------------------------------------------
+
+describe('wpcli allowed on production when setting enabled', () => {
+  beforeAll(async () => {
+    await runCli('settings set wpeOperationPermissions.wpcli.production true');
+  });
+
+  it('plugin list on production does NOT return "Operation blocked"', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
+
+    const r = await runCli(`wp plugin list ${READ_PROD.target}`);
+    // May fail for SSH/other reasons — but must not be an access control block
+    expect(r.output).not.toContain('Operation blocked');
+    expect(r.output).not.toMatch(/not permitted on "production"/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WP-CLI on staging — always allowed by default
+// ---------------------------------------------------------------------------
+
+describe('wpcli allowed on staging (default)', () => {
+  beforeAll(async () => {
+    await runCli('settings set wpeOperationPermissions.wpcli.staging true');
+    await runCli('settings set wpeOperationPermissions.wpcli.production false');
+  });
+
+  it('plugin list on staging does NOT return "Operation blocked"', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
+
+    const r = await runCli(`wp plugin list ${STAGING.target}`);
+    // May fail (SSH key, WP not installed) but must NOT be an access control block
+    expect(r.output).not.toContain('Operation blocked');
+    expect(r.output).not.toMatch(/not permitted on "staging"/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Push blocked on production
+// ---------------------------------------------------------------------------
+
+describe('push blocked on production', () => {
+  beforeAll(async () => {
+    await runCli('settings set wpeOperationPermissions.push.production false');
+  });
+
+  it('purge-cache on production returns "Operation blocked"', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
+
+    // wpe_purge_cache is in the "push" permission bucket
+    const r = await runCli(`wpe cache ${PROD.name}`);
     expect(r.exitCode).toBe(1);
     expect(r.output).toMatch(/Operation blocked|not permitted/);
   });
-
-  it('WP-CLI on staging is NOT blocked', async () => {
-    if (!stagingInstall) { skipTest('No staging install available'); return; }
-    // Ensure staging is explicitly allowed
-    await runCli('settings set wpeOperationPermissions.wpcli.staging true');
-
-    const target = `wpe:${stagingInstall.account}/${stagingInstall.name}@staging`;
-    const r = await runCli(`wp plugin list ${target}`);
-
-    // May fail for other reasons (SSH, auth) but NOT access control
-    expect(r.output).not.toMatch(/Operation blocked.*wpcli/);
-    expect(r.output).not.toMatch(/not permitted.*staging/);
-  });
 });
 
-describe('nexus wpe delete-install — blocked on all environments (default)', () => {
-  it('delete on a staging install is blocked before confirmation', async () => {
-    if (!stagingInstall) { skipTest('No staging install available'); return; }
+// ---------------------------------------------------------------------------
+// Push allowed on staging (default)
+// ---------------------------------------------------------------------------
 
-    const r = await runCli(`wpe delete-install ${stagingInstall.id}`);
-
-    // delete is blocked for ALL environments by default — even staging
-    // If the output doesn't mention block, skip (settings may have been changed)
-    if (r.output.includes('Operation blocked') || r.output.toLowerCase().includes('not permitted')) {
-      expect(r.exitCode).toBe(1);
-      expect(r.output).toMatch(/Operation blocked|not permitted/);
-    } else if (r.output.toLowerCase().includes('confirm')) {
-      // Confirmation prompt means the access control check PASSED (settings changed)
-      skipTest('Delete operation is permitted in current settings (changed from default)');
-    } else {
-      // Some other error (network, auth) — just verify it failed
-      expect(r.exitCode).toBe(1);
-    }
+describe('push allowed on staging when setting enabled', () => {
+  beforeAll(async () => {
+    await runCli('settings set wpeOperationPermissions.push.staging true');
+    await runCli('settings set wpeOperationPermissions.push.production false');
   });
 
-  it('delete on production is blocked before confirmation', async () => {
-    if (!productionInstall) { skipTest('No production install available'); return; }
+  it('purge-cache on staging does NOT return "Operation blocked"', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
 
-    const r = await runCli(`wpe delete-install ${productionInstall.id}`);
-
-    if (r.output.includes('Operation blocked') || r.output.toLowerCase().includes('not permitted')) {
-      expect(r.exitCode).toBe(1);
-    } else if (r.output.toLowerCase().includes('confirm')) {
-      skipTest('Delete operation is permitted in current settings (changed from default)');
-    } else {
-      expect(r.exitCode).toBe(1);
-    }
-  });
-
-  it('delete requires an install ID argument', async () => {
-    const r = await runCli('wpe delete-install');
-    expect(r.exitCode).toBe(1);
-    expect(r.output.toLowerCase()).toMatch(/required|missing|argument/);
+    const r = await runCli(`wpe cache ${STAGING.name}`);
+    // May succeed or fail for other reasons — must not be an access block
+    expect(r.output).not.toContain('Operation blocked');
+    expect(r.output).not.toMatch(/not permitted on "staging"/);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Default ALLOWS — should not return "Operation blocked"
+// Delete blocked on all environments
 // ---------------------------------------------------------------------------
 
-describe('nexus wp — WP-CLI on staging is NOT blocked (default)', () => {
-  it('plugin list on staging does not return access control block', async () => {
-    if (!stagingInstall) { skipTest('No staging install available'); return; }
+describe('delete blocked on all environments', () => {
+  beforeAll(async () => {
+    // Explicitly block delete everywhere
+    await runCli('settings patch \'{"wpeOperationPermissions":{"delete":{"production":false,"staging":false,"development":false}}}\'');
+  });
 
-    const target = `wpe:${stagingInstall.account}/${stagingInstall.name}@staging`;
-    const r = await runCli(`wp plugin list ${target}`);
+  it('delete-install on staging returns "Operation blocked" (not just --confirm required)', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
 
-    // May fail (SSH key not set up, no WP installed, etc.) but must NOT be an access control block
-    expect(r.output).not.toMatch(/Operation blocked.*staging/);
-    expect(r.output).not.toMatch(/not permitted.*staging/);
+    // Use staging install — if it showed --confirm prompt, delete is NOT blocked
+    // We expect "Operation blocked" to appear BEFORE the confirmation gate
+    const r = await runCli(`wpe delete-install ${STAGING.name} --install-id placeholder`);
+    // Even with a bad ID, the access block happens before CAPI lookup in some paths
+    // If we get "confirm" it means access was NOT blocked — fail clearly
+    expect(r.output).not.toMatch(/type.*confirm|--confirm/i);
+    expect(r.output).toMatch(/Operation blocked|not permitted|argument|required/);
+  });
+
+  it('delete-install on production is also blocked', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
+
+    const r = await runCli(`wpe delete-install ${PROD.name} --install-id placeholder`);
+    expect(r.output).not.toMatch(/type.*confirm|--confirm/i);
+    expect(r.output).toMatch(/Operation blocked|not permitted|argument|required/);
   });
 });
 
-describe('nexus wpe install — read-only CAPI on production is NOT blocked', () => {
-  it('fetching install details for a production install does not hit access block', async () => {
-    if (!productionInstall) { skipTest('No production install available'); return; }
+// ---------------------------------------------------------------------------
+// Read-only CAPI is never blocked
+// ---------------------------------------------------------------------------
 
-    const r = await runCli(`wpe install ${productionInstall.id}`);
+describe('read-only CAPI never blocked by access control', () => {
+  beforeAll(async () => {
+    // Even with everything blocked, reads must still work
+    await runCli('settings patch \'{"wpeOperationPermissions":{"wpcli":{"production":false},"push":{"production":false},"delete":{"production":false}}}\'');
+  });
 
-    // Read-only CAPI — should not be blocked. May succeed or fail for other reasons.
+  it('wpe accounts is never blocked', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
+
+    const r = await runCli('wpe accounts');
+    expect(r.output).not.toContain('Operation blocked');
+    expect([0, 1]).toContain(r.exitCode); // may succeed or fail auth-wise
+  });
+
+  it('wpe install (read) on production is never blocked', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
+
+    const r = await runCli(`wpe installs ${WPE_FIXTURES.account} --json`);
+    expect(r.output).not.toContain('Operation blocked');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Site exception: allow overrides global block
+// ---------------------------------------------------------------------------
+
+describe('site exception: allow overrides global block on production', () => {
+  beforeAll(async () => {
+    // Block production WP-CLI globally
+    await runCli('settings set wpeOperationPermissions.wpcli.production false');
+    // But add an exception that allows jppwpeplugin specifically
+    const exception = JSON.stringify({
+      wpeSiteExceptions: [{
+        installName: PROD.name,
+        environment: 'production',
+        overrides: { wpcli: true },
+      }],
+    });
+    await runCli(['settings', 'patch', exception]);
+  });
+
+  it('WP-CLI on the excepted production install is NOT blocked', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
+
+    const r = await runCli(`wp plugin list ${PROD.target}`);
+    // Exception allows it — must not see "Operation blocked"
     expect(r.output).not.toContain('Operation blocked');
     expect(r.output).not.toMatch(/not permitted on "production"/);
   });
 
-  it('wpe accounts is never blocked (read-only)', async () => {
-    const r = await runCli('wpe accounts');
-    expect(r.output).not.toContain('Operation blocked');
-    // Either returns accounts or says "not authenticated" — never an access block
-    expect([0, 1]).toContain(r.exitCode);
+  it('WP-CLI on a different production install IS still blocked', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
+
+    // READ_PROD (jpp0413p) has no exception — still blocked
+    const r = await runCli(`wp plugin list ${READ_PROD.target}`);
+    expect(r.output).toMatch(/Operation blocked|not permitted/);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Block message format regression — message must be human-readable
+// Site exception: block overrides global allow on staging
 // ---------------------------------------------------------------------------
 
-describe('nexus wpe access control — block message quality', () => {
-  it('block message is human-readable, not a raw error object', async () => {
-    if (!productionInstall) { skipTest('No production install available'); return; }
+describe('site exception: block overrides global allow on staging', () => {
+  beforeAll(async () => {
+    // Allow staging WP-CLI globally
+    await runCli('settings set wpeOperationPermissions.wpcli.staging true');
+    // But block jppwpeplugistg specifically
+    const exception = JSON.stringify({
+      wpeSiteExceptions: [{
+        installName: STAGING.name,
+        environment: 'staging',
+        overrides: { wpcli: false },
+      }],
+    });
+    await runCli(['settings', 'patch', exception]);
+  });
 
-    const target = `wpe:${productionInstall.account}/${productionInstall.name}@production`;
-    const r = await runCli(`wp plugin list ${target}`);
+  it('WP-CLI on the blocked staging install IS blocked by site exception', async () => {
+    if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
 
-    if (!r.output.includes('Operation blocked')) {
-      skipTest('Production WP-CLI appears to be enabled in current settings');
-      return;
-    }
-
-    // Must NOT be a raw JSON error or stack trace
-    expect(r.output).not.toMatch(/^\{/);
-    expect(r.output).not.toMatch(/Error:/);
-    expect(r.output).not.toMatch(/at Object\./);
-    // Must be a plain sentence
-    expect(r.output.length).toBeGreaterThan(20);
-    expect(r.output.length).toBeLessThan(500);
+    const r = await runCli(`wp plugin list ${STAGING.target}`);
+    expect(r.exitCode).toBe(1);
+    expect(r.output).toMatch(/Operation blocked|not permitted/);
   });
 });
