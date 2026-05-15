@@ -70,6 +70,13 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
     this.mounted = true;
     injectThemeVars();
     this.deriveViewState();
+    const prog = this.props.settings.discoverProgress;
+    if (prog?.hasSearched) {
+      this.setState({ hasSearched: true });
+    }
+    if (prog?.hasMcpDone) {
+      this.setState({ furtherVisible: true });
+    }
   }
 
   componentDidUpdate(prevProps: DiscoverTabProps): void {
