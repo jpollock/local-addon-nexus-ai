@@ -17,6 +17,7 @@ import { BulkOperationsPanel } from './BulkOperationsPanel';
 import { SiteGroupsPanel } from './SiteGroupsPanel';
 import { AIGatewayPanel } from './AIGatewayPanel';
 import { LoadingSpinner } from './LoadingSpinner';
+import { DiscoverTab } from './DiscoverTab';
 // Local's native notification components
 let toast: any = null;
 try {
@@ -151,7 +152,7 @@ interface NexusOverviewState {
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'activity' | 'operations';
+  activeTab: 'overview' | 'discover' | 'activity' | 'operations';
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -346,7 +347,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     copiedField: null,
     loading: true,
     error: null,
-    activeTab: 'overview',
+    activeTab: 'discover',
     aiProxy: null,
     fleetSetupOpId: null,
     fleetSetupRunning: false,
@@ -1506,9 +1507,10 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
 
 renderTabBar(): React.ReactNode {
     const { activeTab } = this.state;
-    const tabs: { key: NexusOverviewState['activeTab']; label: string }[] = [
-      { key: 'overview', label: 'Overview' },
-      { key: 'activity', label: 'Activity' },
+    const tabs: { key: NexusOverviewState['activeTab']; label: string; isNew?: boolean }[] = [
+      { key: 'overview',   label: 'Overview' },
+      { key: 'discover',   label: 'Discover', isNew: true },
+      { key: 'activity',   label: 'Activity' },
       { key: 'operations', label: 'Operations' },
     ];
 
@@ -1533,7 +1535,12 @@ renderTabBar(): React.ReactNode {
             color: isActive ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
           },
           onClick: () => this.setState({ activeTab: tab.key }),
-        }, tab.label);
+        }, React.createElement('span', null,
+          tab.label,
+          (tab as any).isNew ? React.createElement('span', {
+            style: { marginLeft: 5, fontSize: 9, fontWeight: 700, background: '#0ECAD4', color: '#000', borderRadius: 8, padding: '1px 5px', verticalAlign: 'middle' },
+          }, 'NEW') : null,
+        ));
       }),
     );
   }
@@ -1920,6 +1927,21 @@ renderTabBar(): React.ReactNode {
   renderActiveTab(): React.ReactNode {
     switch (this.state.activeTab) {
       case 'overview': return this.renderOverviewTab();
+      case 'discover': return React.createElement(DiscoverTab, {
+        electron: this.props.electron,
+        sites: this.state.sites.map((s) => ({ id: s.id, name: s.name, status: s.status })),
+        indexEntries: (this.state.indexEntries ?? []).map((e: any) => ({
+          siteId: e.siteId,
+          siteName: e.siteName ?? '',
+          state: e.state,
+          documentCount: e.documentCount,
+        })),
+        settings: this.state.settings ?? { autoIndex: true, excludedSiteIds: [] },
+        onSettingsChange: (s) => {
+          this.setState({ settings: s });
+          this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, s).catch(() => {});
+        },
+      });
       case 'activity': return this.renderActivityTab();
       case 'operations': return this.renderOperationsTab();
       default: return this.renderOverviewTab();
