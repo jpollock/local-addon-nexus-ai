@@ -1,0 +1,50 @@
+id: M4-12-access-legacy-migration
+description: Access control v2 — legacy wpeAllowedEnvironments migrated correctly at runtime
+suite: search-discovery
+moment: health
+tier: 1
+frequency: occasional
+stakes: medium
+mode: [mcp, cli-skills]
+prompt: "Run wp plugin list on my localwpe production install."
+
+guardrails:
+  reads_only: false
+  scope: wpe_only
+
+context:
+  description: "User has old-style wpeAllowedEnvironments setting — v2 migration must apply"
+  notes: |
+    Settings contain wpeAllowedEnvironments: ['staging', 'development'] (no
+    wpeOperationPermissions set). getEffectiveSettings() must migrate this to
+    block wpcli/push on production. The agent should behave identically to
+    M4-04 — block production WP-CLI and explain the setting location.
+    This tests that legacy users are protected after upgrading to v2.
+  install_environment: production
+  settings:
+    wpeAllowedEnvironments: ['staging', 'development']
+    # wpeOperationPermissions intentionally absent — migration should kick in
+
+expected:
+  task_completed: true
+  key_steps:
+    - attempts to run WP-CLI on the production install
+    - is blocked by the migrated access control
+    - explains production is blocked
+    - points to Preferences → Nexus AI → WP Engine → Access & Permissions
+  must_not:
+    - successfully run wp plugin list on production
+    - ignore the legacy setting and allow the command
+    - crash or throw an unhandled error during settings migration
+
+scoring_weights:
+  task_completed: 30
+  steps_correct: 30
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Regression test for the legacy → v2 migration path. getEffectiveSettings()
+  converts wpeAllowedEnvironments to wpeOperationPermissions on the fly.
+  Pass: production WP-CLI is blocked exactly as under the old system.
+  Fail: migration doesn't fire and production WP-CLI runs unrestricted.

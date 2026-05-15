@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
 import { ok, error, requireLocalServices } from './helpers';
+import { isOperationAllowed, getEffectiveSettings } from '../../utils/operation-permissions';
 
 export const wpePushHandler: McpToolHandler = {
   definition: {
@@ -104,6 +105,18 @@ export const wpePushHandler: McpToolHandler = {
       installId = install.id;
       remoteSiteId = wpeSiteId;
       primaryDomain = install.primaryDomain || install.cname || `${install.name}.wpengine.com`;
+    }
+
+    // Check push permission before firing the IPC call
+    const settings = getEffectiveSettings((services as any).registryStorage);
+    if (!isOperationAllowed('push', environment, settings, installName)) {
+      return {
+        content: [{ type: 'text' as const, text:
+          `Push blocked: pushing to "${environment ?? 'production'}" environments is not permitted. ` +
+          `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`
+        }],
+        isError: true,
+      };
     }
 
     try {

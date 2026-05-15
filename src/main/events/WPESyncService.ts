@@ -19,8 +19,7 @@ import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import type { RegistryStorage } from '../content/IndexRegistry';
 import { STORAGE_KEYS } from '../../common/constants';
 import pLimit from 'p-limit';
-import { isWpeEnvironmentAllowed, DEFAULT_WPE_ALLOWED_ENVIRONMENTS } from '../mcp/utils/environment-filter';
-import type { NexusSettings } from '../../common/types';
+import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
 
 export interface WPESyncProgress {
   total: number;
@@ -169,16 +168,16 @@ export class WPESyncService {
         account_id: i.account?.id ?? undefined,
       }));
 
-      // Apply environment filter — production excluded by default
-      const nexusSettings = (this.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+      // Apply operation permissions filter — wpcli on production excluded by default
+      const effectiveSettings = getEffectiveSettings(this.registryStorage);
       const beforeEnvFilter = wpeInstalls.length;
       const wpeInstallsFiltered = wpeInstalls.filter((i) =>
-        isWpeEnvironmentAllowed(i.environment, nexusSettings)
+        isOperationAllowed('wpcli', i.environment, effectiveSettings, i.install_name)
       );
       if (wpeInstallsFiltered.length < beforeEnvFilter) {
         this.logger.info(
-          `[WPESyncService] Environment filter: ${wpeInstallsFiltered.length} of ${beforeEnvFilter} installs in scope ` +
-          `(allowed: ${(nexusSettings.wpeAllowedEnvironments ?? DEFAULT_WPE_ALLOWED_ENVIRONMENTS).join(', ')})`
+          `[WPESyncService] Operation filter: ${wpeInstallsFiltered.length} of ${beforeEnvFilter} installs in scope ` +
+          `(wpcli blocked on ${beforeEnvFilter - wpeInstallsFiltered.length} install(s))`
         );
       }
 
@@ -730,12 +729,11 @@ export class WPESyncService {
         account_id: install.account?.id ?? undefined,
       };
 
-      // Check environment filter before syncing
-      const settings = (this.registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
-      if (!isWpeEnvironmentAllowed(wpeInstall.environment, settings)) {
+      // Check operation permissions before syncing
+      if (!isOperationAllowed('wpcli', wpeInstall.environment, getEffectiveSettings(this.registryStorage), wpeInstall.install_name)) {
         this.logger?.info(
           `[WPESyncService] Skipping ${wpeInstall.install_name} — ` +
-          `environment '${wpeInstall.environment}' not in allowed list`,
+          `wpcli not permitted on '${wpeInstall.environment}' environment`,
         );
         return;
       }

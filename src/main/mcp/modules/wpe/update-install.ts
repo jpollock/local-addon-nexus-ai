@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, capiError, requireCAPI } from './helpers';
-import { checkWpeInstallIdEnvironmentAccess } from '../../utils/environment-filter';
+import { isOperationAllowed, getEffectiveSettings } from '../../utils/operation-permissions';
+import { STORAGE_KEYS } from '../../../../common/constants';
 
 export const updateInstallHandler: McpToolHandler = {
   definition: {
@@ -22,14 +23,18 @@ export const updateInstallHandler: McpToolHandler = {
     try {
       const installId = args.install_id as string;
 
-      // Check environment before modifying install (cache lookup by install_id)
-      const envError = checkWpeInstallIdEnvironmentAccess(
-        installId,
-        (services as any).registryStorage,
-      );
-      if (envError) {
+      // Check operation permissions before modifying install (cache lookup by install_id)
+      const settings = getEffectiveSettings((services as any).registryStorage);
+      const cache = (services as any).registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installId?: string; environment?: string; installName?: string; install_name?: string }> } | null;
+      const cachedInstall = cache?.installs?.find((i: any) => i.installId === installId);
+      const installEnvironment = cachedInstall?.environment ?? 'production';
+      const installNameForCheck = cachedInstall?.installName ?? cachedInstall?.install_name ?? installId;
+      if (!isOperationAllowed('push', installEnvironment, settings, installNameForCheck)) {
         return {
-          content: [{ type: 'text' as const, text: `Cannot update install: ${envError}` }],
+          content: [{ type: 'text' as const, text:
+            `Operation blocked: this operation is not permitted on "${installEnvironment}" environments. ` +
+            `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`
+          }],
           isError: true,
         };
       }

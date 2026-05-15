@@ -17,8 +17,9 @@ function getText(result: any): string {
 }
 
 function makeMockServices(capiDirect: jest.Mock) {
-  // Provide a registryStorage stub so environment-filter checks pass.
+  // Provide a registryStorage stub so operation-permission checks pass.
   // inst-1 and inst-2 are cached as staging/development (allowed by default).
+  // Settings explicitly permit delete on staging + development (block production).
   const storageMap = new Map<string, unknown>([
     ['nexus-ai_wpe_install_cache', {
       installs: [
@@ -26,6 +27,14 @@ function makeMockServices(capiDirect: jest.Mock) {
         { installId: 'inst-2', installName: 'mysite-stg', environment: 'development' },
       ],
       syncedAt: Date.now(),
+    }],
+    ['nexus-ai_settings', {
+      wpeOperationPermissions: {
+        pull:   { development: true,  staging: true,  production: true  },
+        wpcli:  { development: true,  staging: true,  production: false },
+        push:   { development: true,  staging: true,  production: false },
+        delete: { development: true,  staging: true,  production: false },
+      },
     }],
   ]);
   return {

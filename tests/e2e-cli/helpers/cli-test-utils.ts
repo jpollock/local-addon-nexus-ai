@@ -134,3 +134,44 @@ export function skipTest(reason: string): void {
  * args, --confirm flag behavior, and error messages for invalid inputs.
  */
 export const DESTRUCTIVE_NOTE = '[ARGUMENT VALIDATION ONLY — not executed against WPE]';
+
+// ---------------------------------------------------------------------------
+// WPE Test Fixtures
+//
+// Pre-approved installs for e2e testing. Sourced from tests/evals/config.yaml.
+// Use these instead of dynamically discovering installs — faster, deterministic,
+// and guaranteed to be the right environment type.
+//
+// Restricted (never write): localwpe, getflywheel (high-traffic production)
+// ---------------------------------------------------------------------------
+
+export const WPE_FIXTURES = {
+  /** Primary test account — all write/promotion tests go here */
+  account: 'w7579',
+
+  /** Dedicated test installs — safe to read and use as access-control targets */
+  installs: {
+    /** production — wpeplugintest site. Use for read/block tests. */
+    prod: {
+      name: 'jppwpeplugin',
+      environment: 'production' as const,
+      account: 'w7579',
+      /** Target string for `nexus wp` commands */
+      target: 'wpe:w7579/jppwpeplugin@production',
+    },
+    /** staging — wpeplugintest site. Safe for WP-CLI allow tests. */
+    staging: {
+      name: 'jppwpeplugistg',
+      environment: 'staging' as const,
+      account: 'w7579',
+      target: 'wpe:w7579/jppwpeplugistg@staging',
+    },
+    /** read-only production — jpp0413p. Never write to this. */
+    readProd: {
+      name: 'jpp0413p',
+      environment: 'production' as const,
+      account: 'w7579',
+      target: 'wpe:w7579/jpp0413p@production',
+    },
+  },
+} as const;

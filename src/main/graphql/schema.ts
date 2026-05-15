@@ -745,6 +745,12 @@ export const typeDefs = gql`
   # ============================================================================
 
   extend type Mutation {
+    "Get current Nexus AI settings. Pass key= (dotted path) to read a specific field."
+    nexusGetSettings(key: String): NexusGetSettingsResult!
+
+    "Update Nexus AI settings. Use key+value for a single field or patch (JSON) to merge multiple fields."
+    nexusUpdateSettings(key: String, value: String, patch: String): NexusUpdateSettingsResult!
+
     "Get current AI provider configuration"
     nexusAiGetConfig: NexusAiGetConfigResult!
 
@@ -1448,6 +1454,20 @@ export const typeDefs = gql`
     hasApiKey: Boolean!
     "Whether Local AI Gateway is enabled"
     useLocalGateway: Boolean!
+  }
+
+  type NexusGetSettingsResult {
+    success: Boolean!
+    error: String
+    "JSON-encoded NexusSettings object (or specific field value if key= was provided)"
+    settings: String
+  }
+
+  type NexusUpdateSettingsResult {
+    success: Boolean!
+    error: String
+    "JSON-encoded updated NexusSettings after the change"
+    settings: String
   }
 
   type NexusAiGetConfigResult {
