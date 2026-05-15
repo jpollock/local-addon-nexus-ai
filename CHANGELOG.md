@@ -5,6 +5,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.2] — 2026-05-15
+
+### Added
+- **WPE Access Control v2** — three-gate permission system replacing the coarse environment flag.
+  Gate 1: account scope (which WPE accounts Nexus can use). Gate 2: per-operation × environment
+  matrix (pull / WP-CLI / push / delete independently controllable per dev/staging/production).
+  Gate 3: per-site exceptions (allow or block specific installs regardless of global settings).
+  Production is blocked by default for WP-CLI, push, and delete. Pull is always allowed.
+  Legacy `wpeAllowedEnvironments` settings are automatically migrated.
+- **`nexus settings` CLI** — `get [key]`, `set <key> <value>`, `patch <json>`, `reset --confirm`.
+  Read and write any Nexus setting from the terminal. Dotted-path syntax for nested fields
+  (e.g. `nexus settings set wpeOperationPermissions.wpcli.production true`).
+- **`nexus_get_settings` / `nexus_update_settings` MCP tools** — same capabilities via MCP for
+  AI agent workflows and scripting.
+
+### Changed
+- **Preferences UX overhaul** — Excluded Sites collapses to an accordion. WPE Access &
+  Permissions wraps in a collapsible "Advanced" card. Operation cards use full-width stacked
+  layout (environment toggles → exceptions) instead of side-by-side columns. Three sync schedule
+  settings consolidate into one compact table. Section headers use uppercase label + rule for
+  clear visual hierarchy.
+- All WPE access control settings (env toggles, account chips, site exceptions) now **save
+  immediately** on change without requiring the Apply button.
+
+### Fixed
+- `wpeOperationPermissions` and `wpeSiteExceptions` were silently stripped by `UpdateSettingsSchema`
+  (`.strict()` mode) — settings appeared to save in the UI but were never persisted. Root cause
+  of access control settings never working.
+- Dark mode: Dismiss link invisible in Getting Started card; Developer Tools inputs used
+  near-white fallback (`#f9fafb`); preset command buttons had no color; WPE Credentials Apply/Clear
+  buttons had no background or text color.
+- `NexusPreferences` now calls `injectThemeVars()` on mount — preferences renders in a separate
+  window where `SiteNexusSection` never mounts, so CSS vars were never injected.
+
+### Tests
+- `UpdateSettingsSchema` regression suite (15 tests) — guards against fields being silently
+  stripped from settings saves.
+- `operation-permissions` unit tests: 15 → 34 (covers `getEffectiveSettings`, site exception
+  edge cases, migration, push bucket).
+- 5 new eval cases: M4-08 through M4-12 (v2 permission model, site exceptions, delete block,
+  legacy migration).
+- E2e CLI: `13-access-control` — uses fixture installs (`jppwpeplugin`/`jppwpeplugistg`) and
+  `nexus settings set` for deterministic setup. Covers WP-CLI block/allow, push block, delete
+  block, read-only always allowed, site exception override in both directions.
+- E2e CLI: `14-settings` — 25 tests covering `nexus settings get/set/patch` round-trips, value
+  type parsing, sibling key preservation, MCP write path.
+
+---
+
 ## [0.3.1] — 2026-05-14
 
 ### Added
