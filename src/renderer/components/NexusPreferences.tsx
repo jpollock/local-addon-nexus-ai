@@ -65,6 +65,8 @@ interface NexusPreferencesState {
   expandedSections: Set<string>;
   expandedOps: Set<string>;
   acctScopeExpanded: boolean;
+  accessExpanded: boolean;
+  excludedExpanded: boolean;
   addingException: { op: string; installName: string; environment: string; allowing: boolean } | null;
 }
 
@@ -178,6 +180,8 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     expandedSections: new Set(['ai-provider']),
     expandedOps: new Set<string>(),
     acctScopeExpanded: false,
+    accessExpanded: true,
+    excludedExpanded: false,
     addingException: null,
   };
 
@@ -332,7 +336,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
 
   renderWpeAccessControlSection(): React.ReactNode {
-    const { settings, wpeAccounts, expandedOps, acctScopeExpanded, addingException, wpeInstalls, installSearch } = this.state;
+    const { settings, wpeAccounts, expandedOps, addingException, wpeInstalls, installSearch, accessExpanded } = this.state;
     const perms = settings.wpeOperationPermissions ?? {};
     const exceptions = settings.wpeSiteExceptions ?? [];
     const accountFilter = settings.wpeAccountFilter;
@@ -345,11 +349,11 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       return custom !== undefined ? custom : WPE_OPERATION_DEFAULTS[op][env];
     };
 
-    const OPERATIONS: Array<{ id: WpeOperation; label: string; sub: string; icon: string; color: string }> = [
-      { id: 'pull',   label: 'Pull to local',    sub: 'Download files + database from WPE',      icon: '⬇', color: '59,130,246' },
-      { id: 'wpcli',  label: 'WP-CLI over SSH',  sub: 'Run commands on remote WPE installs',      icon: '⌘', color: '167,139,250' },
-      { id: 'push',   label: 'Push to WPE',      sub: 'Overwrite remote with local files and DB', icon: '⬆', color: '251,191,36' },
-      { id: 'delete', label: 'Delete / Promote', sub: 'Irreversible CAPI operations',              icon: '🗑', color: '248,113,113' },
+    const OPERATIONS: Array<{ id: WpeOperation; label: string; sub: string; icon: string }> = [
+      { id: 'pull',   label: 'Pull to local',    sub: 'Download files + database from WPE',      icon: '⬇' },
+      { id: 'wpcli',  label: 'WP-CLI over SSH',  sub: 'Run commands on remote WPE installs',      icon: '⌨' },
+      { id: 'push',   label: 'Push to WPE',      sub: 'Overwrite remote with local files and DB', icon: '⬆' },
+      { id: 'delete', label: 'Delete / Promote', sub: 'Irreversible CAPI operations',              icon: '🗑' },
     ];
 
     const renderToggle = (checked: boolean, onChange: (v: boolean) => void): React.ReactNode =>
@@ -362,6 +366,16 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         React.createElement('div', { style: { position: 'absolute' as const, top: 2, left: checked ? 17 : 2, width: 15, height: 15, background: checked ? '#fff' : 'var(--nxai-status-neutral, #9ca3af)', borderRadius: '50%', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.3)' } }),
       );
 
+    // Summary text shown when section is collapsed
+    const blockedForPush = !getPermVal('push', 'production');
+    const blockedForDelete = !getPermVal('delete', 'production');
+    const summaryParts: string[] = [];
+    if (wpeAccounts.length > 0) summaryParts.push(`${includedIds.length} account${includedIds.length !== 1 ? 's' : ''}`);
+    if (blockedForPush && blockedForDelete) summaryParts.push('production blocked for push & delete');
+    else if (blockedForPush) summaryParts.push('production blocked for push');
+    else if (blockedForDelete) summaryParts.push('production blocked for delete');
+    const headerSummary = summaryParts.join(' · ');
+
     const renderOpCard = (op: typeof OPERATIONS[number]): React.ReactNode => {
       const expanded = expandedOps.has(op.id);
       const devOn = getPermVal(op.id, 'development');
@@ -369,221 +383,214 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       const prdOn = getPermVal(op.id, 'production');
       const opExceptions = exceptions.filter((e) => op.id in e.overrides);
 
-      const envBadge = (label: string, on: boolean, color: string) =>
+      const envPill = (label: string, on: boolean) =>
         React.createElement('span', {
-          style: { fontSize: 10, fontFamily: 'monospace', padding: '2px 7px', borderRadius: 10, fontWeight: 500, background: on ? `rgba(${color},0.12)` : 'rgba(139,148,158,0.08)', color: on ? `rgb(${color})` : 'var(--nxai-status-neutral, #9ca3af)' },
-        }, `${label} ${on ? '✓' : '✗'}`);
+          style: { fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, letterSpacing: '0.02em', background: on ? 'rgba(81,187,123,0.12)' : 'rgba(248,113,113,0.12)', color: on ? '#51BB7B' : '#f87171' },
+        }, label);
 
       return React.createElement('div', {
         key: op.id,
-        style: { background: 'var(--nxai-card-bg, #21262d)', border: `1px solid ${expanded ? 'rgba(59,130,246,0.45)' : 'var(--nxai-card-border, #30363d)'}`, borderRadius: 8, overflow: 'hidden', marginBottom: 8, cursor: 'pointer' },
-        onClick: () => this.handleOpCardToggle(op.id),
+        style: { border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 7, overflow: 'hidden', marginBottom: 5 },
       },
-        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 14, padding: '13px 16px' } },
-          React.createElement('div', { style: { width: 34, height: 34, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, background: `rgba(${op.color},0.12)`, color: `rgb(${op.color})` } }, op.icon),
-          React.createElement('div', { style: { flex: 1 } },
+        // Card header — always visible
+        React.createElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: 11, padding: '10px 13px', background: 'var(--nxai-card-bg, #21262d)', cursor: 'pointer' },
+          onClick: () => this.handleOpCardToggle(op.id),
+        },
+          React.createElement('div', { style: { width: 28, height: 28, borderRadius: 7, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, background: 'rgba(128,128,128,0.08)' } }, op.icon),
+          React.createElement('div', { style: { flex: 1, minWidth: 0 } },
             React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, op.label),
             React.createElement('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', marginTop: 1 } }, op.sub),
           ),
-          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 } },
-            envBadge('Dev', devOn, '81,187,123'),
-            envBadge('Stg', stgOn, '251,191,36'),
-            envBadge('Prd', prdOn, prdOn ? '81,187,123' : '248,113,113'),
-            opExceptions.length > 0 ? React.createElement('span', { style: { fontSize: 10, fontFamily: 'monospace', padding: '2px 8px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6', borderRadius: 3 } }, `${opExceptions.length} exception${opExceptions.length !== 1 ? 's' : ''}`) : null,
-            React.createElement('span', { style: { color: 'var(--nxai-status-neutral, #9ca3af)', fontSize: 11, transition: 'transform 0.15s', transform: expanded ? 'rotate(90deg)' : 'none', display: 'inline-block' } }, '▶'),
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 } },
+            envPill('Dev', devOn),
+            envPill('Stg', stgOn),
+            envPill('Prd', prdOn),
+            opExceptions.length > 0
+              ? React.createElement('span', { style: { fontSize: 10, color: '#0ECAD4', background: 'rgba(14,202,212,0.08)', border: '1px solid rgba(14,202,212,0.18)', borderRadius: 10, padding: '2px 7px' } },
+                  `${opExceptions.length} exception${opExceptions.length !== 1 ? 's' : ''}`)
+              : null,
+            React.createElement('span', { style: { color: 'var(--nxai-status-neutral, #9ca3af)', fontSize: 9, display: 'inline-block', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' } }, '▶'),
           ),
         ),
+        // Card body — stacked: env toggles → divider → exceptions
         expanded ? React.createElement('div', {
-          style: { borderTop: '1px solid var(--nxai-card-border, #30363d)', padding: 16, background: 'rgba(255,255,255,0.01)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },
+          style: { background: 'var(--nxai-code-bg, #1f1f1f)', borderTop: '1px solid var(--nxai-card-border, #30363d)', padding: '14px 15px' },
           onClick: (e: React.MouseEvent) => e.stopPropagation(),
         },
-          React.createElement('div', null,
-            React.createElement('div', { style: { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 10 } }, 'Default by environment'),
-            ...(['development', 'staging', 'production'] as const).map((env) => {
-              const dotColor = env === 'development' ? '#51BB7B' : env === 'staging' ? '#fbbf24' : '#f87171';
-              const val = getPermVal(op.id, env);
-              return React.createElement('div', {
-                key: env,
-                style: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', background: 'var(--nxai-code-bg, #1f1f1f)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 6, marginBottom: 6 },
-              },
+          // Env toggles
+          React.createElement('div', { style: { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 9 } }, 'Default by environment'),
+          ...(['development', 'staging', 'production'] as const).map((env) => {
+            const dotColor = env === 'development' ? '#51BB7B' : env === 'staging' ? '#fbbf24' : '#f87171';
+            const val = getPermVal(op.id, env);
+            return React.createElement('div', {
+              key: env,
+              style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: env !== 'production' ? '1px solid var(--nxai-card-border, #30363d)' : 'none' },
+            },
+              React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 } },
                 React.createElement('div', { style: { width: 7, height: 7, borderRadius: '50%', background: dotColor, flexShrink: 0 } }),
-                React.createElement('span', { style: { flex: 1, fontSize: 12, fontWeight: 500, textTransform: 'capitalize' as const } }, env),
-                renderToggle(val, (v) => this.handleOperationToggle(op.id, env, v)),
-              );
-            }),
-          ),
-          React.createElement('div', null,
-            React.createElement('div', { style: { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 10 } }, 'Site exceptions'),
-            opExceptions.length === 0
-              ? React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-status-neutral, #9ca3af)', fontStyle: 'italic' as const, marginBottom: 8 } }, 'No exceptions — all sites follow global')
-              : opExceptions.map((exc) =>
+                React.createElement('span', { style: { textTransform: 'capitalize' as const } }, env),
+              ),
+              renderToggle(val, (v) => this.handleOperationToggle(op.id, env, v)),
+            );
+          }),
+          // Divider
+          React.createElement('div', { style: { height: 1, background: 'var(--nxai-card-border, #30363d)', margin: '13px 0' } }),
+          // Exceptions
+          React.createElement('div', { style: { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 9 } }, 'Site exceptions'),
+          opExceptions.length === 0
+            ? React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-status-neutral, #9ca3af)', marginBottom: 8 } }, 'No exceptions — all sites follow global defaults.')
+            : React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: 5, marginBottom: 8 } },
+                ...opExceptions.map((exc) =>
                   React.createElement('div', {
                     key: `${exc.installName}-${exc.environment}`,
-                    style: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: 'var(--nxai-code-bg, #1f1f1f)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 6, marginBottom: 6, fontSize: 12 },
+                    style: { display: 'flex', alignItems: 'center', gap: 7, background: 'var(--nxai-card-bg, #21262d)', borderRadius: 6, padding: '6px 10px', fontSize: 12 },
                   },
-                    React.createElement('span', { style: { flex: 1, fontWeight: 500 } }, exc.installName),
-                    React.createElement('span', { style: { fontSize: 10, color: 'var(--nxai-card-sub, #6b7280)' } }, exc.environment),
-                    React.createElement('span', { style: { fontSize: 10, fontFamily: 'monospace', color: exc.overrides[op.id] ? '#51BB7B' : '#f87171' } }, exc.overrides[op.id] ? 'allow ↑' : 'block ↓'),
+                    React.createElement('span', { style: { fontWeight: 500 } }, exc.installName),
+                    React.createElement('span', { style: { fontSize: 10, color: 'var(--nxai-card-sub, #6b7280)', background: 'rgba(128,128,128,0.1)', borderRadius: 4, padding: '1px 6px' } }, exc.environment),
+                    React.createElement('span', { style: { fontSize: 10, fontWeight: 700, color: exc.overrides[op.id] ? '#51BB7B' : '#f87171' } }, exc.overrides[op.id] ? 'allow' : 'block'),
+                    React.createElement('span', { style: { flex: 1 } }),
                     React.createElement('span', {
-                      style: { color: 'var(--nxai-status-neutral, #9ca3af)', cursor: 'pointer', marginLeft: 4, fontSize: 12 },
+                      style: { color: 'var(--nxai-status-neutral, #9ca3af)', cursor: 'pointer', fontSize: 14, padding: '0 3px', lineHeight: 1 },
                       onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handleSiteExceptionRemove(exc.installName, exc.environment); },
-                    }, '✕'),
+                    }, '×'),
                   ),
                 ),
-            // Inline add form with install search
-            addingException?.op === op.id
-              ? React.createElement('div', {
-                  style: { background: 'var(--nxai-code-bg, #1f1f1f)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 6, padding: '10px 12px' },
-                  onClick: (e: React.MouseEvent) => e.stopPropagation(),
+              ),
+          // Add exception form or button
+          addingException?.op === op.id
+            ? React.createElement('div', {
+                style: { background: 'var(--nxai-card-bg, #21262d)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 6, padding: '10px 12px' },
+                onClick: (e: React.MouseEvent) => e.stopPropagation(),
+              },
+                React.createElement('input', {
+                  type: 'text',
+                  placeholder: 'Search installs…',
+                  value: installSearch,
+                  autoFocus: true,
+                  onChange: (e: any) => { const v = e.target.value; this.setState({ installSearch: v }); },
+                  style: { width: '100%', fontSize: 12, padding: '6px 8px', background: 'var(--nxai-code-bg, #1f1f1f)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4, color: 'var(--nxai-card-text, #e6edf3)', fontFamily: 'inherit', marginBottom: 6 },
+                }),
+                React.createElement('div', {
+                  style: { maxHeight: 150, overflowY: 'auto' as const, display: 'flex', flexDirection: 'column' as const, gap: 2, marginBottom: 8 },
                 },
-                  // Search input
-                  React.createElement('input', {
-                    type: 'text',
-                    placeholder: 'Search installs…',
-                    value: installSearch,
-                    autoFocus: true,
-                    onChange: (e: any) => { const v = e.target.value; this.setState({ installSearch: v }); },
-                    style: { width: '100%', fontSize: 12, padding: '6px 8px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4, color: 'var(--nxai-card-text, #e6edf3)', fontFamily: 'inherit', marginBottom: 6 },
-                  }),
-                  // Filtered install list
-                  React.createElement('div', {
-                    style: { maxHeight: 160, overflowY: 'auto' as const, display: 'flex', flexDirection: 'column' as const, gap: 2, marginBottom: 8 },
-                  },
-                    (() => {
-                      const q = installSearch.toLowerCase();
-                      const filtered = wpeInstalls
-                        .filter((i) => !q || i.installName.toLowerCase().includes(q) || i.primaryDomain.toLowerCase().includes(q))
-                        .slice(0, 30);
-                      if (filtered.length === 0) {
-                        return [React.createElement('div', { key: 'empty', style: { fontSize: 11, color: 'var(--nxai-status-neutral, #9ca3af)', padding: '6px 4px', fontStyle: 'italic' as const } }, 'No installs found')];
-                      }
-                      return filtered.map((inst) => {
-                        const isSelected = addingException.installName === inst.installName;
-                        const envColor = inst.environment === 'production' ? '#f87171' : inst.environment === 'staging' ? '#fbbf24' : '#51BB7B';
-                        return React.createElement('div', {
-                          key: inst.installName,
-                          style: {
-                            display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, cursor: 'pointer',
-                            background: isSelected ? 'rgba(59,130,246,0.15)' : 'transparent',
-                            border: isSelected ? '1px solid rgba(59,130,246,0.4)' : '1px solid transparent',
-                          },
-                          onClick: () => this.setState((prev) => ({
-                            addingException: prev.addingException ? { ...prev.addingException, installName: inst.installName, environment: inst.environment } : null,
-                          })),
-                        },
-                          React.createElement('div', { style: { width: 6, height: 6, borderRadius: '50%', background: envColor, flexShrink: 0 } }),
-                          React.createElement('span', { style: { flex: 1, fontSize: 12, fontWeight: 500 } }, inst.installName),
-                          React.createElement('span', { style: { fontSize: 10, color: 'var(--nxai-card-sub, #6b7280)' } }, inst.environment),
-                          isSelected ? React.createElement('span', { style: { fontSize: 10, color: '#3b82f6' } }, '✓') : null,
-                        );
-                      });
-                    })(),
-                  ),
-                  // Selected + allow/block + actions
-                  React.createElement('div', { style: { borderTop: '1px solid var(--nxai-card-border, #30363d)', paddingTop: 8, display: 'flex', alignItems: 'center', gap: 8 } },
-                    addingException.installName
-                      ? React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-card-text)', flex: 1 } },
-                          React.createElement('strong', null, addingException.installName),
-                          ' · ',
-                          React.createElement('span', { style: { color: 'var(--nxai-card-sub, #6b7280)' } }, addingException.environment),
-                        )
-                      : React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-status-neutral, #9ca3af)', flex: 1, fontStyle: 'italic' as const } }, 'Select an install above'),
-                    React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer' } },
-                      React.createElement('input', {
-                        type: 'checkbox', checked: addingException.allowing,
-                        onChange: (e: any) => { const v = e.target.checked; this.setState((prev) => ({ addingException: prev.addingException ? { ...prev.addingException, allowing: v } : null })); },
-                      }),
-                      React.createElement('span', { style: { color: addingException.allowing ? '#51BB7B' : '#f87171' } }, addingException.allowing ? 'Allow' : 'Block'),
-                    ),
-                    React.createElement('button', {
-                      style: { fontSize: 11, padding: '4px 10px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, cursor: addingException.installName ? 'pointer' : 'not-allowed', opacity: addingException.installName ? 1 : 0.5, fontFamily: 'inherit' },
-                      disabled: !addingException.installName,
-                      onClick: (e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        if (!addingException.installName) return;
-                        this.handleSiteExceptionToggle(addingException.installName, addingException.environment, op.id as WpeOperation, addingException.allowing);
-                        this.setState({ addingException: null, installSearch: '' });
+                  (() => {
+                    const q = installSearch.toLowerCase();
+                    const filtered = wpeInstalls
+                      .filter((i) => !q || i.installName.toLowerCase().includes(q) || i.primaryDomain.toLowerCase().includes(q))
+                      .slice(0, 30);
+                    if (filtered.length === 0) {
+                      return [React.createElement('div', { key: 'empty', style: { fontSize: 11, color: 'var(--nxai-status-neutral, #9ca3af)', padding: '6px 4px', fontStyle: 'italic' as const } }, 'No installs found')];
+                    }
+                    return filtered.map((inst) => {
+                      const isSelected = addingException.installName === inst.installName;
+                      const envColor = inst.environment === 'production' ? '#f87171' : inst.environment === 'staging' ? '#fbbf24' : '#51BB7B';
+                      return React.createElement('div', {
+                        key: inst.installName,
+                        style: { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, cursor: 'pointer', background: isSelected ? 'rgba(59,130,246,0.15)' : 'transparent', border: isSelected ? '1px solid rgba(59,130,246,0.4)' : '1px solid transparent' },
+                        onClick: () => this.setState((prev) => ({
+                          addingException: prev.addingException ? { ...prev.addingException, installName: inst.installName, environment: inst.environment } : null,
+                        })),
                       },
-                    }, 'Save'),
-                    React.createElement('button', {
-                      style: { fontSize: 11, padding: '4px 10px', background: 'none', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4, cursor: 'pointer', color: 'var(--nxai-card-sub, #6b7280)', fontFamily: 'inherit' },
-                      onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.setState({ addingException: null, installSearch: '' }); },
-                    }, 'Cancel'),
+                        React.createElement('div', { style: { width: 6, height: 6, borderRadius: '50%', background: envColor, flexShrink: 0 } }),
+                        React.createElement('span', { style: { flex: 1, fontSize: 12, fontWeight: 500 } }, inst.installName),
+                        React.createElement('span', { style: { fontSize: 10, color: 'var(--nxai-card-sub, #6b7280)' } }, inst.environment),
+                        isSelected ? React.createElement('span', { style: { fontSize: 10, color: '#3b82f6' } }, '✓') : null,
+                      );
+                    });
+                  })(),
+                ),
+                React.createElement('div', { style: { borderTop: '1px solid var(--nxai-card-border, #30363d)', paddingTop: 8, display: 'flex', alignItems: 'center', gap: 8 } },
+                  addingException.installName
+                    ? React.createElement('span', { style: { fontSize: 11, flex: 1 } },
+                        React.createElement('strong', null, addingException.installName),
+                        ' · ',
+                        React.createElement('span', { style: { color: 'var(--nxai-card-sub, #6b7280)' } }, addingException.environment),
+                      )
+                    : React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-status-neutral, #9ca3af)', flex: 1, fontStyle: 'italic' as const } }, 'Select an install above'),
+                  React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer' } },
+                    React.createElement('input', {
+                      type: 'checkbox', checked: addingException.allowing,
+                      onChange: (e: any) => { const v = e.target.checked; this.setState((prev) => ({ addingException: prev.addingException ? { ...prev.addingException, allowing: v } : null })); },
+                    }),
+                    React.createElement('span', { style: { color: addingException.allowing ? '#51BB7B' : '#f87171' } }, addingException.allowing ? 'Allow' : 'Block'),
                   ),
-                )
-              : React.createElement('button', {
-                  style: { display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: 'none', border: '1px dashed var(--nxai-card-border, #30363d)', borderRadius: 6, fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)', cursor: 'pointer', width: '100%', fontFamily: 'inherit' },
-                  onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.setState({ addingException: { op: op.id, installName: '', environment: 'production', allowing: true } }); },
-                }, '＋ Add site exception'),
-          ),
+                  React.createElement('button', {
+                    style: { fontSize: 11, padding: '4px 10px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, cursor: addingException.installName ? 'pointer' : 'not-allowed', opacity: addingException.installName ? 1 : 0.5, fontFamily: 'inherit' },
+                    disabled: !addingException.installName,
+                    onClick: (e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      if (!addingException.installName) return;
+                      this.handleSiteExceptionToggle(addingException.installName, addingException.environment, op.id as WpeOperation, addingException.allowing);
+                      this.setState({ addingException: null, installSearch: '' });
+                    },
+                  }, 'Save'),
+                  React.createElement('button', {
+                    style: { fontSize: 11, padding: '4px 10px', background: 'none', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4, cursor: 'pointer', color: 'var(--nxai-card-sub, #6b7280)', fontFamily: 'inherit' },
+                    onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.setState({ addingException: null, installSearch: '' }); },
+                  }, 'Cancel'),
+                ),
+              )
+            : React.createElement('button', {
+                style: { background: 'none', border: 'none', fontSize: 12, color: '#0ECAD4', cursor: 'pointer', padding: '3px 0', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 },
+                onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.setState({ addingException: { op: op.id, installName: '', environment: 'production', allowing: true } }); },
+              }, '+ Add site exception'),
         ) : null,
       );
     };
 
-    const acctCard = wpeAccounts.length > 0 ? React.createElement('div', {
-      style: { background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 8, overflow: 'hidden', marginBottom: 6 },
+    // Simple accounts chip bar (click to toggle individual accounts)
+    const accountsBar = wpeAccounts.length > 0 ? React.createElement('div', {
+      style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const, padding: '9px 12px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 7, marginBottom: 14 },
     },
-      React.createElement('div', {
-        style: { display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', cursor: 'pointer' },
-        onClick: () => this.setState((prev) => ({ acctScopeExpanded: !prev.acctScopeExpanded })),
-      },
-        React.createElement('div', { style: { width: 32, height: 32, borderRadius: 8, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 } }, '🏢'),
-        React.createElement('div', { style: { flex: 1 } },
-          React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, 'Included Accounts'),
-          React.createElement('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', marginTop: 1 } }, 'These accounts are visible in Nexus and included in all operations'),
-        ),
-        React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap' as const, gap: 4, justifyContent: 'flex-end' as const, maxWidth: 260 } },
-          ...wpeAccounts.slice(0, 5).map((a) => {
-            const on = allIncluded || includedIds.includes(a.id);
-            return React.createElement('span', {
-              key: a.id,
-              style: { fontSize: 10, padding: '2px 8px', borderRadius: 10, fontWeight: 500, background: on ? 'rgba(81,187,123,0.12)' : 'rgba(139,148,158,0.08)', color: on ? '#51BB7B' : 'var(--nxai-status-neutral, #9ca3af)', border: on ? '1px solid rgba(81,187,123,0.3)' : '1px solid var(--nxai-card-border, #30363d)', cursor: 'pointer' },
-              onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handleAccountScopeToggle(a.id, !on); },
-            }, a.nickname ?? a.name ?? a.id);
-          }),
-          wpeAccounts.length > 5 ? React.createElement('span', { style: { fontSize: 10, color: 'var(--nxai-card-sub, #6b7280)', padding: '2px 4px' } }, `+${wpeAccounts.length - 5}`) : null,
-        ),
-        React.createElement('span', { style: { color: 'var(--nxai-status-neutral, #9ca3af)', fontSize: 11, marginLeft: 8, flexShrink: 0 } }, acctScopeExpanded ? '▼' : '▶'),
-      ),
-      acctScopeExpanded ? React.createElement('div', {
-        style: { borderTop: '1px solid var(--nxai-card-border, #30363d)', padding: '14px 16px', background: 'rgba(255,255,255,0.01)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 },
-      },
-        ...wpeAccounts.map((a) => {
-          const on = allIncluded || includedIds.includes(a.id);
-          return React.createElement('div', {
-            key: a.id,
-            style: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: on ? 'var(--nxai-code-bg, #1f1f1f)' : 'rgba(255,255,255,0.01)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 6, cursor: 'pointer', opacity: on ? 1 : 0.45, fontSize: 12 },
-            onClick: () => this.handleAccountScopeToggle(a.id, !on),
-          },
-            React.createElement('div', { style: { width: 8, height: 8, borderRadius: '50%', background: on ? '#51BB7B' : 'var(--nxai-status-neutral, #9ca3af)', flexShrink: 0 } }),
-            React.createElement('span', { style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const } }, a.nickname ?? a.name ?? a.id),
-            React.createElement('span', { style: { color: on ? '#51BB7B' : 'var(--nxai-status-neutral, #9ca3af)', fontSize: 11, flexShrink: 0 } }, on ? '✓' : '✗'),
-          );
-        }),
-      ) : null,
+      React.createElement('span', { style: { fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: 'var(--nxai-card-sub, #6b7280)', marginRight: 2 } }, 'Accounts'),
+      ...wpeAccounts.slice(0, 7).map((a) => {
+        const on = allIncluded || includedIds.includes(a.id);
+        return React.createElement('span', {
+          key: a.id,
+          title: `Click to ${on ? 'exclude' : 'include'} ${a.nickname ?? a.name}`,
+          style: { fontSize: 11, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', background: on ? 'rgba(81,187,123,0.1)' : 'rgba(128,128,128,0.08)', color: on ? '#51BB7B' : 'var(--nxai-status-neutral, #9ca3af)', border: on ? '1px solid rgba(81,187,123,0.25)' : '1px solid var(--nxai-card-border, #30363d)' },
+          onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handleAccountScopeToggle(a.id, !on); },
+        }, a.nickname ?? a.name ?? a.id);
+      }),
+      wpeAccounts.length > 7 ? React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)' } }, `+${wpeAccounts.length - 7} more`) : null,
     ) : null;
 
-    return React.createElement('div', { style: sectionStyle },
-      React.createElement('div', { style: labelStyle }, 'WP Engine Access'),
-      React.createElement('div', { style: descStyle }, 'Control which accounts and operations Nexus can use across your WP Engine environments.'),
-      React.createElement('div', { style: { marginTop: 12 } },
-        acctCard,
-        wpeAccounts.length > 0 ? React.createElement('div', { style: { height: 14, borderLeft: '1px solid var(--nxai-card-border, #30363d)', marginLeft: 10, marginBottom: 4 } }) : null,
-        React.createElement('div', { style: { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 } },
-          React.createElement('span', null, 'Operation Permissions'),
-          React.createElement('span', { style: { flex: 1, height: 1, background: 'var(--nxai-card-border, #30363d)' } }),
+    // Outer collapsible container
+    return React.createElement('div', {
+      style: { border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 8, overflow: 'hidden', marginBottom: 14 },
+    },
+      // Collapsible header
+      React.createElement('div', {
+        style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', background: 'var(--nxai-card-bg, #21262d)', cursor: 'pointer', userSelect: 'none' as const },
+        onClick: () => this.setState((prev) => ({ accessExpanded: !prev.accessExpanded })),
+      },
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+          React.createElement('span', { style: { fontSize: 13, fontWeight: 600 } }, 'Access & Permissions'),
+          React.createElement('span', { style: { fontSize: 10, background: 'rgba(128,128,128,0.1)', color: 'var(--nxai-card-sub, #6b7280)', borderRadius: 4, padding: '2px 6px' } }, 'Advanced'),
         ),
-        ...OPERATIONS.map(renderOpCard),
-        React.createElement('div', {
-          style: { display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 14px', background: 'rgba(81,187,123,0.05)', border: '1px solid rgba(81,187,123,0.2)', borderRadius: 6, fontSize: 12, color: 'rgba(81,187,123,0.8)', marginTop: 8, lineHeight: '1.5' },
-        },
-          React.createElement('span', null, '📖'),
-          React.createElement('span', null,
-            React.createElement('strong', null, 'Read metadata'),
-            ' (installs, domains, SSL, usage) is always permitted and cannot be disabled.',
-          ),
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+          React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)' } }, headerSummary),
+          React.createElement('span', { style: { fontSize: 9, color: 'var(--nxai-status-neutral, #9ca3af)', display: 'inline-block', transform: accessExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' } }, '▶'),
         ),
       ),
+      // Collapsible body
+      accessExpanded ? React.createElement('div', {
+        style: { borderTop: '1px solid var(--nxai-card-border, #30363d)', padding: 16, background: 'rgba(255,255,255,0.01)' },
+      },
+        accountsBar,
+        React.createElement('div', { style: { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 9 } }, 'Operation Permissions'),
+        ...OPERATIONS.map(renderOpCard),
+        React.createElement('div', {
+          style: { display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 11px', background: 'rgba(14,202,212,0.05)', border: '1px solid rgba(14,202,212,0.12)', borderRadius: 6, fontSize: 11, color: 'var(--nxai-muted, #6aacb0)', lineHeight: '1.55', marginTop: 12 },
+        },
+          React.createElement('span', null, 'ℹ'),
+          React.createElement('span', null,
+            React.createElement('strong', null, 'Read-only operations'),
+            ' (installs, domains, SSL, usage metadata) are always permitted and cannot be disabled.',
+          ),
+        ),
+      ) : null,
     );
   }
 
@@ -1065,7 +1072,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
 
   render(): React.ReactNode {
-    const { settings, sites, loading, expandedSections } = this.state;
+    const { settings, sites, loading, expandedSections, excludedExpanded } = this.state;
 
     if (loading) {
       return React.createElement('div', {
@@ -1138,36 +1145,43 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
           React.createElement('span', { style: { fontSize: '14px' } }, 'Automatically index sites when started'),
         ),
 
-        settings.autoIndex
-          ? React.createElement('div', { style: { marginTop: '12px' } },
-              React.createElement('div', { style: labelStyle }, 'Excluded Sites'),
-              React.createElement('div', { style: descStyle },
-                'Checked sites will not be auto-indexed when started. You can still manually index them.',
-              ),
-              sites.length === 0
-                ? React.createElement('div', { style: descStyle }, 'No sites found.')
-                : sites.map((site) =>
-                    React.createElement('label', {
-                      key: site.id,
-                      style: checkboxRowStyle,
-                    },
-                      React.createElement('input', {
-                        type: 'checkbox',
-                        checked: settings.excludedSiteIds.includes(site.id),
-                        onChange: () => this.handleSiteExclusionToggle(site.id),
-                        style: { width: '16px', height: '16px', cursor: 'pointer' },
-                      }),
-                      React.createElement('span', { style: { fontSize: '13px' } }, site.name),
-                      React.createElement('span', {
-                        style: {
-                          fontSize: '11px',
-                          color: site.status === 'running' ? UI_COLORS.STATUS_RUNNING : 'inherit',
-                          opacity: site.status === 'running' ? 1 : 0.7,
-                          marginLeft: '4px',
-                        },
-                      }, `(${site.status})`),
-                    ),
+        settings.autoIndex && sites.length > 0
+          ? React.createElement('div', { style: { marginTop: '10px', border: '1px solid rgba(128,128,128,0.15)', borderRadius: 7, overflow: 'hidden' } },
+              // Accordion trigger
+              React.createElement('div', {
+                style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 13px', cursor: 'pointer', userSelect: 'none' as const, background: 'rgba(128,128,128,0.04)' },
+                onClick: () => this.setState((prev) => ({ excludedExpanded: !prev.excludedExpanded })),
+              },
+                React.createElement('span', { style: { fontSize: 13, color: 'inherit' } }, 'Excluded sites'),
+                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                  React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } },
+                    settings.excludedSiteIds.length > 0 ? `${settings.excludedSiteIds.length} excluded` : 'none excluded',
                   ),
+                  React.createElement('span', { style: { fontSize: 9, opacity: 0.5, display: 'inline-block', transform: excludedExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' } }, '▶'),
+                ),
+              ),
+              // Accordion body
+              excludedExpanded ? React.createElement('div', {
+                style: { borderTop: '1px solid rgba(128,128,128,0.12)', padding: '10px 13px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' },
+              },
+                ...sites.map((site) =>
+                  React.createElement('label', {
+                    key: site.id,
+                    style: { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer' },
+                  },
+                    React.createElement('input', {
+                      type: 'checkbox',
+                      checked: settings.excludedSiteIds.includes(site.id),
+                      onChange: () => this.handleSiteExclusionToggle(site.id),
+                      style: { width: '14px', height: '14px', cursor: 'pointer' },
+                    }),
+                    React.createElement('span', { style: { fontSize: '13px' } }, site.name),
+                    React.createElement('span', {
+                      style: { fontSize: '11px', opacity: 0.45, marginLeft: 2 },
+                    }, `(${site.status})`),
+                  ),
+                ),
+              ) : null,
             )
           : null,
       ) : null,
@@ -1190,128 +1204,61 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
         divider,
 
-        // Auto-Sync WP Engine Metadata
+        // Sync Schedule — consolidated
         React.createElement('div', { style: sectionStyle },
-          React.createElement('div', { style: labelStyle }, 'Auto-Sync WP Engine Metadata'),
+          React.createElement('div', { style: labelStyle }, 'Sync Schedule'),
           React.createElement('div', { style: descStyle },
-            'Automatically sync WP Engine site metadata (plugins, WP version, PHP version) on startup and on a schedule.',
+            'How often Nexus automatically refreshes WP Engine site data in the background. Changes take effect on the next Local restart.',
           ),
-          React.createElement('label', {
-            style: checkboxRowStyle,
-            title: 'Periodically pull the latest metadata from all linked WP Engine accounts.',
-          },
-            React.createElement('input', {
-              type: 'checkbox',
-              checked: settings.wpeSyncAutoEnabled !== false,
-              onChange: () => {
-                this.setState((prev) => {
-                  const next = { ...prev.settings, wpeSyncAutoEnabled: prev.settings.wpeSyncAutoEnabled === false ? true : false };
-                  this.notifyChange(next);
-                  return { settings: next };
-                });
-              },
-              style: { width: '16px', height: '16px', cursor: 'pointer' },
-            }),
-            React.createElement('span', { style: { fontSize: '14px' } }, 'Enable auto-sync'),
-          ),
-          settings.wpeSyncAutoEnabled !== false
-            ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' } },
-                React.createElement('span', { style: { fontSize: '14px' } }, 'Sync every'),
+          React.createElement('div', { style: { border: '1px solid rgba(128,128,128,0.15)', borderRadius: 8, overflow: 'hidden' } },
+            // Row: Metadata sync
+            React.createElement('div', { style: { display: 'flex', alignItems: 'center', borderBottom: '1px solid rgba(128,128,128,0.1)' } },
+              React.createElement('div', { style: { flex: 1, padding: '10px 13px' } },
+                React.createElement('div', { style: { fontSize: 12 } }, 'Metadata sync'),
+                React.createElement('div', { style: { fontSize: 11, opacity: 0.45, marginTop: 2 } }, 'Plugins, WP version, PHP version'),
+              ),
+              React.createElement('div', { style: { padding: '10px 13px', borderLeft: '1px solid rgba(128,128,128,0.1)', background: 'rgba(128,128,128,0.04)', display: 'flex', alignItems: 'center', gap: 6 } },
                 React.createElement('input', {
-                  type: 'number',
-                  min: 1,
-                  max: 168,
+                  type: 'number', min: 1, max: 168,
                   value: settings.wpeSyncIntervalHours ?? 8,
                   onChange: this.handleWpeSyncIntervalChange,
-                  title: 'How often (in hours) to automatically fetch WP Engine metadata.',
-                  style: {
-                    width: '64px',
-                    padding: '4px 8px',
-                    fontSize: '14px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--color-border-primary, #ccc)',
-                    textAlign: 'center' as const,
-                  },
+                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)' },
                 }),
-                React.createElement('span', { style: { fontSize: '14px' } }, 'hours'),
-                React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, marginLeft: '4px' } }, '(1–168)'),
-              )
-            : null,
-        ),
-
-        divider,
-
-        // Auto-Update WP Engine Site Info
-        React.createElement('div', { style: sectionStyle },
-          React.createElement('div', { style: labelStyle }, 'Auto-Update WP Engine Site Info'),
-          React.createElement('div', { style: descStyle },
-            'Periodically re-scans WP Engine installs via SSH WP-CLI to update plugins, themes, site URL, admin email, and post count. Changes take effect on the next Local restart.',
-          ),
-          React.createElement('label', {
-            style: checkboxRowStyle,
-            title: 'Use SSH + WP-CLI to fetch the latest plugin list, themes, and site details from WP Engine.',
-          },
-            React.createElement('input', {
-              type: 'checkbox',
-              checked: settings.wpeRefreshAutoEnabled !== false,
-              onChange: this.handleWpeRefreshAutoEnabledToggle,
-              style: { width: '16px', height: '16px', cursor: 'pointer' },
-            }),
-            React.createElement('span', { style: { fontSize: '14px' } }, 'Enable automatic WP Engine site info updates'),
-          ),
-          settings.wpeRefreshAutoEnabled !== false
-            ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' } },
-                React.createElement('span', { style: { fontSize: '14px' } }, 'Update every'),
+                React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } }, 'hrs'),
+              ),
+            ),
+            // Row: Site info updates
+            React.createElement('div', { style: { display: 'flex', alignItems: 'center', borderBottom: '1px solid rgba(128,128,128,0.1)' } },
+              React.createElement('div', { style: { flex: 1, padding: '10px 13px' } },
+                React.createElement('div', { style: { fontSize: 12 } }, 'Site info updates'),
+                React.createElement('div', { style: { fontSize: 11, opacity: 0.45, marginTop: 2 } }, 'URL, admin email, post count via SSH WP-CLI'),
+              ),
+              React.createElement('div', { style: { padding: '10px 13px', borderLeft: '1px solid rgba(128,128,128,0.1)', background: 'rgba(128,128,128,0.04)', display: 'flex', alignItems: 'center', gap: 6 } },
                 React.createElement('input', {
-                  type: 'number',
-                  min: 1,
-                  max: 168,
+                  type: 'number', min: 1, max: 168,
                   value: settings.wpeRefreshIntervalHours ?? 24,
                   onChange: this.handleWpeRefreshIntervalChange,
-                  title: 'How often (in hours) to re-scan WP Engine installs via SSH.',
-                  style: {
-                    width: '64px',
-                    padding: '4px 8px',
-                    fontSize: '14px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--color-border-primary, #ccc)',
-                    textAlign: 'center' as const,
-                  },
+                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)' },
                 }),
-                React.createElement('span', { style: { fontSize: '14px' } }, 'hours'),
-                React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, marginLeft: '4px' } }, '(1–168)'),
-              )
-            : null,
-        ),
-
-        divider,
-
-        // Refresh Offline Sites
-        React.createElement('div', { style: sectionStyle },
-          React.createElement('div', { style: labelStyle }, 'Refresh Offline Sites'),
-          React.createElement('div', { style: descStyle },
-            'Periodically re-scans halted local sites via filesystem to keep their metadata fresh. Running sites are updated automatically when started. Changes take effect on the next Local restart.',
-          ),
-          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-            React.createElement('span', { style: { fontSize: '14px' } }, 'Refresh offline sites every'),
-            React.createElement('input', {
-              type: 'number',
-              min: 1,
-              max: 168,
-              value: settings.haltedSiteRefreshIntervalHours ?? 24,
-              onChange: this.handleHaltedRefreshIntervalChange,
-              title: 'How often (in hours) to scan halted sites for metadata changes.',
-              style: {
-                width: '64px',
-                padding: '4px 8px',
-                fontSize: '14px',
-                borderRadius: '4px',
-                border: '1px solid var(--color-border-primary, #ccc)',
-                textAlign: 'center' as const,
-              },
-            }),
-            React.createElement('span', { style: { fontSize: '14px' } }, 'hours'),
-            React.createElement('span', { style: { fontSize: '12px', opacity: 0.6, marginLeft: '4px' } }, '(1–168)'),
+                React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } }, 'hrs'),
+              ),
+            ),
+            // Row: Offline site refresh
+            React.createElement('div', { style: { display: 'flex', alignItems: 'center' } },
+              React.createElement('div', { style: { flex: 1, padding: '10px 13px' } },
+                React.createElement('div', { style: { fontSize: 12 } }, 'Offline site refresh'),
+                React.createElement('div', { style: { fontSize: 11, opacity: 0.45, marginTop: 2 } }, 'Halted local sites — filesystem scan'),
+              ),
+              React.createElement('div', { style: { padding: '10px 13px', borderLeft: '1px solid rgba(128,128,128,0.1)', background: 'rgba(128,128,128,0.04)', display: 'flex', alignItems: 'center', gap: 6 } },
+                React.createElement('input', {
+                  type: 'number', min: 1, max: 168,
+                  value: settings.haltedSiteRefreshIntervalHours ?? 24,
+                  onChange: this.handleHaltedRefreshIntervalChange,
+                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)' },
+                }),
+                React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } }, 'hrs'),
+              ),
+            ),
           ),
         ),
       ) : null,
