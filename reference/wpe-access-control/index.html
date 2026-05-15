@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Control which WP Engine environment types Nexus can access for WP-CLI and content sync">
+        <meta name="description" content="Control which WP Engine accounts, operation types, and sites Nexus can access">
       
       
         <meta name="author" content="Jeremy Pollock">
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#wp-engine-environment-access-control" class="md-skip">
+        <a href="#wp-engine-access-control" class="md-skip">
           Skip to content
         </a>
       
@@ -2992,10 +2992,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#default-behaviour" class="md-nav__link">
+  <a href="#gate-1-account-scope" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Default Behaviour
+        Gate 1 — Account Scope
       
     </span>
   </a>
@@ -3003,10 +3003,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#enabling-production-access" class="md-nav__link">
+  <a href="#gate-2-operation-permissions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Enabling Production Access
+        Gate 2 — Operation Permissions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gate-3-site-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 3 — Site Exceptions
       
     </span>
   </a>
@@ -3025,10 +3036,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cli-mcp-setting" class="md-nav__link">
+  <a href="#migrating-from-v031" class="md-nav__link">
     <span class="md-ellipsis">
       
-        CLI / MCP Setting
+        Migrating from v0.3.1
       
     </span>
   </a>
@@ -3078,10 +3089,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#default-behaviour" class="md-nav__link">
+  <a href="#gate-1-account-scope" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Default Behaviour
+        Gate 1 — Account Scope
       
     </span>
   </a>
@@ -3089,10 +3100,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#enabling-production-access" class="md-nav__link">
+  <a href="#gate-2-operation-permissions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Enabling Production Access
+        Gate 2 — Operation Permissions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gate-3-site-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 3 — Site Exceptions
       
     </span>
   </a>
@@ -3111,10 +3133,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cli-mcp-setting" class="md-nav__link">
+  <a href="#migrating-from-v031" class="md-nav__link">
     <span class="md-ellipsis">
       
-        CLI / MCP Setting
+        Migrating from v0.3.1
       
     </span>
   </a>
@@ -3141,59 +3163,68 @@
   
 
 
-<h1 id="wp-engine-environment-access-control">WP Engine Environment Access Control<a class="headerlink" href="#wp-engine-environment-access-control" title="Permanent link">&para;</a></h1>
-<p>Nexus can interact with WP Engine installs across three environment types: <strong>production</strong>, <strong>staging</strong>, and <strong>development</strong>. By default, production is excluded to prevent accidental changes to live sites.</p>
-<h2 id="default-behaviour">Default Behaviour<a class="headerlink" href="#default-behaviour" title="Permanent link">&para;</a></h2>
+<h1 id="wp-engine-access-control">WP Engine Access Control<a class="headerlink" href="#wp-engine-access-control" title="Permanent link">&para;</a></h1>
+<p>Nexus uses a three-gate model to control what it can do across your WP Engine fleet. All settings live in <strong>Local → Nexus Preferences → WP Engine → WP Engine Access</strong>.</p>
+<h2 id="gate-1-account-scope">Gate 1 — Account Scope<a class="headerlink" href="#gate-1-account-scope" title="Permanent link">&para;</a></h2>
+<p>Controls which WP Engine accounts are visible in Nexus and included in operations. Excluded accounts are completely hidden — no metadata sync, no commands.</p>
+<p>Click account chips in the header to quickly toggle individual accounts, or expand the full grid.</p>
+<h2 id="gate-2-operation-permissions">Gate 2 — Operation Permissions<a class="headerlink" href="#gate-2-operation-permissions" title="Permanent link">&para;</a></h2>
+<p>Four operation types, each independently configurable per environment:</p>
 <table>
 <thead>
 <tr>
-<th>Environment</th>
-<th>Default</th>
-<th>What's affected</th>
+<th>Operation</th>
+<th>Dev default</th>
+<th>Staging default</th>
+<th>Production default</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Development</td>
-<td>Allowed</td>
-<td>WP-CLI, content sync, twin refresh</td>
+<td><strong>Pull to local</strong></td>
+<td>✅ Allowed</td>
+<td>✅ Allowed</td>
+<td>✅ Allowed</td>
 </tr>
 <tr>
-<td>Staging</td>
-<td>Allowed</td>
-<td>WP-CLI, content sync, twin refresh</td>
+<td><strong>WP-CLI over SSH</strong></td>
+<td>✅ Allowed</td>
+<td>✅ Allowed</td>
+<td>❌ Blocked</td>
 </tr>
 <tr>
-<td>Production</td>
-<td>Blocked</td>
-<td>WP-CLI, content sync, twin refresh</td>
+<td><strong>Push to WPE</strong></td>
+<td>✅ Allowed</td>
+<td>✅ Allowed</td>
+<td>❌ Blocked</td>
+</tr>
+<tr>
+<td><strong>Delete / Promote</strong></td>
+<td>❌ Blocked</td>
+<td>❌ Blocked</td>
+<td>❌ Blocked</td>
 </tr>
 </tbody>
 </table>
-<h2 id="enabling-production-access">Enabling Production Access<a class="headerlink" href="#enabling-production-access" title="Permanent link">&para;</a></h2>
-<p>Go to <strong>Local → Nexus Preferences → WP Engine → WP Engine Environment Access</strong> and check <strong>Production</strong>.</p>
-<div class="admonition warning">
-<p class="admonition-title">Production access</p>
-<p>Enabling production access allows Nexus to run WP-CLI commands and index content on live sites. Review any AI-suggested operations carefully before confirming them.</p>
-</div>
+<p>Click any operation card to expand it and toggle individual environment switches.</p>
+<p><strong>Read metadata</strong> (installs, domains, SSL, usage via CAPI) is always permitted and cannot be disabled.</p>
+<h2 id="gate-3-site-exceptions">Gate 3 — Site Exceptions<a class="headerlink" href="#gate-3-site-exceptions" title="Permanent link">&para;</a></h2>
+<p>Override the defaults for specific installs. Expand an operation card and view the "Site exceptions" column. Exceptions show whether the override relaxes (↑) or tightens (↓) the global default.</p>
+<p>Site exceptions are manageable inline — click ✕ to remove one.</p>
 <h2 id="what-the-filter-controls">What the Filter Controls<a class="headerlink" href="#what-the-filter-controls" title="Permanent link">&para;</a></h2>
-<p><strong>Blocked on excluded environments:</strong>
-- All <code>wp_*</code> MCP tools targeting a WPE install (WP-CLI over SSH)
-- Content indexing and twin sync via <code>WPESyncService</code>
-- <code>wpe_site_deep_refresh</code> SSH commands
-- <code>wpe_promote_environment</code> — when the <strong>destination</strong> install is production
-- <code>wpe_delete_install</code> — when the install being deleted is production
-- <code>wpe_delete_site</code> — when any install on the site is production
-- <code>wpe_update_install</code> — when the install being modified is production
-- <code>wpe_purge_cache</code> — when the install being purged is production</p>
+<p><strong>WP-CLI blocked on excluded environments:</strong>
+All <code>wp_*</code> MCP tools using <code>install_name</code>, WPESyncService content indexing, <code>wpe_site_deep_refresh</code>, and <code>wpe_wait_for_ssh</code>.</p>
+<p><strong>Push blocked on excluded environments:</strong>
+<code>local_wpe_push</code></p>
+<p><strong>Delete/Promote blocked on excluded environments:</strong>
+<code>wpe_promote_environment</code> (destination check), <code>wpe_delete_install</code>, <code>wpe_delete_site</code>, <code>wpe_update_install</code>, <code>wpe_purge_cache</code></p>
 <p><strong>Not affected by this filter:</strong>
-- WPE CAPI read operations — <code>wpe_get_installs</code>, <code>wpe_get_install</code>, <code>wpe_get_sites</code>, etc.
+- WPE CAPI read operations (<code>wpe_get_installs</code>, <code>wpe_get_install</code>, <code>wpe_get_sites</code>, etc.)
 - <code>wpe_create_backup</code> — protective operation, always allowed
-- <code>wpe_create_install</code>, <code>wpe_create_site</code> — creates new resources
-- <code>local_wpe_push</code> / <code>local_wpe_pull</code> — Local's file sync, not WP-CLI
-- Cached twin data — existing data is not cleared when environments are excluded</p>
-<h2 id="cli-mcp-setting">CLI / MCP Setting<a class="headerlink" href="#cli-mcp-setting" title="Permanent link">&para;</a></h2>
-<p>The setting is currently configurable only via the Preferences UI. To check the current value programmatically, look for <code>wpeAllowedEnvironments</code> in the Nexus settings.</p>
+- <code>local_wpe_pull</code> — always configurable (default: allowed on all environments)
+- Cached twin data — existing data is not cleared when permissions change</p>
+<h2 id="migrating-from-v031">Migrating from v0.3.1<a class="headerlink" href="#migrating-from-v031" title="Permanent link">&para;</a></h2>
+<p>In v0.3.1, the setting was <code>wpeAllowedEnvironments: ['staging', 'development']</code>. On first load, Nexus automatically converts this to the equivalent <code>wpeOperationPermissions</code> values. No manual action required.</p>
 
 
 
