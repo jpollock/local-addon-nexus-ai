@@ -323,14 +323,180 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   };
 
 
-  /** @deprecated Replaced by renderWpeAccessControlSection — stub retained for Task 4 cleanup */
-  renderWpeAccountFilterSection(): React.ReactNode {
-    return null;
-  }
+  renderWpeAccessControlSection(): React.ReactNode {
+    const { settings, wpeAccounts, expandedOps, acctScopeExpanded } = this.state;
+    const perms = settings.wpeOperationPermissions ?? {};
+    const exceptions = settings.wpeSiteExceptions ?? [];
+    const accountFilter = settings.wpeAccountFilter;
+    const allAccountIds = wpeAccounts.map((a) => a.id);
+    const includedIds: string[] = accountFilter ?? allAccountIds;
+    const allIncluded = !accountFilter || includedIds.length === allAccountIds.length;
 
-  /** @deprecated Replaced by renderWpeAccessControlSection — stub retained for Task 4 cleanup */
-  renderWpeEnvironmentFilterSection(): React.ReactNode {
-    return null;
+    const getPermVal = (op: WpeOperation, env: WpeEnv): boolean => {
+      const custom = (perms as any)[op]?.[env];
+      return custom !== undefined ? custom : WPE_OPERATION_DEFAULTS[op][env];
+    };
+
+    const OPERATIONS: Array<{ id: WpeOperation; label: string; sub: string; icon: string; color: string }> = [
+      { id: 'pull',   label: 'Pull to local',    sub: 'Download files + database from WPE',      icon: '⬇', color: '59,130,246' },
+      { id: 'wpcli',  label: 'WP-CLI over SSH',  sub: 'Run commands on remote WPE installs',      icon: '⌘', color: '167,139,250' },
+      { id: 'push',   label: 'Push to WPE',      sub: 'Overwrite remote with local files and DB', icon: '⬆', color: '251,191,36' },
+      { id: 'delete', label: 'Delete / Promote', sub: 'Irreversible CAPI operations',              icon: '🗑', color: '248,113,113' },
+    ];
+
+    const renderToggle = (checked: boolean, onChange: (v: boolean) => void): React.ReactNode =>
+      React.createElement('label', {
+        style: { position: 'relative' as const, width: 34, height: 19, flexShrink: 0, cursor: 'pointer', display: 'inline-flex' },
+        onClick: (e: React.MouseEvent) => e.stopPropagation(),
+      },
+        React.createElement('input', { type: 'checkbox', checked, style: { display: 'none' }, onChange: (e: any) => onChange(e.target.checked) }),
+        React.createElement('div', { style: { position: 'absolute' as const, inset: 0, background: checked ? '#51BB7B' : 'var(--nxai-card-border, #30363d)', borderRadius: 10, transition: 'background 0.2s' } }),
+        React.createElement('div', { style: { position: 'absolute' as const, top: 2, left: checked ? 17 : 2, width: 15, height: 15, background: checked ? '#fff' : 'var(--nxai-status-neutral, #9ca3af)', borderRadius: '50%', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.3)' } }),
+      );
+
+    const renderOpCard = (op: typeof OPERATIONS[number]): React.ReactNode => {
+      const expanded = expandedOps.has(op.id);
+      const devOn = getPermVal(op.id, 'development');
+      const stgOn = getPermVal(op.id, 'staging');
+      const prdOn = getPermVal(op.id, 'production');
+      const opExceptions = exceptions.filter((e) => op.id in e.overrides);
+
+      const envBadge = (label: string, on: boolean, color: string) =>
+        React.createElement('span', {
+          style: { fontSize: 10, fontFamily: 'monospace', padding: '2px 7px', borderRadius: 10, fontWeight: 500, background: on ? `rgba(${color},0.12)` : 'rgba(139,148,158,0.08)', color: on ? `rgb(${color})` : 'var(--nxai-status-neutral, #9ca3af)' },
+        }, `${label} ${on ? '✓' : '✗'}`);
+
+      return React.createElement('div', {
+        key: op.id,
+        style: { background: 'var(--nxai-card-bg, #21262d)', border: `1px solid ${expanded ? 'rgba(59,130,246,0.45)' : 'var(--nxai-card-border, #30363d)'}`, borderRadius: 8, overflow: 'hidden', marginBottom: 8, cursor: 'pointer' },
+        onClick: () => this.handleOpCardToggle(op.id),
+      },
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 14, padding: '13px 16px' } },
+          React.createElement('div', { style: { width: 34, height: 34, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, background: `rgba(${op.color},0.12)`, color: `rgb(${op.color})` } }, op.icon),
+          React.createElement('div', { style: { flex: 1 } },
+            React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, op.label),
+            React.createElement('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', marginTop: 1 } }, op.sub),
+          ),
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 } },
+            envBadge('Dev', devOn, '81,187,123'),
+            envBadge('Stg', stgOn, '251,191,36'),
+            envBadge('Prd', prdOn, prdOn ? '81,187,123' : '248,113,113'),
+            opExceptions.length > 0 ? React.createElement('span', { style: { fontSize: 10, fontFamily: 'monospace', padding: '2px 8px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6', borderRadius: 3 } }, `${opExceptions.length} exception${opExceptions.length !== 1 ? 's' : ''}`) : null,
+            React.createElement('span', { style: { color: 'var(--nxai-status-neutral, #9ca3af)', fontSize: 11, transition: 'transform 0.15s', transform: expanded ? 'rotate(90deg)' : 'none', display: 'inline-block' } }, '▶'),
+          ),
+        ),
+        expanded ? React.createElement('div', {
+          style: { borderTop: '1px solid var(--nxai-card-border, #30363d)', padding: 16, background: 'rgba(255,255,255,0.01)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },
+          onClick: (e: React.MouseEvent) => e.stopPropagation(),
+        },
+          React.createElement('div', null,
+            React.createElement('div', { style: { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 10 } }, 'Default by environment'),
+            ...(['development', 'staging', 'production'] as const).map((env) => {
+              const dotColor = env === 'development' ? '#51BB7B' : env === 'staging' ? '#fbbf24' : '#f87171';
+              const val = getPermVal(op.id, env);
+              return React.createElement('div', {
+                key: env,
+                style: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', background: 'var(--nxai-code-bg, #1f1f1f)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 6, marginBottom: 6 },
+              },
+                React.createElement('div', { style: { width: 7, height: 7, borderRadius: '50%', background: dotColor, flexShrink: 0 } }),
+                React.createElement('span', { style: { flex: 1, fontSize: 12, fontWeight: 500, textTransform: 'capitalize' as const } }, env),
+                renderToggle(val, (v) => this.handleOperationToggle(op.id, env, v)),
+              );
+            }),
+          ),
+          React.createElement('div', null,
+            React.createElement('div', { style: { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 10 } }, 'Site exceptions'),
+            opExceptions.length === 0
+              ? React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-status-neutral, #9ca3af)', fontStyle: 'italic' as const, marginBottom: 8 } }, 'No exceptions — all sites follow global')
+              : opExceptions.map((exc) =>
+                  React.createElement('div', {
+                    key: `${exc.installName}-${exc.environment}`,
+                    style: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: 'var(--nxai-code-bg, #1f1f1f)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 6, marginBottom: 6, fontSize: 12 },
+                  },
+                    React.createElement('span', { style: { flex: 1, fontWeight: 500 } }, exc.installName),
+                    React.createElement('span', { style: { fontSize: 10, color: 'var(--nxai-card-sub, #6b7280)' } }, exc.environment),
+                    React.createElement('span', { style: { fontSize: 10, fontFamily: 'monospace', color: exc.overrides[op.id] ? '#51BB7B' : '#f87171' } }, exc.overrides[op.id] ? 'allow ↑' : 'block ↓'),
+                    React.createElement('span', {
+                      style: { color: 'var(--nxai-status-neutral, #9ca3af)', cursor: 'pointer', marginLeft: 4, fontSize: 12 },
+                      onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handleSiteExceptionRemove(exc.installName, exc.environment); },
+                    }, '✕'),
+                  ),
+                ),
+            React.createElement('button', {
+              style: { display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: 'none', border: '1px dashed var(--nxai-card-border, #30363d)', borderRadius: 6, fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)', cursor: 'pointer', width: '100%', fontFamily: 'inherit' },
+              onClick: (e: React.MouseEvent) => e.stopPropagation(),
+              title: 'Site exception editor coming in a future release',
+            }, '＋ Add site exception'),
+          ),
+        ) : null,
+      );
+    };
+
+    const acctCard = wpeAccounts.length > 0 ? React.createElement('div', {
+      style: { background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 8, overflow: 'hidden', marginBottom: 6 },
+    },
+      React.createElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', cursor: 'pointer' },
+        onClick: () => this.setState((prev) => ({ acctScopeExpanded: !prev.acctScopeExpanded })),
+      },
+        React.createElement('div', { style: { width: 32, height: 32, borderRadius: 8, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 } }, '🏢'),
+        React.createElement('div', { style: { flex: 1 } },
+          React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, 'Included Accounts'),
+          React.createElement('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', marginTop: 1 } }, 'These accounts are visible in Nexus and included in all operations'),
+        ),
+        React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap' as const, gap: 4, justifyContent: 'flex-end' as const, maxWidth: 260 } },
+          ...wpeAccounts.slice(0, 5).map((a) => {
+            const on = allIncluded || includedIds.includes(a.id);
+            return React.createElement('span', {
+              key: a.id,
+              style: { fontSize: 10, padding: '2px 8px', borderRadius: 10, fontWeight: 500, background: on ? 'rgba(81,187,123,0.12)' : 'rgba(139,148,158,0.08)', color: on ? '#51BB7B' : 'var(--nxai-status-neutral, #9ca3af)', border: on ? '1px solid rgba(81,187,123,0.3)' : '1px solid var(--nxai-card-border, #30363d)', cursor: 'pointer' },
+              onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handleAccountScopeToggle(a.id, !on); },
+            }, a.nickname ?? a.name ?? a.id);
+          }),
+          wpeAccounts.length > 5 ? React.createElement('span', { style: { fontSize: 10, color: 'var(--nxai-card-sub, #6b7280)', padding: '2px 4px' } }, `+${wpeAccounts.length - 5}`) : null,
+        ),
+        React.createElement('span', { style: { color: 'var(--nxai-status-neutral, #9ca3af)', fontSize: 11, marginLeft: 8, flexShrink: 0 } }, acctScopeExpanded ? '▼' : '▶'),
+      ),
+      acctScopeExpanded ? React.createElement('div', {
+        style: { borderTop: '1px solid var(--nxai-card-border, #30363d)', padding: '14px 16px', background: 'rgba(255,255,255,0.01)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 },
+      },
+        ...wpeAccounts.map((a) => {
+          const on = allIncluded || includedIds.includes(a.id);
+          return React.createElement('div', {
+            key: a.id,
+            style: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: on ? 'var(--nxai-code-bg, #1f1f1f)' : 'rgba(255,255,255,0.01)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 6, cursor: 'pointer', opacity: on ? 1 : 0.45, fontSize: 12 },
+            onClick: () => this.handleAccountScopeToggle(a.id, !on),
+          },
+            React.createElement('div', { style: { width: 8, height: 8, borderRadius: '50%', background: on ? '#51BB7B' : 'var(--nxai-status-neutral, #9ca3af)', flexShrink: 0 } }),
+            React.createElement('span', { style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const } }, a.nickname ?? a.name ?? a.id),
+            React.createElement('span', { style: { color: on ? '#51BB7B' : 'var(--nxai-status-neutral, #9ca3af)', fontSize: 11, flexShrink: 0 } }, on ? '✓' : '✗'),
+          );
+        }),
+      ) : null,
+    ) : null;
+
+    return React.createElement('div', { style: sectionStyle },
+      React.createElement('div', { style: labelStyle }, 'WP Engine Access'),
+      React.createElement('div', { style: descStyle }, 'Control which accounts and operations Nexus can use across your WP Engine environments.'),
+      React.createElement('div', { style: { marginTop: 12 } },
+        acctCard,
+        wpeAccounts.length > 0 ? React.createElement('div', { style: { height: 14, borderLeft: '1px solid var(--nxai-card-border, #30363d)', marginLeft: 10, marginBottom: 4 } }) : null,
+        React.createElement('div', { style: { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 } },
+          React.createElement('span', null, 'Operation Permissions'),
+          React.createElement('span', { style: { flex: 1, height: 1, background: 'var(--nxai-card-border, #30363d)' } }),
+        ),
+        ...OPERATIONS.map(renderOpCard),
+        React.createElement('div', {
+          style: { display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 14px', background: 'rgba(81,187,123,0.05)', border: '1px solid rgba(81,187,123,0.2)', borderRadius: 6, fontSize: 12, color: 'rgba(81,187,123,0.8)', marginTop: 8, lineHeight: '1.5' },
+        },
+          React.createElement('span', null, '📖'),
+          React.createElement('span', null,
+            React.createElement('strong', null, 'Read metadata'),
+            ' (installs, domains, SSL, usage) is always permitted and cannot be disabled.',
+          ),
+        ),
+      ),
+    );
   }
 
   handleWpeRefreshAutoEnabledToggle = (): void => {
@@ -911,8 +1077,8 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     const section4 = React.createElement('div', { style: sectionStyle },
       this.renderSectionHeader('wpe', 'WP Engine'),
       wpeExpanded ? React.createElement('div', null,
-        // Environment Access Filter (first — production safety is highest priority)
-        this.renderWpeEnvironmentFilterSection(),
+        // Unified WPE Access Control (accounts + operation permissions)
+        this.renderWpeAccessControlSection(),
 
         divider,
 
@@ -1014,11 +1180,6 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
               )
             : null,
         ),
-
-        divider,
-
-        // Deep Scan Account Filter
-        this.renderWpeAccountFilterSection(),
 
         divider,
 
