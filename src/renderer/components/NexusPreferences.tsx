@@ -63,6 +63,7 @@ interface NexusPreferencesState {
   expandedSections: Set<string>;
   expandedOps: Set<string>;
   acctScopeExpanded: boolean;
+  addingException: { op: string; installName: string; environment: string; allowing: boolean } | null;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -173,6 +174,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     expandedSections: new Set(['ai-provider']),
     expandedOps: new Set<string>(),
     acctScopeExpanded: false,
+    addingException: null,
   };
 
   componentDidMount(): void {
@@ -324,7 +326,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
 
   renderWpeAccessControlSection(): React.ReactNode {
-    const { settings, wpeAccounts, expandedOps, acctScopeExpanded } = this.state;
+    const { settings, wpeAccounts, expandedOps, acctScopeExpanded, addingException } = this.state;
     const perms = settings.wpeOperationPermissions ?? {};
     const exceptions = settings.wpeSiteExceptions ?? [];
     const accountFilter = settings.wpeAccountFilter;
@@ -422,11 +424,58 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
                     }, '✕'),
                   ),
                 ),
-            React.createElement('button', {
-              style: { display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: 'none', border: '1px dashed var(--nxai-card-border, #30363d)', borderRadius: 6, fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)', cursor: 'pointer', width: '100%', fontFamily: 'inherit' },
-              onClick: (e: React.MouseEvent) => e.stopPropagation(),
-              title: 'Site exception editor coming in a future release',
-            }, '＋ Add site exception'),
+            // Inline add form
+            addingException?.op === op.id
+              ? React.createElement('div', {
+                  style: { background: 'var(--nxai-code-bg, #1f1f1f)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 6, padding: '10px 12px' },
+                  onClick: (e: React.MouseEvent) => e.stopPropagation(),
+                },
+                  React.createElement('div', { style: { display: 'flex', gap: 6, marginBottom: 8 } },
+                    React.createElement('input', {
+                      type: 'text',
+                      placeholder: 'Install name (e.g. mystore)',
+                      value: addingException.installName,
+                      onChange: (e: any) => { const v = e.target.value; this.setState((prev) => ({ addingException: prev.addingException ? { ...prev.addingException, installName: v } : null })); },
+                      style: { flex: 1, fontSize: 12, padding: '5px 8px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4, color: 'var(--nxai-card-text, #e6edf3)', fontFamily: 'inherit' },
+                    }),
+                    React.createElement('select', {
+                      value: addingException.environment,
+                      onChange: (e: any) => { const v = e.target.value; this.setState((prev) => ({ addingException: prev.addingException ? { ...prev.addingException, environment: v } : null })); },
+                      style: { fontSize: 12, padding: '5px 8px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4, color: 'var(--nxai-card-text, #e6edf3)', fontFamily: 'inherit' },
+                    },
+                      React.createElement('option', { value: 'production' }, 'Production'),
+                      React.createElement('option', { value: 'staging' }, 'Staging'),
+                      React.createElement('option', { value: 'development' }, 'Development'),
+                    ),
+                  ),
+                  React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                    React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', flex: 1 } },
+                      React.createElement('input', {
+                        type: 'checkbox', checked: addingException.allowing,
+                        onChange: (e: any) => { const v = e.target.checked; this.setState((prev) => ({ addingException: prev.addingException ? { ...prev.addingException, allowing: v } : null })); },
+                      }),
+                      React.createElement('span', { style: { color: addingException.allowing ? '#51BB7B' : '#f87171' } }, addingException.allowing ? 'Allow (override global block)' : 'Block (override global allow)'),
+                    ),
+                    React.createElement('button', {
+                      style: { fontSize: 11, padding: '4px 10px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, cursor: addingException.installName.trim() ? 'pointer' : 'not-allowed', opacity: addingException.installName.trim() ? 1 : 0.5, fontFamily: 'inherit' },
+                      disabled: !addingException.installName.trim(),
+                      onClick: (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        if (!addingException.installName.trim()) return;
+                        this.handleSiteExceptionToggle(addingException.installName.trim(), addingException.environment, op.id as WpeOperation, addingException.allowing);
+                        this.setState({ addingException: null });
+                      },
+                    }, 'Save'),
+                    React.createElement('button', {
+                      style: { fontSize: 11, padding: '4px 10px', background: 'none', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4, cursor: 'pointer', color: 'var(--nxai-card-sub, #6b7280)', fontFamily: 'inherit' },
+                      onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.setState({ addingException: null }); },
+                    }, 'Cancel'),
+                  ),
+                )
+              : React.createElement('button', {
+                  style: { display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: 'none', border: '1px dashed var(--nxai-card-border, #30363d)', borderRadius: 6, fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)', cursor: 'pointer', width: '100%', fontFamily: 'inherit' },
+                  onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.setState({ addingException: { op: op.id, installName: '', environment: 'production', allowing: true } }); },
+                }, '＋ Add site exception'),
           ),
         ) : null,
       );
@@ -524,6 +573,21 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         [env]: value,
       };
       const next = { ...prev.settings, wpeOperationPermissions: perms };
+      this.notifyChange(next);
+      return { settings: next };
+    });
+  };
+
+  handleSiteExceptionToggle = (installName: string, environment: string, operation: WpeOperation, value: boolean): void => {
+    this.setState((prev) => {
+      const exceptions = [...(prev.settings.wpeSiteExceptions ?? [])];
+      const idx = exceptions.findIndex((e) => e.installName === installName && e.environment === environment);
+      if (idx >= 0) {
+        exceptions[idx] = { ...exceptions[idx], overrides: { ...exceptions[idx].overrides, [operation]: value } };
+      } else {
+        exceptions.push({ installName, environment, overrides: { [operation]: value } });
+      }
+      const next = { ...prev.settings, wpeSiteExceptions: exceptions };
       this.notifyChange(next);
       return { settings: next };
     });
