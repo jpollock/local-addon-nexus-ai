@@ -279,6 +279,16 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     this.props.onSettingsChange?.(settings);
   };
 
+  /** Save settings immediately via IPC — use for inline forms (exceptions, account filter)
+   *  where users expect "Save" to persist without hitting the outer Apply button. */
+  saveNow = async (settings: NexusSettings): Promise<void> => {
+    try {
+      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, settings);
+    } catch {
+      // Best-effort — the Apply button flow is still the fallback
+    }
+  };
+
   handleGatewayToggle = (): void => {
     this.setState((prev) => {
       const next = { ...prev.settings, useLocalGateway: !(prev.settings as any).useLocalGateway };
@@ -642,6 +652,10 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       const next = { ...prev.settings, wpeSiteExceptions: exceptions };
       this.notifyChange(next);
       return { settings: next };
+    }, () => {
+      // Save immediately — users expect "Save" on the exception form to persist
+      // without needing to also click the outer Apply button.
+      this.saveNow(this.state.settings);
     });
   };
 
@@ -653,6 +667,8 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       const next = { ...prev.settings, wpeSiteExceptions: exceptions };
       this.notifyChange(next);
       return { settings: next };
+    }, () => {
+      this.saveNow(this.state.settings);
     });
   };
 
