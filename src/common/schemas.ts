@@ -17,6 +17,30 @@ export const SiteIdSchema = z.string().min(1, 'Site ID cannot be empty');
 // Settings
 // ============================================================================
 
+const WpeEnvFlagsSchema = z.object({
+  development: z.boolean().optional(),
+  staging: z.boolean().optional(),
+  production: z.boolean().optional(),
+}).optional();
+
+const WpeOperationPermissionsSchema = z.object({
+  pull:   WpeEnvFlagsSchema,
+  wpcli:  WpeEnvFlagsSchema,
+  push:   WpeEnvFlagsSchema,
+  delete: WpeEnvFlagsSchema,
+}).optional();
+
+const WpeSiteExceptionSchema = z.object({
+  installName: z.string().min(1),
+  environment: z.string().min(1),
+  overrides: z.object({
+    pull:   z.boolean().optional(),
+    wpcli:  z.boolean().optional(),
+    push:   z.boolean().optional(),
+    delete: z.boolean().optional(),
+  }),
+});
+
 export const UpdateSettingsSchema = z.object({
   autoIndex: z.boolean().optional(),
   excludedSiteIds: z.array(SiteIdSchema).optional(),
@@ -30,7 +54,10 @@ export const UpdateSettingsSchema = z.object({
   wpeRefreshIntervalHours: z.number().int().min(1).max(168).optional(),
   wpeRefreshAutoEnabled: z.boolean().optional(),
   wpeAccountFilter: z.array(z.string()).nullable().optional(),
-}).strict(); // Prevent unknown properties
+  wpeOperationPermissions: WpeOperationPermissionsSchema,
+  wpeSiteExceptions: z.array(WpeSiteExceptionSchema).nullable().optional(),
+  wpeAllowedEnvironments: z.array(z.string()).optional(), // legacy — kept for migration
+}).strict();
 
 export const PluginSlugSchema = z
   .string()
