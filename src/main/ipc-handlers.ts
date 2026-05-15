@@ -2616,6 +2616,30 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  // Reset content index: drop all LanceDB vector tables + clear IndexRegistry.
+  // Leaves graph DB, site metadata, settings, WPE cache, and AI config untouched.
+  safeHandle(IPC_CHANNELS.RESET_CONTENT_INDEX, async () => {
+    try {
+      const entries = indexRegistry.listAll();
+      const siteCount = entries.length;
+      const docCount = entries.reduce((s, e) => s + (e.documentCount ?? 0), 0);
+
+      // Drop all vector tables
+      const dropped = await vectorStore.dropAllTables();
+
+      // Clear every IndexRegistry entry
+      for (const entry of entries) {
+        indexRegistry.remove(entry.siteId);
+      }
+
+      localLogger.info(`[NexusAI] Content index reset: dropped ${dropped} vector tables, cleared ${siteCount} registry entries`);
+      return { success: true, siteCount, docCount, dropped };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] Content index reset failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  });
+
   // WPE_CAPI_SYNC, WPE_SYNC_STOP, WPE_SYNC_STATS, WPE_GET_SYNCED_SITES,
   // WPE_GET_SITE_DETAILS, WPE_SYNC_SINGLE, WPE_DIAGNOSE_SITE, WPE_REMOVE_SITE
   // — all registered above in registerWpeSyncHandlers().

@@ -182,6 +182,10 @@ interface NexusOverviewState {
   diagResults: Array<{ cmd: string; success: boolean; stdout: string; durationMs: number; error?: string }>;
   dbScanRunning: boolean;
   dbScanResults: Array<{ siteId: string; siteName: string; healthScore?: number; issues?: any[]; error?: string }> | null;
+  indexResetConfirming: boolean;
+  indexResetRunning: boolean;
+  indexResetResult: { siteCount: number; docCount: number } | null;
+  _resetConfirmChecked: boolean;
   wpeSyncStats: { total: number; has_wp_version: number; has_php_version: number; last_sync_at: number | null; fresh_count: number; stale_count: number } | null;
   wpeSyncThresholdHours: number;
   // Fleet Intelligence panels
@@ -375,6 +379,10 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     diagResults: [],
     dbScanRunning: false,
     dbScanResults: null,
+    indexResetConfirming: false,
+    indexResetRunning: false,
+    indexResetResult: null,
+    _resetConfirmChecked: false,
     wpeSyncStats: null,
     wpeSyncThresholdHours: 8,
     syncStatus: {},
@@ -1576,6 +1584,7 @@ renderTabBar(): React.ReactNode {
       // ── Maintenance ──────────────────────────────────────────────────────────
       React.createElement('hr', { style: { border: 'none', borderTop: '1px solid var(--nxai-card-border, #e5e7eb)', margin: '32px 0 24px' } }),
       this.renderSectionLabel('Maintenance'),
+      this.renderContentIndexReset(),
       this.renderDbScanSection(),
       this.renderContentMaintenance(),
 
@@ -1583,6 +1592,102 @@ renderTabBar(): React.ReactNode {
       React.createElement('hr', { style: { border: 'none', borderTop: '1px solid var(--nxai-card-border, #e5e7eb)', margin: '32px 0 24px' } }),
       this.renderSectionLabel('Developer Tools'),
       this.renderSshDiagnostics(),
+    );
+  }
+
+  renderContentIndexReset(): React.ReactNode {
+    const { indexResetConfirming, indexResetRunning, indexResetResult, indexEntries, _resetConfirmChecked } = this.state;
+    const sub: React.CSSProperties = { fontSize: '12px', color: 'var(--nxai-card-sub)' };
+
+    const indexedCount = (indexEntries ?? []).filter((e: any) => e.state === 'indexed').length;
+    const totalDocs = (indexEntries ?? []).reduce((s: number, e: any) => s + (e.documentCount ?? 0), 0);
+
+    if (indexResetResult) {
+      return React.createElement('div', { style: { marginBottom: '24px' } },
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'rgba(81,187,123,0.06)', border: '1px solid rgba(81,187,123,0.2)', borderRadius: '7px', fontSize: '12px', color: '#51BB7B' } },
+          '✓ Content index cleared — ',
+          React.createElement('span', { style: { color: 'var(--nxai-card-sub)' } }, `${indexResetResult.siteCount} site${indexResetResult.siteCount !== 1 ? 's' : ''}, ${indexResetResult.docCount.toLocaleString()} documents removed. Content will be re-indexed when sites start.`),
+          React.createElement('button', {
+            onClick: () => this.setState({ indexResetResult: null, activeTab: 'discover' }),
+            style: { marginLeft: 'auto', background: 'none', border: 'none', color: '#0ECAD4', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', padding: '0 4px' },
+          }, 'Go to Discover →'),
+        ),
+      );
+    }
+
+    return React.createElement('div', { style: { marginBottom: '24px' } },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: indexResetConfirming ? '10px' : '0' } },
+        React.createElement('button', {
+          disabled: indexResetRunning,
+          onClick: () => this.setState({ indexResetConfirming: !indexResetConfirming, indexResetResult: null }),
+          style: {
+            padding: '7px 14px', borderRadius: '5px', border: '1px solid var(--nxai-card-border)', fontSize: '12px',
+            fontWeight: 600, cursor: indexResetRunning ? 'not-allowed' : 'pointer',
+            background: 'var(--nxai-card-bg)', color: indexResetConfirming ? '#f87171' : 'inherit',
+            opacity: indexResetRunning ? 0.6 : 1,
+          },
+        }, indexResetRunning ? 'Resetting…' : 'Reset Content Index'),
+        React.createElement('span', { style: sub },
+          indexedCount > 0
+            ? `${indexedCount} site${indexedCount !== 1 ? 's' : ''} · ${totalDocs.toLocaleString()} documents · vectors only, graph and metadata untouched`
+            : 'Clears vector index and registry — graph DB, metadata, and settings are untouched',
+        ),
+      ),
+
+      // Inline confirmation panel
+      indexResetConfirming ? React.createElement('div', {
+        style: { padding: '12px 14px', background: 'rgba(248,113,113,0.05)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '7px' },
+      },
+        React.createElement('div', { style: { fontSize: '12px', marginBottom: '10px', lineHeight: 1.5 } },
+          React.createElement('strong', { style: { color: '#f87171' } }, 'This will permanently delete:'),
+          React.createElement('ul', { style: { margin: '6px 0 0 16px', color: 'var(--nxai-card-sub)' } },
+            React.createElement('li', null, `LanceDB vector tables for ${indexedCount} site${indexedCount !== 1 ? 's' : ''} (${totalDocs.toLocaleString()} documents)`),
+            React.createElement('li', null, 'All IndexRegistry entries (sites will show as unindexed)'),
+          ),
+          React.createElement('div', { style: { marginTop: '6px', color: 'var(--nxai-card-sub)' } },
+            '✓ Graph DB, site metadata, AI config, WPE cache, and settings are ',
+            React.createElement('strong', null, 'not affected'),
+            '. Auto-index will rebuild when sites start.',
+          ),
+        ),
+        React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', marginBottom: '10px' } },
+          React.createElement('input', {
+            type: 'checkbox',
+            id: 'reset-index-confirm',
+            onChange: (e: any) => this.setState({ _resetConfirmChecked: e.target.checked }),
+          }),
+          'I understand — auto-index will rebuild when sites start',
+        ),
+        React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+          React.createElement('button', {
+            disabled: indexResetRunning || !_resetConfirmChecked,
+            onClick: async () => {
+              this.setState({ indexResetRunning: true });
+              const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.RESET_CONTENT_INDEX);
+              this.setState({
+                indexResetRunning: false,
+                indexResetConfirming: false,
+                indexResetResult: result.success ? { siteCount: result.siteCount, docCount: result.docCount } : null,
+                _resetConfirmChecked: false,
+              });
+              if (!result.success) {
+                (window as any).showToast?.(`Reset failed: ${result.error}`, 'error');
+              }
+            },
+            style: {
+              padding: '6px 14px', borderRadius: '5px', border: 'none', fontSize: '12px', fontWeight: 600,
+              cursor: !_resetConfirmChecked || indexResetRunning ? 'not-allowed' : 'pointer',
+              background: !_resetConfirmChecked ? '#444' : '#ef4444',
+              color: '#fff', opacity: !_resetConfirmChecked ? 0.5 : 1,
+              fontFamily: 'inherit',
+            },
+          }, indexResetRunning ? 'Resetting…' : 'Reset Index'),
+          React.createElement('button', {
+            onClick: () => this.setState({ indexResetConfirming: false, _resetConfirmChecked: false }),
+            style: { padding: '6px 14px', borderRadius: '5px', border: '1px solid var(--nxai-card-border)', fontSize: '12px', background: 'var(--nxai-card-bg)', color: 'inherit', cursor: 'pointer', fontFamily: 'inherit' },
+          }, 'Cancel'),
+        ),
+      ) : null,
     );
   }
 
