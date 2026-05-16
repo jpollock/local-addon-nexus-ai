@@ -112,13 +112,11 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
 
   handleStartIndexing = async (): Promise<void> => {
     this.setState({ viewState: 'indexing' });
-    const ipc = this.props.electron.ipcRenderer;
-    for (const site of this.props.sites) {
-      const entry = this.props.indexEntries.find((e) => e.siteId === site.id);
-      if (!entry || entry.state !== 'indexed') {
-        ipc.invoke(IPC_CHANNELS.INDEX_SITE, { siteId: site.id, force: false }).catch(() => {});
-      }
-    }
+    // INDEX_ALL_AUTO auto-starts halted sites, indexes them, then leaves them
+    // running. INDEX_SITE alone silently does nothing for halted sites.
+    this.props.electron.ipcRenderer
+      .invoke(IPC_CHANNELS.INDEX_ALL_AUTO)
+      .catch(() => {});
   };
 
   handleSearch = async (query: string): Promise<void> => {
