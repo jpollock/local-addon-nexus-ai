@@ -18,6 +18,7 @@ export const IPC_CHANNELS = {
   SEARCH: `${ADDON_PREFIX}:search`,
   SEARCH_KEYWORD: `${ADDON_PREFIX}:search:keyword`,
   INDEX_SITE: `${ADDON_PREFIX}:index-site`,
+  INDEX_PROGRESS: `${ADDON_PREFIX}:content:index-progress`,
   GET_SETTINGS: `${ADDON_PREFIX}:get-settings`,
   UPDATE_SETTINGS: `${ADDON_PREFIX}:update-settings`,
 
