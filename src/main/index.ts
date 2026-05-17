@@ -417,7 +417,7 @@ export default function main(context: any): void {
 
       const isWpeSyncAutoEnabled = () => {
         const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncAutoEnabled?: boolean } | null;
-        return settings?.wpeSyncAutoEnabled !== false; // default: true
+        return settings?.wpeSyncAutoEnabled === true; // default: false (opt-in)
       };
 
       const runWpeAutoSyncIncremental = async (reason: string) => {
@@ -485,7 +485,7 @@ export default function main(context: any): void {
       // post count, and active theme for installs not refreshed recently.
       const wpeRefreshSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeRefreshIntervalHours?: number; wpeRefreshAutoEnabled?: boolean } | null;
       const wpeRefreshHours = wpeRefreshSettings?.wpeRefreshIntervalHours ?? 24;
-      const wpeRefreshEnabled = wpeRefreshSettings?.wpeRefreshAutoEnabled !== false; // default: true
+      const wpeRefreshEnabled = wpeRefreshSettings?.wpeRefreshAutoEnabled === true; // default: false (opt-in)
       const wpeRefreshScheduler = new WpeRefreshScheduler({
         graphService,
         localServices: localServicesBridge,

@@ -90,6 +90,8 @@ function safeHandle(channel: string, handler: (...args: any[]) => any): void {
 const DEFAULT_SETTINGS: NexusSettings = {
   autoIndex: true,
   excludedSiteIds: [],
+  wpeSyncAutoEnabled: false,    // opt-in: user must explicitly enable WPE sync
+  wpeRefreshAutoEnabled: false, // opt-in: user must explicitly enable SSH refresh
 };
 
 export interface IpcHandlerDeps {
