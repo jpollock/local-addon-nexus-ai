@@ -1883,4 +1883,31 @@ export const typeDefs = gql`
     firstDate: String
     lastDate: String
   }
+
+  # ============================================================================
+  # B3: Plugin Diff — cross-env plugin version comparison (enables M5-04)
+  # ============================================================================
+
+  extend type Mutation {
+    "Compare plugin versions between two installs (local siteId or WPE install name)"
+    nexusPluginDiff(installA: String!, installB: String!): NexusPluginDiffResult!
+  }
+
+  type PluginDiffEntry {
+    slug:     String!
+    versionA: String
+    versionB: String
+    statusA:  String
+    statusB:  String
+  }
+
+  type NexusPluginDiffResult {
+    success:           Boolean!
+    error:             String
+    installA:          String!
+    installB:          String!
+    onlyInA:           [PluginDiffEntry!]!
+    onlyInB:           [PluginDiffEntry!]!
+    versionMismatches: [PluginDiffEntry!]!
+  }
 `;

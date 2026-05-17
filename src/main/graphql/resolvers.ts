@@ -5024,6 +5024,48 @@ export function createResolvers(context: ResolverContext) {
           return { success: false, error: err.message, users: [], siteId };
         }
       },
+
+      // ======================================================================
+      // B3: Plugin Diff — cross-env plugin version comparison (enables M5-04)
+      // ======================================================================
+
+      nexusPluginDiff: async (_parent: ResolverParent, { installA, installB }: { installA: string; installB: string }) => {
+        const empty = { installA, installB, onlyInA: [], onlyInB: [], versionMismatches: [] };
+        try {
+          const db = services.graphService?.getDb?.();
+          if (!db) return { ...empty, success: false, error: 'Graph DB not available' };
+
+          const getPlugins = (siteId: string) => {
+            const rows = db.prepare(
+              'SELECT slug, version, is_active FROM plugins WHERE site_id = ?'
+            ).all(siteId) as Array<{ slug: string; version: string | null; is_active: number }>;
+            return rows.map(r => ({
+              slug:    r.slug,
+              version: r.version ?? '',
+              status:  r.is_active ? 'active' : 'inactive',
+            }));
+          };
+
+          const { computePluginDiff } = await import('../fleet/plugin-diff');
+          const diff = computePluginDiff(getPlugins(installA), getPlugins(installB));
+
+          return {
+            ...empty,
+            success:          true,
+            onlyInA:          diff.onlyInA.map(p => ({ slug: p.slug, versionA: p.version, versionB: null, statusA: p.status, statusB: null })),
+            onlyInB:          diff.onlyInB.map(p => ({ slug: p.slug, versionA: null, versionB: p.version, statusA: null, statusB: p.status })),
+            versionMismatches: diff.versionMismatches.map(m => ({
+              slug:     m.slug,
+              versionA: m.versionA,
+              versionB: m.versionB,
+              statusA:  m.statusA,
+              statusB:  m.statusB,
+            })),
+          };
+        } catch (err: any) {
+          return { ...empty, success: false, error: err.message };
+        }
+      },
     },
   };
 }
