@@ -1,0 +1,70 @@
+id: M5-07-compare-plugin-recommendations
+description: Compare — plugin recommendations based on patterns across the fleet (requires cross-site reasoning)
+suite: compare
+moment: compare
+tier: 3
+frequency: occasional
+stakes: low
+mode: [mcp, cli-skills]
+prompt: "Based on what's installed across my fleet, what plugins do most of my sites have that some are missing? I want to know if there are plugins that would make sense to standardize across all my sites."
+
+guardrails:
+  reads_only: true
+  scope: both
+
+context:
+  description: "Fleet-wide plugin pattern analysis and gap recommendation"
+  notes: |
+    This requires:
+    1. Aggregate plugin inventory across all sites (local + WPE)
+    2. Find plugins present on >50% (or some threshold) of sites
+    3. Identify which sites are missing those common plugins
+    4. Present the gap as a recommendation
+
+    Data availability:
+    - Plugin inventory: available for local sites (after start) and WPE sites (after sync)
+    - Cross-site aggregation: requires reading all plugins[] and computing frequency
+
+    The agent needs to:
+    - Union all plugin lists across all sites
+    - Count frequency per slug
+    - Find the "most common" plugins
+    - Show which sites are missing each common plugin
+
+    This is the "standardization" use case — agencies often want consistent
+    plugin stacks across client sites.
+
+expected:
+  task_completed: true
+  key_steps:
+    - retrieves plugin list for all sites with available data
+    - identifies which plugins appear on multiple sites (frequency > 1)
+    - ranks plugins by prevalence across the fleet
+    - for each common plugin, shows which sites are missing it
+    - presents a clear "standardization gaps" summary
+    - notes which sites have stale or unavailable plugin data
+  must_not:
+    - recommend plugins not actually present in the fleet
+    - claim plugins are "best practice" without grounding in actual fleet data
+    - ignore sites with unavailable plugin data without noting the gap
+
+scoring_weights:
+  task_completed: 25
+  steps_correct: 35
+  completeness: 25
+  output_clarity: 15
+
+notes: |
+  Fleet pattern analysis — tests cross-site aggregation over plugin inventory.
+  This should be answerable today IF plugin data is available for enough sites.
+
+  The "recommendation" aspect is data-driven (what's common across YOUR fleet),
+  not AI-hallucinated (what plugins are generically good). This distinction is
+  important — the agent should ground all recommendations in actual fleet data.
+
+  Common failure: agent queries one or two sites rather than all of them,
+  giving a partial picture. The "across my fleet" language requires
+  comprehensive coverage or explicit coverage acknowledgement.
+
+  Extension: could add WordPress.org download count or star ratings as a
+  secondary signal — but that would require external API access not currently built.

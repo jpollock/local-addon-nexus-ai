@@ -1,0 +1,54 @@
+id: M5-04-compare-cross-env-plugin-drift
+description: Compare — plugins active on staging but missing or outdated on production for the same site
+suite: compare
+moment: compare
+tier: 2
+frequency: occasional
+stakes: high
+mode: [mcp, cli-skills]
+prompt: "For my wpeplugintest site, show me any plugins that are active on staging (jppwpeplugistg) but not on production (jppwpeplugin) — or where the versions differ between the two environments."
+
+guardrails:
+  reads_only: true
+  scope: wpe_only
+
+context:
+  description: "Cross-environment plugin state comparison for the same logical site"
+  notes: |
+    This requires joining plugin inventory from two different WPE installs of the same
+    site and diffing them. Plugin data comes from the graph DB plugins table (populated
+    by WPE sync). Both installs must have been synced recently for this to be accurate.
+
+    Current system capability:
+    - Plugin inventory: available for both installs if WPE sync ran within 8h
+    - Cross-install diff: requires joining two graph DB queries by plugin slug
+    - Version comparison: requires comparing version strings per plugin
+    This SHOULD work with current data if both installs are synced.
+
+expected:
+  task_completed: true
+  key_steps:
+    - fetches plugin list for jppwpeplugistg (staging)
+    - fetches plugin list for jppwpeplugin (production)
+    - compares plugin lists by slug — finds plugins present in one but not the other
+    - identifies version differences for plugins present in both
+    - presents a clear diff: staging-only, production-only, version mismatches
+    - flags any staging plugins that should probably be promoted to production
+  must_not:
+    - return data for only one environment
+    - conflate staging and production results
+    - claim no difference exists without actually comparing
+
+scoring_weights:
+  task_completed: 35
+  steps_correct: 35
+  completeness: 20
+  output_clarity: 10
+
+notes: |
+  This is a cross-environment diff query — the most common real workflow before
+  promoting staging to production. Should work today if both installs are synced.
+  Common failure: agent queries one install but not both, or queries fleet-wide
+  rather than comparing the two specific installs of the same site.
+
+  Gap if it fails: no cross-install diff capability in graph DB queries.

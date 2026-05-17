@@ -1,0 +1,63 @@
+id: M5-06-compare-local-wpe-full-diff
+description: Compare — complete diff between a local copy and its WPE production counterpart including content, plugins, and WP version
+suite: compare
+moment: compare
+tier: 2
+frequency: occasional
+stakes: high
+mode: [mcp, cli-skills]
+prompt: "I want a complete picture of how my local jpp0413p site differs from its WP Engine production counterpart. What's different in terms of WordPress version, plugins, themes, and content volume? Which one is more up to date?"
+
+guardrails:
+  reads_only: true
+  scope: both
+  test_local: jpp0413p
+  test_wpe_install: jpp0413p
+
+context:
+  description: "Full local vs WPE diff — version, plugins, themes, content volume"
+  notes: |
+    This is the 'which copy is real and what needs to happen' query.
+    Requires comparing:
+    1. WP version: local (from MetadataCache) vs WPE (from graph DB / WPE sync)
+    2. Plugin list: local plugins[] vs WPE plugins[] — by slug, version, active status
+    3. Theme: local activeTheme vs WPE activeTheme
+    4. Content volume: local postCount vs WPE postCount
+
+    The agent should reach a conclusion: which is more current, what's diverged,
+    and what action (if any) would bring them back in sync.
+
+    Content diff is metadata-level only (post counts) — not a full content comparison.
+    Semantic content diff is NOT expected.
+
+expected:
+  task_completed: true
+  key_steps:
+    - identifies the local site and its WPE counterpart
+    - compares WordPress core versions
+    - compares plugin lists — flags version differences and presence/absence
+    - compares active theme
+    - compares post counts as a proxy for content sync state
+    - draws a conclusion about which copy is more current
+    - suggests what would need to happen to sync them
+  must_not:
+    - only compare one dimension (e.g. plugins only)
+    - conclude they are identical without evidence
+    - claim content is identical based only on post count
+
+scoring_weights:
+  task_completed: 25
+  steps_correct: 40
+  completeness: 25
+  output_clarity: 10
+
+notes: |
+  Multi-dimension comparison query. Extends M5-03 (simple pair check) to a full diff.
+
+  Gap if it fails:
+  - Missing data: WPE site not synced, local site not started → stale plugin data
+  - No plugin diff capability: agent can't subtract two lists and show differences
+  - WP version unavailable for one or both sides
+
+  This is one of the most valuable workflows — "am I safe to push / pull?"
+  requires knowing what's different before acting.

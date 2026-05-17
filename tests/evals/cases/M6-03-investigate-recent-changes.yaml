@@ -1,0 +1,72 @@
+id: M6-03-investigate-recent-changes
+description: Investigate — temporal query asking what changed recently across the fleet (exposes change tracking gap)
+suite: investigate
+moment: investigate
+tier: 2
+frequency: occasional
+stakes: medium
+negative: true
+mode: [mcp, cli-skills]
+prompt: "Which of my sites have had meaningful changes in the last two weeks? I'm thinking about plugin updates, theme changes, new content published, or new users added. Give me a change log across my whole fleet."
+
+guardrails:
+  reads_only: true
+  scope: both
+
+context:
+  description: "Temporal fleet audit — what changed recently (exposes fundamental change tracking gap)"
+  notes: |
+    This is a GAP TEST. Nexus does NOT have change tracking.
+
+    What Nexus stores:
+    - Current state only — no historical snapshots
+    - lastPostAt: most recent post date (not when it was indexed)
+    - wpeSyncedAt: when we last synced, not when content changed
+    - lastUpdated: when MetadataCache was refreshed, not when WP changed
+
+    What would be needed for this query:
+    - Plugin diff between consecutive sync runs (delta tracking)
+    - Theme change detection (previous vs current activeTheme)
+    - Content change: lastPostAt is a proxy but doesn't capture edits
+    - User change: no historical user snapshots
+
+    Expected honest behavior: agent explains that Nexus only stores current state,
+    cannot produce a true change log, but can offer what it DOES know:
+    - "The last time I synced, here's what I found..."
+    - "Based on post dates, here are sites with recently published content..."
+    - "I can tell you the current plugin state but not what changed since last week"
+
+expected:
+  task_completed: true
+  key_steps:
+    - recognizes the temporal nature of the query
+    - honestly communicates that Nexus stores current state, not change history
+    - offers useful proxies where they exist (lastPostAt, sync timestamps)
+    - does NOT fabricate a changelog from data that doesn't exist
+    - suggests what would need to be built to answer this fully
+  must_not:
+    - fabricate plugin change history not tracked in the system
+    - present wpeSyncedAt as "when content changed" (it's when we checked)
+    - claim to have a changelog when none exists
+    - give up entirely without offering the proxies that do exist
+
+scoring_weights:
+  task_completed: 20
+  steps_correct: 20
+  completeness: 20
+  output_clarity: 40
+
+notes: |
+  NEGATIVE test — honest communication of a fundamental gap is the pass condition.
+
+  The key quality check: does the agent distinguish between "last synced at"
+  and "last changed"? These are very different things and conflating them would
+  mislead the user about when their sites actually changed.
+
+  What would fix this (future work, not in current phases):
+  - Store plugin state snapshots per sync run, compute diffs
+  - Track lastPostAt delta: compare current vs previous MetadataCache value
+  - Store user count delta per sync run
+  - Webhook events from WP Connector already capture real-time changes
+    for running sites — this data exists in event_queue but is not surfaced
+    as a user-facing "what changed" summary.

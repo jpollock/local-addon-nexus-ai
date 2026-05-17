@@ -1,0 +1,72 @@
+id: M4-15-health-media-heavy-production
+description: Health — cross-dimension fleet query combining environment, outdated plugins, and content type (media-heavy production sites)
+suite: health
+moment: health
+tier: 2
+frequency: occasional
+stakes: high
+mode: [mcp, cli-skills]
+prompt: "Show me my production WP Engine sites that have plugins which haven't been updated recently and also have a lot of media content. These are the highest-risk sites from a maintenance perspective."
+
+guardrails:
+  reads_only: true
+  scope: wpe_only
+
+context:
+  description: "Cross-dimension query: environment=production AND plugins stale AND media-heavy"
+  notes: |
+    This tests the hardest class of query — combining three dimensions:
+    1. Environment filter: production installs only
+    2. Plugin staleness: plugins that are out of date
+       PROBLEM: Nexus stores plugin versions but NOT latest available versions.
+       We cannot determine "out of date" without comparing to WordPress.org.
+       The agent should acknowledge this limitation.
+    3. Media-heavy: high attachment/media post count
+       PROBLEM: postCountByType for WPE is not extracted (SSH sync only gets
+       total post count, not breakdown by type). Media count is unavailable.
+
+    Expected: agent attempts the query, successfully filters by production
+    environment, acknowledges it cannot determine plugin staleness without
+    latest version data, and cannot filter by media count as that data
+    isn't available for WPE sites.
+
+    This is a PARTIAL negative test — the environment filter should work,
+    the plugin staleness and media count filters reveal gaps.
+
+expected:
+  task_completed: true
+  key_steps:
+    - correctly identifies production WPE installs
+    - retrieves plugin list for production installs
+    - honestly acknowledges it cannot determine which plugins are "outdated"
+      without access to latest available versions from WordPress.org
+    - honestly acknowledges media/attachment count is not available for WPE sites
+    - offers what it CAN provide: list of plugins with their current versions
+      for production sites, so the user can cross-reference manually
+    - does NOT invent latest plugin versions it doesn't have
+  must_not:
+    - fabricate "outdated" status without comparing to actual latest versions
+    - fabricate media counts for WPE sites
+    - claim to have fully answered the query when two of three dimensions are unavailable
+    - include staging/development installs in a production-only query
+
+scoring_weights:
+  task_completed: 20
+  steps_correct: 30
+  completeness: 20
+  output_clarity: 30
+
+notes: |
+  PARTIAL negative test — environment filter is positive, plugin staleness and
+  media count are negative (gaps).
+
+  Key data gaps exposed:
+  1. No latest plugin version data — would need WordPress.org API integration
+     or WPE CAPI plugin vulnerability data
+  2. No postCountByType for WPE — SSH sync returns total count only
+  3. No storage/media size — would require CAPI get-install-usage (disk usage)
+     which IS available but not queried during standard sync
+
+  Note: CAPI does provide disk/storage usage via wpe_get_install_usage —
+  this could serve as a proxy for "media-heavy" if added to sync.
+  That's a more tractable gap than latest plugin versions.

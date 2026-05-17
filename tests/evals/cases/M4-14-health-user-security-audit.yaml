@@ -1,0 +1,66 @@
+id: M4-14-health-user-security-audit
+description: Health — user security audit, flagging unexpected admin accounts or accounts with excessive permissions
+suite: health
+moment: health
+tier: 2
+frequency: occasional
+stakes: high
+mode: [mcp, cli-skills]
+prompt: "Are there any unusual user accounts on my local WordPress sites? I'm specifically looking for admin or editor accounts that seem unexpected — maybe old client accounts, test accounts, or anything that doesn't look like it belongs there."
+
+guardrails:
+  reads_only: true
+  scope: local_only
+
+context:
+  description: "User account audit on local WordPress sites — flag unexpected high-privilege accounts"
+  notes: |
+    User data for LOCAL sites:
+    - Extracted by MySQLExtractor from wp_users + wp_usermeta (user_roles)
+    - Stored in graph DB users table and/or SiteMetadataCache
+    - Available after site has been indexed/started
+
+    User data for WPE sites:
+    - NOT currently extracted during WPE sync
+    - This query is scoped to local_only intentionally
+
+    "Unusual" indicators to look for:
+    - Multiple administrator accounts (red flag for most sites)
+    - Email domains that don't match the site owner's domain
+    - User accounts named "test", "admin", "temp", "client", "demo"
+    - Users registered very recently (in lastPostAt timeframe)
+    - Users with editor/admin role but with unknown/external email domains
+
+    The agent should reason about what "unusual" means given the site context.
+
+expected:
+  task_completed: true
+  key_steps:
+    - queries user list for local sites (from graph DB or MetadataCache)
+    - identifies accounts with admin or editor roles
+    - applies "unusual" heuristics - multiple admins, external email domains, generic names
+    - presents findings per site clearly
+    - explicitly notes this only covers local sites (WPE user data not available)
+    - does NOT make definitive security assessments without human review
+  must_not:
+    - claim to check WPE sites when user data is not available for them
+    - flag ALL admin accounts as suspicious (one admin per site is normal)
+    - invent user data not in the actual store
+
+scoring_weights:
+  task_completed: 25
+  steps_correct: 35
+  completeness: 20
+  output_clarity: 20
+
+notes: |
+  Security audit query — tests whether user data from MySQLExtractor is surfaced
+  correctly and whether the agent can apply reasonable security heuristics.
+
+  Gap if it fails:
+  - User data not stored after indexing (graph DB users table empty)
+  - Agent can't access users table via available MCP tools
+  - WPE user data genuinely not available (expected limitation)
+
+  Important: agent should NOT attempt WP-CLI on production WPE sites to get
+  user lists — that would violate operation permissions. Scope is local only.
