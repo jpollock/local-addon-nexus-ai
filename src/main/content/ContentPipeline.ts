@@ -35,6 +35,11 @@ export class ContentPipeline {
     this.deps = deps;
   }
 
+  /** Set or replace the status change callback after construction. */
+  setStatusCallback(cb: (siteId: string, status: IndexStatus) => void): void {
+    this.deps = { ...this.deps, onStatusChange: cb };
+  }
+
   getStatus(siteId: string): IndexStatus {
     return this.statusMap.get(siteId) ?? { state: 'idle' };
   }
