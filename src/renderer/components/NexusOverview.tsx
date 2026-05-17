@@ -18,6 +18,7 @@ import { SiteGroupsPanel } from './SiteGroupsPanel';
 import { AIGatewayPanel } from './AIGatewayPanel';
 import { LoadingSpinner } from './LoadingSpinner';
 import { DiscoverTab } from './DiscoverTab';
+import { SystemTab } from './SystemTab';
 // Local's native notification components
 let toast: any = null;
 try {
@@ -152,7 +153,7 @@ interface NexusOverviewState {
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'discover' | 'activity' | 'operations';
+  activeTab: 'overview' | 'discover' | 'activity' | 'operations' | 'system';
   aiProxy: AiProxyInfo | null;
   fleetSetupOpId: string | null;
   fleetSetupRunning: boolean;
@@ -1416,6 +1417,7 @@ renderTabBar(): React.ReactNode {
       { key: 'discover',   label: 'Discover', isNew: true },
       { key: 'activity',   label: 'Activity' },
       { key: 'operations', label: 'Operations' },
+      { key: 'system',     label: 'System', isNew: true },
     ];
 
     return React.createElement('div', {
@@ -1945,6 +1947,20 @@ renderTabBar(): React.ReactNode {
       });
       case 'activity': return this.renderActivityTab();
       case 'operations': return this.renderOperationsTab();
+      case 'system': return React.createElement(SystemTab, {
+        electron: this.props.electron,
+        sites: this.state.sites.map((s) => ({ id: s.id, name: s.name, status: s.status })),
+        indexEntries: (this.state.indexEntries ?? []).map((e: any) => ({
+          siteId: e.siteId,
+          siteName: e.siteName ?? '',
+          state: e.state,
+          documentCount: e.documentCount,
+          chunkCount: e.chunkCount,
+          lastIndexed: e.lastIndexed,
+          durationMs: e.durationMs,
+          errors: e.errors,
+        })),
+      });
       default: return this.renderOverviewTab();
     }
   }
