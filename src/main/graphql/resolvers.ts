@@ -329,7 +329,8 @@ export function createResolvers(context: ResolverContext) {
           }
 
           const local = sites.map((site) => {
-            const twinCompleteness = services.twinService?.get(site.id)?.completeness ?? 'none';
+            const twin = services.twinService?.get(site.id) ?? null;
+            const twinCompleteness = twin?.completeness ?? 'none';
 
             // Check if site has WPE connection
             const rawSite = services.localServices?.resolveSiteObject?.(site.id) as any;
@@ -341,10 +342,10 @@ export function createResolvers(context: ResolverContext) {
               return {
                 name: site.name,
                 status: statuses[site.id] || 'unknown',
-                wpVersion: site.wpVersion || null,
+                wpVersion: twin?.wpVersion ?? site.wpVersion ?? null,
                 domain: site.domain || 'unknown',
                 id: site.id,
-                phpVersion: site.phpVersion || null,
+                phpVersion: twin?.phpVersion ?? site.phpVersion ?? null,
                 twinCompleteness,
                 linkedTo: null,
               };
@@ -380,10 +381,10 @@ export function createResolvers(context: ResolverContext) {
             return {
               name: site.name,
               status: statuses[site.id] || 'unknown',
-              wpVersion: site.wpVersion || null,
+              wpVersion: twin?.wpVersion ?? site.wpVersion ?? null,
               domain: site.domain || 'unknown',
               id: site.id,
-              phpVersion: site.phpVersion || null,
+              phpVersion: twin?.phpVersion ?? site.phpVersion ?? null,
               twinCompleteness,
               linkedTo: {
                 account: accountId,
