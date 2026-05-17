@@ -42,6 +42,7 @@ interface SearchResult {
 interface DiscoverTabState {
   viewState: 'fresh' | 'indexing' | 'ready';
   indexEntries: IndexEntry[];
+  indexProgress: Record<string, { progress: number; message: string; state: string }>;
   query: string;
   searching: boolean;
   keywordResults: SearchResult[];
@@ -53,10 +54,12 @@ interface DiscoverTabState {
 
 export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabState> {
   private mounted = false;
+  private _progressHandler: ((_: any, data: any) => void) | null = null;
 
   state: DiscoverTabState = {
     viewState: 'fresh',
     indexEntries: [],
+    indexProgress: {},
     query: '',
     searching: false,
     keywordResults: [],
@@ -77,6 +80,23 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
     if (prog?.hasMcpDone) {
       this.setState({ furtherVisible: true });
     }
+    const ipc = this.props.electron.ipcRenderer;
+    this._progressHandler = (_: any, data: { siteId: string; state: string; progress?: number; message?: string; documentCount?: number }) => {
+      if (!this.mounted) return;
+      this.setState((prev) => ({
+        indexProgress: {
+          ...prev.indexProgress,
+          [data.siteId]: {
+            state: data.state,
+            progress: data.progress ?? 0,
+            message: data.message ?? '',
+          },
+        },
+        // Transition to ready when any site fully indexes
+        viewState: data.state === 'indexed' && prev.viewState === 'indexing' ? 'ready' : prev.viewState,
+      }));
+    };
+    ipc.on(IPC_CHANNELS.INDEX_PROGRESS, this._progressHandler);
   }
 
   componentDidUpdate(prevProps: DiscoverTabProps): void {
@@ -87,6 +107,9 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
 
   componentWillUnmount(): void {
     this.mounted = false;
+    if (this._progressHandler) {
+      this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.INDEX_PROGRESS, this._progressHandler);
+    }
   }
 
   deriveViewState(): void {
@@ -180,7 +203,7 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
 
   renderIndexing(): React.ReactNode {
     const { sites } = this.props;
-    const { indexEntries } = this.state;
+    const { indexEntries, indexProgress } = this.state;
     const indexed = indexEntries.filter((e) => e.state === 'indexed').length;
     const total = sites.length;
     const pct = total > 0 ? Math.round((indexed / total) * 100) : 0;
@@ -200,16 +223,21 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
       },
         ...sites.map((site) => {
           const entry = indexEntries.find((e) => e.siteId === site.id);
-          const st = entry?.state ?? 'pending';
+          const live = indexProgress[site.id];
+          const st = live?.state ?? entry?.state ?? 'pending';
           const dotColor = st === 'indexed' ? '#51BB7B' : st === 'indexing' ? '#0ECAD4' : '#333';
-          const label = st === 'indexed' ? `${entry?.documentCount ?? '?'} pages` : st === 'indexing' ? 'indexing…' : 'waiting';
+          const label = st === 'indexed'
+            ? `${entry?.documentCount ?? '?'} pages`
+            : st === 'indexing' && live?.message
+            ? live.message
+            : st === 'indexing' ? 'indexing…' : 'waiting';
           return React.createElement('div', {
             key: site.id,
             style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--nxai-card-bg)', border: '1px solid var(--nxai-card-border)', borderRadius: 6, fontSize: 12 },
           },
             React.createElement('div', { style: { width: 8, height: 8, borderRadius: '50%', background: dotColor, flexShrink: 0 } }),
-            React.createElement('span', { style: { flex: 1, color: 'var(--nxai-card-text)' } }, site.name),
-            React.createElement('span', { style: { fontSize: 10, color: st === 'indexed' ? '#51BB7B' : 'var(--nxai-card-sub)' } }, label),
+            React.createElement('span', { style: { flex: 1, color: 'var(--nxai-card-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const } }, site.name),
+            React.createElement('span', { style: { fontSize: 10, color: st === 'indexed' ? '#51BB7B' : 'var(--nxai-card-sub)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 120 } }, label),
           );
         }),
       ),
