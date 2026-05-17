@@ -131,7 +131,7 @@ export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
       this.props.sites.map(async site => {
         const res = await ipc.invoke(IPC_CHANNELS.GET_SITE_METADATA, site.id).catch(() => null);
         siteData[site.id] = {
-          metadata: res?.metadata?.metadata ?? null,
+          metadata: res?.metadata ?? null,
           metaAge:  res?.ageString ?? null,
           events:   changeEvents[site.id] ?? { lastContent: null, lastPlugin: null, lastUser: null },
         };
@@ -152,7 +152,7 @@ export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
       siteData: {
         ...prev.siteData,
         [siteId]: {
-          metadata: res?.metadata?.metadata ?? null,
+          metadata: res?.metadata ?? null,
           metaAge:  res?.ageString ?? null,
           events:   changeEvents[siteId] ?? prev.siteData[siteId]?.events ?? { lastContent: null, lastPlugin: null, lastUser: null },
         },
