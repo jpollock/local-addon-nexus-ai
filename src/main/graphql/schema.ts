@@ -1767,6 +1767,23 @@ export const typeDefs = gql`
 
     "Get portfolio overview (executive summary)"
     nexusWpePortfolioOverview(monthOffset: Int): NexusWpeDataResult!
+
+    "Get WordPress users for a local site from the graph DB"
+    nexusSiteUsers(siteId: String!): NexusSiteUsersResult!
+  }
+
+  type NexusSiteUser {
+    userId: Int!
+    username: String!
+    email: String!
+    roles: [String!]!
+  }
+
+  type NexusSiteUsersResult {
+    success: Boolean!
+    error: String
+    users: [NexusSiteUser!]
+    siteId: String!
   }
 
   # Generic result for WPE operations returning raw data

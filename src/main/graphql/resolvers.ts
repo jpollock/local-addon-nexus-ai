@@ -4998,6 +4998,32 @@ export function createResolvers(context: ResolverContext) {
           return { success: false, error: err.message, outputPath: null };
         }
       },
+
+      // ======================================================================
+      // B2: Site Users — graph DB read for M4-14 user security audit
+      // ======================================================================
+
+      nexusSiteUsers: (_parent: ResolverParent, { siteId }: { siteId: string }) => {
+        try {
+          const db = services.graphService?.getDb?.();
+          if (!db) return { success: false, error: 'Graph DB not available', users: [], siteId };
+          const rows = db.prepare(
+            'SELECT user_id, username, email, roles FROM users WHERE site_id = ?'
+          ).all(siteId) as Array<{ user_id: number; username: string; email: string; roles: string | null }>;
+          return {
+            success: true,
+            siteId,
+            users: rows.map(r => ({
+              userId: r.user_id,
+              username: r.username,
+              email: r.email,
+              roles: (() => { try { return JSON.parse(r.roles ?? '[]'); } catch { return []; } })(),
+            })),
+          };
+        } catch (err: any) {
+          return { success: false, error: err.message, users: [], siteId };
+        }
+      },
     },
   };
 }

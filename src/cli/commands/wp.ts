@@ -1024,6 +1024,44 @@ wpCommand
     }
   });
 
+// ============================================================================
+// Users (graph DB) Command
+// ============================================================================
+
+wpCommand
+  .command('users <target>')
+  .description('List WordPress users for a site (from graph DB — site must have been indexed)')
+  .option('--json', 'Output as JSON')
+  .action(async (target: string, options) => {
+    try {
+      const client = getClient();
+      // Extract siteId from target — for local sites target is "sitename@local"
+      const siteId = target.includes('@') ? target.split('@')[0] : target;
+      const result = await client.mutate<{ nexusSiteUsers: { success: boolean; error?: string; siteId: string; users: Array<{ userId: number; username: string; email: string; roles: string[] }> } }>(`
+        mutation($siteId: String!) {
+          nexusSiteUsers(siteId: $siteId) {
+            success
+            error
+            siteId
+            users { userId username email roles }
+          }
+        }
+      `, { siteId });
+      const { success, error, users } = result.nexusSiteUsers;
+      if (!success) { console.error(`Error: ${error}`); process.exit(1); }
+      if (options.json) { console.log(JSON.stringify(users, null, 2)); return; }
+      if (users.length === 0) { console.log('No users found (site may not be indexed yet)'); return; }
+      console.log(`\nUsers on ${target}:\n`);
+      users.forEach((u: any) => {
+        const roleStr = u.roles.join(', ');
+        console.log(`  ${u.username} <${u.email}> [${roleStr}]`);
+      });
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 // Add subcommands
 wpCommand.addCommand(pluginCommand);
 wpCommand.addCommand(themeCommand);
