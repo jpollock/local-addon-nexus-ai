@@ -15,11 +15,21 @@ export async function keywordSearch(
 ): Promise<KeywordResult[]> {
   if (!table) return [];
   try {
-    const raw: any[] = await table
-      .query()
-      .fullTextSearch(query, { columns: ['content', 'title'] })
-      .limit(limit * 3)
-      .toArray();
+    // Try both columns; fall back to content-only if title FTS index is missing
+    let raw: any[];
+    try {
+      raw = await table
+        .query()
+        .fullTextSearch(query, { columns: ['content', 'title'] })
+        .limit(limit * 3)
+        .toArray();
+    } catch {
+      raw = await table
+        .query()
+        .fullTextSearch(query, { columns: ['content'] })
+        .limit(limit * 3)
+        .toArray();
+    }
 
     const seen = new Set<number>();
     const deduped: KeywordResult[] = [];
