@@ -23,6 +23,11 @@ export interface BulkOpDeps {
     getThemes(siteId: string): Promise<Array<{ name: string; title: string; version: string; status: string }>>;
     getWpVersion(siteId: string): Promise<string | null>;
   };
+  /** Optional: metadata cache to update after reindex (same refresh as lifecycle hook) */
+  metadataCache?: {
+    set(siteId: string, metadata: any): void;
+    get(siteId: string): any;
+  };
   healthCalculator: { calculateScore(siteId: string, siteInfo: any): Promise<any> };
   graphService?: {
     upsertSite(site: any): Promise<void>;
@@ -278,6 +283,28 @@ export class BulkOperationManager {
       mysqlDatabase: 'local',
       sitePath: site.path,
     });
+
+    // Refresh metadata cache after indexing — same as lifecycle hook does on siteStarted.
+    // Without this, INDEX_ALL_AUTO leaves MetadataCache empty even after full indexing.
+    if (this.deps.metadataCache) {
+      try {
+        const [wpVersion, plugins, themes] = await Promise.all([
+          this.deps.siteDataBridge.getWpVersion(siteId),
+          this.deps.siteDataBridge.getPlugins(siteId),
+          this.deps.siteDataBridge.getThemes(siteId),
+        ]);
+        this.deps.metadataCache.set(siteId, {
+          wpVersion: wpVersion ?? 'unknown',
+          plugins: plugins.map(p => ({ name: p.name, title: p.title, version: p.version, status: p.status as 'active' | 'inactive' })),
+          themes: themes.map(t => ({ name: t.name, title: t.title, version: t.version, status: t.status as 'active' | 'inactive' })),
+          updateSource: 'lifecycle' as const,
+          scanDepth: 'metadata' as const,
+          lastUpdated: Date.now(),
+        });
+      } catch {
+        // Non-fatal — index succeeded, metadata refresh best-effort
+      }
+    }
   }
 
   private async executePluginUpdate(siteId: string, pluginSlug?: string, options?: Record<string, any>): Promise<void> {

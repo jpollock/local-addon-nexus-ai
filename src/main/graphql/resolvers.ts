@@ -332,6 +332,21 @@ export function createResolvers(context: ResolverContext) {
             const twin = services.twinService?.get(site.id) ?? null;
             const twinCompleteness = twin?.completeness ?? 'none';
 
+            // Index registry fields
+            const indexEntry = services.indexRegistry?.get?.(site.id) ?? null;
+            const metaEntry  = services.metadataCache?.getWithAge?.(site.id) ?? null;
+            const indexFields = {
+              indexState:    indexEntry?.state ?? 'idle',
+              documentCount: indexEntry?.documentCount ?? 0,
+              chunkCount:    indexEntry?.chunkCount ?? 0,
+              lastIndexed:   indexEntry?.lastIndexed ?? null,
+              pluginCount:   metaEntry?.plugins?.length ?? null,
+              postCount:     metaEntry?.postCount ?? null,
+              metaUpdatedAt: metaEntry?.lastUpdated ?? null,
+              metaAge:       services.metadataCache?.getAgeString?.(site.id) ?? null,
+              metaSource:    metaEntry?.updateSource ?? null,
+            };
+
             // Check if site has WPE connection
             const rawSite = services.localServices?.resolveSiteObject?.(site.id) as any;
             const wpeConnection = rawSite?.hostConnections
@@ -348,6 +363,7 @@ export function createResolvers(context: ResolverContext) {
                 phpVersion: twin?.phpVersion ?? site.phpVersion ?? null,
                 twinCompleteness,
                 linkedTo: null,
+                ...indexFields,
               };
             }
 
@@ -395,6 +411,7 @@ export function createResolvers(context: ResolverContext) {
                 createdAt: new Date().toISOString(),
                 lastSyncedAt: null,
               },
+              ...indexFields,
             };
           });
 

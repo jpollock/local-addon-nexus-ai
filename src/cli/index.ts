@@ -24,6 +24,7 @@ import { doctorCommand } from './commands/doctor';
 import { troubleshootCommand } from './commands/troubleshoot';
 import { settingsCommand } from './commands/settings';
 import { resetCommand } from './commands/reset';
+import { systemCommand } from './commands/system';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
 import { setBootstrapResult } from './utils/context';
@@ -54,6 +55,7 @@ program.addCommand(doctorCommand);
 program.addCommand(troubleshootCommand);
 program.addCommand(settingsCommand);
 program.addCommand(resetCommand);
+program.addCommand(systemCommand);
 
 // Global error handler
 process.on('unhandledRejection', (error: any) => {

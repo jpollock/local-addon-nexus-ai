@@ -29,6 +29,24 @@ export const typeDefs = gql`
     twinCompleteness: String
     "Linked WPE environment"
     linkedTo: SiteLink
+    "Content index state (idle, indexing, indexed, stale, error)"
+    indexState: String
+    "Number of indexed documents"
+    documentCount: Int
+    "Number of indexed chunks"
+    chunkCount: Int
+    "Unix timestamp (ms) of last completed index"
+    lastIndexed: Float
+    "Number of cached plugins"
+    pluginCount: Int
+    "Number of cached posts"
+    postCount: Int
+    "Metadata cache last updated timestamp (ms)"
+    metaUpdatedAt: Float
+    "Metadata cache age string (e.g. '5m ago')"
+    metaAge: String
+    "Metadata update source"
+    metaSource: String
   }
 
   type WpeSite {

@@ -1610,6 +1610,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     siteDataBridge: localServicesBridge,
     healthCalculator,
     graphService,
+    metadataCache: metadataCache ?? undefined,
     setupSiteForAI: async (siteId: string, options?: any) => {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const provider = options?.provider ?? settings?.aiProvider;
