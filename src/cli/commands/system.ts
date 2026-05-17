@@ -85,35 +85,31 @@ systemCommand
       const listResult = await client.mutate<{ nexusSitesList: any }>(`
         mutation {
           nexusSitesList {
-            success
-            error
-            sites {
+            local {
               id
               name
               status
               phpVersion
               wpVersion
-              isIndexed
+              indexState
               documentCount
               chunkCount
               lastIndexed
-              indexState
+              pluginCount
+              postCount
+              metaUpdatedAt
+              metaAge
+              metaSource
             }
           }
         }
       `, {});
 
-      if (!listResult.nexusSitesList.success) {
-        console.error(`Error: ${listResult.nexusSitesList.error}`);
-        process.exit(1);
-      }
-
-      let sites = listResult.nexusSitesList.sites ?? [];
+      let sites = listResult.nexusSitesList?.local ?? [];
       if (options.site) {
         sites = sites.filter((s: any) => s.name === options.site || s.id === options.site);
       }
-      // Filter to local only
-      sites = sites.filter((s: any) => !s.id.startsWith('wpe-'));
+      // local[] is already local-only
 
       if (options.json) {
         console.log(JSON.stringify(sites, null, 2));
