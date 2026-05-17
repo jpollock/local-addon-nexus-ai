@@ -1,7 +1,7 @@
 import { ContentPipeline } from './ContentPipeline';
 import { IndexRegistry, RegistryStorage } from './IndexRegistry';
 import { SiteConnectionInfo } from './MySQLExtractor';
-import { STORAGE_KEYS } from '../../common/constants';
+import { IPC_CHANNELS, STORAGE_KEYS } from '../../common/constants';
 import type { NexusSettings } from '../../common/types';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
@@ -141,9 +141,17 @@ export function registerLifecycleHooks(
   settingsStorage?: RegistryStorage,
   localServices?: LocalServicesBridge,
   metadataCache?: SiteMetadataCache,
+  sendToRenderer?: (channel: string, ...args: unknown[]) => void,
 ): void {
   context.hooks.addAction('siteStarted', async (site: LocalSiteRef) => {
     logger.info(`[NexusAI] Site started: ${site.name}, triggering index`);
+
+    // Wire real-time progress push to renderer
+    if (sendToRenderer) {
+      pipeline.setStatusCallback((siteId, status) => {
+        sendToRenderer(IPC_CHANNELS.INDEX_PROGRESS, { siteId, ...status });
+      });
+    }
 
     // Check auto-index settings
     if (settingsStorage) {

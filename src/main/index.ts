@@ -176,7 +176,15 @@ export default function main(context: any): void {
 
   // Phase 2: Register lifecycle hooks (pass readyPromise so they wait for init)
   const localServicesBridge = createLocalServicesBridge(serviceContainer);
-  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge, metadataCache);
+  const sendToRenderer = (channel: string, ...args: unknown[]) => {
+    try {
+      const { BrowserWindow } = require('electron');
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send(channel, ...args);
+      }
+    } catch { /* renderer not ready */ }
+  };
+  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge, metadataCache, sendToRenderer);
 
   // Phase 3: Boot MCP server (async — does not block addon load)
   const auditLogger = createAuditLogger(
