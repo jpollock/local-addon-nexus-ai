@@ -23,6 +23,7 @@ import { skillsCommand } from './commands/skills';
 import { doctorCommand } from './commands/doctor';
 import { troubleshootCommand } from './commands/troubleshoot';
 import { settingsCommand } from './commands/settings';
+import { resetCommand } from './commands/reset';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
 import { setBootstrapResult } from './utils/context';
@@ -52,6 +53,7 @@ program.addCommand(skillsCommand);
 program.addCommand(doctorCommand);
 program.addCommand(troubleshootCommand);
 program.addCommand(settingsCommand);
+program.addCommand(resetCommand);
 
 // Global error handler
 process.on('unhandledRejection', (error: any) => {
