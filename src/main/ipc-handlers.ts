@@ -308,6 +308,36 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     return indexRegistry.listAll();
   });
 
+  // Returns the most recent event timestamp per event-type group per site.
+  // Used by SystemTab to determine store freshness relative to source changes.
+  safeHandle(IPC_CHANNELS.GET_SITE_CHANGE_EVENTS, () => {
+    try {
+      const db = graphService?.getDb?.();
+      if (!db) return {};
+      // One row per site: latest content change, latest plugin change, latest user change
+      const rows = db.prepare(`
+        SELECT site_id,
+          MAX(CASE WHEN event_type IN ('post_created','post_updated','post_deleted') THEN created_at END) as last_content,
+          MAX(CASE WHEN event_type IN ('plugin_activated','plugin_deactivated','plugin_installed','plugin_updated') THEN created_at END) as last_plugin,
+          MAX(CASE WHEN event_type IN ('user_registered','user_deleted','user_updated') THEN created_at END) as last_user
+        FROM event_queue
+        WHERE status != 'failed'
+        GROUP BY site_id
+      `).all() as Array<{ site_id: string; last_content: number | null; last_plugin: number | null; last_user: number | null }>;
+      const result: Record<string, { lastContent: number | null; lastPlugin: number | null; lastUser: number | null }> = {};
+      rows.forEach(r => {
+        result[r.site_id] = {
+          lastContent: r.last_content ? r.last_content * 1000 : null, // SQLite stores seconds
+          lastPlugin:  r.last_plugin  ? r.last_plugin  * 1000 : null,
+          lastUser:    r.last_user    ? r.last_user    * 1000 : null,
+        };
+      });
+      return result;
+    } catch {
+      return {};
+    }
+  });
+
   safeHandle(IPC_CHANNELS.GET_SITES, async () => {
     try {
       const allSites = siteData.getSites();

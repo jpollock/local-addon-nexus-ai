@@ -9,6 +9,7 @@ export const IPC_CHANNELS = {
   GET_MCP_INFO: `${ADDON_PREFIX}:get-mcp-info`,
   GET_STARTUP_STATUS: `${ADDON_PREFIX}:get-startup-status`,
   GET_FLEET_STATUS: `${ADDON_PREFIX}:get-fleet-status`,
+  GET_SITE_CHANGE_EVENTS: `${ADDON_PREFIX}:get-site-change-events`,
   GET_SITES: `${ADDON_PREFIX}:get-sites`,
   GET_WPE_SITE_IDS: `${ADDON_PREFIX}:get-wpe-site-ids`,
   GET_DASHBOARD_STATS: `${ADDON_PREFIX}:get-dashboard-stats`,
