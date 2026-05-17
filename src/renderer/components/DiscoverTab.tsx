@@ -50,6 +50,7 @@ interface DiscoverTabState {
   hasSearched: boolean;
   mcpExpanded: boolean;
   furtherVisible: boolean;
+  embeddingReady: boolean | null;  // null = still checking
 }
 
 export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabState> {
@@ -67,6 +68,7 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
     hasSearched: false,
     mcpExpanded: false,
     furtherVisible: false,
+    embeddingReady: null,
   };
 
   componentDidMount(): void {
@@ -97,6 +99,14 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
       }));
     };
     ipc.on(IPC_CHANNELS.INDEX_PROGRESS, this._progressHandler);
+    this.props.electron.ipcRenderer
+      .invoke(IPC_CHANNELS.GET_STARTUP_STATUS)
+      .then((status: any) => {
+        if (this.mounted) {
+          this.setState({ embeddingReady: status?.embedding?.ready !== false });
+        }
+      })
+      .catch(() => { if (this.mounted) this.setState({ embeddingReady: true }); });
   }
 
   componentDidUpdate(prevProps: DiscoverTabProps): void {
@@ -177,6 +187,11 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
     this.props.onSettingsChange(next);
   };
 
+  getWpeSiteCount(): number {
+    // WPE entries have siteId starting with 'wpe-'
+    return this.state.indexEntries.filter((e) => e.siteId.startsWith('wpe-')).length;
+  }
+
   renderFresh(): React.ReactNode {
     return React.createElement('div', {
       style: { maxWidth: 520, margin: '48px auto', textAlign: 'center' as const },
@@ -194,6 +209,10 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
       React.createElement('br'),
       this.props.sites.length === 0
         ? React.createElement('p', { style: { fontSize: 13, color: 'var(--nxai-card-sub)' } }, 'No local WordPress sites found. Create a site in Local first.')
+        : this.state.embeddingReady === false
+        ? React.createElement('div', {
+            style: { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, fontSize: 12, color: '#f59e0b' },
+          }, '⏳ AI model loading — indexing will start automatically when ready')
         : React.createElement('button', {
             onClick: this.handleStartIndexing,
             style: { background: '#0ECAD4', color: '#000', fontWeight: 700, fontSize: 13, padding: '10px 22px', borderRadius: 8, border: 'none', cursor: 'pointer', fontFamily: 'inherit' },
@@ -349,6 +368,20 @@ export class DiscoverTab extends React.Component<DiscoverTabProps, DiscoverTabSt
 
       // MCP card (after first search)
       hasSearched ? this.renderMcpCard() : null,
+
+      // WPE gap banner (after first search)
+      hasSearched
+        ? React.createElement('div', {
+            style: { display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 13px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 7, fontSize: 11, color: '#c8a870', marginTop: 12 },
+          },
+            React.createElement('span', null, 'ℹ'),
+            React.createElement('span', null,
+              'Search covers your indexed local sites only. WP Engine sites are not yet included in content search — ',
+              React.createElement('strong', null, 'their plugins, themes, and WP versions'),
+              ' are available in the fleet view.',
+            ),
+          )
+        : null,
 
       // Further steps
       furtherVisible ? this.renderFurtherSteps() : null,
