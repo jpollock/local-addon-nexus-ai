@@ -146,6 +146,7 @@ export const IPC_CHANNELS = {
   WPE_SYNC_STATS: `${ADDON_PREFIX}:wpe:sync-stats`,
   CLEANUP_EXCLUDED_TYPES: `${ADDON_PREFIX}:content:cleanup-excluded-types`,
   RESET_CONTENT_INDEX: `${ADDON_PREFIX}:content:reset-index`,
+  FACTORY_RESET: `${ADDON_PREFIX}:data:factory-reset`,
   WPE_CAPI_SYNC: `${ADDON_PREFIX}:wpe:capi-sync`,
   RESET_AND_REFRESH: `${ADDON_PREFIX}:data:reset-and-refresh`,
   CLEANUP_GHOST_INSTALLS: `${ADDON_PREFIX}:wpe:cleanup-ghost-installs`,

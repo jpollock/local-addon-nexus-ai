@@ -71,6 +71,10 @@ interface SystemTabState {
   liveProgress: Record<string, LiveProgress>;
   loading: boolean;
   actionInProgress: Record<string, string>;
+  factoryResetConfirming: boolean;
+  factoryResetRunning: boolean;
+  factoryResetDone: boolean;
+  factoryResetChecked: boolean;
 }
 
 export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
@@ -83,6 +87,10 @@ export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
     liveProgress: {},
     loading: true,
     actionInProgress: {},
+    factoryResetConfirming: false,
+    factoryResetRunning: false,
+    factoryResetDone: false,
+    factoryResetChecked: false,
   };
 
   componentDidMount(): void {
@@ -308,7 +316,7 @@ export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
 
   render(): React.ReactNode {
     const { sites, indexEntries } = this.props;
-    const { siteData, liveProgress, loading, actionInProgress } = this.state;
+    const { siteData, liveProgress, loading, actionInProgress, factoryResetConfirming, factoryResetRunning, factoryResetDone, factoryResetChecked } = this.state;
     const counts = this.getStoreCounts();
     const N = sites.length;
 
@@ -345,7 +353,7 @@ export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
       ),
 
       // ── Global actions ─────────────────────────────────────────
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'var(--nxai-code-bg, #1f1f1f)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 7, marginBottom: 14 } },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'var(--nxai-code-bg, #1f1f1f)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 7, marginBottom: factoryResetConfirming || factoryResetDone ? 0 : 14, borderBottomLeftRadius: factoryResetConfirming || factoryResetDone ? 0 : 7, borderBottomRightRadius: factoryResetConfirming || factoryResetDone ? 0 : 7 } },
         React.createElement('span', { style: { fontSize: 12, fontWeight: 600, flex: 1 } }, 'Fleet Actions'),
         React.createElement('button', {
           disabled: !!actionInProgress._all,
@@ -356,7 +364,65 @@ export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
           onClick: () => this.loadAll(),
           style: { padding: '5px 11px', borderRadius: 5, background: 'var(--nxai-card-bg, #21262d)', color: 'var(--nxai-card-sub, #6b7280)', fontSize: 11, border: '1px solid var(--nxai-card-border, #30363d)', cursor: 'pointer', fontFamily: 'inherit' },
         }, '↻ Refresh'),
+        React.createElement('button', {
+          onClick: () => this.setState(prev => ({ factoryResetConfirming: !prev.factoryResetConfirming, factoryResetDone: false, factoryResetChecked: false })),
+          style: { padding: '5px 11px', borderRadius: 5, background: factoryResetConfirming ? 'rgba(239,68,68,0.15)' : 'transparent', color: '#ef4444', fontSize: 11, border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer', fontFamily: 'inherit' },
+        }, '⚠ Factory Reset'),
       ),
+
+      // ── Factory reset confirmation panel ────────────────────────
+      factoryResetDone
+        ? React.createElement('div', { style: { padding: '10px 14px', background: 'rgba(81,187,123,0.06)', border: '1px solid rgba(81,187,123,0.2)', borderTop: 'none', borderRadius: '0 0 7px 7px', marginBottom: 14, fontSize: 12, color: '#51BB7B' } },
+            '✓ All Nexus AI data deleted. ',
+            React.createElement('strong', null, 'Restart Local'),
+            ' to complete the reset — electron-store will otherwise recreate files on exit.',
+          )
+        : factoryResetConfirming
+        ? React.createElement('div', { style: { padding: '12px 14px', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', borderTop: 'none', borderRadius: '0 0 7px 7px', marginBottom: 14 } },
+            React.createElement('div', { style: { fontSize: 12, marginBottom: 10, lineHeight: 1.55 } },
+              React.createElement('strong', { style: { color: '#ef4444' } }, 'Permanently deletes:'),
+              React.createElement('ul', { style: { margin: '5px 0 5px 16px', color: 'var(--nxai-card-sub, #6b7280)', fontSize: 11 } },
+                React.createElement('li', null, 'IndexRegistry · SiteMetadataCache · Settings'),
+                React.createElement('li', null, 'API key status · Site AI configs · WPE install cache'),
+                React.createElement('li', null, 'Graph DB (plugins, themes, users, events)'),
+                React.createElement('li', null, 'Vector store — all embeddings'),
+              ),
+              React.createElement('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', marginTop: 5 } },
+                '✓ API keys (Keychain), WPE OAuth, and telemetry ID are ',
+                React.createElement('strong', null, 'not affected'),
+                '. Restart Local after reset.',
+              ),
+            ),
+            React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', marginBottom: 10 } },
+              React.createElement('input', {
+                type: 'checkbox',
+                checked: factoryResetChecked,
+                onChange: (e: any) => this.setState({ factoryResetChecked: e.target.checked }),
+              }),
+              'I understand — this cannot be undone without re-indexing',
+            ),
+            React.createElement('div', { style: { display: 'flex', gap: 8 } },
+              React.createElement('button', {
+                disabled: !factoryResetChecked || factoryResetRunning,
+                onClick: async () => {
+                  this.setState({ factoryResetRunning: true });
+                  const result = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.FACTORY_RESET);
+                  if (result?.success) {
+                    this.setState({ factoryResetRunning: false, factoryResetConfirming: false, factoryResetDone: true, factoryResetChecked: false, siteData: {}, liveProgress: {} });
+                  } else {
+                    this.setState({ factoryResetRunning: false });
+                    (window as any).showToast?.(`Reset failed: ${result?.error}`, 'error');
+                  }
+                },
+                style: { padding: '5px 14px', borderRadius: 5, fontSize: 12, fontWeight: 700, cursor: !factoryResetChecked || factoryResetRunning ? 'not-allowed' : 'pointer', background: !factoryResetChecked ? '#333' : '#ef4444', color: '#fff', border: 'none', opacity: !factoryResetChecked ? 0.5 : 1, fontFamily: 'inherit' },
+              }, factoryResetRunning ? '⏳ Resetting…' : 'Reset Everything'),
+              React.createElement('button', {
+                onClick: () => this.setState({ factoryResetConfirming: false, factoryResetChecked: false }),
+                style: { padding: '5px 12px', borderRadius: 5, fontSize: 12, background: 'var(--nxai-card-bg, #21262d)', color: 'var(--nxai-card-sub, #6b7280)', border: '1px solid var(--nxai-card-border, #30363d)', cursor: 'pointer', fontFamily: 'inherit' },
+              }, 'Cancel'),
+            ),
+          )
+        : null,
 
       // ── Site matrix ────────────────────────────────────────────
       React.createElement('div', { style: { border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 8, overflow: 'hidden' } },

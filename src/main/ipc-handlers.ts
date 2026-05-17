@@ -2673,6 +2673,65 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
     }
   });
 
+  // Factory reset: wipe ALL Nexus AI data — same as `nexus reset --factory`
+  // Deletes: IndexRegistry, SiteMetadataCache, Settings, API key status,
+  //          Site AI configs, WPE install cache, DB scan cache,
+  //          Graph DB (SQLite), Vector store (LanceDB).
+  // Survives: API keys (Keychain), WPE OAuth session, telemetry ID.
+  // Local MUST be restarted after this — electron-store would recreate files on exit.
+  safeHandle(IPC_CHANNELS.FACTORY_RESET, async () => {
+    try {
+      const fs = require('fs') as typeof import('fs');
+      const path = require('path') as typeof import('path');
+      const os = require('os') as typeof import('os');
+
+      const platform = process.platform;
+      const home = os.homedir();
+      const dataDir = platform === 'darwin'
+        ? path.join(home, 'Library', 'Application Support', 'Local')
+        : platform === 'win32'
+        ? path.join(process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming'), 'Local')
+        : path.join(home, '.config', 'Local');
+
+      const prefix = 'nexus-ai';
+      const filesToDelete = [
+        `${prefix}_index_registry.json`,
+        `${prefix}_site_metadata.json`,
+        `${prefix}_settings.json`,
+        `${prefix}_api_key_status.json`,
+        `${prefix}_site_ai_config.json`,
+        `${prefix}_wpe_install_cache.json`,
+        `${prefix}_db_scan_cache.json`,
+      ];
+
+      let deleted = 0;
+      for (const file of filesToDelete) {
+        const filePath = path.join(dataDir, file);
+        try {
+          if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); deleted++; }
+        } catch { /* best effort */ }
+      }
+
+      // Graph DB
+      for (const ext of ['', '-shm', '-wal']) {
+        const dbPath = path.join(dataDir, prefix, `graph.db${ext}`);
+        try { if (fs.existsSync(dbPath)) { fs.unlinkSync(dbPath); deleted++; } } catch { /* best effort */ }
+      }
+
+      // Vector store
+      const vectorsDir = path.join(dataDir, prefix, 'vectors');
+      try {
+        if (fs.existsSync(vectorsDir)) { fs.rmSync(vectorsDir, { recursive: true, force: true }); deleted++; }
+      } catch { /* best effort */ }
+
+      localLogger.info(`[NexusAI] Factory reset: ${deleted} items deleted`);
+      return { success: true, deleted };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] Factory reset failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  });
+
   // WPE_CAPI_SYNC, WPE_SYNC_STOP, WPE_SYNC_STATS, WPE_GET_SYNCED_SITES,
   // WPE_GET_SITE_DETAILS, WPE_SYNC_SINGLE, WPE_DIAGNOSE_SITE, WPE_REMOVE_SITE
   // — all registered above in registerWpeSyncHandlers().
