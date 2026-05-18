@@ -324,13 +324,32 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         WHERE status != 'failed'
         GROUP BY site_id
       `).all() as Array<{ site_id: string; last_content: number | null; last_plugin: number | null; last_user: number | null }>;
-      const result: Record<string, { lastContent: number | null; lastPlugin: number | null; lastUser: number | null }> = {};
+
+      // Also fetch user counts per site from graph DB users table
+      const userCounts: Record<string, number> = {};
+      try {
+        const userRows = db.prepare(
+          'SELECT site_id, COUNT(*) as cnt FROM users GROUP BY site_id'
+        ).all() as Array<{ site_id: string; cnt: number }>;
+        userRows.forEach(r => { userCounts[r.site_id] = r.cnt; });
+      } catch { /* users table may not exist yet */ }
+
+      const result: Record<string, { lastContent: number | null; lastPlugin: number | null; lastUser: number | null; userCount: number | null }> = {};
       rows.forEach(r => {
         result[r.site_id] = {
-          lastContent: r.last_content ? r.last_content * 1000 : null, // SQLite stores seconds
+          lastContent: r.last_content ? r.last_content * 1000 : null,
           lastPlugin:  r.last_plugin  ? r.last_plugin  * 1000 : null,
           lastUser:    r.last_user    ? r.last_user    * 1000 : null,
+          userCount:   userCounts[r.site_id] ?? null,
         };
+      });
+      // Add user counts for sites that have users but no events
+      Object.entries(userCounts).forEach(([siteId, cnt]) => {
+        if (!result[siteId]) {
+          result[siteId] = { lastContent: null, lastPlugin: null, lastUser: null, userCount: cnt };
+        } else {
+          result[siteId].userCount = cnt;
+        }
       });
       return result;
     } catch {

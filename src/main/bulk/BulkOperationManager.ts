@@ -293,8 +293,13 @@ export class BulkOperationManager {
           this.deps.siteDataBridge.getPlugins(siteId),
           this.deps.siteDataBridge.getThemes(siteId),
         ]);
+        // phpVersion comes from Local's site config (not WP-CLI) — read from site object
+        const siteObj = this.deps.siteDataBridge.resolveSiteObject(siteId) as any;
+        const phpVersion = siteObj?.phpVersion ?? siteObj?.php?.version ?? null;
+
         this.deps.metadataCache.set(siteId, {
           wpVersion: wpVersion ?? 'unknown',
+          phpVersion: phpVersion ?? undefined,
           plugins: plugins.map(p => ({ name: p.name, title: p.title, version: p.version, status: p.status as 'active' | 'inactive' })),
           themes: themes.map(t => ({ name: t.name, title: t.title, version: t.version, status: t.status as 'active' | 'inactive' })),
           updateSource: 'lifecycle' as const,

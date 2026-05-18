@@ -44,6 +44,7 @@ interface ChangeEvents {
   lastContent: number | null;
   lastPlugin:  number | null;
   lastUser:    number | null;
+  userCount:   number | null;
 }
 
 type Freshness = 'fresh' | 'stale' | 'empty' | 'unknown';
@@ -141,7 +142,7 @@ export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
         siteData[site.id] = {
           metadata: res?.metadata ?? null,
           metaAge:  res?.ageString ?? null,
-          events:   changeEvents[site.id] ?? { lastContent: null, lastPlugin: null, lastUser: null },
+          events:   changeEvents[site.id] ?? { lastContent: null, lastPlugin: null, lastUser: null, userCount: null },
         };
       }),
     );
@@ -162,7 +163,7 @@ export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
         [siteId]: {
           metadata: res?.metadata ?? null,
           metaAge:  res?.ageString ?? null,
-          events:   changeEvents[siteId] ?? prev.siteData[siteId]?.events ?? { lastContent: null, lastPlugin: null, lastUser: null },
+          events:   changeEvents[siteId] ?? prev.siteData[siteId]?.events ?? { lastContent: null, lastPlugin: null, lastUser: null, userCount: null },
         },
       },
     }));
@@ -443,7 +444,7 @@ export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
         ...sites.map((site, i) => {
           const entry  = indexEntries.find(e => e.siteId === site.id);
           const sd     = siteData[site.id];
-          const ev     = sd?.events ?? { lastContent: null, lastPlugin: null, lastUser: null };
+          const ev     = sd?.events ?? { lastContent: null, lastPlugin: null, lastUser: null, userCount: null };
           const live   = liveProgress[site.id];
           const action = actionInProgress[site.id];
           const running = site.status === 'running';
@@ -466,7 +467,8 @@ export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
             : entry?.chunkCount ? `${entry.chunkCount} chunks` : '';
           const pluginVal = sd?.metadata?.plugins ? `${sd.metadata.plugins.length} plugins` : (entry?.documentCount ? '?' : '');
           const pluginSub = sd?.metadata?.themes ? `${sd.metadata.themes.length} themes` : '';
-          const usersVal  = '';  // would need nexusSiteUsers call
+          const userCount = ev?.userCount ?? null;
+          const usersVal  = userCount !== null ? `${userCount} users` : (entry?.lastIndexed ? '' : '');
           const usersSub  = '';
 
           const borderStyle = i < sites.length - 1 ? '1px solid rgba(42,47,61,.4)' : 'none';
@@ -527,7 +529,7 @@ export class SystemTab extends React.Component<SystemTabProps, SystemTabState> {
 
             // Users cell
             React.createElement('div', { style: mc },
-              this.renderCell(entry?.lastIndexed, ev.lastUser, usersVal || (entry?.lastIndexed ? '?' : ''), usersSub),
+              this.renderCell(entry?.lastIndexed, ev.lastUser, usersVal, usersSub),
             ),
 
             // Actions
