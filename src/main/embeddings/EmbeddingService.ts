@@ -1,24 +1,49 @@
-import * as ort from 'onnxruntime-node';
 import * as path from 'path';
 import { VECTOR_DIMENSIONS, EMBEDDING_MAX_SEQUENCE_LENGTH } from '../../common/constants';
 import { WordPieceTokenizer } from './tokenizer';
 
+type OrtModule = typeof import('onnxruntime-node');
+type OrtSession = import('onnxruntime-node').InferenceSession;
+type EmbeddingRuntime = {
+  platform: NodeJS.Platform;
+  arch: string;
+};
+
+export function isOnnxRuntimeSupported(runtime: EmbeddingRuntime = process): boolean {
+  return !(runtime.platform === 'win32' && runtime.arch === 'ia32');
+}
+
 export class EmbeddingService {
-  private session: ort.InferenceSession | null = null;
+  private session: OrtSession | null = null;
+  private ort: OrtModule | null = null;
   private tokenizer: WordPieceTokenizer;
   private modelPath: string;
   private vocabPath: string;
+  private runtime: EmbeddingRuntime;
+  private unavailableReason: string | null = null;
 
-  constructor(modelDir: string) {
+  constructor(modelDir: string, runtime: EmbeddingRuntime = process) {
     this.modelPath = path.join(modelDir, 'model.onnx');
     this.vocabPath = path.join(modelDir, 'vocab.txt');
+    this.runtime = runtime;
     this.tokenizer = new WordPieceTokenizer(EMBEDDING_MAX_SEQUENCE_LENGTH);
   }
 
   async initialize(): Promise<void> {
+    if (!isOnnxRuntimeSupported(this.runtime)) {
+      this.unavailableReason = 'ONNX Runtime Node does not publish a Windows ia32 native package.';
+      console.warn(`[EmbeddingService] Disabled: ${this.unavailableReason}`);
+      return;
+    }
+
     this.tokenizer.loadVocab(this.vocabPath);
 
-    this.session = await ort.InferenceSession.create(this.modelPath, {
+    // Load ONNX lazily so unsupported runtimes can still boot the addon.
+    // Windows LocalWP currently runs Electron as ia32, but onnxruntime-node
+    // does not ship a win32 ia32 binding.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    this.ort = require('onnxruntime-node') as OrtModule;
+    this.session = await this.ort.InferenceSession.create(this.modelPath, {
       executionProviders: ['cpu'],
       graphOptimizationLevel: 'all',
     });
@@ -34,8 +59,14 @@ export class EmbeddingService {
   }
 
   async embedBatch(texts: string[]): Promise<Float32Array[]> {
+    if (this.unavailableReason) {
+      throw new Error(`EmbeddingService unavailable: ${this.unavailableReason}`);
+    }
     if (!this.session) {
       throw new Error('EmbeddingService not initialized. Call initialize() first.');
+    }
+    if (!this.ort) {
+      throw new Error('EmbeddingService runtime not loaded. Call initialize() first.');
     }
 
     const batchSize = texts.length;
@@ -55,10 +86,10 @@ export class EmbeddingService {
     }
 
     // Create ONNX tensors
-    const feeds: Record<string, ort.Tensor> = {
-      input_ids: new ort.Tensor('int64', allInputIds, [batchSize, seqLen]),
-      attention_mask: new ort.Tensor('int64', allAttentionMask, [batchSize, seqLen]),
-      token_type_ids: new ort.Tensor('int64', allTokenTypeIds, [batchSize, seqLen]),
+    const feeds: Record<string, import('onnxruntime-node').Tensor> = {
+      input_ids: new this.ort.Tensor('int64', allInputIds, [batchSize, seqLen]),
+      attention_mask: new this.ort.Tensor('int64', allAttentionMask, [batchSize, seqLen]),
+      token_type_ids: new this.ort.Tensor('int64', allTokenTypeIds, [batchSize, seqLen]),
     };
 
     // Run inference
