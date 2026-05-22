@@ -4,6 +4,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { VECTOR_DIMENSIONS } from '../../src/common/constants';
+import { EmbeddingService, isOnnxRuntimeSupported } from '../../src/main/embeddings/EmbeddingService';
 
 // These tests use the real ONNX Runtime and model.
 // They require the model to be downloaded first: npm run download-model
@@ -15,6 +16,17 @@ const MODEL_EXISTS =
   fs.existsSync(path.join(MODEL_DIR, 'vocab.txt'));
 
 const describeWithModel = MODEL_EXISTS ? describe : describe.skip;
+
+describe('EmbeddingService runtime compatibility', () => {
+  test('disables ONNX on Windows ia32 runtimes without loading native bindings', async () => {
+    const service = new EmbeddingService(MODEL_DIR, { platform: 'win32', arch: 'ia32' });
+    await service.initialize();
+
+    expect(isOnnxRuntimeSupported({ platform: 'win32', arch: 'ia32' })).toBe(false);
+    expect(service.isReady()).toBe(false);
+    await expect(service.embed('Hello world')).rejects.toThrow('EmbeddingService unavailable');
+  });
+});
 
 describeWithModel('EmbeddingService (requires model)', () => {
   // Dynamic import to avoid loading onnxruntime-node when model isn't present

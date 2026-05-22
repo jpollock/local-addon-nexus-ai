@@ -1,18 +1,31 @@
-import * as lancedb from '@lancedb/lancedb';
-import { Index } from '@lancedb/lancedb';
+import type { Connection, Table } from '@lancedb/lancedb';
 import * as path from 'path';
 import * as fs from 'fs';
 import { SITE_TABLE_PREFIX, VECTOR_DIMENSIONS } from '../../common/constants';
 import { VectorDocument, SearchOptions, SearchResult, SiteIndexStats } from '../../common/types';
 import { createSeedRecord, toRecord } from './schema';
 
+type LanceDbModule = typeof import('@lancedb/lancedb');
+type VectorStoreRuntime = {
+  platform: NodeJS.Platform;
+  arch: string;
+};
+
+export function isLanceDbRuntimeSupported(runtime: VectorStoreRuntime = process): boolean {
+  return !(runtime.platform === 'win32' && runtime.arch === 'ia32');
+}
+
 export class VectorStore {
-  private db: lancedb.Connection | null = null;
+  private db: Connection | null = null;
   private dbPath: string;
   private migratedTables = new Set<string>();
+  private runtime: VectorStoreRuntime;
+  private lancedbIndex: LanceDbModule['Index'] | null = null;
+  private unavailableReason: string | null = null;
 
-  constructor(dbPath: string) {
+  constructor(dbPath: string, runtime: VectorStoreRuntime = process) {
     this.dbPath = dbPath;
+    this.runtime = runtime;
   }
 
   /**
@@ -32,10 +45,25 @@ export class VectorStore {
 
   async initialize(): Promise<void> {
     fs.mkdirSync(this.dbPath, { recursive: true });
+    if (!isLanceDbRuntimeSupported(this.runtime)) {
+      this.unavailableReason = 'LanceDB does not publish a Windows ia32 native package.';
+      console.warn(`[VectorStore] Disabled: ${this.unavailableReason}`);
+      return;
+    }
+
+    // Load LanceDB lazily so unsupported runtimes can still boot the addon.
+    // Windows LocalWP currently runs Electron as ia32, but LanceDB only ships
+    // win32 x64/arm64 native packages.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const lancedb = require('@lancedb/lancedb') as LanceDbModule;
+    this.lancedbIndex = lancedb.Index;
     this.db = await lancedb.connect(this.dbPath);
   }
 
-  private getDb(): lancedb.Connection {
+  private getDb(): Connection {
+    if (this.unavailableReason) {
+      throw new Error(`VectorStore unavailable: ${this.unavailableReason}`);
+    }
     if (!this.db) {
       throw new Error('VectorStore not initialized. Call initialize() first.');
     }
@@ -46,7 +74,7 @@ export class VectorStore {
     return `${SITE_TABLE_PREFIX}${siteId}_content`;
   }
 
-  private async getOrCreateTable(siteId: string): Promise<lancedb.Table> {
+  private async getOrCreateTable(siteId: string): Promise<Table> {
     const db = this.getDb();
     const name = this.tableName(siteId);
     const existing = await db.tableNames();
@@ -71,7 +99,8 @@ export class VectorStore {
    * Migration-aware table open for read paths. Returns null if the table does
    * not exist yet. Runs schema migration exactly once per table per session.
    */
-  private async getTable(siteId: string): Promise<lancedb.Table | null> {
+  private async getTable(siteId: string): Promise<Table | null> {
+    if (this.unavailableReason) return null;
     const db = this.getDb();
     const name = this.tableName(siteId);
     const existing = await db.tableNames();
@@ -107,7 +136,7 @@ export class VectorStore {
     }
   }
 
-  private async migrateTableSchema(table: lancedb.Table): Promise<void> {
+  private async migrateTableSchema(table: Table): Promise<void> {
     try {
       const schema = await table.schema();
       const fieldNames = schema.fields.map((f) => f.name);
@@ -134,6 +163,7 @@ export class VectorStore {
 
   async upsert(siteId: string, documents: VectorDocument[]): Promise<void> {
     if (documents.length === 0) return;
+    if (this.unavailableReason) return;
 
     const table = await this.getOrCreateTable(siteId);
 
@@ -154,7 +184,7 @@ export class VectorStore {
     // Create/update FTS index on content field for hybrid search
     try {
       await table.createIndex('content', {
-        config: Index.fts({ withPosition: false }),
+        config: this.lancedbIndex!.fts({ withPosition: false }),
         replace: true,
       });
     } catch {
@@ -258,6 +288,7 @@ export class VectorStore {
     // otherwise swallow the error as a "site not indexed" failure.
     if (options.postType) VectorStore.validatePostType(options.postType);
     (options.excludedTypes ?? []).forEach((t) => VectorStore.validatePostType(t));
+    if (this.unavailableReason) return new Map();
 
     const db = this.getDb();
     const existingNames = new Set(await db.tableNames());
@@ -354,6 +385,7 @@ export class VectorStore {
     excludedTypes: string[],
     onProgress?: (current: number, total: number, tableName: string) => void,
   ): Promise<{ tablesScanned: number; docsRemoved: number }> {
+    if (this.unavailableReason) return { tablesScanned: 0, docsRemoved: 0 };
     const db = this.getDb();
     const tables = await db.tableNames();
     let docsRemoved = 0;
@@ -384,6 +416,7 @@ export class VectorStore {
 
   /** Drop ALL lance tables (full reset). Returns count of tables dropped. */
   async dropAllTables(): Promise<number> {
+    if (this.unavailableReason) return 0;
     const db = this.getDb();
     const tables = await db.tableNames();
     for (const name of tables) {
@@ -393,6 +426,7 @@ export class VectorStore {
   }
 
   async delete(siteId: string, documentIds: string[]): Promise<void> {
+    if (this.unavailableReason) return;
     // Sentinel: ['__all__'] clears the entire site table
     if (documentIds.length === 1 && documentIds[0] === '__all__') {
       try {
@@ -420,6 +454,7 @@ export class VectorStore {
   }
 
   async dropSite(siteId: string): Promise<void> {
+    if (this.unavailableReason) return;
     const db = this.getDb();
     const name = this.tableName(siteId);
     const existing = await db.tableNames();
@@ -462,6 +497,7 @@ export class VectorStore {
   }
 
   async listSites(): Promise<string[]> {
+    if (this.unavailableReason) return [];
     const db = this.getDb();
     const tables = await db.tableNames();
     const prefix = SITE_TABLE_PREFIX;

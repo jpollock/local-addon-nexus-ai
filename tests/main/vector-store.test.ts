@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { VectorStore } from '../../src/main/vector-store/VectorStore';
+import { isLanceDbRuntimeSupported, VectorStore } from '../../src/main/vector-store/VectorStore';
 import { VectorDocument } from '../../src/common/types';
 import { VECTOR_DIMENSIONS } from '../../src/common/constants';
 
@@ -157,6 +157,27 @@ describe('VectorStore', () => {
     await store.upsert('site1', []);
     const stats = await store.getSiteStats('site1');
     expect(stats.documentCount).toBe(0);
+  });
+
+  test('disables LanceDB on Windows ia32 runtimes without crashing', async () => {
+    await store.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-test-'));
+    store = new VectorStore(tmpDir, { platform: 'win32', arch: 'ia32' });
+    await store.initialize();
+
+    expect(isLanceDbRuntimeSupported({ platform: 'win32', arch: 'ia32' })).toBe(false);
+
+    await store.upsert('site1', [makeDoc('site1', 1)]);
+    await expect(store.search('site1', makeVector(1), { limit: 5 })).resolves.toEqual([]);
+    await expect(store.searchAcrossSites(['site1'], makeVector(1), { limit: 5 })).resolves.toEqual(new Map());
+    await expect(store.cleanupExcludedTypes(['post'])).resolves.toEqual({ tablesScanned: 0, docsRemoved: 0 });
+    await expect(store.dropAllTables()).resolves.toBe(0);
+    await expect(store.listSites()).resolves.toEqual([]);
+
+    const stats = await store.getSiteStats('site1');
+    expect(stats).toEqual({ siteId: 'site1', documentCount: 0, chunkCount: 0, lastIndexed: 0 });
   });
 
   // --- postType injection guard (regression tests for issue #8) ---
