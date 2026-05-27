@@ -52,8 +52,8 @@ Leverages Local's secure channels to WP Engine:
 
 ### Flexible AI Integration
 
-- **Bring Your Own Key (BYOK)** — Support for Anthropic, OpenAI, and Google LLM APIs
-- **Future-Ready** — Designed for WPE AI API Gateway integration
+- **Bring Your Own Key (BYOK)** — Anthropic (Claude), OpenAI (GPT), and Google (Gemini 2.5 Flash/Pro) — configure once, use across your fleet
+- **Local AI Gateway** — Centralized credential proxy so WordPress sites share your key without storing it per-site
 - **One-Click Setup** — Automated WordPress site configuration for AI use (keys, features, plugins)
 
 ### Developer Experience
@@ -66,6 +66,7 @@ Leverages Local's secure channels to WP Engine:
 
 - **CLI** — Terminal commands for all operations. Works with any AI that can write shell commands. No MCP setup required. Scriptable, automatable, transparent.
 - **MCP Server** — ~160 tools for AI assistants (Claude Desktop, Cursor, etc.)
+- **AI Chat (Discover tab)** — Built-in chat interface in Local UI. Ask questions about your fleet, get answers backed by real site data. Works with Anthropic, OpenAI, Google Gemini, Ollama, or the Local AI Gateway.
 - **WP Engine Remote Management** — Sync and manage WPE sites alongside local sites (see below)
 - **Database Health** — Scans WordPress databases for bloat (revisions, orphaned postmeta with plugin attribution, expired transients, autoload bloat, ghost plugin tables, auto-drafts, trash). Shows a 0–100 health score with advisor-voice recommendations and prevention tips. Safe cleanup via `nexus wp db clean` (dry-run default). Available via site card UI, CLI, and MCP tools. Local-only.
 - **Production-Ready Security** — Input validation, audit logging, credential redaction
@@ -73,6 +74,7 @@ Leverages Local's secure channels to WP Engine:
 - **AI Gateway** — Credential proxy, usage tracking, cost monitoring
 - **Event Tracking** — WordPress action/filter tracking with graph database
 - **Bulk Operations** — Fleet-wide operations with progress tracking and per-site results
+- **WP-CLI read/write permission split** — `wpcli_read` (plugin list, core version, user list) is **allowed on production by default**; write operations remain blocked. Configure per-environment in Preferences → WP Engine Access.
 - Semantic search across all site content with relevance scoring
 - WooCommerce product extraction (price, SKU, stock, attributes, categories)
 - ACF custom field enrichment (text, repeater, group, flexible content)
@@ -81,6 +83,8 @@ Leverages Local's secure channels to WP Engine:
 - Ollama integration with automatic site context injection
 - 3-tier safety system with confirmation tokens for destructive operations
 - Per-platform packaging with native binary stripping
+
+**→ [What's New in v0.4.0](docs-site/docs/reference/whats-new-may-2026.md)**
 
 ## WP Engine Remote Management
 
