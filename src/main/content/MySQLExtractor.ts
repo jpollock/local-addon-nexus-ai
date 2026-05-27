@@ -60,6 +60,29 @@ function getTablePrefix(wpConfigPath: string): string {
   }
 }
 
+/**
+ * Retry wrapper for mysql.createConnection — MySQL socket may not be ready
+ * for up to 10 seconds after siteStarted fires on slow machines.
+ */
+export async function connectWithRetry<T>(
+  connectFn: () => Promise<T>,
+  maxRetries = 3,
+  delayMs = 2000,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await connectFn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastError;
+}
+
 export class MySQLExtractor {
   /**
    * Check whether the site's MySQL socket exists (site must be running).
@@ -83,12 +106,16 @@ export class MySQLExtractor {
     const dbPassword = readWpConfigValue(wpConfigPath, 'DB_PASSWORD') ?? 'root';
     const prefix = getTablePrefix(wpConfigPath);
 
-    const connection = await mysql.createConnection({
-      socketPath,
-      user: dbUser,
-      password: dbPassword,
-      database: dbName,
-    });
+    const connection = await connectWithRetry(
+      () => mysql.createConnection({
+        socketPath,
+        user: dbUser,
+        password: dbPassword,
+        database: dbName,
+      }),
+      3,
+      2000,
+    );
 
     try {
       const warnings: string[] = [];

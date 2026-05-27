@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nexus AI — Assistant UX Mocks</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #e6edf3; height: 100vh; overflow: hidden; }
+
+/* ── View switcher ── */
+.view-switcher {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 4px; background: #0d1117; border: 1px solid #30363d;
+  border-radius: 8px; padding: 4px; z-index: 1000;
+}
+.view-btn {
+  padding: 5px 14px; border-radius: 5px; border: none; font-size: 11px;
+  font-weight: 600; cursor: pointer; font-family: inherit; color: #8b949e;
+  background: transparent; transition: all .15s;
+}
+.view-btn.active { background: #21262d; color: #e6edf3; }
+
+/* ── Local shell ── */
+.local-shell {
+  display: flex; height: 100vh; overflow: hidden;
+}
+
+/* ── Icon rail ── */
+.icon-rail {
+  width: 48px; background: #161b22; border-right: 1px solid #21262d;
+  display: flex; flex-direction: column; align-items: center; padding: 16px 0; gap: 4px; flex-shrink: 0;
+}
+.rail-icon {
+  width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center;
+  justify-content: center; cursor: pointer; color: #8b949e; font-size: 14px;
+  transition: all .15s; position: relative;
+}
+.rail-icon:hover { color: #e6edf3; background: #21262d; }
+.rail-icon.active { color: #0ECAD4; background: rgba(14,202,212,.1); }
+.rail-icon .dot { position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: #ef4444; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 220px; background: #0d1117; border-right: 1px solid #21262d;
+  display: flex; flex-direction: column; flex-shrink: 0;
+}
+.sidebar-header {
+  padding: 12px; border-bottom: 1px solid #21262d;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sidebar-title { font-size: 12px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; }
+.sidebar-toolbar { display: flex; gap: 6px; align-items: center; }
+.toolbar-btn {
+  width: 24px; height: 24px; border-radius: 4px; border: none; background: transparent;
+  color: #6b7280; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; transition: all .15s;
+}
+.toolbar-btn:hover { color: #e6edf3; background: #21262d; }
+.toolbar-btn.active { color: #0ECAD4; }
+.site-list { flex: 1; overflow-y: auto; padding: 6px; }
+.site-item {
+  padding: 8px 10px; border-radius: 6px; cursor: pointer; display: flex;
+  align-items: center; gap: 8px; margin-bottom: 2px; transition: all .15s;
+}
+.site-item:hover { background: #161b22; }
+.site-item.active { background: #21262d; }
+.site-item.dimmed { opacity: 0.25; }
+.site-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.site-dot.running { background: #51BB7B; }
+.site-dot.halted  { background: #555; }
+.site-name { font-size: 12px; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-meta { font-size: 10px; color: #555; }
+.site-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; background: rgba(245,158,11,.12); color: #fbbf24; border: 1px solid rgba(245,158,11,.2); }
+
+/* ── Main area ── */
+.main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+.view { display: none; height: 100%; }
+.view.active { display: flex; flex-direction: column; }
+
+/* ── Topbar ── */
+.topbar {
+  height: 44px; background: #0d1117; border-bottom: 1px solid #21262d;
+  display: flex; align-items: center; padding: 0 16px; gap: 12px; flex-shrink: 0;
+}
+.topbar-title { font-size: 14px; font-weight: 600; }
+.topbar-sub { font-size: 11px; color: #8b949e; }
+.topbar-spacer { flex: 1; }
+.topbar-chip {
+  font-size: 10px; padding: 3px 8px; border-radius: 10px; border: 1px solid #30363d;
+  color: #8b949e; cursor: pointer; display: flex; align-items: center; gap: 4px;
+}
+.topbar-chip:hover { border-color: #0ECAD4; color: #0ECAD4; }
+
+/* ── Tab nav ── */
+.tab-nav {
+  display: flex; border-bottom: 1px solid #21262d; background: #0d1117;
+  padding: 0 16px; flex-shrink: 0;
+}
+.tab {
+  padding: 10px 14px; font-size: 12px; font-weight: 500; color: #8b949e;
+  border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px;
+  transition: all .15s; white-space: nowrap;
+}
+.tab:hover { color: #e6edf3; }
+.tab.active { color: #0ECAD4; border-bottom-color: #0ECAD4; }
+.tab .badge-new {
+  font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px;
+  background: rgba(14,202,212,.15); color: #0ECAD4; margin-left: 4px;
+}
+
+/* ── Content area ── */
+.content { flex: 1; overflow-y: auto; padding: 20px; }
+
+/* ── Fleet overview cards ── */
+.stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.stat-card {
+  background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 14px 16px;
+}
+.stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #8b949e; margin-bottom: 6px; }
+.stat-value { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+.stat-sub { font-size: 11px; color: #8b949e; }
+
+/* ── Assistant panel overlay ── */
+.panel-overlay {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 380px;
+  background: #0d1117; border-left: 1px solid #21262d;
+  display: flex; flex-direction: column; transform: translateX(100%);
+  transition: transform .25s cubic-bezier(.4,0,.2,1); z-index: 100;
+  box-shadow: -8px 0 32px rgba(0,0,0,.4);
+}
+.panel-overlay.open { transform: translateX(0); }
+
+.panel-header {
+  padding: 12px 14px; border-bottom: 1px solid #21262d;
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.panel-icon { font-size: 16px; color: #0ECAD4; }
+.panel-title { font-size: 13px; font-weight: 700; flex: 1; }
+.panel-context {
+  font-size: 10px; color: #8b949e;
+  display: flex; align-items: center; gap: 4px;
+}
+.panel-close {
+  width: 24px; height: 24px; border-radius: 4px; border: none;
+  background: transparent; color: #6b7280; cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+}
+.panel-close:hover { background: #21262d; color: #e6edf3; }
+
+.panel-chips {
+  padding: 10px 12px; border-bottom: 1px solid #161b22;
+  display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0;
+}
+.chip {
+  font-size: 11px; padding: 4px 10px; border-radius: 14px;
+  border: 1px solid #30363d; color: #8b949e; cursor: pointer; background: #161b22;
+  transition: all .15s; white-space: nowrap;
+}
+.chip:hover { border-color: #0ECAD4; color: #0ECAD4; background: rgba(14,202,212,.05); }
+
+.panel-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+
+.insight-card {
+  background: rgba(245,158,11,.06); border: 1px solid rgba(245,158,11,.2);
+  border-radius: 8px; padding: 10px 12px; font-size: 12px;
+}
+.insight-label { font-size: 10px; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+.insight-text { color: #fde68a; line-height: 1.5; margin-bottom: 8px; }
+.insight-actions { display: flex; gap: 6px; }
+.btn-sm {
+  font-size: 11px; padding: 4px 10px; border-radius: 5px; border: none;
+  cursor: pointer; font-family: inherit; font-weight: 600; transition: all .15s;
+}
+.btn-teal { background: rgba(14,202,212,.15); color: #0ECAD4; border: 1px solid rgba(14,202,212,.3); }
+.btn-teal:hover { background: rgba(14,202,212,.25); }
+.btn-ghost { background: transparent; color: #8b949e; border: 1px solid #30363d; }
+.btn-ghost:hover { background: #21262d; color: #e6edf3; }
+.btn-green { background: rgba(81,187,123,.15); color: #51BB7B; border: 1px solid rgba(81,187,123,.3); }
+.btn-green:hover { background: rgba(81,187,123,.25); }
+
+.msg-user {
+  align-self: flex-end; max-width: 85%; background: rgba(14,202,212,.1);
+  border: 1px solid rgba(14,202,212,.2); border-radius: 12px 12px 3px 12px;
+  padding: 8px 12px; font-size: 12px; color: #e6edf3;
+}
+.msg-ai { align-self: flex-start; max-width: 95%; }
+.msg-ai-header { font-size: 10px; font-weight: 700; color: #0ECAD4; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+
+.response-card {
+  background: #161b22; border: 1px solid #21262d; border-radius: 8px; overflow: hidden;
+}
+.response-summary { padding: 10px 12px; font-size: 12px; color: #e6edf3; line-height: 1.5; border-bottom: 1px solid #21262d; }
+.response-summary strong { color: #0ECAD4; }
+.site-result {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  border-bottom: 1px solid rgba(42,47,61,.5); font-size: 11px;
+}
+.site-result:last-child { border-bottom: none; }
+.result-name { font-weight: 600; flex: 1; }
+.result-meta { color: #8b949e; }
+.result-tag {
+  font-size: 9px; padding: 1px 5px; border-radius: 3px;
+  background: rgba(239,68,68,.1); color: #f87171; border: 1px solid rgba(239,68,68,.2);
+}
+.result-tag.ok { background: rgba(81,187,123,.1); color: #51BB7B; border-color: rgba(81,187,123,.2); }
+.response-actions { padding: 8px 12px; display: flex; gap: 6px; background: rgba(255,255,255,.02); }
+
+.panel-input-area {
+  padding: 10px 12px; border-top: 1px solid #21262d; flex-shrink: 0;
+  background: #0d1117;
+}
+.panel-input-row { display: flex; gap: 8px; align-items: flex-end; }
+.panel-input {
+  flex: 1; background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+  color: #e6edf3; font-family: inherit; font-size: 12px; padding: 8px 12px;
+  resize: none; outline: none; line-height: 1.5; min-height: 36px; max-height: 96px;
+}
+.panel-input:focus { border-color: #0ECAD4; }
+.panel-input::placeholder { color: #444; }
+.panel-send {
+  width: 32px; height: 32px; border-radius: 6px; border: none;
+  background: #0ECAD4; color: #000; cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.panel-send:hover { background: #0ab8c1; }
+
+/* ── Site info view ── */
+.site-info-header {
+  padding: 16px 20px; border-bottom: 1px solid #21262d; background: #0d1117; flex-shrink: 0;
+}
+.site-info-name { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.site-info-meta { font-size: 12px; color: #8b949e; display: flex; gap: 12px; }
+.site-status-badge {
+  font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+  background: rgba(81,187,123,.1); color: #51BB7B; border: 1px solid rgba(81,187,123,.2);
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.site-status-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+.site-ai-content { display: flex; height: 100%; overflow: hidden; }
+.site-ai-info { flex: 1; overflow-y: auto; padding: 16px; }
+.site-ai-chat { width: 360px; border-left: 1px solid #21262d; display: flex; flex-direction: column; flex-shrink: 0; }
+
+.info-section { margin-bottom: 16px; }
+.info-section h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #8b949e; margin-bottom: 8px; }
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.info-item { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 8px 10px; }
+.info-item-label { font-size: 10px; color: #8b949e; margin-bottom: 2px; }
+.info-item-value { font-size: 13px; font-weight: 600; }
+.info-item-value.warn { color: #fbbf24; }
+.info-item-value.ok { color: #51BB7B; }
+
+.plugin-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(42,47,61,.4); font-size: 12px; }
+.plugin-row:last-child { border-bottom: none; }
+.plugin-name { flex: 1; font-weight: 500; }
+.plugin-version { color: #8b949e; font-size: 11px; }
+.update-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; background: rgba(245,158,11,.1); color: #fbbf24; border: 1px solid rgba(245,158,11,.2); }
+
+/* ── Typing indicator ── */
+@keyframes typing { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+.typing-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #0ECAD4; margin: 0 2px; animation: typing 1.4s infinite; }
+.typing-dot:nth-child(2) { animation-delay: .2s; }
+.typing-dot:nth-child(3) { animation-delay: .4s; }
+.typing-indicator { padding: 8px 12px; font-size: 12px; color: #8b949e; display: flex; align-items: center; gap: 4px; }
+
+/* ── Progress bar ── */
+.progress-bar { height: 3px; background: #21262d; border-radius: 2px; overflow: hidden; margin-bottom: 6px; }
+.progress-fill { height: 100%; border-radius: 2px; transition: width .6s; }
+</style>
+</head>
+<body>
+
+<div class="view-switcher">
+  <button class="view-btn active" onclick="showView('fleet')">Fleet — AI Search Panel</button>
+  <button class="view-btn" onclick="showView('site')">Site Info — AI Tab</button>
+  <button class="view-btn" onclick="showView('convo')">Fleet — Mid Conversation</button>
+  <button class="view-btn" onclick="showView('dashboard')">Nexus Dashboard — Ask Tab</button>
+</div>
+
+<div class="local-shell">
+
+  <!-- Icon rail -->
+  <div class="icon-rail">
+    <div class="rail-icon active" title="Sites">⊞</div>
+    <div class="rail-icon" title="Nexus AI">✦</div>
+    <div class="rail-icon" title="Settings">⚙</div>
+    <div style="flex:1"></div>
+    <div class="rail-icon" title="Help">?</div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Sites</span>
+      <div class="sidebar-toolbar">
+        <button class="toolbar-btn" title="Add site">+</button>
+        <button class="toolbar-btn active" id="search-btn" onclick="togglePanel()" title="AI Search (⌘K)">⌕</button>
+      </div>
+    </div>
+    <div class="site-list" id="site-list">
+      <div class="site-item active" onclick="selectSite(this)">
+        <div class="site-dot running"></div>
+        <div>
+          <div class="site-name">acme-prod</div>
+          <div class="site-meta">PHP 7.4 · WP 6.9</div>
+        </div>
+        <span class="site-badge">7.4</span>
+      </div>
+      <div class="site-item" onclick="selectSite(this)">
+        <div class="site-dot halted"></div>
+        <div>
+          <div class="site-name">acme-staging</div>
+          <div class="site-meta">PHP 7.4 · WP 6.9</div>
+        </div>
+        <span class="site-badge">7.4</span>
+      </div>
+      <div class="site-item" onclick="selectSite(this)">
+        <div class="site-dot running"></div>
+        <div>
+          <div class="site-name">Newsroom Demo</div>
+          <div class="site-meta">PHP 8.2 · WP 6.9</div>
+        </div>
+      </div>
+      <div class="site-item" onclick="selectSite(this)">
+        <div class="site-dot halted"></div>
+        <div>
+          <div class="site-name">local-copy-jpp</div>
+          <div class="site-meta">PHP 8.1 · WP 6.9</div>
+        </div>
+      </div>
+      <div class="site-item" onclick="selectSite(this)">
+        <div class="site-dot halted"></div>
+        <div>
+          <div class="site-name">ACF Recipes</div>
+          <div class="site-meta">PHP 8.2 · WP 6.9</div>
+        </div>
+      </div>
+      <div class="site-item" onclick="selectSite(this)">
+        <div class="site-dot halted"></div>
+        <div>
+          <div class="site-name">AI Toolkit Demo</div>
+          <div class="site-meta">PHP 8.1 · WP 7.0</div>
+        </div>
+      </div>
+      <div class="site-item" onclick="selectSite(this)">
+        <div class="site-dot halted"></div>
+        <div>
+          <div class="site-name">myloop</div>
+          <div class="site-meta">PHP 8.2 · WP 6.9</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main area -->
+  <div class="main-area">
+
+    <!-- ═══════ VIEW: Fleet (default) ═══════ -->
+    <div class="view active" id="view-fleet">
+      <div class="topbar">
+        <span class="topbar-title">Sites</span>
+        <span class="topbar-sub">14 local · 281 WP Engine</span>
+        <div class="topbar-spacer"></div>
+        <div class="topbar-chip" onclick="togglePanel()">⌕ AI Search  <kbd style="font-size:9px;background:#21262d;padding:1px 4px;border-radius:3px;border:1px solid #30363d">⌘K</kbd></div>
+      </div>
+      <div class="content">
+        <div class="stat-row">
+          <div class="stat-card">
+            <div class="stat-label">Sites</div>
+            <div class="stat-value">14</div>
+            <div class="stat-sub">2 running · 12 halted</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Searchable</div>
+            <div class="stat-value" style="color:#0ECAD4">9<span style="font-size:14px;color:#8b949e">/14</span></div>
+            <div class="stat-sub">5 need indexing</div>
+          </div>
+          <div class="stat-card" style="border-color:rgba(245,158,11,.3)">
+            <div class="stat-label" style="color:#fbbf24">Needs Attention</div>
+            <div class="stat-value" style="color:#fbbf24">2</div>
+            <div class="stat-sub">Sites on PHP 7.4 (EOL)</div>
+          </div>
+        </div>
+        <div style="color:#8b949e;font-size:12px;text-align:center;margin-top:60px">
+          <div style="font-size:28px;margin-bottom:12px;opacity:.3">⌕</div>
+          Press <kbd style="background:#21262d;padding:2px 6px;border-radius:4px;border:1px solid #30363d;font-size:11px">⌘K</kbd> or click the search icon to ask about your sites
+        </div>
+      </div>
+
+      <!-- Panel: fleet empty state -->
+      <div class="panel-overlay" id="fleet-panel">
+        <div class="panel-header">
+          <span class="panel-icon">✦</span>
+          <div>
+            <div class="panel-title">Nexus AI</div>
+            <div class="panel-context">14 local · 281 WP Engine</div>
+          </div>
+          <button class="panel-close" onclick="togglePanel()">×</button>
+        </div>
+
+        <div class="panel-chips">
+          <div class="chip" onclick="runQuery('oldest PHP sites')">oldest PHP sites</div>
+          <div class="chip" onclick="runQuery('sites with page builders')">page builders</div>
+          <div class="chip" onclick="runQuery('what needs updating?')">needs updating?</div>
+          <div class="chip" onclick="runQuery('sites about recipes')">recipe content</div>
+        </div>
+
+        <div class="panel-messages" id="fleet-messages">
+          <div class="insight-card">
+            <div class="insight-label">💡 Insight</div>
+            <div class="insight-text">2 sites are running PHP 7.4, which reached end-of-life in December 2023. They should be upgraded before plugins start dropping support.</div>
+            <div class="insight-actions">
+              <button class="btn-sm btn-teal" onclick="runQuery('show me the PHP 7.4 sites')">Show me</button>
+              <button class="btn-sm btn-ghost">Dismiss</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-input-area">
+          <div class="panel-input-row">
+            <textarea class="panel-input" id="fleet-input" rows="1" placeholder="Ask about your fleet…" onkeydown="handleKey(event,'fleet')"></textarea>
+            <button class="panel-send" onclick="sendMessage('fleet')">↑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ VIEW: Mid-conversation ═══════ -->
+    <div class="view" id="view-convo">
+      <div class="topbar">
+        <span class="topbar-title">Sites</span>
+        <span class="topbar-sub">Filtered: 2 sites</span>
+        <div class="topbar-spacer"></div>
+        <div class="topbar-chip" style="color:#51BB7B;border-color:rgba(81,187,123,.3)" onclick="clearFilter()">✕ Clear filter</div>
+      </div>
+      <div class="content">
+        <!-- Site list filtered state shown via dimming -->
+        <div style="font-size:11px;color:#8b949e;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+          <span style="width:6px;height:6px;background:#51BB7B;border-radius:50%;display:inline-block"></span>
+          Showing 2 of 14 sites matching "PHP 7.4"
+        </div>
+        <div style="background:#161b22;border:1px solid #21262d;border-radius:8px;overflow:hidden">
+          <div class="site-result">
+            <div class="site-dot running"></div>
+            <div class="result-name">acme-prod</div>
+            <div class="result-meta">PHP 7.4 · WP 6.9 · running</div>
+            <span class="result-tag">EOL</span>
+          </div>
+          <div class="site-result">
+            <div class="site-dot halted"></div>
+            <div class="result-name">acme-staging</div>
+            <div class="result-meta">PHP 7.4 · WP 6.9 · halted</div>
+            <span class="result-tag">EOL</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-overlay open" id="convo-panel">
+        <div class="panel-header">
+          <span class="panel-icon">✦</span>
+          <div>
+            <div class="panel-title">Nexus AI</div>
+            <div class="panel-context">14 local · 281 WP Engine</div>
+          </div>
+          <button class="panel-close" onclick="clearFilter()">×</button>
+        </div>
+        <div class="panel-chips">
+          <div class="chip">pull acme-prod locally</div>
+          <div class="chip">which plugins block upgrade?</div>
+          <div class="chip">check staging too</div>
+        </div>
+        <div class="panel-messages">
+          <div class="msg-user">show me the sites on old PHP</div>
+          <div class="msg-ai">
+            <div class="msg-ai-header">✦ Nexus AI</div>
+            <div class="response-card">
+              <div class="response-summary">Found <strong>2 sites on PHP 7.4</strong>, which reached end-of-life December 2023. Both are acme sites — likely linked environments.</div>
+              <div class="site-result">
+                <div class="site-dot running"></div>
+                <div class="result-name">acme-prod</div>
+                <div class="result-meta">running</div>
+                <span class="result-tag">EOL</span>
+              </div>
+              <div class="site-result">
+                <div class="site-dot halted"></div>
+                <div class="result-name">acme-staging</div>
+                <div class="result-meta">halted</div>
+                <span class="result-tag">EOL</span>
+              </div>
+              <div class="response-actions">
+                <button class="btn-sm btn-green">Pull acme-prod locally</button>
+                <button class="btn-sm btn-ghost">Upgrade guide</button>
+              </div>
+            </div>
+          </div>
+          <div class="msg-user">does Elementor support PHP 8?</div>
+          <div class="msg-ai">
+            <div class="msg-ai-header">✦ Nexus AI</div>
+            <div class="response-card">
+              <div class="response-summary">Yes — <strong>Elementor 3.x+ requires PHP 7.4 minimum</strong>, and fully supports PHP 8.0, 8.1, 8.2, 8.3. Upgrading acme-prod to PHP 8.2 won't break Elementor. The bigger risk is custom themes or other plugins — want me to check?</div>
+              <div class="response-actions">
+                <button class="btn-sm btn-teal">Check all plugins</button>
+                <button class="btn-sm btn-ghost">Not now</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="panel-input-area">
+          <div class="panel-input-row">
+            <textarea class="panel-input" rows="1" placeholder="Ask a follow-up…" onkeydown="if(e.key==='Enter'){e.preventDefault();}"></textarea>
+            <button class="panel-send">↑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ VIEW: Site info ═══════ -->
+    <div class="view" id="view-site">
+      <div class="site-info-header">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+          <div class="site-info-name">acme-prod</div>
+          <div class="site-status-badge"><div class="site-status-dot"></div> running</div>
+        </div>
+        <div class="site-info-meta">
+          <span>acme-prod.local</span>
+          <span>·</span>
+          <span>WordPress 6.9.4</span>
+          <span>·</span>
+          <span style="color:#fbbf24">PHP 7.4 ⚠</span>
+          <span>·</span>
+          <span>14 plugins</span>
+        </div>
+      </div>
+      <div class="tab-nav">
+        <div class="tab">Overview</div>
+        <div class="tab">Database</div>
+        <div class="tab">SSL</div>
+        <div class="tab">Utilities</div>
+        <div class="tab active">Nexus AI<span class="badge-new">AI</span></div>
+      </div>
+      <div class="site-ai-content">
+        <!-- Left: site info summary -->
+        <div class="site-ai-info">
+          <div class="info-section">
+            <h3>Site Health</h3>
+            <div class="info-grid">
+              <div class="info-item">
+                <div class="info-item-label">PHP Version</div>
+                <div class="info-item-value warn">7.4 ⚠ EOL</div>
+              </div>
+              <div class="info-item">
+                <div class="info-item-label">WordPress</div>
+                <div class="info-item-value ok">6.9.4 ✓</div>
+              </div>
+              <div class="info-item">
+                <div class="info-item-label">Active Plugins</div>
+                <div class="info-item-value">14</div>
+              </div>
+              <div class="info-item">
+                <div class="info-item-label">Content</div>
+                <div class="info-item-value ok">528 docs ✓</div>
+              </div>
+            </div>
+          </div>
+          <div class="info-section">
+            <h3>Plugins</h3>
+            <div class="plugin-row">
+              <div class="site-dot" style="background:#51BB7B;width:6px;height:6px;border-radius:50%"></div>
+              <div class="plugin-name">Elementor</div>
+              <div class="plugin-version">v3.21.0</div>
+              <span class="update-badge">3.22 available</span>
+            </div>
+            <div class="plugin-row">
+              <div class="site-dot" style="background:#51BB7B;width:6px;height:6px;border-radius:50%"></div>
+              <div class="plugin-name">WooCommerce</div>
+              <div class="plugin-version">v8.4.0</div>
+            </div>
+            <div class="plugin-row">
+              <div class="site-dot" style="background:#51BB7B;width:6px;height:6px;border-radius:50%"></div>
+              <div class="plugin-name">Advanced Custom Fields</div>
+              <div class="plugin-version">v6.2.9</div>
+            </div>
+            <div class="plugin-row">
+              <div class="site-dot" style="background:#51BB7B;width:6px;height:6px;border-radius:50%"></div>
+              <div class="plugin-name">Yoast SEO</div>
+              <div class="plugin-version">v22.0</div>
+            </div>
+            <div class="plugin-row" style="color:#8b949e;font-size:11px;border-bottom:none">
+              + 10 more active plugins
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: AI assistant for this site -->
+        <div class="site-ai-chat">
+          <div class="panel-header" style="border-bottom:1px solid #21262d">
+            <span class="panel-icon">✦</span>
+            <div>
+              <div class="panel-title">Ask about acme-prod</div>
+              <div class="panel-context">
+                <span style="width:5px;height:5px;background:#51BB7B;border-radius:50%;display:inline-block"></span>
+                running · PHP 7.4 · 14 plugins
+              </div>
+            </div>
+          </div>
+          <div class="panel-chips">
+            <div class="chip" onclick="siteQuery('Any issues to fix?')">Any issues?</div>
+            <div class="chip" onclick="siteQuery('Compare with acme-staging')">vs staging</div>
+            <div class="chip" onclick="siteQuery('Which plugins have updates?')">Updates</div>
+            <div class="chip" onclick="siteQuery('Search content about checkout')">Search content</div>
+          </div>
+          <div class="panel-messages" id="site-messages">
+            <div class="insight-card">
+              <div class="insight-label">⚠ Action needed</div>
+              <div class="insight-text">PHP 7.4 reached end-of-life in December 2023. Elementor 4.0 will require PHP 8.0. Upgrade recommended before next major release.</div>
+              <div class="insight-actions">
+                <button class="btn-sm btn-teal" onclick="siteQuery('How do I upgrade PHP on this site?')">How to upgrade</button>
+              </div>
+            </div>
+          </div>
+          <div class="panel-input-area">
+            <div class="panel-input-row">
+              <textarea class="panel-input" id="site-input" rows="1" placeholder="Ask about acme-prod…" onkeydown="handleKey(event,'site')"></textarea>
+              <button class="panel-send" onclick="sendMessage('site')">↑</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ VIEW: Nexus Dashboard — Ask Tab ═══════ -->
+    <div class="view" id="view-dashboard">
+      <div class="topbar">
+        <span class="topbar-title">Nexus AI</span>
+        <span class="topbar-sub">14 local · 281 WP Engine</span>
+        <div class="topbar-spacer"></div>
+        <span style="font-size:11px;color:#8b949e;background:rgba(14,202,212,.08);border:1px solid rgba(14,202,212,.2);border-radius:10px;padding:2px 10px;color:#0ECAD4">✦ Ollama · llama3.2</span>
+      </div>
+      <div class="tab-nav">
+        <div class="tab" onclick="dashTab(this,'overview')">Overview</div>
+        <div class="tab" onclick="dashTab(this,'search')">Search</div>
+        <div class="tab" onclick="dashTab(this,'activity')">Activity</div>
+        <div class="tab" onclick="dashTab(this,'ops')">Operations</div>
+        <div class="tab" onclick="dashTab(this,'system')">System</div>
+        <div class="tab active" onclick="dashTab(this,'ask')">Ask ✦<span class="badge-new">AI</span></div>
+      </div>
+
+      <!-- Dashboard sub-views -->
+      <div id="dash-overview" class="dash-panel" style="display:none;flex:1;overflow-y:auto;padding:20px">
+        <div class="stat-row">
+          <div class="stat-card"><div class="stat-label">Sites</div><div class="stat-value">295</div><div class="stat-sub">14 local · 281 WPE</div></div>
+          <div class="stat-card"><div class="stat-label">Searchable</div><div class="stat-value" style="color:#0ECAD4">97<span style="font-size:14px;color:#8b949e">/295</span></div><div class="stat-sub">33% coverage</div></div>
+          <div class="stat-card" style="border-color:rgba(245,158,11,.3)"><div class="stat-label" style="color:#fbbf24">Attention</div><div class="stat-value" style="color:#fbbf24">2</div><div class="stat-sub">PHP 7.4 EOL</div></div>
+        </div>
+        <div style="color:#8b949e;font-size:12px;text-align:center;padding:40px">Overview content here</div>
+      </div>
+      <div id="dash-search" class="dash-panel" style="display:none;flex:1;overflow-y:auto;padding:20px">
+        <div style="color:#8b949e;font-size:12px;text-align:center;padding:60px">Search tab content</div>
+      </div>
+      <div id="dash-activity" class="dash-panel" style="display:none;flex:1;overflow-y:auto;padding:20px">
+        <div style="color:#8b949e;font-size:12px;text-align:center;padding:60px">Activity tab content</div>
+      </div>
+      <div id="dash-ops" class="dash-panel" style="display:none;flex:1;overflow-y:auto;padding:20px">
+        <div style="color:#8b949e;font-size:12px;text-align:center;padding:60px">Operations tab content</div>
+      </div>
+      <div id="dash-system" class="dash-panel" style="display:none;flex:1;overflow-y:auto;padding:20px">
+        <div style="color:#8b949e;font-size:12px;text-align:center;padding:60px">System tab content</div>
+      </div>
+
+      <!-- Ask tab — full-width assistant -->
+      <div id="dash-ask" class="dash-panel" style="display:flex;flex:1;overflow:hidden;flex-direction:column">
+        <!-- Suggested prompts -->
+        <div style="padding:16px 20px;border-bottom:1px solid #21262d;flex-shrink:0">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8b949e;margin-bottom:10px">Suggested</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <div class="chip" style="font-size:12px;padding:6px 14px" onclick="dashAsk('What are my oldest PHP sites?')">What are my oldest PHP sites?</div>
+            <div class="chip" style="font-size:12px;padding:6px 14px" onclick="dashAsk('Which sites are using page builders?')">Which sites use page builders?</div>
+            <div class="chip" style="font-size:12px;padding:6px 14px" onclick="dashAsk('What needs updating across my fleet?')">What needs updating?</div>
+            <div class="chip" style="font-size:12px;padding:6px 14px" onclick="dashAsk('Find content about customer onboarding')">Find content about onboarding</div>
+            <div class="chip" style="font-size:12px;padding:6px 14px" onclick="dashAsk('Compare acme-prod and acme-staging')">Compare two sites</div>
+            <div class="chip" style="font-size:12px;padding:6px 14px" onclick="dashAsk('Which WPE sites are on old WordPress?')">Old WordPress on WPE?</div>
+          </div>
+        </div>
+
+        <!-- Conversation -->
+        <div style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px" id="dash-messages">
+          <!-- Proactive context card -->
+          <div style="background:rgba(14,202,212,.04);border:1px solid rgba(14,202,212,.15);border-radius:10px;padding:14px 16px;max-width:680px">
+            <div style="font-size:11px;font-weight:700;color:#0ECAD4;margin-bottom:8px">✦ Nexus AI — Fleet context loaded</div>
+            <div style="font-size:12px;color:#e6edf3;line-height:1.6;margin-bottom:10px">
+              I'm aware of your <strong>295 sites</strong> (14 local, 281 WP Engine) and have indexed <strong>97 of them</strong> for content search.
+              Here's what I noticed:
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+                <span style="color:#fbbf24">⚠</span>
+                <span><strong style="color:#fde68a">2 sites</strong> on PHP 7.4 — end-of-life December 2023</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+                <span style="color:#fbbf24">⚠</span>
+                <span><strong style="color:#fde68a">93 WPE installs</strong> have unknown WordPress versions — SSH sync may help</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+                <span style="color:#51BB7B">✓</span>
+                <span><strong style="color:#86efac">198 sites</strong> configured and healthy</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn-sm btn-teal" onclick="dashAsk('Show me the PHP 7.4 sites')">Show PHP 7.4 sites</button>
+              <button class="btn-sm btn-ghost" onclick="dashAsk('How do I fix the WPE version gaps?')">Fix WPE version gaps</button>
+              <button class="btn-sm btn-ghost">Dismiss</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Input -->
+        <div style="padding:14px 20px;border-top:1px solid #21262d;background:#0d1117;flex-shrink:0">
+          <div style="max-width:760px;margin:0 auto">
+            <div style="display:flex;gap:10px;align-items:flex-end">
+              <div style="flex:1;position:relative">
+                <textarea id="dash-input" class="panel-input" rows="1"
+                  style="width:100%;font-size:13px;padding:10px 14px;border-radius:10px"
+                  placeholder="Ask about your WordPress fleet…"
+                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDash();}"></textarea>
+              </div>
+              <button class="panel-send" style="width:38px;height:38px;border-radius:8px;font-size:16px" onclick="sendDash()">↑</button>
+            </div>
+            <div style="margin-top:8px;font-size:10px;color:#444;text-align:center">
+              Powered by Ollama · llama3.2 · context: 14 local + 281 WPE + indexed content
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end main-area -->
+</div><!-- end local-shell -->
+
+<script>
+// ── View switching ──
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'convo') {
+    // Dim non-matching sites
+    document.querySelectorAll('.site-item').forEach((item, i) => {
+      item.classList.toggle('dimmed', i > 1);
+    });
+  } else {
+    document.querySelectorAll('.site-item').forEach(item => item.classList.remove('dimmed'));
+  }
+}
+
+// ── Panel toggle ──
+let panelOpen = false;
+function togglePanel() {
+  panelOpen = !panelOpen;
+  document.getElementById('fleet-panel').classList.toggle('open', panelOpen);
+  document.getElementById('search-btn').classList.toggle('active', panelOpen);
+  if (panelOpen) document.getElementById('fleet-input').focus();
+}
+
+function clearFilter() {
+  showView('fleet');
+  document.querySelectorAll('.view-btn')[0].classList.add('active');
+  document.querySelectorAll('.view-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+}
+
+// ── Site selection ──
+function selectSite(el) {
+  document.querySelectorAll('.site-item').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── Query chips ──
+function runQuery(q) {
+  document.getElementById('fleet-input').value = q;
+  sendMessage('fleet');
+}
+function siteQuery(q) {
+  document.getElementById('site-input').value = q;
+  sendMessage('site');
+}
+
+// ── Message sending ──
+function handleKey(e, ctx) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(ctx); }
+}
+
+const responses = {
+  'oldest PHP sites': {
+    summary: 'Found <strong>2 sites on PHP 7.4</strong> — the oldest in your fleet. Both reached end-of-life December 2023.',
+    sites: [
+      { name: 'acme-prod', meta: 'running', tag: 'EOL', tagClass: '' },
+      { name: 'acme-staging', meta: 'halted', tag: 'EOL', tagClass: '' },
+    ],
+    actions: [['Pull acme-prod locally', 'btn-green'], ['Upgrade guide', 'btn-ghost']],
+    filter: true,
+  },
+  'show me the PHP 7.4 sites': {
+    summary: 'Found <strong>2 sites on PHP 7.4</strong>, which reached end-of-life December 2023.',
+    sites: [
+      { name: 'acme-prod', meta: 'running', tag: 'EOL', tagClass: '' },
+      { name: 'acme-staging', meta: 'halted', tag: 'EOL', tagClass: '' },
+    ],
+    actions: [['Pull acme-prod locally', 'btn-green'], ['Upgrade guide', 'btn-ghost']],
+    filter: true,
+  },
+  'sites with page builders': {
+    summary: '<strong>4 sites</strong> have a page builder installed.',
+    sites: [
+      { name: 'acme-prod', meta: 'Elementor 3.21', tag: 'active', tagClass: 'ok' },
+      { name: 'acme-staging', meta: 'Elementor 3.21', tag: 'active', tagClass: 'ok' },
+      { name: 'Newsroom Demo', meta: 'Beaver Builder', tag: 'active', tagClass: 'ok' },
+      { name: 'myloop', meta: 'Divi Builder', tag: 'inactive', tagClass: '' },
+    ],
+    actions: [['Update Elementor on all', 'btn-teal'], ['View details', 'btn-ghost']],
+  },
+  "what needs updating?": {
+    summary: '<strong>6 plugins</strong> have updates available across your fleet.',
+    sites: [
+      { name: 'acme-prod', meta: 'Elementor 3.21 → 3.22', tag: '1 update', tagClass: '' },
+      { name: 'Newsroom Demo', meta: 'WooCommerce, Yoast', tag: '2 updates', tagClass: '' },
+      { name: 'ACF Recipes', meta: 'ACF 6.2 → 6.3', tag: '1 update', tagClass: '' },
+    ],
+    actions: [['Update all', 'btn-teal'], ['Review changes', 'btn-ghost']],
+  },
+  'sites about recipes': {
+    summary: 'Searched indexed content for <strong>"recipes"</strong>. Found posts on 2 sites.',
+    sites: [
+      { name: 'ACF Recipes', meta: '47 matching posts', tag: 'content', tagClass: 'ok' },
+      { name: 'acme-prod', meta: '3 matching posts', tag: 'content', tagClass: 'ok' },
+    ],
+    actions: [['Open search', 'btn-teal']],
+  },
+};
+
+const siteResponses = {
+  'Any issues to fix?': 'I found <strong>2 things</strong> worth fixing on acme-prod:<br><br>1. <strong>PHP 7.4 (EOL)</strong> — upgrade to 8.2 before Elementor 4.0 ships<br>2. <strong>Elementor update</strong> — 3.22 is available with security patches<br><br>Everything else looks healthy.',
+  'Compare with acme-staging': 'acme-prod and acme-staging are <strong>in sync</strong> on WordPress (6.9.4) and PHP (7.4). acme-prod has 1 extra plugin (WooCommerce Stripe) not on staging. Last push was 3 days ago.',
+  'Which plugins have updates?': '<strong>1 update available:</strong><br><br>Elementor 3.21.0 → 3.22.0<br><span style="color:#8b949e;font-size:11px">Security patch + performance improvements. Compatible with PHP 7.4.</span>',
+  'Search content about checkout': 'Found <strong>12 posts/pages</strong> about checkout on acme-prod:<br><br>• "Checkout Process Guide" (page)<br>• "Fixing checkout errors" (post)<br>• "Guest checkout setup" (post)<br>+ 9 more',
+  'How do I upgrade PHP on this site?': 'To upgrade acme-prod to PHP 8.2:<br><br>1. Right-click the site → <strong>Site Settings</strong><br>2. Change PHP version to <strong>8.2</strong><br>3. Local will restart the site<br>4. Test the site — check for errors<br><br>Want me to check which of your 14 plugins are PHP 8.2 compatible first?',
+};
+
+function sendMessage(ctx) {
+  const input = document.getElementById(ctx + '-input');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+
+  const msgArea = document.getElementById(ctx + '-messages');
+
+  // Add user message
+  const userMsg = document.createElement('div');
+  userMsg.className = 'msg-user';
+  userMsg.textContent = q;
+  msgArea.appendChild(userMsg);
+
+  // Typing indicator
+  const typing = document.createElement('div');
+  typing.className = 'msg-ai';
+  typing.innerHTML = '<div class="typing-indicator"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
+  msgArea.appendChild(typing);
+  msgArea.scrollTop = msgArea.scrollHeight;
+
+  setTimeout(() => {
+    typing.remove();
+
+    const aiMsg = document.createElement('div');
+    aiMsg.className = 'msg-ai';
+    aiMsg.innerHTML = '<div class="msg-ai-header">✦ Nexus AI</div>';
+
+    const card = document.createElement('div');
+    card.className = 'response-card';
+
+    if (ctx === 'fleet' && responses[q]) {
+      const r = responses[q];
+      card.innerHTML = `<div class="response-summary">${r.summary}</div>` +
+        r.sites.map(s => `<div class="site-result"><div class="site-dot halted"></div><div class="result-name">${s.name}</div><div class="result-meta">${s.meta}</div><span class="result-tag ${s.tagClass}">${s.tag}</span></div>`).join('') +
+        `<div class="response-actions">${r.actions.map(a => `<button class="btn-sm ${a[1]}">${a[0]}</button>`).join('')}</div>`;
+
+      if (r.filter) {
+        setTimeout(() => {
+          document.querySelectorAll('#site-list .site-item').forEach((item, i) => {
+            item.classList.toggle('dimmed', i > 1);
+          });
+          document.querySelector('.topbar-sub').textContent = 'Filtered: 2 of 14 sites';
+        }, 300);
+      }
+    } else if (ctx === 'site' && siteResponses[q]) {
+      card.innerHTML = `<div class="response-summary">${siteResponses[q]}</div><div class="response-actions"><button class="btn-sm btn-ghost">Thanks</button></div>`;
+    } else {
+      card.innerHTML = `<div class="response-summary">I searched your fleet for "<strong>${q}</strong>". I'll look across your sites, plugins, and indexed content — give me a moment to check what I find.</div><div class="response-actions"><button class="btn-sm btn-ghost">OK</button></div>`;
+    }
+
+    aiMsg.appendChild(card);
+    msgArea.appendChild(aiMsg);
+    msgArea.scrollTop = msgArea.scrollHeight;
+  }, 1200);
+
+  msgArea.scrollTop = msgArea.scrollHeight;
+}
+// ── Dashboard tab switching ──
+function dashTab(el, name) {
+  document.querySelectorAll('#view-dashboard .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.dash-panel').forEach(p => p.style.display = 'none');
+  const panel = document.getElementById('dash-' + name);
+  if (panel) panel.style.display = name === 'ask' ? 'flex' : 'block';
+  // overview gets flex too
+  if (name === 'overview') panel.style.display = 'block';
+}
+
+function dashAsk(q) {
+  document.getElementById('dash-input').value = q;
+  sendDash();
+}
+
+const dashResponses = {
+  'What are my oldest PHP sites?': {
+    summary: 'Found <strong>2 sites running PHP 7.4</strong> — the oldest in your fleet. Both reached end-of-life in December 2023 and should be upgraded.',
+    sites: [
+      { name: 'acme-prod', meta: 'Local · running', tag: 'PHP 7.4 EOL' },
+      { name: 'acme-staging', meta: 'Local · halted', tag: 'PHP 7.4 EOL' },
+    ],
+    actions: [['Pull acme-prod locally', 'btn-green'], ['Upgrade guide', 'btn-ghost'], ['Check plugin compatibility', 'btn-teal']],
+  },
+  'Show me the PHP 7.4 sites': {
+    summary: 'Your <strong>2 sites on PHP 7.4</strong> are both in the acme group — likely linked environments. PHP 7.4 is end-of-life and no longer receives security patches.',
+    sites: [
+      { name: 'acme-prod', meta: 'Local · running · 14 plugins', tag: 'PHP 7.4 EOL' },
+      { name: 'acme-staging', meta: 'Local · halted · 14 plugins', tag: 'PHP 7.4 EOL' },
+    ],
+    actions: [['Pull acme-prod locally', 'btn-green'], ['Check plugins for PHP 8 compatibility', 'btn-teal']],
+  },
+  'Which sites are using page builders?': {
+    summary: '<strong>4 of your local sites</strong> have a page builder installed. Elementor is the most common.',
+    sites: [
+      { name: 'acme-prod', meta: 'Elementor 3.21 · active', tag: 'update available' },
+      { name: 'acme-staging', meta: 'Elementor 3.21 · active', tag: 'update available' },
+      { name: 'Newsroom Demo', meta: 'Beaver Builder · active', tag: 'up to date' },
+      { name: 'myloop', meta: 'Divi Builder · inactive', tag: 'inactive' },
+    ],
+    actions: [['Update Elementor on all sites', 'btn-teal'], ['View all page builder sites', 'btn-ghost']],
+  },
+  'What needs updating across my fleet?': {
+    summary: 'Across your <strong>14 local sites</strong>, I found <strong>6 plugin updates</strong> available. Most critical are security-related.',
+    sites: [
+      { name: 'acme-prod', meta: '1 update — Elementor 3.22 (security)', tag: '⚠ security' },
+      { name: 'Newsroom Demo', meta: '2 updates — WooCommerce, Yoast', tag: 'minor' },
+      { name: 'ACF Recipes', meta: '1 update — ACF 6.3', tag: 'minor' },
+      { name: 'AI Toolkit Demo', meta: '2 updates — core plugins', tag: 'minor' },
+    ],
+    actions: [['Update all 6 plugins', 'btn-teal'], ['Review changes first', 'btn-ghost']],
+  },
+  'Find content about customer onboarding': {
+    summary: 'Searched <strong>97 indexed sites</strong> for "customer onboarding". Found <strong>12 relevant posts</strong> across 3 sites.',
+    sites: [
+      { name: 'local-copy-jpp', meta: '7 posts — onboarding guides, welcome flows', tag: 'content' },
+      { name: 'acme-prod', meta: '3 posts — checkout and setup docs', tag: 'content' },
+      { name: 'AI Toolkit Demo', meta: '2 posts — AI onboarding flows', tag: 'content' },
+    ],
+    actions: [['Open full search results', 'btn-teal']],
+  },
+  'Compare acme-prod and acme-staging': {
+    summary: 'acme-prod and acme-staging are <strong>mostly in sync</strong>. One difference found.',
+    sites: [
+      { name: 'acme-prod', meta: 'WooCommerce Stripe (active) — not on staging', tag: 'prod only' },
+    ],
+    actions: [['Push acme-prod → acme-staging', 'btn-green'], ['View full diff', 'btn-ghost']],
+  },
+  'Which WPE sites are on old WordPress?': {
+    summary: 'Of 281 WPE installs, <strong>93 have unknown WordPress versions</strong> (no SSH sync yet). Of the 188 with known versions, <strong>6 are on WP 6.4 or older</strong>.',
+    sites: [
+      { name: '6 installs', meta: 'WP 6.4 or older (known)', tag: 'outdated' },
+      { name: '93 installs', meta: 'Version unknown — needs SSH sync', tag: 'unknown' },
+    ],
+    actions: [['Enable SSH sync for WPE', 'btn-teal'], ['Show the 6 outdated sites', 'btn-ghost']],
+  },
+  'How do I fix the WPE version gaps?': {
+    summary: 'The 93 WPE installs with unknown WordPress versions need <strong>SSH sync enabled</strong>. Once synced, I\'ll know the WordPress and PHP versions for every install.',
+    sites: [],
+    actions: [['Enable SSH sync in Preferences', 'btn-teal'], ['Run sync now', 'btn-green']],
+  },
+};
+
+function sendDash() {
+  const input = document.getElementById('dash-input');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+
+  const msgArea = document.getElementById('dash-messages');
+
+  // User message
+  const userMsg = document.createElement('div');
+  userMsg.style.cssText = 'align-self:flex-end;max-width:65%;background:rgba(14,202,212,.1);border:1px solid rgba(14,202,212,.2);border-radius:12px 12px 3px 12px;padding:10px 14px;font-size:13px;color:#e6edf3';
+  userMsg.textContent = q;
+  msgArea.appendChild(userMsg);
+
+  // Typing
+  const typing = document.createElement('div');
+  typing.innerHTML = '<div class="typing-indicator" style="font-size:12px"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span><span style="margin-left:6px;color:#0ECAD4">✦ thinking…</span></div>';
+  msgArea.appendChild(typing);
+  msgArea.scrollTop = msgArea.scrollHeight;
+
+  setTimeout(() => {
+    typing.remove();
+    const r = dashResponses[q];
+
+    const aiMsg = document.createElement('div');
+    aiMsg.style.cssText = 'max-width:680px';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'font-size:10px;font-weight:700;color:#0ECAD4;margin-bottom:8px;display:flex;align-items:center;gap:5px';
+    header.textContent = '✦ Nexus AI';
+    aiMsg.appendChild(header);
+
+    const card = document.createElement('div');
+    card.className = 'response-card';
+
+    if (r) {
+      let html = `<div class="response-summary" style="font-size:13px;padding:12px 14px">${r.summary}</div>`;
+      if (r.sites.length > 0) {
+        html += r.sites.map(s => `<div class="site-result"><div class="site-dot halted"></div><div class="result-name" style="font-size:12px">${s.name}</div><div class="result-meta" style="font-size:11px">${s.meta}</div><span class="result-tag">${s.tag}</span></div>`).join('');
+      }
+      html += `<div class="response-actions" style="padding:10px 14px">${r.actions.map(a => `<button class="btn-sm ${a[1]}" style="font-size:11px;padding:5px 12px">${a[0]}</button>`).join('')}</div>`;
+      card.innerHTML = html;
+    } else {
+      card.innerHTML = `<div class="response-summary" style="font-size:13px;padding:12px 14px">I'll look into "<strong>${q}</strong>" across your fleet. Checking sites, plugins, and indexed content now.</div><div class="response-actions" style="padding:10px 14px"><button class="btn-sm btn-ghost" style="font-size:11px">OK</button></div>`;
+    }
+
+    aiMsg.appendChild(card);
+    msgArea.appendChild(aiMsg);
+    msgArea.scrollTop = msgArea.scrollHeight;
+  }, 1000);
+
+  msgArea.scrollTop = msgArea.scrollHeight;
+}
+</script>
+</body>
+</html>

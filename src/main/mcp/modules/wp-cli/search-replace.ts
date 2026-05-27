@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
-import { requireRunning, ok, error } from './preflight';
+import { ok, error } from './preflight';
+import { withSiteRunning } from '../with-site-running';
 
 export const searchReplaceHandler: McpToolHandler = {
   definition: {
@@ -28,24 +29,23 @@ export const searchReplaceHandler: McpToolHandler = {
     const site = resolveSite(args.site as string, services.siteData);
     if (!site) return error(`Site "${args.site}" not found.`);
 
-    const check = requireRunning(site, services);
-    if (check) return check;
-
     const search = args.search as string;
     const replace = args.replace as string;
     const dryRun = args.dry_run !== false; // default true
 
     if (!search) return error('Search string is required.');
 
-    const cliArgs = ['search-replace', search, replace];
-    if (dryRun) cliArgs.push('--dry-run');
+    return withSiteRunning(site.id, services, async () => {
+      const cliArgs = ['search-replace', search, replace];
+      if (dryRun) cliArgs.push('--dry-run');
 
-    const result = await services.localServices!.wpCliRun(site.id, cliArgs);
-    if (!result.success) {
-      return error(`Search-replace failed: ${result.stdout}`);
-    }
+      const result = await services.localServices!.wpCliRun(site.id, cliArgs);
+      if (!result.success) {
+        return error(`Search-replace failed: ${result.stdout}`);
+      }
 
-    const prefix = dryRun ? '**Dry run** (no changes applied):\n' : '';
-    return ok(`${prefix}${result.stdout || 'Search-replace completed.'}`);
+      const prefix = dryRun ? '**Dry run** (no changes applied):\n' : '';
+      return ok(`${prefix}${result.stdout || 'Search-replace completed.'}`);
+    });
   },
 };

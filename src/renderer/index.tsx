@@ -6,6 +6,8 @@ import { NexusSiteTab } from './components/NexusSiteTab';
 import { NexusSiteTabSummary } from './components/NexusSiteTabSummary';
 import { SidebarSearchPanel } from './components/SidebarSearchPanel';
 import { IPC_CHANNELS } from '../common/constants';
+import { nexusStore } from './store/NexusStateManager';
+import type { NexusState } from './store/NexusStateManager';
 
 export default function renderer(context: any): void {
   console.log('[Nexus AI] Renderer initializing...');
@@ -51,6 +53,10 @@ export default function renderer(context: any): void {
     styleEl.textContent = `
       [class*="TabNav_Items"] { white-space: nowrap !important; }
       .TabNav_Items_ad_cY_v17-8-1 { white-space: nowrap !important; }
+      [data-nexus-chat] { -webkit-user-select: text !important; user-select: text !important; cursor: text !important; }
+      [data-nexus-chat] * { -webkit-user-select: text !important; user-select: text !important; }
+      [data-nexus-chat] button { cursor: pointer !important; }
+      [data-nexus-chat] input, [data-nexus-chat] textarea { cursor: text !important; }
     `;
     document.head.appendChild(styleEl);
   } catch (err) {
@@ -384,10 +390,18 @@ export default function renderer(context: any): void {
   electron.ipcRenderer.on('nexus:apply-sidebar-filter', applyFilterHandler);
   electron.ipcRenderer.on('nexus:clear-sidebar-filter', clearFilterHandler);
 
+  // NexusStateManager — single listener feeds the shared store.
+  // All components observe nexusStore instead of polling individually.
+  const stateUpdateHandler = (_event: any, patch: Partial<NexusState>) => {
+    nexusStore.update(patch);
+  };
+  electron.ipcRenderer.on(IPC_CHANNELS.NEXUS_STATE_UPDATE, stateUpdateHandler);
+
   // Cleanup listeners on unload
   window.addEventListener('beforeunload', () => {
     electron.ipcRenderer.removeListener('nexus:apply-sidebar-filter', applyFilterHandler);
     electron.ipcRenderer.removeListener('nexus:clear-sidebar-filter', clearFilterHandler);
+    electron.ipcRenderer.removeListener(IPC_CHANNELS.NEXUS_STATE_UPDATE, stateUpdateHandler);
   });
 
 }

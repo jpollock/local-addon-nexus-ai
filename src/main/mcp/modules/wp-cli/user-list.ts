@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { requireRunning, ok, error } from './preflight';
+import { ok, error } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { withSiteRunning } from '../with-site-running';
 
 export const userListHandler: McpToolHandler = {
   definition: {
@@ -17,7 +18,7 @@ export const userListHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const target = await resolveTarget(args, services);
+    const target = await resolveTarget(args, services, 'wpcli_read');
     if ('content' in target) return target;
 
     if (target.type === 'remote') {
@@ -42,30 +43,29 @@ export const userListHandler: McpToolHandler = {
       }
     }
 
-    const check = requireRunning(target.site, services);
-    if (check) return check;
+    return withSiteRunning(target.site.id, services, async () => {
+      const result = await services.localServices!.wpCliRun(target.site.id, [
+        'user', 'list', '--format=json',
+      ]);
 
-    const result = await services.localServices!.wpCliRun(target.site.id, [
-      'user', 'list', '--format=json',
-    ]);
-
-    if (!result.success) {
-      return error(`Failed to list users: ${result.stdout}`);
-    }
-
-    try {
-      const users = JSON.parse(result.stdout || '[]');
-      if (users.length === 0) {
-        return ok('No users found.');
+      if (!result.success) {
+        return error(`Failed to list users: ${result.stdout}`);
       }
 
-      const lines = [`## Users (${users.length})`];
-      for (const u of users) {
-        lines.push(`- ${u.user_login} (${u.display_name}) [${u.roles}]`);
+      try {
+        const users = JSON.parse(result.stdout || '[]');
+        if (users.length === 0) {
+          return ok('No users found.');
+        }
+
+        const lines = [`## Users (${users.length})`];
+        for (const u of users) {
+          lines.push(`- ${u.user_login} (${u.display_name}) [${u.roles}]`);
+        }
+        return ok(lines.join('\n'));
+      } catch {
+        return ok(result.stdout || 'No users found.');
       }
-      return ok(lines.join('\n'));
-    } catch {
-      return ok(result.stdout || 'No users found.');
-    }
+    });
   },
 };

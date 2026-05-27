@@ -1,12 +1,13 @@
 import { ContentPipeline } from './ContentPipeline';
 import { IndexRegistry, RegistryStorage } from './IndexRegistry';
 import { SiteConnectionInfo } from './MySQLExtractor';
-import { STORAGE_KEYS } from '../../common/constants';
+import { IPC_CHANNELS, STORAGE_KEYS } from '../../common/constants';
 import type { NexusSettings } from '../../common/types';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
 import { switchProviderForSite } from '../mcp/modules/wp-connector/switch-provider';
 import type { SiteMetadataCache } from '../metadata/SiteMetadataCache';
+import type { GraphService } from '../events/GraphService';
 import { autoGenerateContextFile } from '../ai-context/auto-generate';
 import { generateMuPluginContent } from '../ai-gateway/mu-plugin-template';
 
@@ -122,6 +123,7 @@ export interface LocalSiteRef {
 export interface Logger {
   info(...args: any[]): void;
   error(...args: any[]): void;
+  warn(...args: any[]): void;
 }
 
 /**
@@ -141,9 +143,18 @@ export function registerLifecycleHooks(
   settingsStorage?: RegistryStorage,
   localServices?: LocalServicesBridge,
   metadataCache?: SiteMetadataCache,
+  sendToRenderer?: (channel: string, ...args: unknown[]) => void,
+  graphService?: GraphService,
 ): void {
   context.hooks.addAction('siteStarted', async (site: LocalSiteRef) => {
     logger.info(`[NexusAI] Site started: ${site.name}, triggering index`);
+
+    // Wire real-time progress push to renderer
+    if (sendToRenderer) {
+      pipeline.setStatusCallback((siteId, status) => {
+        sendToRenderer(IPC_CHANNELS.INDEX_PROGRESS, { siteId, ...status });
+      });
+    }
 
     // Check auto-index settings
     if (settingsStorage) {
@@ -180,7 +191,7 @@ export function registerLifecycleHooks(
           const [
             wpVersion, plugins, themes,
             siteUrl, adminEmail,
-            mysqlVersionResult, postCountResult,
+            mysqlVersionResult, postCountResult, userCountResult, phpVersionResult,
           ] = await Promise.allSettled([
             localServices.getWpVersion(site.id),
             localServices.getPlugins(site.id),
@@ -194,6 +205,10 @@ export function registerLifecycleHooks(
               'eval',
               'global $wpdb; $r=$wpdb->get_results("SELECT post_type,COUNT(*) c,MAX(post_date_gmt) ld FROM {$wpdb->posts} WHERE post_status=\'publish\' GROUP BY post_type",ARRAY_A); echo json_encode($r);',
             ]),
+            // User count
+            localServices.wpCliRun(site.id, ['eval', 'global $wpdb; echo (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->users}");']),
+            // PHP version — WP-CLI runs under the site's PHP, so phpversion() is accurate
+            localServices.wpCliRun(site.id, ['eval', 'echo phpversion();']),
           ]);
 
           // Parse post count result
@@ -220,10 +235,13 @@ export function registerLifecycleHooks(
             ? (mysqlVersionResult.value.stdout ?? '').trim() || undefined
             : undefined;
 
+          const phpFromWpCli = phpVersionResult.status === 'fulfilled' && phpVersionResult.value.success
+            ? (phpVersionResult.value.stdout ?? '').trim() || undefined
+            : undefined;
+
           metadataCache.set(site.id, {
             wpVersion: wpVersion.status === 'fulfilled' ? (wpVersion.value ?? 'unknown') : 'unknown',
-            // phpVersion comes from Local's site object — WP-CLI doesn't return it.
-            phpVersion: site.phpVersion || undefined,
+            phpVersion: phpFromWpCli ?? site.phpVersion ?? undefined,
             mysqlVersion,
             siteUrl: siteUrl.status === 'fulfilled' ? (siteUrl.value ?? undefined) : undefined,
             adminEmail: adminEmail.status === 'fulfilled' ? (adminEmail.value ?? undefined) : undefined,
@@ -241,11 +259,54 @@ export function registerLifecycleHooks(
             postCount,
             postCountByType,
             lastPostAt,
+            userCount: userCountResult.status === 'fulfilled' && userCountResult.value.success
+              ? (parseInt((userCountResult.value.stdout ?? '').trim(), 10) || undefined)
+              : undefined,
             updateSource: 'lifecycle',
             scanDepth: 'full',
           });
 
           logger.info(`[NexusAI] Refreshed metadata cache for ${site.name} (WP ${wpVersion.status === 'fulfilled' ? wpVersion.value : '?'}, ${postCount ?? '?'} posts)`);
+
+          // Mirror L2 data to graph.db so it survives restarts and is
+          // available to fleet queries without going through SiteMetadataCache.
+          // This makes local and WPE sites consistent: both readable from one store.
+          if (graphService) {
+            try {
+              const now = Date.now();
+              const resolvedWpVersion = wpVersion.status === 'fulfilled' ? (wpVersion.value ?? undefined) : undefined;
+              const resolvedPhpVersion = phpFromWpCli ?? site.phpVersion ?? undefined;
+              await graphService.upsertSite({
+                id: site.id,
+                name: site.name,
+                domain: `${site.name}.local`,
+                wp_version: resolvedWpVersion,
+                php_version: resolvedPhpVersion,
+                last_sync_at: now,
+                is_active: true,
+                source: 'local',
+                created_at: now,
+                updated_at: now,
+              });
+              // Write plugins to graph.db plugins table
+              if (plugins.status === 'fulfilled') {
+                for (const p of plugins.value) {
+                  await graphService.upsertPlugin({
+                    site_id: site.id,
+                    slug: p.name,
+                    name: p.title ?? p.name,
+                    version: p.version ?? '',
+                    is_active: p.status === 'active',
+                    author: null,
+                    created_at: now,
+                    updated_at: now,
+                  });
+                }
+              }
+            } catch (graphErr) {
+              logger.warn(`[NexusAI] graph.db write failed for ${site.name} (non-fatal):`, graphErr);
+            }
+          }
         } catch (err) {
           logger.error(`[NexusAI] Metadata refresh failed for ${site.name}:`, err);
         }
@@ -311,8 +372,11 @@ export function registerLifecycleHooks(
   });
 
   context.hooks.addAction('siteStopped', async (site: LocalSiteRef) => {
-    logger.info(`[NexusAI] Site stopped: ${site.name}, marking index stale`);
-    indexRegistry.update(site.id, { state: 'stale' });
+    // Do NOT mark index stale on stop — content does not change when a site stops.
+    // Stale is only meaningful when WordPress content actually changes (via webhook).
+    // Marking stale here caused sites to flip from Searchable → Configured every time
+    // they were stopped by the auto-start/stop indexing workflow.
+    logger.info(`[NexusAI] Site stopped: ${site.name} (index state preserved)`);
   });
 
   context.hooks.addAction('siteRemoved', async (site: LocalSiteRef) => {

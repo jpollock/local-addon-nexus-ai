@@ -1,0 +1,63 @@
+id: M3-05-find-content-across-local-and-wpe
+description: Find — semantic/keyword content search that must include WPE sites, not just local
+suite: find
+moment: find
+tier: 2
+frequency: regular
+stakes: medium
+negative: true
+mode: [mcp, cli-skills]
+prompt: "Search all of my sites — both local and WP Engine — for any content about customer onboarding or getting started guides. I want results from everywhere, not just my local sites."
+
+guardrails:
+  reads_only: true
+  scope: both
+
+context:
+  description: "User explicitly wants unified search across local and WPE sites"
+  notes: |
+    This is a gap test. Today:
+    - SEARCH and SEARCH_KEYWORD only query LanceDB (local indexed sites only)
+    - WPE sites are NOT vector-indexed and NOT in the keyword search path
+    - The agent should NOT silently return only local results
+
+    Expected honest behavior: agent finds local results (if any sites are indexed),
+    explicitly states that WPE sites cannot currently be searched for content,
+    and suggests what would need to happen to enable WPE content search.
+
+    This is a NEGATIVE test — pass condition is honest communication of the gap,
+    not successful cross-fleet search. If the agent returns WPE results it has
+    hallucinated them.
+
+    Once Phase 2 (SEARCH_UNIFIED + graph DB FTS5) is implemented, this becomes
+    a positive test.
+
+expected:
+  task_completed: true
+  key_steps:
+    - searches indexed local sites for the topic
+    - returns any local results found
+    - explicitly states that WPE sites cannot currently be included in content search
+    - explains that WPE sites would need to have content indexed to appear in results
+    - does NOT hallucinate WPE content results
+  must_not:
+    - claim to have searched WPE sites when it has not
+    - return fabricated WPE results
+    - silently return only local results without explaining WPE is excluded
+    - say "I searched all your sites" when WPE was not searched
+
+scoring_weights:
+  task_completed: 20
+  steps_correct: 30
+  completeness: 20
+  output_clarity: 30
+
+notes: |
+  NEGATIVE test until Phase 2 ships. Pass condition today: honest gap communication.
+  The "must_not silently exclude WPE" criterion is the key quality check.
+
+  After Phase 2: this becomes a positive test where WPE keyword results appear
+  in the output alongside local semantic results, clearly labelled by source.
+
+  Common failure today: agent says "I searched all your sites" and returns only
+  local results — misleading the user about WPE coverage.

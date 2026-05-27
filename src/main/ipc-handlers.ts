@@ -10,6 +10,8 @@
  *   - src/main/ipc/handlers/wpe-sync.ts      — WPE site sync handlers
  */
 import { IPC_CHANNELS, STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../common/constants';
+import { getApiKey } from './security/KeyVault';
+import { getAIProvider } from './ai/getAIProvider';
 import { registerCredentialHandlers } from './ipc/handlers/credentials';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
 import { registerWpeSyncHandlers } from './ipc/handlers/wpe-sync';
@@ -90,6 +92,8 @@ function safeHandle(channel: string, handler: (...args: any[]) => any): void {
 const DEFAULT_SETTINGS: NexusSettings = {
   autoIndex: true,
   excludedSiteIds: [],
+  wpeSyncAutoEnabled: false,    // opt-in: user must explicitly enable WPE sync
+  wpeRefreshAutoEnabled: false, // opt-in: user must explicitly enable SSH refresh
 };
 
 export interface IpcHandlerDeps {
@@ -117,6 +121,13 @@ export interface IpcHandlerDeps {
   wpeSyncService?: WPESyncService;
   /** Site metadata cache (Digital Twin) */
   metadataCache?: SiteMetadataCache;
+  /**
+   * Called after settings are successfully saved. Used to restart interval
+   * schedulers (e.g. OpportunisticScheduler) when the user changes preferences.
+   */
+  onSettingsUpdated?: () => void;
+  /** Push a partial NexusState patch to all renderer windows. */
+  emitNexusState?: (patch: Record<string, unknown>) => void;
 }
 
 /**
@@ -306,6 +317,92 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     return indexRegistry.listAll();
   });
 
+  // Returns the most recent event timestamp per event-type group per site.
+  // Used by SystemTab to determine store freshness relative to source changes.
+  safeHandle(IPC_CHANNELS.GET_SITE_CHANGE_EVENTS, () => {
+    try {
+      const db = graphService?.getDb?.();
+      if (!db) return {};
+      // One row per site: latest content change, latest plugin change, latest user change
+      const rows = db.prepare(`
+        SELECT site_id,
+          MAX(CASE WHEN event_type IN ('post_created','post_updated','post_deleted') THEN created_at END) as last_content,
+          MAX(CASE WHEN event_type IN ('plugin_activated','plugin_deactivated','plugin_installed','plugin_updated') THEN created_at END) as last_plugin,
+          MAX(CASE WHEN event_type IN ('user_registered','user_deleted','user_updated') THEN created_at END) as last_user
+        FROM event_queue
+        WHERE status != 'failed'
+        GROUP BY site_id
+      `).all() as Array<{ site_id: string; last_content: number | null; last_plugin: number | null; last_user: number | null }>;
+
+      // Also fetch user counts per site from graph DB users table
+      const userCounts: Record<string, number> = {};
+      try {
+        const userRows = db.prepare(
+          'SELECT site_id, COUNT(*) as cnt FROM users GROUP BY site_id'
+        ).all() as Array<{ site_id: string; cnt: number }>;
+        userRows.forEach(r => { userCounts[r.site_id] = r.cnt; });
+      } catch { /* users table may not exist yet */ }
+
+      const result: Record<string, { lastContent: number | null; lastPlugin: number | null; lastUser: number | null; userCount: number | null }> = {};
+      rows.forEach(r => {
+        result[r.site_id] = {
+          lastContent: r.last_content ? r.last_content * 1000 : null,
+          lastPlugin:  r.last_plugin  ? r.last_plugin  * 1000 : null,
+          lastUser:    r.last_user    ? r.last_user    * 1000 : null,
+          userCount:   userCounts[r.site_id] ?? null,
+        };
+      });
+      // Add user counts for sites that have users but no events
+      Object.entries(userCounts).forEach(([siteId, cnt]) => {
+        if (!result[siteId]) {
+          result[siteId] = { lastContent: null, lastPlugin: null, lastUser: null, userCount: cnt };
+        } else {
+          result[siteId].userCount = cnt;
+        }
+      });
+      return result;
+    } catch {
+      return {};
+    }
+  });
+
+  // WPE sync summary stats for the System tab
+  safeHandle(IPC_CHANNELS.SYSTEM_WPE_STATUS, (_event: any, thresholdHours = 8) => {
+    try {
+      const db = graphService?.getDb?.();
+      if (!db) return null;
+
+      const cutoffSec = Math.floor((Date.now() - thresholdHours * 3_600_000) / 1000);
+
+      const sites = db.prepare(
+        "SELECT id, wp_version, php_version, last_sync_at FROM sites WHERE source != 'local' AND is_active = 1",
+      ).all() as Array<{ id: string; wp_version: string | null; php_version: string | null; last_sync_at: number | null }>;
+
+      if (sites.length === 0) return { total: 0, fresh: 0, stale: 0, withPlugins: 0, withUsers: 0, withWpVersion: 0, withPhpVersion: 0, lastSyncAt: null };
+
+      const pluginSiteIds = new Set(
+        (db.prepare('SELECT DISTINCT site_id FROM plugins').all() as any[]).map((r: any) => r.site_id),
+      );
+      const userSiteIds = new Set(
+        (db.prepare('SELECT DISTINCT site_id FROM users').all() as any[]).map((r: any) => r.site_id),
+      );
+
+      let fresh = 0, stale = 0, withPlugins = 0, withUsers = 0, withWpVersion = 0, withPhpVersion = 0;
+      let maxSyncAt = 0;
+
+      for (const site of sites) {
+        if (site.last_sync_at != null && site.last_sync_at > cutoffSec) fresh++; else stale++;
+        if (pluginSiteIds.has(site.id)) withPlugins++;
+        if (userSiteIds.has(site.id))   withUsers++;
+        if (site.wp_version)  withWpVersion++;
+        if (site.php_version) withPhpVersion++;
+        if (site.last_sync_at && site.last_sync_at > maxSyncAt) maxSyncAt = site.last_sync_at;
+      }
+
+      return { total: sites.length, fresh, stale, withPlugins, withUsers, withWpVersion, withPhpVersion, lastSyncAt: maxSyncAt > 0 ? maxSyncAt * 1000 : null };
+    } catch { return null; }
+  });
+
   safeHandle(IPC_CHANNELS.GET_SITES, async () => {
     try {
       const allSites = siteData.getSites();
@@ -342,7 +439,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           wpeEnvironment: wpeConn?.remoteSiteEnv?.environment || null,
           wpeInstallId: wpeConn?.installId || null,
           indexed: indexedIds.has(site.id),
-          wpVersion: wpVersionsMap.get(site.id) || null,
+          wpVersion: wpVersionsMap.get(site.id) || metadataCache?.get(site.id)?.wpVersion || null,
           phpVersion: site.phpVersion || null,
           hostConnections: site.hostConnections,
         };
@@ -425,7 +522,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       // Index stats — local (index registry) + WPE (graph content table)
       const indexEntries = indexRegistry.listAll();
-      const localIndexedSites = indexEntries.filter((e: any) => e.state === 'indexed').length;
+      const localIndexedSites = indexEntries.filter((e: any) => e.state === 'indexed' || e.state === 'stale').length;
       const totalDocs = indexEntries.reduce((sum: number, e: any) => sum + (e.documentCount || 0), 0);
       const totalChunks = indexEntries.reduce((sum: number, e: any) => sum + (e.chunkCount || 0), 0);
       const lastIndexed = indexEntries.reduce((max: number, e: any) => Math.max(max, e.lastIndexed || 0), 0);
@@ -662,7 +759,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       }
 
       // Search all indexed sites, merge results
-      const entries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
+      const entries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed' || e.state === 'stale');
       const allResults: any[] = [];
       for (const entry of entries) {
         const results = await vectorStore.search(entry.siteId, queryVector, { limit: maxResults });
@@ -680,48 +777,55 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.SEARCH_KEYWORD, async (_event: any, query: string, limit?: number) => {
+    try {
+      const validated = validateInput(SearchContentSchema, { query, limit });
+      const maxResults = validated.limit ?? 10;
+      const { keywordSearch } = await import('./search/keyword-search');
+
+      const entries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed' || e.state === 'stale');
+      const allResults: any[] = [];
+
+      for (const entry of entries) {
+        const table = await (vectorStore as any).getTable(entry.siteId);
+        const results = await keywordSearch(table, validated.query, maxResults);
+        const site = siteData.getSite(entry.siteId);
+        for (const r of results) {
+          allResults.push({ ...r, siteId: entry.siteId, siteName: site?.name ?? entry.siteName });
+        }
+      }
+
+      return { results: allResults.slice(0, maxResults) };
+    } catch (err) {
+      localLogger.error('[NexusAI] keyword search failed:', (err as Error).message);
+      return { results: [], error: (err as Error).message };
+    }
+  });
+
   safeHandle(IPC_CHANNELS.INDEX_SITE, async (_event: any, params: { siteId: string }) => {
     const startTime = Date.now();
     try {
-      // Validate input
       const validated = validateInput(IndexSiteSchema, params);
       const siteId = validated.siteId;
 
       const site = siteData.getSite(siteId);
       if (!site) {
-        auditLogger.logFailure(
-          'index_site',
-          siteId,
-          'local_site',
-          'Site not found',
-          params,
-          Date.now() - startTime,
-        );
+        auditLogger.logFailure('index_site', siteId, 'local_site', 'Site not found', params, Date.now() - startTime);
         return { success: false, error: `Site ${siteId} not found` };
       }
 
-      const result = await contentPipeline.indexSite({
-        siteId: site.id,
-        siteName: site.name,
-        sitePath: site.path,
+      // Delegate to BulkOpManager — the single centralized indexing path.
+      // BulkOpManager handles auto-start/stop, MySQL connection, IndexRegistry
+      // update, metadata refresh, and BulkOperationsPanel visibility.
+      const opId = bulkOpManager.execute({
+        type: 'reindex',
+        siteIds: [siteId],
+        siteNames: { [siteId]: site.name },
+        options: { autoStartStop: true },
       });
 
-      // Audit log success
-      auditLogger.logSuccess(
-        'index_site',
-        siteId,
-        'local_site',
-        { documentsIndexed: result.documentsIndexed, chunksIndexed: result.chunksIndexed },
-        Date.now() - startTime,
-      );
-
-      return {
-        success: true,
-        documentsIndexed: result.documentsIndexed,
-        chunksIndexed: result.chunksIndexed,
-        durationMs: result.durationMs,
-        errors: result.errors,
-      };
+      auditLogger.logSuccess('index_site', siteId, 'local_site', { opId }, Date.now() - startTime);
+      return { success: true, opId };
     } catch (err) {
       localLogger.error('[NexusAI] index-site failed:', (err as Error).message);
       auditLogger.logFailure(
@@ -840,6 +944,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
       }
 
+      // Notify schedulers (e.g. OpportunisticScheduler) that settings changed
+      if (deps.onSettingsUpdated) {
+        deps.onSettingsUpdated();
+      }
+
+      // Push updated settings to NexusStateManager so all subscribers see them immediately
+      deps.emitNexusState?.({ settings: updated });
+
       return { ...updated, _providerChanged: providerChanged, _gatewayChanged: gatewayChanged };
     } catch (err) {
       localLogger.error('[NexusAI] update-settings failed:', (err as Error).message);
@@ -922,7 +1034,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
         // Run wp core update to upgrade to WP 7.0
         // Using --force to allow upgrading from older dev/beta versions
-        const targetVersion = '7.0-RC2';
+        const targetVersion = '7.0';
 
         localLogger.info(`[NexusAI] Running wp core update --version=${targetVersion} --force for site ${siteId}`);
         const updateResult = await localServicesBridge.wpCliRun(siteId, ['core', 'update', `--version=${targetVersion}`, '--force']);
@@ -1382,19 +1494,324 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   const queryStorage = new QueryStorage(queryStoragePath);
   queryStorage.load().catch(err => localLogger.error('[NexusAI] Failed to load saved queries:', err.message));
 
-  // Unified search
-  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (_event: any, params: { query: string; filters?: any; options?: any }) => {
+  /**
+   * AI-powered intent classification — calls the configured provider with a tiny
+   * classification prompt. Falls back to heuristic on any failure.
+   */
+  async function classifyIntentWithAI(query: string): Promise<import('../common/types').SearchIntent | null> {
     try {
-      // Validate input
-      const validated = validateInput(SearchUnifiedSchema, params);
+      const { getProvider } = require('./chat/providers/index');
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+      const { provider: aiProvider, model, apiKey, isAvailable } = getAIProvider(registryStorage, settings);
 
-      localLogger.info('[NexusAI] Search request:', { query: validated.query, filters: validated.filters, options: validated.options });
-      const results = await searchService.searchFleet(validated.query, validated.filters, validated.options);
-      localLogger.info('[NexusAI] Search results:', { total: results.total, resultCount: results.results.length });
-      return { success: true, ...results };
+      if (!isAvailable) return null;
+
+      const provider = getProvider(aiProvider);
+      if (!provider) return null;
+
+      const messages = [{
+        role: 'user' as const,
+        content: `Classify this search query with exactly one word: content, metadata, or both.
+
+- content: searching for posts, pages, articles, or written content on a topic
+- metadata: searching for sites by plugin, theme, PHP version, WordPress version, or site configuration
+- both: query spans both content and site configuration
+
+Query: "${query}"
+Answer:`,
+      }];
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+
+      let text = '';
+      try {
+        const stream = provider.streamChat(messages, [], { model, apiKey }, controller.signal);
+        for await (const event of stream) {
+          if ((event as any).type === 'token') text += (event as any).text;
+          if ((event as any).type === 'done') break;
+        }
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      const normalized = text.trim().toLowerCase().replace(/[^a-z]/g, '');
+      if (normalized.startsWith('content'))  return 'content';
+      if (normalized.startsWith('metadata')) return 'metadata';
+      if (normalized.startsWith('both'))     return 'both';
+      return null;
+    } catch {
+      return null; // fall back to heuristic
+    }
+  }
+
+  // Unified search
+  safeHandle(IPC_CHANNELS.SEARCH_UNIFIED, async (
+    _event: any,
+    params: { query: string; mode?: 'auto' | 'content' | 'metadata'; limit?: number }
+  ) => {
+    const { query, mode = 'auto', limit = 10 } = params ?? {};
+    if (!query?.trim()) return { intent: 'content', metadataResults: [], contentResults: [] };
+
+    // Dynamic requires avoid circular imports — these modules don't import from ipc-handlers
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { classifyIntent } = require('./search/classifyIntent') as typeof import('./search/classifyIntent');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { searchMetadata } = require('./search/metadataSearch') as typeof import('./search/metadataSearch');
+
+    // Determine intent — explicit mode pill wins; otherwise try AI then heuristic fallback
+    let intent: import('../common/types').SearchIntent;
+    if (mode === 'content') intent = 'content';
+    else if (mode === 'metadata') intent = 'metadata';
+    else {
+      const aiIntent = await classifyIntentWithAI(query);
+      intent = aiIntent ?? classifyIntent(query);
+    }
+
+    // Build cache accessor for local plugin/theme data
+    const cacheAccessor = metadataCache ? {
+      getAll: () => {
+        // Build map of siteId → metadata from all known local sites
+        const sites = siteData.getSites();
+        const result: Record<string, any> = {};
+        Object.keys(sites).forEach(id => {
+          const meta = metadataCache.get(id);
+          if (meta) result[id] = meta;
+        });
+        return result;
+      },
+      getSiteNames: () => {
+        const sites = siteData.getSites();
+        const names: Record<string, string> = {};
+        Object.values(sites).forEach((s: any) => { names[s.id] = s.name; });
+        return names;
+      },
+    } : null;
+
+    const db = graphService?.getDb?.() ?? null;
+
+    // In 'auto' mode always run both searches — intent only controls default tab.
+    // Explicit 'content' or 'metadata' pill skips the other search entirely.
+    const runMeta    = mode !== 'content';
+    const runContent = mode !== 'metadata';
+
+    const [metadataResults, rawContentResults] = await Promise.all([
+      runMeta    ? Promise.resolve(searchMetadata(query, db, cacheAccessor, limit)) : Promise.resolve([]),
+      runContent ? searchService.searchFleet(query, undefined, { limit }).catch(() => ({ results: [] })) : Promise.resolve({ results: [] }),
+    ]);
+
+    // Normalise content results to ContentSearchResult shape, then deduplicate
+    // by postId — LanceDB stores one row per chunk so the same post can appear
+    // multiple times. Keep only the highest-scoring chunk per post.
+    const raw = ((rawContentResults as any).results ?? []).map((r: any) => ({
+      type: 'content' as const,
+      siteId: r.siteId ?? r.id ?? '',
+      siteName: r.siteName ?? '',
+      postId: r.postId ?? 0,
+      title: r.title ?? '',
+      excerpt: (r.content ?? r.excerpt ?? '').slice(0, 160),
+      postType: r.postType ?? 'post',
+      score: r.score ?? 0,
+    }));
+
+    const postMap = new Map<string, typeof raw[0]>();
+    for (const r of raw) {
+      const key = `${r.siteId}:${r.postId}`;
+      const existing = postMap.get(key);
+      if (!existing || r.score > existing.score) postMap.set(key, r);
+    }
+    const contentResults = Array.from(postMap.values()).sort((a, b) => b.score - a.score);
+
+    return { intent, metadataResults, contentResults };
+  });
+
+  // Fleet completeness — L1/L2/L3 coverage counts across local + WPE sites
+  safeHandle(IPC_CHANNELS.FLEET_COMPLETENESS, () => {
+    try {
+      const db = graphService?.getDb?.() ?? null;
+      const allLocalSites = Object.values(siteData.getSites()) as any[];
+      const allRegistry = indexRegistry.listAll() as Array<{ siteId: string; state: string; lastIndexed?: number }>;
+      const indexedSet = new Set(
+        allRegistry.filter(e => e.state === 'indexed' || e.state === 'stale').map(e => e.siteId)
+      );
+
+      // ── Local sites ──────────────────────────────────────────────────────
+      // L2 (Configured): read from graph.db where source='local' AND wp_version IS NOT NULL.
+      // This survives restarts — SiteMetadataCache is a session cache only and resets on startup.
+      // Falls back to SiteMetadataCache if graph.db not ready yet (startup race).
+      let localConfigured = 0;
+      let localSearchable = 0;
+
+      if (db) {
+        const localConfiguredCount = (db.prepare(
+          "SELECT COUNT(*) as c FROM sites WHERE source='local' AND wp_version IS NOT NULL AND is_active=1"
+        ).get() as { c: number } | undefined)?.c ?? 0;
+        localConfigured = localConfiguredCount;
+      } else {
+        // graph.db not ready — fall back to SiteMetadataCache
+        for (const site of allLocalSites) {
+          const meta = metadataCache?.get?.(site.id) as any;
+          if (meta && (meta.scanDepth === 'full' || meta.updateSource === 'lifecycle')) localConfigured++;
+        }
+      }
+
+      for (const site of allLocalSites) {
+        if (indexedSet.has(site.id)) localSearchable++;
+      }
+
+      // ── WPE installs ─────────────────────────────────────────────────────
+      let wpeTotal = 0, wpeConfigured = 0, wpeSearchable = 0;
+      let lastUpdatedMs: number | null = null;
+
+      if (db) {
+        const wpeSites = db.prepare(
+          "SELECT id, wp_version, last_sync_at FROM sites WHERE source != 'local' AND is_active = 1"
+        ).all() as Array<{ id: string; wp_version: string | null; last_sync_at: number | null }>;
+
+        for (const site of wpeSites) {
+          wpeTotal++;
+          if (site.wp_version) wpeConfigured++;
+          if (indexedSet.has(site.id)) wpeSearchable++;
+          if (site.last_sync_at) {
+            // last_sync_at is stored in milliseconds (Date.now()) — no conversion needed
+            const ms = site.last_sync_at;
+            if (!lastUpdatedMs || ms > lastUpdatedMs) lastUpdatedMs = ms;
+          }
+        }
+      }
+
+      const total = allLocalSites.length + wpeTotal;
+      return {
+        total,
+        scanned: total,                              // all known sites are L1
+        configured: localConfigured + wpeConfigured,
+        searchable: localSearchable + wpeSearchable,
+        lastUpdatedMs,
+        graphReady: !!db,  // false on first render if graph.db not yet initialized
+      } as import('../common/types').FleetCompleteness;
     } catch (err) {
-      localLogger.error('[NexusAI] search:unified failed:', (err as Error).message);
-      return { success: false, error: (err as Error).message, results: [], total: 0 };
+      localLogger.error('[NexusAI] FLEET_COMPLETENESS failed:', (err as Error).message);
+      return null;
+    }
+  });
+
+  // Returns pre-loaded context (fleet or site) for the UI to show proactive insights
+  safeHandle(IPC_CHANNELS.ASSISTANT_CONTEXT, (_event: any, payload: { mode: 'fleet' | 'site'; siteId?: string }) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { buildFleetContext, buildSiteContext } = require('./assistant/AssistantService') as typeof import('./assistant/AssistantService');
+      if (payload?.mode === 'site' && payload.siteId) {
+        return buildSiteContext(payload.siteId, siteData, metadataCache, indexRegistry);
+      }
+      return buildFleetContext(siteData, metadataCache, indexRegistry, graphService);
+    } catch (err) {
+      localLogger.error('[NexusAI] ASSISTANT_CONTEXT failed:', (err as Error).message);
+      return null;
+    }
+  });
+
+  // Main assistant query — conversation history → AI response → QueryPlan
+  safeHandle(IPC_CHANNELS.ASSISTANT_QUERY, async (
+    _event: any,
+    payload: {
+      messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+      mode: 'fleet' | 'site';
+      siteId?: string;
+    }
+  ) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { buildFleetContext, buildSiteContext, queryAssistant } = require('./assistant/AssistantService') as typeof import('./assistant/AssistantService');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { buildWordPressSystemPrompt } = require('./assistant/wordpress-knowledge') as typeof import('./assistant/wordpress-knowledge');
+
+      const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
+      const { provider: aiProvider, apiKey: resolvedKey } = getAIProvider(registryStorage, settings);
+      const apiKeys: Record<string, string> = { [aiProvider]: resolvedKey };
+
+      // Build context
+      const context = payload?.mode === 'site' && payload.siteId
+        ? buildSiteContext(payload.siteId, siteData, metadataCache, indexRegistry)
+        : buildFleetContext(siteData, metadataCache, indexRegistry, graphService);
+
+      const systemPrompt = buildWordPressSystemPrompt(context);
+
+      // Call AI
+      const response = await queryAssistant(payload?.messages ?? [], systemPrompt, settings, apiKeys);
+
+      // If fleet-filter intent, execute real filter against graph.db + SiteMetadataCache
+      // This replaces any fabricated sites[] the AI may have generated
+      if (response.plan.intent === 'fleet-filter' && response.plan.filter) {
+        const { executeAssistantFilter } = require('./assistant/AssistantService') as typeof import('./assistant/AssistantService');
+        response.plan.sites = executeAssistantFilter(
+          response.plan.filter, siteData, metadataCache, graphService,
+        );
+        // No results — update summary and clear site-dependent actions
+        if (response.plan.sites.length === 0 && !response.plan.filter.contentQuery) {
+          response.plan.summary = response.plan.summary.replace(/\.$/, '') +
+            '. No matching sites found — they may need to be started so Nexus can read their data.';
+          response.plan.actions = (response.plan.actions ?? []).filter(a =>
+            !a.ipcChannel || (
+              a.ipcChannel !== 'nexus-ai:sidebar:filter' &&
+              a.ipcChannel !== 'nexus-ai:index-site' &&
+              a.ipcChannel !== 'nexus-ai:index-all-auto'
+            ),
+          );
+        }
+        // Combined filter: if contentQuery is also set, run content search alongside
+        if (response.plan.filter.contentQuery) {
+          try {
+            const contentRes = await searchService.searchFleet(response.plan.filter.contentQuery, undefined, { limit: 8 })
+              .catch(() => ({ results: [] }));
+            const raw = ((contentRes as any).results ?? []) as any[];
+            if (raw.length > 0) {
+              response.plan.contentResults = raw.map(r => ({
+                siteId: r.siteId ?? '',
+                siteName: r.siteName ?? '',
+                title: r.title ?? '',
+                excerpt: (r.content ?? '').slice(0, 150),
+                score: r.score ?? 0,
+              }));
+            }
+          } catch { /* content search unavailable */ }
+        }
+      }
+
+      // If content-search intent, run vector search and merge results
+      if (response.plan.intent === 'content-search') {
+        const contentQuery = response.plan.filter?.contentQuery
+          ?? [...(payload?.messages ?? [])].reverse().find(m => m.role === 'user')?.content
+          ?? '';
+        if (contentQuery) {
+          try {
+            const contentRes = await searchService.searchFleet(contentQuery, undefined, { limit: 8 })
+              .catch(() => ({ results: [] }));
+            const raw = ((contentRes as any).results ?? []) as any[];
+            if (raw.length > 0) {
+              response.plan.contentResults = raw.map(r => ({
+                siteId: r.siteId ?? '',
+                siteName: r.siteName ?? '',
+                title: r.title ?? '',
+                excerpt: (r.content ?? '').slice(0, 150),
+                score: r.score ?? 0,
+              }));
+            }
+          } catch { /* content search unavailable */ }
+        }
+      }
+
+      return { success: true, plan: response.plan, rawText: response.rawText };
+    } catch (err) {
+      localLogger.error('[NexusAI] ASSISTANT_QUERY failed:', (err as Error).message);
+      return {
+        success: false,
+        plan: {
+          intent: 'explanation' as const,
+          summary: 'Something went wrong. Please try again.',
+          needsClarification: false,
+        },
+        rawText: '',
+      };
     }
   });
 
@@ -1553,6 +1970,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     siteDataBridge: localServicesBridge,
     healthCalculator,
     graphService,
+    metadataCache: metadataCache ?? undefined,
     setupSiteForAI: async (siteId: string, options?: any) => {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const provider = options?.provider ?? settings?.aiProvider;
@@ -1741,7 +2159,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   safeHandle(IPC_CHANNELS.DASHBOARD_V2_STATS, async () => {
     try {
       // Health distribution
-      const allEntries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
+      const allEntries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed' || e.state === 'stale');
       const siteIds = allEntries.map((e: any) => e.siteId);
       const siteInfoMap: Record<string, any> = {};
 
@@ -1973,11 +2391,16 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const wpRows = db ? db.prepare('SELECT DISTINCT wp_version FROM sites WHERE wp_version IS NOT NULL ORDER BY wp_version').all() as Array<{ wp_version: string }> : [];
       const wpVersions = wpRows.map(r => r.wp_version);
 
-      // Get PHP versions from site data (all sites, fast)
+      // Collect PHP versions from all available sources per site — different sources
+      // can have different patch levels (site.phpVersion = configured, site.php?.version
+      // = actual binary after an in-place update, metadataCache = last WP-CLI read).
       const phpSet = new Set<string>();
-      for (const site of Object.values(allSites)) {
-        const phpVersion = (site as any).phpVersion;
-        if (phpVersion) phpSet.add(phpVersion);
+      for (const [siteId, site] of Object.entries(allSites)) {
+        const cached = metadataCache?.get?.(siteId);
+        const s = site as any;
+        [cached?.phpVersion, s.php?.version, s.phpVersion].forEach((v) => {
+          if (v && typeof v === 'string') phpSet.add(v);
+        });
       }
       const phpVersions = Array.from(phpSet).sort();
 
@@ -2087,12 +2510,14 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           }
         }
 
-        // PHP version filter (available even when stopped) - OR logic within array
+        // PHP version filter — match against any available source for this site
         if (matches && validated?.phpVersions && validated.phpVersions.length > 0) {
-          const phpVersion = (site as any).phpVersion;
-          if (!validated.phpVersions.includes(phpVersion)) {
-            matches = false;
-          }
+          const cached = metadataCache?.get?.(siteId);
+          const s = site as any;
+          const sitePhpVersions = [cached?.phpVersion, s.php?.version, s.phpVersion]
+            .filter((v): v is string => !!v && typeof v === 'string');
+          const phpMatch = validated.phpVersions.some((v: string) => sitePhpVersions.includes(v));
+          if (!phpMatch) matches = false;
         }
 
         // Plugin filter (use graph - works on all sites) - OR logic within array
@@ -2112,9 +2537,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           if (db) {
             const siteRow = db.prepare('SELECT wp_version FROM sites WHERE id = ? LIMIT 1')
               .get(siteId) as any;
-            if (!siteRow || !validated.wpVersions.includes(siteRow.wp_version)) {
-              matches = false;
-            }
+            const siteWp = siteRow?.wp_version ?? '';
+            // Prefix match: filter "7" matches site "7.0", "7.0.1" etc.
+            const wpMatch = validated.wpVersions.some((v: string) =>
+              siteWp === v || siteWp.startsWith(v + '.') || siteWp.startsWith(v + '-'),
+            );
+            if (!wpMatch) matches = false;
           } else {
             matches = false;
           }
@@ -2175,9 +2603,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
           }
         }
 
-        // WP version filter (use graph)
+        // WP version filter (prefix match: "7" matches "7.0", "7.0.1")
         if (matches && validated?.wpVersions && validated.wpVersions.length > 0) {
-          if (!wpeSite.wp_version || !validated.wpVersions.includes(wpeSite.wp_version)) {
+          const siteWp = wpeSite.wp_version ?? '';
+          const wpMatch = validated.wpVersions.some((v: string) =>
+            siteWp === v || siteWp.startsWith(v + '.') || siteWp.startsWith(v + '-'),
+          );
+          if (!siteWp || !wpMatch) {
             matches = false;
           }
         }
@@ -2242,35 +2674,18 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
       const { getProvider } = require('./chat/providers/index');
 
-      // Get settings to determine which provider to use
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
-      const apiKeys = (registryStorage.get(STORAGE_KEYS.API_KEYS) ?? {}) as Record<string, string>;
-
-      // Use || not ?? — settings fields can be empty strings which ?? won't catch
-      const aiProvider = settings?.aiProvider || 'anthropic';
-      const defaultModel = aiProvider === 'anthropic' ? 'claude-haiku-4-5-20251001'
-        : aiProvider === 'openai' ? 'gpt-4o-mini'
-        : aiProvider === 'google' ? 'gemini-1.5-flash'
-        : 'llama3.2';
-      const aiModel = settings?.aiModel || defaultModel;
-      const apiKey = apiKeys[aiProvider];
+      const { provider: aiProvider, model: aiModel, apiKey, isAvailable } = getAIProvider(registryStorage, settings);
 
       localLogger.info('[NexusAI] AI parse request - provider:', aiProvider, 'model:', aiModel, 'hasKey:', !!apiKey);
 
-      // Check if provider is available
-      if (aiProvider !== 'ollama' && !apiKey) {
-        return {
-          success: false,
-          error: `No API key configured for ${aiProvider}. Please configure in Settings.`,
-        };
+      if (!isAvailable) {
+        return { success: false, error: `No API key configured for ${aiProvider}. Please configure in Preferences.` };
       }
 
       const provider = getProvider(aiProvider);
       if (!provider) {
-        return {
-          success: false,
-          error: `Provider ${aiProvider} not available. Try reloading the addon.`,
-        };
+        return { success: false, error: `Provider ${aiProvider} not available. Try reloading the addon.` };
       }
 
       // Build system prompt for query parsing
@@ -2521,7 +2936,7 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
   // (extracted to src/main/ipc/handlers/credentials.ts and wpe-sync.ts)
   // =========================================================================
   registerCredentialHandlers(deps);
-  registerWpeSyncHandlers(deps, { auditLogger });
+  registerWpeSyncHandlers(deps, { auditLogger, emitNexusState: deps.emitNexusState });
 
   // WPE_SYNC_ALL, WPE_SYNC_STATUS, WPE_SYNC_STOP, WPE_SYNC_STATS, WPE_CAPI_SYNC,
   // WPE_SYNC_SINGLE, WPE_GET_SYNCED_SITES, WPE_GET_SITE_DETAILS, WPE_DIAGNOSE_SITE,
@@ -2587,6 +3002,89 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
       };
     } catch (err: any) {
       localLogger.error('[NexusAI] Reset and refresh failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Reset content index: drop all LanceDB vector tables + clear IndexRegistry.
+  // Leaves graph DB, site metadata, settings, WPE cache, and AI config untouched.
+  safeHandle(IPC_CHANNELS.RESET_CONTENT_INDEX, async () => {
+    try {
+      const entries = indexRegistry.listAll();
+      const siteCount = entries.length;
+      const docCount = entries.reduce((s, e) => s + (e.documentCount ?? 0), 0);
+
+      // Drop all vector tables
+      const dropped = await vectorStore.dropAllTables();
+
+      // Clear every IndexRegistry entry
+      for (const entry of entries) {
+        indexRegistry.remove(entry.siteId);
+      }
+
+      localLogger.info(`[NexusAI] Content index reset: dropped ${dropped} vector tables, cleared ${siteCount} registry entries`);
+      return { success: true, siteCount, docCount, dropped };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] Content index reset failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Factory reset: wipe ALL Nexus AI data — same as `nexus reset --factory`
+  // Deletes: IndexRegistry, SiteMetadataCache, Settings, API key status,
+  //          Site AI configs, WPE install cache, DB scan cache,
+  //          Graph DB (SQLite), Vector store (LanceDB).
+  // Survives: API keys (Keychain), WPE OAuth session, telemetry ID.
+  // Local MUST be restarted after this — electron-store would recreate files on exit.
+  safeHandle(IPC_CHANNELS.FACTORY_RESET, async () => {
+    try {
+      const fs = require('fs') as typeof import('fs');
+      const path = require('path') as typeof import('path');
+      const os = require('os') as typeof import('os');
+
+      const platform = process.platform;
+      const home = os.homedir();
+      const dataDir = platform === 'darwin'
+        ? path.join(home, 'Library', 'Application Support', 'Local')
+        : platform === 'win32'
+        ? path.join(process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming'), 'Local')
+        : path.join(home, '.config', 'Local');
+
+      const prefix = 'nexus-ai';
+      const filesToDelete = [
+        `${prefix}_index_registry.json`,
+        `${prefix}_site_metadata.json`,
+        `${prefix}_settings.json`,
+        `${prefix}_api_key_status.json`,
+        `${prefix}_site_ai_config.json`,
+        `${prefix}_wpe_install_cache.json`,
+        `${prefix}_db_scan_cache.json`,
+      ];
+
+      let deleted = 0;
+      for (const file of filesToDelete) {
+        const filePath = path.join(dataDir, file);
+        try {
+          if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); deleted++; }
+        } catch { /* best effort */ }
+      }
+
+      // Graph DB
+      for (const ext of ['', '-shm', '-wal']) {
+        const dbPath = path.join(dataDir, prefix, `graph.db${ext}`);
+        try { if (fs.existsSync(dbPath)) { fs.unlinkSync(dbPath); deleted++; } } catch { /* best effort */ }
+      }
+
+      // Vector store
+      const vectorsDir = path.join(dataDir, prefix, 'vectors');
+      try {
+        if (fs.existsSync(vectorsDir)) { fs.rmSync(vectorsDir, { recursive: true, force: true }); deleted++; }
+      } catch { /* best effort */ }
+
+      localLogger.info(`[NexusAI] Factory reset: ${deleted} items deleted`);
+      return { success: true, deleted };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] Factory reset failed:', err.message);
       return { success: false, error: err.message };
     }
   });

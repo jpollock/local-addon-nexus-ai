@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus AI — Gap Closure & Resilience Design</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; background: #0d1117; color: #e6edf3; padding: 32px; max-width: 1100px; margin: 0 auto; line-height: 1.6; }
+
+  h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; color: #e6edf3; }
+  h2 { font-size: 16px; font-weight: 600; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #30363d; color: #e6edf3; }
+  h3 { font-size: 13px; font-weight: 600; margin: 20px 0 8px; color: #c9d1d9; }
+  h4 { font-size: 12px; font-weight: 600; margin: 12px 0 6px; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; }
+  p  { margin-bottom: 10px; color: #c9d1d9; }
+  ul, ol { padding-left: 20px; margin-bottom: 10px; color: #c9d1d9; }
+  li { margin-bottom: 4px; }
+  code { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; background: rgba(139,148,158,.1); padding: 1px 4px; border-radius: 3px; color: #c9d1d9; }
+  strong { color: #e6edf3; }
+  em { color: #8b949e; }
+
+  .meta { color: #8b949e; font-size: 12px; margin-bottom: 32px; }
+  .meta span { margin-right: 20px; }
+
+  /* Callout boxes */
+  .callout { padding: 14px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 12px; line-height: 1.6; }
+  .callout-principle { background: rgba(81,187,123,.07); border: 1px solid rgba(81,187,123,.25); border-left: 3px solid #51BB7B; }
+  .callout-warning   { background: rgba(234,179,8,.07); border: 1px solid rgba(234,179,8,.25); border-left: 3px solid #eab308; }
+  .callout-info      { background: rgba(59,130,246,.07); border: 1px solid rgba(59,130,246,.25); border-left: 3px solid #60a5fa; }
+  .callout-gap       { background: rgba(239,68,68,.07); border: 1px solid rgba(239,68,68,.25); border-left: 3px solid #f87171; }
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  /* Tags / badges */
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; margin: 0 2px; white-space: nowrap; }
+  .p-critical { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+  .p-high     { background: rgba(249,115,22,.15); color: #f97316; border: 1px solid rgba(249,115,22,.3); }
+  .p-medium   { background: rgba(234,179,8,.15); color: #eab308; border: 1px solid rgba(234,179,8,.3); }
+  .p-low      { background: rgba(139,148,158,.12); color: #8b949e; border: 1px solid rgba(139,148,158,.25); }
+  .e-small    { background: rgba(81,187,123,.12); color: #51BB7B; border: 1px solid rgba(81,187,123,.25); }
+  .e-medium   { background: rgba(167,139,250,.12); color: #a78bfa; border: 1px solid rgba(167,139,250,.25); }
+  .e-large    { background: rgba(239,68,68,.12); color: #f87171; border: 1px solid rgba(239,68,68,.25); }
+  .phase-1    { background: rgba(14,202,212,.12); color: #0ECAD4; border: 1px solid rgba(14,202,212,.25); }
+  .phase-2    { background: rgba(167,139,250,.12); color: #a78bfa; border: 1px solid rgba(167,139,250,.25); }
+  .phase-3    { background: rgba(249,115,22,.12); color: #f97316; border: 1px solid rgba(249,115,22,.25); }
+  .done       { background: rgba(81,187,123,.12); color: #51BB7B; border: 1px solid rgba(81,187,123,.25); }
+
+  /* Segment cards */
+  .segments { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .segment-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+  .segment-card h3 { margin-top: 0; }
+  .segment-pct { font-size: 28px; font-weight: 700; color: #51BB7B; margin-bottom: 4px; }
+  .segment-pct.wpe { color: #0ECAD4; }
+
+  /* Gap table */
+  table.gaps { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  table.gaps th { background: #161b22; color: #8b949e; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 8px 12px; border: 1px solid #30363d; text-align: left; }
+  table.gaps td { padding: 10px 12px; border: 1px solid #21262d; vertical-align: top; font-size: 12px; }
+  table.gaps tr:nth-child(even) td { background: rgba(22,27,34,.5); }
+  .done-row td { opacity: .55; }
+
+  /* Proposal cards */
+  .proposal { background: #161b22; border: 1px solid #30363d; border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+  .proposal-header { padding: 14px 18px; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 10px; }
+  .proposal-header h3 { margin: 0; font-size: 14px; flex: 1; }
+  .proposal-body { padding: 16px 18px; }
+  .before-after { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .before, .after { padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.55; }
+  .before { background: rgba(239,68,68,.06); border: 1px solid rgba(239,68,68,.2); }
+  .after  { background: rgba(81,187,123,.06); border: 1px solid rgba(81,187,123,.2); }
+  .before h4 { color: #f87171; }
+  .after h4  { color: #51BB7B; }
+
+  /* Phase timeline */
+  .phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .phase-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+  .phase-card h3 { margin-top: 0; }
+  .phase-num { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+  .phase-1-num { color: #0ECAD4; }
+  .phase-2-num { color: #a78bfa; }
+  .phase-3-num { color: #f97316; }
+  .phase-card ul { font-size: 12px; }
+  .phase-card li { margin-bottom: 6px; }
+
+  /* UX wireframe sketches */
+  .wireframe { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 14px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; color: #8b949e; white-space: pre; overflow-x: auto; margin-top: 10px; }
+  .wf-highlight { color: #51BB7B; }
+  .wf-action { color: #0ECAD4; }
+  .wf-warn { color: #eab308; }
+  .wf-error { color: #f87171; }
+
+  /* Metrics */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .metric-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; text-align: center; }
+  .metric-val { font-size: 22px; font-weight: 700; color: #51BB7B; }
+  .metric-label { font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+
+  hr { border: none; border-top: 1px solid #21262d; margin: 24px 0; }
+  .toc { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px 20px; margin-bottom: 32px; }
+  .toc h3 { margin-top: 0; color: #8b949e; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+  .toc ol { color: #60a5fa; font-size: 12px; }
+  .toc a { color: #60a5fa; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>Nexus AI — Gap Closure, Resilience & UX Design</h1>
+<div class="meta">
+  <span>📅 2026-05-23</span>
+  <span>🌿 feat/discover-tab</span>
+  <span>Status: Draft for review</span>
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#principles">Design Principles</a></li>
+    <li><a href="#segments">User Segments & Default Behaviour</a></li>
+    <li><a href="#gaps">Gap Inventory</a></li>
+    <li><a href="#proposals">Design Proposals</a></li>
+    <li><a href="#phases">Implementation Phases</a></li>
+    <li><a href="#metrics">Success Metrics</a></li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="principles">1. Design Principles</h2>
+
+<div class="callout callout-principle">
+  <strong>Local-first, WPE opt-in</strong>
+  The majority of users are Local-only developers. The product must be fast, automatic, and friction-free for them. WPE capabilities are additive — never assumed, never default-enabled.
+</div>
+<div class="callout callout-principle">
+  <strong>WPE users control their SSH surface</strong>
+  SSH connections to production environments are meaningful operations. Deep syncing (L2/L3 for WPE) must be explicitly enabled. CAPI calls are cheap and always-on; SSH is expensive and opt-in.
+</div>
+<div class="callout callout-principle">
+  <strong>Data shown must be data trusted</strong>
+  If a panel could be showing stale data, say so and tell the user what to do. A confident "0/19 Configured — click Refresh to fix this" is better than an unexplained 0.
+</div>
+<div class="callout callout-principle">
+  <strong>One operation, full result</strong>
+  When the user triggers any sync or index operation, it should be as complete as possible. L2 + L3 for WPE in one SSH session; L1 + L2 on local site-start. Users should not need to chain operations manually.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="segments">2. User Segments & Default Behaviour</h2>
+
+<div class="segments">
+  <div class="segment-card">
+    <div class="segment-pct">~80%</div>
+    <h3>Local-only developers</h3>
+    <p>Use Local to build and test WordPress sites locally. No WPE account or connection. May have 1–20 sites.</p>
+    <h4>What they need</h4>
+    <ul>
+      <li>L1 auto on startup (filesystem scan) — <strong>done, always runs</strong></li>
+      <li>L2 auto on site-start (WP-CLI) — <strong>done, siteStarted hook</strong></li>
+      <li>L3 on-demand or scheduled — <strong>opt-in checkbox</strong></li>
+      <li>No WPE panels cluttering their view</li>
+    </ul>
+    <h4>Correct defaults</h4>
+    <ul>
+      <li>Content index interval: <strong>OFF</strong> — let them opt in</li>
+      <li>No WPE sections shown until WPE is connected</li>
+    </ul>
+  </div>
+  <div class="segment-card">
+    <div class="segment-pct wpe">~20%</div>
+    <h3>WPE customers</h3>
+    <p>Connected to WP Engine. May have hundreds of installs. Sensitive about unexpected SSH connections to production.</p>
+    <h4>What they need</h4>
+    <ul>
+      <li>CAPI L1 auto (install list, domain, php_version) — <strong>done, always runs</strong></li>
+      <li>SSH L2 explicit opt-in — <strong>correct, default OFF</strong></li>
+      <li>SSH L3 explicit opt-in, piggybacked on L2 — <strong>piggyback done, scheduler opt-in</strong></li>
+      <li>Clear explanation of what each sync costs (SSH per site)</li>
+    </ul>
+    <h4>Correct defaults</h4>
+    <ul>
+      <li>Metadata sync (SSH): <strong>OFF</strong> — opt-in with explanation ✓</li>
+      <li>Content index for WPE: <strong>OFF / manual</strong> ✓</li>
+      <li>CAPI sync: <strong>always on</strong> — cheap, no SSH ✓</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout callout-warning">
+  <strong>⚠ Key tension:</strong> WPE users want control, but the current experience gives them <em>nothing</em> by default — no wp_version, no plugins, no content — and doesn't explain why. The fix is not to enable more by default but to <strong>guide them toward opt-in with clear affordances</strong>.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="gaps">3. Gap Inventory</h2>
+
+<table class="gaps">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Gap</th>
+      <th>Category</th>
+      <th>Impact</th>
+      <th>Effort</th>
+      <th>Phase</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <tr class="done-row">
+      <td>G1</td>
+      <td>CAPI field names wrong (wp_version/php_version never populated from CAPI)</td>
+      <td>Data acquisition</td>
+      <td><span class="tag p-critical">Critical</span></td>
+      <td><span class="tag e-small">Small</span></td>
+      <td>—</td>
+      <td><span class="tag done">✅ Fixed</span></td>
+    </tr>
+    <tr class="done-row">
+      <td>G2</td>
+      <td>graph.db WAL not checkpointed on shutdown → data lost on restart</td>
+      <td>Resilience</td>
+      <td><span class="tag p-critical">Critical</span></td>
+      <td><span class="tag e-small">Small</span></td>
+      <td>—</td>
+      <td><span class="tag done">✅ Fixed</span></td>
+    </tr>
+    <tr class="done-row">
+      <td>G3</td>
+      <td>Settings + IndexRegistry lost on abnormal exit (no backup)</td>
+      <td>Resilience</td>
+      <td><span class="tag p-critical">Critical</span></td>
+      <td><span class="tag e-small">Small</span></td>
+      <td>—</td>
+      <td><span class="tag done">✅ Fixed</span></td>
+    </tr>
+    <tr class="done-row">
+      <td>G4</td>
+      <td>WPE L2 + L3 required two separate SSH sessions per site</td>
+      <td>Efficiency</td>
+      <td><span class="tag p-high">High</span></td>
+      <td><span class="tag e-small">Small</span></td>
+      <td>—</td>
+      <td><span class="tag done">✅ Fixed (piggyback)</span></td>
+    </tr>
+    <tr class="done-row">
+      <td>G5</td>
+      <td>Data Completeness shows wrong total on first render (graph timing race)</td>
+      <td>UX accuracy</td>
+      <td><span class="tag p-high">High</span></td>
+      <td><span class="tag e-small">Small</span></td>
+      <td>—</td>
+      <td><span class="tag done">✅ Fixed (graphReady + retry)</span></td>
+    </tr>
+
+    <tr>
+      <td>G6</td>
+      <td>No shared reactive store — panels poll independently, show inconsistent data</td>
+      <td>Architecture</td>
+      <td><span class="tag p-critical">Critical</span></td>
+      <td><span class="tag e-large">Large</span></td>
+      <td><span class="tag phase-2">Phase 2</span></td>
+      <td>Open</td>
+    </tr>
+    <tr>
+      <td>G7</td>
+      <td>Data Completeness bars are opaque — 0% Configured gives no action path</td>
+      <td>UX clarity</td>
+      <td><span class="tag p-high">High</span></td>
+      <td><span class="tag e-medium">Medium</span></td>
+      <td><span class="tag phase-1">Phase 1</span></td>
+      <td>Open</td>
+    </tr>
+    <tr>
+      <td>G8</td>
+      <td>No onboarding for WPE users — connected but everything shows 0 with no explanation</td>
+      <td>UX clarity</td>
+      <td><span class="tag p-high">High</span></td>
+      <td><span class="tag e-medium">Medium</span></td>
+      <td><span class="tag phase-1">Phase 1</span></td>
+      <td>Open</td>
+    </tr>
+    <tr>
+      <td>G9</td>
+      <td>"All stale" freshness is misleading — CAPI sync doesn't set last_sync_at</td>
+      <td>Data model</td>
+      <td><span class="tag p-medium">Medium</span></td>
+      <td><span class="tag e-small">Small</span></td>
+      <td><span class="tag phase-1">Phase 1</span></td>
+      <td>Open</td>
+    </tr>
+    <tr>
+      <td>G10</td>
+      <td>WPE L1 has no wp_version — CAPI listInstalls doesn't include it (only individual GET)</td>
+      <td>Data acquisition</td>
+      <td><span class="tag p-medium">Medium</span></td>
+      <td><span class="tag e-small">Small</span></td>
+      <td><span class="tag phase-1">Phase 1</span></td>
+      <td>Open</td>
+    </tr>
+    <tr>
+      <td>G11</td>
+      <td>No scheduled WPE L3 content indexing option</td>
+      <td>Data acquisition</td>
+      <td><span class="tag p-medium">Medium</span></td>
+      <td><span class="tag e-small">Small</span></td>
+      <td><span class="tag phase-2">Phase 2</span></td>
+      <td>Open</td>
+    </tr>
+    <tr>
+      <td>G12</td>
+      <td>Local L2 only on site-start — no scheduled refresh for long-halted sites</td>
+      <td>Data acquisition</td>
+      <td><span class="tag p-low">Low</span></td>
+      <td><span class="tag e-medium">Medium</span></td>
+      <td><span class="tag phase-3">Phase 3</span></td>
+      <td>Open</td>
+    </tr>
+    <tr>
+      <td>G13</td>
+      <td>Settings labels don't explain cost/consequence of enabling WPE sync</td>
+      <td>UX clarity</td>
+      <td><span class="tag p-medium">Medium</span></td>
+      <td><span class="tag e-small">Small</span></td>
+      <td><span class="tag phase-1">Phase 1</span></td>
+      <td>Open</td>
+    </tr>
+    <tr>
+      <td>G14</td>
+      <td>LanceDB has no durability mechanism on abnormal exit</td>
+      <td>Resilience</td>
+      <td><span class="tag p-medium">Medium</span></td>
+      <td><span class="tag e-large">Large</span></td>
+      <td><span class="tag phase-3">Phase 3</span></td>
+      <td>Open</td>
+    </tr>
+
+  </tbody>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="proposals">4. Design Proposals</h2>
+
+<!-- ──────────────────────────── G7 ──────────────────────────── -->
+<div class="proposal">
+  <div class="proposal-header">
+    <span class="tag p-high">High</span>
+    <span class="tag phase-1">Phase 1</span>
+    <h3>G7 — Data Completeness: From status bars to action guide</h3>
+    <span style="color:#8b949e; font-size:11px;">~1 day</span>
+  </div>
+  <div class="proposal-body">
+    <p>Currently the Scanned/Configured/Searchable bars show numbers with no explanation of what's missing or how to fix it. For a new user, "Configured: 0/19" is meaningless.</p>
+
+    <div class="before-after">
+      <div class="before">
+        <h4>❌ Now</h4>
+        <p>Configured <strong>0/19</strong> · 0%<br>
+        <em>Active plugins · users · post counts known</em></p>
+        <p>No explanation. No action. Just a number.</p>
+      </div>
+      <div class="after">
+        <h4>✅ Proposed</h4>
+        <p>Configured <strong>0/19</strong> · 0%<br>
+        <em>Active plugins · users · post counts known</em></p>
+        <p style="color:#51BB7B; font-size:11px;">ℹ Populated when local sites are running (WP-CLI runs automatically on site-start). <a style="color:#0ECAD4">Start a site →</a></p>
+      </div>
+    </div>
+
+    <h4>Contextual action text per segment</h4>
+    <table class="gaps" style="margin-top:8px;">
+      <tr><th>Segment</th><th>Condition</th><th>Message + Action</th></tr>
+      <tr><td>Local Configured = 0</td><td>No sites ever started</td><td>"Starts automatically when you run a site. Start any site in Local to enrich it." <code>[Start a site →]</code></td></tr>
+      <tr><td>Local Configured = partial</td><td>Some started, some not</td><td>Normal — shows which sites need starting</td></tr>
+      <tr><td>WPE Configured = 0</td><td>Metadata sync off</td><td>"Requires Metadata sync (SSH). Enable in Settings to get wp_version, plugins, users." <code>[Enable →]</code></td></tr>
+      <tr><td>Local Searchable = 0</td><td>Auto-index off</td><td>"Enable Content index interval in Settings, or click ⚡ Index sites to index manually." <code>[Index now →]</code></td></tr>
+      <tr><td>WPE Searchable = 0</td><td>Never indexed</td><td>"Run Index Content for WPE in Operations. This also syncs metadata." <code>[Index WPE →]</code></td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ──────────────────────────── G8 ──────────────────────────── -->
+<div class="proposal">
+  <div class="proposal-header">
+    <span class="tag p-high">High</span>
+    <span class="tag phase-1">Phase 1</span>
+    <h3>G8 — WPE Onboarding: Progressive disclosure for new WPE connections</h3>
+    <span style="color:#8b949e; font-size:11px;">~2 days</span>
+  </div>
+  <div class="proposal-body">
+    <p>When a user first connects WPE (or sees 284 remote sites with all-zero L2/L3 data), they need a clear, honest explanation of what they have and what they can get — without automatically touching their production sites.</p>
+
+    <h4>Trigger</h4>
+    <p>Show on Dashboard when: <code>remoteSites.total &gt; 0</code> AND <code>wpeConfigured === 0</code> AND <code>onboarding.wpeDismissed !== true</code>.</p>
+
+    <div class="wireframe"><span class="wf-highlight">┌─ WP Engine Connected — 284 installs ──────────────────────────────────────────────────────┐</span>
+│                                                                                             │
+│  <span class="wf-highlight">✓ CAPI sync active</span> — install list, domain, and PHP version are current (runs hourly).     │
+│                                                                                             │
+│  <span class="wf-warn">⚡ Want plugin lists, WP version, and searchable content?</span>                                  │
+│  That requires SSH access to each install. It's explicit and opt-in:                        │
+│                                                                                             │
+│  <span class="wf-action">[ Enable Metadata sync ]</span>  Get wp_version, plugins, users via SSH. Runs on your schedule.  │
+│  <span class="wf-action">[ Index Content for WPE ]</span>  Make WPE sites searchable. Also syncs metadata. One-time or    │
+│                           scheduled.                                                         │
+│                                                                                             │
+│  Both are opt-in. Nothing runs until you say so. <span class="wf-error">[ Dismiss ]</span>                           │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘</div>
+
+    <p style="margin-top:10px;">Clicking <strong>Enable Metadata sync</strong> takes them directly to Settings → WPE Installs with the toggle highlighted. Clicking <strong>Index Content for WPE</strong> navigates to Operations and starts the bulk index.</p>
+  </div>
+</div>
+
+<!-- ──────────────────────────── G9 ──────────────────────────── -->
+<div class="proposal">
+  <div class="proposal-header">
+    <span class="tag p-medium">Medium</span>
+    <span class="tag phase-1">Phase 1</span>
+    <h3>G9 + G10 — Freshness model & wp_version gap</h3>
+    <span style="color:#8b949e; font-size:11px;">~0.5 days</span>
+  </div>
+  <div class="proposal-body">
+    <p><strong>G9 — Freshness:</strong> The Site Status "0 fresh, 284 stale" label is misleading because CAPI sync (which runs hourly and populates php_version, domain, etc.) doesn't update <code>last_sync_at</code>. "Stale" currently means "no SSH sync" not "no recent data."</p>
+
+    <div class="before-after">
+      <div class="before">
+        <h4>❌ Now</h4>
+        <p><code>last_sync_at</code> only updated by SSH sync.<br>CAPI runs hourly but sites show "stale".<br>284 stale even if CAPI just ran.<br>Hardcoded 8h threshold.</p>
+      </div>
+      <div class="after">
+        <h4>✅ Proposed</h4>
+        <p>Introduce two freshness signals:<br>
+        <code>capi_synced_at</code> — updated on every CAPI sync<br>
+        <code>ssh_synced_at</code> — updated on SSH sync<br><br>
+        "CAPI current" = capi_synced_at within 2h<br>
+        "SSH current" = ssh_synced_at within configured interval<br>
+        Show separately in Site Status.</p>
+      </div>
+    </div>
+
+    <p><strong>G10 — wp_version:</strong> CAPI <code>listInstalls</code> doesn't include <code>wp_version</code> (only individual GET). Rather than making 284 individual CAPI calls on startup, <strong>wp_version should come exclusively from SSH L2 sync</strong>. The CAPI individual GET is not worth the API cost. Document this clearly in the UI: "WP version available after Metadata sync."</p>
+
+    <h4>Updated Site Status display</h4>
+    <div class="wireframe"><span class="wf-highlight">WP Engine  284  installs</span>
+
+<span class="wf-highlight">CAPI</span>  <span class="wf-action">■ 284 current</span>  (synced 2m ago)  ·  PHP: 270/284  ·  domain: 284/284
+<span class="wf-warn">SSH</span>   <span class="wf-warn">● 96 synced</span>  <span class="wf-error">○ 188 not synced</span>  ·  WP: 96/284  ·  Plugins: 96/284  ·  Users: 96/284
+
+<span style="color:#8b949e;">SSH sync is disabled. Enable in Settings → WP Engine Installs to populate WP version and plugins.</span>
+<span class="wf-action">[Enable Metadata sync →]</span></div>
+  </div>
+</div>
+
+<!-- ──────────────────────────── G13 ──────────────────────────── -->
+<div class="proposal">
+  <div class="proposal-header">
+    <span class="tag p-medium">Medium</span>
+    <span class="tag phase-1">Phase 1</span>
+    <h3>G13 — Settings: Explain cost and consequence</h3>
+    <span style="color:#8b949e; font-size:11px;">~0.5 days</span>
+  </div>
+  <div class="proposal-body">
+    <p>The current Settings tab shows checkboxes and intervals but doesn't explain what enabling them costs or what the user gets.</p>
+
+    <div class="wireframe">WP ENGINE INSTALLS
+
+  Metadata sync  <span class="wf-action">[✓]  1  hrs</span>
+  <span style="color:#8b949e;">Fetches wp_version, plugins, users via SSH for each install.</span>
+  <span style="color:#8b949e;">Opens one SSH connection per install on the schedule. Does NOT run on production</span>
+  <span style="color:#8b949e;">by default (see WPE Access & Permissions below).</span>
+  <span class="wf-warn">Applies to: staging + development only</span>  <span class="wf-action">[Change →]</span>
+
+  Content index for WPE  <span class="wf-action">[✓]  24  hrs</span>
+  <span style="color:#8b949e;">Indexes post content for semantic search. Runs Metadata sync automatically as part</span>
+  <span style="color:#8b949e;">of the same SSH session (one connection per site, not two).</span></div>
+  </div>
+</div>
+
+<!-- ──────────────────────────── G6 ──────────────────────────── -->
+<div class="proposal">
+  <div class="proposal-header">
+    <span class="tag p-critical">Critical</span>
+    <span class="tag phase-2">Phase 2</span>
+    <h3>G6 — Shared Reactive Store (MobX)</h3>
+    <span style="color:#8b949e; font-size:11px;">~1 week</span>
+  </div>
+  <div class="proposal-body">
+    <div class="callout callout-info" style="margin-bottom:14px;">
+      <strong>Context:</strong> Local already uses MobX 5 + mobx-react 6. These packages are in the runtime bundle. Our addon can use them without adding a dependency — just import from the host's module resolution.
+    </div>
+
+    <p>Currently every component manages its own IPC fetch cycle. Data Completeness, Site Status, and Fleet Intelligence all poll independently on 30-second timers. When a sync completes, panels update at different moments, showing inconsistent states.</p>
+
+    <h4>Proposed: NexusStore</h4>
+    <p>A single MobX observable store in the renderer, populated by push events from the main process. All components become observers — they re-render automatically when the store changes, with no polling.</p>
+
+    <div class="before-after">
+      <div class="before">
+        <h4>❌ Now (per-component polling)</h4>
+        <pre style="font-size:10px; color:#c9d1d9;">FleetCompletenessWidget
+  → IPC GET_FLEET_COMPLETENESS every 30s
+  → renders with its own stale snapshot
+
+SystemTab
+  → IPC SYSTEM_WPE_STATUS every 30s
+  → renders with DIFFERENT stale snapshot
+
+NexusOverview
+  → IPC GET_DASHBOARD_STATS on mount
+  → renders with YET ANOTHER snapshot
+
+Result: panels diverge after sync events</pre>
+      </div>
+      <div class="after">
+        <h4>✅ Proposed (shared store)</h4>
+        <pre style="font-size:10px; color:#c9d1d9;">Main process pushes events:
+  IPC: NEXUS_STATE_UPDATED
+
+NexusStore (MobX)
+  @observable fleetCompleteness
+  @observable wpeStatus
+  @observable indexEntries
+  @observable settings
+
+All components are @observer
+  → re-render automatically
+  → always same snapshot
+  → zero polling timers</pre>
+      </div>
+    </div>
+
+    <h4>Store structure</h4>
+    <div class="wireframe"><span class="wf-highlight">// src/renderer/store/NexusStore.ts</span>
+import { observable, action, makeObservable } from 'mobx';
+
+class NexusStore {
+  @observable fleetCompleteness: FleetCompleteness | null = null;
+  @observable wpeStatus: WpeStatus | null = null;
+  @observable indexEntries: IndexEntry[] = [];
+  @observable settings: NexusSettings = DEFAULT_SETTINGS;
+  @observable syncProgress: SyncProgress | null = null;
+
+  @action updateFromMain(event: NexusStateEvent) {
+    // Called from ipcRenderer.on('nexus:state-update', ...)
+    if (event.fleetCompleteness) this.fleetCompleteness = event.fleetCompleteness;
+    if (event.wpeStatus)         this.wpeStatus         = event.wpeStatus;
+    if (event.indexEntries)      this.indexEntries       = event.indexEntries;
+    if (event.settings)          this.settings           = event.settings;
+  }
+}
+
+export const nexusStore = new NexusStore();</div>
+
+    <h4>Migration path (non-breaking)</h4>
+    <ol>
+      <li>Create <code>NexusStore</code> with all current data shapes</li>
+      <li>Add <code>NEXUS_STATE_UPDATE</code> push from main process after every sync/index event</li>
+      <li>Convert components one at a time: replace IPC call + local state with store access</li>
+      <li>Remove polling timers from converted components</li>
+      <li>Keep old IPC handlers alive during transition — remove when all consumers migrated</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ──────────────────────────── G11 ──────────────────────────── -->
+<div class="proposal">
+  <div class="proposal-header">
+    <span class="tag p-medium">Medium</span>
+    <span class="tag phase-2">Phase 2</span>
+    <h3>G11 — WPE L3 scheduled content indexing</h3>
+    <span style="color:#8b949e; font-size:11px;">~0.5 days</span>
+  </div>
+  <div class="proposal-body">
+    <p>WPE content indexing is currently manual-only. Since L3 now piggybacks L2, a scheduled WPE content index interval covers both content freshness and metadata freshness in a single SSH session per site.</p>
+    <p>Add to Settings → WPE Installs: <strong>Content index for WPE</strong> checkbox + interval (default <strong>OFF</strong>). When enabled, <code>indexAllWpeContent()</code> runs on the configured interval and also refreshes L2 metadata.</p>
+    <div class="callout callout-warning">
+      Default must be OFF. SSH to production installs on a schedule requires explicit consent.
+    </div>
+  </div>
+</div>
+
+<!-- ──────────────────────────── G14 ──────────────────────────── -->
+<div class="proposal">
+  <div class="proposal-header">
+    <span class="tag p-medium">Medium</span>
+    <span class="tag phase-3">Phase 3</span>
+    <h3>G14 — LanceDB durability</h3>
+    <span style="color:#8b949e; font-size:11px;">~1 week (research-heavy)</span>
+  </div>
+  <div class="proposal-body">
+    <p>LanceDB uses its own WAL mechanism (Lance format). On abnormal exit, the WAL may not be committed. Currently we have no recovery strategy — if vectors are lost, the user must re-index.</p>
+
+    <h4>Short-term mitigation</h4>
+    <ul>
+      <li>Detect vector loss on startup: compare <code>IndexRegistry</code> document counts against actual LanceDB table row counts. If mismatch, mark affected entries as <code>stale</code> automatically.</li>
+      <li>Surface a "Some indexes appear corrupted — re-index?" banner rather than silently showing wrong data.</li>
+    </ul>
+    <h4>Long-term</h4>
+    <ul>
+      <li>Investigate LanceDB's <code>optimize()</code> / compaction API for explicit commit control</li>
+      <li>Consider checkpointing strategy: call optimize/compact before shutdown</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="phases">5. Implementation Phases</h2>
+
+<div class="phases">
+  <div class="phase-card">
+    <div class="phase-num phase-1-num">Phase 1 — Clarity &amp; Quick Wins</div>
+    <h3>~1 week</h3>
+    <p style="font-size:11px; color:#8b949e; margin-bottom:10px;">No architectural change — improve what users see and understand with existing data.</p>
+    <ul>
+      <li><span class="tag phase-1">G7</span> Data Completeness contextual action text</li>
+      <li><span class="tag phase-1">G8</span> WPE onboarding banner (first connection)</li>
+      <li><span class="tag phase-1">G9</span> Split CAPI/SSH freshness signals</li>
+      <li><span class="tag phase-1">G10</span> Document wp_version gap in UI ("available after Metadata sync")</li>
+      <li><span class="tag phase-1">G13</span> Settings: cost/consequence copy for WPE sync options</li>
+    </ul>
+  </div>
+  <div class="phase-card">
+    <div class="phase-num phase-2-num">Phase 2 — Architecture</div>
+    <h3>~2 weeks</h3>
+    <p style="font-size:11px; color:#8b949e; margin-bottom:10px;">Structural fix for data consistency. Highest-leverage investment.</p>
+    <ul>
+      <li><span class="tag phase-2">G6</span> MobX NexusStore — migrate components incrementally</li>
+      <li><span class="tag phase-2">G6</span> Main process: push <code>NEXUS_STATE_UPDATE</code> events after every sync/index operation</li>
+      <li><span class="tag phase-2">G11</span> WPE L3 scheduled content index setting + scheduler</li>
+    </ul>
+  </div>
+  <div class="phase-card">
+    <div class="phase-num phase-3-num">Phase 3 — Resilience &amp; Polish</div>
+    <h3>~2 weeks</h3>
+    <p style="font-size:11px; color:#8b949e; margin-bottom:10px;">Close remaining durability gaps. Lower urgency.</p>
+    <ul>
+      <li><span class="tag phase-3">G14</span> LanceDB startup integrity check + stale detection</li>
+      <li><span class="tag phase-3">G12</span> Local L2: scheduled refresh for long-halted sites</li>
+      <li>Remove polling timers from all MobX-migrated components</li>
+      <li>LanceDB compaction/optimize before shutdown (research spike)</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2 id="metrics">6. Success Metrics</h2>
+
+<div class="metrics">
+  <div class="metric-card">
+    <div class="metric-val">0</div>
+    <div class="metric-label">Panels showing different Configured counts simultaneously</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-val">&lt;5s</div>
+    <div class="metric-label">Time for all panels to reflect a completed sync</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-val">0</div>
+    <div class="metric-label">"Why is this 0?" support questions for fresh WPE connections</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-val">0</div>
+    <div class="metric-label">Data loss events on clean Local shutdown</div>
+  </div>
+</div>
+
+<div class="callout callout-info">
+  <strong>What Phase 1 fixes for users today:</strong> A new WPE user connects Local to WP Engine, sees 284 installs, and instead of 0/0/0 with no explanation they see a clear banner saying "here's what you have (CAPI data), here's what you can get (SSH), here's the toggle." They understand the system in 30 seconds without reading docs.
+</div>
+
+<div class="callout callout-warning">
+  <strong>What Phase 2 fixes for developers building on top:</strong> Right now it's impossible to add a new panel that shows fleet data without adding another IPC call and another 30-second timer. After Phase 2, you subscribe to <code>nexusStore.fleetCompleteness</code> as a MobX observer and it just works — reactive, consistent, no polling.
+</div>
+
+<hr>
+<p style="color:#8b949e; font-size:11px; text-align:center;">Nexus AI · feat/discover-tab · Generated 2026-05-23</p>
+
+</body>
+</html>

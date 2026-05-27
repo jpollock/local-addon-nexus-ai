@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { requireRunning, ok, error } from './preflight';
+import { ok, error } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { withSiteRunning } from '../with-site-running';
 
 export const themeActivateHandler: McpToolHandler = {
   definition: {
@@ -43,21 +44,20 @@ export const themeActivateHandler: McpToolHandler = {
       return ok(`Theme "${slug}" activated on ${target.installName}.`);
     }
 
-    const check = requireRunning(target.site, services);
-    if (check) return check;
+    return withSiteRunning(target.site.id, services, async () => {
+      // Always skip themes when activating — this is the key: it lets us switch themes
+      // even when the currently active theme crashes WordPress on load.
+      const result = await services.localServices!.wpCliRun(
+        target.site.id,
+        ['theme', 'activate', slug],
+        { skipPlugins: false, skipThemes: true },
+      );
 
-    // Always skip themes when activating — this is the key: it lets us switch themes
-    // even when the currently active theme crashes WordPress on load.
-    const result = await services.localServices!.wpCliRun(
-      target.site.id,
-      ['theme', 'activate', slug],
-      { skipPlugins: false, skipThemes: true },
-    );
+      if (!result.success) {
+        return error(`Failed to activate theme "${slug}": ${result.stdout}`);
+      }
 
-    if (!result.success) {
-      return error(`Failed to activate theme "${slug}": ${result.stdout}`);
-    }
-
-    return ok(`Theme "${slug}" activated. WordPress will now load with the new theme.`);
+      return ok(`Theme "${slug}" activated. WordPress will now load with the new theme.`);
+    });
   },
 };

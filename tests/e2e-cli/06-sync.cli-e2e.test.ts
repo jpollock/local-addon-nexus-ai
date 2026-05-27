@@ -56,27 +56,33 @@ describe('nexus sync pull — argument validation', () => {
 
 describe('nexus sync pull — live execution (skips if not ready)', () => {
   it('starts pull when site and wpe install exist', async () => {
-    const sites = await getLocalSites();
-    const running = sites.find((s) => s.status === 'running');
+    // Use getRunningSite() which prefers the fixture site (no spaces in name)
+    const { getRunningSite: getPreferred } = await import('./helpers/cli-test-utils');
+    const running = await getPreferred();
     if (!running) { skipTest('No running local site'); return; }
 
     const accounts = await getWpeAccounts();
     if (accounts.length === 0) { skipTest('Not authenticated to WPE'); return; }
 
-    // Get first install
+    // Get first install — strip any update-notification prefix before JSON parse
     const installsResult = await runCli(`wpe installs ${accounts[0].id} --json`);
     if (installsResult.exitCode !== 0) { skipTest('Could not get WPE installs'); return; }
 
     let installs: any[];
-    try { installs = JSON.parse(installsResult.stdout); } catch { skipTest('Could not parse installs'); return; }
-    if (installs.length === 0) { skipTest('No WPE installs available'); return; }
+    try {
+      const jsonStart = installsResult.stdout.indexOf('[');
+      if (jsonStart === -1) { skipTest('Could not parse installs'); return; }
+      installs = JSON.parse(installsResult.stdout.slice(jsonStart));
+    } catch { skipTest('Could not parse installs'); return; }
+    if (!installs || installs.length === 0) { skipTest('No WPE installs available'); return; }
 
     const install = installs[0];
     const env = install.environment || 'production';
-    const accountName = accounts[0].name || accounts[0].id;
+    // Use account ID (not name) to avoid spaces in the wpe: target format
+    const accountId = accounts[0].id;
 
     const r = await runCli(
-      `sync pull ${running.name}@local --from wpe:${accountName}/${install.name}@${env}`,
+      `sync pull ${running.name}@local --from wpe:${accountId}/${install.name}@${env}`,
       { timeout: 30000 },
     );
 

@@ -32,16 +32,18 @@ function createMockServices(twins: SiteDigitalTwin[] = []): NexusServices {
 }
 
 describe('nexus_fleet_plugins MCP tool', () => {
-  test('returns error message when twinService is not available', async () => {
+  test('returns no plugins message when twinService is not available', async () => {
     const services = {} as any;
     const result = await fleetPluginsHandler.execute({}, services);
-    expect(getText(result)).toContain('not available');
+    // When twinService is null, no local sites are found — returns 0-sites message with setup hint
+    expect(getText(result)).toContain('No plugins found');
+    expect(getText(result)).toContain('0 local');
   });
 
-  test('returns no sites message when fleet is empty', async () => {
+  test('returns no plugins message when fleet is empty', async () => {
     const services = createMockServices([]);
     const result = await fleetPluginsHandler.execute({}, services);
-    expect(getText(result)).toContain('No sites found');
+    expect(getText(result)).toContain('No plugins found');
   });
 
   test('aggregates active plugin counts correctly', async () => {
@@ -246,5 +248,111 @@ describe('nexus_fleet_plugins MCP tool', () => {
     const result = await fleetPluginsHandler.execute({}, services);
     const text = getText(result);
     expect(text).toContain('my-awesome-site');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WPE data path — graphService mock
+// ---------------------------------------------------------------------------
+
+describe('nexus_fleet_plugins — WPE data path', () => {
+  function createMockGraphService(wpePluginRows: Array<{ slug: string; name: string | null; is_active: number; site_name: string }>, wpeSiteCount = 1) {
+    return {
+      getDb: () => ({
+        prepare: (sql: string) => ({
+          all: (..._args: any[]) => {
+            if (sql.includes('plugins')) return wpePluginRows;
+            return [];
+          },
+          get: () => ({ c: wpeSiteCount }),
+        }),
+      }),
+    };
+  }
+
+  function createServicesWithWpe(
+    twins: SiteDigitalTwin[],
+    wpePluginRows: Array<{ slug: string; name: string | null; is_active: number; site_name: string }>,
+    wpeSiteCount = 1,
+  ) {
+    return {
+      twinService: {
+        getAll: jest.fn().mockReturnValue(twins),
+      },
+      graphService: createMockGraphService(wpePluginRows, wpeSiteCount),
+    } as any;
+  }
+
+  test('includes WPE plugins in output', async () => {
+    const services = createServicesWithWpe([], [
+      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'my-wpe-site' },
+    ]);
+    const result = await fleetPluginsHandler.execute({}, services);
+    const text = getText(result);
+    expect(text).toContain('woocommerce');
+    expect(text).toContain('[wpe]');
+  });
+
+  test('shows WPE site name in example sites', async () => {
+    const services = createServicesWithWpe([], [
+      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'my-wpe-site' },
+    ]);
+    const result = await fleetPluginsHandler.execute({}, services);
+    const text = getText(result);
+    expect(text).toContain('my-wpe-site');
+  });
+
+  test('aggregates local + WPE plugin counts correctly', async () => {
+    const twins = [
+      makeTwin({
+        siteId: 'local-1',
+        siteName: 'local-site',
+        plugins: [{ name: 'woocommerce', title: 'WooCommerce', status: 'active' }],
+      }),
+    ];
+    const services = createServicesWithWpe(twins, [
+      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'wpe-site' },
+    ]);
+    const result = await fleetPluginsHandler.execute({}, services);
+    const text = getText(result);
+    // woocommerce should be active on 2 total (1 local + 1 wpe)
+    expect(text).toContain('woocommerce');
+    // Total active = 2, reflected in output
+    expect(text).toContain('2');
+  });
+
+  test('WPE sites counted in total site count', async () => {
+    const services = createServicesWithWpe([], [
+      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'wpe-site' },
+    ], 5);
+    const result = await fleetPluginsHandler.execute({}, services);
+    const text = getText(result);
+    // 0 local + 5 WPE = 5 total sites in the summary line
+    expect(text).toContain('5 WPE');
+  });
+
+  test('inactive WPE plugins not counted in active count', async () => {
+    const services = createServicesWithWpe([], [
+      { slug: 'hello-dolly', name: 'Hello Dolly', is_active: 0, site_name: 'wpe-site' },
+    ]);
+    // min_sites default is 1 (active sites) — inactive WPE plugin should be filtered
+    const result = await fleetPluginsHandler.execute({ min_sites: 1 }, services);
+    const text = getText(result);
+    expect(text).toContain('No plugins found');
+  });
+
+  test('gracefully handles missing graphService', async () => {
+    const services = createMockServices([
+      makeTwin({
+        siteId: 'site-1',
+        siteName: 'local-site',
+        plugins: [{ name: 'woocommerce', title: 'WooCommerce', status: 'active' }],
+      }),
+    ]);
+    // No graphService — should still return local results
+    const result = await fleetPluginsHandler.execute({}, services);
+    const text = getText(result);
+    expect(text).toContain('woocommerce');
+    expect(text).toContain('0 WPE');
   });
 });

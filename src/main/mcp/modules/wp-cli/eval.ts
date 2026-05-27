@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { requireRunning, ok, error } from './preflight';
+import { ok, error } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { withSiteRunning } from '../with-site-running';
 
 export const evalHandler: McpToolHandler = {
   definition: {
@@ -58,18 +59,17 @@ export const evalHandler: McpToolHandler = {
     }
 
     // Local path
-    const check = requireRunning(target.site, services);
-    if (check) return check;
+    return withSiteRunning(target.site.id, services, async () => {
+      const result = await services.localServices!.wpCliRun(target.site.id, ['eval', code], {
+        skipPlugins: !!(args.skip_plugins),
+        skipThemes: !!(args.skip_themes),
+      });
 
-    const result = await services.localServices!.wpCliRun(target.site.id, ['eval', code], {
-      skipPlugins: !!(args.skip_plugins),
-      skipThemes: !!(args.skip_themes),
+      if (!result.success) {
+        return error('Eval failed: ' + result.stdout);
+      }
+
+      return ok(result.stdout?.trim() || '(no output)');
     });
-
-    if (!result.success) {
-      return error('Eval failed: ' + result.stdout);
-    }
-
-    return ok(result.stdout?.trim() || '(no output)');
   },
 };

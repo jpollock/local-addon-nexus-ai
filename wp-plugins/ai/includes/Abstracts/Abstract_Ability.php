@@ -11,6 +11,13 @@ namespace WordPress\AI\Abstracts;
 
 use ReflectionClass;
 use WP_Ability;
+use WP_Error;
+
+use WordPress\AiClient\AiClient;
+
+use function WordPress\AI\format_guidelines_for_prompt;
+use function WordPress\AI\get_feature_developer_model_config;
+use function WordPress\AI\get_preferred_models_for_text_generation;
 
 /**
  * Base implementation for a WordPress Ability.
@@ -102,18 +109,90 @@ abstract class Abstract_Ability extends WP_Ability {
 	abstract protected function meta(): array;
 
 	/**
+	 * Returns the guideline categories this ability uses.
+	 *
+	 * Override in subclasses to opt into guidelines.
+	 * Return an empty array to skip guidelines (default).
+	 *
+	 * Valid categories: 'site', 'copy', 'images', 'additional'.
+	 *
+	 * @since 0.8.0
+	 *
+	 * @return list<string> Guideline category slugs.
+	 */
+	protected function guideline_categories(): array {
+		return array();
+	}
+
+	/**
+	 * Returns formatted guidelines for prompt injection.
+	 *
+	 * Uses guideline_categories() to determine which categories to include.
+	 * Unsupported categories are silently dropped.
+	 * Returns empty string when guidelines are unavailable or no categories declared.
+	 *
+	 * @since 0.8.0
+	 *
+	 * @param string|null $block_name Optional block name for block-specific guidelines.
+	 * @return string Formatted guidelines XML string, or empty string.
+	 */
+	protected function get_guidelines_for_prompt( ?string $block_name = null ): string {
+		$categories = array_values(
+			array_intersect(
+				$this->guideline_categories(),
+				array( 'site', 'copy', 'images', 'additional' )
+			)
+		);
+		if ( empty( $categories ) ) {
+			return '';
+		}
+		return format_guidelines_for_prompt( $categories, $block_name );
+	}
+
+	/**
 	 * Gets the system instruction for the feature.
+	 *
+	 * When guideline_categories() returns a non-empty array and guidelines are
+	 * available, automatically appends them to the system instruction.
+	 *
+	 * Supports a reserved `block_name` key in `$data` for block-specific guidelines.
 	 *
 	 * @since 0.1.0
 	 *
-	 * @param string|null            $filename Optional. Explicit filename to load. If not provided,
-	 *                                         attempts to load `system-instruction.php` or `prompt.php`.
-	 * @param array<string, mixed>   $data     Optional. Data to expose to the system instruction file.
-	 *                                         This data will be extracted as variables available in the file scope.
+	 * @param string|null            $filename   Optional. Explicit filename to load. If not provided,
+	 *                                           attempts to load `system-instruction.php` or `prompt.php`.
+	 * @param array<string, mixed>   $data       Optional. Data to expose to the system instruction file.
+	 *                                           This data will be extracted as variables available in the file scope.
 	 * @return string The system instruction for the feature.
 	 */
 	public function get_system_instruction( ?string $filename = null, array $data = array() ): string {
-		return $this->load_system_instruction_from_file( $filename, $data );
+		$block_name = null;
+		if ( isset( $data['block_name'] ) && is_string( $data['block_name'] ) ) {
+			$block_name = $data['block_name'];
+			unset( $data['block_name'] );
+		}
+
+		$instruction = $this->load_system_instruction_from_file( $filename, $data );
+
+		if ( '' !== $instruction && ! empty( $this->guideline_categories() ) ) {
+			$guidelines = $this->get_guidelines_for_prompt( $block_name );
+
+			if ( $guidelines ) {
+				$instruction .= "\n\n" . 'The following guidelines represent the site&#039;s editorial standards. Apply them where relevant. Do not fabricate content to satisfy guidelines. If guidelines conflict with the input, prioritize accuracy.';
+				$instruction .= "\n\n" . $guidelines;
+			}
+		}
+
+		/**
+		 * Filters the system instruction for an ability.
+		 *
+		 * @since 0.7.0
+		 *
+		 * @param string $instruction The system instruction text.
+		 * @param string $name        The name of the ability.
+		 * @param array  $data        The data passed to the system instruction file.
+		 */
+		return apply_filters( 'wpai_system_instruction', $instruction, $this->get_name(), $data );
 	}
 
 	/**
@@ -159,9 +238,9 @@ abstract class Abstract_Ability extends WP_Ability {
 
 			if ( file_exists( $file_path ) && is_readable( $file_path ) ) {
 				// PHP files should return a string directly.
-				$content = require_once $file_path; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
+				$content = require $file_path; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
 
-				return is_string( $content ) ? esc_html( $content ) : '';
+				return is_string( $content ) ? $content : '';
 			}
 
 			return '';
@@ -174,9 +253,81 @@ abstract class Abstract_Ability extends WP_Ability {
 			// PHP files should return a string directly.
 			$content = require $file_path; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
 
-			return is_string( $content ) ? esc_html( $content ) : '';
+			return is_string( $content ) ? $content : '';
 		}
 
 		return '';
+	}
+
+	/**
+	 * Ensures the prompt builder can run text generation.
+	 *
+	 * @since 0.7.0
+	 *
+	 * @param \WP_AI_Client_Prompt_Builder $prompt_builder The configured prompt builder.
+	 * @param string                       $message        User-visible error message.
+	 * @return \WP_AI_Client_Prompt_Builder|\WP_Error The prompt builder, or a WP_Error on failure.
+	 */
+	protected function ensure_text_generation_supported( $prompt_builder, string $message ) {
+		if ( ! $prompt_builder->is_supported_for_text_generation() ) {
+			return new WP_Error( 'unsupported_model', $message );
+		}
+
+		return $prompt_builder;
+	}
+
+	/**
+	 * Ensures the prompt builder can run image generation.
+	 *
+	 * @since 0.7.0
+	 *
+	 * @param \WP_AI_Client_Prompt_Builder $prompt_builder The configured prompt builder.
+	 * @param string                       $message        User-visible error message.
+	 * @return \WP_AI_Client_Prompt_Builder|\WP_Error The prompt builder, or a WP_Error on failure.
+	 */
+	protected function ensure_image_generation_supported( $prompt_builder, string $message ) {
+		if ( ! $prompt_builder->is_supported_for_image_generation() ) {
+			return new WP_Error( 'unsupported_model', $message );
+		}
+
+		return $prompt_builder;
+	}
+
+	/**
+	 * Sets the provider and model preference for a prompt builder based on developer mode settings.
+	 *
+	 * Reads the developer-configured provider/model for the given feature class and applies it
+	 * to the prompt builder. Falls back to the supplied model preference list when no override
+	 * is saved.
+	 *
+	 * @since 0.9.0
+	 *
+	 * @param \WP_AI_Client_Prompt_Builder $prompt_builder The prompt builder.
+	 * @param class-string<\WordPress\AI\Contracts\Feature> $feature_class The feature class to read settings from.
+	 * @param array<int, array{string, string}> $fallback_models The default models to use when no override is set.
+	 * @return \WP_AI_Client_Prompt_Builder The prompt builder.
+	 */
+	protected function set_provider_model_preference( \WP_AI_Client_Prompt_Builder $prompt_builder, string $feature_class, array $fallback_models = array() ): \WP_AI_Client_Prompt_Builder {
+		$config   = get_feature_developer_model_config( $feature_class::get_id() );
+		$provider = $config['provider'];
+		$model    = $config['model'];
+
+		if ( $provider && $model ) {
+			$prompt_builder->using_model(
+				AiClient::defaultRegistry()->getProviderModel( $provider, $model )
+			);
+		} else {
+			if ( $provider ) {
+				$prompt_builder->using_provider( $provider );
+			}
+
+			if ( empty( $fallback_models ) ) {
+				$fallback_models = get_preferred_models_for_text_generation();
+			}
+
+			$prompt_builder->using_model_preference( ...$fallback_models );
+		}
+
+		return $prompt_builder;
 	}
 }

@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nexus AI — Indexing Architecture</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#111318;--s1:#1a1d24;--s2:#20242d;--bd:#2a2f3d;
+  --tx:#e2e4ea;--mu:#6b7280;--ac:#0ECAD4;--gr:#51BB7B;
+  --ye:#f59e0b;--rd:#ef4444;--bl:#3b82f6;--pu:#a78bfa;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.6}
+.shell{display:flex;min-height:100vh}
+
+/* sidebar */
+.sidebar{width:220px;background:var(--s1);border-right:1px solid var(--bd);padding:20px 0;position:fixed;top:0;left:0;bottom:0;overflow-y:auto;flex-shrink:0}
+.sidebar-logo{padding:0 16px 16px;font-size:12px;font-weight:700;color:var(--ac);letter-spacing:.04em;border-bottom:1px solid var(--bd);margin-bottom:12px}
+.nav-group-label{padding:5px 16px 3px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--mu)}
+.nav-item{display:block;padding:6px 16px;font-size:12px;color:var(--mu);cursor:pointer;border-left:2px solid transparent;transition:all .15s}
+.nav-item:hover{color:var(--tx);background:var(--s2)}
+.nav-item.active{color:var(--ac);border-left-color:var(--ac);background:rgba(14,202,212,.06)}
+.nav-div{height:1px;background:var(--bd);margin:10px 0}
+
+/* main */
+.main{margin-left:220px;padding:36px 44px;max-width:960px}
+.section{display:none}.section.active{display:block}
+
+/* typography */
+h1{font-size:26px;font-weight:700;color:#fff;margin-bottom:8px}
+h2{font-size:18px;font-weight:600;color:#fff;margin:32px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--bd)}
+h3{font-size:14px;font-weight:600;color:#ddd;margin:20px 0 7px}
+p{color:#a0aab8;margin-bottom:11px}
+ul,ol{padding-left:18px;color:#a0aab8;margin-bottom:11px}
+li{margin-bottom:4px}
+strong{color:var(--tx)}
+code{font-family:'SF Mono','Fira Code',monospace;font-size:11px;background:var(--s2);border:1px solid var(--bd);border-radius:3px;padding:1px 4px;color:var(--ac)}
+pre{background:#0d0f14;border:1px solid var(--bd);border-radius:7px;padding:14px;overflow-x:auto;margin:10px 0 18px}
+pre code{background:none;border:none;padding:0;color:#a0b8c8;font-size:11px}
+
+/* chips */
+.chip{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px;margin-left:5px;vertical-align:middle}
+.cr{background:rgba(239,68,68,.12);color:var(--rd);border:1px solid rgba(239,68,68,.2)}
+.cy{background:rgba(245,158,11,.12);color:var(--ye);border:1px solid rgba(245,158,11,.2)}
+.cg{background:rgba(81,187,123,.12);color:var(--gr);border:1px solid rgba(81,187,123,.2)}
+.cb{background:rgba(59,130,246,.12);color:var(--bl);border:1px solid rgba(59,130,246,.2)}
+.cm{background:rgba(107,114,128,.12);color:var(--mu);border:1px solid rgba(107,114,128,.2)}
+
+/* tables */
+table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:13px}
+th{background:var(--s2);color:var(--mu);font-weight:600;padding:7px 11px;text-align:left;border-bottom:1px solid var(--bd);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+td{padding:8px 11px;border-bottom:1px solid rgba(42,47,61,.5);color:#a0aab8;vertical-align:top}
+tr:last-child td{border-bottom:none}
+
+/* callouts */
+.callout{padding:12px 14px;border-radius:7px;margin:14px 0;font-size:13px;line-height:1.55}
+.ci{background:rgba(14,202,212,.06);border:1px solid rgba(14,202,212,.15);color:#88c8cc}
+.cw{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);color:#c8a870}
+.cd{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);color:#c88088}
+
+/* issue cards */
+.issue{display:flex;gap:11px;padding:12px 14px;border-radius:7px;margin-bottom:9px;border:1px solid}
+.i-crit{background:rgba(239,68,68,.05);border-color:rgba(239,68,68,.2)}
+.i-maj{background:rgba(245,158,11,.05);border-color:rgba(245,158,11,.2)}
+.i-min{background:rgba(107,114,128,.05);border-color:rgba(107,114,128,.2)}
+.issue-icon{font-size:15px;flex-shrink:0;margin-top:1px}
+.issue-title{font-size:13px;font-weight:600;color:var(--tx);margin-bottom:3px}
+.issue-body{font-size:12px;color:var(--mu);line-height:1.5}
+
+/* phase blocks */
+.phase{border-left:3px solid var(--ac);padding:12px 16px;margin-bottom:18px;background:rgba(14,202,212,.04);border-radius:0 7px 7px 0}
+.phase-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--ac);margin-bottom:4px}
+.phase-title{font-size:14px;font-weight:600;color:#fff;margin-bottom:4px}
+.phase-desc{font-size:12px;color:var(--mu)}
+
+/* info grid */
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0}
+.info-box{background:var(--s2);border:1px solid var(--bd);border-radius:7px;padding:11px 13px;text-align:center}
+.info-box-icon{font-size:18px;margin-bottom:5px}
+.info-box-title{font-size:12px;font-weight:600;color:var(--tx)}
+.info-box-sub{font-size:11px;color:var(--mu);margin-top:2px;line-height:1.4}
+
+/* capability matrix cell colours */
+td.cg{color:var(--gr);font-size:12px}
+td.cy{color:var(--ye);font-size:12px}
+td.cr{color:var(--rd);font-size:12px}
+
+/* task list */
+.tl{list-style:none;padding:0}
+.tl li{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid rgba(42,47,61,.4);font-size:13px}
+.tl li:last-child{border-bottom:none}
+.tn{width:20px;height:20px;border-radius:50%;background:rgba(14,202,212,.1);border:1px solid rgba(14,202,212,.25);color:var(--ac);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tb{flex:1}
+.tt{font-weight:600;color:var(--tx)}
+.td{color:var(--mu);font-size:11px;margin-top:2px}
+.te{font-size:10px;padding:1px 6px;border-radius:7px;background:var(--s2);color:var(--mu);align-self:flex-start;white-space:nowrap}
+
+/* ─────────── FLOW DIAGRAM SYSTEM ─────────── */
+.flow{display:flex;flex-direction:column;align-items:center;gap:0;margin:16px 0 24px;font-size:12px}
+.flow-row{display:flex;align-items:center;gap:0;width:100%}
+.flow-col{display:flex;flex-direction:column;align-items:center;flex:1}
+
+/* nodes */
+.fn{background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:7px 12px;text-align:center;color:var(--tx);font-size:12px;font-weight:500;min-width:120px;max-width:220px}
+.fn-start{background:rgba(14,202,212,.1);border-color:rgba(14,202,212,.3);color:var(--ac)}
+.fn-end{background:rgba(81,187,123,.1);border-color:rgba(81,187,123,.3);color:var(--gr)}
+.fn-err{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.25);color:var(--rd)}
+.fn-warn{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.25);color:var(--ye)}
+.fn-decision{background:var(--s1);border:1px solid var(--ac);border-radius:4px;padding:7px 12px;text-align:center;color:var(--ac);font-size:11px;font-weight:600;transform:rotate(0deg);position:relative}
+.fn-decision::before{content:'';position:absolute;inset:-1px;border:1px solid rgba(14,202,212,.3);border-radius:4px}
+
+/* arrows */
+.fa-d{display:flex;flex-direction:column;align-items:center;color:var(--mu);font-size:11px;gap:1px;padding:2px 0}
+.fa-d::before{content:'';display:block;width:1px;height:16px;background:var(--bd)}
+.fa-d::after{content:'▼';font-size:8px;color:var(--mu)}
+.fa-label{font-size:10px;color:var(--mu);background:var(--bg);padding:0 5px;margin-bottom:-2px}
+
+.fa-r{display:flex;align-items:center;color:var(--mu);font-size:11px;gap:2px;padding:0 4px}
+.fa-r::after{content:'▶';font-size:8px;color:var(--mu)}
+.fa-r-line{flex:1;height:1px;background:var(--bd);min-width:20px}
+
+/* branch layout */
+.flow-branch{display:flex;align-items:flex-start;gap:16px;width:100%;margin:4px 0}
+.flow-branch-item{display:flex;flex-direction:column;align-items:center;flex:1;gap:0}
+.flow-branch-label{font-size:10px;color:var(--mu);margin-bottom:3px;font-style:italic}
+
+/* horizontal connector bar */
+.h-bar{height:1px;background:var(--bd);width:100%;margin:8px 0}
+
+/* storage boxes in a row */
+.storage-row{display:flex;gap:10px;margin:14px 0}
+.storage-box{flex:1;background:var(--s1);border:1px solid var(--bd);border-radius:8px;padding:11px 13px}
+.storage-box-title{font-size:12px;font-weight:600;color:var(--tx);margin-bottom:4px}
+.storage-box-items{font-size:11px;color:var(--mu);line-height:1.6}
+
+/* state diagram alternative */
+.state-diagram{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0;align-items:flex-start}
+.state-box{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:11px 14px;min-width:160px;flex:1}
+.state-box-name{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ac);margin-bottom:5px}
+.state-box-desc{font-size:11px;color:var(--mu);line-height:1.5}
+.state-box-cap{font-size:10px;color:var(--gr);margin-top:5px;font-weight:600}
+.state-transitions{display:flex;flex-direction:column;gap:6px;margin:14px 0}
+.state-tx{display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 10px;background:var(--s2);border:1px solid var(--bd);border-radius:5px}
+.state-tx-from{color:var(--tx);font-weight:500;min-width:130px}
+.state-tx-arrow{color:var(--mu)}
+.state-tx-to{color:var(--ac);font-weight:500;min-width:130px}
+.state-tx-label{color:var(--mu);font-size:11px;flex:1}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-logo">⚡ Nexus AI Indexing</div>
+  <div class="nav-group-label">Overview</div>
+  <div class="nav-item active" onclick="show('overview')">Executive Summary</div>
+  <div class="nav-div"></div>
+  <div class="nav-group-label">Part 1 — Current State</div>
+  <div class="nav-item" onclick="show('pipeline')">Local Content Pipeline</div>
+  <div class="nav-item" onclick="show('twin')">Digital Twin</div>
+  <div class="nav-item" onclick="show('graph')">Graph DB</div>
+  <div class="nav-item" onclick="show('wpe')">WPE Sync</div>
+  <div class="nav-item" onclick="show('discover-deps')">Discover Tab Deps</div>
+  <div class="nav-item" onclick="show('gaps')">⚠ Gaps &amp; Issues</div>
+  <div class="nav-div"></div>
+  <div class="nav-group-label">Part 1b — Data Schema</div>
+  <div class="nav-item" onclick="show('schema')">📋 Complete Site Data Schema</div>
+  <div class="nav-div"></div>
+  <div class="nav-group-label">Part 2 — Future</div>
+  <div class="nav-item" onclick="show('f-principles')">Principles</div>
+  <div class="nav-item" onclick="show('f-flow')">Unified Index Flow</div>
+  <div class="nav-item" onclick="show('f-discover')">Discover State Machine</div>
+  <div class="nav-div"></div>
+  <div class="nav-group-label">Part 3 — Plan</div>
+  <div class="nav-item" onclick="show('p1')">Phase 1 · Real-time feedback</div>
+  <div class="nav-item" onclick="show('p2')">Phase 2 · WPE Content</div>
+  <div class="nav-item" onclick="show('p3')">Phase 3 · Unified Indexer</div>
+</div>
+
+<div class="main">
+
+<!-- ══════ OVERVIEW ══════ -->
+<div id="overview" class="section active">
+  <h1>Nexus AI — Indexing &amp; Discovery Architecture</h1>
+  <p>How content indexing, digital twins, and the Discover tab fit together — current state, what's broken, and the path forward.</p>
+
+  <h2>Three Separate Systems</h2>
+  <div class="info-grid">
+    <div class="info-box"><div class="info-box-icon">📦</div><div class="info-box-title">Content Index</div><div class="info-box-sub">LanceDB vectors<br>Local sites only<br>Requires running site</div></div>
+    <div class="info-box"><div class="info-box-icon">👤</div><div class="info-box-title">Digital Twin</div><div class="info-box-sub">SiteMetadataCache<br>Local + WPE<br>WP-CLI on site start</div></div>
+    <div class="info-box"><div class="info-box-icon">🗄</div><div class="info-box-title">Graph DB</div><div class="info-box-sub">SQLite<br>Plugins, themes, users<br>Local + WPE metadata</div></div>
+  </div>
+
+  <div class="callout cd"><strong>The Discover problem:</strong> WPE sites return zero search results. Halted local sites silently fail to index. Progress during indexing is blind (10-second poll only). The Discover tab has no unified view across all three systems.</div>
+
+  <h2>Search Capability Today</h2>
+  <table>
+    <tr><th>Site type</th><th>Keyword</th><th>Semantic</th><th>In Discover</th></tr>
+    <tr><td>Local (indexed, running)</td><td>✅ LanceDB FTS</td><td>✅ ONNX vectors</td><td>✅ Yes</td></tr>
+    <tr><td>Local (halted, never indexed)</td><td>❌ Nothing</td><td>❌ Nothing</td><td>❌ Stuck in "waiting"</td></tr>
+    <tr><td>WPE (any state)</td><td>❌ Not wired</td><td>❌ Not implemented</td><td>❌ Zero results</td></tr>
+  </table>
+</div>
+
+<!-- ══════ LOCAL PIPELINE ══════ -->
+<div id="pipeline" class="section">
+  <h1>Local Content Indexing Pipeline</h1>
+  <p>How WordPress content from a running Local site becomes a searchable vector index.</p>
+
+  <h2>Full Pipeline Flow</h2>
+
+  <div class="flow">
+    <div class="fn fn-start">siteStarted hook fires</div>
+    <div class="fa-d"></div>
+    <div class="fn">Check: auto-index enabled + site not excluded</div>
+    <div class="fa-d"></div>
+    <div class="fn">await readyPromise<br><small style="color:var(--mu)">blocks until ONNX model loaded (~2-5s)</small></div>
+    <div class="fa-d"></div>
+    <div class="fn">FileScanner — filesystem structure</div>
+    <div class="fa-d"></div>
+    <div class="fn fn-decision">MySQL socket exists?<br><small>(site must be running)</small></div>
+
+    <div class="flow-branch" style="margin:8px 0">
+      <div class="flow-branch-item">
+        <div class="flow-branch-label">no — site halted</div>
+        <div class="fn fn-err">0 posts extracted<br>documentCount = 0<br>no error shown to user</div>
+      </div>
+      <div class="flow-branch-item">
+        <div class="flow-branch-label">yes — site running</div>
+        <div class="fn">MySQLExtractor<br><small style="color:var(--mu)">wp_posts, postmeta, taxonomies</small></div>
+        <div class="fa-d"></div>
+        <div class="fn">Sub-extractors (non-fatal)<br><small style="color:var(--mu)">WooCommerce, ACF, Media</small></div>
+        <div class="fa-d"></div>
+        <div class="fn">Chunk posts<br><small style="color:var(--mu)">~512 tokens, sentence boundaries</small></div>
+        <div class="fa-d"></div>
+        <div class="fn">EmbeddingService<br><small style="color:var(--mu)">batch=16, ONNX 384-dim</small></div>
+        <div class="fa-d"></div>
+        <div class="fn">VectorStore.upsert<br><small style="color:var(--mu)">LanceDB + FTS index</small></div>
+        <div class="fa-d"></div>
+        <div class="fn fn-end">IndexRegistry.update<br>state = indexed</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>IPC Channels for Indexing</h2>
+  <table>
+    <tr><th>Channel</th><th>Behavior</th><th>Halted sites</th></tr>
+    <tr><td><code>INDEX_SITE</code></td><td>Index one site by ID</td><td class="cr chip">❌ silently does nothing</td></tr>
+    <tr><td><code>INDEX_ALL_AUTO</code></td><td>Auto-start halted sites, index all, leave running</td><td class="cg chip">✅ starts sites first</td></tr>
+    <tr><td><code>INDEX_ALL_FLEET</code></td><td>Index all currently running sites</td><td class="cr chip">❌ skips halted</td></tr>
+  </table>
+
+  <h2>IndexRegistry State Machine</h2>
+  <div class="state-transitions">
+    <div class="state-tx"><span class="state-tx-from">idle (initial)</span><span class="state-tx-arrow">→</span><span class="state-tx-to">indexing</span><span class="state-tx-label">indexSite() called</span></div>
+    <div class="state-tx"><span class="state-tx-from">indexing</span><span class="state-tx-arrow">→</span><span class="state-tx-to">indexed</span><span class="state-tx-label">success — posts extracted and embedded</span></div>
+    <div class="state-tx"><span class="state-tx-from">indexing</span><span class="state-tx-arrow">→</span><span class="state-tx-to">error</span><span class="state-tx-label">extraction or embedding failed</span></div>
+    <div class="state-tx"><span class="state-tx-from">indexed</span><span class="state-tx-arrow">→</span><span class="state-tx-to">stale</span><span class="state-tx-label">siteStopped hook fires</span></div>
+    <div class="state-tx"><span class="state-tx-from">stale / error</span><span class="state-tx-arrow">→</span><span class="state-tx-to">indexing</span><span class="state-tx-label">site restarts (auto-retry)</span></div>
+  </div>
+
+  <h2>LanceDB Table Schema (per site)</h2>
+  <pre><code>// Table name: site_{siteId}_content
+{
+  id:               string,      // wp_{siteId}_{postId} or _chunk_N
+  siteId:           string,
+  title:            string,
+  content:          string,      // cleaned, HTML-stripped
+  postType:         string,
+  postId:           number,
+  chunkIndex:       number,      // 0 = single-chunk post
+  vector:           Float32[384],// L2-normalized ONNX embedding
+  metadata:         string,      // JSON: excerpt, author, date, categories, tags
+  indexedAt:        number,
+  post_date_gmt:    string,      // added via migration
+  post_modified_gmt:string,
+  doc_url:          string
+}</code></pre>
+</div>
+
+<!-- ══════ DIGITAL TWIN ══════ -->
+<div id="twin" class="section">
+  <h1>Digital Twin — SiteMetadataCache</h1>
+  <p>A persistent JSON snapshot of each site's WordPress runtime state, enabling UI responsiveness when sites are halted.</p>
+
+  <h2>What It Stores</h2>
+  <pre><code>interface SiteMetadata {
+  wpVersion:       string;
+  phpVersion?:     string;    // from Local config (no WP-CLI needed)
+  mysqlVersion?:   string;    // from wp eval
+  siteUrl?:        string;
+  adminEmail?:     string;
+  plugins:         Plugin[];  // name, title, version, status
+  themes:          Theme[];
+  activeTheme?:    string;
+  postCount?:      number;
+  postCountByType?:Record&lt;string,number&gt;;
+  lastPostAt?:     number;
+  updateSource:    'lifecycle' | 'manual' | 'setup-ai' | 'wpe-sync';
+  scanDepth:       'filesystem' | 'metadata' | 'full';
+  lastUpdated:     number;    // staleness threshold: 24h
+}</code></pre>
+
+  <h2>WP-CLI Queries on Site Start (7 parallel calls)</h2>
+  <div class="flow">
+    <div class="fn fn-start">siteStarted</div>
+    <div class="fa-d"></div>
+    <div class="fn">Promise.allSettled — all 7 run in parallel<br><small style="color:var(--mu)">never throws — failed calls are skipped</small></div>
+  </div>
+  <div class="storage-row" style="flex-wrap:wrap">
+    <div class="storage-box"><div class="storage-box-title">wp core version</div></div>
+    <div class="storage-box"><div class="storage-box-title">wp plugin list</div></div>
+    <div class="storage-box"><div class="storage-box-title">wp theme list</div></div>
+    <div class="storage-box"><div class="storage-box-title">wp option get siteurl</div></div>
+    <div class="storage-box"><div class="storage-box-title">wp option get admin_email</div></div>
+    <div class="storage-box"><div class="storage-box-title">wp eval: MySQL version</div></div>
+    <div class="storage-box"><div class="storage-box-title">wp eval: post counts by type</div></div>
+  </div>
+  <div class="flow">
+    <div class="fn">Merge results — skip rejected promises</div>
+    <div class="fa-d"></div>
+    <div class="fn fn-end">SiteMetadataCache.set → userData JSON persisted</div>
+  </div>
+
+  <h2>Cache-First Access Pattern</h2>
+  <pre><code>// All IPC handlers follow this pattern
+const cached = metadataCache.get(siteId);
+if (cached && !metadataCache.isStale(siteId)) return cached;  // instant
+if (siteIsRunning(siteId)) {
+  const fresh = await queryLive(siteId);
+  metadataCache.set(siteId, fresh);
+  return fresh;
+}
+return cached ?? null;  // stale cache beats nothing</code></pre>
+
+  <h2>Update Triggers</h2>
+  <table>
+    <tr><th>Trigger</th><th>When</th><th>Freshness</th></tr>
+    <tr><td>siteStarted hook</td><td>Every site start</td><td>✅ Highest — live WP-CLI</td></tr>
+    <tr><td>Setup AI complete</td><td>After AI plugin install</td><td>✅ High</td></tr>
+    <tr><td>Manual refresh (UI)</td><td>User clicks Refresh</td><td>✅ Highest</td></tr>
+    <tr><td>WPE sync background</td><td>Every 24h</td><td>✅ High — SSH WP-CLI</td></tr>
+  </table>
+</div>
+
+<!-- ══════ GRAPH DB ══════ -->
+<div id="graph" class="section">
+  <h1>Graph Database (graph.db)</h1>
+  <p>SQLite database storing structured metadata about Local and WPE sites — plugins, themes, users, content records, event queues.</p>
+
+  <h2>Tables</h2>
+  <table>
+    <tr><th>Table</th><th>Purpose</th><th>Populated by</th></tr>
+    <tr><td><code>sites</code></td><td>Master list — local and WPE</td><td>CAPI sync + Local API</td></tr>
+    <tr><td><code>plugins</code></td><td>Plugin inventory per site</td><td>WPE sync (SSH) + local indexing</td></tr>
+    <tr><td><code>themes</code></td><td>Theme inventory per site</td><td>WPE sync (SSH) + local indexing</td></tr>
+    <tr><td><code>content</code></td><td>Post/page records (raw text, not vectors)</td><td>MySQLExtractor + RemoteContentExtractor (WPE — not wired to search)</td></tr>
+    <tr><td><code>users</code></td><td>WordPress users per site</td><td>MySQLExtractor</td></tr>
+    <tr><td><code>event_queue</code></td><td>Webhook events from WP Connector plugin</td><td>HttpEventInterface (real-time)</td></tr>
+    <tr><td><code>wpe_accounts</code></td><td>WPE account metadata</td><td>CAPI sync</td></tr>
+    <tr><td><code>site_usage</code></td><td>Bandwidth, visits, storage</td><td>CAPI usage API</td></tr>
+  </table>
+
+  <h2>Two Separate Stores — Different Purposes</h2>
+  <div class="storage-row">
+    <div class="storage-box">
+      <div class="storage-box-title">LanceDB (vectors)</div>
+      <div class="storage-box-items">• Post content as embeddings<br>• Semantic + keyword search<br>• Local sites only<br>• ~100K chunks per site</div>
+    </div>
+    <div class="storage-box">
+      <div class="storage-box-title">Graph DB (SQLite)</div>
+      <div class="storage-box-items">• Plugin/theme/user records<br>• Relational queries<br>• Local + WPE sites<br>• Fleet management</div>
+    </div>
+    <div class="storage-box">
+      <div class="storage-box-title">Metadata Cache (JSON)</div>
+      <div class="storage-box-items">• WP version, plugin list<br>• UI responsiveness<br>• Local + WPE sites<br>• Cache-first pattern</div>
+    </div>
+  </div>
+
+  <div class="callout cd"><strong>Critical gap:</strong> The graph DB <code>content</code> table holds WPE post text (via RemoteContentExtractor) but is not connected to any search path. SEARCH_KEYWORD queries LanceDB only — WPE content is completely unreachable from the Discover tab.</div>
+</div>
+
+<!-- ══════ WPE SYNC ══════ -->
+<div id="wpe" class="section">
+  <h1>WPE Site Sync</h1>
+  <p>How WP Engine install metadata is extracted via CAPI + SSH WP-CLI and stored in the graph DB.</p>
+
+  <h2>Sync Flow</h2>
+  <div class="flow">
+    <div class="fn fn-start">WPESyncService.syncAllWPESites()</div>
+    <div class="fa-d"></div>
+    <div class="fn">CAPI: getInstalls() → all WPE installs</div>
+    <div class="fa-d"></div>
+    <div class="fn">Filter: account filter + operation permissions + staleness (8h threshold)</div>
+    <div class="fa-d"></div>
+    <div class="fn">pLimit(4) — max 4 parallel SSH connections<br><small style="color:var(--mu)">reserves 1 of WPE's 5-connection limit for interactive use</small></div>
+    <div class="fa-d"></div>
+    <div class="fn">Per install via SSH WP-CLI:<br>plugin list · theme list · core version · option get siteurl · post count</div>
+    <div class="fa-d"></div>
+    <div class="fn">GraphService: upsertSite, upsertPlugin, upsertTheme</div>
+    <div class="fa-d"></div>
+    <div class="fn fn-end">sites.last_sync_at updated</div>
+  </div>
+
+  <h2>What Sync Does and Does Not Do</h2>
+  <table>
+    <tr><th>Operation</th><th>Status</th><th>Notes</th></tr>
+    <tr><td>Plugin inventory</td><td>✅</td><td>All non-production installs (subject to permissions)</td></tr>
+    <tr><td>Theme inventory</td><td>✅</td><td></td></tr>
+    <tr><td>WP version, site URL, admin email</td><td>✅</td><td></td></tr>
+    <tr><td>Post count</td><td>✅</td><td>Via wp post list --format=count</td></tr>
+    <tr><td>Post content extraction</td><td>⚠</td><td>RemoteContentExtractor exists but not integrated into search</td></tr>
+    <tr><td>Vector embeddings</td><td>❌</td><td>Not implemented — Phase 2</td></tr>
+    <tr><td>Production WP-CLI</td><td>❌</td><td>Blocked by default (wpcli.production = false)</td></tr>
+  </table>
+
+  <h2>Scheduling</h2>
+  <p><strong>Auto-sync interval:</strong> 8 hours (configurable in Settings → WP Engine → Sync Schedule)</p>
+  <p><strong>Concurrency:</strong> 4 parallel SSH connections. Total time for 50 installs: ~5-10 minutes.</p>
+</div>
+
+<!-- ══════ DISCOVER DEPS ══════ -->
+<div id="discover-deps" class="section">
+  <h1>Discover Tab — Dependency Map</h1>
+  <p>What must exist at each layer for the Discover tab to show results.</p>
+
+  <h2>Props Chain from NexusOverview to DiscoverTab</h2>
+  <div class="flow">
+    <div class="fn fn-start">NexusOverview.fetchAll() — runs on mount + every 10s</div>
+    <div class="fa-d"></div>
+    <div class="flow-branch">
+      <div class="flow-branch-item">
+        <div class="fn">IPC: GET_SITES<br><small style="color:var(--mu)">name, id, status</small></div>
+      </div>
+      <div class="flow-branch-item">
+        <div class="fn">IPC: INDEX_REGISTRY listAll<br><small style="color:var(--mu)">siteId, state, documentCount</small></div>
+      </div>
+    </div>
+    <div class="fa-d"></div>
+    <div class="fn">DiscoverTab props: sites + indexEntries</div>
+    <div class="fa-d"></div>
+    <div class="fn fn-decision">any state === 'indexed' ?</div>
+    <div class="flow-branch" style="margin:8px 0">
+      <div class="flow-branch-item"><div class="flow-branch-label">none</div><div class="fn">viewState: fresh</div></div>
+      <div class="flow-branch-item"><div class="flow-branch-label">some indexing</div><div class="fn">viewState: indexing</div></div>
+      <div class="flow-branch-item"><div class="flow-branch-label">any indexed</div><div class="fn fn-end">viewState: ready — show search</div></div>
+    </div>
+  </div>
+
+  <div class="callout cw"><strong>Polling problem:</strong> Progress only updates every 10 seconds. ContentPipeline has an <code>onStatusChange</code> callback with real-time stage/progress data — but it's never wired to the renderer. Users see a static grid for minutes with no feedback.</div>
+
+  <h2>Search Backends Today</h2>
+  <table>
+    <tr><th>Search type</th><th>IPC</th><th>Backend</th><th>Local</th><th>WPE</th></tr>
+    <tr><td>Semantic</td><td>SEARCH</td><td>LanceDB vectorSearch</td><td>✅</td><td>❌</td></tr>
+    <tr><td>Keyword</td><td>SEARCH_KEYWORD</td><td>LanceDB fullTextSearch</td><td>✅</td><td>❌</td></tr>
+    <tr><td>WPE content</td><td>—</td><td>Graph DB content table (not wired)</td><td>N/A</td><td>⚠</td></tr>
+  </table>
+</div>
+
+<!-- ══════ GAPS ══════ -->
+<div id="gaps" class="section">
+  <h1>Gaps, Issues &amp; Problem Areas</h1>
+
+  <h2>Critical <span class="chip cr">blocking first-run</span></h2>
+
+  <div class="issue i-crit">
+    <div class="issue-icon">🔴</div>
+    <div>
+      <div class="issue-title">Halted sites silently fail to index</div>
+      <div class="issue-body">INDEX_SITE requires the MySQL socket file which only exists when a site is running. Called on a halted site: extracts 0 posts, marks state as "indexed" with documentCount=0, no error shown. User sees 0 results with no explanation. INDEX_ALL_AUTO is the correct channel but was not used in the Discover tab until recently.</div>
+    </div>
+  </div>
+
+  <div class="issue i-crit">
+    <div class="issue-icon">🔴</div>
+    <div>
+      <div class="issue-title">WPE sites return zero results from Discover search</div>
+      <div class="issue-body">SEARCH and SEARCH_KEYWORD only query LanceDB, which contains locally-indexed content only. WPE installs are never included regardless of sync status. A user with 20 WPE sites and 0 local sites gets zero results. The graph DB has a content table but it's not wired to any search handler.</div>
+    </div>
+  </div>
+
+  <div class="issue i-crit">
+    <div class="issue-icon">🔴</div>
+    <div>
+      <div class="issue-title">No real-time progress during indexing</div>
+      <div class="issue-body">ContentPipeline has an onStatusChange callback that fires with stage, progress %, and message (e.g. "Embedding 40 of 200..."). This callback is never pushed to the renderer. DiscoverTab polls on a 10-second interval. Users see a static "waiting" grid for minutes with no indication progress is happening.</div>
+    </div>
+  </div>
+
+  <h2>Major <span class="chip cy">impacts reliability</span></h2>
+
+  <div class="issue i-maj">
+    <div class="issue-icon">🟡</div>
+    <div>
+      <div class="issue-title">ONNX model failure silently disables all indexing</div>
+      <div class="issue-body">If EmbeddingService.initialize() fails, readyPromise rejects. The lifecycle hook catches it, logs an error, and skips indexing for every site start until addon restart. No UI feedback. Users see sites as "waiting" indefinitely with no actionable message.</div>
+    </div>
+  </div>
+
+  <div class="issue i-maj">
+    <div class="issue-icon">🟡</div>
+    <div>
+      <div class="issue-title">MySQL race condition on site start</div>
+      <div class="issue-body">siteStarted fires when nginx/PHP are ready, but MySQL initialization can take an additional 2-10 seconds. MySQLExtractor.connect() times out. The index completes with 0 documents — no retry until next site start. No user notification.</div>
+    </div>
+  </div>
+
+  <div class="issue i-maj">
+    <div class="issue-icon">🟡</div>
+    <div>
+      <div class="issue-title">Three overlapping persistence stores — no unified "site state"</div>
+      <div class="issue-body">IndexRegistry (content index state), SiteMetadataCache (WP runtime state), and the graph DB sites table all hold overlapping data. They can drift. DiscoverTab must reconcile indexEntries from IndexRegistry with sites from Local's API — two separate IPC calls that can race.</div>
+    </div>
+  </div>
+
+  <h2>Minor <span class="chip cm">tech debt</span></h2>
+
+  <div class="issue i-min">
+    <div class="issue-icon">⚪</div>
+    <div>
+      <div class="issue-title">INDEX_ALL_AUTO starts all sites and leaves them running</div>
+      <div class="issue-body">When triggered from Discover, users see all their sites suddenly start. A Discover-specific variant that stops sites after indexing would be better UX — especially for machines with limited RAM.</div>
+    </div>
+  </div>
+
+  <div class="issue i-min">
+    <div class="issue-icon">⚪</div>
+    <div>
+      <div class="issue-title">Docs and code have drifted</div>
+      <div class="issue-body">docs/architecture/digital-twin.md (606 lines) describes a planned architecture that doesn't match the current Discover tab integration or the WPE search gap. Plans predate INDEX_ALL_AUTO being the correct indexing path.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ FUTURE PRINCIPLES ══════ -->
+<div id="f-principles" class="section">
+  <h1>Rationalized Architecture — Principles</h1>
+
+  <div style="display:flex;flex-direction:column;gap:10px;margin:16px 0">
+    <div class="issue i-min" style="border-color:rgba(14,202,212,.2);background:rgba(14,202,212,.04)">
+      <div class="issue-icon" style="color:var(--ac)">1</div>
+      <div><div class="issue-title">One unified "IndexedSite" concept</div><div class="issue-body">A single known state per site regardless of type: unindexed, indexing, metadata-only, or fully-indexed. DiscoverTab reads from one source — not three diverging stores.</div></div>
+    </div>
+    <div class="issue i-min" style="border-color:rgba(14,202,212,.2);background:rgba(14,202,212,.04)">
+      <div class="issue-icon" style="color:var(--ac)">2</div>
+      <div><div class="issue-title">Progressive search capability — not binary</div><div class="issue-body">Keyword search works as soon as any content is in the graph DB. Semantic search activates when vectors are built. WPE sites contribute keyword results even without full vector indexing.</div></div>
+    </div>
+    <div class="issue i-min" style="border-color:rgba(14,202,212,.2);background:rgba(14,202,212,.04)">
+      <div class="issue-icon" style="color:var(--ac)">3</div>
+      <div><div class="issue-title">Real-time progress, not polling</div><div class="issue-body">Wire ContentPipeline.onStatusChange → IPC push event → DiscoverTab listener. Updates every second, not every 10 seconds.</div></div>
+    </div>
+    <div class="issue i-min" style="border-color:rgba(14,202,212,.2);background:rgba(14,202,212,.04)">
+      <div class="issue-icon" style="color:var(--ac)">4</div>
+      <div><div class="issue-title">Explicit dependency declarations, loud failures</div><div class="issue-body">Each indexer declares preconditions. The system fails loudly with actionable UI messages — not silently. "ONNX model not ready" and "MySQL not available, will retry" rather than invisible skips.</div></div>
+    </div>
+    <div class="issue i-min" style="border-color:rgba(14,202,212,.2);background:rgba(14,202,212,.04)">
+      <div class="issue-icon" style="color:var(--ac)">5</div>
+      <div><div class="issue-title">Testable at every layer</div><div class="issue-body">Each indexer independently unit-testable with mocks. Integration tests use WPE_FIXTURES (jppwpeplugin, jppwpeplugistg). No test requires all 14 sites running simultaneously.</div></div>
+    </div>
+  </div>
+
+  <h2>Target Search Capability Matrix</h2>
+  <table>
+    <tr><th>Site type</th><th>Keyword</th><th>Semantic</th><th>Requires</th></tr>
+    <tr><td>Local (running once)</td><td>✅ FTS in LanceDB</td><td>✅ ONNX vectors</td><td>Site started + ONNX model loaded</td></tr>
+    <tr><td>Local (halted, prev. indexed)</td><td>✅ Persists across stops</td><td>✅ Persists</td><td>Previously indexed while running</td></tr>
+    <tr><td>WPE (metadata only)</td><td>⚠ Title + type only</td><td>❌</td><td>WPE CAPI auth</td></tr>
+    <tr><td>WPE (content indexed — Phase 2)</td><td>✅ Full text via graph DB FTS5</td><td>✅ ONNX via SSH</td><td>WPE auth + SSH + non-prod permission</td></tr>
+  </table>
+</div>
+
+<!-- ══════ FUTURE FLOW ══════ -->
+<div id="f-flow" class="section">
+  <h1>Unified Index Flow (Target)</h1>
+
+  <h2>Unified Site States</h2>
+  <div class="state-diagram">
+    <div class="state-box">
+      <div class="state-box-name">Unknown</div>
+      <div class="state-box-desc">Site discovered but not yet synced or scanned</div>
+    </div>
+    <div class="state-box">
+      <div class="state-box-name">Metadata Only</div>
+      <div class="state-box-desc">WP version, plugins, themes known from CAPI or filesystem scan</div>
+      <div class="state-box-cap">Search: title + type only</div>
+    </div>
+    <div class="state-box">
+      <div class="state-box-name">Content Indexed</div>
+      <div class="state-box-desc">Post content embedded in LanceDB (local) or FTS5 (WPE)</div>
+      <div class="state-box-cap">Search: full keyword + semantic</div>
+    </div>
+  </div>
+  <div class="state-transitions">
+    <div class="state-tx"><span class="state-tx-from">Unknown</span><span class="state-tx-arrow">→</span><span class="state-tx-to">MetadataOnly</span><span class="state-tx-label">CAPI sync or filesystem scan</span></div>
+    <div class="state-tx"><span class="state-tx-from">MetadataOnly</span><span class="state-tx-arrow">→</span><span class="state-tx-to">ContentIndexed</span><span class="state-tx-label">full indexing complete (vector + FTS)</span></div>
+    <div class="state-tx"><span class="state-tx-from">ContentIndexed</span><span class="state-tx-arrow">→</span><span class="state-tx-to">MetadataOnly</span><span class="state-tx-label">index reset</span></div>
+    <div class="state-tx"><span class="state-tx-from">MetadataOnly</span><span class="state-tx-arrow">→</span><span class="state-tx-to">Unknown</span><span class="state-tx-label">site removed</span></div>
+  </div>
+
+  <h2>Local Site Indexing (Improved) — with Real-Time Progress</h2>
+  <div class="flow">
+    <div class="fn fn-start">siteStarted or user clicks "Index my sites"</div>
+    <div class="fa-d"></div>
+    <div class="fn fn-decision">ONNX model loaded?</div>
+    <div class="flow-branch" style="margin:6px 0">
+      <div class="flow-branch-item"><div class="flow-branch-label">no</div><div class="fn fn-err">Push error to UI: model not ready — restart suggested</div></div>
+      <div class="flow-branch-item">
+        <div class="flow-branch-label">yes</div>
+        <div class="fn fn-decision">site running?</div>
+        <div class="flow-branch" style="margin:6px 0">
+          <div class="flow-branch-item"><div class="flow-branch-label">no</div><div class="fn">auto-start via INDEX_ALL_AUTO</div><div class="fa-d"></div><div class="fn fn-decision">start ok?</div></div>
+          <div class="flow-branch-item"><div class="flow-branch-label">yes</div><div class="fn">continue to extract</div></div>
+        </div>
+        <div class="fa-d"></div>
+        <div class="fn fn-decision">MySQL ready? (retry 3x / 2s)</div>
+        <div class="flow-branch" style="margin:6px 0">
+          <div class="flow-branch-item"><div class="flow-branch-label">no</div><div class="fn fn-warn">warn: filesystem only — no content extracted</div></div>
+          <div class="flow-branch-item">
+            <div class="flow-branch-label">yes</div>
+            <div class="fn">extract posts<br><small style="color:var(--mu)">push progress: "Extracting..."</small></div>
+            <div class="fa-d"></div>
+            <div class="fn">chunk + embed<br><small style="color:var(--mu)">push progress: "Embedding N of M..."</small></div>
+            <div class="fa-d"></div>
+            <div class="fn">VectorStore upsert</div>
+            <div class="fa-d"></div>
+            <div class="fn fn-end">push INDEX_COMPLETE event → DiscoverTab transitions to ready</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2>The Missing Wire: Real-Time Progress</h2>
+  <pre><code>// ContentPipeline already fires this — needs wiring to renderer:
+contentPipeline.onStatusChange = (siteId, status) =&gt; {
+  mainWindow.webContents.send(IPC_CHANNELS.INDEX_PROGRESS, {
+    siteId,
+    state:         status.state,     // 'indexing' | 'indexed' | 'error'
+    progress:      status.progress,   // 0-100
+    message:       status.message,    // 'Extracting...', 'Embedding 40 of 200...'
+    documentCount: status.documentCount
+  });
+};
+
+// DiscoverTab.componentDidMount adds a listener:
+ipc.on(IPC_CHANNELS.INDEX_PROGRESS, (_, data) =&gt; {
+  this.setState(prev =&gt; ({
+    indexEntries: prev.indexEntries.map(e =&gt;
+      e.siteId === data.siteId ? { ...e, ...data } : e
+    )
+  }));
+});</code></pre>
+
+  <h2>WPE Search Path (Phase 2)</h2>
+  <div class="flow">
+    <div class="fn fn-start">User searches "customer feedback"</div>
+    <div class="fa-d"></div>
+    <div class="fn">SEARCH_UNIFIED IPC handler</div>
+    <div class="flow-branch" style="margin:8px 0">
+      <div class="flow-branch-item">
+        <div class="fn">LocalSearcher<br><small style="color:var(--mu)">LanceDB FTS + vectors</small></div>
+        <div class="fa-d"></div>
+        <div class="fn">Local results<br><small style="color:var(--mu)">with semantic score</small></div>
+      </div>
+      <div class="flow-branch-item">
+        <div class="fn">WPESearcher<br><small style="color:var(--mu)">Graph DB content FTS5</small></div>
+        <div class="fa-d"></div>
+        <div class="fn">WPE results<br><small style="color:var(--mu)">keyword only</small></div>
+      </div>
+    </div>
+    <div class="fa-d"></div>
+    <div class="fn">Merge + rank by score type</div>
+    <div class="fa-d"></div>
+    <div class="fn fn-end">DiscoverTab — results tagged with source (local / wpe)</div>
+  </div>
+</div>
+
+<!-- ══════ FUTURE DISCOVER ══════ -->
+<div id="f-discover" class="section">
+  <h1>Discover Tab — Rationalized State Machine</h1>
+
+  <h2>Progressive Disclosure by Capability</h2>
+  <div class="flow">
+    <div class="fn fn-start">Discover tab opens</div>
+    <div class="fa-d"></div>
+    <div class="fn fn-decision">any local site content indexed?</div>
+    <div class="flow-branch" style="margin:8px 0">
+      <div class="flow-branch-item">
+        <div class="flow-branch-label">no local content</div>
+        <div class="fn">FRESH — index CTA<br><small style="color:var(--mu)">"Index my sites now" button</small></div>
+        <div class="fa-d"></div>
+        <div class="fn">INDEXING — real-time progress<br><small style="color:var(--mu)">per-site stage + percent via IPC push</small></div>
+        <div class="fa-d"></div>
+        <div class="fn fn-end">SEARCH — local keyword + semantic</div>
+      </div>
+      <div class="flow-branch-item">
+        <div class="flow-branch-label">yes local</div>
+        <div class="fn fn-end">SEARCH — local keyword + semantic</div>
+      </div>
+      <div class="flow-branch-item">
+        <div class="flow-branch-label">WPE only, no local</div>
+        <div class="fn fn-warn">METADATA — WPE visible<br>not yet searchable<br>CTA: Sync WPE content</div>
+      </div>
+    </div>
+    <div class="fa-d"></div>
+    <div class="fn fn-decision">WPE content synced?</div>
+    <div class="flow-branch" style="margin:8px 0">
+      <div class="flow-branch-item"><div class="flow-branch-label">yes</div><div class="fn fn-end">full fleet — local semantic + WPE keyword</div></div>
+      <div class="flow-branch-item"><div class="flow-branch-label">no</div><div class="fn">banner: N WPE sites not included in search</div></div>
+    </div>
+  </div>
+
+  <h2>Data Requirements Per State</h2>
+  <table>
+    <tr><th>State</th><th>Requires</th><th>IPC</th></tr>
+    <tr><td>Fresh</td><td>sites list only</td><td>GET_SITES</td></tr>
+    <tr><td>Indexing</td><td>real-time progress events</td><td>ipc.on(INDEX_PROGRESS)</td></tr>
+    <tr><td>Search (local)</td><td>IndexRegistry + ONNX loaded</td><td>SEARCH + SEARCH_KEYWORD</td></tr>
+    <tr><td>Search (full fleet)</td><td>WPE graph DB content + FTS5 enabled</td><td>SEARCH_UNIFIED (new)</td></tr>
+  </table>
+</div>
+
+<!-- ══════ PHASE 1 ══════ -->
+<div id="p1" class="section">
+  <h1>Phase 1 — Real-Time Feedback</h1>
+  <p>Fixes that unblock the first-run Discover experience without architectural changes. Target: current branch.</p>
+
+  <div class="phase">
+    <div class="phase-label">Phase 1 · 1-2 days</div>
+    <div class="phase-title">Wire onStatusChange → IPC push → DiscoverTab</div>
+    <div class="phase-desc">The callback exists in ContentPipeline. We just need the wire.</div>
+  </div>
+
+  <ul class="tl">
+    <li><div class="tn">1</div><div class="tb"><div class="tt">Add INDEX_PROGRESS IPC event channel</div><div class="td">New channel in constants.ts: <code>nexus-ai:content:index-progress</code>. Used for main→renderer push (ipcRenderer.on, not invoke).</div></div><div class="te">~30min</div></li>
+    <li><div class="tn">2</div><div class="tb"><div class="tt">Wire ContentPipeline.onStatusChange → IPC push in lifecycle-hooks.ts</div><div class="td">Set <code>contentPipeline.onStatusChange = (siteId, status) =&gt; mainWindow.webContents.send(INDEX_PROGRESS, {...})</code> before calling indexSite().</div></div><div class="te">~1h</div></li>
+    <li><div class="tn">3</div><div class="tb"><div class="tt">Subscribe to INDEX_PROGRESS in DiscoverTab.componentDidMount</div><div class="td">Register ipc.on listener that updates indexEntries state in real time. Remove in componentWillUnmount.</div></div><div class="te">~1h</div></li>
+    <li><div class="tn">4</div><div class="tb"><div class="tt">Show per-site progress stage in the indexing grid</div><div class="td">DiscoverTab's renderIndexing() currently shows "waiting". Update to show stage message: "Extracting...", "Embedding 40 of 200...", "✓ 312 pages".</div></div><div class="te">~1h</div></li>
+    <li><div class="tn">5</div><div class="tb"><div class="tt">Show ONNX model status in fresh state</div><div class="td">Check GET_STARTUP_STATUS on mount. If embedding model not loaded show "AI model loading..." instead of silently failing when user clicks Index.</div></div><div class="te">~1h</div></li>
+    <li><div class="tn">6</div><div class="tb"><div class="tt">Add MySQL retry (3× / 2s) in MySQLExtractor</div><div class="td">Most "not ready" failures happen in the first 5s after site start. 3 retries cost 6s max but dramatically improve reliability on slow machines.</div></div><div class="te">~1h</div></li>
+  </ul>
+</div>
+
+<!-- ══════ PHASE 2 ══════ -->
+<div id="p2" class="section">
+  <h1>Phase 2 — WPE Content in Discover</h1>
+  <p>Make WPE sites contribute search results in the Discover keyword column.</p>
+
+  <div class="phase">
+    <div class="phase-label">Phase 2 · 3-5 days</div>
+    <div class="phase-title">WPE sites appear in Discover search results</div>
+    <div class="phase-desc">Route SEARCH through both LanceDB (local) and graph DB FTS5 (WPE). Result columns show site source clearly.</div>
+  </div>
+
+  <ul class="tl">
+    <li><div class="tn">1</div><div class="tb"><div class="tt">Enable SQLite FTS5 on graph DB content table</div><div class="td">Add migration in GraphService to create FTS5 virtual table on content(title, content). Enables fast full-text search without loading all rows.</div></div><div class="te">~2h</div></li>
+    <li><div class="tn">2</div><div class="tb"><div class="tt">Add SEARCH_UNIFIED IPC handler</div><div class="td">Queries LanceDB (local semantic + keyword) and graph DB FTS5 (WPE keyword) in parallel. Merges results with source label. Replace dual SEARCH + SEARCH_KEYWORD calls in DiscoverTab.</div></div><div class="te">~3h</div></li>
+    <li><div class="tn">3</div><div class="tb"><div class="tt">Run RemoteContentExtractor during WPE sync (opt-in)</div><div class="td">WPEContentIndexer exists but is not called. Add opt-in toggle (off by default) to extract and store WPE post content in graph DB during sync.</div></div><div class="te">~2h</div></li>
+    <li><div class="tn">4</div><div class="tb"><div class="tt">DiscoverTab: show WPE sites in keyword column</div><div class="td">Update result cards with a "WPE" badge. Add note in column header: "Local: semantic + keyword / WPE: keyword only".</div></div><div class="te">~2h</div></li>
+    <li><div class="tn">5</div><div class="tb"><div class="tt">WPE content sync toggle in Settings</div><div class="td">Settings → WP Engine → Sync Schedule: "Include post content in sync" (off by default, explains SSH usage).</div></div><div class="te">~1h</div></li>
+  </ul>
+</div>
+
+<!-- ══════ PHASE 3 ══════ -->
+<div id="p3" class="section">
+  <h1>Phase 3 — Unified Indexer Architecture</h1>
+  <p>The structural work that makes the system deterministic, testable, and extensible.</p>
+
+  <div class="phase">
+    <div class="phase-label">Phase 3 · 1-2 weeks</div>
+    <div class="phase-title">IndexerRegistry + unified SiteIndex state</div>
+    <div class="phase-desc">One conceptual model for "what do we know about this site and can we search it?" — regardless of local vs WPE.</div>
+  </div>
+
+  <h2>Target Architecture</h2>
+  <div class="storage-row" style="flex-direction:column;gap:12px">
+    <div class="storage-row">
+      <div class="storage-box"><div class="storage-box-title">LocalIndexer</div><div class="storage-box-items">MySQLExtractor + ONNX<br>→ LanceDB (vectors + FTS)<br>→ SiteMetadataCache</div></div>
+      <div class="storage-box"><div class="storage-box-title">WPEMetadataIndexer</div><div class="storage-box-items">CAPI + SSH WP-CLI<br>→ Graph DB (plugins, themes)<br>→ SiteMetadataCache</div></div>
+      <div class="storage-box"><div class="storage-box-title">WPEContentIndexer</div><div class="storage-box-items">SSH + RemoteContentExtractor<br>→ Graph DB (content FTS5)<br>→ LanceDB (optional vectors)</div></div>
+    </div>
+    <div style="text-align:center;color:var(--mu);font-size:12px">All three report to ↓</div>
+    <div class="storage-box" style="text-align:center">
+      <div class="storage-box-title">IndexerRegistry</div>
+      <div class="storage-box-items">SiteIndex state per site: unknown / metadata_only / content_indexed<br>Progress events → IPC push → DiscoverTab real-time updates</div>
+    </div>
+    <div style="text-align:center;color:var(--mu);font-size:12px">All storage feeds ↓</div>
+    <div class="storage-box" style="text-align:center">
+      <div class="storage-box-title">SEARCH_UNIFIED</div>
+      <div class="storage-box-items">Routes by capability — semantic for local, keyword for WPE, or both</div>
+    </div>
+  </div>
+
+  <ul class="tl">
+    <li><div class="tn">1</div><div class="tb"><div class="tt">Consolidate IndexRegistry + SiteMetadataCache into SiteIndex</div><div class="td">Single record: <code>{ siteId, source: 'local'|'wpe', searchCapability: 'none'|'keyword'|'semantic', metadata, lastIndexed, progress }</code>. One IPC channel, one source of truth for DiscoverTab.</div></div><div class="te">3 days</div></li>
+    <li><div class="tn">2</div><div class="tb"><div class="tt">IndexerRegistry — central coordinator</div><div class="td">Routes indexSite(siteId) to the right indexer based on site type. Emits progress events. Handles concurrency (one site at a time per indexer).</div></div><div class="te">2 days</div></li>
+    <li><div class="tn">3</div><div class="tb"><div class="tt">Explicit dependency checking before indexing</div><div class="td">Each indexer exposes checkDependencies() → DependencyResult[]. Results shown in UI before indexing starts. "ONNX model: ✅ | MySQL: ⚠ (will auto-start) | WPE auth: ✅".</div></div><div class="te">2 days</div></li>
+    <li><div class="tn">4</div><div class="tb"><div class="tt">Testable indexer interfaces</div><div class="td">Common interface for all indexers. Unit tests inject mock indexers. Integration tests use real indexers against WPE_FIXTURES (nexus-e2e-test, jppwpeplugin).</div></div><div class="te">2 days</div></li>
+  </ul>
+
+  <h2>Testing Checkpoints</h2>
+  <table>
+    <tr><th>Phase</th><th>Verify by</th><th>Fixture</th></tr>
+    <tr><td>Phase 1</td><td>Click "Index my sites" → see real-time per-site progress</td><td>any local site</td></tr>
+    <tr><td>Phase 1</td><td>Search returns results immediately after indexing completes</td><td>nexus-e2e-test</td></tr>
+    <tr><td>Phase 2</td><td>Search returns WPE results in the keyword column</td><td>jppwpeplugin, jppwpeplugistg</td></tr>
+    <tr><td>Phase 3</td><td>npm test covers LocalIndexer + WPEMetadataIndexer independently</td><td>mock fixtures</td></tr>
+    <tr><td>Phase 3</td><td>Reset index → Discover fresh → index → search → MCP card</td><td>local + WPE fixture</td></tr>
+  </table>
+
+  <div class="callout ci"><strong>Migration strategy:</strong> Phase 1 is drop-in improvements. Phase 2 adds new search paths alongside existing ones. Phase 3 consolidates — existing code removed only after new code is proven. Each phase ships independently.</div>
+</div>
+
+<!-- ══════ SITE DATA SCHEMA ══════ -->
+<div id="schema" class="section">
+  <h1>Complete Site Data Schema</h1>
+  <p>The canonical definition of every field Nexus wants to know about a site — local or WPE — along with where it comes from, when it's populated, where it lives, and what it unlocks.</p>
+
+  <div class="callout ci">This is the spec that doesn't yet exist in code. Building toward a unified <code>SiteIndex</code> type (Phase 3) starts here — every field below should eventually have an owner, a source, and a freshness guarantee.</div>
+
+  <!-- ── FIELD GROUPS ── -->
+
+  <h2>Group 1 — Identity <span class="chip cm">always available</span></h2>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Local source</th><th>WPE source</th><th>Store</th><th>Freshness</th></tr>
+    <tr><td><code>siteId</code></td><td>string</td><td>Local internal ID</td><td>CAPI install UUID</td><td>All stores</td><td>Permanent — never changes</td></tr>
+    <tr><td><code>siteName</code></td><td>string</td><td>Local site name</td><td>CAPI install name</td><td>All stores</td><td>On rename</td></tr>
+    <tr><td><code>source</code></td><td>'local' | 'wpe'</td><td>always 'local'</td><td>always 'wpe'</td><td>Graph DB, MetadataCache</td><td>Permanent</td></tr>
+    <tr><td><code>domain</code></td><td>string</td><td>Local site domain</td><td>CAPI primaryDomain</td><td>Graph DB, MetadataCache</td><td>On domain change</td></tr>
+    <tr><td><code>environment</code></td><td>'production' | 'staging' | 'development' | null</td><td>null (not applicable)</td><td>CAPI install.environment</td><td>Graph DB, WPE install cache</td><td>Rarely changes</td></tr>
+    <tr><td><code>remoteInstallId</code></td><td>string | null</td><td>null unless linked</td><td>CAPI install UUID</td><td>Graph DB, WPE install cache</td><td>Permanent</td></tr>
+    <tr><td><code>accountId</code></td><td>string | null</td><td>null</td><td>CAPI account UUID</td><td>Graph DB, WPE install cache</td><td>Permanent</td></tr>
+  </table>
+
+  <h2>Group 2 — WordPress Runtime <span class="chip cy">populated on site start / 24h sync</span></h2>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Local source</th><th>WPE source</th><th>Store</th><th>Trigger</th></tr>
+    <tr><td><code>wpVersion</code></td><td>string</td><td>wp core version (WP-CLI)</td><td>SSH wp core version</td><td>MetadataCache + Graph DB</td><td>Site start / WPE sync 24h</td></tr>
+    <tr><td><code>phpVersion</code></td><td>string</td><td>Local config file (fast, no WP-CLI)</td><td>CAPI install.phpVersion</td><td>MetadataCache</td><td>Site start / CAPI sync</td></tr>
+    <tr><td><code>mysqlVersion</code></td><td>string</td><td>wp eval — global $wpdb</td><td>not available</td><td>MetadataCache</td><td>Site start</td></tr>
+    <tr><td><code>siteUrl</code></td><td>string</td><td>wp option get siteurl</td><td>SSH wp option get siteurl</td><td>MetadataCache + Graph DB</td><td>Site start / WPE sync</td></tr>
+    <tr><td><code>adminEmail</code></td><td>string</td><td>wp option get admin_email</td><td>SSH wp option get admin_email</td><td>MetadataCache</td><td>Site start / WPE sync</td></tr>
+    <tr><td><code>activeTheme</code></td><td>string</td><td>wp option get stylesheet</td><td>SSH wp option get stylesheet</td><td>MetadataCache + Graph DB</td><td>Site start / WPE sync</td></tr>
+  </table>
+
+  <h2>Group 3 — Plugin &amp; Theme Inventory <span class="chip cy">populated on site start / 24h sync</span></h2>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Local source</th><th>WPE source</th><th>Store</th><th>Trigger</th></tr>
+    <tr><td><code>plugins[]</code></td><td>Plugin[]</td><td>wp plugin list (WP-CLI)</td><td>SSH wp plugin list</td><td>MetadataCache + Graph DB</td><td>Site start / WPE sync 24h</td></tr>
+    <tr><td><code>plugins[].name</code></td><td>string</td><td>plugin slug</td><td>plugin slug</td><td>—</td><td>—</td></tr>
+    <tr><td><code>plugins[].version</code></td><td>string</td><td>from WP-CLI output</td><td>from SSH WP-CLI</td><td>—</td><td>—</td></tr>
+    <tr><td><code>plugins[].status</code></td><td>'active' | 'inactive'</td><td>from WP-CLI output</td><td>from SSH WP-CLI</td><td>—</td><td>—</td></tr>
+    <tr><td><code>themes[]</code></td><td>Theme[]</td><td>wp theme list (WP-CLI)</td><td>SSH wp theme list</td><td>MetadataCache + Graph DB</td><td>Site start / WPE sync 24h</td></tr>
+  </table>
+
+  <h2>Group 4 — Content Inventory <span class="chip cy">populated on site start</span></h2>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Local source</th><th>WPE source</th><th>Store</th><th>Trigger</th></tr>
+    <tr><td><code>postCount</code></td><td>number</td><td>wp eval — $wpdb COUNT</td><td>SSH wp post list --format=count</td><td>MetadataCache + Graph DB</td><td>Site start / WPE sync</td></tr>
+    <tr><td><code>postCountByType</code></td><td>Record&lt;string, number&gt;</td><td>wp eval — GROUP BY post_type</td><td>❌ not extracted</td><td>MetadataCache</td><td>Site start</td></tr>
+    <tr><td><code>lastPostAt</code></td><td>timestamp</td><td>wp eval — MAX(post_date_gmt)</td><td>❌ not extracted</td><td>MetadataCache</td><td>Site start</td></tr>
+    <tr><td><code>customTables</code></td><td>string[]</td><td>MySQL SHOW TABLES scan</td><td>❌ not extracted</td><td>MetadataCache (in structure)</td><td>Site start</td></tr>
+  </table>
+
+  <h2>Group 5 — Content Search Index <span class="chip cr">local only today</span></h2>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Local source</th><th>WPE source</th><th>Store</th><th>Trigger</th></tr>
+    <tr><td><code>indexState</code></td><td>'idle' | 'indexing' | 'indexed' | 'stale' | 'error'</td><td>ContentPipeline</td><td>❌ N/A</td><td>IndexRegistry</td><td>Real-time during index</td></tr>
+    <tr><td><code>documentCount</code></td><td>number</td><td>ContentPipeline result</td><td>❌ N/A</td><td>IndexRegistry</td><td>After each index run</td></tr>
+    <tr><td><code>chunkCount</code></td><td>number</td><td>ContentPipeline result</td><td>❌ N/A</td><td>IndexRegistry</td><td>After each index run</td></tr>
+    <tr><td><code>lastIndexed</code></td><td>timestamp</td><td>ContentPipeline result</td><td>❌ N/A</td><td>IndexRegistry</td><td>After each index run</td></tr>
+    <tr><td><code>vectorTableExists</code></td><td>boolean</td><td>VectorStore.getTable()</td><td>❌ N/A</td><td>LanceDB (derived)</td><td>After index / reset</td></tr>
+    <tr><td><code>ftsIndexExists</code></td><td>boolean</td><td>LanceDB FTS on content</td><td>Graph DB FTS5 (Phase 2)</td><td>LanceDB / Graph DB</td><td>After index</td></tr>
+    <tr><td><code>indexErrors</code></td><td>string[]</td><td>ContentPipeline errors[]</td><td>❌ N/A</td><td>IndexRegistry</td><td>After each index run</td></tr>
+  </table>
+
+  <h2>Group 6 — Freshness &amp; Sync Metadata</h2>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Local</th><th>WPE</th><th>Store</th><th>Staleness threshold</th></tr>
+    <tr><td><code>lastUpdated</code></td><td>timestamp</td><td>siteStarted hook</td><td>WPE sync run</td><td>MetadataCache</td><td>24 hours</td></tr>
+    <tr><td><code>updateSource</code></td><td>'lifecycle' | 'manual' | 'setup-ai' | 'wpe-sync'</td><td>varies</td><td>'wpe-sync'</td><td>MetadataCache</td><td>Informational</td></tr>
+    <tr><td><code>scanDepth</code></td><td>'filesystem' | 'metadata' | 'full'</td><td>varies by run</td><td>'metadata'</td><td>MetadataCache</td><td>Informational</td></tr>
+    <tr><td><code>wpeSyncedAt</code></td><td>timestamp | null</td><td>N/A</td><td>after SSH sync completes</td><td>Graph DB sites.last_sync_at</td><td>8 hours</td></tr>
+    <tr><td><code>capiSyncedAt</code></td><td>timestamp | null</td><td>N/A</td><td>after CAPI install fetch</td><td>WPE install cache</td><td>8 hours</td></tr>
+  </table>
+
+  <h2>Group 7 — Usage Metrics <span class="chip cm">WPE only</span></h2>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Source</th><th>Store</th><th>Trigger</th></tr>
+    <tr><td><code>visits</code></td><td>number</td><td>CAPI usage API</td><td>Graph DB site_usage</td><td>On demand / scheduled</td></tr>
+    <tr><td><code>bandwidthBytes</code></td><td>number</td><td>CAPI usage API</td><td>Graph DB site_usage</td><td>On demand / scheduled</td></tr>
+    <tr><td><code>storageBytes</code></td><td>number</td><td>CAPI usage API</td><td>Graph DB site_usage</td><td>On demand / scheduled</td></tr>
+  </table>
+
+  <!-- ── CAPABILITY MATRIX ── -->
+  <h2>Capability Unlock Matrix</h2>
+  <p>Which fields must be populated for each feature to work. <strong>This is the dependency graph made explicit.</strong></p>
+
+  <table>
+    <tr>
+      <th>Capability</th>
+      <th>Required fields</th>
+      <th>Local today</th>
+      <th>WPE today</th>
+      <th>Blocker</th>
+    </tr>
+    <tr>
+      <td><strong>Show in site list</strong></td>
+      <td>siteId, siteName, source</td>
+      <td class="cg">✅ Always</td>
+      <td class="cg">✅ After CAPI sync</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><strong>Plugin audit / fleet</strong></td>
+      <td>plugins[] populated</td>
+      <td class="cg">✅ After site start</td>
+      <td class="cg">✅ After WPE sync</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><strong>Version drift detection</strong></td>
+      <td>wpVersion, phpVersion</td>
+      <td class="cg">✅ After site start</td>
+      <td class="cg">✅ After WPE sync</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><strong>Keyword search (Discover)</strong></td>
+      <td>documentCount &gt; 0, ftsIndexExists</td>
+      <td class="cg">✅ After indexing</td>
+      <td class="cr">❌ SEARCH_KEYWORD not wired to graph DB</td>
+      <td>Phase 2: SEARCH_UNIFIED + graph DB FTS5</td>
+    </tr>
+    <tr>
+      <td><strong>Semantic search (Discover)</strong></td>
+      <td>vectorTableExists, documentCount &gt; 0</td>
+      <td class="cg">✅ After indexing</td>
+      <td class="cr">❌ No vectors for WPE</td>
+      <td>Phase 2+: WPEContentIndexer + ONNX via SSH</td>
+    </tr>
+    <tr>
+      <td><strong>Discover first-run progress</strong></td>
+      <td>indexState real-time push</td>
+      <td class="cy">⚠ 10s poll only — onStatusChange not wired</td>
+      <td class="cr">❌ No indexing</td>
+      <td>Phase 1: wire onStatusChange → IPC push</td>
+    </tr>
+    <tr>
+      <td><strong>DB health scan</strong></td>
+      <td>site running (MySQL socket)</td>
+      <td class="cg">✅ When running</td>
+      <td class="cr">❌ Not supported</td>
+      <td>Local-only feature</td>
+    </tr>
+    <tr>
+      <td><strong>WP-CLI commands</strong></td>
+      <td>MySQL socket OR SSH accessible</td>
+      <td class="cg">✅ When running</td>
+      <td class="cy">⚠ Non-prod only (permission default)</td>
+      <td>Production blocked by default</td>
+    </tr>
+    <tr>
+      <td><strong>Site Finder (AI search)</strong></td>
+      <td>documentCount &gt; 0, aiProvider configured</td>
+      <td class="cg">✅ After indexing + AI setup</td>
+      <td class="cr">❌ No vectors for WPE</td>
+      <td>Same as semantic search</td>
+    </tr>
+    <tr>
+      <td><strong>Smart Search (atlas-search)</strong></td>
+      <td>documentCount &gt; 0, atlas-search plugin installed</td>
+      <td class="cg">✅ After setup</td>
+      <td class="cr">❌ Not implemented</td>
+      <td>Local-only feature today</td>
+    </tr>
+    <tr>
+      <td><strong>AI toolkit (title gen, alt text)</strong></td>
+      <td>aiProvider configured, plugin installed</td>
+      <td class="cg">✅ After AI setup</td>
+      <td class="cr">❌ Not supported</td>
+      <td>Requires running site + WP plugin</td>
+    </tr>
+    <tr>
+      <td><strong>Usage analytics (visits, bandwidth)</strong></td>
+      <td>visits, bandwidthBytes</td>
+      <td class="cr">❌ Not applicable</td>
+      <td class="cg">✅ After CAPI usage call</td>
+      <td>WPE-only feature</td>
+    </tr>
+  </table>
+
+  <!-- ── POPULATION TIMING ── -->
+  <h2>Population Timing Map</h2>
+  <p>When does each group of data arrive? This shows the order of operations from zero to fully-capable.</p>
+
+  <div style="display:flex;flex-direction:column;gap:0;margin:16px 0;border:1px solid var(--bd);border-radius:8px;overflow:hidden">
+    <div style="display:grid;grid-template-columns:180px 1fr;background:var(--s2)">
+      <div style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);border-right:1px solid var(--bd)">When</div>
+      <div style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mu)">What gets populated</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:180px 1fr;border-top:1px solid var(--bd)">
+      <div style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--ac);border-right:1px solid var(--bd);background:rgba(14,202,212,.04)">Site discovered</div>
+      <div style="padding:10px 12px;font-size:12px;color:var(--mu)"><strong style="color:var(--tx)">Identity:</strong> siteId, siteName, source, domain<br><span style="font-size:11px">WPE: also environment, remoteInstallId, accountId from CAPI</span></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:180px 1fr;border-top:1px solid var(--bd)">
+      <div style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--gr);border-right:1px solid var(--bd);background:rgba(81,187,123,.04)">Local site starts</div>
+      <div style="padding:10px 12px;font-size:12px;color:var(--mu)">
+        <strong style="color:var(--tx)">WordPress Runtime:</strong> wpVersion, phpVersion, mysqlVersion, siteUrl, adminEmail, activeTheme<br>
+        <strong style="color:var(--tx)">Plugin/Theme Inventory:</strong> plugins[], themes[]<br>
+        <strong style="color:var(--tx)">Content Inventory:</strong> postCount, postCountByType, lastPostAt<br>
+        <span style="font-size:11px">Source: Promise.allSettled — 7 parallel WP-CLI calls. Partial data if any fail.</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:180px 1fr;border-top:1px solid var(--bd)">
+      <div style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--gr);border-right:1px solid var(--bd);background:rgba(81,187,123,.04)">Local site indexed<br><span style="font-size:10px;font-weight:400;color:var(--mu)">(same start, after WP-CLI)</span></div>
+      <div style="padding:10px 12px;font-size:12px;color:var(--mu)">
+        <strong style="color:var(--tx)">Search Index:</strong> documentCount, chunkCount, lastIndexed, vectorTableExists, ftsIndexExists<br>
+        <strong style="color:var(--tx)">Index State:</strong> indexState = 'indexed'<br>
+        <span style="font-size:11px">Unlocks: keyword search, semantic search, Site Finder, Smart Search</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:180px 1fr;border-top:1px solid var(--bd)">
+      <div style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--pu);border-right:1px solid var(--bd);background:rgba(167,139,250,.04)">WPE CAPI sync<br><span style="font-size:10px;font-weight:400;color:var(--mu)">(8h schedule or manual)</span></div>
+      <div style="padding:10px 12px;font-size:12px;color:var(--mu)">
+        <strong style="color:var(--tx)">Identity (WPE):</strong> environment, remoteInstallId, accountId confirmed<br>
+        <strong style="color:var(--tx)">Plugin/Theme (WPE):</strong> plugins[], themes[], wpVersion via SSH WP-CLI<br>
+        <strong style="color:var(--tx)">Content Inventory (WPE):</strong> postCount via SSH wp post list<br>
+        <span style="font-size:11px">Unlocks: plugin audit, version drift, fleet management</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:180px 1fr;border-top:1px solid var(--bd)">
+      <div style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--ye);border-right:1px solid var(--bd);background:rgba(245,158,11,.04)">WPE content indexed<br><span style="font-size:10px;font-weight:400;color:var(--mu)">(Phase 2 — not yet)</span></div>
+      <div style="padding:10px 12px;font-size:12px;color:var(--mu)">
+        <strong style="color:var(--tx)">Graph DB content table:</strong> post records via SSH RemoteContentExtractor<br>
+        <strong style="color:var(--tx)">Graph DB FTS5:</strong> full-text search index on title + content<br>
+        <span style="font-size:11px">Unlocks: WPE sites appear in Discover keyword search column</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:180px 1fr;border-top:1px solid var(--bd)">
+      <div style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--mu);border-right:1px solid var(--bd)">On demand</div>
+      <div style="padding:10px 12px;font-size:12px;color:var(--mu)">
+        <strong style="color:var(--tx)">Usage Metrics (WPE):</strong> visits, bandwidthBytes, storageBytes from CAPI usage API<br>
+        <strong style="color:var(--tx)">DB Health:</strong> scan results from MySQL (local running sites only)
+      </div>
+    </div>
+  </div>
+
+  <!-- ── GAPS ── -->
+  <h2>Schema Gaps — Fields We Want But Don't Have</h2>
+  <table>
+    <tr><th>Missing field</th><th>Needed for</th><th>Why it's missing</th><th>Phase to fix</th></tr>
+    <tr><td><code>indexState</code> (real-time)</td><td>Discover progress grid</td><td>onStatusChange not wired to renderer</td><td>Phase 1</td></tr>
+    <tr><td><code>vectorTableExists</code> (WPE)</td><td>WPE semantic search</td><td>WPEContentIndexer not implemented</td><td>Phase 2+</td></tr>
+    <tr><td><code>ftsIndexExists</code> (WPE)</td><td>WPE keyword search in Discover</td><td>Graph DB FTS5 not enabled, SEARCH_UNIFIED not built</td><td>Phase 2</td></tr>
+    <tr><td><code>postCountByType</code> (WPE)</td><td>Content type breakdown for WPE</td><td>SSH WP-CLI only returns total count</td><td>Phase 2</td></tr>
+    <tr><td><code>searchCapability</code></td><td>Unified Discover state machine</td><td>No unified SiteIndex — three separate stores</td><td>Phase 3</td></tr>
+    <tr><td><code>indexProgress</code> (0-100)</td><td>Real-time Discover progress bar</td><td>onStatusChange not wired to renderer</td><td>Phase 1</td></tr>
+    <tr><td><code>dependencyStatus</code></td><td>Pre-flight check before indexing</td><td>No dependency checker exists</td><td>Phase 3</td></tr>
+  </table>
+
+  <!-- ── TARGET TYPE ── -->
+  <h2>Target: Unified SiteIndex Type (Phase 3)</h2>
+  <p>What the single source of truth should look like once all three phases are complete:</p>
+  <pre><code>interface SiteIndex {
+  // ── Identity ──────────────────────────────────────────────────────
+  siteId:             string;
+  siteName:           string;
+  source:             'local' | 'wpe';
+  domain:             string;
+  environment:        'production' | 'staging' | 'development' | null;
+  remoteInstallId:    string | null;  // WPE install UUID
+  accountId:          string | null;  // WPE account UUID
+
+  // ── WordPress Runtime ─────────────────────────────────────────────
+  wpVersion:          string | null;
+  phpVersion:         string | null;
+  siteUrl:            string | null;
+  adminEmail:         string | null;
+  activeTheme:        string | null;
+
+  // ── Inventory ─────────────────────────────────────────────────────
+  plugins:            Plugin[];
+  themes:             Theme[];
+  postCount:          number | null;
+  postCountByType:    Record&lt;string, number&gt; | null;
+  lastPostAt:         number | null;
+
+  // ── Search Index ──────────────────────────────────────────────────
+  searchCapability:   'none' | 'keyword' | 'semantic';
+  indexState:         'unknown' | 'indexing' | 'indexed' | 'stale' | 'error';
+  indexProgress:      number | null;   // 0-100 during indexing
+  indexMessage:       string | null;   // "Embedding 40 of 200..."
+  documentCount:      number;
+  chunkCount:         number;
+  lastIndexed:        number | null;
+  indexErrors:        string[];
+
+  // ── Freshness ─────────────────────────────────────────────────────
+  lastUpdated:        number;
+  updateSource:       'lifecycle' | 'manual' | 'setup-ai' | 'wpe-sync' | 'capi';
+  isStale:            boolean;         // derived: lastUpdated &gt; 24h
+  wpeSyncedAt:        number | null;
+  capiSyncedAt:       number | null;
+
+  // ── Derived Capability Flags ──────────────────────────────────────
+  // Computed from above fields — not stored, recalculated on read
+  canKeywordSearch:   boolean;  // documentCount &gt; 0 && ftsIndexExists
+  canSemanticSearch:  boolean;  // searchCapability === 'semantic'
+  canFleetAudit:      boolean;  // plugins.length &gt; 0
+  canVersionDrift:    boolean;  // wpVersion !== null
+  canDbScan:          boolean;  // source === 'local' (site must be running)
+  canWpCli:           boolean;  // local running OR wpe non-prod SSH
+  canAiFeatures:      boolean;  // indexState === 'indexed' && aiProvider set
+}</code></pre>
+
+</div><!-- /schema -->
+
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick') === "show('" + id + "')") n.classList.add('active');
+  });
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>

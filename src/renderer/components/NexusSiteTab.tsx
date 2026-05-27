@@ -9,6 +9,7 @@
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 import type { NexusSettings, AIProvider, SiteAIConfig, DbScanResult } from '../../common/types';
+import { AssistantPanel } from './AssistantPanel';
 
 export interface NexusSiteTabProps {
   site: { id: string; name: string; path: string; status?: string };
@@ -342,7 +343,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
   handleIndex = async (): Promise<void> => {
     this.setState({ indexing: true });
     try {
-      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_SITE, this.props.site.id);
+      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_SITE, { siteId: this.props.site.id });
       if (!this.mounted) return;
       await this.fetchData();
     } catch {
@@ -788,8 +789,9 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       ),
     );
 
-    // Credentials row (only when AI is configured)
-    const credsRow = isAIConfigured && aiStatus
+    // Credentials row — hidden when Local Gateway is active because the gateway
+    // plugin handles authentication internally; no WP DB credential sync needed.
+    const credsRow = isAIConfigured && aiStatus && !useLocalGateway
       ? this.cardRow('Credentials',
           React.createElement('span', { style: dot(aiStatus.credentialsSynced ? UI_COLORS.STATUS_RUNNING : '#888') }),
           React.createElement('span', { style: { marginRight: 6 } },
@@ -939,18 +941,38 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
         )
       : null;
 
-    return React.createElement('div', { style: styles.container },
-      // Top row: 2-column grid
-      React.createElement('div', { style: styles.grid },
-        this.renderContentIndexCard(),
-        this.renderAIProviderCard(),
+    const { site } = this.props;
+
+    return React.createElement('div', { style: { display: 'flex', height: '100%', overflow: 'hidden' } },
+
+      // Left: existing content (55%, scrollable)
+      React.createElement('div', { style: { flex: '0 0 55%', overflowY: 'auto' as const, padding: '16px 20px', borderRight: '1px solid var(--nxai-card-border, #30363d)', boxSizing: 'border-box' as const } },
+        // Top row: 2-column grid
+        React.createElement('div', { style: styles.grid },
+          this.renderContentIndexCard(),
+          this.renderAIProviderCard(),
+        ),
+        // Full-width: Database Health
+        this.renderDatabaseHealthCard(),
+        // Full-width: Tools
+        this.renderToolsCard(),
+        // Result banner at bottom
+        resultBanner,
       ),
-      // Full-width: Database Health
-      this.renderDatabaseHealthCard(),
-      // Full-width: Tools
-      this.renderToolsCard(),
-      // Result banner at bottom
-      resultBanner,
+
+      // Right: AI assistant (45%)
+      React.createElement('div', { style: { flex: '0 0 45%', display: 'flex', flexDirection: 'column' as const, overflow: 'hidden' } },
+        React.createElement('div', {
+          style: { padding: '10px 14px', borderBottom: '1px solid var(--nxai-card-border, #30363d)', fontSize: 11, fontWeight: 700, color: '#0ECAD4', flexShrink: 0 },
+        }, `✦ Ask about ${site.name}`),
+        React.createElement(AssistantPanel, {
+          electron: this.props.electron,
+          mode: 'site' as const,
+          siteId: this.props.site.id,
+          siteName: this.props.site.name,
+          layout: 'panel' as const,
+        }),
+      ),
     );
   }
 }

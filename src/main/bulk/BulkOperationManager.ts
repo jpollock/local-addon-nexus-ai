@@ -23,6 +23,11 @@ export interface BulkOpDeps {
     getThemes(siteId: string): Promise<Array<{ name: string; title: string; version: string; status: string }>>;
     getWpVersion(siteId: string): Promise<string | null>;
   };
+  /** Optional: metadata cache to update after reindex (same refresh as lifecycle hook) */
+  metadataCache?: {
+    set(siteId: string, metadata: any): void;
+    get(siteId: string): any;
+  };
   healthCalculator: { calculateScore(siteId: string, siteInfo: any): Promise<any> };
   graphService?: {
     upsertSite(site: any): Promise<void>;
@@ -278,6 +283,33 @@ export class BulkOperationManager {
       mysqlDatabase: 'local',
       sitePath: site.path,
     });
+
+    // Refresh metadata cache after indexing — same as lifecycle hook does on siteStarted.
+    // Without this, INDEX_ALL_AUTO leaves MetadataCache empty even after full indexing.
+    if (this.deps.metadataCache) {
+      try {
+        const [wpVersion, plugins, themes] = await Promise.all([
+          this.deps.siteDataBridge.getWpVersion(siteId),
+          this.deps.siteDataBridge.getPlugins(siteId),
+          this.deps.siteDataBridge.getThemes(siteId),
+        ]);
+        // phpVersion comes from Local's site config (not WP-CLI) — read from site object
+        const siteObj = this.deps.siteDataBridge.resolveSiteObject(siteId) as any;
+        const phpVersion = siteObj?.phpVersion ?? siteObj?.php?.version ?? null;
+
+        this.deps.metadataCache.set(siteId, {
+          wpVersion: wpVersion ?? 'unknown',
+          phpVersion: phpVersion ?? undefined,
+          plugins: plugins.map(p => ({ name: p.name, title: p.title, version: p.version, status: p.status as 'active' | 'inactive' })),
+          themes: themes.map(t => ({ name: t.name, title: t.title, version: t.version, status: t.status as 'active' | 'inactive' })),
+          updateSource: 'lifecycle' as const,
+          scanDepth: 'metadata' as const,
+          lastUpdated: Date.now(),
+        });
+      } catch {
+        // Non-fatal — index succeeded, metadata refresh best-effort
+      }
+    }
   }
 
   private async executePluginUpdate(siteId: string, pluginSlug?: string, options?: Record<string, any>): Promise<void> {
@@ -389,13 +421,21 @@ export class BulkOperationManager {
 
     const now = Date.now();
 
-    // 1. Sync site metadata
-    const wpVersion = await this.deps.siteDataBridge.getWpVersion(siteId);
+    // 1. Sync site metadata — get WP version and PHP version via WP-CLI
+    const [wpVersion, phpResult] = await Promise.allSettled([
+      this.deps.siteDataBridge.getWpVersion(siteId),
+      this.deps.siteDataBridge.wpCliRun(siteId, ['eval', 'echo phpversion();']),
+    ]);
+    const phpVersion = phpResult.status === 'fulfilled' && phpResult.value?.success
+      ? (phpResult.value.stdout ?? '').trim() || null
+      : (site as any).phpVersion ?? (site as any).php?.version ?? null;
+
     await this.deps.graphService.upsertSite({
       id: siteId,
       name: site.name,
       domain: site.domain,
-      wp_version: wpVersion || null,
+      wp_version: wpVersion.status === 'fulfilled' ? (wpVersion.value || null) : null,
+      php_version: phpVersion,
       last_sync_at: now,
       is_active: true,
       created_at: now,

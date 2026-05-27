@@ -65,6 +65,9 @@ export interface SiteMetadata {
 
   /** Unix timestamp of the most recently published post (requires WP-CLI). */
   lastPostAt?: number;
+
+  /** Total WordPress user count (requires WP-CLI — only set on 'full' scans). */
+  userCount?: number;
 }
 
 export interface SiteMetadataWithAge extends SiteMetadata {

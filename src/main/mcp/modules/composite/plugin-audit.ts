@@ -1,133 +1,88 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { WpPlugin } from '../../local-services-bridge';
-import { ok, error } from '../wp-cli/preflight';
-
-interface UpdateInfo {
-  name: string;
-  version: string;
-  update_version?: string;
-}
-
-interface SitePluginReport {
-  siteName: string;
-  plugins: WpPlugin[];
-  updatesAvailable: UpdateInfo[];
-  error?: string;
-}
+import { SiteDataResolver } from '../../../resolver/SiteDataResolver';
 
 /**
- * Composite tool: audits plugins across all running local sites.
- * For each running site, fetches the plugin list and checks for updates.
- * Returns a fleet-wide report.
+ * Fleet-wide plugin audit — works for ALL sites regardless of running status.
+ *
+ * Data sources by site state:
+ *   Running:           WP-CLI (fresh, authoritative)
+ *   Halted+Configured: cached plugin list + WordPress.org update check
+ *   Halted+Searchable: index snapshot (no update check possible)
+ *   No data:           prompts to start site once
  */
 export const pluginAuditHandler: McpToolHandler = {
   definition: {
     name: 'nexus_plugin_audit',
     description:
-      'Fleet-wide plugin audit across all running local sites — lists installed plugins with current and latest versions, available updates, and update availability counts per site. Runs in a single call, more efficient than calling wp_plugin_list on each site individually. LOCAL SITES ONLY — runs on currently running sites. For WPE remote installs, use wp_plugin_list with install_name= for each install.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-    },
-    isAvailable: (services) => !!services.localServices,
+      'Fleet-wide plugin audit across all local sites — lists installed plugins with current and latest versions, available updates. ' +
+      'Works even when sites are halted by using cached data (SiteMetadataCache) + WordPress.org API for update checks. ' +
+      'Data freshness is reported per site. Running sites get real-time WP-CLI data.',
+    inputSchema: { type: 'object', properties: {} },
+    isAvailable: (services) => !!services.siteData,
   },
 
   async execute(_args, services): Promise<McpToolResult> {
-    const ls = services.localServices!;
-    const sites = Object.values(services.siteData.getSites());
-    const statuses = ls.getAllSiteStatuses();
+    const resolver = SiteDataResolver.fromServices(services);
+    const sites = Object.values(services.siteData.getSites()) as any[];
 
-    const runningSites = sites.filter((s) => statuses[s.id] === 'running');
-
-    if (runningSites.length === 0) {
-      return error('No running sites found. Start at least one site first.');
+    if (sites.length === 0) {
+      return ok('No local sites found.');
     }
 
-    // Audit each running site in parallel
     const reports = await Promise.all(
-      runningSites.map(async (site): Promise<SitePluginReport> => {
-        try {
-          const [plugins, updateResult] = await Promise.allSettled([
-            ls.getPlugins(site.id),
-            ls.wpCliRun(site.id, ['plugin', 'update', '--all', '--dry-run', '--format=json']),
-          ]);
-
-          if (plugins.status === 'rejected') {
-            return {
-              siteName: site.name,
-              plugins: [],
-              updatesAvailable: [],
-              error: plugins.reason instanceof Error ? plugins.reason.message : String(plugins.reason),
-            };
-          }
-
-          const pluginList = plugins.value;
-
-          let updatesAvailable: UpdateInfo[] = [];
-          if (updateResult.status === 'fulfilled' && updateResult.value.success) {
-            try {
-              updatesAvailable = JSON.parse(updateResult.value.stdout || '[]');
-            } catch {
-              // parse failed — skip updates
-            }
-          }
-
-          return { siteName: site.name, plugins: pluginList, updatesAvailable };
-        } catch (err) {
-          return {
-            siteName: site.name,
-            plugins: [],
-            updatesAvailable: [],
-            error: err instanceof Error ? err.message : String(err),
-          };
-        }
+      sites.map(async (site) => {
+        const result = await resolver.getPluginsWithUpdateCheck(site.id);
+        return { site, result };
       }),
     );
 
-    // Build report
-    const lines: string[] = [
-      `## Fleet Plugin Audit (${runningSites.length} sites)`,
-      '',
-    ];
-
-    let totalPlugins = 0;
+    const lines: string[] = ['## Fleet Plugin Audit', ''];
     let totalUpdates = 0;
+    let sitesWithData = 0;
 
-    for (const report of reports) {
-      lines.push(`### ${report.siteName}`);
+    for (const { site, result } of reports) {
+      const { data: plugins, provenance } = result;
+      const updates = plugins.filter(p => p.updateAvailable);
+      totalUpdates += updates.length;
+      if (plugins.length > 0) sitesWithData++;
 
-      if (report.error) {
-        lines.push(`Error: ${report.error}`);
-        lines.push('');
-        continue;
-      }
+      const emoji = SiteDataResolver.levelEmoji(provenance.level);
+      const age = resolver.formatAge(provenance.ageSeconds);
+      const sourceLabel = provenance.ageSeconds === 0 ? provenance.source : `${provenance.source}, ${age}`;
 
-      totalPlugins += report.plugins.length;
-      totalUpdates += report.updatesAvailable.length;
-
-      if (report.plugins.length === 0) {
-        lines.push('No plugins installed.');
-        lines.push('');
-        continue;
-      }
-
-      lines.push(`${report.plugins.length} plugins, ${report.updatesAvailable.length} updates available`);
+      lines.push(`### ${site.name} ${emoji}`);
+      lines.push(`*${sourceLabel}*`);
       lines.push('');
 
-      if (report.updatesAvailable.length > 0) {
-        lines.push('| Plugin | Current | Available |');
-        lines.push('|--------|---------|-----------|');
-        for (const u of report.updatesAvailable) {
-          lines.push(`| ${u.name} | v${u.version} | v${u.update_version ?? 'unknown'} |`);
+      if (plugins.length === 0) {
+        lines.push('No plugin data available — start site to populate cache.');
+      } else {
+        lines.push(`${plugins.length} plugins installed, ${updates.length} update${updates.length !== 1 ? 's' : ''} available`);
+        if (updates.length > 0) {
+          lines.push('');
+          lines.push('**Updates available:**');
+          for (const u of updates) {
+            lines.push(`- ${u.name}: v${u.version} → v${u.updateAvailable}`);
+          }
         }
-        lines.push('');
       }
+
+      if (provenance.caveat) {
+        lines.push('');
+        lines.push(`⚠️ ${provenance.caveat}`);
+      }
+      lines.push('');
     }
 
-    // Summary
     lines.push('---');
-    lines.push(`**Total:** ${totalPlugins} plugins across ${runningSites.length} sites, ${totalUpdates} updates available`);
+    lines.push(`**${totalUpdates} updates available across ${sitesWithData}/${sites.length} sites with data**`);
+    lines.push('');
+    lines.push('Legend: 🟢 live · 🟡 configured cache · 🔵 searchable index · ⚪ no data');
 
     return ok(lines.join('\n'));
   },
 };
+
+function ok(text: string): McpToolResult {
+  return { content: [{ type: 'text', text }] };
+}

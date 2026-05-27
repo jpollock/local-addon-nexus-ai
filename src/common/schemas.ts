@@ -24,20 +24,22 @@ const WpeEnvFlagsSchema = z.object({
 }).optional();
 
 const WpeOperationPermissionsSchema = z.object({
-  pull:   WpeEnvFlagsSchema,
-  wpcli:  WpeEnvFlagsSchema,
-  push:   WpeEnvFlagsSchema,
-  delete: WpeEnvFlagsSchema,
+  pull:       WpeEnvFlagsSchema,
+  wpcli_read: WpeEnvFlagsSchema,
+  wpcli:      WpeEnvFlagsSchema,
+  push:       WpeEnvFlagsSchema,
+  delete:     WpeEnvFlagsSchema,
 }).optional();
 
 const WpeSiteExceptionSchema = z.object({
   installName: z.string().min(1),
   environment: z.string().min(1),
   overrides: z.object({
-    pull:   z.boolean().optional(),
-    wpcli:  z.boolean().optional(),
-    push:   z.boolean().optional(),
-    delete: z.boolean().optional(),
+    pull:       z.boolean().optional(),
+    wpcli_read: z.boolean().optional(),
+    wpcli:      z.boolean().optional(),
+    push:       z.boolean().optional(),
+    delete:     z.boolean().optional(),
   }),
 });
 
@@ -53,10 +55,16 @@ export const UpdateSettingsSchema = z.object({
   haltedSiteRefreshIntervalHours: z.number().int().min(1).max(168).optional(),
   wpeRefreshIntervalHours: z.number().int().min(1).max(168).optional(),
   wpeRefreshAutoEnabled: z.boolean().optional(),
+  localContentIndexIntervalHours: z.number().int().min(0).max(168).optional(),
+  localContentIndexAutoEnabled: z.boolean().optional(),
   wpeAccountFilter: z.array(z.string()).nullable().optional(),
   wpeOperationPermissions: WpeOperationPermissionsSchema,
   wpeSiteExceptions: z.array(WpeSiteExceptionSchema).nullable().optional(),
   wpeAllowedEnvironments: z.array(z.string()).optional(), // legacy — kept for migration
+  wpeBannerDismissed: z.boolean().optional(),
+  wpeNotConnectedBannerDismissed: z.boolean().optional(),
+  wpeContentIndexAutoEnabled: z.boolean().optional(),
+  wpeContentIndexIntervalHours: z.number().int().min(1).max(168).optional(),
 }).strict();
 
 export const PluginSlugSchema = z

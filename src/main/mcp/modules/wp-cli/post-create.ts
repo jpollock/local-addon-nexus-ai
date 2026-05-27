@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { requireRunning, ok, error } from './preflight';
+import { ok, error } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { withSiteRunning } from '../with-site-running';
 
 export const wpPostCreateHandler: McpToolHandler = {
   definition: {
@@ -74,17 +75,16 @@ export const wpPostCreateHandler: McpToolHandler = {
     }
 
     // Local path
-    const check = requireRunning(target.site, services);
-    if (check) return check;
+    return withSiteRunning(target.site.id, services, async () => {
+      const result = await services.localServices!.wpCliRun(target.site.id, cliArgs);
 
-    const result = await services.localServices!.wpCliRun(target.site.id, cliArgs);
+      if (!result.success) {
+        return error('Failed to create post: ' + result.stdout);
+      }
 
-    if (!result.success) {
-      return error('Failed to create post: ' + result.stdout);
-    }
+      const postId = result.stdout?.trim() || '';
 
-    const postId = result.stdout?.trim() || '';
-
-    return ok(`Created post ${postId}: "${title}" (status: ${status})`);
+      return ok(`Created post ${postId}: "${title}" (status: ${status})`);
+    });
   },
 };

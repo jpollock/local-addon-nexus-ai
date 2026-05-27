@@ -20,11 +20,12 @@ import { safeHandle } from '../safe-handle';
 /** Extra runtime objects created in registerIpcHandlers, passed down here. */
 export interface WpeSyncHandlerContext {
   auditLogger: AuditLogger;
+  emitNexusState?: (patch: Record<string, unknown>) => void;
 }
 
 export function registerWpeSyncHandlers(deps: IpcHandlerDeps, ctx: WpeSyncHandlerContext): void {
   const { localServicesBridge, graphService, registryStorage, localLogger } = deps;
-  const { auditLogger } = ctx;
+  const { auditLogger, emitNexusState } = ctx;
 
   // =========================================================================
   // WPE Site Sync Handlers (Phase 1)
@@ -50,7 +51,13 @@ export function registerWpeSyncHandlers(deps: IpcHandlerDeps, ctx: WpeSyncHandle
       // Manual sync always force-refreshes all installs (staleThresholdHours=0)
       // Incremental staleness is only for scheduled/auto syncs
       localLogger.info(`[NexusAI] Starting WPE site sync (force)${limit ? ` (limit: ${limit})` : ''}${accountFilter ? ` (${accountFilter.length} accounts)` : ''}...`);
-      const result = await deps.wpeSyncService?.syncAllWPESites(limit, 0, accountFilter);
+      emitNexusState?.({ wpeSyncProgress: { active: true, current: 0, total: 0, currentSite: '', phase: 'metadata' } });
+      let result;
+      try {
+        result = await deps.wpeSyncService?.syncAllWPESites(limit, 0, accountFilter);
+      } finally {
+        emitNexusState?.({ wpeSyncProgress: null });
+      }
       localLogger.info(`[NexusAI] WPE sync completed: ${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed`);
 
       auditLogger.logSuccess(
@@ -337,6 +344,22 @@ export function registerWpeSyncHandlers(deps: IpcHandlerDeps, ctx: WpeSyncHandle
         params,
         Date.now() - startTime,
       );
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  // ── WPE content indexing — standalone (no metadata sync) ──────────────────
+  // Indexes all active WPE installs via SSH WP-CLI → embeds → stores in vector DB.
+  safeHandle(IPC_CHANNELS.INDEX_ALL_FLEET, async () => {
+    try {
+      if (!deps.wpeSyncService) {
+        return { success: false, error: 'WPE sync service not available' };
+      }
+      const result = await deps.wpeSyncService.indexAllWpeContent();
+      localLogger.info(`[NexusAI] INDEX_ALL_FLEET complete: ${result.indexed} indexed, ${result.errors} errors`);
+      return { success: true, indexed: result.indexed, errors: result.errors };
+    } catch (err) {
+      localLogger.error('[NexusAI] INDEX_ALL_FLEET failed:', (err as Error).message);
       return { success: false, error: (err as Error).message };
     }
   });

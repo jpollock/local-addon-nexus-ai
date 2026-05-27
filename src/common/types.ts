@@ -259,10 +259,11 @@ export interface WpeEnvFlags {
  * Replaces wpeAllowedEnvironments. Missing keys fall back to DEFAULT_OPERATION_PERMISSIONS.
  */
 export interface WpeOperationPermissions {
-  pull?:   WpeEnvFlags;  // local_wpe_pull
-  wpcli?:  WpeEnvFlags;  // WP-CLI over SSH (includes deep-refresh, wait-for-ssh)
-  push?:   WpeEnvFlags;  // local_wpe_push
-  delete?: WpeEnvFlags;  // delete-install, delete-site, promote-environment, update-install, purge-cache
+  pull?:       WpeEnvFlags;  // local_wpe_pull
+  wpcli_read?: WpeEnvFlags;  // WP-CLI read-only: plugin list, core version, user list, option get, site health
+  wpcli?:      WpeEnvFlags;  // WP-CLI write: plugin install/update/activate, core update, post create/update/delete
+  push?:       WpeEnvFlags;  // local_wpe_push
+  delete?:     WpeEnvFlags;  // delete-install, delete-site, promote-environment, update-install, purge-cache
 }
 
 /** A site-level override for one or more operations on a specific install+environment */
@@ -270,10 +271,11 @@ export interface WpeSiteException {
   installName: string;   // WPE install name (e.g. "mystore")
   environment: string;   // 'production' | 'staging' | 'development'
   overrides: {
-    pull?:   boolean;
-    wpcli?:  boolean;
-    push?:   boolean;
-    delete?: boolean;
+    pull?:       boolean;
+    wpcli_read?: boolean;
+    wpcli?:      boolean;
+    push?:       boolean;
+    delete?:     boolean;
   };
 }
 
@@ -285,10 +287,10 @@ export interface NexusSettings {
   onboardingDismissed?: boolean;
   useLocalGateway?: boolean; // Route all AI requests through Local AI Gateway
   wpeSyncIntervalHours?: number; // How often to auto-sync WPE sites (default: 8)
-  wpeSyncAutoEnabled?: boolean;  // Whether auto-sync is enabled (default: true)
+  wpeSyncAutoEnabled?: boolean;  // Whether WPE SSH metadata sync is enabled (default: false — opt-in)
   haltedSiteRefreshIntervalHours?: number; // How often to refresh halted local sites (default: 24)
   wpeRefreshIntervalHours?: number;         // How often to run WPE SSH refresh cycle (default: 24)
-  wpeRefreshAutoEnabled?: boolean;          // Whether WPE SSH refresh is enabled (default: true)
+  wpeRefreshAutoEnabled?: boolean;          // Whether WPE SSH site-info refresh is enabled (default: false — opt-in)
   wpeAccountFilter?: string[] | null;       // Account IDs to deep-scan; null/undefined = all accounts
   /** WPE environment types Nexus is allowed to access. Default: staging + development only.
    *  Set to include 'production' to enable production access. */
@@ -297,6 +299,18 @@ export interface NexusSettings {
   wpeOperationPermissions?: WpeOperationPermissions;
   /** Per-install, per-environment overrides for individual operations. */
   wpeSiteExceptions?: WpeSiteException[];
+  /** Hours between scheduled local site content index runs. 0 or undefined = manual only. */
+  localContentIndexIntervalHours?: number;
+  /** Whether the opportunistic content indexer is enabled. Default: false. */
+  localContentIndexAutoEnabled?: boolean;
+  /** Whether the WPE onboarding banner has been dismissed. */
+  wpeBannerDismissed?: boolean;
+  /** Whether the "not connected to WPE" callout has been dismissed by Local-only users. */
+  wpeNotConnectedBannerDismissed?: boolean;
+  /** Whether WPE content index scheduler is enabled (default: false — opt-in) */
+  wpeContentIndexAutoEnabled?: boolean;
+  /** How often to run WPE content index in hours (default: 24h) */
+  wpeContentIndexIntervalHours?: number;
 }
 
 export interface SiteAIConfig {
@@ -308,6 +322,159 @@ export interface SiteAIConfig {
   configuredAt: number;
   /** Whether Local AI Gateway was active when this site was configured */
   useLocalGateway?: boolean;
+}
+
+// ===== Unified Search Types =====
+
+export type SearchIntent = 'content' | 'metadata' | 'both';
+
+export interface MetadataSearchResult {
+  type: 'site-metadata';
+  matchKind: 'plugin' | 'theme' | 'wp-version' | 'php-version';
+  siteId: string;
+  siteName: string;
+  siteSource: 'local' | 'wpe';
+  field: string;    // e.g. "elementor/elementor.php"
+  value: string;    // e.g. "active · v3.21.0"
+  score: number;    // 0–1
+}
+
+export interface ContentSearchResult {
+  type: 'content';
+  siteId: string;
+  siteName: string;
+  postId: number;
+  title: string;
+  excerpt: string;
+  postType: string;
+  score: number;
+}
+
+export type UnifiedSearchResult = MetadataSearchResult | ContentSearchResult;
+
+export interface UnifiedSearchResponse {
+  intent: SearchIntent;
+  metadataResults: MetadataSearchResult[];
+  contentResults: ContentSearchResult[];
+}
+
+// ===== Fleet Completeness Types =====
+
+export interface FleetCompleteness {
+  total: number;
+  scanned: number;    // L1: site known to Nexus
+  configured: number; // L2: active plugins/users known
+  searchable: number; // L3: content indexed
+  lastUpdatedMs: number | null;
+  /** false when graph.db is not yet ready — renderer should retry in a few seconds */
+  graphReady: boolean;
+}
+
+// ===== AI Assistant Types =====
+
+/**
+ * Filter spec returned by AI for fleet-filter intent.
+ * The handler executes this against real data — AI must NOT fabricate sites[].
+ */
+export interface AssistantFilter {
+  phpSort?: 'asc' | 'desc';          // oldest/newest PHP first
+  wpSort?:  'asc' | 'desc';          // oldest/newest WP first
+  phpEolOnly?: boolean;               // only sites on EOL PHP
+  phpVersion?: { op: '<' | '>' | '<=' | '>='; version: string };
+  pluginSlug?: string;                // e.g. "elementor"
+  pluginCategory?: string;            // e.g. "form-builder"
+  contentQuery?: string;              // falls through to vector search
+}
+
+export interface QueryPlan {
+  intent: 'fleet-filter' | 'content-search' | 'site-info' | 'action' | 'explanation';
+  summary: string;
+  /** Filter spec for fleet-filter intent — handler executes against real data */
+  filter?: AssistantFilter;
+  /** Populated by handler from real data — AI must NOT fill this in */
+  sites?: Array<{
+    id?: string;
+    name: string;
+    meta: string;
+    tag?: string;
+    tagKind?: 'warn' | 'ok' | 'info';
+    source: 'local' | 'wpe';
+  }>;
+  contentResults?: Array<{
+    siteId: string;
+    siteName: string;
+    title: string;
+    excerpt: string;
+    score: number;
+  }>;
+  actions?: Array<{
+    label: string;
+    kind: 'primary' | 'secondary';
+    ipcChannel?: string;
+    ipcPayload?: unknown;
+  }>;
+  needsClarification?: boolean;
+  clarificationQuestion?: string;
+}
+
+export interface AssistantContext {
+  mode: 'fleet' | 'site';
+  // Fleet fields
+  localSiteCount?: number;
+  wpeSiteCount?: number;
+  indexedCount?: number;
+  fleetInsights?: FleetInsight[];
+  // Site fields
+  siteId?: string;
+  siteName?: string;
+  phpVersion?: string | null;
+  wpVersion?: string | null;
+  pluginCount?: number;
+  activePlugins?: string[];
+  installedPluginCount?: number;
+  activeTheme?: string;
+  postCount?: number;
+  userCount?: number;
+  scanDepth?: 'filesystem' | 'full';
+  indexState?: string;
+  documentCount?: number;
+  linkedWpeInstall?: string | null;
+}
+
+export interface FleetInsight {
+  kind: 'warning' | 'info' | 'action';
+  title: string;
+  detail: string;
+  ipcChannel?: string;
+  ipcPayload?: unknown;
+}
+
+export interface AssistantResponse {
+  plan: QueryPlan;
+  rawText: string;
+}
+
+// ===== Site Data Resolver Types =====
+
+/** Which data path answered a resolver query. */
+export interface DataProvenance {
+  level: 'live' | 'configured' | 'searchable' | 'scanned' | 'external-api';
+  source: string;
+  ageSeconds: number | null;
+  caveat: string | null;
+}
+
+export interface ResolvedData<T> {
+  data: T;
+  provenance: DataProvenance;
+}
+
+export interface ResolvedPluginInfo {
+  name: string;
+  slug: string;
+  version: string;
+  status: 'active' | 'inactive';
+  updateAvailable?: string | null;
 }
 
 // ===== Sprint 1: Visibility Types (Renderer-Safe) =====

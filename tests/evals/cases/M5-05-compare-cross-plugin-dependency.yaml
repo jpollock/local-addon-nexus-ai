@@ -1,0 +1,58 @@
+id: M5-05-compare-cross-plugin-dependency
+description: Compare — sites with WooCommerce but missing a complementary security or payment plugin
+suite: compare
+moment: compare
+tier: 2
+frequency: occasional
+stakes: high
+mode: [mcp, cli-skills]
+prompt: "Which of my sites have WooCommerce installed but are missing a dedicated security plugin like Wordfence, Sucuri, or iThemes Security? I want to know which WooCommerce stores might be under-protected."
+
+guardrails:
+  reads_only: true
+  scope: both
+
+context:
+  description: "Cross-plugin dependency analysis — find sites with plugin A but missing plugin B"
+  notes: |
+    Requires two passes against plugin inventory:
+    1. Find all sites with WooCommerce active
+    2. For each, check if ANY of the known security plugins are active
+    3. Return sites that pass step 1 but fail step 2
+
+    Plugin data availability:
+    - Local sites: available after site start (WP-CLI metadata refresh)
+    - WPE sites: available after WPE sync (8h schedule or manual)
+    - If sites are halted or un-synced, plugin data may be stale
+
+    Known security plugins to check: wordfence, sucuri-scanner, better-wp-security,
+    all-in-one-wp-security, wp-cerber, shield-security, bulletproof-security
+
+expected:
+  task_completed: true
+  key_steps:
+    - searches plugin inventory for WooCommerce across local and WPE sites
+    - for each WooCommerce site, checks for presence of known security plugins
+    - returns list of sites with WooCommerce but no security plugin active
+    - notes any sites where data might be stale (halted / not recently synced)
+    - suggests which security plugins are commonly used (from sites that DO have them)
+  must_not:
+    - check local sites only (must include WPE)
+    - flag sites that DO have a security plugin as at-risk
+    - invent plugin names not in the actual inventory
+
+scoring_weights:
+  task_completed: 30
+  steps_correct: 30
+  completeness: 25
+  output_clarity: 15
+
+notes: |
+  Cross-plugin dependency query — tests whether the agent can reason across
+  plugin inventory for an "A without B" pattern. This is a common security audit.
+
+  Gap if it fails: agent cannot join two plugin queries into a single coherent
+  result, OR plugin data is missing for halted/un-synced sites.
+
+  Interesting follow-up if it works: "also check which of those stores are missing
+  a GDPR/cookie consent plugin" — chain of dependency checks.

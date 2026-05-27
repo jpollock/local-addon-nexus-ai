@@ -63,7 +63,11 @@ export interface WpeInstallInfo {
 export interface LocalServicesBridge {
   // Site Process Management
   startSite(siteId: string): Promise<void>;
+  /** Start multiple sites with a single router restart — use this instead of looping startSite() */
+  startSites(siteIds: string[]): Promise<void>;
   stopSite(siteId: string): Promise<void>;
+  /** Stop multiple sites sequentially — avoids concurrent router teardown races */
+  stopSites(siteIds: string[]): Promise<void>;
   restartSite(siteId: string): Promise<void>;
   getSiteStatus(siteId: string): string;
   getAllSiteStatuses(): Record<string, string>;
@@ -221,9 +225,38 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       await svc('siteProcessManager').start(site);
     },
 
+    async startSites(siteIds: string[]): Promise<void> {
+      if (siteIds.length === 0) return;
+      const pm = svc('siteProcessManager');
+      if (typeof pm.startSites === 'function') {
+        // Local's startSites() takes raw site IDs and does Site.find() internally.
+        // Do NOT convert to objects — that causes "Cannot read properties of null" crashes.
+        await pm.startSites(siteIds);
+      } else {
+        // Fallback: sequential individual starts
+        for (const id of siteIds) {
+          const site = requireSite(id);
+          await pm.start(site, true, true, true).catch(() => {});
+        }
+      }
+    },
+
     async stopSite(siteId: string): Promise<void> {
       const site = requireSite(siteId);
       await svc('siteProcessManager').stop(site);
+    },
+
+    async stopSites(siteIds: string[]): Promise<void> {
+      const pm = svc('siteProcessManager');
+      if (typeof pm.stopSites === 'function') {
+        // Local's stopSites() also takes raw site IDs
+        await pm.stopSites(siteIds).catch(() => {});
+      } else {
+        for (const id of siteIds) {
+          const site = requireSite(id);
+          await pm.stop(site).catch(() => {});
+        }
+      }
     },
 
     async restartSite(siteId: string): Promise<void> {
@@ -319,10 +352,21 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       // ExportSiteService.exportSite() returns Promise<void>, not the path.
       const exportPath = expandedPath.replace(/\.zip$/i, '') + '.zip';
 
-      // Fire the export (this is async and uses a worker process)
-      await exportService.exportSite({ site, outputPath: expandedPath, filter: '__noop__' });
+      // suppressNavigation: true so Local doesn't steal focus from the chat/MCP caller.
+      await exportService.exportSite({ site, outputPath: expandedPath, filter: '__noop__', suppressNavigation: true });
 
-      // Return the path where the export will be saved
+      // Guard against workerFork silently returning undefined on fork failure.
+      // ExportSiteService does `if (!exportSiteWorker) return;` — that early return
+      // resolves the Promise<void> without creating the zip, but callers can't tell.
+      // Check the file exists; if not, the fork failed silently and we must throw so
+      // operationTracker.fail() is called instead of operationTracker.complete().
+      if (!fs.existsSync(exportPath)) {
+        throw new Error(
+          `Export appeared to succeed but zip not found at ${exportPath}. ` +
+          `workerFork may have failed — check local-lightning.log for details.`,
+        );
+      }
+
       return exportPath;
     },
 

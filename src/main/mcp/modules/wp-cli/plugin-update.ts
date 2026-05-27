@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { requireRunning, ok, error, validateSlug } from './preflight';
+import { ok, error, validateSlug } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { withSiteRunning } from '../with-site-running';
 
 export const pluginUpdateHandler: McpToolHandler = {
   definition: {
@@ -45,15 +46,14 @@ export const pluginUpdateHandler: McpToolHandler = {
       return ok(result.stdout || `Plugin "${slug}" updated on ${target.installName}.`);
     }
 
-    const check = requireRunning(target.site, services);
-    if (check) return check;
+    return withSiteRunning(target.site.id, services, async () => {
+      // Plugin updates download from WordPress.org — allow up to 3 minutes
+      const result = await services.localServices!.wpCliRun(target.site.id, cliArgs, { timeoutMs: 180000 });
+      if (!result.success) {
+        return error(`Failed to update plugin "${slug}": ${result.stdout}`);
+      }
 
-    // Plugin updates download from WordPress.org — allow up to 3 minutes
-    const result = await services.localServices!.wpCliRun(target.site.id, cliArgs, { timeoutMs: 180000 });
-    if (!result.success) {
-      return error(`Failed to update plugin "${slug}": ${result.stdout}`);
-    }
-
-    return ok(result.stdout || `Plugin "${slug}" updated.`);
+      return ok(result.stdout || `Plugin "${slug}" updated.`);
+    });
   },
 };

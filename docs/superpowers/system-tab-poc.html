@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nexus AI — System Inspector POC</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#111318;--s1:#1a1d24;--s2:#20242d;--bd:#2a2f3d;
+  --tx:#e2e4ea;--mu:#6b7280;--ac:#0ECAD4;--gr:#51BB7B;
+  --ye:#f59e0b;--rd:#ef4444;--pu:#a78bfa;--or:#f97316;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:13px;line-height:1.5;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+.tabbar{display:flex;align-items:center;border-bottom:1px solid var(--bd);background:#161616;padding:0 16px;flex-shrink:0}
+.tab{padding:11px 15px;font-size:12px;color:var(--mu);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;user-select:none}
+.tab.active{color:var(--tx);border-bottom-color:var(--ac)}
+.chip{display:inline-block;background:var(--ac);color:#000;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px;margin-left:5px;vertical-align:middle}
+
+.shell{display:grid;grid-template-columns:1fr 280px;flex:1;overflow:hidden}
+.main{overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px}
+
+.section-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--mu);white-space:nowrap}
+.section-rule{flex:1;height:1px;background:var(--bd)}
+
+/* Source legend */
+.source-row{display:flex;gap:8px;flex-wrap:wrap}
+.source-tag{display:flex;align-items:center;gap:6px;padding:4px 9px;border-radius:5px;font-size:11px;border:1px solid}
+.source-tag.auto{background:rgba(81,187,123,.06);border-color:rgba(81,187,123,.15);color:var(--gr)}
+.source-tag.manual{background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.15);color:var(--ye)}
+.source-tag.off{background:rgba(107,114,128,.06);border-color:rgba(107,114,128,.15);color:var(--mu)}
+.sdot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+/* Progress bars */
+.progress-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.prog-card{background:var(--s1);border:1px solid var(--bd);border-radius:7px;padding:10px 12px}
+.prog-card-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.prog-card-title{font-size:11px;font-weight:600}
+.prog-counts{font-size:11px}
+.prog-count-big{font-size:18px;font-weight:700}
+.prog-count-stale{font-size:11px;color:var(--ye);margin-left:6px}
+.prog-bar-bg{background:var(--s2);border-radius:3px;height:5px;overflow:hidden;margin-bottom:3px;position:relative}
+.prog-bar-fill{height:100%;border-radius:3px;transition:width .6s ease;position:absolute;top:0;left:0}
+.prog-bar-stale{height:100%;border-radius:3px;transition:all .6s ease;position:absolute;top:0}
+.prog-card-sub{font-size:10px;color:var(--mu)}
+.legend-row{display:flex;gap:10px;margin-top:4px;font-size:10px}
+.leg{display:flex;align-items:center;gap:3px;color:var(--mu)}
+.leg-dot{width:7px;height:7px;border-radius:2px}
+
+/* Global bar */
+.global-bar{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--s2);border:1px solid var(--bd);border-radius:7px;flex-wrap:wrap}
+.global-bar-title{font-size:12px;font-weight:600;flex:1}
+.btn-sm{padding:5px 11px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:none;font-family:inherit;white-space:nowrap}
+.btn-sm.primary{background:var(--ac);color:#000}
+.btn-sm.primary:hover{background:#0bb8c0}
+.btn-sm.ghost{background:var(--s1);color:var(--mu);border:1px solid var(--bd)}
+.btn-sm.ghost:hover{color:var(--tx)}
+
+/* Matrix */
+.matrix{border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+/* cols: name | status | source | meta | index | plugins | users | actions */
+.matrix-head,.matrix-row{
+  display:grid;
+  grid-template-columns: 148px 68px 72px 130px 130px 100px 90px 1fr;
+  align-items:center;
+}
+.matrix-head{background:var(--s2);border-bottom:1px solid var(--bd)}
+.matrix-row{border-bottom:1px solid rgba(42,47,61,.4);transition:background .1s}
+.matrix-row:last-child{border-bottom:none}
+.matrix-row:hover{background:rgba(255,255,255,.015)}
+.mc{padding:8px 9px;font-size:12px}
+.mch{padding:6px 9px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mu)}
+
+.status-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:2px 6px;border-radius:6px}
+.status-chip.running{background:rgba(81,187,123,.1);color:var(--gr);border:1px solid rgba(81,187,123,.2)}
+.status-chip.halted{background:rgba(107,114,128,.08);color:var(--mu);border:1px solid rgba(107,114,128,.15)}
+.sdot2{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* Source of last change */
+.change-source{font-size:10px;line-height:1.4}
+.cs-time{color:var(--mu)}
+.cs-event{color:#444;font-size:9px;display:block}
+
+/* Data cells - the core of this view */
+.cell{line-height:1.35}
+.cell-empty{color:#252a35;font-size:18px}
+.cell-val{font-size:11px;font-weight:600}
+.cell-age{font-size:10px;display:block;margin-top:1px}
+
+/* Freshness states */
+.fresh .cell-val{color:var(--gr)}
+.fresh .cell-age{color:#2a4a35}
+.stale .cell-val{color:var(--ye)}
+.stale .cell-age{color:#5a4a15}
+.unknown .cell-val{color:var(--mu)}
+.unknown .cell-age{color:#333}
+.indexing-cell .cell-val{color:var(--ac)}
+
+/* Freshness badge */
+.fbadge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;vertical-align:middle;margin-left:4px}
+.fbadge.fresh{background:rgba(81,187,123,.12);color:var(--gr);border:1px solid rgba(81,187,123,.2)}
+.fbadge.stale{background:rgba(245,158,11,.12);color:var(--ye);border:1px solid rgba(245,158,11,.2)}
+.fbadge.unknown{background:rgba(107,114,128,.1);color:var(--mu);border:1px solid rgba(107,114,128,.15)}
+
+.row-action{padding:6px 8px;display:flex;gap:4px;flex-wrap:wrap}
+.btn-xs{padding:3px 7px;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid;font-family:inherit;white-space:nowrap}
+.btn-xs.start{background:rgba(81,187,123,.1);color:var(--gr);border-color:rgba(81,187,123,.25)}
+.btn-xs.reindex{background:rgba(245,158,11,.1);color:var(--ye);border-color:rgba(245,158,11,.25)}
+.btn-xs:disabled{opacity:.3;cursor:not-allowed}
+
+/* Indexing bar in cell */
+.mini-prog{background:#1a1d24;border-radius:2px;height:3px;overflow:hidden;margin-top:4px}
+.mini-prog-fill{height:100%;background:var(--ac);border-radius:2px;transition:width .3s}
+
+/* Event log */
+.eventlog{border-left:1px solid var(--bd);display:flex;flex-direction:column;background:var(--s1);overflow:hidden}
+.eventlog-head{padding:9px 12px;border-bottom:1px solid var(--bd);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.log-clear{font-size:10px;color:#2a2f3d;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0}
+.log-clear:hover{color:var(--mu)}
+.log-body{flex:1;overflow-y:auto;font-family:'SF Mono','Fira Code',monospace;font-size:10px}
+.log-row{padding:4px 10px;border-bottom:1px solid rgba(42,47,61,.2);display:grid;grid-template-columns:52px 42px 1fr;gap:6px;align-items:baseline}
+.log-row.hi{background:rgba(14,202,212,.04)}
+.log-ts{color:#2a2f3d}
+.log-tag{font-weight:700}
+.log-tag.auto{color:var(--gr)}
+.log-tag.webhook{color:var(--pu)}
+.log-tag.stale{color:var(--ye)}
+.log-tag.event{color:var(--ac)}
+.log-tag.manual{color:var(--or)}
+.log-msg{color:#444;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.pulsing{animation:pulse 1.2s infinite}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#222;border-radius:2px}
+</style>
+</head>
+<body>
+
+<div class="tabbar">
+  <div class="tab">Overview</div>
+  <div class="tab">Discover <span class="chip">NEW</span></div>
+  <div class="tab">Activity</div>
+  <div class="tab">Operations</div>
+  <div class="tab active">System <span class="chip">NEW</span></div>
+</div>
+
+<div class="shell">
+<div class="main">
+
+  <!-- Data sources -->
+  <div>
+    <div class="section-head"><span class="section-label">Data Sources</span><div class="section-rule"></div></div>
+    <div class="source-row">
+      <div class="source-tag auto"><div class="sdot"></div>Auto on site start — metadata cache · content vectors · graph records</div>
+      <div class="source-tag auto"><div class="sdot"></div>Webhook events (WP Connector) — post_created · post_updated · plugin_activated</div>
+      <div class="source-tag manual"><div class="sdot"></div>Manual — re-index · refresh metadata</div>
+      <div class="source-tag off"><div class="sdot"></div>WPE sync — off</div>
+    </div>
+  </div>
+
+  <!-- Fleet completeness + freshness bars -->
+  <div>
+    <div class="section-head">
+      <span class="section-label">Fleet Completeness &amp; Freshness</span>
+      <div class="section-rule"></div>
+      <span id="fleet-summary" style="font-size:11px;color:var(--mu);white-space:nowrap">14 local · 0 WPE</span>
+    </div>
+    <div class="progress-grid">
+      <div class="prog-card">
+        <div class="prog-card-head">
+          <span class="prog-card-title" style="color:var(--pu)">Metadata Cache</span>
+          <span class="prog-counts">
+            <span class="prog-count-big" id="cnt-meta">0</span>
+            <span style="color:var(--mu)">/14</span>
+            <span class="prog-count-stale" id="stale-meta"></span>
+          </span>
+        </div>
+        <div class="prog-bar-bg">
+          <div class="prog-bar-fill" id="bar-meta-fresh" style="width:0%;background:var(--pu);opacity:.9"></div>
+          <div class="prog-bar-stale" id="bar-meta-stale" style="left:0%;width:0%;background:var(--ye);opacity:.7"></div>
+        </div>
+        <div class="legend-row">
+          <div class="leg"><div class="leg-dot" style="background:var(--pu)"></div>fresh</div>
+          <div class="leg"><div class="leg-dot" style="background:var(--ye)"></div>stale (source changed)</div>
+          <div class="leg"><div class="leg-dot" style="background:var(--s2);border:1px solid var(--bd)"></div>empty</div>
+        </div>
+      </div>
+      <div class="prog-card">
+        <div class="prog-card-head">
+          <span class="prog-card-title" style="color:var(--ac)">Content Index</span>
+          <span class="prog-counts">
+            <span class="prog-count-big" id="cnt-index">0</span>
+            <span style="color:var(--mu)">/14</span>
+            <span class="prog-count-stale" id="stale-index"></span>
+          </span>
+        </div>
+        <div class="prog-bar-bg">
+          <div class="prog-bar-fill" id="bar-index-fresh" style="width:0%;background:var(--ac);opacity:.9"></div>
+          <div class="prog-bar-stale" id="bar-index-stale" style="left:0%;width:0%;background:var(--ye);opacity:.7"></div>
+        </div>
+        <div class="legend-row">
+          <div class="leg"><div class="leg-dot" style="background:var(--ac)"></div>fresh</div>
+          <div class="leg"><div class="leg-dot" style="background:var(--ye)"></div>stale (content changed since)</div>
+          <div class="leg"><div class="leg-dot" style="background:var(--s2);border:1px solid var(--bd)"></div>empty</div>
+        </div>
+      </div>
+      <div class="prog-card">
+        <div class="prog-card-head">
+          <span class="prog-card-title" style="color:var(--ye)">Graph — Plugins &amp; Themes</span>
+          <span class="prog-counts">
+            <span class="prog-count-big" id="cnt-plugins">0</span>
+            <span style="color:var(--mu)">/14</span>
+            <span class="prog-count-stale" id="stale-plugins"></span>
+          </span>
+        </div>
+        <div class="prog-bar-bg">
+          <div class="prog-bar-fill" id="bar-plugins-fresh" style="width:0%;background:var(--ye);opacity:.9"></div>
+          <div class="prog-bar-stale" id="bar-plugins-stale" style="left:0%;width:0%;background:var(--ye);opacity:.4"></div>
+        </div>
+        <div class="prog-card-sub" style="margin-top:3px">Stale when plugin_activated/deactivated event received after last index</div>
+      </div>
+      <div class="prog-card">
+        <div class="prog-card-head">
+          <span class="prog-card-title" style="color:var(--or)">Graph — Users</span>
+          <span class="prog-counts">
+            <span class="prog-count-big" id="cnt-users">0</span>
+            <span style="color:var(--mu)">/14</span>
+            <span class="prog-count-stale" id="stale-users"></span>
+          </span>
+        </div>
+        <div class="prog-bar-bg">
+          <div class="prog-bar-fill" id="bar-users-fresh" style="width:0%;background:var(--or);opacity:.9"></div>
+          <div class="prog-bar-stale" id="bar-users-stale" style="left:0%;width:0%;background:var(--ye);opacity:.5"></div>
+        </div>
+        <div class="prog-card-sub" style="margin-top:3px">Stale when user_registered/deleted event received after last index</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global controls -->
+  <div class="global-bar">
+    <span class="global-bar-title">Fleet Actions</span>
+    <button class="btn-sm primary" onclick="startAll()">⚡ Start + index all</button>
+    <button class="btn-sm ghost" onclick="simulateWebhooks()">📡 Simulate content changes</button>
+    <button class="btn-sm ghost" onclick="resetAll()">↺ Reset</button>
+  </div>
+
+  <!-- Site matrix -->
+  <div>
+    <div class="section-head"><span class="section-label">Site Matrix</span><div class="section-rule"></div></div>
+    <div class="matrix">
+      <div class="matrix-head">
+        <div class="mch">Site</div>
+        <div class="mch">Status</div>
+        <div class="mch">Last change</div>
+        <div class="mch" style="color:var(--pu)">Metadata Cache</div>
+        <div class="mch" style="color:var(--ac)">Content Index</div>
+        <div class="mch" style="color:var(--ye)">Plugins/Themes</div>
+        <div class="mch" style="color:var(--or)">Users</div>
+        <div class="mch"></div>
+      </div>
+      <div id="site-matrix"></div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- Event log -->
+<div class="eventlog">
+  <div class="eventlog-head">
+    Event Stream
+    <span class="log-clear" onclick="clearLog()">clear</span>
+  </div>
+  <div class="log-body" id="log-body">
+    <div style="padding:12px 10px;color:#2a2f3d;font-size:10px">No events yet.</div>
+  </div>
+</div>
+</div>
+
+<script>
+const NOW = Date.now();
+const M = 60000, H = 3600000, D = 86400000;
+
+const SITES = [
+  { id:'myloop',           name:'myloop',            docs:247, plugins:15, themes:3, users:6  },
+  { id:'pm-bulletin',      name:'pm-bulletin',       docs:312, plugins:9,  themes:2, users:3  },
+  { id:'markshare',        name:'markshare',         docs:89,  plugins:11, themes:2, users:2  },
+  { id:'nexus-e2e-test',   name:'nexus-e2e-test',    docs:12,  plugins:4,  themes:1, users:1  },
+  { id:'jeremypollockblog',name:'jeremypollockblog',docs:156,  plugins:8,  themes:2, users:2  },
+  { id:'jpp0413p',         name:'jpp0413p',          docs:203, plugins:13, themes:3, users:4  },
+  { id:'the-awful-pm',     name:'the-awful-pm',      docs:44,  plugins:6,  themes:1, users:1  },
+  { id:'newsroom-demo',    name:'newsroom-demo',     docs:78,  plugins:10, themes:2, users:3  },
+  { id:'ai-toolkit-demo',  name:'ai-toolkit-demo',   docs:31,  plugins:5,  themes:1, users:2  },
+  { id:'advanced-cf',      name:'advanced-custom-fields',docs:67,plugins:7,themes:2,users:2  },
+  { id:'myloop-stg',       name:'myloop-stg',        docs:211, plugins:15, themes:3, users:5  },
+  { id:'the-blog',         name:'the-blog',          docs:523, plugins:12, themes:2, users:8  },
+  { id:'nexus',            name:'nexus',             docs:19,  plugins:3,  themes:1, users:1  },
+  { id:'local-copy-jpp',   name:'local-copy-jpp',    docs:187, plugins:11, themes:2, users:3  },
+];
+
+// Per-site state
+const S = {};
+SITES.forEach(s => {
+  S[s.id] = {
+    running: false,
+    // Timestamps
+    lastContentChange: null,  // when was content last modified (webhook or lastPostAt)
+    lastPluginChange: null,   // when was a plugin installed/updated
+    lastUserChange: null,     // when was a user added/changed
+    // Store built timestamps
+    metaBuiltAt: null,
+    indexBuiltAt: null,
+    pluginsBuiltAt: null,
+    usersBuiltAt: null,
+    // Indexing progress
+    indexing: false,
+    progress: 0,
+  };
+});
+
+const timers = {};
+
+// ── Freshness logic ──────────────────────────────────────────────
+function freshness(storeBuiltAt, sourceChangedAt) {
+  if (!storeBuiltAt) return 'empty';
+  if (!sourceChangedAt) return 'fresh';       // no known change → assume fresh
+  if (sourceChangedAt > storeBuiltAt) return 'stale'; // source newer than store
+  return 'fresh';
+}
+
+// ── Format time ──────────────────────────────────────────────────
+function ago(ts) {
+  if (!ts) return 'never';
+  const s = Math.floor((NOW_LIVE() - ts) / 1000);
+  if (s < 5) return 'just now';
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  return Math.floor(s/3600) + 'h ago';
+}
+let _now = NOW;
+function NOW_LIVE() { return _now; }
+setInterval(() => { _now += 1000; }, 1000);
+
+function ts() {
+  return new Date(_now).toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+// ── Logging ──────────────────────────────────────────────────────
+function log(type, site, msg) {
+  const body = document.getElementById('log-body');
+  if (body.querySelector('div[style]')) body.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'log-row hi';
+  row.innerHTML = `<span class="log-ts">${ts()}</span><span class="log-tag ${type}">${type}</span><span class="log-msg">[${site}] ${msg}</span>`;
+  body.insertBefore(row, body.firstChild);
+  setTimeout(() => row.classList.remove('hi'), 2500);
+}
+function clearLog() {
+  document.getElementById('log-body').innerHTML = '<div style="padding:12px 10px;color:#2a2f3d;font-size:10px">Cleared.</div>';
+}
+
+// ── Render matrix ────────────────────────────────────────────────
+function cellHtml(storeBuiltAt, sourceChangedAt, value, subvalue) {
+  const f = freshness(storeBuiltAt, sourceChangedAt);
+  if (f === 'empty') return `<div class="cell"><span class="cell-empty">—</span></div>`;
+
+  const badge = f === 'fresh'
+    ? `<span class="fbadge fresh">✓ fresh</span>`
+    : `<span class="fbadge stale">⚠ stale</span>`;
+
+  const ageStyle = f === 'stale' ? 'color:var(--ye)' : 'color:#2a4a35';
+
+  return `<div class="cell ${f}">
+    <span class="cell-val">${value}${badge}</span>
+    <span class="cell-age" style="${ageStyle}">${subvalue} · built ${ago(storeBuiltAt)}</span>
+  </div>`;
+}
+
+function renderMatrix() {
+  const el = document.getElementById('site-matrix');
+  el.innerHTML = '';
+
+  SITES.forEach(s => {
+    const st = S[s.id];
+    const row = document.createElement('div');
+    row.className = 'matrix-row' + (st.running ? '' : '');
+    row.id = 'row-' + s.id;
+
+    // Name
+    const cName = document.createElement('div');
+    cName.className = 'mc';
+    cName.style.cssText = 'font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    cName.textContent = s.name;
+
+    // Status
+    const cStatus = document.createElement('div');
+    cStatus.className = 'mc';
+    cStatus.innerHTML = st.running
+      ? `<span class="status-chip running"><span class="sdot2"></span>running</span>`
+      : `<span class="status-chip halted"><span class="sdot2"></span>halted</span>`;
+
+    // Last change (source of truth for freshness)
+    const cChange = document.createElement('div');
+    cChange.className = 'mc change-source';
+    const lastAny = Math.max(st.lastContentChange||0, st.lastPluginChange||0, st.lastUserChange||0) || null;
+    if (!lastAny) {
+      cChange.innerHTML = `<span class="cs-time" style="color:#2a2f3d">no changes</span>`;
+    } else {
+      const parts = [];
+      if (st.lastContentChange) parts.push('post');
+      if (st.lastPluginChange) parts.push('plugin');
+      if (st.lastUserChange) parts.push('user');
+      cChange.innerHTML = `<span class="cs-time">${ago(lastAny)}</span><span class="cs-event">${parts.join(' · ')} change</span>`;
+    }
+
+    // Metadata cell
+    const cMeta = document.createElement('div');
+    cMeta.className = 'mc';
+    if (st.metaBuiltAt) {
+      cMeta.innerHTML = cellHtml(
+        st.metaBuiltAt,
+        st.lastPluginChange,   // plugin changes make metadata stale
+        'WP 7.0 · PHP 8.3',
+        `${s.plugins} plugins`
+      );
+    } else {
+      cMeta.innerHTML = `<div class="cell"><span class="cell-empty">—</span></div>`;
+    }
+
+    // Index cell
+    const cIndex = document.createElement('div');
+    cIndex.className = 'mc';
+    if (st.indexing) {
+      cIndex.innerHTML = `<div class="cell indexing-cell">
+        <span class="cell-val pulsing">indexing ${st.progress}%</span>
+        <div class="mini-prog"><div class="mini-prog-fill" style="width:${st.progress}%"></div></div>
+      </div>`;
+    } else if (st.indexBuiltAt) {
+      cIndex.innerHTML = cellHtml(
+        st.indexBuiltAt,
+        st.lastContentChange,  // content changes make index stale
+        `${s.docs} docs`,
+        `${Math.round(s.docs*1.67)} chunks`
+      );
+    } else {
+      cIndex.innerHTML = `<div class="cell"><span class="cell-empty">—</span></div>`;
+    }
+
+    // Plugins cell
+    const cPlugins = document.createElement('div');
+    cPlugins.className = 'mc';
+    if (st.pluginsBuiltAt) {
+      cPlugins.innerHTML = cellHtml(
+        st.pluginsBuiltAt,
+        st.lastPluginChange,
+        `${s.plugins} plugins`,
+        `${s.themes} themes`
+      );
+    } else {
+      cPlugins.innerHTML = `<div class="cell"><span class="cell-empty">—</span></div>`;
+    }
+
+    // Users cell
+    const cUsers = document.createElement('div');
+    cUsers.className = 'mc';
+    if (st.usersBuiltAt) {
+      const hasAlert = s.id === 'myloop' || s.id === 'the-blog';
+      cUsers.innerHTML = cellHtml(
+        st.usersBuiltAt,
+        st.lastUserChange,
+        `${s.users} users`,
+        hasAlert ? '⚠ ext. email' : 'ok'
+      );
+    } else {
+      cUsers.innerHTML = `<div class="cell"><span class="cell-empty">—</span></div>`;
+    }
+
+    // Actions
+    const cActions = document.createElement('div');
+    cActions.className = 'row-action';
+    if (!st.running && !st.indexing) {
+      const b = document.createElement('button');
+      b.className = 'btn-xs start'; b.textContent = '▶ Start';
+      b.onclick = () => startSite(s.id);
+      cActions.appendChild(b);
+    }
+    // Re-index if stale
+    const indexF = freshness(st.indexBuiltAt, st.lastContentChange);
+    if (st.running && !st.indexing && (indexF === 'stale' || !st.indexBuiltAt)) {
+      const b = document.createElement('button');
+      b.className = 'btn-xs reindex';
+      b.textContent = indexF === 'stale' ? '⚡ Re-index' : '⚡ Index';
+      b.onclick = () => triggerIndex(s.id);
+      cActions.appendChild(b);
+    }
+
+    row.append(cName, cStatus, cChange, cMeta, cIndex, cPlugins, cUsers, cActions);
+    el.appendChild(row);
+  });
+}
+
+// ── Update summary bars ──────────────────────────────────────────
+function updateBars() {
+  const N = SITES.length;
+  function counts(builtKey, changeKey) {
+    let fresh=0, stale=0;
+    SITES.forEach(s => {
+      const st = S[s.id];
+      const f = freshness(st[builtKey], st[changeKey]);
+      if (f === 'fresh') fresh++;
+      else if (f === 'stale') stale++;
+    });
+    return {fresh, stale};
+  }
+  function setBar(idF, idS, countEl, staleEl, fresh, stale) {
+    document.getElementById(countEl).textContent = fresh + stale;
+    document.getElementById(staleEl).textContent = stale > 0 ? `${stale} stale` : '';
+    document.getElementById(idF).style.width = (fresh/N*100) + '%';
+    document.getElementById(idS).style.left   = (fresh/N*100) + '%';
+    document.getElementById(idS).style.width  = (stale/N*100) + '%';
+  }
+  const m = counts('metaBuiltAt','lastPluginChange');
+  setBar('bar-meta-fresh','bar-meta-stale','cnt-meta','stale-meta', m.fresh, m.stale);
+  const i = counts('indexBuiltAt','lastContentChange');
+  setBar('bar-index-fresh','bar-index-stale','cnt-index','stale-index', i.fresh, i.stale);
+  const p = counts('pluginsBuiltAt','lastPluginChange');
+  setBar('bar-plugins-fresh','bar-plugins-stale','cnt-plugins','stale-plugins', p.fresh, p.stale);
+  const u = counts('usersBuiltAt','lastUserChange');
+  setBar('bar-users-fresh','bar-users-stale','cnt-users','stale-users', u.fresh, u.stale);
+}
+
+// ── Site lifecycle ────────────────────────────────────────────────
+function startSite(id) {
+  const s = SITES.find(x => x.id === id);
+  const st = S[id];
+  if (st.running) return;
+  st.running = true;
+  log('auto', s.name, 'siteStarted hook fired');
+
+  // Metadata refresh: fires first, ~1s
+  setTimeout(() => {
+    st.metaBuiltAt = _now;
+    log('auto', s.name, `SiteMetadataCache built — WP 7.0 · ${s.plugins} plugins · ${s.docs} posts`);
+    updateBars(); renderMatrix();
+  }, 1000 + Math.random()*400);
+
+  // Content index: fires simultaneously, takes longer
+  triggerIndex(id, true);
+}
+
+function triggerIndex(id, auto=false) {
+  const s = SITES.find(x => x.id === id);
+  const st = S[id];
+  if (st.indexing) return;
+  if (!auto) log('manual', s.name, 'Re-index triggered');
+
+  st.indexing = true;
+  st.indexBuiltAt = null;
+  st.pluginsBuiltAt = null;
+  st.usersBuiltAt = null;
+  st.progress = 0;
+  renderMatrix();
+
+  const steps = [5,12,20,28,36,45,55,65,75,84,91,97,100];
+  const msgs = [
+    'FileScanner', 'MySQLExtractor — connecting', 'extracted '+s.docs+' posts',
+    'ACF/WooCommerce extractors', 'chunking → '+Math.round(s.docs*1.67)+' chunks',
+    'ONNX batch 1/'+Math.ceil(s.docs*1.67/16),
+    'ONNX batch '+Math.floor(Math.ceil(s.docs*1.67/16)/2)+'/'+Math.ceil(s.docs*1.67/16),
+    'ONNX batch '+Math.ceil(s.docs*1.67/16)*0.75|0+'/'+Math.ceil(s.docs*1.67/16),
+    'ONNX complete · writing LanceDB',
+    'VectorStore.upsert · FTS index',
+    'GraphDB — writing plugins/themes/users',
+    'IndexRegistry → indexed',
+    'done',
+  ];
+  let i = 0;
+  const t = setInterval(() => {
+    if (i >= steps.length - 1) {
+      clearInterval(t);
+      delete timers[id];
+      st.indexing = false;
+      st.progress = 100;
+      st.indexBuiltAt   = _now;
+      st.pluginsBuiltAt = _now;
+      st.usersBuiltAt   = _now;
+      log('event', s.name, `Indexed ✓ — ${s.docs} docs · ${s.plugins} plugins · ${s.users} users · all stores written`);
+      updateBars(); renderMatrix();
+      return;
+    }
+    st.progress = steps[i];
+    if (i === 2 || i === 5 || i === 10) log('auto', s.name, msgs[i]);
+    i++;
+    renderMatrix();
+  }, 280 + Math.random()*80);
+  timers[id] = t;
+}
+
+// ── Simulate content/plugin/user changes (webhooks) ──────────────
+function simulateWebhooks() {
+  // Pick 3-4 random indexed sites and mark them as having changed
+  const indexed = SITES.filter(s => S[s.id].indexBuiltAt);
+  if (indexed.length === 0) { log('manual','fleet','No indexed sites yet — start some sites first'); return; }
+
+  const picks = indexed.sort(() => Math.random()-.5).slice(0, Math.min(4, indexed.length));
+  picks.forEach((s, i) => {
+    setTimeout(() => {
+      const types = ['content','plugin','user'];
+      const type = types[Math.floor(Math.random()*types.length)];
+      const st = S[s.id];
+      if (type === 'content') {
+        st.lastContentChange = _now;
+        log('webhook', s.name, 'post_updated event received — content index now stale');
+      } else if (type === 'plugin') {
+        st.lastPluginChange = _now;
+        log('webhook', s.name, 'plugin_activated event received — metadata + graph.plugins now stale');
+      } else {
+        st.lastUserChange = _now;
+        log('webhook', s.name, 'user_registered event received — graph.users now stale');
+      }
+      updateBars(); renderMatrix();
+    }, i * 400);
+  });
+}
+
+// ── Start all ─────────────────────────────────────────────────────
+function startAll() {
+  log('manual','fleet','INDEX_ALL_AUTO — starting all sites sequentially');
+  SITES.forEach((s, i) => {
+    setTimeout(() => { if (!S[s.id].running) startSite(s.id); }, i * 700);
+  });
+}
+
+// ── Reset ─────────────────────────────────────────────────────────
+function resetAll() {
+  Object.values(timers).forEach(t => clearInterval(t));
+  SITES.forEach(s => {
+    S[s.id] = { running:false, lastContentChange:null, lastPluginChange:null, lastUserChange:null,
+      metaBuiltAt:null, indexBuiltAt:null, pluginsBuiltAt:null, usersBuiltAt:null,
+      indexing:false, progress:0 };
+  });
+  updateBars(); renderMatrix(); clearLog();
+  log('manual','fleet','Factory reset — all stores cleared');
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+updateBars();
+renderMatrix();
+</script>
+</body>
+</html>

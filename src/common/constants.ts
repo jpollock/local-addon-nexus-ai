@@ -9,6 +9,7 @@ export const IPC_CHANNELS = {
   GET_MCP_INFO: `${ADDON_PREFIX}:get-mcp-info`,
   GET_STARTUP_STATUS: `${ADDON_PREFIX}:get-startup-status`,
   GET_FLEET_STATUS: `${ADDON_PREFIX}:get-fleet-status`,
+  GET_SITE_CHANGE_EVENTS: `${ADDON_PREFIX}:get-site-change-events`,
   GET_SITES: `${ADDON_PREFIX}:get-sites`,
   GET_WPE_SITE_IDS: `${ADDON_PREFIX}:get-wpe-site-ids`,
   GET_DASHBOARD_STATS: `${ADDON_PREFIX}:get-dashboard-stats`,
@@ -16,7 +17,9 @@ export const IPC_CHANNELS = {
   STOP_SITE: `${ADDON_PREFIX}:stop-site`,
   STATUS_CHANGE: `${ADDON_PREFIX}:status-change`,
   SEARCH: `${ADDON_PREFIX}:search`,
+  SEARCH_KEYWORD: `${ADDON_PREFIX}:search:keyword`,
   INDEX_SITE: `${ADDON_PREFIX}:index-site`,
+  INDEX_PROGRESS: `${ADDON_PREFIX}:content:index-progress`,
   GET_SETTINGS: `${ADDON_PREFIX}:get-settings`,
   UPDATE_SETTINGS: `${ADDON_PREFIX}:update-settings`,
 
@@ -142,6 +145,8 @@ export const IPC_CHANNELS = {
   WPE_SYNC_STATUS: `${ADDON_PREFIX}:wpe:sync-status`,
   WPE_SYNC_STATS: `${ADDON_PREFIX}:wpe:sync-stats`,
   CLEANUP_EXCLUDED_TYPES: `${ADDON_PREFIX}:content:cleanup-excluded-types`,
+  RESET_CONTENT_INDEX: `${ADDON_PREFIX}:content:reset-index`,
+  FACTORY_RESET: `${ADDON_PREFIX}:data:factory-reset`,
   WPE_CAPI_SYNC: `${ADDON_PREFIX}:wpe:capi-sync`,
   RESET_AND_REFRESH: `${ADDON_PREFIX}:data:reset-and-refresh`,
   CLEANUP_GHOST_INSTALLS: `${ADDON_PREFIX}:wpe:cleanup-ghost-installs`,
@@ -183,6 +188,23 @@ export const IPC_CHANNELS = {
 
   // UI Navigation
   NAVIGATE_TO_PREFERENCES: `${ADDON_PREFIX}:ui:navigate-to-preferences`,
+
+  // Fleet completeness (Overview widget)
+  FLEET_COMPLETENESS: `${ADDON_PREFIX}:fleet:completeness`,
+
+  // NexusStateManager — main process pushes partial state patches to renderer.
+  // All components observe nexusStore instead of polling individually.
+  NEXUS_STATE_UPDATE: `${ADDON_PREFIX}:state:update`,
+
+  // Search intent classification
+  SEARCH_CLASSIFY_INTENT: `${ADDON_PREFIX}:search:classify-intent`,
+
+  // System tab — WPE sync summary
+  SYSTEM_WPE_STATUS: `${ADDON_PREFIX}:system:wpe-status`,
+
+  // AI Assistant (fleet panel, dashboard Ask tab, site tab)
+  ASSISTANT_QUERY:   `${ADDON_PREFIX}:assistant:query`,
+  ASSISTANT_CONTEXT: `${ADDON_PREFIX}:assistant:context`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -305,5 +327,5 @@ export const OLLAMA_POLL_INTERVAL_MS = 30_000;
 
 export const CHAT_DEFAULTS = {
   DEFAULT_PROVIDER: 'ollama',
-  MAX_AGENT_ITERATIONS: 10,
+  MAX_AGENT_ITERATIONS: 25,
 } as const;

@@ -8,6 +8,61 @@ import type { SiteStructure } from '../../common/types';
 import { getProvider } from './providers/index';
 import type { ChatProviderConfig } from './providers/types';
 import { adaptToolsForChat } from './tool-adapter';
+import { buildFleetContext } from '../assistant/AssistantService';
+import { buildWordPressSystemPrompt } from '../assistant/wordpress-knowledge';
+
+// ---------------------------------------------------------------------------
+// Site Lifecycle — tools that require a running local site
+// ---------------------------------------------------------------------------
+
+interface SiteToolConfig {
+  argKey: 'site' | 'site_ids';
+  /**
+   * true  → stop sites after tool returns (synchronous tools that wait for completion)
+   * false → leave sites running (async tools that queue background work)
+   */
+  autoStop: boolean;
+}
+
+/**
+ * Tools that require running local sites.
+ * autoStop=false means the background task needs sites alive after the tool call returns.
+ */
+const NEEDS_RUNNING_SITE: Record<string, SiteToolConfig> = {
+  // Synchronous — tool awaits completion, safe to stop after
+  reindex_site:          { argKey: 'site',     autoStop: true },
+  scan_database_health:  { argKey: 'site',     autoStop: true },
+  clean_database_items:  { argKey: 'site',     autoStop: true },
+  get_site_structure:    { argKey: 'site',     autoStop: true },
+  nexus_site_audit:      { argKey: 'site',     autoStop: true },
+  nexus_site_refresh:    { argKey: 'site',     autoStop: true },
+  wp_plugin_list:        { argKey: 'site',     autoStop: true },
+  wp_plugin_update:      { argKey: 'site',     autoStop: true },
+  wp_plugin_activate:    { argKey: 'site',     autoStop: true },
+  wp_plugin_deactivate:  { argKey: 'site',     autoStop: true },
+  wp_plugin_install:     { argKey: 'site',     autoStop: true },
+  wp_core_version:       { argKey: 'site',     autoStop: true },
+  wp_core_update:        { argKey: 'site',     autoStop: true },
+  wp_eval:               { argKey: 'site',     autoStop: true },
+  wp_search_replace:     { argKey: 'site',     autoStop: true },
+  wp_site_health:        { argKey: 'site',     autoStop: true },
+  wp_option_get:         { argKey: 'site',     autoStop: true },
+  wp_post_create:        { argKey: 'site',     autoStop: true },
+  wp_post_update:        { argKey: 'site',     autoStop: true },
+  wp_post_delete:        { argKey: 'site',     autoStop: true },
+  wp_user_list:          { argKey: 'site',     autoStop: true },
+  wp_theme_list:         { argKey: 'site',     autoStop: true },
+  wp_theme_activate:     { argKey: 'site',     autoStop: true },
+  wp_db_export:          { argKey: 'site',     autoStop: true },
+  wp_import_database:    { argKey: 'site',     autoStop: true },
+  wp_run_ability:        { argKey: 'site',     autoStop: true },
+  wp_list_abilities:     { argKey: 'site',     autoStop: true },
+  wp_setup_ai:           { argKey: 'site',     autoStop: true },
+  wp_sync_ai_credentials:{ argKey: 'site',     autoStop: true },
+
+  // Async — queues background work; sites must stay running until indexing completes
+  bulk_reindex:          { argKey: 'site_ids', autoStop: false },
+};
 
 // ---------------------------------------------------------------------------
 // Session State
@@ -86,6 +141,9 @@ export class ChatService {
       apiKey: providerConfig.apiKey,
       model: providerConfig.model,
     };
+
+    // Compress stale tool results to prevent context bloat
+    session.messages = this.compressStaleToolResults(session.messages);
 
     await this.runAgentLoop(session, providerConfig.providerId, config);
   }
@@ -237,19 +295,20 @@ export class ChatService {
         name: toolCall.name,
       });
 
-      // Mark as 'mcp' since chat is AI agent interaction (similar to MCP)
-      const result = await this.registry.call(toolCall.name, toolCall.arguments, this.services, 'mcp');
-      const text = result.content.map((c) => c.text).join('\n');
+      const { startedIds: _s3, autoStop: _as3 } = await this.prepareSiteLifecycle(toolCall.name, toolCall.arguments);
+      const result3 = await this.registry.call(toolCall.name, toolCall.arguments, this.services, 'mcp');
+      const _note3 = await this.teardownSiteLifecycle(_s3, _as3);
+      const text3 = result3.content.map((c) => c.text).join('\n') + _note3;
 
       this.emit(sessionId(session), {
         type: 'tool_call_result',
         id: toolCall.id,
         name: toolCall.name,
-        result: text,
-        isError: result.isError,
+        result: text3,
+        isError: result3.isError,
       });
 
-      return { text, isError: result.isError };
+      return { text: text3, isError: result3.isError };
     }
 
     // Tier 1 & 2: execute directly
@@ -259,9 +318,10 @@ export class ChatService {
       name: toolCall.name,
     });
 
-    // Mark as 'mcp' since chat is AI agent interaction (similar to MCP)
+    const { startedIds: _s, autoStop: _as } = await this.prepareSiteLifecycle(toolCall.name, toolCall.arguments);
     const result = await this.registry.call(toolCall.name, toolCall.arguments, this.services, 'mcp');
-    const text = result.content.map((c) => c.text).join('\n');
+    const _note = await this.teardownSiteLifecycle(_s, _as);
+    const text = result.content.map((c) => c.text).join('\n') + _note;
 
     this.emit(sessionId(session), {
       type: 'tool_call_result',
@@ -272,6 +332,82 @@ export class ChatService {
     });
 
     return { text, isError: result.isError };
+  }
+
+  /**
+   * Starts any halted local sites required by the tool.
+   * Returns IDs of sites we started so teardown knows what to stop.
+   */
+  private async prepareSiteLifecycle(
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Promise<{ startedIds: string[]; autoStop: boolean }> {
+    const config = NEEDS_RUNNING_SITE[toolName];
+    const bail = { startedIds: [], autoStop: true };
+
+    if (!config) return bail;
+    if (!this.services.localServices) {
+      return bail;
+    }
+
+    const targets: Array<{ id: string; name: string }> = [];
+
+    if (config.argKey === 'site') {
+      const siteArg = args.site as string | undefined;
+      if (!siteArg) return { startedIds: [], autoStop: config.autoStop };
+      const site = resolveSite(siteArg, this.services.siteData);
+      if (site) targets.push({ id: site.id, name: site.name });
+    } else {
+      const ids = (args.site_ids as string[]) ?? [];
+      for (const id of ids) {
+        const site = this.services.siteData.getSite(id);
+        if (site) targets.push({ id: site.id, name: site.name });
+      }
+    }
+
+    const toStart = targets.filter((t) => {
+      try {
+        return this.services.localServices!.getSiteStatus(t.id) === 'halted';
+      } catch {
+        return false;
+      }
+    });
+
+    if (toStart.length === 0) return { startedIds: [], autoStop: config.autoStop };
+
+    try {
+      await this.services.localServices.startSites(toStart.map((t) => t.id));
+    } catch (err) {
+      // startSites failure is non-fatal — proceed with whatever sites did start
+    }
+
+    const startedIds = toStart
+      .filter((t) => {
+        try { return this.services.localServices!.getSiteStatus(t.id) === 'running'; } catch { return false; }
+      })
+      .map((t) => t.id);
+
+    return { startedIds, autoStop: config.autoStop };
+  }
+
+  /**
+   * Stops sites we auto-started (sync tools only). For async tools (bulk_reindex etc.),
+   * sites must stay running until background indexing completes — autoStop=false skips this.
+   */
+  private async teardownSiteLifecycle(
+    startedIds: string[],
+    autoStop: boolean,
+  ): Promise<string> {
+    if (startedIds.length === 0 || !this.services.localServices) return '';
+
+    const names = startedIds.map((id) => this.services.siteData.getSite(id)?.name ?? id);
+
+    if (!autoStop) {
+      return `\n\n[Auto-lifecycle: started ${names.join(', ')} — left running for background task]`;
+    }
+
+    await this.services.localServices.stopSites(startedIds);
+    return `\n\n[Auto-lifecycle: started and stopped ${names.join(', ')}]`;
   }
 
   /**
@@ -328,14 +464,30 @@ export class ChatService {
    * Build the system prompt with optional site context.
    */
   private async buildSystemPrompt(siteId?: string): Promise<string> {
+    // Build WordPress-aware fleet context (PHP EOL, site counts, insights)
+    let fleetContextSection = '';
+    try {
+      const fleetCtx = buildFleetContext(
+        this.services.siteData,
+        (this.services as any).metadataCache,
+        this.services.indexRegistry,
+        (this.services as any).graphService,
+      );
+      // agentMode=true: omits JSON output format, keeps WordPress domain knowledge
+      fleetContextSection = buildWordPressSystemPrompt(fleetCtx, true);
+    } catch { /* fleet context unavailable — proceed without it */ }
+
     const lines = [
+      fleetContextSection,
+      '',
       'You are Nexus AI, a WordPress site management assistant built into the Local development environment.',
       'You have access to tools for managing WordPress sites, checking plugin status, running WP-CLI commands, and more.',
       'Be concise and helpful. When using tools, explain what you are doing.',
       '',
       'IMPORTANT: Always use your tools to get real data. Never fabricate or guess site names, plugin lists, version numbers, or other information.',
-      'If asked about sites, call local_list_sites first. If asked about plugins, call wp_plugin_list with the site name.',
+      'If asked about sites, call local_list_sites or nexus_list_sites first. If asked about plugins, call wp_plugin_list with the site name.',
       'If asked about WordPress versions, call wp_core_version. If you cannot answer using your available tools, say so.',
+      'For complex multi-step queries (e.g. "admin users across recipe sites"), chain multiple tool calls together.',
       '',
       'Fleet management tools:',
       '- fleet_health_summary: Get health scores for all indexed sites',
@@ -349,6 +501,29 @@ export class ChatService {
       '',
       'When asked to reindex sites, use the bulk_reindex tool with site IDs from local_list_sites.',
       'Never suggest manual WP-CLI commands when a tool exists for the task.',
+      '',
+      '## Task completion protocol',
+      'When you finish a multi-step task (updated plugins, started a site, ran an audit, etc.), begin your final response with:',
+      '  ✓ Done: [one sentence past-tense summary of what was accomplished]',
+      '',
+      'Example: "✓ Done: Updated 3 plugins on pm-bulletin (Elementor, WooCommerce, ACF). Site is still running."',
+      '',
+      'For follow-up questions, treat previously completed work as resolved unless the user explicitly revisits it.',
+      '',
+      '## Async / long-running operations (pulls, pushes, exports, backups)',
+      'Some operations take 1–5 minutes: site pulls from WP Engine, pushes, exports, bulk reindex.',
+      'Correct behaviour for these:',
+      '  1. Start the operation.',
+      '  2. Check local_operation_status 2–3 times to confirm it is running.',
+      '  3. If still "in_progress" after 3 checks, STOP polling and tell the user:',
+      '     "The [operation] is running in the background. Ask me again in a few minutes to check if it\'s done."',
+      '  4. Do NOT call local_operation_status more than 3 times in one turn — this wastes context budget.',
+      'If the user asks "is it done yet?", check once and report.',
+      '',
+      '## Site lifecycle',
+      'Tools that require a running site (wp_*, reindex_site, scan_database_health, etc.) handle',
+      'start/stop automatically in the background. You will see [Auto-lifecycle: ...] notes in tool',
+      'results confirming which sites were started and stopped. You do not need to manage this yourself.',
     ];
 
     if (siteId) {
@@ -380,6 +555,42 @@ export class ChatService {
     }
 
     return lines.join('\n');
+  }
+
+  /**
+   * Compress stale tool results to reduce context bloat.
+   * Tool results older than 2 assistant messages get trimmed to 600 chars.
+   * Recent results (from the last tool-use cycle) are preserved in full.
+   */
+  private compressStaleToolResults(messages: ChatMessage[]): ChatMessage[] {
+    const COMPRESS_THRESHOLD = 800;
+    const COMPRESS_TO = 600;
+
+    let assistantCount = 0;
+    let compressBefore = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') {
+        assistantCount++;
+        if (assistantCount >= 2) {
+          compressBefore = i;
+          break;
+        }
+      }
+    }
+
+    if (compressBefore < 0) return messages;
+
+    return messages.map((msg, idx) => {
+      if (idx >= compressBefore) return msg;
+      if (msg.role !== 'tool') return msg;
+      const content = typeof msg.content === 'string' ? msg.content : '';
+      if (content.length <= COMPRESS_THRESHOLD) return msg;
+      return {
+        ...msg,
+        content: content.slice(0, COMPRESS_TO) +
+          `\n[…compressed for context efficiency — ${content.length} chars total]`,
+      };
+    });
   }
 
   /**

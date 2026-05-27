@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
-import { requireRunning, ok, error } from './preflight';
+import { ok, error } from './preflight';
+import { withSiteRunning } from '../with-site-running';
 
 export const dbExportHandler: McpToolHandler = {
   definition: {
@@ -24,12 +25,11 @@ export const dbExportHandler: McpToolHandler = {
     const site = resolveSite(args.site as string, services.siteData);
     if (!site) return error(`Site "${args.site}" not found.`);
 
-    const check = requireRunning(site, services);
-    if (check) return check;
+    return withSiteRunning(site.id, services, async () => {
+      const destination = args.destination as string | undefined;
+      const dumpPath = await services.localServices!.dumpDatabase(site.id, destination);
 
-    const destination = args.destination as string | undefined;
-    const dumpPath = await services.localServices!.dumpDatabase(site.id, destination);
-
-    return ok(`Database exported to: ${dumpPath}`);
+      return ok(`Database exported to: ${dumpPath}`);
+    });
   },
 };

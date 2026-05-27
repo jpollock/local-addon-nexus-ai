@@ -1981,5 +1981,47 @@ wpeCommand
     }
   });
 
+// ===========================================================================
+// B3: Plugin Diff — compare plugins between two installs (enables M5-04)
+// ===========================================================================
+
+wpeCommand
+  .command('plugin-diff <installA> <installB>')
+  .description('Compare plugins between two installs (local siteId or WPE install name)')
+  .option('--json', 'Output as JSON')
+  .action(async (installA: string, installB: string, options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusPluginDiff: any }>(`
+        mutation($installA: String!, $installB: String!) {
+          nexusPluginDiff(installA: $installA, installB: $installB) {
+            success error installA installB
+            onlyInA { slug versionA statusA }
+            onlyInB { slug versionB statusB }
+            versionMismatches { slug versionA versionB statusA statusB }
+          }
+        }
+      `, { installA, installB });
+      const diff = result.nexusPluginDiff;
+      if (!diff.success) { console.error(`Error: ${diff.error}`); process.exit(1); }
+      if (options.json) { console.log(JSON.stringify(diff, null, 2)); return; }
+      const total = diff.versionMismatches.length + diff.onlyInA.length + diff.onlyInB.length;
+      if (total === 0) { console.log(`No plugin differences between ${installA} and ${installB}.`); return; }
+      console.log(`\nPlugin diff: ${installA} vs ${installB}\n`);
+      if (diff.versionMismatches.length > 0) {
+        console.log(`Version mismatches (${diff.versionMismatches.length}):`);
+        diff.versionMismatches.forEach((m: any) => console.log(`  ${m.slug}: ${m.versionA} → ${m.versionB}`));
+      }
+      if (diff.onlyInA.length > 0) {
+        console.log(`\nOnly in ${installA}:`);
+        diff.onlyInA.forEach((p: any) => console.log(`  ${p.slug} ${p.versionA} [${p.statusA}]`));
+      }
+      if (diff.onlyInB.length > 0) {
+        console.log(`\nOnly in ${installB}:`);
+        diff.onlyInB.forEach((p: any) => console.log(`  ${p.slug} ${p.versionB} [${p.statusB}]`));
+      }
+    } catch (err: any) { console.error(`Error: ${err.message}`); process.exit(1); }
+  });
+
 export { wpeCommand };
 

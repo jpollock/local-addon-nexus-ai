@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nexus AI — Search Architecture (updated)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #e6edf3; padding: 32px; line-height: 1.5; max-width: 1200px; }
+  h1 { font-size: 22px; font-weight: 700; color: #e6edf3; margin-bottom: 4px; }
+  h2 { font-size: 13px; font-weight: 700; color: #8b949e; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; margin-top: 36px; }
+  h3 { font-size: 13px; font-weight: 700; color: #e6edf3; margin-bottom: 8px; }
+  .subtitle { color: #8b949e; font-size: 13px; margin-bottom: 40px; }
+  .section { background: #0d1117; border: 1px solid #21262d; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .two-col, .three-col { grid-template-columns: 1fr; } }
+
+  /* Flow diagram */
+  .flow { display: flex; align-items: flex-start; gap: 0; overflow-x: auto; padding-bottom: 8px; margin-bottom: 16px; }
+  .step { display: flex; flex-direction: column; align-items: center; }
+  .box { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; width: 150px; text-align: center; flex-shrink: 0; }
+  .box-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #8b949e; margin-bottom: 3px; }
+  .box-title { font-size: 12px; font-weight: 600; color: #e6edf3; margin-bottom: 3px; }
+  .box-sub { font-size: 10px; color: #8b949e; line-height: 1.4; }
+  .box.green  { border-color: rgba(81,187,123,.4);  background: rgba(81,187,123,.05); }
+  .box.teal   { border-color: rgba(14,202,212,.4);  background: rgba(14,202,212,.05); }
+  .box.amber  { border-color: rgba(245,158,11,.4);  background: rgba(245,158,11,.05); }
+  .box.purple { border-color: rgba(139,92,246,.4);  background: rgba(139,92,246,.05); }
+  .box.blue   { border-color: rgba(96,165,250,.4);  background: rgba(96,165,250,.05); }
+  .box.red    { border-color: rgba(239,68,68,.4);   background: rgba(239,68,68,.05); }
+  .box.grey   { border-color: #30363d; background: #161b22; }
+  .arrow { display: flex; align-items: center; padding: 0 3px; padding-top: 22px; }
+  .arrow-line { width: 24px; height: 2px; background: #30363d; }
+  .arrow-head { width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid #30363d; }
+  .fork { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; padding: 8px 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #8b949e; border-bottom: 1px solid #21262d; }
+  td { padding: 7px 10px; border-bottom: 1px solid #161b22; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  /* Badges */
+  .pill { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+  .pill.works   { background: rgba(81,187,123,.12); color: #51bb7b; border: 1px solid rgba(81,187,123,.25); }
+  .pill.broken  { background: rgba(239,68,68,.10);  color: #f87171; border: 1px solid rgba(239,68,68,.2); }
+  .pill.new     { background: rgba(14,202,212,.10); color: #0ECAD4; border: 1px solid rgba(14,202,212,.2); }
+  .pill.partial { background: rgba(245,158,11,.10); color: #fbbf24; border: 1px solid rgba(245,158,11,.2); }
+
+  code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; background: #21262d; padding: 1px 5px; border-radius: 4px; color: #79c0ff; }
+  pre  { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 12px 14px; color: #e6edf3; overflow-x: auto; line-height: 1.7; margin-top: 8px; }
+  .comment { color: #8b949e; }
+  .kw { color: #ff7b72; }
+  .str { color: #a5d6ff; }
+  .fn { color: #d2a8ff; }
+  .num { color: #79c0ff; }
+
+  .callout { border-radius: 8px; padding: 10px 14px; font-size: 12px; margin-top: 10px; }
+  .callout.info  { background: rgba(14,202,212,.05); border: 1px solid rgba(14,202,212,.2); color: #67e8f9; }
+  .callout.warn  { background: rgba(245,158,11,.05); border: 1px solid rgba(245,158,11,.2); color: #fde68a; }
+  .callout.green { background: rgba(81,187,123,.05); border: 1px solid rgba(81,187,123,.2); color: #86efac; }
+  .callout strong { font-weight: 700; }
+  .badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 4px; vertical-align: middle; background: rgba(14,202,212,.15); color: #0ECAD4; border: 1px solid rgba(14,202,212,.3); }
+</style>
+</head>
+<body>
+
+<h1>Nexus AI — Search Architecture</h1>
+<p class="subtitle">Full request flow from query input to results — including AI integration. Last updated: May 2026.</p>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2>1. Full request flow</h2>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="flow">
+    <div class="step"><div class="box grey">
+      <div class="box-label">User</div>
+      <div class="box-title">Query + Mode pill</div>
+      <div class="box-sub">Auto / Content / Site Metadata</div>
+    </div></div>
+    <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+    <div class="step"><div class="box grey">
+      <div class="box-label">Electron IPC</div>
+      <div class="box-title">SEARCH_UNIFIED</div>
+      <div class="box-sub">ipc-handlers.ts</div>
+    </div></div>
+    <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+    <div class="step"><div class="box blue">
+      <div class="box-label">Step 1 — Intent</div>
+      <div class="box-title">classifyIntentWithAI()</div>
+      <div class="box-sub">Calls configured AI provider. Falls back to regex heuristic.</div>
+    </div></div>
+    <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+    <div class="step"><div class="box amber">
+      <div class="box-label">Step 2 — Patterns</div>
+      <div class="box-title">detectMetadataQueryIntent()</div>
+      <div class="box-sub">Sort? Category? Substring? Chooses SQL branch.</div>
+    </div></div>
+    <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+    <div class="step">
+      <div class="fork">
+        <div class="box teal" style="width:155px">
+          <div class="box-label">Step 3a</div>
+          <div class="box-title">metadataSearch()</div>
+          <div class="box-sub">graph.db + SiteMetadataCache — plugins, versions, categories</div>
+        </div>
+        <div class="box green" style="width:155px">
+          <div class="box-label">Step 3b</div>
+          <div class="box-title">searchFleet()</div>
+          <div class="box-sub">LanceDB — ONNX embedding search on indexed post content</div>
+        </div>
+      </div>
+    </div>
+    <div class="arrow" style="padding-top:44px"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+    <div class="step"><div class="box purple">
+      <div class="box-label">Step 4</div>
+      <div class="box-title">Merge + dedup</div>
+      <div class="box-sub">postId dedup on content. Tabs auto-select based on intent.</div>
+    </div></div>
+    <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+    <div class="step"><div class="box grey">
+      <div class="box-label">UI</div>
+      <div class="box-title">SearchTab</div>
+      <div class="box-sub">All / Sites / Content tabs</div>
+    </div></div>
+  </div>
+
+  <div class="callout info">
+    <strong>Auto mode always runs both searches (3a and 3b) in parallel.</strong> The AI intent only determines which tab is highlighted by default — it never blocks a search from running. Explicit Content or Site Metadata pills do skip the other search.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2>2. AI integration — classifyIntentWithAI()</h2>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="section">
+  <p style="font-size:12px;color:#8b949e;margin-bottom:16px">Reads <code>settings.aiProvider</code> and calls the configured provider with a tiny classification prompt. No tool calls, no streaming — just a one-word response.</p>
+
+  <div class="two-col" style="margin-bottom:16px">
+    <div>
+      <h3 style="margin-bottom:10px">Provider selection</h3>
+      <table>
+        <tr><th>Provider</th><th>Default model</th><th>Requires key?</th></tr>
+        <tr><td><strong>Ollama</strong> <span class="badge">LOCAL</span></td><td><code>llama3.2</code></td><td>No — local</td></tr>
+        <tr><td><strong>Anthropic</strong></td><td><code>claude-haiku-4-5</code></td><td>Yes</td></tr>
+        <tr><td><strong>OpenAI</strong></td><td><code>gpt-4o-mini</code></td><td>Yes</td></tr>
+        <tr><td><strong>Google</strong></td><td><code>gemini-1.5-flash</code></td><td>Yes</td></tr>
+        <tr><td><em>None configured</em></td><td>—</td><td>Falls back to regex</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3 style="margin-bottom:10px">Classification prompt (sent to AI)</h3>
+      <pre><span class="comment">Classify this search query with exactly one word:</span>
+<span class="comment">content, metadata, or both.</span>
+
+<span class="kw">-</span> <span class="str">content</span>: searching for posts, pages, articles,
+  or written content on a topic
+<span class="kw">-</span> <span class="str">metadata</span>: searching for sites by plugin, theme,
+  PHP version, WordPress version, or site config
+<span class="kw">-</span> <span class="str">both</span>: query spans content AND site config
+
+Query: <span class="str">"what are my oldest php sites"</span>
+Answer:</pre>
+      <div class="callout green" style="margin-top:8px">AI responds with one word: <code>metadata</code>. 5 second timeout. Falls back to regex on failure.</div>
+    </div>
+  </div>
+
+  <h3 style="margin-bottom:10px">Fallback chain</h3>
+  <pre><span class="fn">classifyIntentWithAI</span>(<span class="str">"what are my oldest php sites"</span>)
+  <span class="kw">→</span> reads settings.aiProvider  <span class="comment">= 'ollama'</span>
+  <span class="kw">→</span> no API key needed
+  <span class="kw">→</span> calls Ollama /api/chat with classification prompt
+  <span class="kw">→</span> response: <span class="str">"metadata"</span>  <span class="comment">✓</span>
+
+<span class="fn">classifyIntentWithAI</span>(<span class="str">"customer onboarding"</span>)
+  <span class="kw">→</span> Ollama responds: <span class="str">"content"</span>  <span class="comment">✓</span>
+
+<span class="comment">// Provider not configured:</span>
+<span class="fn">classifyIntentWithAI</span>(<span class="str">"form builder sites"</span>)
+  <span class="kw">→</span> aiProvider = 'anthropic', no key → returns <span class="num">null</span>
+  <span class="kw">→</span> falls back to <span class="fn">classifyIntent</span>() regex heuristic
+  <span class="kw">→</span> regex: <span class="comment">no pattern matches "form builder"</span> → <span class="str">"content"</span>  <span class="comment">⚠ wrong without AI</span>
+
+<span class="comment">// But detectMetadataQueryIntent catches it:</span>
+<span class="fn">detectMetadataQueryIntent</span>(<span class="str">"form builder sites"</span>)
+  <span class="kw">→</span> /\bform\s*build/ matches → <span class="str">'plugin-category'</span>  <span class="comment">✓</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2>3. detectMetadataQueryIntent() — SQL branch selection</h2>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="section">
+  <p style="font-size:12px;color:#8b949e;margin-bottom:16px">Runs after intent classification, before SQL. Inspects the query string and chooses which SQL query to run.</p>
+
+  <div class="three-col">
+    <div>
+      <h3 style="color:#f59e0b;margin-bottom:8px">php-sort / wp-sort</h3>
+      <p style="font-size:11px;color:#8b949e;margin-bottom:8px">Detected by regex patterns. Runs <code>ORDER BY version ASC/DESC</code>.</p>
+      <table>
+        <tr><th>Pattern detected</th><th>SQL run</th></tr>
+        <tr><td>"oldest php sites"</td><td><code>ORDER BY php_version ASC</code></td></tr>
+        <tr><td>"old version of PHP"</td><td><code>ORDER BY php_version ASC</code></td></tr>
+        <tr><td>"outdated PHP"</td><td><code>ORDER BY php_version ASC</code></td></tr>
+        <tr><td>"sites needing PHP upgrade"</td><td><code>ORDER BY php_version ASC</code></td></tr>
+        <tr><td>"PHP 7 sites"</td><td><code>ORDER BY php_version ASC</code></td></tr>
+        <tr><td>"latest PHP"</td><td><code>ORDER BY php_version DESC</code></td></tr>
+        <tr><td>"old WordPress"</td><td><code>ORDER BY wp_version ASC</code></td></tr>
+        <tr><td>"latest WP"</td><td><code>ORDER BY wp_version DESC</code></td></tr>
+      </table>
+    </div>
+
+    <div>
+      <h3 style="color:#0ECAD4;margin-bottom:8px">plugin-category</h3>
+      <p style="font-size:11px;color:#8b949e;margin-bottom:8px">Detected by concept keywords. Runs <code>slug IN (...)</code> against known plugin lists.</p>
+      <table>
+        <tr><th>Query concept</th><th>Searches slugs for</th></tr>
+        <tr><td>"form builder"</td><td>contact-form-7, wpforms, gravity-forms, ninja-forms…</td></tr>
+        <tr><td>"page builder"</td><td>elementor, beaver-builder, divi, js_composer…</td></tr>
+        <tr><td>"SEO"</td><td>wordpress-seo, rank-math, all-in-one-seo-pack…</td></tr>
+        <tr><td>"e-commerce"</td><td>woocommerce, easy-digital-downloads…</td></tr>
+        <tr><td>"caching"</td><td>litespeed-cache, w3-total-cache, wp-super-cache…</td></tr>
+        <tr><td>"security"</td><td>wordfence, sucuri-scanner, bulletproof-security…</td></tr>
+        <tr><td>"backup"</td><td>updraftplus, backwpup, duplicator…</td></tr>
+        <tr><td>"performance"</td><td>autoptimize, smush, imagify, jetpack-boost…</td></tr>
+        <tr><td>"analytics"</td><td>google-analytics-for-wordpress, wp-statistics…</td></tr>
+      </table>
+    </div>
+
+    <div>
+      <h3 style="color:#51BB7B;margin-bottom:8px">substring (existing)</h3>
+      <p style="font-size:11px;color:#8b949e;margin-bottom:8px">Falls through when no pattern matches. Runs <code>LIKE '%query%'</code>.</p>
+      <table>
+        <tr><th>Query</th><th>SQL</th></tr>
+        <tr><td>"elementor"</td><td><code>name LIKE '%elementor%'</code></td></tr>
+        <tr><td>"woocommerce"</td><td><code>name LIKE '%woocommerce%'</code></td></tr>
+        <tr><td>"PHP 7.4"</td><td><code>php_version LIKE '7.4%'</code></td></tr>
+        <tr><td>"WP 6.9"</td><td><code>wp_version LIKE '6.9%'</code></td></tr>
+        <tr><td>"Astra"</td><td><code>name LIKE '%astra%'</code> (themes)</td></tr>
+      </table>
+      <div class="callout warn" style="margin-top:8px;font-size:11px">
+        <strong>Still limited:</strong> "form builder" with no AI → no regex catch → LIKE → no match. With AI: AI routes to 'metadata', category pattern catches "form builder" → IN query works.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2>4. Where each data store fits</h2>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="section">
+  <table>
+    <tr>
+      <th style="width:18%">Store</th>
+      <th style="width:20%">What's in it</th>
+      <th style="width:20%">Populated by</th>
+      <th style="width:20%">Searched by</th>
+      <th>Coverage gap</th>
+    </tr>
+    <tr>
+      <td><strong>SiteMetadataCache</strong><br><code>nexus-ai_site_metadata.json</code></td>
+      <td>Local sites: WP version, PHP version, plugins (name+active status), themes, post counts, user count</td>
+      <td>Lifecycle hook on site start. Filesystem scan on startup.</td>
+      <td>metadataSearch() — local plugin/theme substring + category</td>
+      <td>Halted sites have filesystem-only data (no active status)</td>
+    </tr>
+    <tr>
+      <td><strong>graph.db</strong><br>SQLite at <code>nexus-ai/graph.db</code></td>
+      <td>WPE installs: sites, plugins, themes, users, accounts. From CAPI + SSH sync.</td>
+      <td>CAPI sync (startup + scheduled). SSH sync (opt-in).</td>
+      <td>metadataSearch() — all branches run against graph.db</td>
+      <td>Plugin data only after SSH sync. PHP/WP version from CAPI (always).</td>
+    </tr>
+    <tr>
+      <td><strong>LanceDB</strong><br><code>nexus-ai/vectors/</code></td>
+      <td>Post/page content chunks with ONNX embeddings (384-dim)</td>
+      <td>ContentPipeline on site start (auto-index) or manual index</td>
+      <td>searchFleet() — semantic vector similarity</td>
+      <td>Local sites only. WPE content indexing = Phase 2. Halted sites not indexed.</td>
+    </tr>
+    <tr>
+      <td><strong>IndexRegistry</strong><br><code>nexus-ai_index_registry.json</code></td>
+      <td>Per-site index state: indexed/stale/error, document count, last indexed timestamp</td>
+      <td>Updated by ContentPipeline after each indexing run</td>
+      <td>System tab completeness view. FLEET_COMPLETENESS handler.</td>
+      <td>—</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2>5. Query examples — what works now</h2>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="two-col">
+    <div>
+      <h3 style="color:#51BB7B;margin-bottom:10px">✓ Works — AI provider configured</h3>
+      <table>
+        <tr><th>Query</th><th>How</th></tr>
+        <tr><td>"what are my oldest php sites"</td><td><span class="pill new">AI→metadata</span> + php-sort ASC</td></tr>
+        <tr><td>"sites that need a PHP upgrade"</td><td><span class="pill new">AI→metadata</span> + php-sort ASC</td></tr>
+        <tr><td>"which sites have form builders"</td><td><span class="pill new">AI→metadata</span> + category IN</td></tr>
+        <tr><td>"show me e-commerce sites"</td><td><span class="pill new">AI→metadata</span> + category IN</td></tr>
+        <tr><td>"sites about cars"</td><td><span class="pill new">AI→content</span> + vector search</td></tr>
+        <tr><td>"customer onboarding flow"</td><td><span class="pill new">AI→content</span> + vector search</td></tr>
+        <tr><td>"page builders"</td><td><span class="pill new">AI→metadata</span> + category IN</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3 style="color:#51BB7B;margin-bottom:10px">✓ Works — no AI provider needed</h3>
+      <table>
+        <tr><th>Query</th><th>How</th></tr>
+        <tr><td>"oldest php" / "latest WP"</td><td><span class="pill works">regex</span> + sort SQL</td></tr>
+        <tr><td>"form builder sites"</td><td><span class="pill works">regex</span> + category IN</td></tr>
+        <tr><td>"Elementor"</td><td><span class="pill works">substring</span> LIKE</td></tr>
+        <tr><td>"PHP 7.4"</td><td><span class="pill works">substring</span> version match</td></tr>
+        <tr><td>"sites with Elementor"</td><td><span class="pill works">regex</span> + LIKE</td></tr>
+        <tr><td>"running PHP 8.2"</td><td><span class="pill works">regex</span> + LIKE</td></tr>
+        <tr><td>"WP 6.9"</td><td><span class="pill works">substring</span> version match</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="two-col" style="margin-top:16px">
+    <div>
+      <h3 style="color:#f59e0b;margin-bottom:10px">⚠ Works only with AI — regex can't catch</h3>
+      <table>
+        <tr><th>Query</th><th>Why regex fails</th></tr>
+        <tr><td>"sites that might need a PHP upgrade"</td><td>No pattern matches "might need"</td></tr>
+        <tr><td>"which sites have security issues"</td><td>"security" alone doesn't fire (needs "security plugin")</td></tr>
+        <tr><td>"who uses page builders"</td><td>Pattern only catches "page builder" not "page builders" in all forms</td></tr>
+        <tr><td>"sites about recipes"</td><td>"sites about" doesn't match "sites with" pattern</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3 style="color:#f87171;margin-bottom:10px">✗ Not yet supported (any mode)</h3>
+      <table>
+        <tr><th>Query</th><th>What's needed</th></tr>
+        <tr><td>"sites with more than 10 plugins"</td><td>COUNT() + HAVING — not in current schema</td></tr>
+        <tr><td>"sites similar to acme-prod"</td><td>Site profile vector embeddings (Phase 2)</td></tr>
+        <tr><td>"WPE sites about [topic]"</td><td>WPE content indexing (Phase 2)</td></tr>
+        <tr><td>"sites where PHP is below 8"</td><td>Range query branch (not yet built)</td></tr>
+        <tr><td>"which plugin causes slowness"</td><td>Performance correlation — no data</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2>6. Sidebar search — separate implementation</h2>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="section">
+  <p style="font-size:12px;color:#8b949e;margin-bottom:14px">The sidebar search (slide-in panel from the Local sites list) is a completely separate implementation with its own AI integration path. It uses the same provider infrastructure but a different — and richer — system prompt.</p>
+  <div class="two-col">
+    <div>
+      <h3 style="margin-bottom:8px">How it works</h3>
+      <pre><span class="kw">User types</span>: <span class="str">"sites using ACF with PHP 7.4"</span>
+  <span class="kw">→</span> SITE_FINDER_AI_PARSE IPC
+  <span class="kw">→</span> reads settings.aiProvider + apiKey
+  <span class="kw">→</span> calls provider with full system prompt
+  <span class="kw">→</span> AI returns structured JSON:
+    {
+      <span class="str">"plugins"</span>: [<span class="str">"advanced-custom-fields"</span>],
+      <span class="str">"phpVersions"</span>: [<span class="str">"7.4"</span>]
+    }
+  <span class="kw">→</span> Runs structured filter against fleet
+  <span class="kw">→</span> Shows matching sites in sidebar</pre>
+    </div>
+    <div>
+      <h3 style="margin-bottom:8px">What the AI system prompt understands</h3>
+      <table>
+        <tr><th>Field</th><th>AI maps to</th></tr>
+        <tr><td><code>plugins</code></td><td>Plugin slug array — "ACF" → "advanced-custom-fields"</td></tr>
+        <tr><td><code>themes</code></td><td>Theme slug array</td></tr>
+        <tr><td><code>phpVersions</code></td><td>Version strings — "old PHP" → ["7.4", "7.3", "5.6"]</td></tr>
+        <tr><td><code>wpVersions</code></td><td>WP version strings</td></tr>
+        <tr><td><code>contentQuery</code></td><td>"sites about X" → semantic search on indexed content</td></tr>
+        <tr><td><code>searchText</code></td><td>Exact text in site name or domain</td></tr>
+      </table>
+      <div class="callout green" style="margin-top:8px;font-size:11px">
+        <strong>This is more powerful than Search tab</strong> for fleet filtering — it returns a structured filter that drives the site list, not just result rows.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2>7. Configuration — how to enable AI</h2>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="three-col">
+    <div>
+      <h3 style="color:#0ECAD4;margin-bottom:8px">Option A — Ollama (free, local)</h3>
+      <ol style="font-size:12px;color:#8b949e;padding-left:16px;line-height:2">
+        <li>Install Ollama from <code>ollama.ai</code></li>
+        <li>Run <code>ollama pull llama3.2</code></li>
+        <li>Open Nexus Preferences</li>
+        <li>Set AI Provider → Ollama</li>
+        <li>Reload Local addon</li>
+      </ol>
+      <div class="callout info" style="margin-top:8px;font-size:11px">No API key needed. Uses <code>http://localhost:11434</code>. Classification adds ~200-500ms per query.</div>
+    </div>
+    <div>
+      <h3 style="color:#a78bfa;margin-bottom:8px">Option B — Anthropic / OpenAI / Google</h3>
+      <ol style="font-size:12px;color:#8b949e;padding-left:16px;line-height:2">
+        <li>Get API key from provider</li>
+        <li>Open Nexus Preferences</li>
+        <li>Set AI Provider → Anthropic (or other)</li>
+        <li>Enter API key</li>
+        <li>Reload Local addon</li>
+      </ol>
+      <div class="callout info" style="margin-top:8px;font-size:11px">Uses claude-haiku / gpt-4o-mini / gemini-flash — fast and cheap for classification. Costs fraction of a cent per search.</div>
+    </div>
+    <div>
+      <h3 style="color:#8b949e;margin-bottom:8px">Option C — No provider (heuristic only)</h3>
+      <p style="font-size:12px;color:#8b949e;margin-bottom:8px">All 12 regex patterns + <code>detectMetadataQueryIntent()</code> patterns still run. Most common queries work without AI:</p>
+      <ul style="font-size:12px;color:#8b949e;padding-left:16px;line-height:2">
+        <li>Exact plugin/version names</li>
+        <li>PHP/WP version sorting ("oldest php")</li>
+        <li>Category concepts ("form builder", "seo")</li>
+        <li>Indexed content (semantic search)</li>
+      </ul>
+      <div class="callout warn" style="margin-top:8px;font-size:11px"><strong>Missing:</strong> ambiguous natural language, novel phrasings, complex queries.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<h2>8. What's still missing</h2>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="section">
+  <table>
+    <tr><th>Gap</th><th>What it would unlock</th><th>Complexity</th></tr>
+    <tr>
+      <td><strong>PHP range query</strong><br><em>detectMetadataQueryIntent php-range branch</em></td>
+      <td>"sites where PHP is below 8.0" → <code>WHERE CAST(php_version …) &lt; 8.0</code></td>
+      <td><span class="pill works">Low</span> — ~20 lines, pure SQL</td>
+    </tr>
+    <tr>
+      <td><strong>Plugin count query</strong></td>
+      <td>"sites with more than 10 plugins" → COUNT + HAVING</td>
+      <td><span class="pill works">Low</span> — needs subquery</td>
+    </tr>
+    <tr>
+      <td><strong>WPE content indexing (Phase 2)</strong></td>
+      <td>"WPE sites about [topic]" → SSH → MySQL → LanceDB</td>
+      <td><span class="pill partial">High</span> — new WpeContentExtractor</td>
+    </tr>
+    <tr>
+      <td><strong>Site profile vectors</strong></td>
+      <td>"sites similar to X", "e-commerce sites" without AI</td>
+      <td><span class="pill partial">Medium</span> — embed metadata text → LanceDB</td>
+    </tr>
+    <tr>
+      <td><strong>Plugin category expansion</strong></td>
+      <td>WordPress.org tag lookup → auto-discover slugs per category</td>
+      <td><span class="pill partial">Medium</span> — API call + cache</td>
+    </tr>
+    <tr>
+      <td><strong>Eval/scoring framework</strong></td>
+      <td>Measure search quality against known-good query-result pairs</td>
+      <td><span class="pill works">Low</span> — fixture file + runner (partially built)</td>
+    </tr>
+  </table>
+</div>
+
+<p style="font-size:11px;color:#333;margin-top:32px">Source files: <code>src/main/ipc-handlers.ts</code> (classifyIntentWithAI, SEARCH_UNIFIED) · <code>src/main/search/classifyIntent.ts</code> · <code>src/main/search/metadataSearch.ts</code> · <code>src/renderer/components/SearchTab.tsx</code> · <code>src/renderer/components/SidebarSearchPanel.tsx</code></p>
+</body>
+</html>

@@ -308,7 +308,7 @@ npm install                    # Install dependencies
 npm run download-model         # Download ONNX model (~30 MB)
 npm run build                  # Compile TypeScript + create entry points
 npm run watch                  # Watch mode for development
-npm test                       # Run unit tests (1,235 tests)
+npm test                       # Run unit tests (~2,200 tests)
 npm run test:eval              # Run eval tests (52, LLM evals need Ollama)
 npm run test:integration       # Run integration tests (187 tests)
 npm run test:e2e               # Run E2E tests (347 tests, requires Local running)
@@ -383,17 +383,20 @@ src/
 │           └── test-tools/          # 1 tool
 └── renderer/
     └── components/
-        ├── NexusOverview.tsx          # Fleet dashboard (7 active panels)
-        ├── NexusPreferences.tsx       # Addon settings
-        ├── SidebarSearchPanel.tsx     # Search integration
-        ├── SiteInfoWPE.tsx            # WPE site details
-        ├── AIGatewayUsagePanel.tsx    # AI usage tracking
+        ├── NexusOverview.tsx          # Main dashboard (Dashboard/Ask/Tell/Operations/Activity/Settings)
+        ├── SettingsTab.tsx            # Sync schedule, auto-index, WPE access controls
+        ├── SystemTab.tsx              # Site Status — per-site data level (Scanned/Configured/Searchable)
+        ├── ChatTab.tsx                # Ask/Tell AI assistant
+        ├── NexusPreferences.tsx       # AI provider, gateway, WPE credentials
+        ├── SidebarSearchPanel.tsx     # Site Finder search panel
+        ├── FleetCompletenessWidget.tsx # Data Completeness progress bars
         ├── BulkOperationsPanel.tsx    # Bulk operation progress
+        ├── AIGatewayPanel.tsx         # AI gateway usage tracking
         ├── EventTimeline.tsx          # Live event stream
         └── ...
 ```
 
-## MCP Tools (~111)
+## MCP Tools (~160)
 
 | Module | Tools | Description |
 |--------|-------|-------------|
@@ -417,7 +420,7 @@ Five-tier test pyramid. See [tests/TESTING-STRATEGY.md](tests/TESTING-STRATEGY.m
 
 | Tier | Command | What it tests |
 |------|---------|---------------|
-| Unit | `npm test` | Code logic with mocked deps (1,235 tests) |
+| Unit | `npm test` | Code logic with mocked deps (~2,200 tests) |
 | Eval | `npm run test:eval` | Content quality + LLM tool routing (52 tests) |
 | Integration | `npm run test:integration` | Real ONNX, LanceDB, MCP (187 tests) |
 | E2E | `npm run test:e2e` | Full addon in running Local (347 tests) |

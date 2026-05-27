@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Nexus AI Preferences — POC</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      font-size: 13px;
+    }
+
+    /* Shell */
+    .shell { display: flex; height: 100vh; }
+
+    .sidebar {
+      width: 180px;
+      background: #111;
+      padding: 48px 0;
+      flex-shrink: 0;
+    }
+    .sidebar a {
+      display: block;
+      padding: 8px 20px;
+      color: #777;
+      text-decoration: none;
+      font-size: 13px;
+      border-radius: 0;
+    }
+    .sidebar a.active { color: #fff; background: #252525; }
+    .sidebar a:hover:not(.active) { color: #bbb; }
+
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 36px 80px;
+    }
+
+    .page-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 28px;
+    }
+
+    /* Section dividers */
+    .section { margin-bottom: 28px; }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .section-head-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #555;
+      white-space: nowrap;
+    }
+    .section-head-rule {
+      flex: 1;
+      height: 1px;
+      background: #252525;
+    }
+
+    /* Generic subsection */
+    .sub-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e0e0e0;
+      margin-bottom: 3px;
+    }
+    .sub-desc {
+      font-size: 12px;
+      color: #5a5a5a;
+      line-height: 1.55;
+      margin-bottom: 12px;
+    }
+
+    /* Inputs */
+    select, input[type=text], input[type=password], input[type=number] {
+      background: #272727;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #e0e0e0;
+      padding: 6px 10px;
+      font-size: 12px;
+      outline: none;
+      font-family: inherit;
+    }
+    select:focus, input:focus { border-color: #0ECAD4; }
+    select { cursor: pointer; }
+
+    /* Toggle */
+    .toggle-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .toggle {
+      position: relative;
+      width: 34px;
+      height: 19px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: #333;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.18s;
+    }
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #fff;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.18s;
+    }
+    .toggle input:checked + .toggle-track { background: #0ECAD4; }
+    .toggle input:checked + .toggle-track::after { transform: translateX(15px); }
+
+    .toggle-text { font-size: 13px; color: #d0d0d0; line-height: 1.4; }
+    .toggle-sub { font-size: 11px; color: #555; margin-top: 2px; }
+
+    /* Provider row */
+    .pref-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .pref-row label { font-size: 12px; color: #777; min-width: 64px; }
+
+    /* Accordion */
+    .accordion {
+      border: 1px solid #272727;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .accordion-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 13px;
+      background: #202020;
+      cursor: pointer;
+      user-select: none;
+    }
+    .accordion-trigger:hover { background: #242424; }
+    .accordion-left { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #aaa; }
+    .accordion-right { display: flex; align-items: center; gap: 8px; }
+    .accordion-count {
+      font-size: 11px;
+      color: #555;
+      background: #272727;
+      border-radius: 10px;
+      padding: 2px 8px;
+    }
+    .chevron {
+      color: #444;
+      font-size: 9px;
+      transition: transform 0.18s;
+      display: inline-block;
+    }
+    .open > .accordion-trigger .chevron,
+    .open > .op-head .chevron,
+    .open > .ps-header .chevron { transform: rotate(180deg); }
+
+    .accordion-body {
+      display: none;
+      padding: 13px;
+      background: #1c1c1c;
+      border-top: 1px solid #252525;
+    }
+    .open > .accordion-body { display: block; }
+
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px 16px;
+    }
+    .cb-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: #bbb;
+    }
+    .cb-item input[type=checkbox] {
+      accent-color: #0ECAD4;
+      width: 13px;
+      height: 13px;
+      cursor: pointer;
+    }
+    .cb-halted { font-size: 11px; color: #444; }
+
+    /* Power section (collapsible advanced) */
+    .ps {
+      border: 1px solid #272727;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .ps-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 14px;
+      background: #1e1e1e;
+      cursor: pointer;
+      user-select: none;
+    }
+    .ps-header:hover { background: #222; }
+    .ps-left { display: flex; align-items: center; gap: 8px; }
+    .ps-title { font-size: 13px; font-weight: 600; color: #bbb; }
+    .ps-badge {
+      font-size: 10px;
+      background: #272727;
+      color: #666;
+      border-radius: 4px;
+      padding: 2px 6px;
+    }
+    .ps-right { display: flex; align-items: center; gap: 8px; }
+    .ps-summary { font-size: 11px; color: #4a4a4a; }
+    .ps-body {
+      display: none;
+      padding: 16px;
+      background: #1b1b1b;
+      border-top: 1px solid #252525;
+    }
+    .ps.open .ps-body { display: block; }
+
+    /* Accounts row */
+    .accounts-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 9px 12px;
+      background: #202020;
+      border: 1px solid #272727;
+      border-radius: 7px;
+      margin-bottom: 16px;
+    }
+    .accounts-bar-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #4a4a4a; }
+    .acct-chip {
+      font-size: 11px;
+      background: #272727;
+      color: #999;
+      border-radius: 4px;
+      padding: 2px 7px;
+    }
+    .acct-edit { font-size: 11px; color: #0ECAD4; cursor: pointer; margin-left: auto; }
+    .acct-edit:hover { color: #5ee6ef; }
+
+    /* Sub-label within a panel */
+    .panel-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #444;
+      margin-bottom: 9px;
+    }
+
+    /* Operation cards */
+    .op-cards { display: flex; flex-direction: column; gap: 5px; }
+
+    .op-card {
+      border: 1px solid #252525;
+      border-radius: 7px;
+      overflow: hidden;
+    }
+    .op-head {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 10px 13px;
+      background: #202020;
+      cursor: pointer;
+      user-select: none;
+    }
+    .op-head:hover { background: #232323; }
+
+    .op-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .op-icon.pull { background: #162535; }
+    .op-icon.push { background: #251c0e; }
+    .op-icon.wpcli { background: #16201a; }
+    .op-icon.delete { background: #251212; }
+
+    .op-info { flex: 1; min-width: 0; }
+    .op-title { font-size: 13px; font-weight: 600; color: #d8d8d8; }
+    .op-desc { font-size: 11px; color: #4a4a4a; margin-top: 1px; }
+
+    .op-right { display: flex; align-items: center; gap: 5px; }
+
+    .env-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      letter-spacing: 0.02em;
+    }
+    .env-pill.ok { background: #0f2a18; color: #4caf66; }
+    .env-pill.no { background: #2a1010; color: #d44; }
+
+    .exc-badge {
+      font-size: 10px;
+      color: #0ECAD4;
+      background: rgba(14,202,212,0.08);
+      border-radius: 10px;
+      padding: 2px 7px;
+      border: 1px solid rgba(14,202,212,0.18);
+    }
+
+    .op-body {
+      display: none;
+      background: #1a1a1a;
+      border-top: 1px solid #252525;
+      padding: 14px 15px;
+    }
+    .op-card.open .op-body { display: block; }
+
+    /* Env toggles inside op card */
+    .env-rows { margin-bottom: 14px; }
+    .env-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 0;
+      border-bottom: 1px solid #222;
+    }
+    .env-row:last-child { border-bottom: none; }
+    .env-name { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #bbb; }
+    .env-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .env-dot.dev { background: #4caf66; }
+    .env-dot.stg { background: #f59e0b; }
+    .env-dot.prd { background: #d44; }
+
+    /* Exceptions */
+    .exc-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; }
+    .exc-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: #222;
+      border-radius: 6px;
+      padding: 6px 10px;
+    }
+    .exc-site { font-size: 12px; color: #e0e0e0; font-weight: 500; }
+    .exc-env-tag {
+      font-size: 10px;
+      color: #666;
+      background: #2a2a2a;
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
+    .exc-verdict.allow { font-size: 10px; font-weight: 700; color: #4caf66; }
+    .exc-verdict.block { font-size: 10px; font-weight: 700; color: #d44; }
+    .exc-spacer { flex: 1; }
+    .exc-x { color: #444; cursor: pointer; font-size: 14px; padding: 0 3px; line-height: 1; }
+    .exc-x:hover { color: #d44; }
+
+    .exc-empty { font-size: 12px; color: #444; padding: 4px 0; }
+
+    .add-exc-btn {
+      background: none;
+      border: none;
+      color: #0ECAD4;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 3px 0;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: inherit;
+    }
+    .add-exc-btn:hover { color: #5ee6ef; }
+
+    .exc-form {
+      display: none;
+      background: #222;
+      border-radius: 7px;
+      padding: 11px 12px;
+      margin-top: 8px;
+    }
+    .exc-form.show { display: block; }
+
+    .exc-form input[type=text] { width: 100%; margin-bottom: 8px; }
+
+    .exc-results {
+      max-height: 150px;
+      overflow-y: auto;
+      margin-bottom: 8px;
+    }
+    .exc-result-item {
+      padding: 6px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .exc-result-item:hover { background: #2a2a2a; }
+    .exc-result-item.selected { background: rgba(14,202,212,0.1); }
+    .exc-result-name { color: #e0e0e0; font-weight: 500; }
+    .exc-result-env {
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .exc-result-env.dev { background: #0f2a18; color: #4caf66; }
+    .exc-result-env.staging { background: #2a1f00; color: #f59e0b; }
+    .exc-result-env.production { background: #2a1010; color: #d44; }
+    .exc-result-domain { font-size: 11px; color: #444; }
+
+    .exc-selected-display {
+      display: none;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 8px;
+      padding: 6px 8px;
+      background: rgba(14,202,212,0.06);
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .exc-selected-display.show { display: flex; }
+    .exc-selected-name { color: #e0e0e0; font-weight: 500; }
+    .exc-selected-tag {
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: #2a1010;
+      color: #d44;
+    }
+
+    .exc-verdict-toggle {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .exc-verdict-btn {
+      padding: 4px 12px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid #333;
+      background: #272727;
+      color: #666;
+      font-family: inherit;
+    }
+    .exc-verdict-btn.active-allow { background: #0f2a18; border-color: #4caf66; color: #4caf66; }
+    .exc-verdict-btn.active-block { background: #2a1010; border-color: #d44; color: #d44; }
+
+    .exc-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+    .btn {
+      padding: 5px 13px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      font-weight: 500;
+    }
+    .btn-primary { background: #0ECAD4; color: #000; font-weight: 700; }
+    .btn-primary:hover { background: #0bb8c0; }
+    .btn-ghost { background: #282828; color: #777; }
+    .btn-ghost:hover { background: #303030; color: #bbb; }
+
+    /* Info note */
+    .info-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      background: rgba(14,202,212,0.05);
+      border: 1px solid rgba(14,202,212,0.12);
+      border-radius: 6px;
+      padding: 8px 11px;
+      font-size: 11px;
+      color: #6aacb0;
+      line-height: 1.55;
+      margin-top: 13px;
+    }
+
+    /* Credentials */
+    .cred-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 12px;
+    }
+    .cred-dot { width: 6px; height: 6px; border-radius: 50%; background: #444; }
+    .cred-status.ok { color: #4caf66; }
+    .cred-status.ok .cred-dot { background: #4caf66; }
+
+    .cred-fields { display: flex; flex-direction: column; gap: 8px; margin-bottom: 11px; }
+    .cred-field { display: flex; align-items: center; gap: 11px; }
+    .cred-field label { min-width: 65px; font-size: 12px; color: #666; text-align: right; }
+    .cred-field input { width: 240px; }
+
+    .cred-actions { display: flex; gap: 6px; margin-bottom: 10px; }
+    .cred-help { font-size: 11px; color: #444; line-height: 1.5; }
+    .cred-help a { color: #0ECAD4; text-decoration: none; }
+
+    /* Sync schedule */
+    .sync-table {
+      width: 100%;
+      border: 1px solid #272727;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .sync-row-item {
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid #222;
+    }
+    .sync-row-item:last-child { border-bottom: none; }
+    .sync-name { flex: 1; padding: 10px 13px; }
+    .sync-name-main { font-size: 12px; color: #bbb; }
+    .sync-name-sub { font-size: 11px; color: #444; margin-top: 2px; }
+    .sync-ctrl {
+      padding: 10px 13px;
+      border-left: 1px solid #222;
+      background: #1c1c1c;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sync-ctrl input[type=number] { width: 48px; text-align: center; }
+    .sync-ctrl span { font-size: 11px; color: #444; }
+
+    /* Apply bar */
+    .apply-bar {
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      left: 180px;
+      padding: 10px 36px;
+      background: rgba(20,20,20,0.96);
+      border-top: 1px solid #252525;
+      display: flex;
+      justify-content: flex-end;
+      backdrop-filter: blur(4px);
+    }
+    .apply-btn {
+      background: #f0f0f0;
+      color: #111;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 7px 22px;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .apply-btn:hover { background: #fff; }
+
+    /* Divider between op-body sections */
+    .op-divider { height: 1px; background: #222; margin: 13px 0; }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <nav>
+      <a href="#">Appearance &amp; behavior</a>
+      <a href="#">New site defaults</a>
+      <a href="#">Exporting</a>
+      <a href="#">Connected accounts</a>
+      <a href="#" class="active">Nexus AI</a>
+      <a href="#">Advanced</a>
+    </nav>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+    <div class="page-title">Nexus AI</div>
+
+    <!-- ── AI PROVIDER ───────────────────────────────────── -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-head-label">AI Provider</span>
+        <div class="section-head-rule"></div>
+      </div>
+
+      <div class="sub-title">AI Credentials</div>
+      <div class="sub-desc">Choose the AI provider for Nexus AI features, e.g. Site Finder. Each WordPress site can use a different provider — configure per-site via the site's Nexus AI section.</div>
+      <div class="pref-row">
+        <label>Provider</label>
+        <select>
+          <option>Select a provider</option>
+          <option>Anthropic (Claude)</option>
+          <option>OpenAI</option>
+          <option>Google (Gemini)</option>
+          <option>Ollama (local)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ── LOCAL AI GATEWAY ──────────────────────────────── -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-head-label">Local AI Gateway</span>
+        <div class="section-head-rule"></div>
+      </div>
+      <div class="sub-desc">When enabled, all AI requests from WordPress sites are proxied through the Local AI Gateway, which routes them to your configured AI provider above.</div>
+      <div class="toggle-row">
+        <label class="toggle"><input type="checkbox"><span class="toggle-track"></span></label>
+        <div>
+          <div class="toggle-text">Route WordPress AI requests through Local AI Gateway</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CONTENT INDEXING ──────────────────────────────── -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-head-label">Content Indexing</span>
+        <div class="section-head-rule"></div>
+      </div>
+
+      <div class="toggle-row" style="margin-bottom:14px">
+        <label class="toggle"><input type="checkbox" checked><span class="toggle-track"></span></label>
+        <div>
+          <div class="toggle-text">Automatically index sites when started</div>
+          <div class="toggle-sub">Site content is indexed for AI search whenever a site starts</div>
+        </div>
+      </div>
+
+      <!-- Excluded sites — collapsed accordion -->
+      <div class="accordion" id="acc-excluded">
+        <div class="accordion-trigger" onclick="toggleEl('acc-excluded')">
+          <div class="accordion-left">Excluded sites</div>
+          <div class="accordion-right">
+            <span class="accordion-count">10 sites configured</span>
+            <span class="chevron">▼</span>
+          </div>
+        </div>
+        <div class="accordion-body">
+          <div class="sub-desc" style="margin-bottom:10px">Checked sites will not be auto-indexed when started. You can still manually index them.</div>
+          <div class="checkbox-grid">
+            <label class="cb-item"><input type="checkbox" checked> nexus-e2e-test <span class="cb-halted">(halted)</span></label>
+            <label class="cb-item"><input type="checkbox" checked> jeremypollockblog <span class="cb-halted">(halted)</span></label>
+            <label class="cb-item"><input type="checkbox" checked> jpp0413p <span class="cb-halted">(halted)</span></label>
+            <label class="cb-item"><input type="checkbox"> nexus <span class="cb-halted">(halted)</span></label>
+            <label class="cb-item"><input type="checkbox" checked> Newsroom Demo <span class="cb-halted">(halted)</span></label>
+            <label class="cb-item"><input type="checkbox" checked> the-awful-pm <span class="cb-halted">(halted)</span></label>
+            <label class="cb-item"><input type="checkbox"> pm-bulletin <span class="cb-halted">(halted)</span></label>
+            <label class="cb-item"><input type="checkbox"> advanced-custom-fields <span class="cb-halted">(halted)</span></label>
+            <label class="cb-item"><input type="checkbox"> markshare <span class="cb-halted">(halted)</span></label>
+            <label class="cb-item"><input type="checkbox"> myloop <span class="cb-halted">(halted)</span></label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── WP ENGINE ─────────────────────────────────────── -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-head-label">WP Engine</span>
+        <div class="section-head-rule"></div>
+      </div>
+
+      <!-- Access & Permissions — collapsible power section -->
+      <div class="ps open" id="ps-access">
+        <div class="ps-header" onclick="toggleEl('ps-access')">
+          <div class="ps-left">
+            <span class="ps-title">Access &amp; Permissions</span>
+            <span class="ps-badge">Advanced</span>
+          </div>
+          <div class="ps-right">
+            <span class="ps-summary">4 accounts · production blocked for push &amp; delete</span>
+            <span class="chevron">▼</span>
+          </div>
+        </div>
+        <div class="ps-body">
+
+          <!-- Accounts row -->
+          <div class="accounts-bar">
+            <span class="accounts-bar-label">Accounts</span>
+            <span class="acct-chip">btope</span>
+            <span class="acct-chip">devel</span>
+            <span class="acct-chip">Unicorn</span>
+            <span class="acct-chip">AutoScaleAlpha</span>
+            <span class="acct-chip">+2 more</span>
+            <span class="acct-edit">Manage ›</span>
+          </div>
+
+          <div class="panel-label">Operation Permissions</div>
+
+          <div class="op-cards">
+
+            <!-- Pull to local -->
+            <div class="op-card" id="op-pull">
+              <div class="op-head" onclick="toggleEl('op-pull')">
+                <div class="op-icon pull">⬇</div>
+                <div class="op-info">
+                  <div class="op-title">Pull to local</div>
+                  <div class="op-desc">Download files + database from WPE</div>
+                </div>
+                <div class="op-right">
+                  <span class="env-pill ok">Dev</span>
+                  <span class="env-pill ok">Stg</span>
+                  <span class="env-pill ok">Prd</span>
+                  <span class="chevron">▼</span>
+                </div>
+              </div>
+              <div class="op-body">
+                <div class="panel-label">Default by environment</div>
+                <div class="env-rows">
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot dev"></div> Development</div>
+                    <label class="toggle"><input type="checkbox" checked><span class="toggle-track"></span></label>
+                  </div>
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot stg"></div> Staging</div>
+                    <label class="toggle"><input type="checkbox" checked><span class="toggle-track"></span></label>
+                  </div>
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot prd"></div> Production</div>
+                    <label class="toggle"><input type="checkbox" checked><span class="toggle-track"></span></label>
+                  </div>
+                </div>
+                <div class="op-divider"></div>
+                <div class="panel-label">Site exceptions</div>
+                <div class="exc-empty">No exceptions — all sites follow global defaults.</div>
+                <button class="add-exc-btn" onclick="toggleForm('form-pull')">+ Add site exception</button>
+                <div class="exc-form" id="form-pull">
+                  <input type="text" placeholder="Search installs…" oninput="filterInstalls(this, 'results-pull')" style="width:100%;margin-bottom:8px">
+                  <div class="exc-results" id="results-pull"></div>
+                  <div class="exc-selected-display" id="selected-pull">
+                    <span class="exc-selected-name" id="sel-name-pull"></span>
+                    <span class="exc-selected-tag" id="sel-env-pull"></span>
+                  </div>
+                  <div class="exc-verdict-toggle">
+                    <button class="exc-verdict-btn active-allow" onclick="setVerdict(this, 'allow')">Allow</button>
+                    <button class="exc-verdict-btn" onclick="setVerdict(this, 'block')">Block</button>
+                  </div>
+                  <div class="exc-form-actions">
+                    <button class="btn btn-ghost" onclick="toggleForm('form-pull')">Cancel</button>
+                    <button class="btn btn-primary">Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- WP-CLI / SSH -->
+            <div class="op-card" id="op-wpcli">
+              <div class="op-head" onclick="toggleEl('op-wpcli')">
+                <div class="op-icon wpcli">⌨</div>
+                <div class="op-info">
+                  <div class="op-title">WP-CLI / SSH</div>
+                  <div class="op-desc">Run WP-CLI commands on WPE installs</div>
+                </div>
+                <div class="op-right">
+                  <span class="env-pill ok">Dev</span>
+                  <span class="env-pill ok">Stg</span>
+                  <span class="env-pill no">Prd</span>
+                  <span class="chevron">▼</span>
+                </div>
+              </div>
+              <div class="op-body">
+                <div class="panel-label">Default by environment</div>
+                <div class="env-rows">
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot dev"></div> Development</div>
+                    <label class="toggle"><input type="checkbox" checked><span class="toggle-track"></span></label>
+                  </div>
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot stg"></div> Staging</div>
+                    <label class="toggle"><input type="checkbox" checked><span class="toggle-track"></span></label>
+                  </div>
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot prd"></div> Production</div>
+                    <label class="toggle"><input type="checkbox"><span class="toggle-track"></span></label>
+                  </div>
+                </div>
+                <div class="op-divider"></div>
+                <div class="panel-label">Site exceptions</div>
+                <div class="exc-empty">No exceptions — all sites follow global defaults.</div>
+                <button class="add-exc-btn" onclick="toggleForm('form-wpcli')">+ Add site exception</button>
+                <div class="exc-form" id="form-wpcli">
+                  <input type="text" placeholder="Search installs…" oninput="filterInstalls(this, 'results-wpcli')" style="width:100%;margin-bottom:8px">
+                  <div class="exc-results" id="results-wpcli"></div>
+                  <div class="exc-selected-display" id="selected-wpcli">
+                    <span class="exc-selected-name" id="sel-name-wpcli"></span>
+                    <span class="exc-selected-tag" id="sel-env-wpcli"></span>
+                  </div>
+                  <div class="exc-verdict-toggle">
+                    <button class="exc-verdict-btn active-allow" onclick="setVerdict(this, 'allow')">Allow</button>
+                    <button class="exc-verdict-btn" onclick="setVerdict(this, 'block')">Block</button>
+                  </div>
+                  <div class="exc-form-actions">
+                    <button class="btn btn-ghost" onclick="toggleForm('form-wpcli')">Cancel</button>
+                    <button class="btn btn-primary">Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Push to WPE -->
+            <div class="op-card open" id="op-push">
+              <div class="op-head" onclick="toggleEl('op-push')">
+                <div class="op-icon push">⬆</div>
+                <div class="op-info">
+                  <div class="op-title">Push to WPE</div>
+                  <div class="op-desc">Overwrite remote with local files and DB</div>
+                </div>
+                <div class="op-right">
+                  <span class="env-pill ok">Dev</span>
+                  <span class="env-pill ok">Stg</span>
+                  <span class="env-pill no">Prd</span>
+                  <span class="exc-badge">1 exception</span>
+                  <span class="chevron">▼</span>
+                </div>
+              </div>
+              <div class="op-body">
+                <div class="panel-label">Default by environment</div>
+                <div class="env-rows">
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot dev"></div> Development</div>
+                    <label class="toggle"><input type="checkbox" checked><span class="toggle-track"></span></label>
+                  </div>
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot stg"></div> Staging</div>
+                    <label class="toggle"><input type="checkbox" checked><span class="toggle-track"></span></label>
+                  </div>
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot prd"></div> Production</div>
+                    <label class="toggle"><input type="checkbox"><span class="toggle-track"></span></label>
+                  </div>
+                </div>
+                <div class="op-divider"></div>
+                <div class="panel-label">Site exceptions</div>
+                <div class="exc-list">
+                  <div class="exc-row">
+                    <span class="exc-site">myloop</span>
+                    <span class="exc-env-tag">production</span>
+                    <span class="exc-verdict allow">allow</span>
+                    <span class="exc-spacer"></span>
+                    <span class="exc-x">×</span>
+                  </div>
+                </div>
+                <button class="add-exc-btn" onclick="toggleForm('form-push')">+ Add site exception</button>
+                <div class="exc-form" id="form-push">
+                  <input type="text" placeholder="Search installs…" oninput="filterInstalls(this, 'results-push')" style="width:100%;margin-bottom:8px">
+                  <div class="exc-results" id="results-push"></div>
+                  <div class="exc-selected-display" id="selected-push">
+                    <span class="exc-selected-name" id="sel-name-push"></span>
+                    <span class="exc-selected-tag" id="sel-env-push"></span>
+                  </div>
+                  <div class="exc-verdict-toggle">
+                    <button class="exc-verdict-btn active-allow" onclick="setVerdict(this, 'allow')">Allow</button>
+                    <button class="exc-verdict-btn" onclick="setVerdict(this, 'block')">Block</button>
+                  </div>
+                  <div class="exc-form-actions">
+                    <button class="btn btn-ghost" onclick="toggleForm('form-push')">Cancel</button>
+                    <button class="btn btn-primary">Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Delete / Promote -->
+            <div class="op-card" id="op-delete">
+              <div class="op-head" onclick="toggleEl('op-delete')">
+                <div class="op-icon delete">🗑</div>
+                <div class="op-info">
+                  <div class="op-title">Delete / Promote</div>
+                  <div class="op-desc">Irreversible CAPI operations</div>
+                </div>
+                <div class="op-right">
+                  <span class="env-pill no">Dev</span>
+                  <span class="env-pill no">Stg</span>
+                  <span class="env-pill no">Prd</span>
+                  <span class="chevron">▼</span>
+                </div>
+              </div>
+              <div class="op-body">
+                <div class="panel-label">Default by environment</div>
+                <div class="env-rows">
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot dev"></div> Development</div>
+                    <label class="toggle"><input type="checkbox"><span class="toggle-track"></span></label>
+                  </div>
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot stg"></div> Staging</div>
+                    <label class="toggle"><input type="checkbox"><span class="toggle-track"></span></label>
+                  </div>
+                  <div class="env-row">
+                    <div class="env-name"><div class="env-dot prd"></div> Production</div>
+                    <label class="toggle"><input type="checkbox"><span class="toggle-track"></span></label>
+                  </div>
+                </div>
+                <div class="op-divider"></div>
+                <div class="panel-label">Site exceptions</div>
+                <div class="exc-empty">No exceptions — all sites follow global defaults.</div>
+                <button class="add-exc-btn" onclick="toggleForm('form-delete')">+ Add site exception</button>
+                <div class="exc-form" id="form-delete">
+                  <input type="text" placeholder="Search installs…" oninput="filterInstalls(this, 'results-delete')" style="width:100%;margin-bottom:8px">
+                  <div class="exc-results" id="results-delete"></div>
+                  <div class="exc-selected-display" id="selected-delete">
+                    <span class="exc-selected-name" id="sel-name-delete"></span>
+                    <span class="exc-selected-tag" id="sel-env-delete"></span>
+                  </div>
+                  <div class="exc-verdict-toggle">
+                    <button class="exc-verdict-btn active-allow" onclick="setVerdict(this, 'allow')">Allow</button>
+                    <button class="exc-verdict-btn" onclick="setVerdict(this, 'block')">Block</button>
+                  </div>
+                  <div class="exc-form-actions">
+                    <button class="btn btn-ghost" onclick="toggleForm('form-delete')">Cancel</button>
+                    <button class="btn btn-primary">Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /op-cards -->
+
+          <div class="info-note">
+            ℹ Read-only operations (installs, domains, SSL, usage metadata) are always permitted and cannot be disabled.
+          </div>
+
+        </div><!-- /ps-body -->
+      </div><!-- /ps -->
+
+      <!-- API Credentials -->
+      <div style="margin-top:14px">
+        <div class="sub-title">WP Engine API Credentials</div>
+        <div class="sub-desc">Required for backup creation. WP Engine's backup endpoint uses basic authentication, not OAuth. Stored encrypted using OS-level encryption.</div>
+        <div class="cred-status">
+          <div class="cred-dot"></div>
+          Not configured
+        </div>
+        <div class="cred-fields">
+          <div class="cred-field">
+            <label>Username</label>
+            <input type="text" placeholder="API username">
+          </div>
+          <div class="cred-field">
+            <label>Password</label>
+            <input type="password" placeholder="API password">
+          </div>
+        </div>
+        <div class="cred-actions">
+          <button class="btn btn-primary">Save</button>
+          <button class="btn btn-ghost">Clear</button>
+        </div>
+        <div class="cred-help">
+          Get credentials from <a href="#">my.wpengine.com</a> → Profile → API Access.
+          These are different from your WP Engine login — you must generate API credentials specifically for programmatic access.
+        </div>
+      </div>
+
+      <!-- Sync Schedule — consolidated -->
+      <div style="margin-top:20px">
+        <div class="sub-title">Sync Schedule</div>
+        <div class="sub-desc">How often Nexus automatically refreshes WP Engine site data in the background. Changes take effect on the next Local restart.</div>
+        <div class="sync-table">
+          <div class="sync-row-item">
+            <div class="sync-name">
+              <div class="sync-name-main">Metadata sync</div>
+              <div class="sync-name-sub">Plugins, WP version, PHP version</div>
+            </div>
+            <div class="sync-ctrl">
+              <input type="number" value="4" min="1" max="168">
+              <span>hrs</span>
+            </div>
+          </div>
+          <div class="sync-row-item">
+            <div class="sync-name">
+              <div class="sync-name-main">Site info updates</div>
+              <div class="sync-name-sub">URL, admin email, post count via SSH WP-CLI</div>
+            </div>
+            <div class="sync-ctrl">
+              <input type="number" value="24" min="1" max="168">
+              <span>hrs</span>
+            </div>
+          </div>
+          <div class="sync-row-item">
+            <div class="sync-name">
+              <div class="sync-name-main">Offline site refresh</div>
+              <div class="sync-name-sub">Halted local sites — filesystem scan only</div>
+            </div>
+            <div class="sync-ctrl">
+              <input type="number" value="6" min="1" max="168">
+              <span>hrs</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /WP Engine section -->
+
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<div class="apply-bar">
+  <button class="apply-btn">Apply</button>
+</div>
+
+<script>
+  // Sample installs for type-ahead demo
+  const INSTALLS = [
+    { name: 'myloop', env: 'production', domain: 'myloop.wpengine.com' },
+    { name: 'myloop-stg', env: 'staging', domain: 'myloop-stg.wpengine.com' },
+    { name: 'myloop-dev', env: 'development', domain: 'myloop-dev.wpengine.com' },
+    { name: 'jpp0413p', env: 'production', domain: 'jpp0413p.wpengine.com' },
+    { name: 'jpp0413p-stg', env: 'staging', domain: 'jpp0413p-stg.wpengine.com' },
+    { name: 'btopeprod', env: 'production', domain: 'btopeprod.wpengine.com' },
+    { name: 'btopestg', env: 'staging', domain: 'btopestg.wpengine.com' },
+    { name: 'unicornprod', env: 'production', domain: 'unicornprod.wpengine.com' },
+    { name: 'markshare', env: 'production', domain: 'markshare.wpengine.com' },
+    { name: 'newsroomdemo', env: 'staging', domain: 'newsroomdemo-stg.wpengine.com' },
+  ];
+
+  function toggleEl(id) {
+    document.getElementById(id).classList.toggle('open');
+  }
+
+  function toggleForm(id) {
+    const el = document.getElementById(id);
+    el.classList.toggle('show');
+    if (!el.classList.contains('show')) {
+      // reset
+      el.querySelector('input[type=text]').value = '';
+      const opId = id.replace('form-', '');
+      const res = document.getElementById('results-' + opId);
+      if (res) res.innerHTML = '';
+      const sel = document.getElementById('selected-' + opId);
+      if (sel) sel.classList.remove('show');
+    }
+  }
+
+  function filterInstalls(input, resultsId) {
+    const q = input.value.toLowerCase().trim();
+    const container = document.getElementById(resultsId);
+    if (!q) { container.innerHTML = ''; return; }
+    const matches = INSTALLS.filter(i =>
+      i.name.includes(q) || i.domain.includes(q)
+    ).slice(0, 8);
+    container.innerHTML = matches.map(i => `
+      <div class="exc-result-item" onclick="selectInstall(this, '${i.name}', '${i.env}', '${resultsId}')">
+        <span class="exc-result-name">${i.name}</span>
+        <span class="exc-result-env ${i.env}">${i.env}</span>
+        <span class="exc-result-domain">${i.domain}</span>
+      </div>
+    `).join('');
+    if (!matches.length) container.innerHTML = '<div style="padding:8px;color:#444;font-size:12px">No installs found</div>';
+  }
+
+  function selectInstall(el, name, env, resultsId) {
+    const opId = resultsId.replace('results-', '');
+    document.getElementById('results-' + opId).innerHTML = '';
+    const form = document.getElementById('form-' + opId);
+    form.querySelector('input[type=text]').value = name;
+    const sel = document.getElementById('selected-' + opId);
+    document.getElementById('sel-name-' + opId).textContent = name;
+    const envTag = document.getElementById('sel-env-' + opId);
+    envTag.textContent = env;
+    envTag.className = 'exc-selected-tag';
+    if (env === 'production') envTag.style.background = '#2a1010', envTag.style.color = '#d44';
+    else if (env === 'staging') envTag.style.background = '#2a1f00', envTag.style.color = '#f59e0b';
+    else envTag.style.background = '#0f2a18', envTag.style.color = '#4caf66';
+    sel.classList.add('show');
+  }
+
+  function setVerdict(btn, verdict) {
+    const group = btn.closest('.exc-verdict-toggle');
+    group.querySelectorAll('.exc-verdict-btn').forEach(b => {
+      b.className = 'exc-verdict-btn';
+    });
+    btn.classList.add(verdict === 'allow' ? 'active-allow' : 'active-block');
+  }
+</script>
+
+</body>
+</html>

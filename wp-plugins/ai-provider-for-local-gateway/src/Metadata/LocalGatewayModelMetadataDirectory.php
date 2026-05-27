@@ -85,6 +85,8 @@ class LocalGatewayModelMetadataDirectory implements ModelMetadataDirectoryInterf
             new SupportedOption(OptionEnum::candidateCount()),
             new SupportedOption(OptionEnum::inputModalities()),
             new SupportedOption(OptionEnum::outputModalities()),
+            new SupportedOption(OptionEnum::outputSchema()),   // required by as_json_response() (e.g. editorial notes)
+            new SupportedOption(OptionEnum::functionDeclarations()), // required by tool-use abilities
         ];
 
         // --- Image generation capabilities / options ---

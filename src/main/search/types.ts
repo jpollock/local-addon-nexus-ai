@@ -29,9 +29,10 @@ export interface SearchOptions {
 }
 
 /**
- * Single unified search result
+ * Single legacy search result (use UnifiedSearchResult from common/types.ts instead)
+ * @deprecated Use UnifiedSearchResult from common/types.ts
  */
-export interface UnifiedSearchResult {
+export interface LegacySearchResult {
   type: 'post' | 'plugin' | 'theme' | 'user' | 'setting';
   siteId: string;
   siteName: string;
@@ -47,7 +48,7 @@ export interface UnifiedSearchResult {
  * Search results with pagination metadata
  */
 export interface SearchResults {
-  results: UnifiedSearchResult[];
+  results: LegacySearchResult[];
   total: number;
   facets: SearchFacets;
 }

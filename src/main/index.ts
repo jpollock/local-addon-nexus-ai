@@ -55,13 +55,32 @@ import { SmartSearchHandler } from './smart-search/SmartSearchHandler';
 import { SynonymStore } from './smart-search/SynonymStore';
 import { SemanticConfig } from './smart-search/SemanticConfig';
 import { TrackerStore } from './smart-search/TrackerStore';
+import { OpportunisticScheduler } from './scheduler/OpportunisticScheduler';
 import type { StartupStatus } from '../common/types';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
-const { ipcMain } = require('electron');
+const { ipcMain, BrowserWindow } = require('electron');
 
 let mcpServer: McpServer | null = null;
+
+/**
+ * Push a partial NexusState patch to all open renderer windows.
+ * Components subscribe to nexusStore instead of polling — this is the
+ * single write point that feeds the entire UI.
+ */
+function emitNexusState(patch: Record<string, unknown>): void {
+  try {
+    const windows = BrowserWindow.getAllWindows?.() ?? [];
+    for (const win of windows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send(IPC_CHANNELS.NEXUS_STATE_UPDATE, patch);
+      }
+    }
+  } catch {
+    // Non-fatal — renderer may not be ready yet
+  }
+}
 
 // Startup lifecycle state, exposed to the renderer via GET_STARTUP_STATUS so
 // the dashboard can surface a real error instead of an indefinite "waiting"
@@ -105,10 +124,28 @@ export default function main(context: any): void {
 
   localLogger.info('[NexusAI] Addon loading...');
 
-  // Build adapter for IndexRegistry persistence via Local's userData
+  // Build adapter for IndexRegistry persistence via Local's userData.
+  // Settings are written with a shadow backup key so we can recover them if
+  // the primary key is lost due to a force-quit / OS crash during an atomic write.
+  // Keys that get shadowed to a backup to survive force-quit data loss.
+  // Both settings and IndexRegistry are critical — losing either reverts the UI to defaults.
+  const RESILIENT_KEYS = new Set<string>([STORAGE_KEYS.SETTINGS, STORAGE_KEYS.INDEX_REGISTRY]);
   const registryStorage: RegistryStorage = {
-    get: (key: string) => userData.get(key) ?? null,
-    set: (key: string, value: any) => userData.set(key, value),
+    get: (key: string) => {
+      const value = userData.get(key) ?? null;
+      if (value === null && RESILIENT_KEYS.has(key)) {
+        const backup = userData.get(`${key}_backup`) ?? null;
+        if (backup) localLogger.info(`[NexusAI] ${key} recovered from backup`);
+        return backup;
+      }
+      return value;
+    },
+    set: (key: string, value: any) => {
+      userData.set(key, value);
+      if (RESILIENT_KEYS.has(key)) {
+        userData.set(`${key}_backup`, value);
+      }
+    },
   };
 
   // Digital Twin: Site metadata cache (created early for lifecycle hooks)
@@ -146,6 +183,14 @@ export default function main(context: any): void {
   const indexRegistry = new IndexRegistry(registryStorage);
   const graphService = new GraphService(graphDbPath, localLogger);
 
+  // Checkpoint WAL on clean shutdown so committed writes survive a restart.
+  // Also run a passive checkpoint every 5 minutes to keep WAL size bounded.
+  const { app } = require('electron');
+  app.on('before-quit', () => { graphService.close().catch(() => {}); });
+  setInterval(() => {
+    try { graphService.getDb()?.pragma('wal_checkpoint(PASSIVE)'); } catch {}
+  }, 5 * 60 * 1000);
+
   const contentPipeline = new ContentPipeline({
     vectorStore,
     embeddingService,
@@ -176,7 +221,15 @@ export default function main(context: any): void {
 
   // Phase 2: Register lifecycle hooks (pass readyPromise so they wait for init)
   const localServicesBridge = createLocalServicesBridge(serviceContainer);
-  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge, metadataCache);
+  const sendToRenderer = (channel: string, ...args: unknown[]) => {
+    try {
+      const { BrowserWindow } = require('electron');
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send(channel, ...args);
+      }
+    } catch { /* renderer not ready */ }
+  };
+  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge, metadataCache, sendToRenderer, graphService);
 
   // Phase 3: Boot MCP server (async — does not block addon load)
   const auditLogger = createAuditLogger(
@@ -214,6 +267,13 @@ export default function main(context: any): void {
     vectorStore,
     logger: localLogger,
     registryStorage,
+    indexRegistry,
+    emitIndexProgress: (siteId, data) => {
+      try { ipcMain?.emit?.(IPC_CHANNELS.INDEX_PROGRESS, null, { siteId, ...data }); } catch { /* renderer may not be ready */ }
+    },
+    onSyncProgress: (progress) => {
+      emitNexusState({ wpeSyncProgress: progress });
+    },
   });
 
   // Start operation tracker — intercepts Local's IPC events for push/pull/export
@@ -302,6 +362,42 @@ export default function main(context: any): void {
     },
   });
 
+  // Opportunistic local-site indexer — fires a bulk reindex on a configurable
+  // interval. Declared before the async IIFE so closures inside can capture it.
+  // Started after async init resolves (nexusServices.bulkOpManager is set by then).
+  const opportunisticScheduler = new OpportunisticScheduler();
+
+  // Halted-site refresh and WPE refresh schedulers — declared before the async IIFE
+  // so the onSettingsUpdated closure (registered outside the IIFE) can capture them.
+  // Assigned inside the IIFE once their dependencies are available.
+  let haltedRefreshScheduler: HaltedSiteRefreshScheduler;
+  let wpeRefreshScheduler: WpeRefreshScheduler;
+
+  // WPE content index timer — inline interval-based scheduler for indexAllWpeContent.
+  // Declared here so the onSettingsUpdated closure can restart/stop it reactively.
+  let wpeContentIndexTimer: ReturnType<typeof setInterval> | null = null;
+  const startWpeContentIndexScheduler = (hours: number) => {
+    if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
+    wpeContentIndexTimer = setInterval(async () => {
+      if (!wpeSyncService) return;
+      localLogger.info(`[NexusAI] WPE content index scheduler running (every ${hours}h)`);
+      try { await wpeSyncService.indexAllWpeContent(); } catch (e: any) {
+        localLogger.warn('[NexusAI] WPE content index scheduler failed:', e?.message);
+      }
+    }, hours * 60 * 60 * 1000);
+  };
+
+  const getSchedulerSettings = () =>
+    (registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings) ??
+    ({ autoIndex: true, excludedSiteIds: [] } as any);
+
+  const buildSiteNamesLocal = (ids: string[]) => {
+    const sites = siteDataAccessor.getSites();
+    const names: Record<string, string> = {};
+    ids.forEach(id => { names[id] = sites[id]?.name ?? id; });
+    return names;
+  };
+
   // Async initialization
   (async () => {
     try {
@@ -359,6 +455,17 @@ export default function main(context: any): void {
       // Signal readiness — lifecycle hooks waiting to index can now proceed
       resolveReady!();
 
+      // Start opportunistic local-site indexer now that bulkOpManager is wired
+      if (nexusServices?.bulkOpManager) {
+        opportunisticScheduler.start({
+          bulkOpManager: nexusServices.bulkOpManager,
+          siteData: siteDataAccessor,
+          getSettings: getSchedulerSettings,
+          buildSiteNames: buildSiteNamesLocal,
+          logger: localLogger,
+        });
+      }
+
       const instructionRegistry = new InstructionRegistry();
       registerAllInstructions(instructionRegistry, registryStorage);
 
@@ -409,20 +516,25 @@ export default function main(context: any): void {
 
       const isWpeSyncAutoEnabled = () => {
         const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeSyncAutoEnabled?: boolean } | null;
-        return settings?.wpeSyncAutoEnabled !== false; // default: true
+        return settings?.wpeSyncAutoEnabled === true; // default: false (opt-in)
       };
 
       const runWpeAutoSyncIncremental = async (reason: string) => {
         if (!wpeSyncService || !localServicesBridge.isCAPIAvailable()) return;
         const hours = getWpeSyncIntervalHours();
         localLogger.info(`[NexusAI] WPE incremental sync triggered: ${reason} (threshold: ${hours}h)`);
+        // Signal sync started so UI shows active state immediately
+        emitNexusState({ wpeSyncProgress: { active: true, current: 0, total: 0, currentSite: '', phase: 'metadata' } });
         try {
           const result = await wpeSyncService.syncAllWPESites(undefined, hours);
           localLogger.info(
             `[NexusAI] WPE sync done: ${result.synced} synced, ${result.skipped} skipped (fresh), ${result.failed} failed`
           );
+          // Clear progress and push fresh wpeStatus
+          emitNexusState({ wpeSyncProgress: null });
         } catch (err) {
           localLogger.error('[NexusAI] WPE auto-sync failed:', (err as Error).message);
+          emitNexusState({ wpeSyncProgress: null });
         }
       };
 
@@ -459,7 +571,7 @@ export default function main(context: any): void {
       // Re-runs the filesystem scan on halted sites whose twin is stale (>24h).
       // Running sites are handled by the lifecycle hook on site-start — skip them.
       const haltedIntervalHours = (registryStorage.get(STORAGE_KEYS.SETTINGS) as { haltedSiteRefreshIntervalHours?: number } | null)?.haltedSiteRefreshIntervalHours ?? 24;
-      const haltedRefreshScheduler = new HaltedSiteRefreshScheduler({
+      haltedRefreshScheduler = new HaltedSiteRefreshScheduler({
         scanner: startupScanner,
         metadataCache,
         siteData: siteDataAccessor,
@@ -477,8 +589,8 @@ export default function main(context: any): void {
       // post count, and active theme for installs not refreshed recently.
       const wpeRefreshSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeRefreshIntervalHours?: number; wpeRefreshAutoEnabled?: boolean } | null;
       const wpeRefreshHours = wpeRefreshSettings?.wpeRefreshIntervalHours ?? 24;
-      const wpeRefreshEnabled = wpeRefreshSettings?.wpeRefreshAutoEnabled !== false; // default: true
-      const wpeRefreshScheduler = new WpeRefreshScheduler({
+      const wpeRefreshEnabled = wpeRefreshSettings?.wpeRefreshAutoEnabled === true; // default: false (opt-in)
+      wpeRefreshScheduler = new WpeRefreshScheduler({
         graphService,
         localServices: localServicesBridge,
         intervalMs: wpeRefreshHours * 60 * 60 * 1000,
@@ -492,6 +604,16 @@ export default function main(context: any): void {
         wpeRefreshScheduler.start();
       } else {
         localLogger.info('[NexusAI] WPE SSH refresh auto-run disabled by preference — scheduler not started');
+      }
+
+      // WPE content index scheduler — interval-based, triggers indexAllWpeContent.
+      const wpeContentIndexSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeContentIndexAutoEnabled?: boolean; wpeContentIndexIntervalHours?: number } | null;
+      const wpeContentIndexEnabled = wpeContentIndexSettings?.wpeContentIndexAutoEnabled === true;
+      const wpeContentIndexHours = wpeContentIndexSettings?.wpeContentIndexIntervalHours ?? 24;
+      if (wpeContentIndexEnabled) {
+        startWpeContentIndexScheduler(wpeContentIndexHours);
+      } else {
+        localLogger.info('[NexusAI] WPE content index auto-run disabled — scheduler not started');
       }
 
       // Startup: Tier 1 CAPI-only sync (fast, every startup when authenticated)
@@ -564,6 +686,15 @@ export default function main(context: any): void {
       }, 3600000); // 1 hour
 
       startupStatus = { ready: true, phase: null, error: null };
+
+      // Push initial state to NexusStateManager so components have data
+      // immediately on first render without waiting for their first poll.
+      setTimeout(async () => {
+        try {
+          const settings = registryStorage.get(STORAGE_KEYS.SETTINGS);
+          emitNexusState({ settings: settings ?? {} });
+        } catch { /* non-fatal */ }
+      }, 2000);
     } catch (err) {
       const error = err as any;
       rejectReady!(err as Error);
@@ -617,6 +748,39 @@ export default function main(context: any): void {
     nexusServices,
     wpeSyncService,
     metadataCache,
+    onSettingsUpdated: () => {
+      if (!nexusServices?.bulkOpManager) return;
+      opportunisticScheduler.restart({
+        bulkOpManager: nexusServices.bulkOpManager,
+        siteData: siteDataAccessor,
+        getSettings: getSchedulerSettings,
+        buildSiteNames: buildSiteNamesLocal,
+        logger: localLogger,
+      });
+
+      // Restart halted-site refresh scheduler with updated interval from settings.
+      const newHaltedIntervalHours = (registryStorage.get(STORAGE_KEYS.SETTINGS) as { haltedSiteRefreshIntervalHours?: number } | null)?.haltedSiteRefreshIntervalHours ?? 24;
+      haltedRefreshScheduler.restart(newHaltedIntervalHours * 60 * 60 * 1000);
+
+      // Restart (or stop) WPE refresh scheduler based on updated settings.
+      const updatedWpeSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeRefreshIntervalHours?: number; wpeRefreshAutoEnabled?: boolean } | null;
+      const newWpeRefreshHours = updatedWpeSettings?.wpeRefreshIntervalHours ?? 24;
+      const newWpeRefreshEnabled = updatedWpeSettings?.wpeRefreshAutoEnabled === true;
+      if (newWpeRefreshEnabled) {
+        wpeRefreshScheduler.restart(newWpeRefreshHours * 60 * 60 * 1000);
+      } else {
+        wpeRefreshScheduler.stop();
+      }
+
+      // Restart (or stop) WPE content index scheduler based on updated settings.
+      const newContentSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeContentIndexAutoEnabled?: boolean; wpeContentIndexIntervalHours?: number } | null;
+      const newContentEnabled = newContentSettings?.wpeContentIndexAutoEnabled === true;
+      const newContentHours = newContentSettings?.wpeContentIndexIntervalHours ?? 24;
+      if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
+      wpeContentIndexTimer = null;
+      if (newContentEnabled) startWpeContentIndexScheduler(newContentHours);
+    },
+    emitNexusState,
   });
 
   // Sprint 4: Credential sync broadcaster

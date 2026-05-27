@@ -147,25 +147,23 @@ export function calculateGoogleCost(
   inputTokens: number,
   outputTokens: number,
 ): number {
-  // Prices per 1M tokens (input / output)
-  let inputCostPer1M = 0.10;   // gemini-2.0-flash default
-  let outputCostPer1M = 0.40;
+  // Prices per 1M tokens (input / output) — source: ai.google.dev/pricing, May 2026
+  let inputCostPer1M = 0.15;   // gemini-2.5-flash default
+  let outputCostPer1M = 0.60;
 
-  if (model.includes('2.5-pro') || model.includes('gemini-2.5-pro')) {
+  if (model.includes('2.5-pro')) {
     inputCostPer1M = 1.25;
     outputCostPer1M = 10.00;
-  } else if (model.includes('2.5-flash') || model.includes('gemini-2.5-flash')) {
+  } else if (model.includes('2.5-flash-lite')) {
+    inputCostPer1M = 0.10;
+    outputCostPer1M = 0.40;
+  } else if (model.includes('2.5-flash')) {
     inputCostPer1M = 0.15;
     outputCostPer1M = 0.60;
-  } else if (model.includes('1.5-pro')) {
-    inputCostPer1M = 1.25;
-    outputCostPer1M = 5.00;
-  } else if (model.includes('1.5-flash')) {
-    inputCostPer1M = 0.075;
-    outputCostPer1M = 0.30;
-  } else if (model.includes('flash-lite') || model.includes('flash-8b')) {
-    inputCostPer1M = 0.075;
-    outputCostPer1M = 0.30;
+  } else if (model.includes('3.5-flash') || model.includes('3.1-flash-lite')) {
+    // Gemini 3.x pricing TBD — using 2.5 Flash as proxy until Google publishes pricing
+    inputCostPer1M = 0.15;
+    outputCostPer1M = 0.60;
   }
 
   return (inputTokens / 1_000_000) * inputCostPer1M +

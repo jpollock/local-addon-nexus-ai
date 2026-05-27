@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
 import { ok, error, requireLocalServices } from './helpers';
+import { waitForDatabaseReady } from '../with-site-running';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -31,17 +32,42 @@ export const exportSiteHandler: McpToolHandler = {
     const outputDir = rawDir.startsWith('~') ? path.join(os.homedir(), rawDir.slice(1)) : rawDir;
     const outputFile = path.join(outputDir, `${site.name}.zip`);
 
+    const ls = services.localServices!;
+
+    // Auto-start if halted — mysqldump needs a running MySQL server.
+    // Unlike synchronous tools, export is fire-and-forget, so we CANNOT use
+    // withSiteRunning (it would stop the site the moment exportSite() returns,
+    // while the worker is still zipping files in the background).
+    // Instead we auto-start here and thread the auto-stop into the callbacks.
+    const statuses = ls.getAllSiteStatuses() as Record<string, string>;
+    const wasRunning = statuses[site.id] === 'running';
+
+    if (!wasRunning) {
+      services.logger.info(`[local_export_site] Site ${site.id} is halted — auto-starting for export`);
+      await ls.startSite(site.id);
+      await waitForDatabaseReady(site.id, services);
+    }
+
     // Register with tracker so local_operation_status can report progress
     services.operationTracker?.register(site.id, site.name, 'export');
 
     // Fire-and-forget — zip creation blocks for minutes on large sites.
-    // Return immediately and let the agent poll local_operation_status.
-    services.localServices!.exportSite(site.id, outputFile)
+    // Auto-stop the site (if we started it) only AFTER the worker finishes.
+    ls.exportSite(site.id, outputFile)
       .then(() => {
         services.operationTracker?.complete(site.id, `Exported to ${outputFile}`);
+        if (!wasRunning) {
+          services.logger.info(`[local_export_site] Export complete — auto-stopping site ${site.id}`);
+          ls.stopSite(site.id).catch((e: Error) => {
+            services.logger.error(`[local_export_site] Failed to auto-stop site ${site.id}: ${e.message}`);
+          });
+        }
       })
       .catch((err: Error) => {
         services.operationTracker?.fail(site.id, err.message);
+        if (!wasRunning) {
+          ls.stopSite(site.id).catch(() => { /* best effort */ });
+        }
       });
 
     return ok(

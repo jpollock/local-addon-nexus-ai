@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { requireRunning, ok, error, validateSlug } from './preflight';
+import { ok, error, validateSlug } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { withSiteRunning } from '../with-site-running';
 
 export const pluginInstallHandler: McpToolHandler = {
   definition: {
@@ -45,14 +46,13 @@ export const pluginInstallHandler: McpToolHandler = {
       return ok(`Plugin "${slug}" installed${args.activate ? ' and activated' : ''} on ${target.installName}.`);
     }
 
-    const check = requireRunning(target.site, services);
-    if (check) return check;
+    return withSiteRunning(target.site.id, services, async () => {
+      const result = await services.localServices!.wpCliRun(target.site.id, cliArgs);
+      if (!result.success) {
+        return error(`Failed to install plugin "${slug}": ${result.stdout}`);
+      }
 
-    const result = await services.localServices!.wpCliRun(target.site.id, cliArgs);
-    if (!result.success) {
-      return error(`Failed to install plugin "${slug}": ${result.stdout}`);
-    }
-
-    return ok(`Plugin "${slug}" installed${args.activate ? ' and activated' : ''}.`);
+      return ok(`Plugin "${slug}" installed${args.activate ? ' and activated' : ''}.`);
+    });
   },
 };

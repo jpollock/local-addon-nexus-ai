@@ -1,0 +1,54 @@
+{
+  "_comment": "Search query fixtures for 16-search-quality.cli-e2e.test.ts. Edit queries here to tune what each test searches for — no TypeScript changes needed.",
+
+  "sites": {
+    "acfRecipes": {
+      "primary":      "recipe",
+      "dedup":        "ingredients",
+      "semantic":     "cooking instructions",
+      "scores":       "food",
+      "independence": "recipe"
+    },
+    "acfRecipesTest": {
+      "primary": "recipe",
+      "dedup":   "ingredients",
+      "scores":  "food"
+    },
+    "newsroom": {
+      "primary":   "news",
+      "dedup":     "article",
+      "ordering":  "latest news"
+    },
+    "aiToolkit": {
+      "primary":  "artificial intelligence",
+      "semantic": "machine learning"
+    },
+    "jpp": {
+      "broad": "wordpress"
+    }
+  },
+
+  "crossSite": {
+    "broad":             "wordpress",
+    "ordering":          "content strategy",
+    "recipeAttribution": "recipes",
+    "aiAttribution":     "artificial intelligence toolkit"
+  },
+
+  "edgeCases": {
+    "noResults": "xyzzy_nonexistent_term_12345",
+    "multiWord":  "easy dinner recipes for beginners",
+    "scoreCheck": "news"
+  },
+
+  "_comment_ai": "Queries that benefit from AI-powered intent classification over heuristics. These are natural-language questions where regex patterns won't fire but an LLM would correctly route to 'both' or 'metadata'.",
+  "aiAssisted": {
+    "pluginByDescription":   "which sites have a form builder",
+    "versionByContext":      "find sites running an older PHP version",
+    "contentOrPlugin":       "how is WooCommerce being used across my sites",
+    "semanticMetadata":      "show me sites that are likely e-commerce",
+    "ambiguousIntent":       "ACF field groups and custom post types",
+    "naturalLanguagePlugin": "which sites use page builders",
+    "contextualVersion":     "sites that might need a PHP upgrade"
+  }
+}

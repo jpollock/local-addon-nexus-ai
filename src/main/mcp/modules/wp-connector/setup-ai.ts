@@ -101,15 +101,25 @@ add_filter('acf/abilities/enabled', '__return_true');
 `;
 
 /**
- * All known AI Experiment IDs in WordPress 7.0.
+ * All known AI Experiment IDs in WordPress 7.0 (ai plugin v1.0.0).
+ * Sourced from wp-plugins/ai/includes/Experiments - each class get_id() method.
  */
 const AI_EXPERIMENT_IDS = [
   'abilities-explorer',
-  'excerpt-generation',
+  'ai-request-logging',
   'alt-text-generation',
-  'image-generation',
+  'comment-moderation',
+  'connector-approval',
+  'content-classification',
+  'content-resizing',
+  'editorial-notes',
+  'editorial-updates',
+  'excerpt-generation',
+  'meta-description',
   'summarization',
   'title-generation',
+  // 'image-generation' removed in v1.0.0 (absorbed into core abilities)
+  // 'example-experiment' excluded - development scaffold only
 ];
 
 function findPlugin(plugins: WpPlugin[], slug: string): WpPlugin | undefined {
@@ -750,6 +760,25 @@ export async function setupSiteForAI(
       for (const id of AI_EXPERIMENT_IDS) {
         phpLines.push(`update_option('wpai_feature_${id}_enabled', '1');`);
       }
+
+      // Pre-approve the Local Gateway provider plugin for the connector-approval experiment.
+      // The connector-approval experiment (ai plugin v1.0.0+) gates all AI connector usage
+      // behind per-plugin admin approval stored in wpai_connector_approvals. Without this,
+      // ai-provider-for-local-gateway gets silently 403'd until an admin manually approves it.
+      // Format: wpai_connector_approvals[caller_basename][connector_id] = true
+      // Pre-approve all known callers for the local-gateway connector.
+      // The MU plugin also injects these via option_wpai_connector_approvals filter,
+      // but writing them to the DB here ensures they persist even if the MU plugin
+      // is temporarily unavailable (e.g. during early bootstrap on a new site).
+      phpLines.push(
+        "$approvals = get_option('wpai_connector_approvals', array());" +
+        "$callers = array('ai/ai.php', 'ai-provider-for-local-gateway/plugin.php', 'nexus-ai-connector/nexus-ai-connector.php');" +
+        "foreach ($callers as $caller) {" +
+        "  if (!isset($approvals[$caller])) { $approvals[$caller] = array(); }" +
+        "  $approvals[$caller]['local-gateway'] = true;" +
+        "}" +
+        "update_option('wpai_connector_approvals', $approvals, false);",
+      );
 
       // Verify the options were actually written by reading them back
       phpLines.push("$verified = array();");

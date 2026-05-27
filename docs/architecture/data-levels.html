@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus AI — Data Level Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; background: #0d1117; color: #e6edf3; padding: 24px; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 6px; color: #e6edf3; }
+  .subtitle { color: #8b949e; font-size: 12px; margin-bottom: 24px; }
+
+  table { width: 100%; border-collapse: collapse; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
+
+  /* Section header rows */
+  .section-local { background: #161b22; color: #51BB7B; font-weight: 700; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; text-align: center; padding: 6px 10px; border-bottom: 1px solid #30363d; }
+  .section-wpe { background: #161b22; color: #0ECAD4; font-weight: 700; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; text-align: center; padding: 6px 10px; border-bottom: 1px solid #30363d; }
+
+  /* Column header row */
+  th { background: #161b22; color: #8b949e; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 8px 10px; border: 1px solid #30363d; text-align: left; white-space: nowrap; }
+  th.level-col { width: 70px; }
+
+  /* Data cells */
+  td { padding: 8px 10px; border: 1px solid #21262d; vertical-align: top; font-size: 12px; line-height: 1.5; }
+
+  /* Level badge */
+  .level-badge { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
+  .level-num { font-size: 18px; font-weight: 700; line-height: 1; }
+  .level-name { font-size: 9px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .l1 .level-num { color: #51BB7B; }
+  .l1 .level-name { color: #51BB7B; }
+  .l2 .level-num { color: #a78bfa; }
+  .l2 .level-name { color: #a78bfa; }
+  .l3 .level-num { color: #0ECAD4; }
+  .l3 .level-name { color: #0ECAD4; }
+
+  /* Source pill */
+  .source-pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; letter-spacing: .04em; margin-bottom: 4px; }
+  .src-fs   { background: rgba(81,187,123,.15); color: #51BB7B; border: 1px solid rgba(81,187,123,.3); }
+  .src-wpcli { background: rgba(167,139,250,.15); color: #a78bfa; border: 1px solid rgba(167,139,250,.3); }
+  .src-mysql { background: rgba(14,202,212,.15); color: #0ECAD4; border: 1px solid rgba(14,202,212,.3); }
+  .src-capi  { background: rgba(249,115,22,.15); color: #f97316; border: 1px solid rgba(249,115,22,.3); }
+  .src-ssh   { background: rgba(59,130,246,.15); color: #60a5fa; border: 1px solid rgba(59,130,246,.3); }
+  .src-missing { background: rgba(239,68,68,.1); color: #f87171; border: 1px solid rgba(239,68,68,.25); }
+
+  /* Row shading */
+  .row-l1-local { background: rgba(81,187,123,.03); }
+  .row-l2-local { background: rgba(167,139,250,.03); }
+  .row-l3-local { background: rgba(14,202,212,.03); }
+  .row-l1-wpe   { background: rgba(249,115,22,.03); }
+  .row-l1-wpe-missing { background: rgba(239,68,68,.04); }
+  .row-l2-wpe   { background: rgba(59,130,246,.03); }
+  .row-l3-wpe   { background: rgba(14,202,212,.03); }
+
+  /* Tags */
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin: 1px 2px 1px 0; white-space: nowrap; }
+  .tag-green   { background: rgba(81,187,123,.15); color: #51BB7B; }
+  .tag-purple  { background: rgba(167,139,250,.15); color: #a78bfa; }
+  .tag-cyan    { background: rgba(14,202,212,.15); color: #0ECAD4; }
+  .tag-orange  { background: rgba(249,115,22,.15); color: #f97316; }
+  .tag-blue    { background: rgba(59,130,246,.15); color: #60a5fa; }
+  .tag-red     { background: rgba(239,68,68,.15); color: #f87171; }
+  .tag-gray    { background: rgba(139,148,158,.12); color: #8b949e; }
+  .tag-yellow  { background: rgba(234,179,8,.15); color: #eab308; }
+
+  /* Should-be column */
+  .should-be { background: rgba(234,179,8,.04); border-left: 2px solid rgba(234,179,8,.3) !important; }
+  .should-be-header { color: #eab308 !important; }
+
+  /* Missing / not implemented */
+  .missing { color: #f87171; font-style: italic; }
+  .missing-cell { background: rgba(239,68,68,.05) !important; }
+
+  code { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; background: rgba(139,148,158,.1); padding: 1px 4px; border-radius: 3px; color: #c9d1d9; }
+
+  .dot-row { display: flex; gap: 3px; align-items: center; margin-bottom: 3px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-filled-green  { background: #51BB7B; }
+  .dot-filled-purple { background: #a78bfa; }
+  .dot-filled-cyan   { background: #0ECAD4; }
+  .dot-empty { background: transparent; border: 1px solid #30363d; }
+  .dot-label { font-size: 11px; color: #8b949e; }
+
+  .divider-row td { background: #161b22; height: 4px; padding: 0; border: none; border-top: 2px solid #30363d; }
+
+  .legend { margin-top: 24px; display: flex; gap: 24px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #8b949e; }
+
+  ul { padding-left: 14px; }
+  li { margin-bottom: 2px; }
+
+  .note { margin-top: 20px; padding: 12px 16px; background: rgba(234,179,8,.06); border: 1px solid rgba(234,179,8,.2); border-radius: 6px; font-size: 11px; color: #c9d1d9; line-height: 1.6; }
+  .note strong { color: #eab308; }
+</style>
+</head>
+<body>
+
+<h1>Nexus AI — Data Level Architecture</h1>
+<p class="subtitle">L1 Scanned · L2 Configured · L3 Searchable — for both Local and WPE Remote sites</p>
+
+<table>
+  <thead>
+    <tr>
+      <th rowspan="2" class="level-col">Level</th>
+      <th class="section-local" colspan="8">LOCAL SITES</th>
+      <th class="section-wpe" colspan="8">WPE REMOTE</th>
+    </tr>
+    <tr>
+      <th>Source</th>
+      <th>What</th>
+      <th>When</th>
+      <th>Controlled by</th>
+      <th>Stored in</th>
+      <th>Seen in UI</th>
+      <th>UX State — is</th>
+      <th class="should-be-header should-be">UX State — should be</th>
+
+      <th>Source</th>
+      <th>What</th>
+      <th>When</th>
+      <th>Controlled by</th>
+      <th>Stored in</th>
+      <th>Seen in UI</th>
+      <th>UX State — is</th>
+      <th class="should-be-header should-be">UX State — should be</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <!-- ═══════════════════════════ L1 ═══════════════════════════ -->
+    <tr>
+      <td rowspan="3" style="text-align:center; vertical-align:middle;">
+        <div class="level-badge l1">
+          <span class="level-num">L1</span>
+          <span class="level-name">Scanned</span>
+        </div>
+      </td>
+
+      <!-- LOCAL L1 -->
+      <td class="row-l1-local"><span class="source-pill src-fs">Filesystem</span></td>
+      <td class="row-l1-local">
+        <ul>
+          <li>WP version <em>(version.php)</em></li>
+          <li>Installed plugins <em>(directory listing)</em></li>
+          <li>Installed themes <em>(directory listing)</em></li>
+        </ul>
+      </td>
+      <td class="row-l1-local">
+        <ul>
+          <li>Startup <code>StartupSiteScanner</code> (5s)</li>
+          <li><code>siteStarted</code> hook</li>
+          <li><code>HaltedSiteRefreshScheduler</code></li>
+        </ul>
+      </td>
+      <td class="row-l1-local">
+        <span class="tag tag-green">Always on</span><br>
+        Offline site scan interval<br>
+        <em>(Settings → Local Sites)</em>
+      </td>
+      <td class="row-l1-local">
+        <code>SiteMetadataCache</code><br>
+        → <code>nexus-ai_site_metadata.json</code><br>
+        <span class="tag tag-gray">electron-store</span>
+      </td>
+      <td class="row-l1-local">
+        <div class="dot-row"><div class="dot dot-filled-green"></div><div class="dot dot-empty"></div><div class="dot dot-empty"></div><span class="dot-label">Scanned</span></div>
+        Site Status level dots<br>
+        Data Completeness Scanned bar
+      </td>
+      <td class="row-l1-local">
+        React <code>this.state</code> in <code>SystemTab</code><br>
+        Fetched via <code>GET_SITE_METADATA</code> IPC<br>
+        <span class="tag tag-gray">30s poll</span>
+      </td>
+      <td class="row-l1-local should-be">
+        Shared reactive store (MobX observable).<br>
+        <code>StartupSiteScanner</code> pushes to store on completion → all panels update atomically, no independent polls diverging.
+      </td>
+
+      <!-- WPE L1 row 1: CAPI listInstalls -->
+      <td class="row-l1-wpe"><span class="source-pill src-capi">CAPI listInstalls</span></td>
+      <td class="row-l1-wpe">
+        <ul>
+          <li>Install name, domain</li>
+          <li>Environment type</li>
+          <li><code>php_version</code> <span class="tag tag-orange">from CAPI</span></li>
+          <li>Account info</li>
+        </ul>
+        <em style="color:#8b949e; font-size:11px;">wp_version NOT in list response — see row below</em>
+      </td>
+      <td class="row-l1-wpe">
+        <ul>
+          <li>Startup (10s delay)</li>
+          <li>Every 1hr <span class="tag tag-gray">hardcoded</span></li>
+        </ul>
+      </td>
+      <td class="row-l1-wpe">
+        <span class="tag tag-orange">Always on</span> — no toggle<br>
+        Requires valid WPE OAuth token
+      </td>
+      <td class="row-l1-wpe">
+        <code>graph.db sites</code> table<br>
+        <code>nexus-ai_wpe_install_cache.json</code><br>
+        <span class="tag tag-gray">SQLite + electron-store</span>
+      </td>
+      <td class="row-l1-wpe">
+        Remote Sites card (284)<br>
+        Data Completeness Scanned bar<br>
+        PHP: N/284 in Site Status
+      </td>
+      <td class="row-l1-wpe">
+        React <code>this.state</code> in <code>NexusOverview</code><br>
+        via <code>GET_DASHBOARD_STATS</code> IPC<br>
+        <span class="tag tag-gray">on mount + poll</span>
+      </td>
+      <td class="row-l1-wpe should-be">
+        Push to shared store after CAPI sync completes. Fleet Intelligence and Data Completeness currently re-fetch independently — a single CAPI sync event should update all panels atomically.
+      </td>
+    </tr>
+
+    <!-- WPE L1 row 2: CAPI individual GET (wp_version) -->
+    <tr>
+      <td class="row-l1-wpe-missing missing-cell"><span class="source-pill src-missing">CAPI individual GET</span></td>
+      <td class="row-l1-wpe-missing missing-cell">
+        <code>wp_version</code> — <strong>only returned by<br>GET /installs/{id}</strong>, not by listInstalls
+      </td>
+      <td class="row-l1-wpe-missing missing-cell">
+        <span class="missing">❌ Not implemented</span><br>
+        Would require N API calls<br>on startup (one per install)
+      </td>
+      <td class="row-l1-wpe-missing missing-cell">
+        <span class="missing">❌ Not controlled</span>
+      </td>
+      <td class="row-l1-wpe-missing missing-cell">
+        <span class="missing">❌ Not stored via this path</span><br>
+        <em>wp_version comes from SSH L2 instead</em>
+      </td>
+      <td class="row-l1-wpe-missing missing-cell">
+        WP version: 0/284 <span class="tag tag-red">gap</span><br>
+        until L2 SSH sync runs
+      </td>
+      <td class="row-l1-wpe-missing missing-cell">
+        <span class="missing">❌ No state — not populated</span>
+      </td>
+      <td class="row-l1-wpe-missing should-be">
+        <strong>Recommended: rely on SSH L2</strong> (more accurate, avoids N×CAPI calls). Or: call individual GET lazily for installs not yet L2-synced. Either way, not a blocker once L2 scheduler is enabled.
+      </td>
+    </tr>
+
+    <!-- spacer -->
+    <tr class="divider-row"><td colspan="17"></td></tr>
+
+    <!-- ═══════════════════════════ L2 ═══════════════════════════ -->
+    <tr>
+      <td rowspan="1" style="text-align:center; vertical-align:middle;">
+        <div class="level-badge l2">
+          <span class="level-num">L2</span>
+          <span class="level-name">Configured</span>
+        </div>
+      </td>
+
+      <!-- LOCAL L2 -->
+      <td class="row-l2-local"><span class="source-pill src-wpcli">WP-CLI</span></td>
+      <td class="row-l2-local">
+        <ul>
+          <li>Active plugins + status</li>
+          <li>Active theme</li>
+          <li>Users + roles</li>
+          <li>Post counts by type</li>
+          <li>PHP version</li>
+          <li>MySQL version</li>
+          <li>Site URL, admin email</li>
+        </ul>
+      </td>
+      <td class="row-l2-local">
+        <ul>
+          <li><code>siteStarted</code> hook <span class="tag tag-green">auto</span></li>
+          <li>Manual: Operations → Refresh metadata</li>
+        </ul>
+        <em style="color:#8b949e; font-size:11px;">No periodic scheduler for halted sites</em>
+      </td>
+      <td class="row-l2-local">
+        Auto on site-start.<br>
+        Manual: Refresh metadata button.<br>
+        <span class="tag tag-gray">No schedule toggle</span>
+      </td>
+      <td class="row-l2-local">
+        <code>SiteMetadataCache</code> <code>scanDepth='full'</code><br>
+        → <code>nexus-ai_site_metadata.json</code><br>
+        <span class="tag tag-gray">electron-store</span>
+      </td>
+      <td class="row-l2-local">
+        <div class="dot-row"><div class="dot dot-filled-green"></div><div class="dot dot-filled-purple"></div><div class="dot dot-empty"></div><span class="dot-label">Configured</span></div>
+        Data Completeness Configured bar<br>
+        PHP shown in Site Status expanded
+      </td>
+      <td class="row-l2-local">
+        React <code>this.state</code> in <code>SystemTab</code><br>
+        Fetched via <code>GET_SITE_METADATA</code> IPC<br>
+        <span class="tag tag-gray">30s poll</span>
+      </td>
+      <td class="row-l2-local should-be">
+        Shared reactive store. Also: add a <strong>scheduled L2 refresh</strong> for sites that haven't been started in &gt;24h (avoids stale active-plugin data for long-halted sites). Currently only refreshes on site-start.
+      </td>
+
+      <!-- WPE L2 -->
+      <td class="row-l2-wpe"><span class="source-pill src-ssh">SSH WP-CLI</span></td>
+      <td class="row-l2-wpe">
+        <ul>
+          <li><code>wp core version</code> → wp_version</li>
+          <li><code>wp plugin list</code> → plugins + status</li>
+          <li><code>wp user list</code> → users</li>
+          <li>Post counts</li>
+        </ul>
+      </td>
+      <td class="row-l2-wpe">
+        <ul>
+          <li><code>wpeRefreshScheduler</code> <em>(if enabled)</em></li>
+          <li>Manual: Operations → Refresh metadata</li>
+          <li><span class="tag tag-cyan">New</span> Piggyback during L3 index</li>
+        </ul>
+      </td>
+      <td class="row-l2-wpe">
+        Metadata sync <strong>toggle + interval</strong><br>
+        <em>(Settings → WPE Installs)</em><br>
+        Default: <span class="tag tag-red">off</span> — opt-in<br>
+        Piggyback: <span class="tag tag-green">auto</span> when L3 runs
+      </td>
+      <td class="row-l2-wpe">
+        <code>graph.db sites</code> (wp_version, last_sync_at)<br>
+        <code>graph.db plugins</code><br>
+        <code>graph.db users</code><br>
+        <span class="tag tag-gray">SQLite</span>
+      </td>
+      <td class="row-l2-wpe">
+        WP: N/284, PHP: N/284<br>
+        Plugins: N/284, Users: N/284<br>
+        <em>"fresh"</em> = last_sync_at &lt; 8h<br>
+        Data Completeness Configured bar
+      </td>
+      <td class="row-l2-wpe">
+        React <code>this.state</code> in <code>SystemTab</code><br>
+        via <code>SYSTEM_WPE_STATUS</code> IPC<br>
+        <span class="tag tag-gray">30s poll</span>
+      </td>
+      <td class="row-l2-wpe should-be">
+        Shared reactive store — push after each <code>syncInstall()</code>. <strong>Default the metadata sync toggle to ON</strong> (currently off, causes confusion). "Fresh" threshold should match the sync interval setting, not a hardcoded 8h.
+      </td>
+    </tr>
+
+    <!-- spacer -->
+    <tr class="divider-row"><td colspan="17"></td></tr>
+
+    <!-- ═══════════════════════════ L3 ═══════════════════════════ -->
+    <tr>
+      <td rowspan="1" style="text-align:center; vertical-align:middle;">
+        <div class="level-badge l3">
+          <span class="level-num">L3</span>
+          <span class="level-name">Searchable</span>
+        </div>
+      </td>
+
+      <!-- LOCAL L3 -->
+      <td class="row-l3-local"><span class="source-pill src-mysql">MySQL</span></td>
+      <td class="row-l3-local">
+        <ul>
+          <li>Posts, pages, products</li>
+          <li>ACF custom fields</li>
+          <li>Media metadata</li>
+          <li>WooCommerce (price, SKU, stock)</li>
+          <li>384-dim ONNX embeddings</li>
+        </ul>
+      </td>
+      <td class="row-l3-local">
+        <ul>
+          <li><code>siteStarted</code> (if auto-index on)</li>
+          <li>Content index interval scheduler</li>
+          <li>Manual: Operations → ⚡ Index</li>
+        </ul>
+      </td>
+      <td class="row-l3-local">
+        Content index interval<br>
+        <strong>checkbox + hrs</strong><br>
+        <em>(Settings → Local Sites)</em><br>
+        Default: <span class="tag tag-red">off</span> — opt-in
+      </td>
+      <td class="row-l3-local">
+        <code>IndexRegistry</code> → <code>nexus-ai_index_registry.json</code> <em>(state, counts, timestamps)</em><br>
+        <code>LanceDB</code> → <code>vectors/</code> dir <em>(embeddings)</em><br>
+        <span class="tag tag-gray">electron-store + LanceDB</span>
+      </td>
+      <td class="row-l3-local">
+        <div class="dot-row"><div class="dot dot-filled-green"></div><div class="dot dot-filled-purple"></div><div class="dot dot-filled-cyan"></div><span class="dot-label">Searchable</span></div>
+        Data Completeness Searchable bar<br>
+        Semantic search results<br>
+        Site Finder content queries
+      </td>
+      <td class="row-l3-local">
+        <code>IndexRegistry</code> events → IPC push (<code>INDEX_PROGRESS</code>)<br>
+        React <code>this.state</code> in <code>SystemTab</code> + <code>FleetCompletenessWidget</code><br>
+        <span class="tag tag-gray">event-driven + 30s poll fallback</span>
+      </td>
+      <td class="row-l3-local should-be">
+        Already partly event-driven. Should complete the push model: <code>INDEX_PROGRESS</code> events update a shared store in real-time. Remove the 30s poll fallback once the store is reactive.
+      </td>
+
+      <!-- WPE L3 -->
+      <td class="row-l3-wpe"><span class="source-pill src-ssh">SSH wp post list</span></td>
+      <td class="row-l3-wpe">
+        <ul>
+          <li>Posts, pages, custom post types</li>
+          <li>Via <code>wp post list --format=json</code></li>
+          <li>384-dim ONNX embeddings</li>
+          <li>+ triggers L2 piggyback</li>
+        </ul>
+      </td>
+      <td class="row-l3-wpe">
+        <strong>Manual only</strong><br>
+        Operations → ⚡ Index sites for WPE<br>
+        <em>(also fires L2 metadata sync as piggyback)</em>
+      </td>
+      <td class="row-l3-wpe">
+        Manual only — no scheduler<br>
+        <span class="tag tag-red">No scheduled option yet</span>
+      </td>
+      <td class="row-l3-wpe">
+        <code>IndexRegistry</code> → <code>nexus-ai_index_registry.json</code><br>
+        <code>LanceDB</code> → <code>vectors/</code> dir<br>
+        <span class="tag tag-gray">electron-store + LanceDB</span>
+      </td>
+      <td class="row-l3-wpe">
+        <div class="dot-row"><div class="dot dot-filled-green"></div><div class="dot dot-filled-purple"></div><div class="dot dot-filled-cyan"></div><span class="dot-label">Searchable (WPE)</span></div>
+        Data Completeness Searchable bar<br>
+        Semantic search results (WPE sites)
+      </td>
+      <td class="row-l3-wpe">
+        Same as local L3:<br>
+        <code>INDEX_PROGRESS</code> IPC push<br>
+        React <code>this.state</code> in <code>SystemTab</code> + <code>FleetCompletenessWidget</code>
+      </td>
+      <td class="row-l3-wpe should-be">
+        Add <strong>scheduled WPE content indexing</strong> toggle + interval in Settings (mirrors local content index interval). Since L2 now piggybacks on L3, enabling this also keeps WPE metadata current without a separate Metadata sync setting.
+      </td>
+    </tr>
+
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>⚠ Shared Reactive Store gap:</strong> Currently every UI panel manages its own IPC fetch cycle with independent 30-second poll timers (<code>FleetCompletenessWidget</code>, <code>SystemTab</code>, <code>NexusOverview</code>). This means panels can show inconsistent data — e.g. Data Completeness shows 113 Configured while Site Status shows 0 WP version, because they polled at different moments relative to a sync completing. The "should be" column consistently calls for a <strong>MobX observable store</strong> (or equivalent) in the renderer, fed by main-process push events, so all panels always reflect the same authoritative state.
+</div>
+
+<div class="legend">
+  <div class="legend-item"><span class="source-pill src-fs" style="margin:0">Filesystem</span> No WP running required</div>
+  <div class="legend-item"><span class="source-pill src-wpcli" style="margin:0">WP-CLI</span> Site must be running (local)</div>
+  <div class="legend-item"><span class="source-pill src-mysql" style="margin:0">MySQL</span> Site must be running (local)</div>
+  <div class="legend-item"><span class="source-pill src-capi" style="margin:0">CAPI</span> WPE API — needs OAuth token</div>
+  <div class="legend-item"><span class="source-pill src-ssh" style="margin:0">SSH</span> WPE SSH — needs key configured</div>
+  <div class="legend-item"><span class="source-pill src-missing" style="margin:0">Missing</span> Not yet implemented</div>
+  <div class="legend-item"><span class="tag tag-yellow" style="padding:3px 8px">Should be</span> Recommended improvement</div>
+</div>
+
+</body>
+</html>

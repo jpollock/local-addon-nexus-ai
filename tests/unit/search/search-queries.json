@@ -1,0 +1,105 @@
+[
+  {
+    "id": "content-basic",
+    "query": "recipes",
+    "mode": "auto",
+    "description": "Pure content query — no metadata signals",
+    "expect": {
+      "intent": "content",
+      "minContentResults": 0,
+      "metadataResultsEmpty": true,
+      "noPostIdDuplicates": true
+    }
+  },
+  {
+    "id": "plugin-name-acf",
+    "query": "acf",
+    "mode": "auto",
+    "description": "Short plugin abbreviation — auto should search both",
+    "expect": {
+      "runsBothSearches": true,
+      "noPostIdDuplicates": true
+    }
+  },
+  {
+    "id": "plugin-name-woocommerce",
+    "query": "woocommerce",
+    "mode": "auto",
+    "description": "Full plugin name — should trigger metadata search",
+    "expect": {
+      "runsBothSearches": true,
+      "noPostIdDuplicates": true
+    }
+  },
+  {
+    "id": "sites-with-pattern",
+    "query": "sites with Elementor",
+    "mode": "auto",
+    "description": "'sites with X' pattern must classify as both",
+    "expect": {
+      "intent": "both",
+      "runsBothSearches": true
+    }
+  },
+  {
+    "id": "php-version-query",
+    "query": "running PHP 7.4",
+    "mode": "auto",
+    "description": "PHP version query must classify as both",
+    "expect": {
+      "intent": "both",
+      "runsBothSearches": true
+    }
+  },
+  {
+    "id": "content-only-mode",
+    "query": "customer onboarding flow",
+    "mode": "content",
+    "description": "Explicit Content mode must skip metadata search",
+    "expect": {
+      "intent": "content",
+      "metadataResultsEmpty": true,
+      "noPostIdDuplicates": true
+    }
+  },
+  {
+    "id": "metadata-only-mode",
+    "query": "elementor",
+    "mode": "metadata",
+    "description": "Explicit Site Metadata mode must skip content search",
+    "expect": {
+      "intent": "metadata",
+      "contentResultsEmpty": true
+    }
+  },
+  {
+    "id": "mixed-content-and-plugin",
+    "query": "recipes and acf",
+    "mode": "auto",
+    "description": "Mixed query — auto mode always runs both; no duplicate posts",
+    "expect": {
+      "runsBothSearches": true,
+      "noPostIdDuplicates": true,
+      "maxContentResults": 15
+    }
+  },
+  {
+    "id": "empty-query",
+    "query": "",
+    "mode": "auto",
+    "description": "Empty query must return empty results",
+    "expect": {
+      "metadataResultsEmpty": true,
+      "contentResultsEmpty": true
+    }
+  },
+  {
+    "id": "short-stopword-query",
+    "query": "the",
+    "mode": "auto",
+    "description": "Stopword-only query must return no keyword noise",
+    "expect": {
+      "noPostIdDuplicates": true
+    }
+  }
+]

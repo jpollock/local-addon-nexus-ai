@@ -295,6 +295,15 @@ export class GraphService {
 
   async close(): Promise<void> {
     if (this.db) {
+      try {
+        // Checkpoint WAL before closing so all committed writes are in the main DB file.
+        // Without this, a hard kill (SIGKILL, force-quit) can leave WAL frames unwritten
+        // and data is lost on the next open. TRUNCATE resets the WAL to zero length.
+        this.db.pragma('wal_checkpoint(TRUNCATE)');
+      } catch (e: any) {
+        // Non-fatal — DB still closes; worst case is WAL frames lost on next open
+        this.logger?.warn('[GraphService] WAL checkpoint failed on close:', e?.message);
+      }
       this.db.close();
       this.db = null;
     }

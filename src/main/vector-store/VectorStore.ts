@@ -155,6 +155,22 @@ export class VectorStore {
       if (newCols.length > 0) {
         await table.addColumns(newCols);
       }
+
+      // Ensure FTS indexes exist on both content and title columns.
+      // Previously only 'content' was indexed — 'title' was added later.
+      // Best-effort: failure here does not break vector search.
+      for (const col of ['content', 'title'] as const) {
+        try {
+          const listIndexes: any[] = await (table as any).listIndices?.() ?? [];
+          const hasFts = listIndexes.some((idx: any) => idx.columns?.includes(col) || idx.name?.includes(col));
+          if (!hasFts) {
+            await table.createIndex(col, {
+              config: this.lancedbIndex!.fts({ withPosition: false }),
+              replace: true,
+            });
+          }
+        } catch { /* non-fatal */ }
+      }
     } catch (err) {
       console.warn('[VectorStore] Schema migration failed (non-fatal):', err);
       // Migration is best-effort — search still works without new columns
@@ -181,14 +197,16 @@ export class VectorStore {
     const records = documents.map(toRecord);
     await table.add(records);
 
-    // Create/update FTS index on content field for hybrid search
-    try {
-      await table.createIndex('content', {
-        config: this.lancedbIndex!.fts({ withPosition: false }),
-        replace: true,
-      });
-    } catch {
-      // FTS index creation is best-effort — vector search still works without it
+    // Create/update FTS indexes on content and title for keyword search
+    for (const col of ['content', 'title'] as const) {
+      try {
+        await table.createIndex(col, {
+          config: this.lancedbIndex!.fts({ withPosition: false }),
+          replace: true,
+        });
+      } catch {
+        // FTS index creation is best-effort — vector search still works without it
+      }
     }
   }
 

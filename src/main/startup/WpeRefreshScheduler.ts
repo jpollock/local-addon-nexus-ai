@@ -60,7 +60,8 @@ export class WpeRefreshScheduler {
   private readonly graphService: GraphService;
   private readonly localServices: LocalServicesBridge;
   private readonly intervalMs: number;
-  private readonly stalenessThresholdMs: number;
+  private currentIntervalMs: number;
+  private currentStalenessThresholdMs: number;
   private readonly getAccountFilter: () => string[] | null | undefined;
   private readonly logger: WpeRefreshSchedulerOptions['logger'];
 
@@ -71,7 +72,8 @@ export class WpeRefreshScheduler {
     this.graphService = options.graphService;
     this.localServices = options.localServices;
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
-    this.stalenessThresholdMs = options.stalenessThresholdMs ?? this.intervalMs;
+    this.currentIntervalMs = this.intervalMs;
+    this.currentStalenessThresholdMs = options.stalenessThresholdMs ?? this.intervalMs;
     this.getAccountFilter = options.getAccountFilter ?? (() => null);
     this.logger = options.logger;
   }
@@ -87,14 +89,14 @@ export class WpeRefreshScheduler {
     }
 
     this.logger.info(
-      `[WpeRefreshScheduler] Starting — interval ${Math.round(this.intervalMs / 3600000)}h`
+      `[WpeRefreshScheduler] Starting — interval ${Math.round(this.currentIntervalMs / 3600000)}h`
     );
 
     this.timer = setInterval(() => {
       this.runNow().catch((err) => {
         this.logger.error('[WpeRefreshScheduler] Refresh cycle error:', (err as Error).message);
       });
-    }, this.intervalMs);
+    }, this.currentIntervalMs);
   }
 
   /**
@@ -106,6 +108,21 @@ export class WpeRefreshScheduler {
       this.timer = null;
       this.logger.info('[WpeRefreshScheduler] Stopped');
     }
+  }
+
+  /**
+   * Stop the existing timer and restart with a new interval.
+   * Used when the user changes `wpeRefreshIntervalHours` in Settings.
+   * The staleness threshold is set to the same value as the new interval.
+   */
+  restart(intervalMs: number): void {
+    this.currentIntervalMs = intervalMs;
+    this.currentStalenessThresholdMs = intervalMs;
+    this.stop();
+    this.start();
+    this.logger.info(
+      `[WpeRefreshScheduler] Restarted with interval ${Math.round(intervalMs / 3600000)}h`
+    );
   }
 
   /**
@@ -204,7 +221,7 @@ export class WpeRefreshScheduler {
 
     for (const site of sites) {
       // Skip if SSH sync is recent enough
-      if (site.last_sync_at !== null && (now - site.last_sync_at) < this.stalenessThresholdMs) {
+      if (site.last_sync_at !== null && (now - site.last_sync_at) < this.currentStalenessThresholdMs) {
         result.skipped++;
         this.logger.info(
           `[WpeRefreshScheduler] Skipping fresh install: ${site.name} (age ${Math.round((now - site.last_sync_at) / 3600000)}h)`

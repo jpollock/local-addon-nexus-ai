@@ -82,6 +82,8 @@ const descStyle: React.CSSProperties = {
   marginBottom: '16px',
   lineHeight: 1.5,
   opacity: 0.7,
+  overflowWrap: 'break-word',
+  wordBreak: 'break-word',
 };
 
 const checkboxRowStyle: React.CSSProperties = {
@@ -95,16 +97,23 @@ const sectionStyle: React.CSSProperties = {
   marginBottom: '24px',
 };
 
+// Matches Local's FlySelect visual style: appearance:none + custom green chevron SVG
+const SELECT_CHEVRON_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='8' viewBox='0 0 14 8'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%2351bb7b' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`;
+
 const selectStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  fontSize: '14px',
-  borderRadius: '6px',
-  border: '1px solid rgba(128, 128, 128, 0.3)',
+  appearance: 'none' as const,
+  WebkitAppearance: 'none' as const,
+  padding: '7px 32px 7px 10px',
+  fontSize: '13px',
+  borderRadius: '4px',
+  border: '1px solid #d1d5db',
   outline: 'none',
-  minWidth: '200px',
+  width: '100%',
+  maxWidth: '350px',
   cursor: 'pointer',
-  background: 'var(--nxai-input-bg, transparent)',
-  color: 'inherit',
+  background: `white ${SELECT_CHEVRON_SVG} no-repeat right 10px center`,
+  color: '#111827',
+  fontFamily: 'inherit',
 };
 
 const inputStyle: React.CSSProperties = {
@@ -150,10 +159,11 @@ const rowStyle: React.CSSProperties = {
 };
 
 const WPE_OPERATION_DEFAULTS = {
-  pull:   { development: true,  staging: true,  production: true  },
-  wpcli:  { development: true,  staging: true,  production: false },
-  push:   { development: true,  staging: true,  production: false },
-  delete: { development: false, staging: false, production: false },
+  pull:       { development: true,  staging: true,  production: true  },
+  wpcli_read: { development: true,  staging: true,  production: true  },
+  wpcli:      { development: true,  staging: true,  production: false },
+  push:       { development: true,  staging: true,  production: false },
+  delete:     { development: false, staging: false, production: false },
 } as const;
 
 type WpeOperation = keyof typeof WPE_OPERATION_DEFAULTS;
@@ -352,6 +362,19 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     });
   };
 
+  handleLocalContentIndexIntervalChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const hours = Math.max(0, Math.min(168, parseInt(e.target.value, 10) || 0));
+    this.setState(prev => ({
+      settings: { ...prev.settings, localContentIndexIntervalHours: hours },
+    }));
+  };
+
+  handleLocalContentIndexAutoEnabledChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    this.setState(prev => ({
+      settings: { ...prev.settings, localContentIndexAutoEnabled: e.target.checked },
+    }));
+  };
+
 
   renderWpeAccessControlSection(): React.ReactNode {
     const { settings, wpeAccounts, expandedOps, addingException, wpeInstalls, installSearch, accessExpanded } = this.state;
@@ -368,10 +391,11 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     };
 
     const OPERATIONS: Array<{ id: WpeOperation; label: string; sub: string; icon: string }> = [
-      { id: 'pull',   label: 'Pull to local',    sub: 'Download files + database from WPE',      icon: '⬇' },
-      { id: 'wpcli',  label: 'WP-CLI over SSH',  sub: 'Run commands on remote WPE installs',      icon: '⌨' },
-      { id: 'push',   label: 'Push to WPE',      sub: 'Overwrite remote with local files and DB', icon: '⬆' },
-      { id: 'delete', label: 'Delete / Promote', sub: 'Irreversible CAPI operations',              icon: '🗑' },
+      { id: 'pull',       label: 'Pull to local',           sub: 'Download files + database from WPE',                            icon: '⬇' },
+      { id: 'wpcli_read', label: 'WP-CLI over SSH (Read)',  sub: 'plugin list, core version, user list — read-only SSH commands', icon: '⌨' },
+      { id: 'wpcli',      label: 'WP-CLI over SSH (Write)', sub: 'plugin install/update, core update — modifying SSH commands',   icon: '⌨' },
+      { id: 'push',       label: 'Push to WPE',             sub: 'Overwrite remote with local files and DB',                      icon: '⬆' },
+      { id: 'delete',     label: 'Delete / Promote',        sub: 'Irreversible CAPI operations',                                  icon: '🗑' },
     ];
 
     const renderToggle = (checked: boolean, onChange: (v: boolean) => void): React.ReactNode =>
@@ -385,13 +409,16 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       );
 
     // Summary text shown when section is collapsed
+    const blockedForWrite = !getPermVal('wpcli', 'production');
     const blockedForPush = !getPermVal('push', 'production');
     const blockedForDelete = !getPermVal('delete', 'production');
     const summaryParts: string[] = [];
     if (wpeAccounts.length > 0) summaryParts.push(`${includedIds.length} account${includedIds.length !== 1 ? 's' : ''}`);
-    if (blockedForPush && blockedForDelete) summaryParts.push('production blocked for push & delete');
-    else if (blockedForPush) summaryParts.push('production blocked for push');
-    else if (blockedForDelete) summaryParts.push('production blocked for delete');
+    const blockedItems: string[] = [];
+    if (blockedForWrite) blockedItems.push('SSH write');
+    if (blockedForPush) blockedItems.push('push');
+    if (blockedForDelete) blockedItems.push('delete');
+    if (blockedItems.length > 0) summaryParts.push(`production blocked for ${blockedItems.join(' & ')}`);
     const headerSummary = summaryParts.join(' · ');
 
     const renderOpCard = (op: typeof OPERATIONS[number]): React.ReactNode => {
@@ -559,19 +586,28 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
     // Simple accounts chip bar (click to toggle individual accounts)
     const accountsBar = wpeAccounts.length > 0 ? React.createElement('div', {
-      style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const, padding: '9px 12px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 7, marginBottom: 14 },
+      style: { marginBottom: 14 },
     },
-      React.createElement('span', { style: { fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: 'var(--nxai-card-sub, #6b7280)', marginRight: 2 } }, 'Accounts'),
-      ...wpeAccounts.slice(0, 7).map((a) => {
-        const on = allIncluded || includedIds.includes(a.id);
-        return React.createElement('span', {
-          key: a.id,
-          title: `Click to ${on ? 'exclude' : 'include'} ${a.nickname ?? a.name}`,
-          style: { fontSize: 11, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', background: on ? 'rgba(81,187,123,0.1)' : 'rgba(128,128,128,0.08)', color: on ? '#51BB7B' : 'var(--nxai-status-neutral, #9ca3af)', border: on ? '1px solid rgba(81,187,123,0.25)' : '1px solid var(--nxai-card-border, #30363d)' },
-          onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handleAccountScopeToggle(a.id, !on); },
-        }, a.nickname ?? a.name ?? a.id);
-      }),
-      wpeAccounts.length > 7 ? React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)' } }, `+${wpeAccounts.length - 7} more`) : null,
+      React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 } },
+        React.createElement('span', { style: { fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: 'var(--nxai-card-sub, #6b7280)' } }, 'Account scope'),
+        React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)' } }, '— click to include / exclude accounts from the permissions below'),
+      ),
+      React.createElement('div', {
+        style: { display: 'flex', flexWrap: 'wrap' as const, gap: 5, padding: '9px 12px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 7, maxHeight: 110, overflowY: 'auto' as const },
+      },
+        ...wpeAccounts.map((a) => {
+          const on = allIncluded || includedIds.includes(a.id);
+          return React.createElement('span', {
+            key: a.id,
+            title: `Click to ${on ? 'exclude' : 'include'} ${a.nickname ?? a.name}`,
+            style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, userSelect: 'none' as const, background: on ? 'rgba(81,187,123,0.12)' : 'rgba(128,128,128,0.06)', color: on ? '#51BB7B' : 'var(--nxai-status-neutral, #9ca3af)', border: on ? '1px solid rgba(81,187,123,0.3)' : '1px dashed var(--nxai-card-border, #30363d)', opacity: on ? 1 : 0.6 },
+            onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handleAccountScopeToggle(a.id, !on); },
+          },
+            React.createElement('span', { style: { fontSize: 9 } }, on ? '✓' : '✗'),
+            a.nickname ?? a.name ?? a.id,
+          );
+        }),
+      ),
     ) : null;
 
     // Outer collapsible container
@@ -1098,208 +1134,69 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
 
 
   render(): React.ReactNode {
-    const { settings, sites, loading, expandedSections, excludedExpanded } = this.state;
+    const { settings, loading, expandedSections } = this.state;
 
     if (loading) {
-      return React.createElement('div', {
-        style: { padding: '24px', opacity: 0.7 },
-      }, 'Loading preferences...');
+      return React.createElement('div', { style: { padding: '24px', opacity: 0.7 } }, 'Loading preferences...');
     }
 
-    const divider = React.createElement('hr', {
-      style: { border: 'none', borderTop: '1px solid', opacity: 0.15, margin: '8px 0 16px' },
-    });
-
-    // -----------------------------------------------------------------------
-    // Section 1: AI Provider (always expanded by default)
-    // -----------------------------------------------------------------------
-    const aiProviderExpanded = expandedSections.has('ai-provider');
+    // Section 1: AI Provider
     const section1 = React.createElement('div', { style: sectionStyle },
       this.renderSectionHeader('ai-provider', 'AI Provider'),
-      aiProviderExpanded ? React.createElement('div', null,
-        this.renderChatSection(),
-      ) : null,
+      expandedSections.has('ai-provider')
+        ? React.createElement('div', null, this.renderChatSection())
+        : null,
     );
 
-    // -----------------------------------------------------------------------
-    // Section 2: Local AI Gateway (collapsed by default)
-    // -----------------------------------------------------------------------
-    const gatewayExpanded = expandedSections.has('gateway');
+    // Section 2: Local AI Gateway
     const section2 = React.createElement('div', { style: sectionStyle },
       this.renderSectionHeader('gateway', 'Local AI Gateway'),
-      gatewayExpanded ? React.createElement('div', null,
-        React.createElement('div', { style: descStyle },
-          'When enabled, all AI requests from WordPress sites are proxied through the Local AI Gateway, which routes them to your configured AI provider above.',
-        ),
-        React.createElement('label', {
-          style: checkboxRowStyle,
-          title: 'Route all WordPress AI plugin requests through the Local AI Gateway running on this machine.',
-        },
-          React.createElement('input', {
-            type: 'checkbox',
-            checked: !!((settings as any).useLocalGateway),
-            onChange: this.handleGatewayToggle,
-            style: { width: '16px', height: '16px', cursor: 'pointer' },
-          }),
-          React.createElement('span', { style: { fontSize: '14px' } },
-            'Route WordPress AI requests through Local AI Gateway',
-          ),
-        ),
-      ) : null,
+      expandedSections.has('gateway')
+        ? React.createElement('div', null,
+            React.createElement('div', { style: descStyle },
+              'When enabled, all AI requests from WordPress sites are proxied through the Local AI Gateway, which routes them to your configured AI provider above.',
+            ),
+            React.createElement('label', {
+              style: checkboxRowStyle,
+              title: 'Route all WordPress AI plugin requests through the Local AI Gateway running on this machine.',
+            },
+              React.createElement('input', {
+                type: 'checkbox',
+                checked: !!((settings as any).useLocalGateway),
+                onChange: this.handleGatewayToggle,
+                style: { width: '16px', height: '16px', cursor: 'pointer' },
+              }),
+              React.createElement('span', { style: { fontSize: '14px' } },
+                'Route WordPress AI requests through Local AI Gateway',
+              ),
+            ),
+          )
+        : null,
     );
 
-    // -----------------------------------------------------------------------
-    // Section 3: Auto-Indexing (collapsed by default)
-    // -----------------------------------------------------------------------
-    const indexingExpanded = expandedSections.has('auto-indexing');
+    // Section 3: WP Engine API Credentials
     const section3 = React.createElement('div', { style: sectionStyle },
-      this.renderSectionHeader('auto-indexing', 'Auto-Indexing'),
-      indexingExpanded ? React.createElement('div', null,
-        React.createElement('div', { style: descStyle },
-          'When enabled, site content is automatically indexed for AI search when a site starts.',
-        ),
-        React.createElement('label', {
-          style: checkboxRowStyle,
-          title: 'Automatically create a searchable index when each site starts.',
-        },
-          React.createElement('input', {
-            type: 'checkbox',
-            checked: settings.autoIndex,
-            onChange: this.handleAutoIndexToggle,
-            style: { width: '16px', height: '16px', cursor: 'pointer' },
-          }),
-          React.createElement('span', { style: { fontSize: '14px' } }, 'Automatically index sites when started'),
-        ),
-
-        settings.autoIndex && sites.length > 0
-          ? React.createElement('div', { style: { marginTop: '10px', border: '1px solid rgba(128,128,128,0.15)', borderRadius: 7, overflow: 'hidden' } },
-              // Accordion trigger
-              React.createElement('div', {
-                style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 13px', cursor: 'pointer', userSelect: 'none' as const, background: 'rgba(128,128,128,0.04)' },
-                onClick: () => this.setState((prev) => ({ excludedExpanded: !prev.excludedExpanded })),
-              },
-                React.createElement('span', { style: { fontSize: 13, color: 'inherit' } }, 'Excluded sites'),
-                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-                  React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } },
-                    settings.excludedSiteIds.length > 0 ? `${settings.excludedSiteIds.length} excluded` : 'none excluded',
-                  ),
-                  React.createElement('span', { style: { fontSize: 9, opacity: 0.5, display: 'inline-block', transform: excludedExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' } }, '▶'),
-                ),
-              ),
-              // Accordion body
-              excludedExpanded ? React.createElement('div', {
-                style: { borderTop: '1px solid rgba(128,128,128,0.12)', padding: '10px 13px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' },
-              },
-                ...sites.map((site) =>
-                  React.createElement('label', {
-                    key: site.id,
-                    style: { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer' },
-                  },
-                    React.createElement('input', {
-                      type: 'checkbox',
-                      checked: settings.excludedSiteIds.includes(site.id),
-                      onChange: () => this.handleSiteExclusionToggle(site.id),
-                      style: { width: '14px', height: '14px', cursor: 'pointer' },
-                    }),
-                    React.createElement('span', { style: { fontSize: '13px' } }, site.name),
-                    React.createElement('span', {
-                      style: { fontSize: '11px', opacity: 0.45, marginLeft: 2 },
-                    }, `(${site.status})`),
-                  ),
-                ),
-              ) : null,
-            )
-          : null,
-      ) : null,
+      this.renderSectionHeader('wpe-creds', 'WP Engine API Credentials'),
+      expandedSections.has('wpe-creds')
+        ? React.createElement('div', null,
+            React.createElement('div', { style: descStyle },
+              'Required only for creating backups. Get credentials from my.wpengine.com → Profile → API Access.',
+            ),
+            this.renderWpeCredsSection(),
+          )
+        : null,
     );
 
-    // -----------------------------------------------------------------------
-    // Section 4: WP Engine (collapsed by default)
-    // -----------------------------------------------------------------------
-    const wpeExpanded = expandedSections.has('wpe');
-    const section4 = React.createElement('div', { style: sectionStyle },
-      this.renderSectionHeader('wpe', 'WP Engine'),
-      wpeExpanded ? React.createElement('div', null,
-        // Unified WPE Access Control (accounts + operation permissions)
-        this.renderWpeAccessControlSection(),
+    // Note: Auto-Indexing, Sync Schedule, and WPE Access & Permissions have
+    // moved to the Nexus AI Settings tab for a cleaner separation of concerns.
 
-        divider,
-
-        // WPE API Credentials
-        this.renderWpeCredsSection(),
-
-        divider,
-
-        // Sync Schedule — consolidated
-        React.createElement('div', { style: sectionStyle },
-          React.createElement('div', { style: labelStyle }, 'Sync Schedule'),
-          React.createElement('div', { style: descStyle },
-            'How often Nexus automatically refreshes WP Engine site data in the background. Changes take effect on the next Local restart.',
-          ),
-          React.createElement('div', { style: { border: '1px solid rgba(128,128,128,0.15)', borderRadius: 8, overflow: 'hidden' } },
-            // Row: Metadata sync
-            React.createElement('div', { style: { display: 'flex', alignItems: 'center', borderBottom: '1px solid rgba(128,128,128,0.1)' } },
-              React.createElement('div', { style: { flex: 1, padding: '10px 13px' } },
-                React.createElement('div', { style: { fontSize: 12 } }, 'Metadata sync'),
-                React.createElement('div', { style: { fontSize: 11, opacity: 0.45, marginTop: 2 } }, 'Plugins, WP version, PHP version'),
-              ),
-              React.createElement('div', { style: { padding: '10px 13px', borderLeft: '1px solid rgba(128,128,128,0.1)', background: 'rgba(128,128,128,0.04)', display: 'flex', alignItems: 'center', gap: 6 } },
-                React.createElement('input', {
-                  type: 'number', min: 1, max: 168,
-                  value: settings.wpeSyncIntervalHours ?? 8,
-                  onChange: this.handleWpeSyncIntervalChange,
-                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)', background: 'var(--nxai-input-bg, transparent)', color: 'inherit', outline: 'none' },
-                }),
-                React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } }, 'hrs'),
-              ),
-            ),
-            // Row: Site info updates
-            React.createElement('div', { style: { display: 'flex', alignItems: 'center', borderBottom: '1px solid rgba(128,128,128,0.1)' } },
-              React.createElement('div', { style: { flex: 1, padding: '10px 13px' } },
-                React.createElement('div', { style: { fontSize: 12 } }, 'Site info updates'),
-                React.createElement('div', { style: { fontSize: 11, opacity: 0.45, marginTop: 2 } }, 'URL, admin email, post count via SSH WP-CLI'),
-              ),
-              React.createElement('div', { style: { padding: '10px 13px', borderLeft: '1px solid rgba(128,128,128,0.1)', background: 'rgba(128,128,128,0.04)', display: 'flex', alignItems: 'center', gap: 6 } },
-                React.createElement('input', {
-                  type: 'number', min: 1, max: 168,
-                  value: settings.wpeRefreshIntervalHours ?? 24,
-                  onChange: this.handleWpeRefreshIntervalChange,
-                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)', background: 'var(--nxai-input-bg, transparent)', color: 'inherit', outline: 'none' },
-                }),
-                React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } }, 'hrs'),
-              ),
-            ),
-            // Row: Offline site refresh
-            React.createElement('div', { style: { display: 'flex', alignItems: 'center' } },
-              React.createElement('div', { style: { flex: 1, padding: '10px 13px' } },
-                React.createElement('div', { style: { fontSize: 12 } }, 'Offline site refresh'),
-                React.createElement('div', { style: { fontSize: 11, opacity: 0.45, marginTop: 2 } }, 'Halted local sites — filesystem scan'),
-              ),
-              React.createElement('div', { style: { padding: '10px 13px', borderLeft: '1px solid rgba(128,128,128,0.1)', background: 'rgba(128,128,128,0.04)', display: 'flex', alignItems: 'center', gap: 6 } },
-                React.createElement('input', {
-                  type: 'number', min: 1, max: 168,
-                  value: settings.haltedSiteRefreshIntervalHours ?? 24,
-                  onChange: this.handleHaltedRefreshIntervalChange,
-                  style: { width: 48, textAlign: 'center' as const, padding: '4px 6px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(128,128,128,0.25)', background: 'var(--nxai-input-bg, transparent)', color: 'inherit', outline: 'none' },
-                }),
-                React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } }, 'hrs'),
-              ),
-            ),
-          ),
-        ),
-      ) : null,
-    );
-
-    return React.createElement('div', { style: { padding: '24px' } },
+    return React.createElement('div', { style: { padding: '24px', maxWidth: '600px', boxSizing: 'border-box' as const } },
       React.createElement('style', null, `
-        .nexus-password-input {
-          -webkit-text-fill-color: unset !important;
-        }
+        .nexus-password-input { -webkit-text-fill-color: unset !important; }
       `),
       section1,
       section2,
       section3,
-      section4,
     );
   }
 }

@@ -23,6 +23,8 @@ import { skillsCommand } from './commands/skills';
 import { doctorCommand } from './commands/doctor';
 import { troubleshootCommand } from './commands/troubleshoot';
 import { settingsCommand } from './commands/settings';
+import { resetCommand } from './commands/reset';
+import { systemCommand } from './commands/system';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
 import { setBootstrapResult } from './utils/context';
@@ -52,6 +54,8 @@ program.addCommand(skillsCommand);
 program.addCommand(doctorCommand);
 program.addCommand(troubleshootCommand);
 program.addCommand(settingsCommand);
+program.addCommand(resetCommand);
+program.addCommand(systemCommand);
 
 // Global error handler
 process.on('unhandledRejection', (error: any) => {
@@ -125,7 +129,7 @@ async function main() {
         mutation { nexusAiGetConfig { success config { provider } } }
       `, {});
       if (configResult.nexusAiGetConfig?.success && !configResult.nexusAiGetConfig?.config?.provider) {
-        console.log('💡 No AI provider configured. Run: nexus ai config\n');
+        console.error('💡 No AI provider configured. Run: nexus ai config\n');
       }
     } catch {
       // Non-blocking — don't fail startup if this check errors

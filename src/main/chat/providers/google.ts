@@ -4,11 +4,36 @@ import { streamingRequest, apiRequest } from './http-utils';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
+/**
+ * Gemini's function-declaration schema accepts a strict subset of JSON Schema.
+ * Unsupported keywords cause HTTP 400 INVALID_ARGUMENT errors. Strip them recursively.
+ *
+ * Removed: additionalProperties, $schema, $id, $ref, definitions, allOf, anyOf, oneOf, not,
+ *          patternProperties, dependencies, if/then/else, contentEncoding, contentMediaType
+ */
+const GEMINI_SCHEMA_BLOCKLIST = new Set([
+  'additionalProperties', '$schema', '$id', '$ref', '$defs', 'definitions',
+  'allOf', 'anyOf', 'oneOf', 'not', 'patternProperties', 'dependencies',
+  'if', 'then', 'else', 'contentEncoding', 'contentMediaType',
+]);
+
+function sanitizeSchemaForGemini(schema: any): any {
+  if (!schema || typeof schema !== 'object') return schema;
+  if (Array.isArray(schema)) return schema.map(sanitizeSchemaForGemini);
+
+  const out: Record<string, any> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (GEMINI_SCHEMA_BLOCKLIST.has(key)) continue;
+    out[key] = sanitizeSchemaForGemini(value);
+  }
+  return out;
+}
+
 export class GoogleProvider implements AIProvider {
   readonly id = 'google';
   readonly displayName = 'Google Gemini';
   readonly requiresApiKey = true;
-  readonly defaultModels = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash'];
+  readonly defaultModels = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
 
   async *streamChat(
     messages: ChatMessage[],
@@ -25,8 +50,9 @@ export class GoogleProvider implements AIProvider {
     // Convert messages to Gemini format
     const contents = nonSystemMessages.map((m) => {
       if (m.role === 'tool') {
+        // Gemini requires function responses as role:'user', not role:'function'
         return {
-          role: 'function' as const,
+          role: 'user' as const,
           parts: [{
             functionResponse: {
               name: m.toolName ?? '',
@@ -60,7 +86,7 @@ export class GoogleProvider implements AIProvider {
       functionDeclarations: tools.map((t) => ({
         name: t.name,
         description: t.description,
-        parameters: t.parameters,
+        parameters: sanitizeSchemaForGemini(t.parameters),
       })),
     }] : undefined;
 

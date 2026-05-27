@@ -96,8 +96,8 @@ export async function checkForUpdates(): Promise<void> {
   // Skip if checked recently
   if (cache && now - cache.lastCheck < UPDATE_CHECK_INTERVAL) {
     if (cache.latestVersion && isNewerVersion(cache.latestVersion, currentVersion)) {
-      console.log(`\n\x1b[33mUpdate available: ${currentVersion} → ${cache.latestVersion}\x1b[0m`);
-      console.log(`Run: \x1b[36mnexus update\x1b[0m\n`);
+      console.error(`\n\x1b[33mUpdate available: ${currentVersion} → ${cache.latestVersion}\x1b[0m`);
+      console.error(`Run: \x1b[36mnexus update\x1b[0m\n`);
     }
     return;
   }
@@ -108,8 +108,8 @@ export async function checkForUpdates(): Promise<void> {
       writeUpdateCache({ lastCheck: now, latestVersion });
 
       if (latestVersion && isNewerVersion(latestVersion, currentVersion)) {
-        console.log(`\n\x1b[33mUpdate available: ${currentVersion} → ${latestVersion}\x1b[0m`);
-        console.log(`Run: \x1b[36mnexus update\x1b[0m\n`);
+        console.error(`\n\x1b[33mUpdate available: ${currentVersion} → ${latestVersion}\x1b[0m`);
+        console.error(`Run: \x1b[36mnexus update\x1b[0m\n`);
       }
     })
     .catch(() => {

@@ -6,6 +6,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS } from '../../common/constants';
+import { AssistantPanel } from './AssistantPanel';
 
 interface SidebarSearchPanelProps {
   electron: any;
@@ -30,6 +31,7 @@ interface WpeSiteResult {
 
 interface SidebarSearchPanelState {
   aiMode: boolean;
+  assistantMode: boolean;
   query: string;
   conversation: Array<{ role: 'user' | 'assistant'; content: string }>;
   loading: boolean;
@@ -203,6 +205,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
 
   state: SidebarSearchPanelState = {
     aiMode: true,
+    assistantMode: true,
     query: '',
     conversation: [],
     loading: false,
@@ -232,6 +235,28 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     // Add keyboard listener for Escape
     document.addEventListener('keydown', this.handleKeyDown);
   }
+
+  componentDidUpdate(prevProps: SidebarSearchPanelProps): void {
+    if (this.props.isOpen && !prevProps.isOpen) {
+      // Panel opened — re-fetch options (startup race fix) and clear stale state
+      this.fetchFilterOptions();
+      this.clearAll();
+    }
+    if (!this.props.isOpen && prevProps.isOpen) {
+      // Panel closed — clear everything so next open starts fresh
+      this.clearAll();
+    }
+  }
+
+  clearAll = (): void => {
+    this.setState({
+      query: '', conversation: [], interpretedFilters: null,
+      resultsCount: null, localResults: [], wpeResults: [],
+      error: null, pullResult: null, expandedWpeId: null,
+      searchText: '',
+      selectedPlugins: [], selectedThemes: [], selectedPhpVersions: [], selectedWpVersions: [],
+    });
+  };
 
   componentWillUnmount(): void {
     this.mounted = false;
@@ -271,51 +296,25 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
   handleAISearch = async (): Promise<void> => {
     if (!this.state.query.trim() || this.state.loading) return;
 
-    // Max 3 messages
-    if (this.state.conversation.length >= 3) {
-      this.setState({ error: 'Too many rounds. Try a clearer query.' });
-      return;
-    }
-
-    this.setState({ loading: true, error: null });
-
-    const newConversation = [
-      ...this.state.conversation,
-      { role: 'user' as const, content: this.state.query },
-    ];
+    const queryText = this.state.query;
+    // Single-turn: clear query immediately so UX reflects that this is one-shot
+    this.setState({ loading: true, error: null, query: '', resultsCount: null, localResults: [], wpeResults: [] });
 
     try {
       const result = await this.props.electron.ipcRenderer.invoke(
         IPC_CHANNELS.SITE_FINDER_AI_PARSE,
-        { conversation: newConversation },
+        { conversation: [{ role: 'user', content: queryText }] },
       );
 
       if (!this.mounted) return;
 
       if (!result.success) {
-        this.setState({ loading: false, error: result.error });
+        // Don't show raw API errors to user — fall back gracefully
+        this.setState({ loading: false, error: 'Could not parse query — try adjusting the wording.' });
         return;
       }
 
-      if (result.needsClarification && result.question) {
-        this.setState({
-          conversation: [
-            ...newConversation,
-            { role: 'assistant', content: result.question },
-          ],
-          query: '',
-          loading: false,
-        });
-        return;
-      }
-
-      // Execute search
-      this.setState({
-        interpretedFilters: result.filters,
-        conversation: newConversation,
-        loading: false,
-      });
-
+      this.setState({ interpretedFilters: result.filters, loading: false });
       await this.executeSearch(result.filters);
     } catch {
       if (!this.mounted) return;
@@ -426,17 +425,23 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
   };
 
 
-  renderAIMode(): React.ReactNode {
-    const { query, loading, conversation, interpretedFilters, error } = this.state;
+  renderAISiteFinderContent(): React.ReactNode {
+    const { query, loading, interpretedFilters, error } = this.state;
+    const conversation: any[] = []; // single-turn: no conversation history shown
 
-    return React.createElement('div', null,
+    return React.createElement('div', { style: { overflowY: 'auto' as const, flex: 1, padding: '12px' } },
       // Input
       React.createElement('textarea', {
         style: inputStyle,
         placeholder: 'e.g., "WP 6.8 with ACF and posts about cars"',
         value: query,
         onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) =>
-          this.setState({ query: e.target.value }),
+          this.setState({
+            query: e.target.value,
+            // Always clear results when typing — stale results while composing are confusing
+            resultsCount: null, localResults: [], wpeResults: [],
+            interpretedFilters: null, error: null,
+          }),
         rows: 2,
         disabled: loading,
       }),
@@ -498,6 +503,12 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
         ),
       ) : null,
     );
+  }
+
+  renderAIMode(): React.ReactNode {
+    // Single-turn natural language search — no sub-mode toggle.
+    // Results always use renderResultsList() for consistency with manual mode.
+    return this.renderAISiteFinderContent();
   }
 
   renderManualMode(): React.ReactNode {
@@ -822,8 +833,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
               React.createElement('input', {
                 type: 'checkbox',
                 checked: aiMode,
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                  this.setState({ aiMode: e.target.checked }),
+                onChange: (e: React.ChangeEvent<HTMLInputElement>) => { this.setState({ aiMode: e.target.checked }); this.clearAll(); },
                 style: { display: 'none' },
               }),
               React.createElement('span', {

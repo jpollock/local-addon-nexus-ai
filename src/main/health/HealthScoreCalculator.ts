@@ -283,13 +283,10 @@ export class HealthScoreCalculator {
     }
 
     // Index state check (30 points)
-    if (entry.state === 'indexed') {
+    if (entry.state === 'indexed' || entry.state === 'stale') {
       score += 30;
     } else if (entry.state === 'indexing') {
       score += 20;
-    } else if (entry.state === 'stale') {
-      score += 10;
-      issues.push('Site index is marked as stale');
     } else {
       issues.push('Site index is in error state');
     }

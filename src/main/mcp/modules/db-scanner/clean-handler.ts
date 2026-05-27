@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
-import { requireRunning, error } from '../wp-cli/preflight';
+import { error } from '../wp-cli/preflight';
+import { withSiteRunning } from '../with-site-running';
 import { cleanDatabase, scanDatabase } from './db-scanner';
 
 const DEFAULT_ITEMS = [
@@ -43,40 +44,39 @@ export const cleanDatabaseItemsHandler: McpToolHandler = {
     const site = resolveSite(args.site as string, services.siteData);
     if (!site) return error(`Site "${args.site}" not found.`);
 
-    const check = requireRunning(site, services);
-    if (check) return check;
-
     // Default dry_run to true
     const dryRun = args.dry_run === undefined ? true : Boolean(args.dry_run);
 
-    // Determine which items to clean
-    let items: string[];
-    if (Array.isArray(args.items) && args.items.length > 0) {
-      items = args.items as string[];
-    } else {
-      // Default: all non-WC items, plus WC items if WooCommerce is active
-      items = [...DEFAULT_ITEMS];
-      try {
-        // Quick check for WooCommerce
-        const scan = await scanDatabase(site.id, services);
-        if (scan.isWooCommerceActive) {
-          items = [...items, ...WC_ITEMS];
+    return withSiteRunning(site.id, services, async () => {
+      // Determine which items to clean
+      let items: string[];
+      if (Array.isArray(args.items) && args.items.length > 0) {
+        items = args.items as string[];
+      } else {
+        // Default: all non-WC items, plus WC items if WooCommerce is active
+        items = [...DEFAULT_ITEMS];
+        try {
+          // Quick check for WooCommerce
+          const scan = await scanDatabase(site.id, services);
+          if (scan.isWooCommerceActive) {
+            items = [...items, ...WC_ITEMS];
+          }
+        } catch {
+          // If scan fails, just use default items
         }
-      } catch {
-        // If scan fails, just use default items
       }
-    }
 
-    try {
-      const result = await cleanDatabase(site.id, items, dryRun, services);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
-    } catch (err) {
-      return {
-        isError: true,
-        content: [{ type: 'text', text: `Database clean failed: ${err instanceof Error ? err.message : String(err)}` }],
-      };
-    }
+      try {
+        const result = await cleanDatabase(site.id, items, dryRun, services);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Database clean failed: ${err instanceof Error ? err.message : String(err)}` }],
+        };
+      }
+    });
   },
 };

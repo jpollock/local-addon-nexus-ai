@@ -288,10 +288,11 @@ describe('find_sites_with_plugin staleness', () => {
     expect(getText(result)).toContain('⚠️');
   });
 
-  test('❌ warning when index is > 7d old', async () => {
+  test('⚠️ warning when index is > 7d old', async () => {
     const services = setup(Date.now() - 8 * DAY);
     const result = await findSitesWithPluginHandler.execute({ plugin: 'woocommerce' }, services);
-    expect(getText(result)).toContain('❌');
+    // New staleness model: proportional count warning (⚠️), not worst-case fleet status (❌)
+    expect(getText(result)).toContain('⚠️');
   });
 });
 

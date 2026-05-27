@@ -1,0 +1,64 @@
+id: M4-13-health-php-version-fleet
+description: Health — PHP version audit across the fleet, flagging sites on EOL or near-EOL versions
+suite: health
+moment: health
+tier: 1
+frequency: regular
+stakes: medium
+mode: [mcp, cli-skills]
+prompt: "Which of my sites are running PHP 7.4 or older? I need to know about both local and WP Engine sites — PHP 7.4 reached end-of-life in December 2022."
+
+guardrails:
+  reads_only: true
+  scope: both
+
+context:
+  description: "PHP version compliance audit across local and WPE fleet"
+  notes: |
+    PHP version availability:
+    - Local sites: phpVersion from Local config (fast, no WP-CLI needed)
+      Stored in SiteMetadataCache after site start
+    - WPE sites: phpVersion from CAPI install data (available after CAPI sync)
+      Also in graph DB sites table after WPE sync
+
+    EOL versions to flag:
+    - PHP 7.4: EOL December 2022
+    - PHP 8.0: EOL November 2023
+    - PHP 8.1: Security fixes only from December 2024
+
+    The agent should know or look up the EOL dates.
+
+expected:
+  task_completed: true
+  key_steps:
+    - queries PHP version for all local sites (from MetadataCache or IPC)
+    - queries PHP version for all WPE sites (from graph DB or CAPI)
+    - identifies sites on PHP 7.4 or older
+    - optionally flags PHP 8.0 and 8.1 as "security-only or EOL soon"
+    - clearly separates local vs WPE results
+    - notes any sites where PHP version is unknown (not recently synced)
+    - suggests upgrade path or priority
+  must_not:
+    - check local only and ignore WPE
+    - invent PHP versions for sites where data is unknown
+    - report 8.x as EOL when it is not (at current date)
+
+scoring_weights:
+  task_completed: 30
+  steps_correct: 30
+  completeness: 25
+  output_clarity: 15
+
+notes: |
+  Fleet compliance query — PHP version is one of the most common compliance
+  checks for agencies managing multiple client sites.
+
+  Gap if it fails for local sites: phpVersion not being populated in MetadataCache
+  (requires site to have started at least once since addon installed).
+
+  Gap if it fails for WPE: WPE sync hasn't run, or CAPI doesn't return phpVersion
+  for all install types.
+
+  This is one query where the data SHOULD exist — phpVersion is in both
+  SiteMetadataCache and the WPE install cache. A failure here means a retrieval
+  or display bug, not a fundamental architecture gap.

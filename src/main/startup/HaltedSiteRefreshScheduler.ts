@@ -46,6 +46,7 @@ export class HaltedSiteRefreshScheduler {
   private readonly metadataCache: SiteMetadataCache;
   private readonly siteData: SiteDataAccessor;
   private readonly intervalMs: number;
+  private currentIntervalMs: number;
   private readonly isSiteRunning: (siteId: string) => boolean;
   private readonly logger: HaltedSiteRefreshSchedulerOptions['logger'];
 
@@ -56,6 +57,7 @@ export class HaltedSiteRefreshScheduler {
     this.metadataCache = options.metadataCache;
     this.siteData = options.siteData;
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
+    this.currentIntervalMs = this.intervalMs;
     this.isSiteRunning = options.isSiteRunning;
     this.logger = options.logger;
   }
@@ -71,14 +73,14 @@ export class HaltedSiteRefreshScheduler {
     }
 
     this.logger.info(
-      `[HaltedSiteRefreshScheduler] Starting — interval ${Math.round(this.intervalMs / 3600000)}h`
+      `[HaltedSiteRefreshScheduler] Starting — interval ${Math.round(this.currentIntervalMs / 3600000)}h`
     );
 
     this.timer = setInterval(() => {
       this.runNow().catch((err) => {
         this.logger.error('[HaltedSiteRefreshScheduler] Refresh cycle error:', (err as Error).message);
       });
-    }, this.intervalMs);
+    }, this.currentIntervalMs);
   }
 
   /**
@@ -90,6 +92,19 @@ export class HaltedSiteRefreshScheduler {
       this.timer = null;
       this.logger.info('[HaltedSiteRefreshScheduler] Stopped');
     }
+  }
+
+  /**
+   * Stop the existing timer and restart with a new interval.
+   * Used when the user changes `haltedSiteRefreshIntervalHours` in Settings.
+   */
+  restart(intervalMs: number): void {
+    this.currentIntervalMs = intervalMs;
+    this.stop();
+    this.start();
+    this.logger.info(
+      `[HaltedSiteRefreshScheduler] Restarted with interval ${Math.round(intervalMs / 3600000)}h`
+    );
   }
 
   /**
@@ -122,7 +137,7 @@ export class HaltedSiteRefreshScheduler {
       const metadata = this.metadataCache.get(site.id);
       if (metadata) {
         const ageMs = Date.now() - metadata.lastUpdated;
-        if (ageMs < this.intervalMs) {
+        if (ageMs < this.currentIntervalMs) {
           skippedFresh++;
           this.logger.info(
             `[HaltedSiteRefreshScheduler] Skipping fresh site: ${site.name} (age ${Math.round(ageMs / 3600000)}h)`

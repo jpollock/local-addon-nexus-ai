@@ -43,6 +43,7 @@ describe('registerLifecycleHooks', () => {
     logger = {
       info: jest.fn(),
       error: jest.fn(),
+      warn: jest.fn(),
     };
 
     registerLifecycleHooks(context, pipeline, indexRegistry, logger);
@@ -73,14 +74,15 @@ describe('registerLifecycleHooks', () => {
     expect(logger.error).toHaveBeenCalled();
   });
 
-  test('siteStopped marks index stale', async () => {
-    // Set up some existing data
+  test('siteStopped does not change index state', async () => {
+    // siteStopped no longer marks indexes stale — stopping a site doesn't invalidate
+    // its content; the index remains valid until content actually changes.
     indexRegistry.update('site1', { state: 'indexed', siteName: 'My Site' });
 
     await hooks.siteStopped({ id: 'site1', name: 'My Site', path: '/tmp/site' });
 
     const entry = indexRegistry.get('site1');
-    expect(entry!.state).toBe('stale');
+    expect(entry!.state).toBe('indexed');
   });
 
   test('siteRemoved calls removeSite', async () => {
@@ -139,6 +141,7 @@ describe('readyPromise gate', () => {
     logger = {
       info: jest.fn(),
       error: jest.fn(),
+      warn: jest.fn(),
     };
   });
 

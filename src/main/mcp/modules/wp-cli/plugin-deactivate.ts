@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { requireRunning, ok, error, validateSlug } from './preflight';
+import { ok, error, validateSlug } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { withSiteRunning } from '../with-site-running';
 
 export const pluginDeactivateHandler: McpToolHandler = {
   definition: {
@@ -37,14 +38,13 @@ export const pluginDeactivateHandler: McpToolHandler = {
       return ok(`Plugin "${slug}" deactivated on ${target.installName}.`);
     }
 
-    const check = requireRunning(target.site, services);
-    if (check) return check;
+    return withSiteRunning(target.site.id, services, async () => {
+      const result = await services.localServices!.wpCliRun(target.site.id, ['plugin', 'deactivate', slug]);
+      if (!result.success) {
+        return error(`Failed to deactivate plugin "${slug}": ${result.stdout}`);
+      }
 
-    const result = await services.localServices!.wpCliRun(target.site.id, ['plugin', 'deactivate', slug]);
-    if (!result.success) {
-      return error(`Failed to deactivate plugin "${slug}": ${result.stdout}`);
-    }
-
-    return ok(`Plugin "${slug}" deactivated.`);
+      return ok(`Plugin "${slug}" deactivated.`);
+    });
   },
 };

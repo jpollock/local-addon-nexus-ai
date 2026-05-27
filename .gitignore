@@ -22,3 +22,6 @@ tests/e2e/.auth/
 archive/
 STRATEGIC_ANALYSIS.md
 .worktrees
+.ai.api.keys.env
+docs/superpowers/
+*.env.local

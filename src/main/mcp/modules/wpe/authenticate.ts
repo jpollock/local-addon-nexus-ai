@@ -66,48 +66,55 @@ export const wpeStatusHandler = {
     isAvailable: (_services: NexusServices) => true,
   },
   async execute(_args: unknown, services: NexusServices): Promise<McpToolResult> {
+    let gqlEmail: string | null = null;
+
+    // Try Local GraphQL first — the wpeStatus field exists in Local 10+.
+    // Older Local builds don't have it; we fall through to the CAPI check.
     try {
-      // Check stored token via Local GraphQL first
       const data = await localGql<{
         wpeStatus: { authenticated: boolean; email?: string; accountId?: string; accountName?: string };
       }>('query { wpeStatus { authenticated email accountId accountName } }', 10000);
 
-      const { authenticated, email, accountName } = data.wpeStatus;
+      const { authenticated, email } = data.wpeStatus;
 
       if (!authenticated || !email) {
         return {
-          content: [{
-            type: 'text',
-            text: '⚫ Not authenticated with WP Engine. Call wpe_login to connect.',
-          }],
+          content: [{ type: 'text', text: '⚫ Not authenticated with WP Engine. Call wpe_login to connect.' }],
         };
       }
+      gqlEmail = email;
+    } catch {
+      // wpeStatus field absent (older Local) or timeout — fall back to CAPI below.
+    }
 
-      // Validate token is still active with a live CAPI call
-      if (services.localServices) {
-        try {
-          await services.localServices.capiGetAccounts();
-        } catch {
-          // Token exists but is expired
-          return {
-            content: [{
-              type: 'text',
-              text: `⚠️ WP Engine token expired for ${email}. Call wpe_login to re-authenticate.`,
-            }],
-            isError: true,
-          };
-        }
-      }
+    // Validate session is active with a live CAPI call. This works regardless
+    // of whether the GraphQL query above succeeded.
+    if (!services.localServices) {
+      return {
+        content: [{ type: 'text', text: '⚫ Local services unavailable. Is Local running?' }],
+        isError: true,
+      };
+    }
 
-      const name = accountName || null;
+    try {
+      const accounts = await services.localServices.capiGetAccounts() as any[];
+      const count = Array.isArray(accounts) ? accounts.length : 0;
+      const suffix = gqlEmail ? ` as ${gqlEmail}` : '';
       return {
         content: [{
           type: 'text',
-          text: `✅ Authenticated with WP Engine${name ? ` (${name})` : ''} as ${email}`,
+          text: `✅ Authenticated with WP Engine${suffix}. ${count} account${count !== 1 ? 's' : ''} accessible.`,
         }],
       };
-    } catch (err: any) {
-      return { content: [{ type: 'text', text: `Error checking WPE status: ${err.message}` }], isError: true };
+    } catch {
+      const suffix = gqlEmail ? ` for ${gqlEmail}` : '';
+      return {
+        content: [{
+          type: 'text',
+          text: `⚠️ WP Engine token expired${suffix}. Call wpe_login to re-authenticate.`,
+        }],
+        isError: true,
+      };
     }
   },
 };

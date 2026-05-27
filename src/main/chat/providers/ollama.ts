@@ -4,11 +4,25 @@ import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './t
 import { streamingRequest, apiRequest } from './http-utils';
 
 /**
- * Max tools to send to Ollama models. Local models have limited context
- * and can't reliably handle 48 tool definitions. Prioritize by position
- * (modules register most useful tools first).
+ * Max tools to send to Ollama models. Local models have limited context.
+ * 10 tools is a practical limit for 3B-7B models — beyond that reliability
+ * drops sharply and the model echoes schemas instead of calling tools.
  */
-const MAX_OLLAMA_TOOLS = 20;
+const MAX_OLLAMA_TOOLS = 10;
+
+/**
+ * Models known to support Ollama's native tool-calling API.
+ * Used as a fallback when /api/show template inspection fails
+ * (e.g. network error, version mismatch, unusual model name).
+ */
+const KNOWN_TOOL_CAPABLE_PREFIXES = [
+  'llama3.2', 'llama3.1', 'llama3',
+  'qwen2.5', 'qwen3', 'qwen',
+  'mistral', 'mixtral',
+  'command-r',
+  'phi4', 'phi3',
+  'deepseek-r1',
+];
 
 export class OllamaProvider implements AIProvider {
   readonly id = 'ollama';
@@ -256,6 +270,18 @@ export class OllamaProvider implements AIProvider {
       return this.toolCapabilityCache.get(model)!;
     }
 
+    // Check the hardcoded allowlist first (model names often include tags like :3b or :latest)
+    const modelBase = model.toLowerCase().split(':')[0];
+    const isKnownCapable = KNOWN_TOOL_CAPABLE_PREFIXES.some(prefix =>
+      modelBase.startsWith(prefix),
+    );
+
+    if (isKnownCapable) {
+      this.toolCapabilityCache.set(model, true);
+      return true;
+    }
+
+    // Unknown model — inspect the Ollama template via /api/show
     try {
       const response = await apiRequest({
         url: `${baseUrl}/api/show`,
@@ -263,14 +289,13 @@ export class OllamaProvider implements AIProvider {
         body: JSON.stringify({ name: model }),
       });
       const data = JSON.parse(response);
-
-      // Ollama models that support tools have {{- if .Tools }} or similar in their template
       const template = (data.template ?? '') as string;
+      // Ollama tool-capable models include {{- if .Tools }} or {{ .ToolCalls }} in their template
       const hasToolSupport = template.includes('.Tools') || template.includes('.ToolCalls');
-
       this.toolCapabilityCache.set(model, hasToolSupport);
       return hasToolSupport;
     } catch {
+      // Can't determine — default to false to avoid sending tools to incapable models
       this.toolCapabilityCache.set(model, false);
       return false;
     }

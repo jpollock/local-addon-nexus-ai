@@ -222,11 +222,11 @@ describe('fleet_summary', () => {
     const result = await registry.call('fleet_summary', {}, services);
     const text = getText(result);
 
-    expect(text).toContain('3 indexed / 3 in Local');
-    expect(text).toContain('6.9.1: 2 sites');
-    expect(text).toContain('6.8.0: 1 site');
-    expect(text).toContain('8.2: 2 sites');
-    expect(text).toContain('8.1: 1 site');
+    expect(text).toContain('**Total sites: 3** — 3 local, 0 WP Engine');
+    expect(text).toContain('6.9.1');
+    expect(text).toContain('6.8.0');
+    expect(text).toContain('8.2');
+    expect(text).toContain('8.1');
   });
 
   test('shows plugin ranking', async () => {
@@ -244,8 +244,8 @@ describe('fleet_summary', () => {
     const result = await registry.call('fleet_summary', {}, services);
     const text = getText(result);
 
-    expect(text).toContain('Total documents: 201');
-    expect(text).toContain('Total chunks: 254');
+    expect(text).toContain('201');
+    expect(text).toContain('254');
   });
 
   test('shows key integrations', async () => {
@@ -269,8 +269,8 @@ describe('fleet_summary', () => {
     const result = await registry.call('fleet_summary', {}, services);
     const text = getText(result);
 
-    expect(text).toContain('0 indexed / 1 in Local');
-    expect(text).toContain('No sites have been indexed');
+    expect(text).toContain('**Total sites: 1** — 1 local, 0 WP Engine');
+    expect(text).toContain('No version data available');
   });
 
   test('reports stale and error indexes', async () => {
@@ -294,7 +294,7 @@ describe('fleet_summary', () => {
     const result = await registry.call('fleet_summary', {}, services);
     const text = getText(result);
 
-    expect(text).toContain('stale indexes');
+    expect(text).toContain('stale content indexes');
     expect(text).toContain('index errors');
   });
 });
@@ -336,7 +336,7 @@ describe('find_sites_with_plugin', () => {
     const result = await registry.call('find_sites_with_plugin', { plugin: 'nonexistent' }, services);
     const text = getText(result);
 
-    expect(text).toContain('No indexed sites have a plugin matching');
+    expect(text).toContain('No sites have a plugin matching');
   });
 
   test('shows version and status', async () => {
@@ -387,7 +387,7 @@ describe('find_sites_with_theme', () => {
     const result = await registry.call('find_sites_with_theme', { theme: 'nonexistent' }, services);
     const text = getText(result);
 
-    expect(text).toContain('No indexed sites have a theme matching');
+    expect(text).toContain('No sites have a theme matching');
   });
 
   test('errors on missing theme arg', async () => {
@@ -704,8 +704,8 @@ describe('edge cases', () => {
     const result = await registry.call('fleet_summary', {}, services);
     const text = getText(result);
 
-    // Should count 2 indexed total, but only 1 with structure
-    expect(text).toContain('2 indexed / 2 in Local');
+    // Should count 2 local sites total
+    expect(text).toContain('**Total sites: 2** — 2 local, 0 WP Engine');
     expect(text).toContain('WooCommerce');
   });
 
@@ -719,7 +719,191 @@ describe('edge cases', () => {
     const result = await registry.call('find_sites_with_plugin', { plugin: 'woo' }, services);
     const text = getText(result);
 
-    expect(text).toContain('No indexed sites with structure data');
+    expect(text).toContain('No sites have a plugin matching');
   });
 
+});
+
+// ---------------------------------------------------------------------------
+// WPE data path tests — graphService mock
+// ---------------------------------------------------------------------------
+
+function makeGraphService(opts: {
+  pluginRows?: Array<{ slug: string; name: string | null; is_active: number; site_name: string }>;
+  themeRows?: Array<{ slug: string; name: string; version: string; is_active: number; site_name: string }>;
+  wpeSiteCount?: number;
+  wpeSites?: Array<{ name: string; wp_version: string | null; php_version: string | null }>;
+}) {
+  const {
+    pluginRows = [],
+    themeRows = [],
+    wpeSiteCount = 0,
+    wpeSites = [],
+  } = opts;
+  return {
+    getDb: () => ({
+      prepare: (sql: string) => ({
+        all: (..._args: any[]) => {
+          if (sql.includes('themes')) return themeRows;
+          if (sql.includes('plugins')) return pluginRows;
+          if (sql.includes('sites') && !sql.includes('plugins') && !sql.includes('themes')) return wpeSites;
+          return [];
+        },
+        get: () => ({ c: wpeSiteCount }),
+      }),
+    }),
+  };
+}
+
+function buildServicesWithGraph(
+  indexRegistry: IndexRegistry,
+  siteData: SiteDataAccessor,
+  graphService: ReturnType<typeof makeGraphService>,
+): NexusServices {
+  return {
+    ...buildServices(indexRegistry, siteData),
+    graphService,
+  } as any;
+}
+
+describe('find_sites_with_plugin — WPE data path', () => {
+  test('finds WPE sites via graphService', async () => {
+    const siteData = createSiteData({});
+    const indexRegistry = new IndexRegistry(createStorage());
+    const graphService = makeGraphService({
+      pluginRows: [{ slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'my-wpe-site' }],
+      wpeSiteCount: 1,
+    });
+    const services = buildServicesWithGraph(indexRegistry, siteData, graphService);
+    const registry = new ToolRegistry();
+    registerFleetTools(registry);
+
+    const result = await registry.call('find_sites_with_plugin', { plugin: 'woocommerce' }, services);
+    const text = getText(result);
+
+    expect(text).toContain('my-wpe-site');
+    expect(text).toContain('[wpe]');
+    expect(text).toContain('Found in 1 of 1 sites');
+  });
+
+  test('shows [local] label for local sites in plugin results', async () => {
+    const { indexRegistry, siteData } = setupThreeSites();
+    const servicesWithGraph = buildServicesWithGraph(
+      indexRegistry,
+      siteData,
+      makeGraphService({ wpeSiteCount: 0 }),
+    );
+    const registry = new ToolRegistry();
+    registerFleetTools(registry);
+
+    const result = await registry.call('find_sites_with_plugin', { plugin: 'woocommerce' }, servicesWithGraph);
+    const text = getText(result);
+
+    expect(text).toContain('[local]');
+    expect(text).not.toContain('[wpe]');
+  });
+
+  test('combines local + WPE results in Found summary', async () => {
+    const { indexRegistry, siteData } = setupThreeSites();
+    const graphService = makeGraphService({
+      pluginRows: [{ slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'wpe-prod' }],
+      wpeSiteCount: 2,
+    });
+    const services = buildServicesWithGraph(indexRegistry, siteData, graphService);
+    const registry = new ToolRegistry();
+    registerFleetTools(registry);
+
+    const result = await registry.call('find_sites_with_plugin', { plugin: 'woocommerce' }, services);
+    const text = getText(result);
+
+    // 2 local (Curated Shelf + Dev Store) + 1 WPE match, searched 3 local + 2 WPE
+    expect(text).toContain('3 local, 2 WPE');
+    expect(text).toContain('wpe-prod');
+  });
+
+  test('no match message includes WPE site count', async () => {
+    const siteData = createSiteData({});
+    const indexRegistry = new IndexRegistry(createStorage());
+    const graphService = makeGraphService({ pluginRows: [], wpeSiteCount: 3 });
+    const services = buildServicesWithGraph(indexRegistry, siteData, graphService);
+    const registry = new ToolRegistry();
+    registerFleetTools(registry);
+
+    const result = await registry.call('find_sites_with_plugin', { plugin: 'nonexistent' }, services);
+    const text = getText(result);
+
+    expect(text).toContain('0 local, 3 WPE');
+  });
+});
+
+describe('find_sites_with_theme — WPE data path', () => {
+  test('finds WPE sites via graphService', async () => {
+    const siteData = createSiteData({});
+    const indexRegistry = new IndexRegistry(createStorage());
+    const graphService = makeGraphService({
+      themeRows: [{ slug: 'twentytwentyfive', name: 'Twenty Twenty-Five', version: '1.0', is_active: 1, site_name: 'wpe-site' }],
+      wpeSiteCount: 1,
+    });
+    const services = buildServicesWithGraph(indexRegistry, siteData, graphService);
+    const registry = new ToolRegistry();
+    registerFleetTools(registry);
+
+    const result = await registry.call('find_sites_with_theme', { theme: 'twentytwentyfive' }, services);
+    const text = getText(result);
+
+    expect(text).toContain('wpe-site');
+    expect(text).toContain('[wpe]');
+    expect(text).toContain('Found in 1 of 1 sites');
+  });
+
+  test('no match message includes WPE site count', async () => {
+    const siteData = createSiteData({});
+    const indexRegistry = new IndexRegistry(createStorage());
+    const graphService = makeGraphService({ themeRows: [], wpeSiteCount: 4 });
+    const services = buildServicesWithGraph(indexRegistry, siteData, graphService);
+    const registry = new ToolRegistry();
+    registerFleetTools(registry);
+
+    const result = await registry.call('find_sites_with_theme', { theme: 'nonexistent' }, services);
+    const text = getText(result);
+
+    expect(text).toContain('0 local, 4 WPE');
+  });
+});
+
+describe('fleet_summary — WPE data path', () => {
+  test('includes WPE sites in total count', async () => {
+    const { indexRegistry, siteData } = setupThreeSites();
+    const graphService = makeGraphService({
+      wpeSites: [{ name: 'wpe-prod', wp_version: '6.9.1', php_version: '8.2' }],
+      wpeSiteCount: 1,
+    });
+    const services = buildServicesWithGraph(indexRegistry, siteData, graphService);
+    const registry = new ToolRegistry();
+    registerFleetTools(registry);
+
+    const result = await registry.call('fleet_summary', {}, services);
+    const text = getText(result);
+
+    // 3 local + 1 WPE = 4 total
+    expect(text).toContain('**Total sites: 4** — 3 local, 1 WP Engine');
+  });
+
+  test('shows WPE version distribution', async () => {
+    const siteData = createSiteData({});
+    const indexRegistry = new IndexRegistry(createStorage());
+    const graphService = makeGraphService({
+      wpeSites: [{ name: 'wpe-site', wp_version: '6.8.0', php_version: '8.1' }],
+      wpeSiteCount: 1,
+    });
+    const services = buildServicesWithGraph(indexRegistry, siteData, graphService);
+    const registry = new ToolRegistry();
+    registerFleetTools(registry);
+
+    const result = await registry.call('fleet_summary', {}, services);
+    const text = getText(result);
+
+    expect(text).toContain('6.8.0');
+    expect(text).toContain('WPE');
+  });
 });

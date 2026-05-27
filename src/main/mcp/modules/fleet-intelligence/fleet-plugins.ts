@@ -8,8 +8,8 @@ export const fleetPluginsHandler: McpToolHandler = {
   definition: {
     name: 'nexus_fleet_plugins',
     description:
-      'List all plugins across the fleet aggregated from twin cache. ' +
-      'Shows how many sites each plugin is active on. ' +
+      'List all plugins across the FULL fleet (local + WP Engine) aggregated from twin cache and graph.db. ' +
+      'Shows how many sites each plugin is active on across both local and WPE environments. ' +
       'Filter with search= (partial name match) or min_sites= (minimum active site count).',
     inputSchema: {
       type: 'object',
@@ -28,102 +28,126 @@ export const fleetPluginsHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    if (!services.twinService) {
-      return ok('Twin service is not available. Ensure Local is running with the Nexus AI addon active.');
-    }
-
     const search: string | undefined = typeof args.search === 'string' ? args.search : undefined;
     const minSites: number = typeof args.min_sites === 'number' ? args.min_sites : 1;
 
-    const twins = services.twinService.getAll() ?? [];
-
-    if (twins.length === 0) {
-      return ok('No sites found. Are any sites loaded in Local?');
-    }
-
-    const pluginMap = new Map<string, {
+    interface PluginEntry {
       slug: string;
       title?: string;
-      activeOnCount: number;
-      installedOnCount: number;
-      sites: string[];
-    }>();
+      localActive: number;
+      localInstalled: number;
+      wpeActive: number;
+      wpeInstalled: number;
+      exampleSites: string[];
+    }
+
+    const pluginMap = new Map<string, PluginEntry>();
+
+    // ── Local sites: twin cache ────────────────────────────────────────────
+    const twins = services.twinService?.getAll() ?? [];
+    let localSiteCount = 0;
 
     for (const twin of twins) {
-      // Process plugins with status (metadata/indexed completeness)
+      localSiteCount++;
       if (twin.plugins?.length) {
         for (const plugin of twin.plugins) {
           const slug = plugin.name;
           if (!pluginMap.has(slug)) {
-            pluginMap.set(slug, { slug, title: plugin.title, activeOnCount: 0, installedOnCount: 0, sites: [] });
+            pluginMap.set(slug, { slug, title: plugin.title, localActive: 0, localInstalled: 0, wpeActive: 0, wpeInstalled: 0, exampleSites: [] });
           }
           const entry = pluginMap.get(slug)!;
           if (plugin.title && !entry.title) entry.title = plugin.title;
-          entry.installedOnCount++;
+          entry.localInstalled++;
           if (plugin.status === 'active') {
-            entry.activeOnCount++;
-            if (!entry.sites.includes(twin.siteName)) entry.sites.push(twin.siteName);
+            entry.localActive++;
+            if (entry.exampleSites.length < 3) entry.exampleSites.push(`${twin.siteName} [local]`);
           }
         }
       }
-
-      // Filesystem-only installed plugins (installed but not active)
       if (twin.installedPlugins?.length) {
         for (const slug of twin.installedPlugins) {
           if (!twin.plugins?.some(p => p.name === slug)) {
             if (!pluginMap.has(slug)) {
-              pluginMap.set(slug, { slug, activeOnCount: 0, installedOnCount: 0, sites: [] });
+              pluginMap.set(slug, { slug, localActive: 0, localInstalled: 0, wpeActive: 0, wpeInstalled: 0, exampleSites: [] });
             }
-            pluginMap.get(slug)!.installedOnCount++;
+            pluginMap.get(slug)!.localInstalled++;
           }
         }
       }
     }
 
+    // ── WPE sites: graph.db ───────────────────────────────────────────────
+    const graphService = (services as any).graphService;
+    let wpeSiteCount = 0;
+
+    if (graphService?.getDb) {
+      try {
+        const db = graphService.getDb();
+        if (db) {
+          wpeSiteCount = ((db.prepare(
+            "SELECT COUNT(*) as c FROM sites WHERE source != 'local' AND is_active = 1"
+          ).get() as { c: number })?.c) ?? 0;
+
+          const rows = db.prepare(`
+            SELECT p.slug, p.name, p.is_active, s.name as site_name
+            FROM plugins p JOIN sites s ON p.site_id = s.id
+            WHERE s.source != 'local' AND s.is_active = 1
+          `).all() as Array<{ slug: string; name: string | null; is_active: number; site_name: string }>;
+
+          for (const row of rows) {
+            if (!pluginMap.has(row.slug)) {
+              pluginMap.set(row.slug, { slug: row.slug, title: row.name ?? undefined, localActive: 0, localInstalled: 0, wpeActive: 0, wpeInstalled: 0, exampleSites: [] });
+            }
+            const entry = pluginMap.get(row.slug)!;
+            if (row.name && !entry.title) entry.title = row.name;
+            entry.wpeInstalled++;
+            if (row.is_active) {
+              entry.wpeActive++;
+              if (entry.exampleSites.length < 3) entry.exampleSites.push(`${row.site_name} [wpe]`);
+            }
+          }
+        }
+      } catch { /* graph unavailable */ }
+    }
+
     let plugins = Array.from(pluginMap.values());
 
-    // Apply search filter
     if (search) {
       const q = search.toLowerCase();
       plugins = plugins.filter(p =>
-        p.slug.toLowerCase().includes(q) ||
-        (p.title ?? '').toLowerCase().includes(q)
+        p.slug.toLowerCase().includes(q) || (p.title ?? '').toLowerCase().includes(q)
       );
     }
 
-    // Apply min_sites filter
-    plugins = plugins.filter(p => p.activeOnCount >= minSites);
+    const totalActive = (p: PluginEntry) => p.localActive + p.wpeActive;
+    plugins = plugins.filter(p => totalActive(p) >= minSites);
+    plugins.sort((a, b) => totalActive(b) - totalActive(a));
 
-    // Sort by activeOnCount desc
-    plugins.sort((a, b) => b.activeOnCount - a.activeOnCount);
-
-    const sitesWithFullData = twins.filter(
-      t => t.completeness === 'metadata' || t.completeness === 'indexed'
-    ).length;
+    const totalSites = localSiteCount + wpeSiteCount;
 
     if (plugins.length === 0) {
       const filterDesc = search ? ` matching "${search}"` : '';
       return ok(
-        `No plugins found${filterDesc} across ${twins.length} sites (${sitesWithFullData} with full data).\n\n` +
-        'Run `nexus fleet refresh` to populate twin data.'
+        `No plugins found${filterDesc} across ${totalSites} sites (${localSiteCount} local, ${wpeSiteCount} WPE).\n\n` +
+        'Run `nexus fleet refresh` to populate local twin data, or sync WPE sites to populate graph.db.'
       );
     }
 
     const lines: string[] = [
       '## Fleet Plugins',
       '',
-      `**${plugins.length} plugin${plugins.length !== 1 ? 's' : ''} found** across ${twins.length} sites (${sitesWithFullData} with full WP-CLI data)`,
+      `**${plugins.length} plugin${plugins.length !== 1 ? 's' : ''} found** across ${totalSites} sites (${localSiteCount} local, ${wpeSiteCount} WPE)`,
       '',
-      '| Plugin | Active on | Installed on | Sites |',
-      '|--------|-----------|--------------|-------|',
+      '| Plugin | Active (local) | Active (WPE) | Total active | Example sites |',
+      '|--------|---------------|-------------|--------------|---------------|',
     ];
 
     for (const plugin of plugins) {
       const name = plugin.title ? `${plugin.title} (\`${plugin.slug}\`)` : `\`${plugin.slug}\``;
-      const sitesStr = plugin.sites.length > 0
-        ? plugin.sites.slice(0, 3).join(', ') + (plugin.sites.length > 3 ? `, +${plugin.sites.length - 3} more` : '')
+      const sitesStr = plugin.exampleSites.length > 0
+        ? plugin.exampleSites.slice(0, 3).join(', ')
         : '—';
-      lines.push(`| ${name} | ${plugin.activeOnCount} | ${plugin.installedOnCount} | ${sitesStr} |`);
+      lines.push(`| ${name} | ${plugin.localActive} | ${plugin.wpeActive} | ${totalActive(plugin)} | ${sitesStr} |`);
     }
 
     if (minSites > 1 || search) {

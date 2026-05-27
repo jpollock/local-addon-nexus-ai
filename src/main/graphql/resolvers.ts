@@ -28,6 +28,24 @@ import type { LocalSite, LocalSiteDataAccessor } from '../types/site-data';
 import pLimit from 'p-limit';
 import { withQueue } from './resolver-utils';
 
+/** Read-only WP-CLI commands — use wpcli_read permission (default: all envs allowed). */
+const WPCLI_READ_COMMANDS = new Set([
+  'plugin list', 'plugin get',
+  'theme list', 'theme get',
+  'core version',
+  'user list', 'user get',
+  'option get',
+  'site health',
+  'post list', 'post get',
+  'post-type list',
+  'db export',
+]);
+
+function classifyWpCliOp(command: string[]): 'wpcli_read' | 'wpcli' {
+  const key = command.slice(0, 2).join(' ').toLowerCase();
+  return WPCLI_READ_COMMANDS.has(key) ? 'wpcli_read' : 'wpcli';
+}
+
 /** The root value for GraphQL resolvers — always null/undefined for Query/Mutation. */
 type ResolverParent = unknown;
 
@@ -329,7 +347,23 @@ export function createResolvers(context: ResolverContext) {
           }
 
           const local = sites.map((site) => {
-            const twinCompleteness = services.twinService?.get(site.id)?.completeness ?? 'none';
+            const twin = services.twinService?.get(site.id) ?? null;
+            const twinCompleteness = twin?.completeness ?? 'none';
+
+            // Index registry fields
+            const indexEntry = services.indexRegistry?.get?.(site.id) ?? null;
+            const metaEntry  = services.metadataCache?.getWithAge?.(site.id) ?? null;
+            const indexFields = {
+              indexState:    indexEntry?.state ?? 'idle',
+              documentCount: indexEntry?.documentCount ?? 0,
+              chunkCount:    indexEntry?.chunkCount ?? 0,
+              lastIndexed:   indexEntry?.lastIndexed ?? null,
+              pluginCount:   metaEntry?.plugins?.length ?? null,
+              postCount:     metaEntry?.postCount ?? null,
+              metaUpdatedAt: metaEntry?.lastUpdated ?? null,
+              metaAge:       services.metadataCache?.getAgeString?.(site.id) ?? null,
+              metaSource:    metaEntry?.updateSource ?? null,
+            };
 
             // Check if site has WPE connection
             const rawSite = services.localServices?.resolveSiteObject?.(site.id) as any;
@@ -341,12 +375,13 @@ export function createResolvers(context: ResolverContext) {
               return {
                 name: site.name,
                 status: statuses[site.id] || 'unknown',
-                wpVersion: site.wpVersion || null,
+                wpVersion: twin?.wpVersion ?? site.wpVersion ?? null,
                 domain: site.domain || 'unknown',
                 id: site.id,
-                phpVersion: site.phpVersion || null,
+                phpVersion: twin?.phpVersion ?? site.phpVersion ?? null,
                 twinCompleteness,
                 linkedTo: null,
+                ...indexFields,
               };
             }
 
@@ -380,10 +415,10 @@ export function createResolvers(context: ResolverContext) {
             return {
               name: site.name,
               status: statuses[site.id] || 'unknown',
-              wpVersion: site.wpVersion || null,
+              wpVersion: twin?.wpVersion ?? site.wpVersion ?? null,
               domain: site.domain || 'unknown',
               id: site.id,
-              phpVersion: site.phpVersion || null,
+              phpVersion: twin?.phpVersion ?? site.phpVersion ?? null,
               twinCompleteness,
               linkedTo: {
                 account: accountId,
@@ -394,6 +429,7 @@ export function createResolvers(context: ResolverContext) {
                 createdAt: new Date().toISOString(),
                 lastSyncedAt: null,
               },
+              ...indexFields,
             };
           });
 
@@ -998,42 +1034,26 @@ export function createResolvers(context: ResolverContext) {
        * Start a local site
        */
       nexusSitesStart: async (_parent: ResolverParent, { target }: { target: string }) => {
-        return withQueue(async () => {
-        try {
-          if (!services.localServices) {
-            return { success: false, error: 'Local services not available' };
-          }
-
-          const parsed = parseTarget(target);
-          if (parsed.type !== 'local') {
-            return {
-              success: false,
-              error: 'Only local sites can be started. Pull this site to local first.',
-            };
-          }
-
-          const site = resolveSite(parsed.siteName!, services.siteData);
-          if (!site) {
-            return {
-              success: false,
-              error: `Site not found: ${parsed.siteName}`,
-            };
-          }
-
-          await services.localServices.startSite(site.id);
-          const newStatus = services.localServices.getSiteStatus(site.id);
-
-          return {
-            success: true,
-            siteName: site.name,
-            status: newStatus,
-          };
-        } catch (error: any) {
-          return {
-            success: false,
-            error: error.message,
-          };
+        // Validate before entering queue so "not found" returns immediately
+        if (!services.localServices) {
+          return { success: false, error: 'Local services not available' };
         }
+        const parsed = parseTarget(target);
+        if (parsed.type !== 'local') {
+          return { success: false, error: 'Only local sites can be started. Pull this site to local first.' };
+        }
+        const site = resolveSite(parsed.siteName!, services.siteData);
+        if (!site) {
+          return { success: false, error: `Site not found: ${parsed.siteName}` };
+        }
+        return withQueue(async () => {
+          try {
+            await services.localServices!.startSite(site.id);
+            const newStatus = services.localServices!.getSiteStatus(site.id);
+            return { success: true, siteName: site.name, status: newStatus };
+          } catch (error: any) {
+            return { success: false, error: error.message };
+          }
         });
       },
 
@@ -1041,42 +1061,26 @@ export function createResolvers(context: ResolverContext) {
        * Stop a local site
        */
       nexusSitesStop: async (_parent: ResolverParent, { target }: { target: string }) => {
-        return withQueue(async () => {
-        try {
-          if (!services.localServices) {
-            return { success: false, error: 'Local services not available' };
-          }
-
-          const parsed = parseTarget(target);
-          if (parsed.type !== 'local') {
-            return {
-              success: false,
-              error: 'Only local sites can be stopped. WPE sites are always running.',
-            };
-          }
-
-          const site = resolveSite(parsed.siteName!, services.siteData);
-          if (!site) {
-            return {
-              success: false,
-              error: `Site not found: ${parsed.siteName}`,
-            };
-          }
-
-          await services.localServices.stopSite(site.id);
-          const newStatus = services.localServices.getSiteStatus(site.id);
-
-          return {
-            success: true,
-            siteName: site.name,
-            status: newStatus,
-          };
-        } catch (error: any) {
-          return {
-            success: false,
-            error: error.message,
-          };
+        // Validate before entering queue so "not found" returns immediately
+        if (!services.localServices) {
+          return { success: false, error: 'Local services not available' };
         }
+        const parsed = parseTarget(target);
+        if (parsed.type !== 'local') {
+          return { success: false, error: 'Only local sites can be stopped. WPE sites are always running.' };
+        }
+        const site = resolveSite(parsed.siteName!, services.siteData);
+        if (!site) {
+          return { success: false, error: `Site not found: ${parsed.siteName}` };
+        }
+        return withQueue(async () => {
+          try {
+            await services.localServices!.stopSite(site.id);
+            const newStatus = services.localServices!.getSiteStatus(site.id);
+            return { success: true, siteName: site.name, status: newStatus };
+          } catch (error: any) {
+            return { success: false, error: error.message };
+          }
         });
       },
 
@@ -1704,7 +1708,8 @@ export function createResolvers(context: ResolverContext) {
                     const bareCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
                     const bareCached = bareCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === wpeRow.name);
                     const bareEnv = bareCached?.environment ?? 'production';
-                    if (!isOperationAllowed('wpcli', bareEnv, bareSettings, wpeRow.name)) {
+                    const bareOp = classifyWpCliOp(command);
+                    if (!isOperationAllowed(bareOp, bareEnv, bareSettings, wpeRow.name)) {
                       return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${bareEnv}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
                     }
                     const result = await services.localServices.remoteWpCliRun(wpeRow.name, command);
@@ -1764,8 +1769,9 @@ export function createResolvers(context: ResolverContext) {
             const wpeSettings = getEffectiveSettings(services.registryStorage);
             const wpeCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
             const wpeCached = wpeCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installNameOnly);
-            const wpeEnv = wpeCached?.environment ?? 'production';
-            if (!isOperationAllowed('wpcli', wpeEnv, wpeSettings, installNameOnly)) {
+            const wpeEnv = parsed.environment ?? wpeCached?.environment ?? 'production';
+            const wpeOp = classifyWpCliOp(command);
+            if (!isOperationAllowed(wpeOp, wpeEnv, wpeSettings, installNameOnly)) {
               return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${wpeEnv}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
             }
 
@@ -1889,6 +1895,15 @@ export function createResolvers(context: ResolverContext) {
                 error: 'WP Engine SSH key not found. Connect to WP Engine via Local\'s UI first to generate the SSH key.',
                 plugins: [],
               };
+            }
+
+            // Access control check using parsed.environment (explicit in target)
+            const pluginListSettings = getEffectiveSettings(services.registryStorage);
+            const pluginListCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
+            const pluginListCached = pluginListCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installNameOnly);
+            const pluginListEnv = parsed.environment ?? pluginListCached?.environment ?? 'production';
+            if (!isOperationAllowed('wpcli_read', pluginListEnv, pluginListSettings, installNameOnly)) {
+              return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${pluginListEnv}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.`, plugins: [] };
             }
 
             const wpCliResult = await services.localServices.remoteWpCliRun(
@@ -2386,6 +2401,16 @@ export function createResolvers(context: ResolverContext) {
             return {
               success: false,
               error: 'Target must be a WPE install. Use format: wpe:account/install@environment',
+            };
+          }
+
+          // Access control check — use parsed.environment (explicit in target) first
+          const cacheSettings = getEffectiveSettings(services.registryStorage);
+          const envForCheck = parsed.environment ?? 'production';
+          if (!isOperationAllowed('push', envForCheck, cacheSettings, parsed.installName!)) {
+            return {
+              success: false,
+              error: `Operation blocked: this operation is not permitted on "${envForCheck}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.`,
             };
           }
 
@@ -4640,6 +4665,15 @@ export function createResolvers(context: ResolverContext) {
       nexusWpeDeleteInstall: async (_parent: ResolverParent, { installId, confirmName }: { installId: string; confirmName?: string }) => {
         try {
           if (!services.localServices) return { success: false, error: 'Local services not available' };
+          // Access control: check before CAPI call using confirmName + cache for environment
+          const deleteSettings = getEffectiveSettings(services.registryStorage);
+          const deleteCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
+          const nameForCheck = confirmName || installId;
+          const cachedForDelete = deleteCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === nameForCheck);
+          const envForDelete = cachedForDelete?.environment ?? 'production';
+          if (!isOperationAllowed('delete', envForDelete, deleteSettings, nameForCheck)) {
+            return { success: false, error: `Operation blocked: delete is not permitted on "${envForDelete}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.` };
+          }
           const install = await services.localServices.capiDirect(`/installs/${installId}`) as any;
           if (!confirmName) return { success: false, error: `Pass --confirm-name "${install?.name || installId}" to confirm deletion` };
           if (confirmName !== install?.name) return { success: false, error: `Confirmation name "${confirmName}" does not match install name "${install?.name}"` };
@@ -4995,6 +5029,74 @@ export function createResolvers(context: ResolverContext) {
           return { success: true, outputPath };
         } catch (err: any) {
           return { success: false, error: err.message, outputPath: null };
+        }
+      },
+
+      // ======================================================================
+      // B2: Site Users — graph DB read for M4-14 user security audit
+      // ======================================================================
+
+      nexusSiteUsers: (_parent: ResolverParent, { siteId }: { siteId: string }) => {
+        try {
+          const db = services.graphService?.getDb?.();
+          if (!db) return { success: false, error: 'Graph DB not available', users: [], siteId };
+          const rows = db.prepare(
+            'SELECT user_id, username, email, roles FROM users WHERE site_id = ?'
+          ).all(siteId) as Array<{ user_id: number; username: string; email: string; roles: string | null }>;
+          return {
+            success: true,
+            siteId,
+            users: rows.map(r => ({
+              userId: r.user_id,
+              username: r.username,
+              email: r.email,
+              roles: (() => { try { return JSON.parse(r.roles ?? '[]'); } catch { return []; } })(),
+            })),
+          };
+        } catch (err: any) {
+          return { success: false, error: err.message, users: [], siteId };
+        }
+      },
+
+      // ======================================================================
+      // B3: Plugin Diff — cross-env plugin version comparison (enables M5-04)
+      // ======================================================================
+
+      nexusPluginDiff: async (_parent: ResolverParent, { installA, installB }: { installA: string; installB: string }) => {
+        const empty = { installA, installB, onlyInA: [], onlyInB: [], versionMismatches: [] };
+        try {
+          const db = services.graphService?.getDb?.();
+          if (!db) return { ...empty, success: false, error: 'Graph DB not available' };
+
+          const getPlugins = (siteId: string) => {
+            const rows = db.prepare(
+              'SELECT slug, version, is_active FROM plugins WHERE site_id = ?'
+            ).all(siteId) as Array<{ slug: string; version: string | null; is_active: number }>;
+            return rows.map(r => ({
+              slug:    r.slug,
+              version: r.version ?? '',
+              status:  r.is_active ? 'active' : 'inactive',
+            }));
+          };
+
+          const { computePluginDiff } = await import('../fleet/plugin-diff');
+          const diff = computePluginDiff(getPlugins(installA), getPlugins(installB));
+
+          return {
+            ...empty,
+            success:          true,
+            onlyInA:          diff.onlyInA.map(p => ({ slug: p.slug, versionA: p.version, versionB: null, statusA: p.status, statusB: null })),
+            onlyInB:          diff.onlyInB.map(p => ({ slug: p.slug, versionA: null, versionB: p.version, statusA: null, statusB: p.status })),
+            versionMismatches: diff.versionMismatches.map(m => ({
+              slug:     m.slug,
+              versionA: m.versionA,
+              versionB: m.versionB,
+              statusA:  m.statusA,
+              statusB:  m.statusB,
+            })),
+          };
+        } catch (err: any) {
+          return { ...empty, success: false, error: err.message };
         }
       },
     },

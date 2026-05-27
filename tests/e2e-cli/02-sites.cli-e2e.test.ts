@@ -8,6 +8,9 @@
  * "nexus-cli-test-site" and clean up after themselves.
  */
 
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { runCli, getLocalSites, getRunningSite, skipTest } from './helpers/cli-test-utils';
 
@@ -165,4 +168,29 @@ describe('nexus sites config-php', () => {
     const r = await runCli('sites config-php');
     expect(r.exitCode).toBe(1);
   });
+});
+
+describe('nexus sites export', () => {
+  it('requires @local suffix', async () => {
+    const r = await runCli('sites export somename');
+    expect(r.exitCode).toBe(1);
+    expect(r.output).toContain('@local');
+  });
+
+  it('exports a running site to a zip and zip exists on disk', async () => {
+    const site = await getRunningSite();
+    if (!site) { skipTest('No running local site'); return; }
+
+    const outputPath = path.join(os.tmpdir(), `nexus-export-test-${Date.now()}.zip`);
+    try {
+      const r = await runCli(`sites export ${site.name}@local ${outputPath}`, { timeout: 300_000 });
+      expect(r.exitCode).toBe(0);
+      expect(r.output.toLowerCase()).toMatch(/export/);
+      expect(r.output).toContain(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+      expect(fs.statSync(outputPath).size).toBeGreaterThan(0);
+    } finally {
+      try { fs.unlinkSync(outputPath); } catch { /* best effort cleanup */ }
+    }
+  }, 300_000);
 });

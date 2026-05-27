@@ -12,7 +12,7 @@ import type {
   SearchFilters,
   SearchOptions,
   SearchResults,
-  UnifiedSearchResult,
+  LegacySearchResult,
   SearchFacets,
   VectorResult,
   MetadataResult,
@@ -195,8 +195,8 @@ export class SearchService {
   private mergeResults(
     vectorResults: VectorResult[],
     metadataResults: MetadataResult[]
-  ): UnifiedSearchResult[] {
-    const merged: UnifiedSearchResult[] = [];
+  ): LegacySearchResult[] {
+    const merged: LegacySearchResult[] = [];
 
     // Add vector results (posts)
     for (const result of vectorResults) {
@@ -221,9 +221,9 @@ export class SearchService {
    * Apply filters to results
    */
   private applyFilters(
-    results: UnifiedSearchResult[],
+    results: LegacySearchResult[],
     filters?: SearchFilters
-  ): UnifiedSearchResult[] {
+  ): LegacySearchResult[] {
     if (!filters) return results;
 
     let filtered = results;
@@ -262,9 +262,9 @@ export class SearchService {
    * Sort results by relevance or other criteria
    */
   private sortByRelevance(
-    results: UnifiedSearchResult[],
+    results: LegacySearchResult[],
     sortBy: 'relevance' | 'date' | 'health' | 'title'
-  ): UnifiedSearchResult[] {
+  ): LegacySearchResult[] {
     const sorted = [...results];
 
     switch (sortBy) {
@@ -288,7 +288,7 @@ export class SearchService {
   /**
    * Compute result facets (for filtering UI)
    */
-  private computeFacets(results: UnifiedSearchResult[]): SearchFacets {
+  private computeFacets(results: LegacySearchResult[]): SearchFacets {
     return {
       types: this.countByType(results),
       sites: this.countBySite(results),
@@ -299,7 +299,7 @@ export class SearchService {
   /**
    * Count results by type
    */
-  private countByType(results: UnifiedSearchResult[]): Record<string, number> {
+  private countByType(results: LegacySearchResult[]): Record<string, number> {
     const counts: Record<string, number> = {};
 
     for (const result of results) {
@@ -312,7 +312,7 @@ export class SearchService {
   /**
    * Count results by site
    */
-  private countBySite(results: UnifiedSearchResult[]): Record<string, number> {
+  private countBySite(results: LegacySearchResult[]): Record<string, number> {
     const counts: Record<string, number> = {};
 
     for (const result of results) {
@@ -325,7 +325,7 @@ export class SearchService {
   /**
    * Count results by health range
    */
-  private countByHealthRange(results: UnifiedSearchResult[]): {
+  private countByHealthRange(results: LegacySearchResult[]): {
     critical: number;
     warning: number;
     good: number;

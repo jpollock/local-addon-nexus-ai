@@ -17,6 +17,7 @@ import { VectorStore } from '../vector-store/VectorStore';
 import { VectorDocument } from '../../common/types';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import type { RegistryStorage } from '../content/IndexRegistry';
+import { IndexRegistry } from '../content/IndexRegistry';
 import { STORAGE_KEYS } from '../../common/constants';
 import pLimit from 'p-limit';
 import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
@@ -55,6 +56,11 @@ export interface WPESyncServiceOptions {
   vectorStore?: VectorStore;
   logger?: any;
   registryStorage?: RegistryStorage;
+  indexRegistry?: IndexRegistry;
+  /** Optional IPC emitter — used to broadcast INDEX_PROGRESS to the renderer. */
+  emitIndexProgress?: (siteId: string, data: { state: string; progress: number; message: string; documentCount?: number }) => void;
+  /** Optional progress callback — broadcasts per-site WPE sync progress to NexusStateManager. */
+  onSyncProgress?: (progress: { active: boolean; current: number; total: number; currentSite: string; phase: 'capi' | 'metadata' | 'content' } | null) => void;
 }
 
 export class WPESyncService {
@@ -65,6 +71,9 @@ export class WPESyncService {
   private vectorStore?: VectorStore;
   private logger: any;
   private registryStorage?: RegistryStorage;
+  private indexRegistry?: IndexRegistry;
+  private emitIndexProgress?: (siteId: string, data: { state: string; progress: number; message: string; documentCount?: number }) => void;
+  private onSyncProgress?: (progress: { active: boolean; current: number; total: number; currentSite: string; phase: 'capi' | 'metadata' | 'content' } | null) => void;
   private currentProgress: WPESyncProgress | null = null;
   private abortRequested = false;
 
@@ -87,6 +96,9 @@ export class WPESyncService {
     this.vectorStore = options.vectorStore;
     this.logger = options.logger || console;
     this.registryStorage = options.registryStorage;
+    this.indexRegistry = options.indexRegistry ?? (options.registryStorage ? new IndexRegistry(options.registryStorage) : undefined);
+    this.emitIndexProgress = options.emitIndexProgress;
+    this.onSyncProgress = options.onSyncProgress;
   }
 
   /**
@@ -159,12 +171,14 @@ export class WPESyncService {
       }
 
       // Map to WPEInstallData
+      // CAPI returns snake_case fields (php_version, primary_domain). Normalise both
+      // cases defensively in case Local's CAPI SDK changes its normalisation.
       const wpeInstalls: WPEInstallData[] = installs.map((i: any) => ({
         install_id: i.id,
         install_name: i.name,
         environment: i.environment ?? 'production',
-        primary_domain: i.primaryDomain || `${i.name}.wpengine.com`,
-        php_version: i.phpVersion ?? undefined,
+        primary_domain: (i.primary_domain ?? i.primaryDomain) || `${i.name}.wpengine.com`,
+        php_version: i.php_version ?? i.phpVersion ?? undefined,
         account_id: i.account?.id ?? undefined,
       }));
 
@@ -172,12 +186,12 @@ export class WPESyncService {
       const effectiveSettings = getEffectiveSettings(this.registryStorage);
       const beforeEnvFilter = wpeInstalls.length;
       const wpeInstallsFiltered = wpeInstalls.filter((i) =>
-        isOperationAllowed('wpcli', i.environment, effectiveSettings, i.install_name)
+        isOperationAllowed('wpcli_read', i.environment, effectiveSettings, i.install_name)
       );
       if (wpeInstallsFiltered.length < beforeEnvFilter) {
         this.logger.info(
           `[WPESyncService] Operation filter: ${wpeInstallsFiltered.length} of ${beforeEnvFilter} installs in scope ` +
-          `(wpcli blocked on ${beforeEnvFilter - wpeInstallsFiltered.length} install(s))`
+          `(wpcli_read blocked on ${beforeEnvFilter - wpeInstallsFiltered.length} install(s))`
         );
       }
 
@@ -233,10 +247,20 @@ export class WPESyncService {
             return;
           }
 
+          // Use task dispatch index (i+1) — matches the log "Syncing i+1/N: sitename"
+          // so UI and logs stay in sync. current only ever increases.
           if (this.currentProgress) {
-            this.currentProgress.current = completed + 1;
             this.currentProgress.currentSite = install.install_name;
+            this.currentProgress.current = Math.max(this.currentProgress.current, i + 1);
           }
+
+          this.onSyncProgress?.({
+            active: true,
+            current: Math.max(this.currentProgress?.current ?? 0, i + 1),
+            total: installsToSync.length,
+            currentSite: install.install_name,
+            phase: 'metadata',
+          });
 
           this.logger.info(`[WPESyncService] Syncing ${i + 1}/${installsToSync.length}: ${install.install_name}`);
 
@@ -256,6 +280,19 @@ export class WPESyncService {
             });
             this.logger.error(`[WPESyncService] ✗ Failed to sync ${install.install_name}:`, errorMsg, errorStack);
           }
+
+          // After each completion, advance current if completed count is higher
+          // (current only moves forward — never backward from parallel tasks)
+          if (this.currentProgress) {
+            this.currentProgress.current = Math.max(this.currentProgress.current, completed);
+          }
+          this.onSyncProgress?.({
+            active: true,
+            current: Math.max(this.currentProgress?.current ?? 0, completed),
+            total: installsToSync.length,
+            currentSite: install.install_name,
+            phase: 'metadata',
+          });
         }),
       );
 
@@ -385,10 +422,12 @@ export class WPESyncService {
       });
     }
 
-    // Content indexing (optional — don't fail sync if this errors)
-    if (this.remoteContentExtractor && this.embeddingService && this.vectorStore) {
-      await this.syncContent(siteId, install.install_name);
-    }
+    // Content indexing does NOT run here.
+    // syncInstall is the metadata path only: WP version, plugins, users → graph.db.
+    // Content extraction (posts/pages → LanceDB) runs exclusively via:
+    //   1. indexAllWpeContent() triggered by Operations tab "Index content" button
+    //   2. The wpeContentIndex scheduled timer (if wpeContentIndexAutoEnabled = true)
+    // This ensures content indexing never runs on app startup or during metadata sync.
   }
 
 
@@ -396,7 +435,7 @@ export class WPESyncService {
    * Sync content for a WPE install (Phase 2)
    * Extracts posts/pages and indexes them for semantic search
    */
-  private async syncContent(siteId: string, installName: string): Promise<void> {
+  private async syncContent(siteId: string, installName: string, startTime = Date.now()): Promise<void> {
     if (!this.remoteContentExtractor || !this.embeddingService || !this.vectorStore) {
       this.logger.warn(`[WPESyncService] Content sync skipped - missing dependencies`);
       return;
@@ -484,16 +523,113 @@ export class WPESyncService {
       // Upsert into vector store (this handles table creation automatically)
       await this.vectorStore.upsert(siteId, embeddedDocs);
 
-      this.logger.info(`[WPESyncService] Vector store upsert complete`);
-
+      // Update IndexRegistry so the UI shows Searchable (L3) for this WPE install
+      if (this.indexRegistry) {
+        this.indexRegistry.update(siteId, {
+          siteId,
+          siteName: installName,
+          state: 'indexed',
+          lastIndexed: Date.now(),
+          documentCount: embeddedDocs.length,
+          chunkCount: embeddedDocs.length,
+          durationMs: Date.now() - startTime,
+        });
+      }
 
       this.logger.info(`[WPESyncService] Content sync completed for ${installName}: ${embeddedDocs.length} documents indexed`);
+
+      // Piggyback metadata sync while the SSH ControlMaster is still warm.
+      // extract() above opened the SSH connection; ControlPersist keeps it alive
+      // for 30s, so wp core version / plugin list / user list run in 1-3s instead
+      // of the 13-30s cold-start cost. This ensures content index = metadata sync.
+      try {
+        const db = this.graphService.getDb();
+        if (db) {
+          const row = db.prepare(
+            'SELECT name, php_version, domain, account_id, remote_install_id FROM sites WHERE id = ?'
+          ).get(siteId) as { name: string; php_version: string | null; domain: string; account_id: string | null; remote_install_id: string | null } | undefined;
+
+          if (row) {
+            const installData: WPEInstallData = {
+              install_id: row.remote_install_id ?? siteId.replace(/^wpe-/, ''),
+              install_name: installName,
+              environment: 'production',
+              primary_domain: row.domain,
+              php_version: row.php_version ?? undefined,
+              account_id: row.account_id ?? undefined,
+            };
+            this.logger.info(`[WPESyncService] Piggybacking metadata sync for ${installName} (SSH ControlMaster warm)`);
+            await this.syncInstall(installData);
+          }
+        }
+      } catch (metaErr: any) {
+        // Metadata sync failure is non-fatal — content is already indexed
+        this.logger.warn(`[WPESyncService] Metadata piggyback failed for ${installName}: ${metaErr?.message}`);
+      }
     } catch (error: any) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error(`[WPESyncService] Failed to sync content for ${installName}:`, errorMsg, errorStack);
+      if (this.indexRegistry) {
+        this.indexRegistry.update(siteId, { state: 'error', lastIndexed: Date.now() } as any);
+      }
       // Don't throw - content sync is optional, metadata sync succeeded
     }
+  }
+
+  /**
+   * Index content for all known WPE installs.
+   * Each site's SSH session is reused to piggyback a metadata sync (wp_version,
+   * plugins, users) at no extra SSH cold-start cost.
+   * Used by the Operations tab "Index content" button for WPE sites.
+   */
+  async indexAllWpeContent(): Promise<{ indexed: number; errors: number }> {
+    if (!this.remoteContentExtractor || !this.embeddingService || !this.vectorStore) {
+      this.logger.warn('[WPESyncService] indexAllWpeContent: missing dependencies (SSH key or embedding service not configured)');
+      return { indexed: 0, errors: 0 };
+    }
+
+    const db = this.graphService.getDb();
+    if (!db) return { indexed: 0, errors: 0 };
+
+    const installs = db.prepare(
+      "SELECT id, name FROM sites WHERE source = 'wpe' AND is_active = 1"
+    ).all() as Array<{ id: string; name: string }>;
+
+    if (installs.length === 0) {
+      this.logger.info('[WPESyncService] indexAllWpeContent: no active WPE installs found');
+      return { indexed: 0, errors: 0 };
+    }
+
+    let indexed = 0;
+    let errors = 0;
+
+    // Process up to 2 concurrently, emitting INDEX_PROGRESS per install
+    const concurrency = 2;
+    for (let i = 0; i < installs.length; i += concurrency) {
+      const batch = installs.slice(i, i + concurrency);
+      await Promise.all(batch.map(async (install) => {
+        const startTime = Date.now();
+        this.emitIndexProgress?.(install.id, {
+          state: 'indexing', progress: Math.round((indexed / installs.length) * 100),
+          message: `Indexing ${install.name} via SSH…`,
+        });
+        try {
+          await this.syncContent(install.id, install.name, startTime);
+          indexed++;
+          this.emitIndexProgress?.(install.id, {
+            state: 'indexed', progress: 100, message: 'Indexed',
+            documentCount: this.indexRegistry?.get(install.id)?.documentCount ?? 0,
+          });
+        } catch {
+          errors++;
+          this.emitIndexProgress?.(install.id, { state: 'error', progress: 0, message: 'Indexing failed' });
+        }
+      }));
+    }
+
+    this.logger.info(`[WPESyncService] indexAllWpeContent complete: ${indexed} indexed, ${errors} errors`);
+    return { indexed, errors };
   }
 
   /**
@@ -579,14 +715,19 @@ export class WPESyncService {
       const siteId = `wpe-${i.id}`;
       const isNew = !existingIds.has(siteId);
 
+      // Normalise snake_case / camelCase from CAPI response defensively
+      const capiWpVersion  = i.wp_version  ?? i.wpVersion  ?? null;
+      const capiPhpVersion = i.php_version ?? i.phpVersion ?? null;
+      const capiDomain     = (i.primary_domain ?? i.primaryDomain) || `${i.name}.wpengine.com`;
+
       if (isNew) {
         newInstalls.push(i.name);
         await this.graphService.upsertSite({
           id: siteId,
           name: i.name,
-          domain: i.primaryDomain || `${i.name}.wpengine.com`,
-          wp_version: i.wpVersion ?? undefined,
-          php_version: i.phpVersion ?? undefined,
+          domain: capiDomain,
+          wp_version: capiWpVersion ?? undefined,
+          php_version: capiPhpVersion ?? undefined,
           account_id: i.account?.id ?? undefined,
           last_sync_at: undefined,
           is_active: true,
@@ -594,7 +735,7 @@ export class WPESyncService {
           updated_at: now,
           source: 'wpe',
           remote_install_id: i.id,
-          remote_domain: i.primaryDomain || `${i.name}.wpengine.com`,
+          remote_domain: capiDomain,
         });
         updatedFields++;
       } else {
@@ -609,7 +750,7 @@ export class WPESyncService {
               domain = CASE WHEN domain = '' OR domain IS NULL THEN ? ELSE domain END,
               updated_at = ?
             WHERE id = ?
-          `).run(i.wpVersion ?? null, i.phpVersion ?? null, i.account?.id ?? null, i.primaryDomain ?? null, now, siteId);
+          `).run(capiWpVersion, capiPhpVersion, i.account?.id ?? null, capiDomain, now, siteId);
           if (result.changes > 0) updatedFields++;
         }
       }
@@ -730,10 +871,10 @@ export class WPESyncService {
       };
 
       // Check operation permissions before syncing
-      if (!isOperationAllowed('wpcli', wpeInstall.environment, getEffectiveSettings(this.registryStorage), wpeInstall.install_name)) {
+      if (!isOperationAllowed('wpcli_read', wpeInstall.environment, getEffectiveSettings(this.registryStorage), wpeInstall.install_name)) {
         this.logger?.info(
           `[WPESyncService] Skipping ${wpeInstall.install_name} — ` +
-          `wpcli not permitted on '${wpeInstall.environment}' environment`,
+          `wpcli_read not permitted on '${wpeInstall.environment}' environment`,
         );
         return;
       }

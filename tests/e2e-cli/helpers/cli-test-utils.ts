@@ -68,24 +68,46 @@ export async function runCli(
 
 /**
  * Get all local sites. Returns empty array if Local is not running.
+ * Strips any update-notification prefix before parsing JSON.
+ * Filters out sites with undefined/empty names (duplicates in error state).
  */
 export async function getLocalSites(): Promise<Array<{ name: string; status: string; id: string }>> {
   try {
     const result = await runCli('sites list --json');
     if (result.exitCode !== 0) return [];
-    const data = JSON.parse(result.stdout);
-    return data.local || [];
+    // stdout may start with an update notification — find the JSON start
+    const jsonStart = result.stdout.indexOf('{');
+    if (jsonStart === -1) return [];
+    const data = JSON.parse(result.stdout.slice(jsonStart));
+    const all = data.local || [];
+    // Filter out sites with missing names (can happen with duplicate/errored installs)
+    return all.filter((s: any) => s.name && typeof s.name === 'string');
   } catch {
     return [];
   }
 }
 
 /**
- * Get first running local site, or null.
+ * Known fixture site used by WP-CLI and export tests.
+ * Prefer this over arbitrary user sites to avoid names with spaces.
+ */
+const PREFERRED_TEST_SITE = process.env.CLI_E2E_TEST_SITE ?? 'nexus-e2e-cli-test-site';
+
+/**
+ * Get a running local site suitable for CLI tests.
+ * Prefers the e2e fixture site; falls back to any running site WITHOUT spaces in the name.
+ * Sites with spaces in their names break CLI argument parsing when interpolated into strings.
  */
 export async function getRunningSite(): Promise<{ name: string; status: string; id: string } | null> {
   const sites = await getLocalSites();
-  return sites.find((s) => s.status === 'running') || null;
+  const running = sites.filter((s) => s.status === 'running' && s.name);
+
+  // 1. Prefer the known fixture site
+  const fixture = running.find((s) => s.name === PREFERRED_TEST_SITE);
+  if (fixture) return fixture;
+
+  // 2. Fall back to any running site with no spaces (safe for CLI string interpolation)
+  return running.find((s) => !s.name.includes(' ')) || null;
 }
 
 /**

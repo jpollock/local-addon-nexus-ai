@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { resolveSite } from '../../site-resolver';
 import { ok, error as err } from './preflight';
+import { withSiteRunning } from '../with-site-running';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -62,17 +63,19 @@ export const importDatabaseHandler: McpToolHandler = {
       return err(`SQL file not found: ${sqlPath}`);
     }
 
-    try {
-      // Run WP-CLI db import
-      const result = await services.localServices!.wpCliRun(site.id, ['db', 'import', sqlPath]);
+    return withSiteRunning(site.id, services, async () => {
+      try {
+        // Run WP-CLI db import
+        const result = await services.localServices!.wpCliRun(site.id, ['db', 'import', sqlPath]);
 
-      if (!result.stdout) {
-        return err(`Failed to import database for "${site.name}"`);
+        if (!result.stdout) {
+          return err(`Failed to import database for "${site.name}"`);
+        }
+
+        return ok(`Successfully imported "${sqlPath}" into database for "${site.name}"`);
+      } catch (error: any) {
+        return err(`Failed to import database: ${error.message}`);
       }
-
-      return ok(`Successfully imported "${sqlPath}" into database for "${site.name}"`);
-    } catch (error: any) {
-      return err(`Failed to import database: ${error.message}`);
-    }
+    });
   },
 };

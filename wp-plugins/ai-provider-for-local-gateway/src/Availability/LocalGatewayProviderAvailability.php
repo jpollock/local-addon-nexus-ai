@@ -26,22 +26,27 @@ class LocalGatewayProviderAvailability implements ProviderAvailabilityInterface
      */
     public function isConfigured(): bool
     {
-        // Cache per request — isConfigured() is called multiple times per page load
-        // (once per registered priority), and the health ping adds ~3s latency each time.
+        // Cache per request — isConfigured() is called multiple times per page load.
         if (self::$cachedResult !== null) {
             return self::$cachedResult;
         }
 
-        // Resolve the webhook server URL — this is where /health and /ai-gateway/v1/* live.
-        // Priority: NEXUS_AI_WEBHOOK_URL constant (set by MU plugin) > wp option > fallback.
-        if (defined('NEXUS_AI_WEBHOOK_URL')) {
-            $baseUrl = rtrim(NEXUS_AI_WEBHOOK_URL, '/');
-        } else {
-            $webhookInfo = get_option('nexus_ai_webhook_info');
-            $baseUrl = ($webhookInfo && isset($webhookInfo['url']))
-                ? rtrim($webhookInfo['url'], '/')
-                : 'http://127.0.0.1:13000';
+        // If the MU plugin has defined the constant, the gateway is configured.
+        // We trust the constant rather than doing a live health ping here — the gateway
+        // may be slow to start (e.g. Local is still loading), and caching a false negative
+        // would suppress the connector for the entire page load. The actual request path
+        // handles gateway-unreachable errors gracefully.
+        if (defined('NEXUS_AI_WEBHOOK_URL') && NEXUS_AI_WEBHOOK_URL !== '') {
+            self::$cachedResult = true;
+            return true;
         }
+
+        // No MU plugin constant — fall back to a live health ping using the WP option
+        // or the default port so manually configured sites still work.
+        $webhookInfo = get_option('nexus_ai_webhook_info');
+        $baseUrl = ($webhookInfo && isset($webhookInfo['url']))
+            ? rtrim($webhookInfo['url'], '/')
+            : 'http://127.0.0.1:13000';
 
         $response = wp_remote_get($baseUrl . '/health', [
             'timeout'            => 3,

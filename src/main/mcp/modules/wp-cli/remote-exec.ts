@@ -83,6 +83,7 @@ export type ResolvedTarget = LocalTarget | RemoteTarget;
 export async function resolveTarget(
   args: Record<string, unknown>,
   services: NexusServices,
+  operation: 'wpcli_read' | 'wpcli' = 'wpcli',
 ): Promise<ResolvedTarget | McpToolResult> {
   const installName = args.install_name as string | undefined;
   const siteQuery = args.site as string | undefined;
@@ -114,7 +115,7 @@ export async function resolveTarget(
       if (installInfo) {
         // Linked-site path: environment is known from installInfo
         const environment = installInfo.environment ?? 'production';
-        if (!isOperationAllowed('wpcli', environment, settings, installInfo.installName)) {
+        if (!isOperationAllowed(operation, environment, settings, installInfo.installName)) {
           return error(
             `Operation blocked: WP-CLI is not permitted on "${environment}" environments. ` +
             `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`,
@@ -136,7 +137,7 @@ export async function resolveTarget(
     );
     const environment = cachedInstall?.environment ?? 'production';
 
-    if (!isOperationAllowed('wpcli', environment, settings, installName)) {
+    if (!isOperationAllowed(operation, environment, settings, installName)) {
       return error(
         `Operation blocked: WP-CLI is not permitted on "${environment}" environments. ` +
         `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`,

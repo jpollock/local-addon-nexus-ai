@@ -279,7 +279,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     this.setState({ indexing: true });
     const startTime = Date.now();
     try {
-      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_SITE, this.props.site.id);
+      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.INDEX_SITE, { siteId: this.props.site.id });
       if (!this.mounted) return;
       await this.fetchData();
       const elapsed = Math.round((Date.now() - startTime) / 1000);
@@ -609,21 +609,24 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       );
     }
 
+    // 'stale' = searchable but content may have changed since last index
+    const isSearchable = indexEntry?.state === 'indexed' || indexEntry?.state === 'stale';
     const stateColor = !indexEntry ? '#888'
-      : indexEntry.state === 'indexed' ? UI_COLORS.STATUS_RUNNING
-      : indexEntry.state === 'stale' ? UI_COLORS.STATUS_WARNING
+      : isSearchable ? UI_COLORS.STATUS_RUNNING
       : indexEntry.state === 'error' ? UI_COLORS.STATUS_ERROR
       : UI_COLORS.WPE_BRAND;
 
-    const stateLabel = indexEntry
-      ? indexEntry.state.charAt(0).toUpperCase() + indexEntry.state.slice(1)
-      : 'Not indexed';
+    // Align with dashboard terminology: L3 = "Searchable"
+    const stateLabel = !indexEntry ? 'Not searchable'
+      : isSearchable ? 'Searchable'
+      : indexEntry.state === 'error' ? 'Error'
+      : 'Indexing…';
 
     // Tooltip for index state label
-    const stateLabelTooltip = indexEntry?.state === 'indexed'
-      ? 'Content is indexed for semantic search. Update Index if you\'ve published new content.'
-      : indexEntry?.state === 'stale'
-      ? 'This data is more than 24 hours old. Click Refresh Metadata to update it.'
+    const stateLabelTooltip = isSearchable
+      ? (indexEntry?.state === 'stale'
+          ? 'Searchable — content may have changed since last index. Re-index to update.'
+          : 'Content is indexed and searchable. Re-index after publishing new content.')
       : undefined;
 
     // Always-visible rows
@@ -631,16 +634,15 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     // Detail rows (hidden by default)
     const detailRows: React.ReactElement[] = [];
 
-    // -- ALWAYS VISIBLE: Index status + action --
+    // -- ALWAYS VISIBLE: Content index + action --
+    // "Re-index" matches the Operations tab "Index content" flow terminology
     const indexButtonText = indexing ? 'Working...'
-      : indexEntry ? 'Update Index'
-      : 'Index Content';
+      : isSearchable ? 'Re-index'
+      : 'Index content';
     const indexButtonTitle = indexing ? undefined
-      : indexEntry
-      ? 'Creates a searchable database of posts, pages, and products using AI. Run after adding content to your site.'
-      : 'Creates a searchable database of posts, pages, and products using AI. Run after adding content to your site.';
+      : 'Extracts posts, pages, and custom content for AI search. Auto-starts the site if halted.';
 
-    alwaysRows.push(row('Index status',
+    alwaysRows.push(row('Content index',
       React.createElement('span', {
         style: dotStyle(stateColor),
         title: stateLabelTooltip,
@@ -846,7 +848,9 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       ));
 
       // -- DETAIL: Credentials --
-      if (isAIConfigured) {
+      // Hidden when Local Gateway is active — gateway handles auth internally,
+      // no WP DB credential sync is needed.
+      if (isAIConfigured && !useLocalGateway) {
         const credsSynced = aiStatus.credentialsSynced ?? false;
         detailRows.push(row('Credentials',
           React.createElement('span', { style: dotStyle(credsSynced ? UI_COLORS.STATUS_RUNNING : '#888') }),

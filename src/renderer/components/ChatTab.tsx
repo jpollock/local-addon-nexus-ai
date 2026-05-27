@@ -6,6 +6,7 @@
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS, CHAT_DEFAULTS } from '../../common/constants';
 import type { ChatStreamEvent } from '../../common/chat-types';
+import { renderMarkdown } from '../utils/markdown';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -13,6 +14,14 @@ import type { ChatStreamEvent } from '../../common/chat-types';
 
 interface ChatTabProps {
   electron: any;
+  /** Messages saved in parent — restores conversation when tab is revisited */
+  initialMessages?: any[];
+  initialSessionId?: string;
+  onMessagesChange?: (messages: any[]) => void;
+  onSessionIdChange?: (sessionId: string) => void;
+  /** Pre-filled prompt from dashboard — auto-submitted once provider is ready */
+  initialPrompt?: string;
+  onPromptConsumed?: () => void;
 }
 
 interface UIToolCall {
@@ -25,11 +34,18 @@ interface UIToolCall {
   expanded?: boolean;
 }
 
+/** Ordered record of what arrived in the stream — text and tool calls interleaved. */
+type MessageSegment =
+  | { type: 'text'; content: string }
+  | { type: 'tool'; id: string };
+
 interface UIMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   toolCalls?: UIToolCall[];
+  /** Stream-ordered segments — use for rendering so text appears in the right place relative to tool calls */
+  segments?: MessageSegment[];
   isStreaming?: boolean;
   timestamp: number;
 }
@@ -52,14 +68,16 @@ interface ChatTabState {
 const containerStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  height: '100%',
+  flex: 1,        // fills the flexGrow:1 wrapper — height:100% is auto on flex children
+  minHeight: 0,   // required so overflowY:auto on message list actually scrolls
   overflow: 'hidden',
 };
 
 const messageListStyle: React.CSSProperties = {
   flex: 1,
+  minHeight: 0,        // ← critical: lets overflowY:auto actually scroll in a flex column
   overflowY: 'auto',
-  padding: '16px 0',
+  padding: '16px 20px',
   display: 'flex',
   flexDirection: 'column',
   gap: '12px',
@@ -67,7 +85,7 @@ const messageListStyle: React.CSSProperties = {
 
 const inputBarStyle: React.CSSProperties = {
   flexShrink: 0,
-  padding: '12px 0 0',
+  padding: '12px 0 16px',
   borderTop: '1px solid var(--nxai-card-border, #e5e7eb)',
   display: 'flex',
   gap: '8px',
@@ -139,6 +157,8 @@ const assistantBubbleStyle: React.CSSProperties = {
   ...messageBubbleBase,
   backgroundColor: 'var(--nxai-card-bg, #fff)',
   border: '1px solid var(--nxai-card-border, #e5e7eb)',
+  userSelect: 'text',
+  WebkitUserSelect: 'text',
 };
 
 const toolCardStyle: React.CSSProperties = {
@@ -186,7 +206,7 @@ const configErrorStyle: React.CSSProperties = {
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
-  height: '100%',
+  flex: 1,          // ← fills the flex message-list; height:100% doesn't work in flex containers
   gap: '12px',
   color: 'var(--nxai-card-sub, #6b7280)',
   fontSize: '14px',
@@ -204,11 +224,12 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
   private messageListRef: HTMLDivElement | null = null;
   private streamListener: ((...args: any[]) => void) | null = null;
 
+  // Use parent-provided state when available so conversation survives tab switches
   state: ChatTabState = {
-    messages: [],
-    inputValue: '',
+    messages: this.props.initialMessages ?? [],
+    inputValue: this.props.initialPrompt ?? '',
     isGenerating: false,
-    sessionId: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    sessionId: this.props.initialSessionId ?? `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     providerId: CHAT_DEFAULTS.DEFAULT_PROVIDER,
     model: '',
     error: null,
@@ -234,6 +255,23 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
     // Auto-scroll when new content arrives
     if (this.state.messages !== prevState.messages || this.state.isGenerating !== prevState.isGenerating) {
       this.scrollToBottom();
+    }
+    // Notify parent when messages change so they survive tab switches
+    if (this.state.messages !== prevState.messages && this.props.onMessagesChange) {
+      this.props.onMessagesChange(this.state.messages);
+    }
+    if (this.state.sessionId !== prevState.sessionId && this.props.onSessionIdChange) {
+      this.props.onSessionIdChange(this.state.sessionId);
+    }
+    // Auto-submit initial prompt from dashboard once provider is ready
+    if (
+      this.props.initialPrompt &&
+      !prevState.providerReady && this.state.providerReady &&
+      this.state.inputValue === this.props.initialPrompt &&
+      this.state.messages.length === 0
+    ) {
+      this.handleSend();
+      this.props.onPromptConsumed?.();
     }
   }
 
@@ -314,12 +352,21 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
           const messages = [...prev.messages];
           const last = messages[messages.length - 1];
           if (last && last.role === 'assistant' && last.isStreaming) {
-            messages[messages.length - 1] = { ...last, content: last.content + event.text };
+            // Append to content (for fallback) AND to the last text segment (for ordered rendering)
+            const segs = [...(last.segments ?? [])];
+            const lastSeg = segs[segs.length - 1];
+            if (lastSeg && lastSeg.type === 'text') {
+              segs[segs.length - 1] = { type: 'text', content: lastSeg.content + event.text };
+            } else {
+              segs.push({ type: 'text', content: event.text });
+            }
+            messages[messages.length - 1] = { ...last, content: last.content + event.text, segments: segs };
           } else {
             messages.push({
               id: `msg_${Date.now()}`,
               role: 'assistant',
               content: event.text,
+              segments: [{ type: 'text', content: event.text }],
               isStreaming: true,
               timestamp: Date.now(),
               toolCalls: [],
@@ -337,12 +384,12 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
           if (last && last.role === 'assistant') {
             const toolCalls = [...(last.toolCalls ?? [])];
             if (event.type === 'tool_call_start') {
-              toolCalls.push({
-                id: event.id,
-                name: event.name,
-                arguments: {},
-                status: 'executing',
-              });
+              toolCalls.push({ id: event.id, name: event.name, arguments: {}, status: 'executing' });
+              // Record tool in segment order so it renders between surrounding text
+              const segs = [...(last.segments ?? [])];
+              segs.push({ type: 'tool', id: event.id });
+              messages[messages.length - 1] = { ...last, toolCalls, segments: segs };
+              return { messages };
             } else {
               const idx = toolCalls.findIndex((tc) => tc.id === event.id);
               if (idx >= 0) {
@@ -489,7 +536,7 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
     this.setState({ isGenerating: false });
   };
 
-  handleClear = (): void => {
+  handleNewTask = (): void => {
     this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR, this.state.sessionId);
     const newSessionId = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     this.setState({
@@ -560,7 +607,13 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
       : tc.status === 'denied' ? UI_COLORS.STATUS_ERROR
       : UI_COLORS.WPE_BRAND;
 
-    return React.createElement('div', { key: tc.id, style: toolCardStyle },
+    return React.createElement('div', {
+      key: tc.id,
+      style: toolCardStyle,
+      'data-testid': 'tool-call',
+      'data-tool-name': tc.name,
+      'data-tool-status': tc.status,
+    },
       React.createElement('div', {
         style: toolHeaderStyle,
         onClick: () => this.toggleToolExpand(tc.id),
@@ -630,49 +683,70 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
   renderMessage(msg: UIMessage): React.ReactNode {
     const isUser = msg.role === 'user';
     const bubbleStyle = isUser ? userBubbleStyle : assistantBubbleStyle;
+    const hasCalls = msg.toolCalls && msg.toolCalls.length > 0;
 
-    return React.createElement('div', {
-      key: msg.id,
-      style: { display: 'flex', flexDirection: 'column' },
-    },
-      React.createElement('div', {
-        style: {
-          fontSize: '11px',
-          fontWeight: 600,
-          color: 'var(--nxai-card-sub)',
-          marginBottom: '4px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-        },
-      }, isUser ? 'You' : 'Nexus AI'),
+    const cursor = msg.isStreaming && msg.content
+      ? React.createElement('span', {
+          style: {
+            display: 'inline-block', width: '6px', height: '14px',
+            backgroundColor: UI_COLORS.WPE_BRAND, marginLeft: '2px',
+            animation: 'nxai-blink 1s step-end infinite', verticalAlign: 'text-bottom',
+          },
+        })
+      : null;
 
-      React.createElement('div', { style: bubbleStyle },
-        msg.isStreaming && !msg.content && (!msg.toolCalls || msg.toolCalls.length === 0)
-          ? React.createElement('span', {
-              style: {
-                color: 'var(--nxai-card-sub, #9ca3af)',
-                fontStyle: 'italic',
-                fontSize: '13px',
-              },
-            }, 'Thinking\u2026')
-          : msg.content,
-        msg.isStreaming && msg.content
-          ? React.createElement('span', {
-              style: {
-                display: 'inline-block',
-                width: '6px',
-                height: '14px',
-                backgroundColor: UI_COLORS.WPE_BRAND,
-                marginLeft: '2px',
-                animation: 'nxai-blink 1s step-end infinite',
-                verticalAlign: 'text-bottom',
-              },
-            })
-          : null,
-      ),
+    // User messages: simple bubble
+    if (isUser) {
+      return React.createElement('div', { key: msg.id, style: { display: 'flex', flexDirection: 'column' } },
+        React.createElement('div', { style: { fontSize: '11px', fontWeight: 600, color: 'var(--nxai-card-sub)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' } }, 'You'),
+        React.createElement('div', { style: userBubbleStyle }, msg.content),
+      );
+    }
 
-      // Tool calls
-      msg.toolCalls?.map((tc) => this.renderToolCall(tc)) ?? null,
+    // Assistant message with segments: render text + tool calls in stream order
+    if (msg.segments && msg.segments.length > 0) {
+      const toolCallMap = new Map((msg.toolCalls ?? []).map(tc => [tc.id, tc]));
+      const renderedSegments: React.ReactNode[] = [];
+
+      for (let i = 0; i < msg.segments.length; i++) {
+        const seg = msg.segments[i];
+        if (seg.type === 'text' && seg.content.trim()) {
+          const isLast = i === msg.segments.length - 1;
+          renderedSegments.push(
+            React.createElement('div', { key: `text-${i}`, style: { ...assistantBubbleStyle, marginBottom: 6 } },
+              renderMarkdown(seg.content),
+              isLast && cursor ? cursor : null,
+            ),
+          );
+        } else if (seg.type === 'tool') {
+          const tc = toolCallMap.get(seg.id);
+          if (tc) renderedSegments.push(this.renderToolCall(tc));
+        }
+      }
+
+      if (renderedSegments.length === 0) {
+        renderedSegments.push(React.createElement('div', { key: 'thinking', style: assistantBubbleStyle },
+          React.createElement('span', { style: { color: 'var(--nxai-card-sub)', fontStyle: 'italic', fontSize: '13px' } }, 'Thinking\u2026'),
+        ));
+      }
+
+      return React.createElement('div', { key: msg.id, style: { display: 'flex', flexDirection: 'column' }, 'data-testid': 'assistant-message' },
+        React.createElement('div', { style: { fontSize: '11px', fontWeight: 600, color: 'var(--nxai-card-sub)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' } }, 'Nexus AI'),
+        ...renderedSegments,
+      );
+    }
+
+    // Fallback: old rendering (no segments \u2014 e.g. loaded from session history)
+    const contentBubble = React.createElement('div', { style: bubbleStyle },
+      msg.isStreaming && !msg.content && !hasCalls
+        ? React.createElement('span', { style: { color: 'var(--nxai-card-sub)', fontStyle: 'italic', fontSize: '13px' } }, 'Thinking\u2026')
+        : renderMarkdown(msg.content),
+      cursor,
+    );
+
+    return React.createElement('div', { key: msg.id, style: { display: 'flex', flexDirection: 'column' }, 'data-testid': 'assistant-message' },
+      React.createElement('div', { style: { fontSize: '11px', fontWeight: 600, color: 'var(--nxai-card-sub)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' } }, 'Nexus AI'),
+      hasCalls ? [...(msg.toolCalls!.map(tc => this.renderToolCall(tc))), msg.content ? contentBubble : null] : [contentBubble],
     );
   }
 
@@ -706,12 +780,25 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
             disabled: !inputValue.trim() || !providerReady,
           }, 'Send'),
 
-      this.state.messages.length > 0
-        ? React.createElement('button', {
-            style: btnStyle,
-            onClick: this.handleClear,
-          }, 'Clear')
-        : null,
+      React.createElement('button', {
+        style: {
+          fontSize: '12px',
+          fontWeight: 600,
+          padding: '6px 12px',
+          borderRadius: '6px',
+          border: '1px solid var(--nxai-card-border, #30363d)',
+          background: 'transparent',
+          color: this.state.messages.length === 0
+            ? 'var(--nxai-card-sub, #6b7280)'
+            : 'var(--nxai-card-text, #e6edf3)',
+          opacity: this.state.messages.length === 0 ? 0.4 : 1,
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          transition: 'opacity .15s',
+        },
+        onClick: this.handleNewTask,
+        title: 'Start a new task (clears conversation)',
+      }, '+ New Task'),
     );
   }
 
@@ -742,12 +829,19 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
   }
 
   render(): React.ReactNode {
-    const { messages, providerReady, error } = this.state;
+    const { messages, providerReady, error, isGenerating } = this.state;
 
     // Inject blinking cursor animation
     this.injectCursorAnimation();
 
-    return React.createElement('div', { style: containerStyle },
+    const userTurnCount = messages.filter(m => m.role === 'user').length;
+    const showContextWarning = userTurnCount >= 10;
+
+    return React.createElement('div', {
+      style: containerStyle,
+      'data-nexus-chat': 'true',
+      'data-is-generating': isGenerating ? 'true' : 'false',
+    },
       !providerReady && error
         ? this.renderConfigError()
         : React.createElement(React.Fragment, null,
@@ -758,6 +852,40 @@ export class ChatTab extends React.Component<ChatTabProps, ChatTabState> {
               messages.length === 0 ? this.renderEmptyState() : null,
               messages.map((msg) => this.renderMessage(msg)),
             ),
+            showContextWarning
+              ? React.createElement('div', {
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 14px',
+                    background: 'rgba(245,158,11,0.08)',
+                    borderTop: '1px solid rgba(245,158,11,0.2)',
+                    fontSize: '12px',
+                    color: '#fbbf24',
+                    flexShrink: 0,
+                  },
+                },
+                  React.createElement('span', null, '⚠'),
+                  React.createElement('span', { style: { flex: 1 } },
+                    `Long conversation (${userTurnCount} turns) — context quality may degrade.`,
+                  ),
+                  React.createElement('button', {
+                    onClick: this.handleNewTask,
+                    style: {
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '5px',
+                      border: '1px solid rgba(245,158,11,0.3)',
+                      background: 'rgba(245,158,11,0.1)',
+                      color: '#fbbf24',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    },
+                  }, '+ New Task'),
+                )
+              : null,
             this.renderInput(),
           ),
     );

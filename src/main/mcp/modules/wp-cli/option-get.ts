@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { requireRunning, ok, error } from './preflight';
+import { ok, error } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { withSiteRunning } from '../with-site-running';
 
 export const optionGetHandler: McpToolHandler = {
   definition: {
@@ -22,7 +23,7 @@ export const optionGetHandler: McpToolHandler = {
     const option = args.option as string;
     if (!option) return error('Option name is required.');
 
-    const target = await resolveTarget(args, services);
+    const target = await resolveTarget(args, services, 'wpcli_read');
     if ('content' in target) return target;
 
     if (target.type === 'remote') {
@@ -33,23 +34,22 @@ export const optionGetHandler: McpToolHandler = {
       return ok(`${option}: ${result.stdout?.trim() ?? '(empty)'}`);
     }
 
-    const check = requireRunning(target.site, services);
-    if (check) return check;
+    return withSiteRunning(target.site.id, services, async () => {
+      try {
+        const value = await services.localServices!.getOption(target.site.id, option);
+        if (value === null) {
+          return error(`Option "${option}" not found.`);
+        }
 
-    try {
-      const value = await services.localServices!.getOption(target.site.id, option);
-      if (value === null) {
-        return error(`Option "${option}" not found.`);
+        return ok(`${option}: ${value}`);
+      } catch (err) {
+        // Fall back to WP-CLI if getOption fails
+        const result = await services.localServices!.wpCliRun(target.site.id, ['option', 'get', option, '--format=json']);
+        if (!result.success) {
+          return error(`Option "${option}" not found.`);
+        }
+        return ok(`${option}: ${result.stdout?.trim() ?? '(empty)'}`);
       }
-
-      return ok(`${option}: ${value}`);
-    } catch (err) {
-      // Fall back to WP-CLI if getOption fails
-      const result = await services.localServices!.wpCliRun(target.site.id, ['option', 'get', option, '--format=json']);
-      if (!result.success) {
-        return error(`Option "${option}" not found.`);
-      }
-      return ok(`${option}: ${result.stdout?.trim() ?? '(empty)'}`);
-    }
+    });
   },
 };

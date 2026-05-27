@@ -23,7 +23,7 @@ export const pluginListHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const target = await resolveTarget(args, services);
+    const target = await resolveTarget(args, services, 'wpcli_read');
     if ('content' in target) return target; // error result
 
     if (target.type === 'remote') {

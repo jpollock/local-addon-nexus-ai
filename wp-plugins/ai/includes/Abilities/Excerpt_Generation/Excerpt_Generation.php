@@ -11,9 +11,9 @@ namespace WordPress\AI\Abilities\Excerpt_Generation;
 
 use WP_Error;
 use WordPress\AI\Abstracts\Abstract_Ability;
+use WordPress\AI\Experiments\Excerpt_Generation\Excerpt_Generation as Excerpt_Generation_Experiment;
 
 use function WordPress\AI\get_post_context;
-use function WordPress\AI\get_preferred_models_for_text_generation;
 use function WordPress\AI\normalize_content;
 
 /**
@@ -22,6 +22,15 @@ use function WordPress\AI\normalize_content;
  * @since 0.2.0
  */
 class Excerpt_Generation extends Abstract_Ability {
+
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @since 0.8.0
+	 */
+	protected function guideline_categories(): array {
+		return array( 'site', 'copy' );
+	}
 
 	/**
 	 * {@inheritDoc}
@@ -93,12 +102,6 @@ class Excerpt_Generation extends Abstract_Ability {
 			// Default to the passed in content if it exists.
 			if ( $args['content'] ) {
 				$content = normalize_content( $args['content'] );
-			}
-
-			// Fallback: if content is still empty (e.g. new post or page builder),
-			// use the post title so the user can still get an excerpt suggestion.
-			if ( empty( $content ) && ! empty( $post->post_title ) ) {
-				$content = sanitize_text_field( $post->post_title );
 			}
 		} else {
 			$content = normalize_content( $args['content'] ?? '' );
@@ -230,11 +233,34 @@ class Excerpt_Generation extends Abstract_Ability {
 			$content .= "\n\n<additional-context>" . $context . '</additional-context>';
 		}
 
+		$prompt_builder = $this->get_prompt_builder( $content );
+
+		if ( is_wp_error( $prompt_builder ) ) {
+			return $prompt_builder;
+		}
+
 		// Generate an excerpt using the AI client.
-		return wp_ai_client_prompt( $content )
+		return $prompt_builder->generate_text();
+	}
+
+	/**
+	 * Gets a prompt builder for generating an excerpt.
+	 *
+	 * @since 0.7.0
+	 *
+	 * @param string $prompt The prompt to generate an excerpt from.
+	 * @return \WP_AI_Client_Prompt_Builder|\WP_Error The prompt builder, or a WP_Error on failure.
+	 */
+	private function get_prompt_builder( string $prompt ) {
+		$prompt_builder = wp_ai_client_prompt( $prompt )
 			->using_system_instruction( $this->get_system_instruction() )
-			->using_temperature( 0.7 )
-			->using_model_preference( ...get_preferred_models_for_text_generation() )
-			->generate_text();
+			->using_temperature( 0.7 );
+
+		$prompt_builder = $this->set_provider_model_preference( $prompt_builder, Excerpt_Generation_Experiment::class );
+
+		return $this->ensure_text_generation_supported(
+			$prompt_builder,
+			esc_html__( 'Excerpt generation failed. Please ensure you have a connected provider that supports text generation.', 'ai' )
+		);
 	}
 }

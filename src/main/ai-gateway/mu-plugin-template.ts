@@ -60,16 +60,6 @@ if (!defined('NEXUS_AI_SITE_ID')) {
     define('NEXUS_AI_SITE_ID', '${siteId}');
 }
 
-// Enable WordPress debugging for Nexus AI event logging
-if (!defined('WP_DEBUG')) {
-    define('WP_DEBUG', true);
-}
-if (!defined('WP_DEBUG_LOG')) {
-    define('WP_DEBUG_LOG', true);
-}
-if (!defined('WP_DEBUG_DISPLAY')) {
-    define('WP_DEBUG_DISPLAY', false);
-}
 
 ${aiGatewayUrl && aiGatewayToken ? `
 // ============================================================================
@@ -278,6 +268,52 @@ add_filter('http_request_args', function($args, $url) {
 
     return $args;
 }, 10, 2);
+
+// ============================================================================
+// CONNECTOR APPROVAL: Pre-approve all callers for the local-gateway connector.
+//
+// The connector-approval experiment (ai plugin v1.0.0+) blocks AI requests unless
+// the calling plugin has been explicitly approved for each connector. The Local
+// Gateway manages access at the gateway level (auth token), so we bypass the
+// per-plugin approval gate by filtering the approvals option directly.
+// This avoids writing to the DB and works for any caller automatically.
+// ============================================================================
+
+add_filter('option_wpai_connector_approvals', function($approvals) {
+    if (!is_array($approvals)) {
+        $approvals = [];
+    }
+    // Pre-approve known callers for local-gateway. The gateway authenticates via
+    // token so per-plugin approval at the WP layer is redundant for local dev.
+    $callers = [
+        'ai/ai.php',
+        'ai-provider-for-local-gateway/plugin.php',
+        'nexus-ai-connector/nexus-ai-connector.php',
+    ];
+    foreach ($callers as $caller) {
+        if (!isset($approvals[$caller])) {
+            $approvals[$caller] = [];
+        }
+        $approvals[$caller]['local-gateway'] = true;
+    }
+    return $approvals;
+}, 1);
+
+// Override the connector approval check: if the connector is local-gateway, allow through.
+add_filter('pre_http_request', function($preempt, $args, $url) {
+    // Only act on blocked local-gateway requests (WP_Error from Http_Guard)
+    if (!is_wp_error($preempt)) {
+        return $preempt;
+    }
+    if ($preempt->get_error_code() !== 'wpai_connector_not_approved') {
+        return $preempt;
+    }
+    $data = $preempt->get_error_data();
+    if (isset($data['connector_id']) && $data['connector_id'] === 'local-gateway') {
+        return false; // allow the request through
+    }
+    return $preempt;
+}, 6, 3); // priority 6 = just after Http_Guard (priority 5)
 
 // ============================================================================
 // IMAGE GENERATION: Prepend local-gateway image models to the preferred list.

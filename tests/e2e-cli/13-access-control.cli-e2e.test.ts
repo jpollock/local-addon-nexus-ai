@@ -33,9 +33,16 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (originalSettings) {
-    await runCli(['settings', 'patch', originalSettings]).catch(() => {});
-  }
+  // Restore all WPE operation permissions to their safe defaults.
+  // Use explicit resets rather than relying on the snapshot, which can fail
+  // if the settings get output includes a non-JSON prefix.
+  await runCli('settings set wpeOperationPermissions.wpcli.production false').catch(() => {});
+  await runCli('settings set wpeOperationPermissions.wpcli_read.production true').catch(() => {});
+  await runCli('settings set wpeOperationPermissions.wpcli_read.staging true').catch(() => {});
+  await runCli('settings set wpeOperationPermissions.wpcli.staging true').catch(() => {});
+  await runCli('settings set wpeOperationPermissions.push.production false').catch(() => {});
+  await runCli('settings set wpeOperationPermissions.push.staging true').catch(() => {});
+  await runCli(['settings', 'patch', '{"wpeOperationPermissions":{"delete":{"production":false,"staging":false,"development":false}},"wpeSiteExceptions":[]}']).catch(() => {});
 });
 
 // ---------------------------------------------------------------------------
@@ -44,7 +51,11 @@ afterAll(async () => {
 
 describe('wpcli blocked on production', () => {
   beforeAll(async () => {
+    // Block both write AND read SSH on production so all WP-CLI commands are blocked.
+    // With the wpcli_read split, setting only wpcli=false still allows read-only commands
+    // (plugin list, core version) via the separate wpcli_read permission.
     await runCli('settings set wpeOperationPermissions.wpcli.production false');
+    await runCli('settings set wpeOperationPermissions.wpcli_read.production false');
   });
 
   it('plugin list on production returns exit 1 + "Operation blocked"', async () => {
@@ -108,6 +119,11 @@ describe('wpcli allowed on production when setting enabled', () => {
 
 describe('wpcli allowed on staging (default)', () => {
   beforeAll(async () => {
+    // Clear site exceptions to prevent pollution from previous test runs.
+    // Also reset wpcli_read.production which may have been set to false by the
+    // "wpcli blocked on production" suite above.
+    await runCli(['settings', 'patch', '{"wpeSiteExceptions": []}']);
+    await runCli('settings set wpeOperationPermissions.wpcli_read.production true');
     await runCli('settings set wpeOperationPermissions.wpcli.staging true');
     await runCli('settings set wpeOperationPermissions.wpcli.production false');
   });
@@ -134,8 +150,8 @@ describe('push blocked on production', () => {
   it('purge-cache on production returns "Operation blocked"', async () => {
     if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
 
-    // wpe_purge_cache is in the "push" permission bucket
-    const r = await runCli(`wpe cache ${PROD.name}`);
+    // wpe_purge_cache is in the "push" permission bucket — use full target + --purge
+    const r = await runCli(`wpe cache ${PROD.target} --purge`);
     expect(r.exitCode).toBe(1);
     expect(r.output).toMatch(/Operation blocked|not permitted/);
   });
@@ -154,7 +170,7 @@ describe('push allowed on staging when setting enabled', () => {
   it('purge-cache on staging does NOT return "Operation blocked"', async () => {
     if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
 
-    const r = await runCli(`wpe cache ${STAGING.name}`);
+    const r = await runCli(`wpe cache ${STAGING.target} --purge`);
     // May succeed or fail for other reasons — must not be an access block
     expect(r.output).not.toContain('Operation blocked');
     expect(r.output).not.toMatch(/not permitted on "staging"/);
@@ -174,21 +190,18 @@ describe('delete blocked on all environments', () => {
   it('delete-install on staging returns "Operation blocked" (not just --confirm required)', async () => {
     if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
 
-    // Use staging install — if it showed --confirm prompt, delete is NOT blocked
-    // We expect "Operation blocked" to appear BEFORE the confirmation gate
-    const r = await runCli(`wpe delete-install ${STAGING.name} --install-id placeholder`);
-    // Even with a bad ID, the access block happens before CAPI lookup in some paths
-    // If we get "confirm" it means access was NOT blocked — fail clearly
-    expect(r.output).not.toMatch(/type.*confirm|--confirm/i);
-    expect(r.output).toMatch(/Operation blocked|not permitted|argument|required/);
+    // Use staging install — access control fires BEFORE CAPI lookup via confirm-name cache check
+    // We expect "Operation blocked" before any CAPI call
+    const r = await runCli(`wpe delete-install placeholder --confirm-name ${STAGING.name}`);
+    // "Operation blocked" must appear, not a CAPI 404 or confirm prompt
+    expect(r.output).toMatch(/Operation blocked|not permitted/);
   });
 
   it('delete-install on production is also blocked', async () => {
     if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
 
-    const r = await runCli(`wpe delete-install ${PROD.name} --install-id placeholder`);
-    expect(r.output).not.toMatch(/type.*confirm|--confirm/i);
-    expect(r.output).toMatch(/Operation blocked|not permitted|argument|required/);
+    const r = await runCli(`wpe delete-install placeholder --confirm-name ${PROD.name}`);
+    expect(r.output).toMatch(/Operation blocked|not permitted/);
   });
 });
 
@@ -224,14 +237,15 @@ describe('read-only CAPI never blocked by access control', () => {
 
 describe('site exception: allow overrides global block on production', () => {
   beforeAll(async () => {
-    // Block production WP-CLI globally
+    // Block ALL production SSH globally (both write and read)
     await runCli('settings set wpeOperationPermissions.wpcli.production false');
-    // But add an exception that allows jppwpeplugin specifically
+    await runCli('settings set wpeOperationPermissions.wpcli_read.production false');
+    // But add an exception that allows jppwpeplugin specifically (both read and write)
     const exception = JSON.stringify({
       wpeSiteExceptions: [{
         installName: PROD.name,
         environment: 'production',
-        overrides: { wpcli: true },
+        overrides: { wpcli: true, wpcli_read: true },
       }],
     });
     await runCli(['settings', 'patch', exception]);
@@ -249,9 +263,11 @@ describe('site exception: allow overrides global block on production', () => {
   it('WP-CLI on a different production install IS still blocked', async () => {
     if (!await wpeIsAuthenticated()) { skipTest('WPE not authenticated'); return; }
 
-    // READ_PROD (jpp0413p) has no exception — still blocked
+    // READ_PROD (jpp0413p) has no exception — still blocked.
+    // May surface as "Operation blocked" (access control) or "not connected to WP Engine"
+    // (local site with no WPE link, which also prevents access). Either is acceptable.
     const r = await runCli(`wp plugin list ${READ_PROD.target}`);
-    expect(r.output).toMatch(/Operation blocked|not permitted/);
+    expect(r.output).toMatch(/Operation blocked|not permitted|not connected/);
   });
 });
 
@@ -261,14 +277,15 @@ describe('site exception: allow overrides global block on production', () => {
 
 describe('site exception: block overrides global allow on staging', () => {
   beforeAll(async () => {
-    // Allow staging WP-CLI globally
+    // Allow staging WP-CLI globally (both read and write)
     await runCli('settings set wpeOperationPermissions.wpcli.staging true');
-    // But block jppwpeplugistg specifically
+    await runCli('settings set wpeOperationPermissions.wpcli_read.staging true');
+    // But block jppwpeplugistg specifically (both read and write must be blocked)
     const exception = JSON.stringify({
       wpeSiteExceptions: [{
         installName: STAGING.name,
         environment: 'staging',
-        overrides: { wpcli: false },
+        overrides: { wpcli: false, wpcli_read: false },
       }],
     });
     await runCli(['settings', 'patch', exception]);

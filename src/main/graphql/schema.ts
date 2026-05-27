@@ -29,6 +29,24 @@ export const typeDefs = gql`
     twinCompleteness: String
     "Linked WPE environment"
     linkedTo: SiteLink
+    "Content index state (idle, indexing, indexed, stale, error)"
+    indexState: String
+    "Number of indexed documents"
+    documentCount: Int
+    "Number of indexed chunks"
+    chunkCount: Int
+    "Unix timestamp (ms) of last completed index"
+    lastIndexed: Float
+    "Number of cached plugins"
+    pluginCount: Int
+    "Number of cached posts"
+    postCount: Int
+    "Metadata cache last updated timestamp (ms)"
+    metaUpdatedAt: Float
+    "Metadata cache age string (e.g. '5m ago')"
+    metaAge: String
+    "Metadata update source"
+    metaSource: String
   }
 
   type WpeSite {
@@ -1767,6 +1785,23 @@ export const typeDefs = gql`
 
     "Get portfolio overview (executive summary)"
     nexusWpePortfolioOverview(monthOffset: Int): NexusWpeDataResult!
+
+    "Get WordPress users for a local site from the graph DB"
+    nexusSiteUsers(siteId: String!): NexusSiteUsersResult!
+  }
+
+  type NexusSiteUser {
+    userId: Int!
+    username: String!
+    email: String!
+    roles: [String!]!
+  }
+
+  type NexusSiteUsersResult {
+    success: Boolean!
+    error: String
+    users: [NexusSiteUser!]
+    siteId: String!
   }
 
   # Generic result for WPE operations returning raw data
@@ -1865,5 +1900,32 @@ export const typeDefs = gql`
     cachedAgeMinutes: Int!
     firstDate: String
     lastDate: String
+  }
+
+  # ============================================================================
+  # B3: Plugin Diff — cross-env plugin version comparison (enables M5-04)
+  # ============================================================================
+
+  extend type Mutation {
+    "Compare plugin versions between two installs (local siteId or WPE install name)"
+    nexusPluginDiff(installA: String!, installB: String!): NexusPluginDiffResult!
+  }
+
+  type PluginDiffEntry {
+    slug:     String!
+    versionA: String
+    versionB: String
+    statusA:  String
+    statusB:  String
+  }
+
+  type NexusPluginDiffResult {
+    success:           Boolean!
+    error:             String
+    installA:          String!
+    installB:          String!
+    onlyInA:           [PluginDiffEntry!]!
+    onlyInB:           [PluginDiffEntry!]!
+    versionMismatches: [PluginDiffEntry!]!
   }
 `;

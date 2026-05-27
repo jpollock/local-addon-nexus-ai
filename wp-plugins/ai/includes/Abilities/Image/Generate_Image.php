@@ -12,6 +12,7 @@ namespace WordPress\AI\Abilities\Image;
 use Throwable;
 use WP_Error;
 use WordPress\AI\Abstracts\Abstract_Ability;
+use WordPress\AI\Features\Image_Generation\Image_Generation as Image_Generation_Feature;
 use WordPress\AiClient\Files\DTO\File;
 use WordPress\AiClient\Files\Enums\FileTypeEnum;
 use WordPress\AiClient\Providers\DTO\ProviderMetadata;
@@ -26,6 +27,15 @@ use function WordPress\AI\get_preferred_image_models;
  * @since 0.2.0
  */
 class Generate_Image extends Abstract_Ability {
+
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @since 0.8.0
+	 */
+	protected function guideline_categories(): array {
+		return array( 'site', 'images' );
+	}
 
 	/**
 	 * {@inheritDoc}
@@ -239,10 +249,19 @@ class Generate_Image extends Abstract_Ability {
 		$request_options = new RequestOptions();
 		$request_options->setTimeout( 90 );
 
+		// Inject guidelines into the prompt. Unlike the other features, we don't
+		// use system instructions here because most image gen models don't support them.
+		$guidelines = $this->get_guidelines_for_prompt();
+		if ( $guidelines ) {
+			$prompt .= "\n\n" . 'The following guidelines represent the site&#039;s editorial standards. Apply them where relevant. If guidelines conflict with the above input, prioritize accuracy.';
+			$prompt .= "\n\n" . $guidelines;
+		}
+
 		$prompt_builder = wp_ai_client_prompt( $prompt )
 			->using_request_options( $request_options )
-			->as_output_file_type( FileTypeEnum::inline() )
-			->using_model_preference( ...get_preferred_image_models() );
+			->as_output_file_type( FileTypeEnum::inline() );
+
+		$prompt_builder = $this->set_provider_model_preference( $prompt_builder, Image_Generation_Feature::class, get_preferred_image_models() );
 
 		if ( null !== $reference_image ) {
 			try {
@@ -256,6 +275,12 @@ class Generate_Image extends Abstract_Ability {
 			}
 		}
 
-		return $prompt_builder;
+		$error_message = esc_html__( 'Image generation failed. Please ensure you have a connected provider that supports image generation.', 'ai' );
+
+		if ( null !== $reference_image ) {
+			$error_message = esc_html__( 'Image refinement failed. Please ensure you have a connected provider that supports image refinement, not just image generation.', 'ai' );
+		}
+
+		return $this->ensure_image_generation_supported( $prompt_builder, $error_message );
 	}
 }

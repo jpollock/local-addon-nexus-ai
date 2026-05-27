@@ -69,10 +69,14 @@ function register_provider(): void
                 $registry->setHttpTransporter('local-gateway', $httpTransporter);
             }
 
-            // Also set the WordPress options as a fallback for the Connectors API
-            if (!get_option('connectors_ai_local-gateway_api_key')) {
-                update_option('connectors_ai_local-gateway_api_key', $gatewayToken);
+            // Also set the WordPress option used by the Connectors API for credentials check.
+            // The Connectors API sanitizes provider IDs with str_replace('-','_') so the key
+            // must use underscores: connectors_ai_local_gateway_api_key (NOT hyphens).
+            if (!get_option('connectors_ai_local_gateway_api_key')) {
+                update_option('connectors_ai_local_gateway_api_key', $gatewayToken);
             }
+            // Migration: remove stale hyphenated key written by older versions.
+            delete_option('connectors_ai_local-gateway_api_key');
 
         }
     } catch (\Exception $e) {
@@ -148,6 +152,21 @@ add_filter('http_request_args', function ($args, $url) {
         $args['timeout'] = (strpos($url, '/images/') !== false) ? 120 : 30;
     }
     return $args;
+}, 10, 2);
+
+// Declare credentials available whenever the local-gateway provider is registered.
+// This is needed because has_ai_credentials() checks wp_options for the API key — but
+// the Local Gateway manages credentials outside WP (via the MU plugin constant). Without
+// this filter, the AI plugin shows "no valid connector" even when the gateway is running.
+add_filter('wpai_has_ai_credentials', function ($has_credentials, $connectors) {
+    if ($has_credentials) {
+        return $has_credentials;
+    }
+    if (!class_exists(\WordPress\AiClient\AiClient::class)) {
+        return $has_credentials;
+    }
+    $registry = \WordPress\AiClient\AiClient::defaultRegistry();
+    return $registry->hasProvider('local-gateway') ? true : $has_credentials;
 }, 10, 2);
 
 // Bypass credential validation if gateway token is set

@@ -34,28 +34,52 @@ Symlink or copy into Local's addon path, then restart Local.
 
 ## Dashboard
 
-The Nexus AI dashboard appears as an addon view inside Local. It has four tabs:
+The Nexus AI dashboard appears as an addon view inside Local. It has five tabs (Dashboard is the default):
 
-### Overview
+### Dashboard
 
-Shows fleet-wide statistics: total sites, running vs halted, WordPress version distribution, and plugin usage across all local sites.
+Fleet-wide statistics and quick actions:
 
-### Search
+- **Ask Nexus AI** — Quick-send card at the top. Type a question and press Enter or →; it opens the Ask/Tell tab and submits the prompt automatically.
+- **Fleet Intelligence** — Site counts (local + WPE), WordPress version distribution, PHP distribution.
+- **Data Completeness** — Progress bars for Scanned / Configured / Searchable sites. ⚡ Index sites opens Operations; ⏱ Schedule opens Settings.
+- **AI Integration** — MCP server status, AI gateway usage.
 
-Semantic search across indexed site content. Type a natural language query (e.g., "posts about pricing") and Nexus AI finds relevant content using vector similarity, not just keyword matching.
+### Ask/Tell
 
-Sites must be indexed before they appear in search results. Use the Sites tab to trigger indexing.
+An AI assistant that manages WordPress sites using natural language. Calls the same MCP tools that external clients use.
 
-### Sites
+> **Tip:** For a richer experience with full tool support and conversation history, use the MCP server or CLI with Claude, Cursor, or another AI tool. Ask/Tell is a quick way to try the capabilities.
 
-Lists all local WordPress sites with their status, WordPress version, and available actions:
+### Operations
 
-- **Index** — Scan the site's content (posts, pages, products, media) and store it in the vector database for semantic search.
-- **Setup for AI** — One-click button that installs the AI Experiments plugin and enables plugin abilities (like ACF field group management). See [WP Connector](wp-connector.md) for details.
+Bulk actions and site status:
 
-### Chat
+- **Keep data current** — Refresh metadata (WP-CLI: active plugins, WP version, PHP, themes), Index content, Sync WPE metadata.
+- **Site Status** — Per-site data level (Scanned / Configured / Searchable) with expand-to-detail. Click ⚡ Index to index a running site.
+- **Advanced** — Factory reset, content index reset, database health, SSH diagnostics.
 
-An AI assistant inside Local that manages WordPress sites using natural language. It calls the same MCP tools that external clients use.
+Indexing a site: click **⚡ Index sites** from the Dashboard, or expand the Operations → Site Status row and click **⚡ Index** on a running site.
+
+**Setup AI for a site:** Use the per-site Nexus section in Local's site info panel (not from the dashboard).
+
+### Activity
+
+Event timeline, event stats, storage health, and top issues panel.
+
+### Settings
+
+Operational configuration — auto-indexing, sync schedules, and WPE access controls.
+
+**Sync schedule — WPE Installs:**
+- **Metadata sync** — checkbox (enable) + interval in hours. When enabled, runs SSH WP-CLI every hour and syncs installs older than the threshold. Default: **disabled** (opt-in).
+- **Site info updates** — checkbox (enable) + interval. URL, admin email, post count via SSH. Default: **disabled** (opt-in).
+
+**Sync schedule — Local Sites:**
+- **Content index interval** — checkbox + interval. Auto-starts halted sites, indexes content, then stops. 0 = manual only. Default: **disabled**.
+- **Offline site scan** — interval only (always runs). Filesystem scan for halted sites. Default: 24h.
+
+Changes to sync settings take effect immediately — no Local restart required.
 
 **Supported providers:** Ollama (local, default), OpenAI, Anthropic, Google, WPE Gateway
 
@@ -207,13 +231,13 @@ Nexus AI indexes WordPress content for semantic search:
 4. **Embed** — Generates 384-dimensional vectors using all-MiniLM-L6-v2 (runs locally via ONNX)
 5. **Index** — Stores vectors in LanceDB with cosine distance search
 
-Indexing happens on-demand when you click "Index" in the Sites tab, or programmatically via the `reindex_site` tool. Content is automatically re-indexed when a site starts if auto-indexing is enabled.
+Indexing happens on-demand via Operations → ⚡ Index sites, or per-site via the Site Status panel, or programmatically via the `reindex_site` MCP tool. Content is automatically re-indexed when a site starts if auto-indexing is enabled (Settings → Content index interval).
 
 Supported content types: posts, pages, custom post types, WooCommerce products (price, SKU, stock, attributes), ACF custom fields (text, repeater, group, flexible content), and media metadata.
 
 ## AI Setup
 
-Nexus AI can configure WordPress sites for AI features with one click. The "Setup AI" button (found in the Sites tab or per-site addon section) performs these steps:
+Nexus AI can configure WordPress sites for AI features with one click. The "Setup AI" button (found in the per-site Nexus section in Local's site info panel) performs these steps:
 
 1. Installs and activates the AI Experiments plugin
 2. Installs the Ollama provider plugin (registers Ollama as a WordPress AI service provider)
@@ -222,7 +246,7 @@ Nexus AI can configure WordPress sites for AI features with one click. The "Setu
 5. Syncs configured API keys to WordPress
 6. Enables ACF abilities (for sites using Advanced Custom Fields)
 
-**Fleet-wide setup:** Click "Setup AI for All Running Sites" on the Overview tab to configure all running sites at once. Progress is tracked in the Bulk Operations panel.
+**Fleet-wide setup:** Click "Setup AI for All Running Sites" in Operations → Keep data current to configure all running sites at once. Progress is tracked in the Bulk Operations panel.
 
 **Requirements:**
 - Site must be running

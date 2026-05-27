@@ -1,14 +1,15 @@
 import type { NexusSettings, WpeOperationPermissions } from '../../../common/types';
 import { STORAGE_KEYS } from '../../../common/constants';
 
-type Operation = 'pull' | 'wpcli' | 'push' | 'delete';
+type Operation = 'pull' | 'wpcli_read' | 'wpcli' | 'push' | 'delete';
 type EnvKey = 'development' | 'staging' | 'production';
 
 export const DEFAULT_OPERATION_PERMISSIONS: Record<Operation, Record<EnvKey, boolean>> = {
-  pull:   { development: true,  staging: true,  production: true  },
-  wpcli:  { development: true,  staging: true,  production: false },
-  push:   { development: true,  staging: true,  production: false },  // also covers purge-cache, update-install
-  delete: { development: false, staging: false, production: false }, // true destructive: delete-install/site, promote-environment
+  pull:       { development: true,  staging: true,  production: true  },
+  wpcli_read: { development: true,  staging: true,  production: true  }, // read-only SSH: plugin list, core version, user list, etc.
+  wpcli:      { development: true,  staging: true,  production: false }, // write SSH: plugin install/update/activate, core update, etc.
+  push:       { development: true,  staging: true,  production: false }, // also covers purge-cache, update-install
+  delete:     { development: false, staging: false,  production: false }, // true destructive: delete-install/site, promote-environment
 };
 
 /**
@@ -27,7 +28,7 @@ export const DEFAULT_OPERATION_PERMISSIONS: Record<Operation, Record<EnvKey, boo
  * @param installName WPE install name; required to apply site exceptions
  */
 export function isOperationAllowed(
-  operation: Operation,
+  operation: 'pull' | 'wpcli_read' | 'wpcli' | 'push' | 'delete',
   environment: string | undefined,
   settings: Pick<NexusSettings, 'wpeOperationPermissions' | 'wpeSiteExceptions'>,
   installName?: string,
@@ -78,10 +79,11 @@ export function migrateFromLegacyEnvFilter(
   const devAllowed = allowedEnvs.includes('development');
 
   return {
-    pull:   { development: true,        staging: true,           production: true },
-    wpcli:  { development: devAllowed,  staging: stagingAllowed, production: productionAllowed },
-    push:   { development: devAllowed,  staging: stagingAllowed, production: productionAllowed },
-    delete: { development: false,       staging: false,          production: false },
+    pull:       { development: true,        staging: true,           production: true },
+    wpcli_read: { development: true,        staging: true,           production: true }, // read ops always allowed
+    wpcli:      { development: devAllowed,  staging: stagingAllowed, production: productionAllowed },
+    push:       { development: devAllowed,  staging: stagingAllowed, production: productionAllowed },
+    delete:     { development: false,       staging: false,          production: false },
   };
 }
 
