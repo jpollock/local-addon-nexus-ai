@@ -102,3 +102,76 @@ describe('upsert + getSiteStats', () => {
     expect(stats.documentCount).toBe(2); // 2 unique post IDs
   });
 });
+
+describe('search', () => {
+  let store: SqliteVecStore;
+  let dbPath: string;
+
+  beforeEach(async () => {
+    dbPath = tmpDb();
+    store = new SqliteVecStore(dbPath);
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  });
+
+  it('returns empty array for non-existent site', async () => {
+    const results = await store.search('no-such-site', new Float32Array(384).fill(0), { limit: 5 });
+    expect(results).toEqual([]);
+  });
+
+  it('returns results ranked by score descending', async () => {
+    const docA = makeDoc({ id: 'wp_s_1', postId: 1, vector: new Float32Array(384).fill(0.5) });
+    const docB = makeDoc({ id: 'wp_s_2', postId: 2, vector: new Float32Array(384).fill(1.0) });
+    await store.upsert('site-1', [docA, docB]);
+
+    const query = new Float32Array(384).fill(1.0);
+    const results = await store.search('site-1', query, { limit: 5 });
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].postId).toBe(2); // docB is closest to query
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i].score).toBeLessThanOrEqual(results[i - 1].score);
+    }
+  });
+
+  it('deduplicates — only the highest-scoring chunk per postId is returned', async () => {
+    const chunk0 = makeDoc({ id: 'wp_s_1_c0', postId: 1, chunkIndex: 0, vector: new Float32Array(384).fill(0.5) });
+    const chunk1 = makeDoc({ id: 'wp_s_1_c1', postId: 1, chunkIndex: 1, vector: new Float32Array(384).fill(1.0) });
+    await store.upsert('site-1', [chunk0, chunk1]);
+
+    const results = await store.search('site-1', new Float32Array(384).fill(1.0), { limit: 10 });
+    const postOneHits = results.filter(r => r.postId === 1);
+    expect(postOneHits.length).toBe(1);
+  });
+
+  it('filters by relevanceFloor', async () => {
+    // Very dissimilar vector (all zeros vs query of all ones — maximum distance)
+    const doc = makeDoc({ id: 'wp_s_1', postId: 1, vector: new Float32Array(384).fill(0.0) });
+    await store.upsert('site-1', [doc]);
+
+    const query = new Float32Array(384).fill(1.0);
+    const results = await store.search('site-1', query, { limit: 10, relevanceFloor: 0.99 });
+    expect(results).toEqual([]);
+  });
+
+  it('filters by postType when specified', async () => {
+    const postDoc = makeDoc({ id: 'wp_s_1', postId: 1, postType: 'post', vector: new Float32Array(384).fill(1.0) });
+    const pageDoc = makeDoc({ id: 'wp_s_2', postId: 2, postType: 'page', vector: new Float32Array(384).fill(1.0) });
+    await store.upsert('site-1', [postDoc, pageDoc]);
+
+    const results = await store.search('site-1', new Float32Array(384).fill(1.0), { limit: 10, postType: 'post' });
+    expect(results.every(r => r.postType === 'post')).toBe(true);
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it('rejects invalid postType to prevent injection', async () => {
+    await store.upsert('site-1', [makeDoc()]);
+    await expect(
+      store.search('site-1', new Float32Array(384).fill(0), { limit: 5, postType: "post'; DROP TABLE docs;--" }),
+    ).rejects.toThrow('Invalid postType');
+  });
+});

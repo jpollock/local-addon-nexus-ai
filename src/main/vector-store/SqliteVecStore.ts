@@ -108,8 +108,85 @@ export class SqliteVecStore implements IVectorStore {
   }
 
   // Implemented in Task 3
-  async search(_siteId: string, _queryVector: Float32Array | number[], _options: SearchOptions): Promise<SearchResult[]> {
-    return [];
+  async search(
+    siteId: string,
+    queryVector: Float32Array | number[],
+    options: SearchOptions,
+  ): Promise<SearchResult[]> {
+    // Validate postType early — before any DB access — to prevent injection
+    if (options.postType) {
+      SqliteVecStore.validatePostType(options.postType);
+    }
+
+    const p = this.tablePrefix(siteId);
+    const tableExists = this.conn.prepare(
+      `SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`,
+    ).get(`${p}_docs`);
+    if (!tableExists) return [];
+
+    const limit = options.limit ?? 10;
+    const relevanceFloor = options.relevanceFloor ?? 0.3;
+    const fetchLimit = limit * 3;
+    const vec = queryVector instanceof Float32Array ? queryVector : new Float32Array(queryVector);
+    // Convert to raw IEEE-754 bytes — sqliteVec.serialize does not exist in v0.1.9
+    const blob = Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength);
+
+    // Step 1: ANN search — preferred simpler form per vec0 v0.1.9
+    const vecRows = this.conn.prepare(
+      `SELECT rowid, distance FROM "${p}_vec" WHERE embedding MATCH ? AND k = ? ORDER BY distance`,
+    ).all(blob, fetchLimit) as Array<{ rowid: number; distance: number }>;
+
+    if (vecRows.length === 0) return [];
+
+    // Step 2: fetch doc metadata for the matching rowids
+    const rowidToDistance = new Map(vecRows.map(r => [r.rowid, r.distance]));
+    const placeholders = vecRows.map(() => '?').join(', ');
+    const rowidParams = vecRows.map(r => r.rowid);
+
+    type RawDoc = {
+      rowid: number;
+      id: string;
+      title: string;
+      content: string;
+      post_type: string;
+      post_id: number;
+      metadata: string;
+    };
+
+    let docRows: RawDoc[];
+    if (options.postType) {
+      docRows = this.conn.prepare(
+        `SELECT rowid, id, title, content, post_type, post_id, metadata FROM "${p}_docs" WHERE rowid IN (${placeholders}) AND post_type = ?`,
+      ).all(...rowidParams, options.postType) as RawDoc[];
+    } else {
+      docRows = this.conn.prepare(
+        `SELECT rowid, id, title, content, post_type, post_id, metadata FROM "${p}_docs" WHERE rowid IN (${placeholders})`,
+      ).all(...rowidParams) as RawDoc[];
+    }
+
+    // Step 3: compute scores, apply relevanceFloor, dedup by postId (keep best chunk)
+    const byPostId = new Map<number, SearchResult>();
+    for (const doc of docRows) {
+      const distance = rowidToDistance.get(doc.rowid) ?? 1;
+      const score = 1 - distance;
+      if (score < relevanceFloor) continue;
+      const existing = byPostId.get(doc.post_id);
+      if (!existing || score > existing.score) {
+        byPostId.set(doc.post_id, {
+          id: doc.id,
+          title: doc.title,
+          content: doc.content,
+          postType: doc.post_type,
+          postId: doc.post_id,
+          score,
+          metadata: doc.metadata,
+        });
+      }
+    }
+
+    return Array.from(byPostId.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
   }
 
   // Implemented in Task 4
