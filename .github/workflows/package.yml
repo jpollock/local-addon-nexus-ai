@@ -66,10 +66,29 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
+      - name: Configure node-gyp for Windows
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswherePath) {
+            $vsInstalls = & $vswherePath -all -format json | ConvertFrom-Json
+            Write-Host "VS installs found: $($vsInstalls.Count)"
+            foreach ($vs in $vsInstalls) { Write-Host "  $($vs.displayName) @ $($vs.installationPath)" }
+          } else {
+            Write-Host "WARNING: vswhere not found at expected path"
+          }
+          "VSWHERE=$vswherePath" >> $env:GITHUB_ENV
+          "GYP_MSVS_VERSION=2022" >> $env:GITHUB_ENV
+          npm config set msvs_version 2022
+
       - name: Build
         run: npm run build
 
       - name: Package for ${{ matrix.platform }}-${{ matrix.arch }}
+        env:
+          GYP_MSVS_VERSION: '2022'
+          npm_config_msvs_version: '2022'
         run: node scripts/package-addon.js --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
 
       - name: Upload tarball to R2
