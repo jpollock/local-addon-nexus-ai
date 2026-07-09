@@ -99,7 +99,7 @@ export class SqliteVecStore implements IVectorStore {
           doc.post_date_gmt ?? null, doc.post_modified_gmt ?? null, doc.doc_url ?? null,
         );
         // Serialize Float32Array to raw IEEE-754 bytes; vec0 accepts a BLOB blob
-        insertVec.run(Buffer.from(doc.vector.buffer));
+        insertVec.run(Buffer.from(doc.vector.buffer, doc.vector.byteOffset, doc.vector.byteLength));
         insertFts.run(doc.title, doc.content);
       }
     });
@@ -165,10 +165,11 @@ export class SqliteVecStore implements IVectorStore {
     }
 
     // Step 3: compute scores, apply relevanceFloor, dedup by postId (keep best chunk)
+    // cosine_sim = 1 - L2² / 2  (exact for unit-normalised vectors; stable for non-unit test vecs)
     const byPostId = new Map<number, SearchResult>();
     for (const doc of docRows) {
       const distance = rowidToDistance.get(doc.rowid) ?? 1;
-      const score = 1 - distance;
+      const score = 1 - (distance * distance) / 2;
       if (score < relevanceFloor) continue;
       const existing = byPostId.get(doc.post_id);
       if (!existing || score > existing.score) {
@@ -233,9 +234,10 @@ export class SqliteVecStore implements IVectorStore {
         ).all(blob, limit * 4) as (RawDocRow & { distance: number })[];
 
         // Build id → SearchResult map: only entries above floor, not in excluded types
+        // cosine_sim = 1 - L2² / 2  (exact for unit-normalised vectors; stable for non-unit test vecs)
         const vecMap = new Map<string, SearchResult>();
         for (const row of vecRows) {
-          const score = 1 - row.distance;
+          const score = 1 - (row.distance * row.distance) / 2;
           if (score >= vectorFloor && !excludedTypes.has(row.post_type)) {
             vecMap.set(row.id, {
               id: row.id,

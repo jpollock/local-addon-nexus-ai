@@ -119,16 +119,16 @@ describe('search', () => {
   });
 
   it('returns empty array for non-existent site', async () => {
-    const results = await store.search('no-such-site', new Float32Array(384).fill(0), { limit: 5 });
+    const results = await store.search('no-such-site', new Float32Array(VECTOR_DIMENSIONS).fill(0), { limit: 5 });
     expect(results).toEqual([]);
   });
 
   it('returns results ranked by score descending', async () => {
-    const docA = makeDoc({ id: 'wp_s_1', postId: 1, vector: new Float32Array(384).fill(0.5) });
-    const docB = makeDoc({ id: 'wp_s_2', postId: 2, vector: new Float32Array(384).fill(1.0) });
+    const docA = makeDoc({ id: 'wp_s_1', postId: 1, vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.5) });
+    const docB = makeDoc({ id: 'wp_s_2', postId: 2, vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) });
     await store.upsert('site-1', [docA, docB]);
 
-    const query = new Float32Array(384).fill(1.0);
+    const query = new Float32Array(VECTOR_DIMENSIONS).fill(1.0);
     const results = await store.search('site-1', query, { limit: 5 });
 
     expect(results.length).toBeGreaterThan(0);
@@ -139,31 +139,31 @@ describe('search', () => {
   });
 
   it('deduplicates — only the highest-scoring chunk per postId is returned', async () => {
-    const chunk0 = makeDoc({ id: 'wp_s_1_c0', postId: 1, chunkIndex: 0, vector: new Float32Array(384).fill(0.5) });
-    const chunk1 = makeDoc({ id: 'wp_s_1_c1', postId: 1, chunkIndex: 1, vector: new Float32Array(384).fill(1.0) });
+    const chunk0 = makeDoc({ id: 'wp_s_1_c0', postId: 1, chunkIndex: 0, vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.5) });
+    const chunk1 = makeDoc({ id: 'wp_s_1_c1', postId: 1, chunkIndex: 1, vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) });
     await store.upsert('site-1', [chunk0, chunk1]);
 
-    const results = await store.search('site-1', new Float32Array(384).fill(1.0), { limit: 10 });
+    const results = await store.search('site-1', new Float32Array(VECTOR_DIMENSIONS).fill(1.0), { limit: 10 });
     const postOneHits = results.filter(r => r.postId === 1);
     expect(postOneHits.length).toBe(1);
   });
 
   it('filters by relevanceFloor', async () => {
     // Very dissimilar vector (all zeros vs query of all ones — maximum distance)
-    const doc = makeDoc({ id: 'wp_s_1', postId: 1, vector: new Float32Array(384).fill(0.0) });
+    const doc = makeDoc({ id: 'wp_s_1', postId: 1, vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.0) });
     await store.upsert('site-1', [doc]);
 
-    const query = new Float32Array(384).fill(1.0);
+    const query = new Float32Array(VECTOR_DIMENSIONS).fill(1.0);
     const results = await store.search('site-1', query, { limit: 10, relevanceFloor: 0.99 });
     expect(results).toEqual([]);
   });
 
   it('filters by postType when specified', async () => {
-    const postDoc = makeDoc({ id: 'wp_s_1', postId: 1, postType: 'post', vector: new Float32Array(384).fill(1.0) });
-    const pageDoc = makeDoc({ id: 'wp_s_2', postId: 2, postType: 'page', vector: new Float32Array(384).fill(1.0) });
+    const postDoc = makeDoc({ id: 'wp_s_1', postId: 1, postType: 'post', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) });
+    const pageDoc = makeDoc({ id: 'wp_s_2', postId: 2, postType: 'page', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) });
     await store.upsert('site-1', [postDoc, pageDoc]);
 
-    const results = await store.search('site-1', new Float32Array(384).fill(1.0), { limit: 10, postType: 'post' });
+    const results = await store.search('site-1', new Float32Array(VECTOR_DIMENSIONS).fill(1.0), { limit: 10, postType: 'post' });
     expect(results.every(r => r.postType === 'post')).toBe(true);
     expect(results.length).toBeGreaterThan(0);
   });
@@ -171,7 +171,7 @@ describe('search', () => {
   it('rejects invalid postType to prevent injection', async () => {
     await store.upsert('site-1', [makeDoc()]);
     await expect(
-      store.search('site-1', new Float32Array(384).fill(0), { limit: 5, postType: "post'; DROP TABLE docs;--" }),
+      store.search('site-1', new Float32Array(VECTOR_DIMENSIONS).fill(0), { limit: 5, postType: "post'; DROP TABLE docs;--" }),
     ).rejects.toThrow('Invalid postType');
   });
 });
@@ -192,17 +192,17 @@ describe('searchAcrossSites', () => {
   });
 
   it('returns empty map for unindexed sites', async () => {
-    const results = await store.searchAcrossSites(['no-site'], new Float32Array(384).fill(0), { limit: 5 });
+    const results = await store.searchAcrossSites(['no-site'], new Float32Array(VECTOR_DIMENSIONS).fill(0), { limit: 5 });
     expect(results.size).toBe(0);
   });
 
   it('returns results for each indexed site', async () => {
-    await store.upsert('site-a', [makeDoc({ id: 'wp_a_1', siteId: 'site-a', vector: new Float32Array(384).fill(1.0) })]);
-    await store.upsert('site-b', [makeDoc({ id: 'wp_b_1', siteId: 'site-b', vector: new Float32Array(384).fill(1.0) })]);
+    await store.upsert('site-a', [makeDoc({ id: 'wp_a_1', siteId: 'site-a', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) })]);
+    await store.upsert('site-b', [makeDoc({ id: 'wp_b_1', siteId: 'site-b', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) })]);
 
     const results = await store.searchAcrossSites(
       ['site-a', 'site-b'],
-      new Float32Array(384).fill(1.0),
+      new Float32Array(VECTOR_DIMENSIONS).fill(1.0),
       { limit: 5 },
     );
     expect(results.has('site-a')).toBe(true);
@@ -218,19 +218,19 @@ describe('searchAcrossSites', () => {
       id: 'wp_s_1', postId: 1,
       title: 'woocommerce payment gateway',
       content: 'Configure woocommerce payment gateway for your store.',
-      vector: new Float32Array(384).fill(0.98),
+      vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.98),
     });
     const withoutKeyword = makeDoc({
       id: 'wp_s_2', postId: 2,
       title: 'Shopping cart setup',
       content: 'Setting up your shopping cart for checkout.',
-      vector: new Float32Array(384).fill(0.98),
+      vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.98),
     });
     await store.upsert('site-1', [withKeyword, withoutKeyword]);
 
     const results = await store.searchAcrossSites(
       ['site-1'],
-      new Float32Array(384).fill(1.0),
+      new Float32Array(VECTOR_DIMENSIONS).fill(1.0),
       { limit: 10, queryText: 'woocommerce payment' },
     );
     const hits = results.get('site-1') ?? [];
@@ -246,13 +246,13 @@ describe('searchAcrossSites', () => {
       id: 'wp_s_1', postId: 1,
       title: 'uniquekeyword alpha',
       content: 'This post is about uniquekeyword alpha concepts.',
-      vector: new Float32Array(384).fill(0.0), // will be far from query
+      vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.0), // will be far from query
     });
     await store.upsert('site-1', [ftsOnlyDoc]);
 
     const results = await store.searchAcrossSites(
       ['site-1'],
-      new Float32Array(384).fill(1.0),     // opposite vector → low similarity
+      new Float32Array(VECTOR_DIMENSIONS).fill(1.0),     // opposite vector → low similarity
       { limit: 10, queryText: 'uniquekeyword', relevanceFloor: 0.99 }, // floor kills vector result
     );
     const hits = results.get('site-1') ?? [];
@@ -263,12 +263,12 @@ describe('searchAcrossSites', () => {
 
   it('excludes post types in excludedTypes', async () => {
     await store.upsert('site-1', [
-      makeDoc({ id: 'wp_s_1', postId: 1, postType: 'post', vector: new Float32Array(384).fill(1.0) }),
-      makeDoc({ id: 'wp_s_2', postId: 2, postType: 'attachment', vector: new Float32Array(384).fill(1.0) }),
+      makeDoc({ id: 'wp_s_1', postId: 1, postType: 'post', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) }),
+      makeDoc({ id: 'wp_s_2', postId: 2, postType: 'attachment', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) }),
     ]);
     const results = await store.searchAcrossSites(
       ['site-1'],
-      new Float32Array(384).fill(1.0),
+      new Float32Array(VECTOR_DIMENSIONS).fill(1.0),
       { limit: 10, excludedTypes: ['attachment'] },
     );
     const hits = results.get('site-1') ?? [];
