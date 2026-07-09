@@ -43,3 +43,62 @@ describe('SqliteVecStore — initialize/close', () => {
     await expect(store.upsert('site-1', [])).rejects.toThrow('not initialized');
   });
 });
+
+describe('upsert + getSiteStats', () => {
+  let store: SqliteVecStore;
+  let dbPath: string;
+
+  beforeEach(async () => {
+    dbPath = tmpDb();
+    store = new SqliteVecStore(dbPath);
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  });
+
+  it('inserts a document without error', async () => {
+    await expect(store.upsert('site-1', [makeDoc()])).resolves.not.toThrow();
+  });
+
+  it('is idempotent — same id twice yields count of 1', async () => {
+    const doc = makeDoc();
+    await store.upsert('site-1', [doc]);
+    await store.upsert('site-1', [doc]);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(1);
+  });
+
+  it('inserts a batch and all rows appear in stats', async () => {
+    const docs = Array.from({ length: 5 }, (_, i) =>
+      makeDoc({ id: `wp_s_${i}`, postId: i }),
+    );
+    await store.upsert('site-1', docs);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(5);
+    expect(stats.documentCount).toBe(5);
+  });
+
+  it('skips empty array without error', async () => {
+    await expect(store.upsert('site-1', [])).resolves.not.toThrow();
+  });
+
+  it('getSiteStats returns zeros for unindexed site', async () => {
+    const stats = await store.getSiteStats('no-such-site');
+    expect(stats).toEqual({ siteId: 'no-such-site', documentCount: 0, chunkCount: 0, lastIndexed: 0 });
+  });
+
+  it('getSiteStats counts chunks vs unique posts correctly', async () => {
+    const docs = [
+      makeDoc({ id: 'wp_s_1_c0', postId: 1, chunkIndex: 0 }),
+      makeDoc({ id: 'wp_s_1_c1', postId: 1, chunkIndex: 1 }),
+      makeDoc({ id: 'wp_s_2_c0', postId: 2, chunkIndex: 0 }),
+    ];
+    await store.upsert('site-1', docs);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(3);
+    expect(stats.documentCount).toBe(2); // 2 unique post IDs
+  });
+});
