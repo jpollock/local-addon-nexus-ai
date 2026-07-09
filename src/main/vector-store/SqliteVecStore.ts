@@ -324,15 +324,114 @@ export class SqliteVecStore implements IVectorStore {
   }
 
   // Implemented in Task 5
-  async lookupById(_siteId: string, _docId: string): Promise<{ id: string; content: string; title: string } | null> { return null; }
-  async delete(_siteId: string, _documentIds: string[]): Promise<void> { /* Task 5 */ }
-  async dropSite(_siteId: string): Promise<void> { /* Task 5 */ }
-  async dropAllTables(): Promise<number> { return 0; }
-  async listSites(): Promise<string[]> { return []; }
+  async lookupById(siteId: string, docId: string): Promise<{ id: string; content: string; title: string } | null> {
+    if (!/^[a-zA-Z0-9:_\-]+$/.test(docId)) return null;
+    const p = this.tablePrefix(siteId);
+    const tableExists = this.conn.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(`${p}_docs`);
+    if (!tableExists) return null;
+    const row = this.conn.prepare(`SELECT id, title, content FROM "${p}_docs" WHERE id = ?`).get(docId) as
+      | { id: string; title: string; content: string }
+      | undefined;
+    return row ?? null;
+  }
+
+  async delete(siteId: string, documentIds: string[]): Promise<void> {
+    const p = this.tablePrefix(siteId);
+    const tableExists = this.conn.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(`${p}_docs`);
+    if (!tableExists) return;
+
+    const getRowid = this.conn.prepare<[string]>(`SELECT rowid FROM "${p}_docs" WHERE id = ?`);
+    const deleteVec = this.conn.prepare<[number]>(`DELETE FROM "${p}_vec" WHERE rowid = ?`);
+    const deleteFts = this.conn.prepare<[number]>(`DELETE FROM "${p}_fts" WHERE rowid = ?`);
+    const deleteDoc = this.conn.prepare<[string]>(`DELETE FROM "${p}_docs" WHERE id = ?`);
+
+    if (documentIds.length === 1 && documentIds[0] === '__all__') {
+      this.conn.transaction(() => {
+        this.conn.exec(`DELETE FROM "${p}_vec"`);
+        this.conn.exec(`DELETE FROM "${p}_fts"`);
+        this.conn.exec(`DELETE FROM "${p}_docs"`);
+      })();
+      return;
+    }
+
+    this.conn.transaction(() => {
+      for (const id of documentIds) {
+        const existing = getRowid.get(id) as { rowid: number } | undefined;
+        if (existing) {
+          deleteVec.run(existing.rowid);
+          deleteFts.run(existing.rowid);
+          deleteDoc.run(id);
+        }
+      }
+    })();
+  }
+
+  async dropSite(siteId: string): Promise<void> {
+    const p = this.tablePrefix(siteId);
+    this.conn.transaction(() => {
+      this.conn.exec(`DROP TABLE IF EXISTS "${p}_fts"`);
+      this.conn.exec(`DROP TABLE IF EXISTS "${p}_vec"`);
+      this.conn.exec(`DROP TABLE IF EXISTS "${p}_docs"`);
+    })();
+  }
+
+  async dropAllTables(): Promise<number> {
+    const sites = await this.listSites();
+    for (const siteId of sites) {
+      await this.dropSite(siteId);
+    }
+    return sites.length;
+  }
+
+  async listSites(): Promise<string[]> {
+    const rows = this.conn.prepare(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'site_%_docs' ORDER BY name`,
+    ).all() as { name: string }[];
+    // Strip "site_" prefix and "_docs" suffix to recover the original siteId (hyphens preserved)
+    return rows.map(({ name }) => name.slice('site_'.length, -'_docs'.length));
+  }
+
   async cleanupExcludedTypes(
-    _excludedTypes: string[],
-    _onProgress?: (current: number, total: number, tableName: string) => void,
-  ): Promise<{ tablesScanned: number; docsRemoved: number }> { return { tablesScanned: 0, docsRemoved: 0 }; }
+    excludedTypes: string[],
+    onProgress?: (current: number, total: number, tableName: string) => void,
+  ): Promise<{ tablesScanned: number; docsRemoved: number }> {
+    if (excludedTypes.length === 0) return { tablesScanned: 0, docsRemoved: 0 };
+    excludedTypes.forEach(t => SqliteVecStore.validatePostType(t));
+
+    const sites = await this.listSites();
+    let docsRemoved = 0;
+    const placeholders = excludedTypes.map(() => '?').join(', ');
+
+    for (let i = 0; i < sites.length; i++) {
+      const siteId = sites[i];
+      const p = this.tablePrefix(siteId);
+      onProgress?.(i + 1, sites.length, `${p}_docs`);
+
+      try {
+        const toDelete = this.conn.prepare(
+          `SELECT rowid, id FROM "${p}_docs" WHERE post_type IN (${placeholders})`,
+        ).all(...excludedTypes) as { rowid: number; id: string }[];
+
+        if (toDelete.length === 0) continue;
+
+        const deleteVec = this.conn.prepare<[number]>(`DELETE FROM "${p}_vec" WHERE rowid = ?`);
+        const deleteFts = this.conn.prepare<[number]>(`DELETE FROM "${p}_fts" WHERE rowid = ?`);
+        const deleteDoc = this.conn.prepare<[string]>(`DELETE FROM "${p}_docs" WHERE id = ?`);
+
+        this.conn.transaction(() => {
+          for (const { rowid, id } of toDelete) {
+            deleteVec.run(rowid);
+            deleteFts.run(rowid);
+            deleteDoc.run(id);
+          }
+        })();
+
+        docsRemoved += toDelete.length;
+      } catch { /* skip site on error */ }
+    }
+
+    return { tablesScanned: sites.length, docsRemoved };
+  }
 
   // Implemented in Task 2 (needed by upsert tests)
   async getSiteStats(siteId: string): Promise<SiteIndexStats> {

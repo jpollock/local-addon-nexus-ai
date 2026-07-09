@@ -275,3 +275,110 @@ describe('searchAcrossSites', () => {
     expect(hits.every(r => r.postType !== 'attachment')).toBe(true);
   });
 });
+
+describe('CRUD — lookupById / delete / dropSite / dropAllTables / listSites / cleanupExcludedTypes', () => {
+  let store: SqliteVecStore;
+  let dbPath: string;
+
+  beforeEach(async () => {
+    dbPath = tmpDb();
+    store = new SqliteVecStore(dbPath);
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  });
+
+  // lookupById
+  it('lookupById returns null for non-existent site', async () => {
+    expect(await store.lookupById('no-site', 'any-id')).toBeNull();
+  });
+
+  it('lookupById returns null for non-existent document', async () => {
+    await store.upsert('site-1', [makeDoc()]);
+    expect(await store.lookupById('site-1', 'no-such-doc')).toBeNull();
+  });
+
+  it('lookupById returns id, title, content for existing document', async () => {
+    await store.upsert('site-1', [makeDoc({ id: 'wp_s_1', title: 'My Post', content: 'My Content' })]);
+    const result = await store.lookupById('site-1', 'wp_s_1');
+    expect(result).toMatchObject({ id: 'wp_s_1', title: 'My Post', content: 'My Content' });
+  });
+
+  // delete
+  it('delete removes specific document ids from all three tables', async () => {
+    await store.upsert('site-1', [
+      makeDoc({ id: 'wp_s_1', postId: 1 }),
+      makeDoc({ id: 'wp_s_2', postId: 2 }),
+    ]);
+    await store.delete('site-1', ['wp_s_1']);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(1);
+  });
+
+  it('delete with __all__ sentinel clears all docs for the site', async () => {
+    await store.upsert('site-1', [
+      makeDoc({ id: 'wp_s_1', postId: 1 }),
+      makeDoc({ id: 'wp_s_2', postId: 2 }),
+    ]);
+    await store.delete('site-1', ['__all__']);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(0);
+  });
+
+  // dropSite
+  it('dropSite removes all three tables so getSiteStats returns zeros', async () => {
+    await store.upsert('site-1', [makeDoc()]);
+    await store.dropSite('site-1');
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(0);
+  });
+
+  it('dropSite does not throw for non-existent site', async () => {
+    await expect(store.dropSite('no-such-site')).resolves.not.toThrow();
+  });
+
+  // dropAllTables
+  it('dropAllTables clears all sites and returns a positive count', async () => {
+    await store.upsert('site-x', [makeDoc({ id: 'wp_x_1', siteId: 'site-x' })]);
+    await store.upsert('site-y', [makeDoc({ id: 'wp_y_1', siteId: 'site-y' })]);
+    const count = await store.dropAllTables();
+    expect(count).toBeGreaterThan(0);
+    expect(await store.listSites()).toEqual([]);
+  });
+
+  // listSites
+  it('listSites returns empty when nothing is indexed', async () => {
+    expect(await store.listSites()).toEqual([]);
+  });
+
+  it('listSites returns siteIds of indexed sites', async () => {
+    await store.upsert('site-a', [makeDoc({ id: 'wp_a_1', siteId: 'site-a' })]);
+    await store.upsert('site-b', [makeDoc({ id: 'wp_b_1', siteId: 'site-b' })]);
+    const sites = await store.listSites();
+    expect(sites).toContain('site-a');
+    expect(sites).toContain('site-b');
+  });
+
+  // cleanupExcludedTypes
+  it('cleanupExcludedTypes removes docs of excluded post types', async () => {
+    await store.upsert('site-1', [
+      makeDoc({ id: 'wp_s_1', postId: 1, postType: 'post' }),
+      makeDoc({ id: 'wp_s_2', postId: 2, postType: 'attachment' }),
+    ]);
+    const result = await store.cleanupExcludedTypes(['attachment']);
+    expect(result.docsRemoved).toBe(1);
+    expect(result.tablesScanned).toBe(1);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(1);
+  });
+
+  it('cleanupExcludedTypes returns zeros for empty types list', async () => {
+    await store.upsert('site-1', [makeDoc()]);
+    const result = await store.cleanupExcludedTypes([]);
+    expect(result.docsRemoved).toBe(0);
+    expect(result.tablesScanned).toBe(0);
+  });
+});
