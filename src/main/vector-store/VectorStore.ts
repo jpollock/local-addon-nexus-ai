@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import { SITE_TABLE_PREFIX, VECTOR_DIMENSIONS } from '../../common/constants';
 import { VectorDocument, SearchOptions, SearchResult, SiteIndexStats } from '../../common/types';
 import { createSeedRecord, toRecord } from './schema';
-import { IVectorStore } from './IVectorStore';
+import type { IVectorStore } from './IVectorStore';
 
 type LanceDbModule = typeof import('@lancedb/lancedb');
 type VectorStoreRuntime = {

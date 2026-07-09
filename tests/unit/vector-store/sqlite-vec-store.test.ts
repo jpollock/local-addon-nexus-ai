@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { SqliteVecStore } from '../../../src/main/vector-store/SqliteVecStore';
 import type { VectorDocument } from '../../../src/common/types';
+import { VECTOR_DIMENSIONS } from '../../../src/common/constants';
 
 function tmpDb(): string {
   return path.join(os.tmpdir(), `test-vec-${process.hrtime.bigint()}.db`);
@@ -18,7 +19,7 @@ export function makeDoc(overrides: Partial<VectorDocument> = {}): VectorDocument
     postType: 'post',
     postId: 1,
     chunkIndex: 0,
-    vector: new Float32Array(384).fill(0.1),
+    vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.1),
     metadata: JSON.stringify({ excerpt: 'test' }),
     indexedAt: Date.now(),
     post_date_gmt: '2024-01-01T00:00:00',
