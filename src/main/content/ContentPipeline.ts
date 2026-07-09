@@ -1,4 +1,4 @@
-import { VectorStore } from '../vector-store/VectorStore';
+import type { IVectorStore } from '../vector-store/IVectorStore';
 import { EmbeddingService } from '../embeddings/EmbeddingService';
 import { MySQLExtractor, SiteConnectionInfo } from './MySQLExtractor';
 import { FileScanner } from './FileScanner';
@@ -14,7 +14,7 @@ export type IndexStatus =
   | { state: 'error'; error: string; lastAttempt: number };
 
 export interface ContentPipelineDeps {
-  vectorStore: VectorStore;
+  vectorStore: IVectorStore;
   embeddingService: EmbeddingService;
   mysqlExtractor: MySQLExtractor;
   fileScanner: FileScanner;

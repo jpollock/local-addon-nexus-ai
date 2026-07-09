@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { IPC_CHANNELS, OLLAMA_POLL_INTERVAL_MS, STORAGE_KEYS } from '../common/constants';
 import { OperationTracker } from './operation-tracker';
-import { VectorStore } from './vector-store/VectorStore';
+import { createVectorStore } from './vector-store/index';
 import { EmbeddingService } from './embeddings/EmbeddingService';
 import { ContentPipeline } from './content/ContentPipeline';
 import { MySQLExtractor } from './content/MySQLExtractor';
@@ -176,7 +176,7 @@ export default function main(context: any): void {
   const graphDbPath = path.join(localDataDir, 'nexus-ai', 'graph.db');
 
   // Phase 1: Initialize foundation services (async)
-  const vectorStore = new VectorStore(vectorDbDir);
+  const vectorStore = createVectorStore(vectorDbDir);
   const embeddingService = new EmbeddingService(modelsDir);
   const fileScanner = new FileScanner();
   const mysqlExtractor = new MySQLExtractor();

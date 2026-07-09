@@ -19,7 +19,7 @@ import type { NexusSettings } from '../common/types';
 import type { IndexRegistry, RegistryStorage } from './content/IndexRegistry';
 import type { ContentPipeline } from './content/ContentPipeline';
 import type { EmbeddingService } from './embeddings/EmbeddingService';
-import type { VectorStore } from './vector-store/VectorStore';
+import type { IVectorStore } from './vector-store/IVectorStore';
 import type { McpServer } from './mcp/McpServer';
 import type { LocalServicesBridge } from './mcp/local-services-bridge';
 import type { GraphService } from './events/GraphService';
@@ -102,7 +102,7 @@ export interface IpcHandlerDeps {
   indexRegistry: IndexRegistry;
   embeddingService: EmbeddingService;
   contentPipeline: ContentPipeline;
-  vectorStore: VectorStore;
+  vectorStore: IVectorStore;
   registryStorage: RegistryStorage;
   localLogger: any;
   getMcpServer: () => McpServer | null;

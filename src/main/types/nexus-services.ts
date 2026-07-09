@@ -12,7 +12,7 @@
  * any other code that receives the full service container.
  */
 
-import type { VectorStore } from '../vector-store/VectorStore';
+import type { IVectorStore } from '../vector-store/IVectorStore';
 import type { EmbeddingService } from '../embeddings/EmbeddingService';
 import type { ContentPipeline } from '../content/ContentPipeline';
 import type { IndexRegistry, RegistryStorage } from '../content/IndexRegistry';
@@ -73,7 +73,7 @@ export interface HttpEventInterface {
 export interface NexusServices {
   // ── Core services ──────────────────────────────────────────────────────
 
-  vectorStore: VectorStore;
+  vectorStore: IVectorStore;
   embeddingService: EmbeddingService;
   contentPipeline: ContentPipeline;
   indexRegistry: IndexRegistry;

@@ -12,12 +12,12 @@ import {
   SiteEventPayload,
 } from './types';
 import { GraphService } from './GraphService';
-import { VectorStore } from '../vector-store/VectorStore';
+import type { IVectorStore } from '../vector-store/IVectorStore';
 import { EmbeddingService } from '../embeddings/EmbeddingService';
 
 export interface EventProcessorOptions {
   graphService: GraphService;
-  vectorStore: VectorStore | null;  // Can be null for testing
+  vectorStore: IVectorStore | null;  // Can be null for testing
   embeddingService: EmbeddingService | null;  // Can be null for testing
   logger: {
     info: (msg: string) => void;
@@ -30,7 +30,7 @@ export interface EventProcessorOptions {
 
 export class EventProcessor {
   private graphService: GraphService;
-  private vectorStore: VectorStore | null;
+  private vectorStore: IVectorStore | null;
   private embeddingService: EmbeddingService | null;
   private logger: any;
   private maxRetries: number;

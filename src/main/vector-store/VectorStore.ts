@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { SITE_TABLE_PREFIX, VECTOR_DIMENSIONS } from '../../common/constants';
 import { VectorDocument, SearchOptions, SearchResult, SiteIndexStats } from '../../common/types';
 import { createSeedRecord, toRecord } from './schema';
+import { IVectorStore } from './IVectorStore';
 
 type LanceDbModule = typeof import('@lancedb/lancedb');
 type VectorStoreRuntime = {
@@ -15,7 +16,7 @@ export function isLanceDbRuntimeSupported(runtime: VectorStoreRuntime = process)
   return !(runtime.platform === 'win32' && runtime.arch === 'ia32');
 }
 
-export class VectorStore {
+export class VectorStore implements IVectorStore {
   private db: Connection | null = null;
   private dbPath: string;
   private migratedTables = new Set<string>();
