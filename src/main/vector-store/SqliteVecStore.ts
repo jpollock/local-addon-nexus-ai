@@ -191,12 +191,136 @@ export class SqliteVecStore implements IVectorStore {
 
   // Implemented in Task 4
   async searchAcrossSites(
-    _siteIds: string[],
-    _queryVector: Float32Array | number[],
-    _options: SearchOptions & { queryText?: string; excludedTypes?: string[] },
+    siteIds: string[],
+    queryVector: Float32Array | number[],
+    options: SearchOptions & { queryText?: string; excludedTypes?: string[] },
     _concurrency = 5,
   ): Promise<Map<string, SearchResult[]>> {
-    return new Map();
+    if (options.postType) SqliteVecStore.validatePostType(options.postType);
+    (options.excludedTypes ?? []).forEach(t => SqliteVecStore.validatePostType(t));
+
+    const results = new Map<string, SearchResult[]>();
+    const vec = queryVector instanceof Float32Array ? queryVector : new Float32Array(queryVector);
+    // Serialize to raw IEEE-754 bytes — same pattern as search()
+    const blob = Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength);
+    const limit = options.limit ?? 3;
+    const vectorFloor = options.relevanceFloor ?? 0.35;
+    const excludedTypes = new Set(options.excludedTypes ?? []);
+
+    for (const siteId of siteIds) {
+      const p = this.tablePrefix(siteId);
+      const tableExists = this.conn.prepare(
+        `SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`,
+      ).get(`${p}_docs`);
+      if (!tableExists) continue;
+
+      try {
+        type RawDocRow = {
+          id: string;
+          title: string;
+          content: string;
+          post_type: string;
+          post_id: number;
+          metadata: string;
+        };
+
+        // ── Vector ANN search — primary relevance signal ─────────────────────
+        const vecRows = this.conn.prepare(
+          `SELECT d.id, d.title, d.content, d.post_type, d.post_id, d.metadata, v.distance
+           FROM (SELECT rowid, distance FROM "${p}_vec" WHERE embedding MATCH ? AND k = ? ORDER BY distance) v
+           JOIN "${p}_docs" d ON d.rowid = v.rowid
+           ORDER BY v.distance`,
+        ).all(blob, limit * 4) as (RawDocRow & { distance: number })[];
+
+        // Build id → SearchResult map: only entries above floor, not in excluded types
+        const vecMap = new Map<string, SearchResult>();
+        for (const row of vecRows) {
+          const score = 1 - row.distance;
+          if (score >= vectorFloor && !excludedTypes.has(row.post_type)) {
+            vecMap.set(row.id, {
+              id: row.id,
+              title: row.title,
+              content: row.content,
+              postType: row.post_type,
+              postId: row.post_id,
+              score,
+              metadata: row.metadata,
+            });
+          }
+        }
+
+        // ── FTS5 keyword search — catches exact terms the vector misses ───────
+        const ftsMatchIds = new Set<string>();
+        const ftsExtraMap = new Map<string, SearchResult>();
+
+        if (options.queryText) {
+          try {
+            // Two-step: get rowids from FTS5 (table name — not alias — required for MATCH
+            // in this SQLite version), then look up doc metadata by rowid.
+            const ftsHits = this.conn.prepare(
+              `SELECT rowid FROM "${p}_fts" WHERE "${p}_fts" MATCH ? LIMIT ?`,
+            ).all(options.queryText, limit * 2) as { rowid: number }[];
+
+            if (ftsHits.length > 0) {
+              const ftsPh = ftsHits.map(() => '?').join(', ');
+              const ftsRowids = ftsHits.map(r => r.rowid);
+              const ftsDocs = this.conn.prepare(
+                `SELECT id, title, content, post_type, post_id, metadata
+                 FROM "${p}_docs" WHERE rowid IN (${ftsPh})`,
+              ).all(...ftsRowids) as RawDocRow[];
+
+              for (const row of ftsDocs) {
+                if (excludedTypes.has(row.post_type)) continue;
+                ftsMatchIds.add(row.id);
+                if (!vecMap.has(row.id)) {
+                  // FTS-only result: fixed score 0.45
+                  ftsExtraMap.set(row.id, {
+                    id: row.id,
+                    title: row.title,
+                    content: row.content,
+                    postType: row.post_type,
+                    postId: row.post_id,
+                    score: 0.45,
+                    metadata: row.metadata,
+                  });
+                }
+              }
+            }
+          } catch {
+            // FTS table not yet populated or invalid query syntax — vector-only for this site
+          }
+        }
+
+        // ── Boost overlap: vector results that also appear in FTS ─────────────
+        for (const [id, result] of vecMap) {
+          if (ftsMatchIds.has(id)) {
+            result.score = Math.min(1.0, result.score + 0.1);
+          }
+        }
+
+        // ── Merge, dedup by postId (keep best score), sort, slice ─────────────
+        const allResults = [...vecMap.values(), ...ftsExtraMap.values()];
+        const bestByPostId = new Map<number, SearchResult>();
+        for (const result of allResults) {
+          const existing = bestByPostId.get(result.postId);
+          if (!existing || result.score > existing.score) {
+            bestByPostId.set(result.postId, result);
+          }
+        }
+
+        const hits = Array.from(bestByPostId.values())
+          .sort((a, b) => b.score - a.score)
+          .slice(0, limit);
+
+        if (hits.length > 0) {
+          results.set(siteId, hits);
+        }
+      } catch {
+        // Site search failed — skip this site
+      }
+    }
+
+    return results;
   }
 
   // Implemented in Task 5

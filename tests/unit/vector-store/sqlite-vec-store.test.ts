@@ -175,3 +175,103 @@ describe('search', () => {
     ).rejects.toThrow('Invalid postType');
   });
 });
+
+describe('searchAcrossSites', () => {
+  let store: SqliteVecStore;
+  let dbPath: string;
+
+  beforeEach(async () => {
+    dbPath = tmpDb();
+    store = new SqliteVecStore(dbPath);
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  });
+
+  it('returns empty map for unindexed sites', async () => {
+    const results = await store.searchAcrossSites(['no-site'], new Float32Array(384).fill(0), { limit: 5 });
+    expect(results.size).toBe(0);
+  });
+
+  it('returns results for each indexed site', async () => {
+    await store.upsert('site-a', [makeDoc({ id: 'wp_a_1', siteId: 'site-a', vector: new Float32Array(384).fill(1.0) })]);
+    await store.upsert('site-b', [makeDoc({ id: 'wp_b_1', siteId: 'site-b', vector: new Float32Array(384).fill(1.0) })]);
+
+    const results = await store.searchAcrossSites(
+      ['site-a', 'site-b'],
+      new Float32Array(384).fill(1.0),
+      { limit: 5 },
+    );
+    expect(results.has('site-a')).toBe(true);
+    expect(results.has('site-b')).toBe(true);
+  });
+
+  it('FTS boost: document matching queryText scores higher than vector-only peer', async () => {
+    // Both docs have the same vector (fill(0.98)) and the query is fill(1.0).
+    // L2 distance ≈ 0.39 → score ≈ 0.61 for both (above the 0.35 floor).
+    // The FTS-matching doc receives a +0.1 boost → ≈ 0.71, clearly above the peer at ≈ 0.61.
+    // Using identical-but-non-query vectors avoids the score-1.0 cap that would mask the boost.
+    const withKeyword = makeDoc({
+      id: 'wp_s_1', postId: 1,
+      title: 'woocommerce payment gateway',
+      content: 'Configure woocommerce payment gateway for your store.',
+      vector: new Float32Array(384).fill(0.98),
+    });
+    const withoutKeyword = makeDoc({
+      id: 'wp_s_2', postId: 2,
+      title: 'Shopping cart setup',
+      content: 'Setting up your shopping cart for checkout.',
+      vector: new Float32Array(384).fill(0.98),
+    });
+    await store.upsert('site-1', [withKeyword, withoutKeyword]);
+
+    const results = await store.searchAcrossSites(
+      ['site-1'],
+      new Float32Array(384).fill(1.0),
+      { limit: 10, queryText: 'woocommerce payment' },
+    );
+    const hits = results.get('site-1') ?? [];
+    const keywordHit = hits.find(r => r.postId === 1);
+    const noKeywordHit = hits.find(r => r.postId === 2);
+    expect(keywordHit).toBeDefined();
+    expect(noKeywordHit).toBeDefined();
+    expect(keywordHit!.score).toBeGreaterThan(noKeywordHit!.score);
+  });
+
+  it('FTS-only result is included with score 0.45 when vector match is below floor', async () => {
+    const ftsOnlyDoc = makeDoc({
+      id: 'wp_s_1', postId: 1,
+      title: 'uniquekeyword alpha',
+      content: 'This post is about uniquekeyword alpha concepts.',
+      vector: new Float32Array(384).fill(0.0), // will be far from query
+    });
+    await store.upsert('site-1', [ftsOnlyDoc]);
+
+    const results = await store.searchAcrossSites(
+      ['site-1'],
+      new Float32Array(384).fill(1.0),     // opposite vector → low similarity
+      { limit: 10, queryText: 'uniquekeyword', relevanceFloor: 0.99 }, // floor kills vector result
+    );
+    const hits = results.get('site-1') ?? [];
+    const ftsResult = hits.find(r => r.postId === 1);
+    expect(ftsResult).toBeDefined();
+    expect(ftsResult!.score).toBe(0.45);
+  });
+
+  it('excludes post types in excludedTypes', async () => {
+    await store.upsert('site-1', [
+      makeDoc({ id: 'wp_s_1', postId: 1, postType: 'post', vector: new Float32Array(384).fill(1.0) }),
+      makeDoc({ id: 'wp_s_2', postId: 2, postType: 'attachment', vector: new Float32Array(384).fill(1.0) }),
+    ]);
+    const results = await store.searchAcrossSites(
+      ['site-1'],
+      new Float32Array(384).fill(1.0),
+      { limit: 10, excludedTypes: ['attachment'] },
+    );
+    const hits = results.get('site-1') ?? [];
+    expect(hits.every(r => r.postType !== 'attachment')).toBe(true);
+  });
+});
