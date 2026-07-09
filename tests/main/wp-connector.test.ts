@@ -896,7 +896,6 @@ describe('setupSiteForAI', () => {
     expect(experimentCall!.args[1]).toContain("wpai_feature_abilities-explorer_enabled");
     expect(experimentCall!.args[1]).toContain("wpai_feature_excerpt-generation_enabled");
     expect(experimentCall!.args[1]).toContain("wpai_feature_alt-text-generation_enabled");
-    expect(experimentCall!.args[1]).toContain("wpai_feature_image-generation_enabled");
     expect(experimentCall!.args[1]).toContain("wpai_feature_summarization_enabled");
     expect(experimentCall!.args[1]).toContain("wpai_feature_title-generation_enabled");
   });

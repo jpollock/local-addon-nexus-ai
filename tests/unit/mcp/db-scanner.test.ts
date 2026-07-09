@@ -56,6 +56,11 @@ const makeWpCliMock = (overrides: Record<string, { stdout: string; success?: boo
       }
     }
 
+    // withSiteRunning readiness probe
+    if (cmd === 'eval' && args[1] === "echo 'ready';") {
+      return Promise.resolve({ success: true, stdout: 'ready', stderr: '' });
+    }
+
     // core version
     if (cmd === 'core' && args[1] === 'version') {
       return Promise.resolve({ success: true, stdout: '6.5.0', stderr: '' });
@@ -495,16 +500,16 @@ describe('scan_database_health', () => {
     expect(result.content[0].text).toContain('not found');
   });
 
-  it('returns error if site is not running', async () => {
+  it('auto-starts a halted site and scans it', async () => {
     const site = createMockSite({ id: 'site-1', name: 'mysite' });
     const services = createMockServices([site]);
     (services.localServices!.getSiteStatus as jest.Mock).mockReturnValue('halted');
 
     const result = await scanDatabaseHealthHandler.execute({ site: 'mysite' }, services);
 
-    expect(result.isError).toBe(true);
-    // The preflight message says "halted. Start it first"
-    expect(result.content[0].text).toMatch(/halted|not running/i);
+    // withSiteRunning auto-starts the site — scan should succeed
+    expect(services.localServices!.startSite).toHaveBeenCalledWith('site-1');
+    expect(result.isError).toBeUndefined();
   });
 
   it('returns defaults of 0 when WP-CLI queries fail', async () => {
@@ -633,7 +638,7 @@ describe('clean_database_items', () => {
     expect(result.content[0].text).toContain('not found');
   });
 
-  it('returns error if site is not running', async () => {
+  it('auto-starts a halted site and runs clean', async () => {
     const site = createMockSite({ id: 'site-1', name: 'mysite' });
     const services = createMockServices([site]);
     (services.localServices!.getSiteStatus as jest.Mock).mockReturnValue('halted');
@@ -643,8 +648,9 @@ describe('clean_database_items', () => {
       services,
     );
 
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/halted|not running/i);
+    // withSiteRunning auto-starts the site — clean should succeed
+    expect(services.localServices!.startSite).toHaveBeenCalledWith('site-1');
+    expect(result.isError).toBeUndefined();
   });
 });
 

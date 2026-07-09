@@ -1,0 +1,30 @@
+id: SF-04-settings-hidden
+description: Site Finder — settings-based query, hidden from search (P2)
+suite: site-finder
+tier: 2
+mode: [mcp]
+prompt: "sites that are blocking search engines"
+
+expected_filter_json:
+  hiddenFromSearch: true
+
+guardrails:
+  must_not_return_all: true
+  must_not:
+    - return sites where blog_public = 1
+    - confuse with "sites that block users" or access control
+
+alternate_prompts:
+  - "sites hidden from Google"
+  - "sites with search engine indexing disabled"
+  - "private sites"
+
+notes: |
+  Requires settings_json to be populated with blog_public field.
+  Sites where blog_public='0' in wp_options.
+  This tests P2 filter functionality end-to-end.
+
+scoring_weights:
+  filter_correct: 60
+  results_accurate: 30
+  handles_alternates: 10

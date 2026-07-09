@@ -1,0 +1,29 @@
+id: SF-02-recent-activity
+description: Site Finder — recently updated sites (P0 — recentPostDays)
+suite: site-finder
+tier: 1
+mode: [mcp]
+prompt: "sites updated in last 30 days"
+
+expected_filter_json:
+  recentPostDays: 30
+
+guardrails:
+  must_not_return_all: true
+  expected_result_count: ">0"
+  must_not:
+    - return sites not updated in 30 days
+    - use stalePostDays instead of recentPostDays
+    - ask for clarification (this is a well-defined query)
+    - return all sites
+
+notes: |
+  This is the query shown in the bug screenshot (SF screenshot, June 2026).
+  The AI was previously responding with needsClarification asking if the user
+  meant "NOT updated in last 30 days" — that was wrong. recentPostDays should
+  handle this direction directly.
+
+scoring_weights:
+  filter_correct: 60
+  no_clarification_requested: 20
+  results_accurate: 20

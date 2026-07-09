@@ -355,7 +355,7 @@ export class AssistantPanel extends React.Component<AssistantPanelProps, Assista
 
     const defaultSuggestions = mode === 'fleet'
       ? ['oldest PHP sites', 'sites with page builders', 'what needs updating?', 'Find recipe content']
-      : ['Any issues to fix?', 'Which plugins have updates?', 'Compare with staging', 'Search this site\'s content'];
+      : [];
     const chips = suggestions.length > 0 ? suggestions : defaultSuggestions;
     const placeholder = mode === 'fleet'
       ? 'Ask about your fleet…'

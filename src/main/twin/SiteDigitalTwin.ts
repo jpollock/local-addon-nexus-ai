@@ -115,6 +115,11 @@ export interface SiteDigitalTwin {
   postCount?: number;
   postCountByType?: Record<string, number>;
   lastPostAt?: number;
+  /** Unix timestamp of most recent session_tokens login. NOT "last login" — reflects active sessions only. */
+  lastActiveSession?: number;
+
+  /** wp-config.php mtime as unix timestamp; age > 1yr suggests salts not rotated. */
+  wpConfigMtime?: number;
 
   // ── Index state ───────────────────────────────────────────────────────────
   indexState?: 'indexed' | 'indexing' | 'stale' | 'error' | 'never';

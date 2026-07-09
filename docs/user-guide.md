@@ -110,7 +110,7 @@ The server binds to `127.0.0.1` only — it is not accessible from other machine
 
 ## Tool Catalog
 
-Nexus AI provides 51 MCP tools organized into 9 modules.
+Nexus AI provides 53 MCP tools organized into 9 modules.
 
 ### Content (2 tools)
 
@@ -135,10 +135,12 @@ Nexus AI provides 51 MCP tools organized into 9 modules.
 | `ask_ollama` | Query a local Ollama model. Pass `site` to inject site context automatically |
 | `list_ollama_models` | List installed models with hardware-aware recommendations |
 
-### Fleet (6 tools)
+### Fleet (8 tools)
 
 | Tool | Description |
 |------|-------------|
+| `fleet_overview` | Adaptive fleet summary — auto-detects local-only vs WPE fleet. Start here for "tell me about my fleet" questions |
+| `fleet_sql` | Read-only SQL query over graph.db (`sites`, `plugins`, `content`, `users` tables). Write SELECT queries for version distributions, plugin inventory, user counts, activity |
 | `fleet_summary` | Aggregate stats across all sites |
 | `find_sites_with_plugin` | Filter sites by plugin presence |
 | `compare_sites` | Side-by-side comparison of two or more sites |
@@ -234,6 +236,36 @@ Nexus AI indexes WordPress content for semantic search:
 Indexing happens on-demand via Operations → ⚡ Index sites, or per-site via the Site Status panel, or programmatically via the `reindex_site` MCP tool. Content is automatically re-indexed when a site starts if auto-indexing is enabled (Settings → Content index interval).
 
 Supported content types: posts, pages, custom post types, WooCommerce products (price, SKU, stock, attributes), ACF custom fields (text, repeater, group, flexible content), and media metadata.
+
+## Fleet Analytics
+
+In addition to the vector index, Nexus AI maintains a relational graph database (`graph.db`) with structured per-site data collected on every site start:
+
+| Column | Description |
+|--------|-------------|
+| `wp_version`, `php_version` | WordPress and PHP versions |
+| `post_count_by_type` | JSON — per-post-type publish counts |
+| `user_count_by_role` | JSON — role distribution (administrator, editor, etc.) |
+| `settings_json` | Key WordPress options (blogname, siteurl, active_plugins, etc.) |
+| `last_post_at` | Timestamp of the most recently published post |
+| `last_active_session` | Most recent user login from `session_tokens` meta |
+
+Query this data directly using `fleet_sql`:
+
+```
+what WordPress versions is my fleet running?
+```
+```
+which sites have woocommerce active?
+```
+```
+show me sites with no posts published in the last 90 days
+```
+```
+how many admins does each site have?
+```
+
+`fleet_sql` accepts any SELECT statement and returns results as a table. See the tool description for the full schema and example queries.
 
 ## AI Setup
 

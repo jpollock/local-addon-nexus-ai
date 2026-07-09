@@ -1,0 +1,26 @@
+id: SF-03-eol-php
+description: Site Finder — end-of-life PHP (P1 — phpEolOnly)
+suite: site-finder
+tier: 1
+mode: [mcp]
+prompt: "sites on end-of-life PHP"
+
+expected_filter_json:
+  phpEolOnly: true
+
+guardrails:
+  must_not_return_all: true
+  expected_result_count: ">0"
+  must_not:
+    - return sites on PHP 8.2 or 8.3
+    - ask for clarification
+
+alternate_prompts:
+  - "sites with outdated PHP"
+  - "which sites need a PHP upgrade"
+  - "sites running EOL PHP versions"
+
+scoring_weights:
+  filter_correct: 60
+  results_accurate: 30
+  handles_alternates: 10

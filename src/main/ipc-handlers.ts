@@ -587,7 +587,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       try {
         const db = graphService.getDb();
         if (db) {
-          wpeSites = db.prepare("SELECT id, wp_version, php_version FROM sites WHERE source='wpe'").all() as any[];
+          wpeSites = db.prepare("SELECT id, wp_version, php_version, last_sync_at FROM sites WHERE source='wpe' AND is_active=1").all() as any[];
         }
       } catch { /* graph may not be ready */ }
 
@@ -622,8 +622,10 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         phpVersionMap.set(phpV, (phpVersionMap.get(phpV) ?? 0) + 1);
       }
 
-      // Add WPE site versions
+      // Add WPE site versions + staleness
       for (const site of wpeSites) {
+        if (site.last_sync_at && now - site.last_sync_at > DAY_MS) staleCount++;
+
         const wpV = site.wp_version ?? 'unknown';
         wpVersionMap.set(wpV, (wpVersionMap.get(wpV) ?? 0) + 1);
 
@@ -648,6 +650,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         return top;
       };
 
+      // WPE sync completeness: synced = has wp_version, neverSynced = never SSH-synced
+      const wpeSync = {
+        synced: wpeSites.filter((s: any) => !!s.wp_version).length,
+        neverSynced: wpeSites.filter((s: any) => !s.wp_version).length,
+      };
+
       return {
         total,
         totalLocal,
@@ -655,6 +663,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         wpVersions: sortVersions(wpVersionMap),
         phpVersions: sortVersions(phpVersionMap),
         completeness,
+        wpeSync,
         staleCount,
         neverScannedCount,
       };
@@ -869,7 +878,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   safeHandle(IPC_CHANNELS.GET_SETTINGS, () => {
     try {
       const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
-      if (!raw) return DEFAULT_SETTINGS;
+      if (!raw) return { ...DEFAULT_SETTINGS, llmAvailable: false };
       // Migrate pre-rename field names (chatProvider→aiProvider, chatModel→aiModel)
       if (raw.chatProvider !== undefined && raw.aiProvider === undefined) {
         raw.aiProvider = raw.chatProvider;
@@ -879,9 +888,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       }
       delete raw.chatProvider;
       delete raw.chatModel;
-      return raw;
+      // Inject llmAvailable so the renderer can correctly gate AI features
+      // without needing a separate IPC call or guessing from provider name alone.
+      const { isAvailable } = getAIProvider(registryStorage, raw as NexusSettings);
+      return { ...raw, llmAvailable: isAvailable };
     } catch {
-      return DEFAULT_SETTINGS;
+      return { ...DEFAULT_SETTINGS, llmAvailable: false };
     }
   });
 
@@ -1701,7 +1713,8 @@ Answer:`,
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { buildFleetContext, buildSiteContext } = require('./assistant/AssistantService') as typeof import('./assistant/AssistantService');
       if (payload?.mode === 'site' && payload.siteId) {
-        return buildSiteContext(payload.siteId, siteData, metadataCache, indexRegistry);
+        const status = localServicesBridge?.getSiteStatus(payload.siteId) as 'running' | 'halted' | undefined;
+        return buildSiteContext(payload.siteId, siteData, metadataCache, indexRegistry, status ?? 'unknown');
       }
       return buildFleetContext(siteData, metadataCache, indexRegistry, graphService);
     } catch (err) {
@@ -1731,7 +1744,8 @@ Answer:`,
 
       // Build context
       const context = payload?.mode === 'site' && payload.siteId
-        ? buildSiteContext(payload.siteId, siteData, metadataCache, indexRegistry)
+        ? buildSiteContext(payload.siteId, siteData, metadataCache, indexRegistry,
+            localServicesBridge?.getSiteStatus(payload.siteId) as 'running' | 'halted' | undefined ?? 'unknown')
         : buildFleetContext(siteData, metadataCache, indexRegistry, graphService);
 
       const systemPrompt = buildWordPressSystemPrompt(context);
@@ -2439,6 +2453,38 @@ Answer:`,
       // Validate input
       const validated = validateInput(SiteFinderFiltersSchema, filters);
 
+      // Guard: if no filter criteria are present, return empty rather than all sites.
+      // An empty filter means the AI couldn't map the query — returning everything is misleading.
+      const hasFilter = !!(
+        validated?.plugins?.length ||
+        validated?.themes?.length ||
+        validated?.phpVersions?.length ||
+        validated?.wpVersions?.length ||
+        validated?.contentQuery?.trim() ||
+        validated?.searchText?.trim() ||
+        validated?.minPluginCount ||
+        validated?.minPostCount ||
+        validated?.minUserCount ||
+        validated?.stalePostDays ||
+        validated?.recentPostDays ||
+        validated?.phpEolOnly ||
+        validated?.wpVersionOlderThan ||
+        validated?.maxPostCount ||
+        validated?.maxUserCount ||
+        validated?.pluginVersion ||
+        validated?.commentsDisabled !== undefined ||
+        validated?.hiddenFromSearch !== undefined ||
+        validated?.selfRegistrationOpen !== undefined ||
+        validated?.staticFrontPage !== undefined ||
+        validated?.plainPermalinks !== undefined ||
+        validated?.source ||
+        validated?.wpeEnvironment ||
+        validated?.minAdminCount
+      );
+      if (!hasFilter) {
+        return { success: true, local: [], wpe: [], siteIds: [] };
+      }
+
       const allSites = siteData.getSites();
       const statuses = localServicesBridge.getAllSiteStatuses();
       const db = graphService.getDb();
@@ -2532,6 +2578,117 @@ Answer:`,
           }
         }
 
+        // Min plugin count filter
+        if (matches && validated?.minPluginCount && db) {
+          const row = db.prepare(`SELECT COUNT(*) as c FROM plugins WHERE site_id = ? AND is_active = 1`)
+            .get(siteId) as { c: number } | undefined;
+          if (!row || row.c < validated.minPluginCount) matches = false;
+        }
+
+        // Min post count filter
+        if (matches && validated?.minPostCount && db) {
+          const row = db.prepare(`SELECT post_count FROM sites WHERE id = ?`).get(siteId) as { post_count: number | null } | undefined;
+          if (!row?.post_count || row.post_count < validated.minPostCount) matches = false;
+        }
+
+        // Min user count filter
+        if (matches && validated?.minUserCount && db) {
+          const row = db.prepare(`SELECT user_count FROM sites WHERE id = ?`).get(siteId) as { user_count: number | null } | undefined;
+          if (!row?.user_count || row.user_count < validated.minUserCount) matches = false;
+        }
+
+        // Stale post filter — last_post_at older than N days
+        if (matches && validated?.stalePostDays && db) {
+          const cutoff = Date.now() - validated.stalePostDays * 24 * 60 * 60 * 1000;
+          const row = db.prepare(`SELECT last_post_at FROM sites WHERE id = ?`).get(siteId) as { last_post_at: number | null } | undefined;
+          if (row?.last_post_at && row.last_post_at > cutoff) matches = false;
+        }
+
+        // P0: recentPostDays — updated WITHIN N days
+        if (matches && validated?.recentPostDays && db) {
+          const cutoff = Date.now() - validated.recentPostDays * 24 * 60 * 60 * 1000;
+          const row = db.prepare(`SELECT last_post_at FROM sites WHERE id = ?`).get(siteId) as { last_post_at: number | null } | undefined;
+          if (!row?.last_post_at || row.last_post_at < cutoff) matches = false;
+        }
+
+        // P1: phpEolOnly
+        const PHP_EOL_PREFIXES = ['5.6','7.0','7.1','7.2','7.3','7.4','8.0','8.1'];
+        if (matches && validated?.phpEolOnly && db) {
+          const row = db.prepare(`SELECT php_version FROM sites WHERE id = ?`).get(siteId) as { php_version: string | null } | undefined;
+          const isEol = PHP_EOL_PREFIXES.some(p => row?.php_version?.startsWith(p));
+          if (!isEol) matches = false;
+        }
+
+        // P1: wpVersionOlderThan (semver-aware prefix comparison)
+        if (matches && validated?.wpVersionOlderThan && db) {
+          const norm = (v: string) => v.split('.').map(n => parseInt(n, 10).toString().padStart(5, '0')).join('.');
+          const row = db.prepare(`SELECT wp_version FROM sites WHERE id = ?`).get(siteId) as { wp_version: string | null } | undefined;
+          if (!row?.wp_version || norm(row.wp_version) >= norm(validated.wpVersionOlderThan)) matches = false;
+        }
+
+        // P1: maxPostCount
+        if (matches && validated?.maxPostCount != null && db) {
+          const row = db.prepare(`SELECT post_count FROM sites WHERE id = ?`).get(siteId) as { post_count: number | null } | undefined;
+          if (row?.post_count != null && row.post_count >= validated.maxPostCount) matches = false;
+        }
+
+        // P1: maxUserCount
+        if (matches && validated?.maxUserCount != null && db) {
+          const row = db.prepare(`SELECT user_count FROM sites WHERE id = ?`).get(siteId) as { user_count: number | null } | undefined;
+          if (row?.user_count != null && row.user_count >= validated.maxUserCount) matches = false;
+        }
+
+        // P1: pluginVersion — plugin installed and active but older than olderThan
+        if (matches && validated?.pluginVersion?.slug && validated?.pluginVersion?.olderThan && db) {
+          const { slug, olderThan } = validated.pluginVersion;
+          const norm = (v: string) => v.split('.').map(n => parseInt(n, 10).toString().padStart(5, '0')).join('.');
+          const row = db.prepare(`SELECT version FROM plugins WHERE site_id=? AND slug=? AND is_active=1 LIMIT 1`).get(siteId, slug) as { version: string | null } | undefined;
+          if (!row?.version) { matches = false; }
+          else if (norm(row.version) >= norm(olderThan)) matches = false;
+        }
+
+        // P2: settings_json based filters
+        if (matches && (validated?.commentsDisabled !== undefined || validated?.hiddenFromSearch !== undefined ||
+            validated?.selfRegistrationOpen !== undefined || validated?.staticFrontPage !== undefined ||
+            validated?.plainPermalinks !== undefined) && db) {
+          const row = db.prepare(`SELECT settings_json FROM sites WHERE id = ?`).get(siteId) as { settings_json: string | null } | undefined;
+          // Sites without settings_json have unknown state — exclude from all settings filters
+          // (both true AND false direction) to avoid polluting results with unknowns.
+          if (!row?.settings_json) { matches = false; }
+          else {
+            const settings = JSON.parse(row.settings_json);
+            // Boolean settings filters support both directions:
+            //   true  = match the "special" state (disabled/hidden/open/static/plain)
+            //   false = match the inverse (enabled/visible/closed/blog/pretty)
+            //   If the specific setting key is missing from settings_json, exclude the site.
+            if (validated.commentsDisabled !== undefined) {
+              if (settings.default_comment_status === undefined) { matches = false; }
+              else { const closed = settings.default_comment_status === 'closed'; if (validated.commentsDisabled !== closed) matches = false; }
+            }
+            if (validated.hiddenFromSearch !== undefined) {
+              if (settings.blog_public === undefined) { matches = false; }
+              else { const hidden = settings.blog_public === '0'; if (validated.hiddenFromSearch !== hidden) matches = false; }
+            }
+            if (validated.selfRegistrationOpen !== undefined) {
+              if (settings.users_can_register === undefined) { matches = false; }
+              else { const open = settings.users_can_register === '1'; if (validated.selfRegistrationOpen !== open) matches = false; }
+            }
+            if (validated.staticFrontPage !== undefined) {
+              if (settings.show_on_front === undefined) { matches = false; }
+              else { const isStatic = settings.show_on_front === 'page'; if (validated.staticFrontPage !== isStatic) matches = false; }
+            }
+            if (validated.plainPermalinks !== undefined) {
+              if (settings.permalink_structure === undefined) { matches = false; }
+              else { const plain = settings.permalink_structure === ''; if (validated.plainPermalinks !== plain) matches = false; }
+            }
+          }
+        }
+
+        // P3: source filter
+        if (matches && validated?.source) {
+          if (validated.source !== 'local') matches = false; // local site loop, always source='local'
+        }
+
         // WP version filter (use graph - works on all sites) - OR logic within array
         if (matches && validated?.wpVersions && validated.wpVersions.length > 0) {
           if (db) {
@@ -2601,6 +2758,101 @@ Answer:`,
           } else {
             matches = false;
           }
+        }
+
+        // Min plugin count filter
+        if (matches && validated?.minPluginCount && db) {
+          const row = db.prepare(`SELECT COUNT(*) as c FROM plugins WHERE site_id = ? AND is_active = 1`)
+            .get(wpeSite.id) as { c: number } | undefined;
+          if (!row || row.c < validated.minPluginCount) matches = false;
+        }
+
+        // Min post count filter
+        if (matches && validated?.minPostCount) {
+          if (!wpeSite.post_count || wpeSite.post_count < validated.minPostCount) matches = false;
+        }
+
+        // Min user count filter
+        if (matches && validated?.minUserCount) {
+          if (!wpeSite.user_count || wpeSite.user_count < validated.minUserCount) matches = false;
+        }
+
+        // Stale post filter
+        if (matches && validated?.stalePostDays) {
+          const cutoff = Date.now() - validated.stalePostDays * 24 * 60 * 60 * 1000;
+          if (wpeSite.last_post_at && wpeSite.last_post_at > cutoff) matches = false;
+        }
+
+        // P0: recentPostDays
+        if (matches && validated?.recentPostDays) {
+          const cutoff = Date.now() - validated.recentPostDays * 24 * 60 * 60 * 1000;
+          if (!wpeSite.last_post_at || wpeSite.last_post_at < cutoff) matches = false;
+        }
+
+        // P1: phpEolOnly
+        const WPE_PHP_EOL = ['5.6','7.0','7.1','7.2','7.3','7.4','8.0','8.1'];
+        if (matches && validated?.phpEolOnly) {
+          const isEol = WPE_PHP_EOL.some(p => wpeSite.php_version?.startsWith(p));
+          if (!isEol) matches = false;
+        }
+
+        // P1: wpVersionOlderThan
+        if (matches && validated?.wpVersionOlderThan) {
+          const norm = (v: string) => v.split('.').map(n => parseInt(n, 10).toString().padStart(5, '0')).join('.');
+          if (!wpeSite.wp_version || norm(wpeSite.wp_version) >= norm(validated.wpVersionOlderThan)) matches = false;
+        }
+
+        // P1: maxPostCount / maxUserCount
+        if (matches && validated?.maxPostCount != null) {
+          if (wpeSite.post_count != null && wpeSite.post_count >= validated.maxPostCount) matches = false;
+        }
+        if (matches && validated?.maxUserCount != null) {
+          if (wpeSite.user_count != null && wpeSite.user_count >= validated.maxUserCount) matches = false;
+        }
+
+        // P1: pluginVersion
+        if (matches && validated?.pluginVersion?.slug && validated?.pluginVersion?.olderThan && db) {
+          const { slug, olderThan } = validated.pluginVersion;
+          const norm = (v: string) => v.split('.').map(n => parseInt(n, 10).toString().padStart(5, '0')).join('.');
+          const row = db.prepare(`SELECT version FROM plugins WHERE site_id=? AND slug=? AND is_active=1 LIMIT 1`).get(wpeSite.id, slug) as { version: string | null } | undefined;
+          if (!row?.version) { matches = false; }
+          else if (norm(row.version) >= norm(olderThan)) matches = false;
+        }
+
+        // P2: settings_json based (WPE sites)
+        if (matches && db && (validated?.commentsDisabled !== undefined || validated?.hiddenFromSearch !== undefined ||
+            validated?.selfRegistrationOpen !== undefined || validated?.staticFrontPage !== undefined ||
+            validated?.plainPermalinks !== undefined)) {
+          const row = db.prepare(`SELECT settings_json FROM sites WHERE id = ?`).get(wpeSite.id) as { settings_json: string | null } | undefined;
+          if (!row?.settings_json) { matches = false; }
+          else {
+            const settings = JSON.parse(row.settings_json);
+            if (validated.commentsDisabled !== undefined) {
+              if (settings.default_comment_status === undefined) { matches = false; }
+              else { const closed = settings.default_comment_status === 'closed'; if (validated.commentsDisabled !== closed) matches = false; }
+            }
+            if (validated.hiddenFromSearch !== undefined) {
+              if (settings.blog_public === undefined) { matches = false; }
+              else { const hidden = settings.blog_public === '0'; if (validated.hiddenFromSearch !== hidden) matches = false; }
+            }
+            if (validated.selfRegistrationOpen !== undefined) {
+              if (settings.users_can_register === undefined) { matches = false; }
+              else { const open = settings.users_can_register === '1'; if (validated.selfRegistrationOpen !== open) matches = false; }
+            }
+            if (validated.staticFrontPage !== undefined) {
+              if (settings.show_on_front === undefined) { matches = false; }
+              else { const isStatic = settings.show_on_front === 'page'; if (validated.staticFrontPage !== isStatic) matches = false; }
+            }
+            if (validated.plainPermalinks !== undefined) {
+              if (settings.permalink_structure === undefined) { matches = false; }
+              else { const plain = settings.permalink_structure === ''; if (validated.plainPermalinks !== plain) matches = false; }
+            }
+          }
+        }
+
+        // P3: source filter — WPE loop, always source='wpe'
+        if (matches && validated?.source) {
+          if (validated.source !== 'wpe') matches = false;
         }
 
         // WP version filter (prefix match: "7" matches "7.0", "7.0.1")
@@ -2689,14 +2941,35 @@ Answer:`,
       }
 
       // Build system prompt for query parsing
-      const systemPrompt = `You are a site finder query parser. Convert natural language queries into structured filters for searching WordPress sites.
+      // Build system prompt — defined in src/main/ai/site-finder-prompt.ts for testability
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { buildSiteFinderSystemPrompt } = require('./ai/site-finder-prompt') as typeof import('./ai/site-finder-prompt');
+      const systemPrompt = buildSiteFinderSystemPrompt();
+      const __legacyPromptStart = `You are a site finder query parser. Convert natural language queries into structured filters for searching WordPress sites.
 
 Available filter types:
 - plugins: array of plugin slugs (e.g., ["advanced-custom-fields", "woocommerce"])
 - themes: array of theme slugs (e.g., ["twentytwentyfour"])
 - phpVersions: array of PHP version strings (e.g., ["8.1", "8.2"])
 - wpVersions: array of WordPress version strings (e.g., ["6.8.1", "6.7"])
-- contentQuery: semantic search for indexed site content - finds sites with posts/pages about a topic (e.g., "cars", "recipes", "travel")
+- minPluginCount: integer — minimum number of active plugins
+- maxPluginCount: integer — maximum number of active plugins
+- minPostCount: integer — minimum number of posts/pages
+- maxPostCount: integer — maximum number of posts/pages (use for "empty sites", "brand new sites")
+- minUserCount: integer — minimum number of registered users
+- maxUserCount: integer — maximum number of registered users
+- stalePostDays: integer — sites NOT updated in N days (most recent post older than N days)
+- recentPostDays: integer — sites updated WITHIN the last N days (most recent post newer than N days)
+- phpEolOnly: boolean — sites running PHP that has reached end-of-life (7.4 and earlier)
+- wpVersionOlderThan: string — sites running WordPress older than the given version (e.g., "7.0")
+- pluginVersion: { slug, olderThan } — sites with a specific plugin installed at a version older than olderThan
+- commentsDisabled: boolean — sites where comments are closed by default (WordPress setting)
+- hiddenFromSearch: boolean — sites set to discourage search engine indexing (blog_public=0)
+- selfRegistrationOpen: boolean — sites where anyone can register as a user
+- staticFrontPage: boolean — sites using a static page as their front page (not blog roll)
+- plainPermalinks: boolean — sites using plain permalinks (no pretty URL structure)
+- source: "local" or "wpe" — filter to only local sites or only WP Engine sites
+- contentQuery: semantic search for indexed site content
 - searchText: exact text match in site names or domains
 
 Common plugin name mappings:
@@ -2704,11 +2977,18 @@ Common plugin name mappings:
 - "WooCommerce" → "woocommerce"
 - "Yoast" or "Yoast SEO" → "wordpress-seo"
 - "Akismet" → "akismet"
+- "WP Migrate" or "WP Migrate DB" → "wp-migrate-db"
+- "Elementor" → "elementor"
 
 IMPORTANT: contentQuery searches actual page/post content using AI embeddings. Use it for:
 - "sites about X" → contentQuery: "X"
 - "sites with content about X" → contentQuery: "X"
 - "sites mentioning X" → contentQuery: "X"
+
+NOT SUPPORTED — use needsClarification for these:
+- "outdated plugins" / "out-of-date plugins" / "plugins that need updates" → not filterable; ask user to use the Ask/Tell tab instead
+- "active sites" / "sites with traffic" / "most visited" → no traffic data available
+- If you cannot map the query to any supported filter, ALWAYS use needsClarification — NEVER return empty filters
 
 CRITICAL OUTPUT FORMAT:
 - You MUST respond with ONLY a JSON object, nothing else
@@ -2726,7 +3006,110 @@ User: "WooCommerce sites on old PHP"
 Assistant: { "needsClarification": true, "question": "What PHP version range? (e.g., below 8.0)" }
 
 User: "sites about cooking"
-Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen" } }`;
+Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen" } }
+
+User: "sites with more than 3 plugins"
+Assistant: { "filters": { "minPluginCount": 4 } }
+
+User: "sites with at least 5 plugins"
+Assistant: { "filters": { "minPluginCount": 5 } }
+
+User: "sites with >3 plugins"
+Assistant: { "filters": { "minPluginCount": 4 } }
+
+User: "sites with outdated plugins"
+Assistant: { "needsClarification": true, "question": "Plugin update status isn't filterable here. For a fleet-wide outdated plugin report, use the Ask/Tell tab and ask 'do I have any sites that have out of date plugins'." }
+
+User: "sites with out-of-date plugins"
+Assistant: { "needsClarification": true, "question": "Plugin update status isn't filterable here. For a fleet-wide outdated plugin report, use the Ask/Tell tab and ask 'do I have any sites that have out of date plugins'." }
+
+User: "sites with old versions of ACF"
+Assistant: { "needsClarification": true, "question": "What version of ACF do you consider outdated? (e.g., older than 6.3, or older than 6.0)" }
+
+User: "sites that haven't been updated in several weeks"
+Assistant: { "filters": { "stalePostDays": 14 } }
+
+User: "sites with no recent content"
+Assistant: { "filters": { "stalePostDays": 30 } }
+
+User: "sites not updated in the last month"
+Assistant: { "filters": { "stalePostDays": 30 } }
+
+User: "sites with more than 100 content items"
+Assistant: { "filters": { "minPostCount": 100 } }
+
+User: "sites with over 50 posts"
+Assistant: { "filters": { "minPostCount": 50 } }
+
+User: "sites with more than 10 users"
+Assistant: { "filters": { "minUserCount": 10 } }
+
+User: "sites with at least 5 users"
+Assistant: { "filters": { "minUserCount": 5 } }
+
+User: "sites updated in last 30 days"
+Assistant: { "filters": { "recentPostDays": 30 } }
+
+User: "recently active sites"
+Assistant: { "filters": { "recentPostDays": 7 } }
+
+User: "sites with recent content"
+Assistant: { "filters": { "recentPostDays": 14 } }
+
+User: "sites on end-of-life PHP"
+Assistant: { "filters": { "phpEolOnly": true } }
+
+User: "sites with outdated PHP"
+Assistant: { "filters": { "phpEolOnly": true } }
+
+User: "sites that need a PHP upgrade"
+Assistant: { "filters": { "phpEolOnly": true } }
+
+User: "sites not on WP 7.0"
+Assistant: { "filters": { "wpVersionOlderThan": "7.0" } }
+
+User: "sites running outdated WordPress"
+Assistant: { "filters": { "wpVersionOlderThan": "7.0" } }
+
+User: "sites with fewer than 5 posts"
+Assistant: { "filters": { "maxPostCount": 5 } }
+
+User: "empty sites"
+Assistant: { "filters": { "maxPostCount": 3 } }
+
+User: "sites with ACF older than 6.3"
+Assistant: { "filters": { "pluginVersion": { "slug": "advanced-custom-fields", "olderThan": "6.3.0" } } }
+
+User: "sites with comments disabled"
+Assistant: { "filters": { "commentsDisabled": true } }
+
+User: "sites blocking search engines"
+Assistant: { "filters": { "hiddenFromSearch": true } }
+
+User: "sites hidden from Google"
+Assistant: { "filters": { "hiddenFromSearch": true } }
+
+User: "sites where anyone can register"
+Assistant: { "filters": { "selfRegistrationOpen": true } }
+
+User: "sites with static front page"
+Assistant: { "filters": { "staticFrontPage": true } }
+
+User: "sites with plain permalinks"
+Assistant: { "filters": { "plainPermalinks": true } }
+
+User: "sites with ugly URLs"
+Assistant: { "filters": { "plainPermalinks": true } }
+
+User: "only WPE sites"
+Assistant: { "filters": { "source": "wpe" } }
+
+User: "only local sites"
+Assistant: { "filters": { "source": "local" } }
+
+User: "WooCommerce sites on end-of-life PHP"
+Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
+      void __legacyPromptStart; // removed — see site-finder-prompt.ts
 
       // Build messages array
       const messages = [
@@ -3326,16 +3709,75 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
 
       // Fetch metadata with auto-start/stop
       const result = await withSiteRunning(siteId, localServicesBridge, localLogger, async () => {
-        // Fetch fresh metadata via WP-CLI
-        const [wpVersion, plugins, themes] = await Promise.all([
+        // Fetch fresh metadata via WP-CLI — same fields as siteStarted lifecycle hook
+        // WP-CLI is already open — grab everything opportunistically
+        const [
+          wpVersion, plugins, themes,
+          phpVersionResult, siteUrlResult, adminEmailResult,
+          wpSettingsResult, postCountResult, userCountResult,
+        ] = await Promise.all([
           localServicesBridge.getWpVersion(siteId),
           localServicesBridge.getPlugins(siteId),
           localServicesBridge.getThemes(siteId),
+          localServicesBridge.wpCliRun(siteId, ['eval', 'echo phpversion();']),
+          localServicesBridge.getOption(siteId, 'siteurl'),
+          localServicesBridge.getOption(siteId, 'admin_email'),
+          localServicesBridge.wpCliRun(siteId, [
+            'eval',
+            `$keys = ['blogname','blogdescription','blogpublic','show_on_front','posts_per_page','default_comment_status','permalink_structure','timezone_string','users_can_register','default_role','WPLANG'];
+$out = [];
+foreach ($keys as $k) { $v = get_option($k); if ($v !== false) $out[$k] = $v; }
+echo json_encode($out);`,
+          ]),
+          localServicesBridge.wpCliRun(siteId, [
+            'eval',
+            `global $wpdb;
+$r=$wpdb->get_results("SELECT post_type,COUNT(*) c,MAX(post_date_gmt) ld FROM {$wpdb->posts} WHERE post_status='publish' GROUP BY post_type",ARRAY_A);
+$total=0;$byType=[];$last=null;
+foreach($r as $row){ $byType[$row['post_type']]=(int)$row['c']; $total+=(int)$row['c']; if(!$last||$row['ld']>$last)$last=$row['ld']; }
+echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
+          ]),
+          localServicesBridge.wpCliRun(siteId, ['eval', 'global $wpdb; echo (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->users}");']),
         ]);
+
+        const phpVersion = phpVersionResult.success ? phpVersionResult.stdout?.trim() || undefined : undefined;
+        const siteUrl = siteUrlResult ?? undefined;
+        const adminEmail = adminEmailResult ?? undefined;
+
+        let wpSettings: Record<string, string | number> | undefined;
+        if (wpSettingsResult.success && wpSettingsResult.stdout?.trim()) {
+          try {
+            const parsed = JSON.parse(wpSettingsResult.stdout.trim());
+            if (parsed && typeof parsed === 'object') wpSettings = parsed;
+          } catch { /* ignore */ }
+        }
+
+        let postCount: number | undefined;
+        let postCountByType: Record<string, number> | undefined;
+        let lastPostAt: number | undefined;
+        if (postCountResult.success && postCountResult.stdout?.trim()) {
+          try {
+            const p = JSON.parse(postCountResult.stdout.trim());
+            postCount = p.total ?? undefined;
+            postCountByType = p.byType ?? undefined;
+            if (p.lastPostAt) lastPostAt = new Date(p.lastPostAt + ' UTC').getTime() || undefined;
+          } catch { /* ignore */ }
+        }
+
+        const userCount = userCountResult.success
+          ? (parseInt((userCountResult.stdout ?? '').trim(), 10) || undefined)
+          : undefined;
 
         // Store in cache
         metadataCache.set(siteId, {
           wpVersion: wpVersion ?? 'unknown',
+          phpVersion,
+          siteUrl,
+          adminEmail,
+          postCount,
+          postCountByType,
+          lastPostAt,
+          userCount,
           plugins: plugins.map(p => ({
             name: p.name,
             title: p.title,
@@ -3350,8 +3792,18 @@ Assistant: { "filters": { "contentQuery": "cooking recipes food culinary kitchen
             status: t.status as 'active' | 'inactive',
           })),
           activeTheme: themes.find(t => t.status === 'active')?.name,
+          wpSettings,
           updateSource: 'manual',
+          scanDepth: 'full',
         });
+
+        // Persist to graph.db while we have the data
+        if (graphService) {
+          try {
+            graphService.updateSiteStats(siteId, { postCount, postCountByType, userCount, lastPostAt });
+            if (wpSettings) graphService.updateSiteSettings(siteId, wpSettings);
+          } catch { /* non-fatal */ }
+        }
 
         // Digital Twin: Also update IndexRegistry structure to refresh searchable data
         const existingEntry = indexRegistry.get(siteId);

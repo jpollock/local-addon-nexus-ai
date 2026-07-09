@@ -40,7 +40,7 @@ export const deleteInstallHandler: McpToolHandler = {
           return {
             content: [{ type: 'text' as const, text:
               `Operation blocked: this operation is not permitted on "${effectiveEnv}" environments. ` +
-              `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`
+              `Adjust in Nexus AI → Settings → WP Engine Access.`
             }],
             isError: true,
           };
@@ -123,7 +123,7 @@ export const deleteInstallHandler: McpToolHandler = {
         return {
           content: [{ type: 'text' as const, text:
             `Operation blocked: this operation is not permitted on "${confirmEnv}" environments. ` +
-            `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`
+            `Adjust in Nexus AI → Settings → WP Engine Access.`
           }],
           isError: true,
         };

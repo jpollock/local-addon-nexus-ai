@@ -111,8 +111,12 @@ export interface Site {
   created_at: number;
   updated_at: number;
   source?: 'local' | 'wpe';
+  environment?: 'production' | 'staging' | 'development';
   remote_install_id?: string;
   remote_domain?: string;
+  post_count?: number;
+  user_count?: number;
+  last_post_at?: number;
 }
 
 export interface Content {

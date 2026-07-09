@@ -118,7 +118,7 @@ export async function resolveTarget(
         if (!isOperationAllowed(operation, environment, settings, installInfo.installName)) {
           return error(
             `Operation blocked: WP-CLI is not permitted on "${environment}" environments. ` +
-            `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`,
+            `Adjust in Nexus AI → Settings → WP Engine Access.`,
           );
         }
         return { type: 'remote', installName: installInfo.installName, installInfo };
@@ -140,7 +140,7 @@ export async function resolveTarget(
     if (!isOperationAllowed(operation, environment, settings, installName)) {
       return error(
         `Operation blocked: WP-CLI is not permitted on "${environment}" environments. ` +
-        `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`,
+        `Adjust in Nexus AI → Settings → WP Engine Access.`,
       );
     }
 

@@ -9,6 +9,8 @@ import { listSiteGroupsHandler } from './list-site-groups';
 import { manageSiteGroupHandler } from './manage-site-group';
 import { fleetSummaryHandler } from './fleet-summary';
 import { fleetPluginsHandler } from './fleet-plugins';
+import { fleetSqlHandler } from './fleet-sql';
+import { fleetOverviewHandler } from './fleet-overview';
 
 export function registerFleetIntelligenceTools(registry: ToolRegistry): void {
   registry.register(fleetHealthSummaryHandler);
@@ -21,4 +23,6 @@ export function registerFleetIntelligenceTools(registry: ToolRegistry): void {
   registry.register(manageSiteGroupHandler);
   registry.register(fleetSummaryHandler);
   registry.register(fleetPluginsHandler);
+  registry.register(fleetSqlHandler);
+  registry.register(fleetOverviewHandler);
 }

@@ -80,7 +80,7 @@ function createTestSetup(storageData: Record<string, any>, localServicesOverride
     removeSite: jest.fn().mockResolvedValue(undefined),
   };
   const indexRegistry = new IndexRegistry(createMockStorage());
-  const logger = { info: jest.fn(), error: jest.fn() };
+  const logger = { info: jest.fn(), error: jest.fn(), warn: jest.fn() };
   const localServices = createMockLocalServices(localServicesOverrides);
 
   registerLifecycleHooks(
@@ -169,6 +169,18 @@ describe('applyGatewayChange (via siteStarted hook)', () => {
     await hooks.siteStarted(site);
 
     expect(mockedSwitchProvider).not.toHaveBeenCalled();
+  });
+
+  it('logs a skip message when site has no AI config (gateway cannot be applied)', async () => {
+    const { hooks, logger } = createTestSetup({
+      [STORAGE_KEYS.SETTINGS]: { aiProvider: 'anthropic', useLocalGateway: true },
+      [STORAGE_KEYS.SITE_AI_CONFIG]: {}, // no entry for site-1
+    });
+
+    await hooks.siteStarted(site);
+
+    const infoMessages = (logger.info as jest.Mock).mock.calls.map((c: any[]) => c.join(' '));
+    expect(infoMessages.some((m: string) => m.includes('Skipping') && m.includes('AI not configured'))).toBe(true);
   });
 
   // 5. Ollama provider always skips gateway logic
@@ -260,7 +272,7 @@ describe('applyGatewayChange — provider-only change', () => {
       removeSite: jest.fn(),
     };
     const indexRegistry = new IndexRegistry(createMockStorage());
-    const logger = { info: jest.fn(), error: jest.fn() };
+    const logger = { info: jest.fn(), error: jest.fn(), warn: jest.fn() };
     const localServices = createMockLocalServices();
 
     registerLifecycleHooks(context, pipeline as any, indexRegistry, logger, undefined, storage, localServices as any, undefined);

@@ -1,0 +1,23 @@
+id: SF-01-plugin-presence
+description: Site Finder — plugin presence query, basic case
+suite: site-finder
+tier: 1
+mode: [mcp]
+prompt: "sites with ACF"
+
+expected_filter_json:
+  plugins: ["advanced-custom-fields"]
+
+guardrails:
+  must_not_return_all: true
+  expected_result_count: ">0"
+  expected_sites:
+    include: ["acfrecipes", "local-copy-jpp"]
+  must_not:
+    - return all 300+ sites
+    - include sites where ACF is not installed
+
+scoring_weights:
+  filter_correct: 50
+  results_accurate: 30
+  no_false_positives: 20

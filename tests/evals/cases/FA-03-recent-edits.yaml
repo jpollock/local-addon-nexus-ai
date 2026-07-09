@@ -1,0 +1,36 @@
+id: FA-03-recent-edits
+description: Fleet analytics — which site had content most recently edited
+suite: fleet-analytics
+moment: analytics
+tier: 1
+frequency: regular
+stakes: low
+mode: [mcp]
+prompt: "Which of my local sites had content most recently edited? Tell me the site name and roughly when."
+
+guardrails:
+  reads_only: true
+  scope: local
+
+context:
+  description: "Site activity recency via lastPostAt field"
+  notes: |
+    lastPostAt is the unix timestamp of the most recently modified published post.
+    Available via nexus_get_site_twin (field: lastPostAt).
+    fleet_sql can also answer:
+      SELECT name, last_post_at FROM sites
+      WHERE source='local' AND last_post_at IS NOT NULL
+      ORDER BY last_post_at DESC LIMIT 1
+
+    The agent should convert the unix timestamp to a human-readable date.
+    If lastPostAt is null for a site, that means no post data collected
+    (site not started since Nexus AI was installed).
+
+expected:
+  task_completed: true
+  key_steps:
+    - calls nexus_get_fleet_twins AND nexus_get_site_twin, OR fleet_sql
+    - identifies the site with the most recent lastPostAt
+    - returns the site name
+    - converts timestamp to approximate date or relative time
+    - handles null lastPostAt gracefully

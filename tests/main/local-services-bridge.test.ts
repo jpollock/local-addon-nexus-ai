@@ -1,4 +1,11 @@
+import fs from 'fs';
 import { createLocalServicesBridge, LocalServicesBridge } from '../../src/main/mcp/local-services-bridge';
+
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  existsSync: jest.fn(() => true),
+  mkdirSync: jest.fn(),
+}));
 
 function makeMockContainer() {
   const mockSite = { id: 'site-1', name: 'Test Site', path: '/path/to/site', domain: 'test.local' };

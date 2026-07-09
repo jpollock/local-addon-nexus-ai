@@ -1,0 +1,26 @@
+id: SF-08-zero-result
+description: Site Finder — valid filter that returns no matches, handled gracefully
+suite: site-finder
+tier: 1
+mode: [mcp]
+prompt: "sites with more than 5000 posts"
+
+expected_filter_json:
+  minPostCount: 5000
+
+expected_result_count: "0"
+
+guardrails:
+  must_not:
+    - return sites that don't have 5000+ posts
+    - fail silently or show a generic error
+    - return all sites
+
+expected_ui_behavior: |
+  Should show "No matching sites found" message — not a crash, not all sites,
+  not a clarification. The filter is valid; there just happen to be no matches.
+
+scoring_weights:
+  filter_correct: 40
+  empty_handled_gracefully: 40
+  no_false_results: 20

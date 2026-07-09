@@ -23,7 +23,7 @@ type SiteRow = {
   id: string;
   name: string;
   remote_install_id: string;
-  last_sync_at: number | null;
+  ssh_last_sync_at: number | null;
 };
 
 /**
@@ -97,19 +97,19 @@ describe('WpeRefreshScheduler', () => {
     id: 'wpe-aaa',
     name: 'install-a',
     remote_install_id: 'aaa',
-    last_sync_at: staleTimestamp,
+    ssh_last_sync_at: staleTimestamp,
   };
   const installB: SiteRow = {
     id: 'wpe-bbb',
     name: 'install-b',
     remote_install_id: 'bbb',
-    last_sync_at: freshTimestamp,
+    ssh_last_sync_at: freshTimestamp,
   };
   const installC: SiteRow = {
     id: 'wpe-ccc',
     name: 'install-c',
     remote_install_id: 'ccc',
-    last_sync_at: null, // never SSH-synced
+    ssh_last_sync_at: null, // never SSH-synced
   };
 
   // -----------------------------------------------------------
@@ -117,7 +117,7 @@ describe('WpeRefreshScheduler', () => {
   // -----------------------------------------------------------
 
   describe('runNow() — staleness filtering', () => {
-    it('skips installs whose last_sync_at is within the staleness threshold', async () => {
+    it('skips installs whose ssh_last_sync_at is within the staleness threshold', async () => {
       const graphService = makeGraphService([installB]); // fresh
       const localServices = makeLocalServices();
       const logger = makeLogger();
@@ -136,7 +136,7 @@ describe('WpeRefreshScheduler', () => {
       expect(localServices.remoteWpCliRun).not.toHaveBeenCalled();
     });
 
-    it('scans installs with a stale last_sync_at', async () => {
+    it('scans installs with a stale ssh_last_sync_at', async () => {
       const graphService = makeGraphService([installA]); // stale
       const localServices = makeLocalServices({
         wpCliResult: { success: true, stdout: '[]' },
@@ -157,7 +157,7 @@ describe('WpeRefreshScheduler', () => {
       expect(localServices.remoteWpCliRun).toHaveBeenCalled();
     });
 
-    it('scans installs with null last_sync_at (never SSH-synced)', async () => {
+    it('scans installs with null ssh_last_sync_at (never SSH-synced)', async () => {
       const graphService = makeGraphService([installC]); // never synced
       const localServices = makeLocalServices({
         wpCliResult: { success: true, stdout: '[]' },

@@ -1,7 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error } from './preflight';
 import { resolveTarget, remoteWpCliRun } from './remote-exec';
-import { withSiteRunning } from '../with-site-running';
 
 export const evalHandler: McpToolHandler = {
   definition: {
@@ -58,18 +57,25 @@ export const evalHandler: McpToolHandler = {
       return ok(result.stdout?.trim() || '(no output)');
     }
 
-    // Local path
-    return withSiteRunning(target.site.id, services, async () => {
-      const result = await services.localServices!.wpCliRun(target.site.id, ['eval', code], {
-        skipPlugins: !!(args.skip_plugins),
-        skipThemes: !!(args.skip_themes),
-      });
+    // Local path — require site to be running (wp_eval needs MySQL; auto-start hangs)
+    const siteStatus = services.localServices!.getSiteStatus(target.site.id);
+    if (siteStatus !== 'running') {
+      return error(
+        `Site "${target.site.name}" is ${siteStatus}. wp_eval requires the site to be running (MySQL must be available). ` +
+        `Start it first with local_start_site, then retry.`,
+      );
+    }
 
-      if (!result.success) {
-        return error('Eval failed: ' + result.stdout);
-      }
-
-      return ok(result.stdout?.trim() || '(no output)');
+    const result = await services.localServices!.wpCliRun(target.site.id, ['eval', code], {
+      skipPlugins: !!(args.skip_plugins),
+      skipThemes: !!(args.skip_themes),
+      timeoutMs: 30_000,
     });
+
+    if (!result.success) {
+      return error('Eval failed: ' + result.stdout);
+    }
+
+    return ok(result.stdout?.trim() || '(no output)');
   },
 };

@@ -30,6 +30,7 @@ function createMockDeps(overrides: Partial<BulkOpDeps> = {}): BulkOpDeps {
       getPlugins: jest.fn().mockResolvedValue([]),
       getThemes: jest.fn().mockResolvedValue([]),
       getWpVersion: jest.fn().mockResolvedValue('6.5.0'),
+      getOption: jest.fn().mockResolvedValue(null),
     },
     healthCalculator: {
       calculateScore: jest.fn().mockResolvedValue({ score: 80 }),

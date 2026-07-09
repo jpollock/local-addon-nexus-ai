@@ -62,13 +62,14 @@ function parseJsonArray(stdout: string): any[] {
   catch { return []; }
 }
 
+/** Returns site status, 'not-found' if site missing, or null if Local CLI is unreachable. */
 async function getSiteRunStatus(siteName: string): Promise<string | null> {
   const r = await runCli('sites list --json');
   if (r.exitCode !== 0) return null;
   const data = parseJsonObject(r.stdout);
   const local: any[] = data?.local ?? [];
   const site = local.find((s: any) => s.name === siteName);
-  return site?.status ?? null;
+  return site ? (site.status ?? 'unknown') : 'not-found';
 }
 
 async function getIndexState(siteName: string): Promise<any | null> {
@@ -91,6 +92,7 @@ async function waitForRunStatus(
   const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
     const s = await getSiteRunStatus(siteName);
+    if (s === 'not-found') return false; // site doesn't exist — bail early
     if (s === targetStatus) return true;
     await new Promise(res => setTimeout(res, POLL_MS));
   }
@@ -115,8 +117,9 @@ async function waitForIndexed(siteName: string, maxMs = MAX_WAIT_MS): Promise<bo
 beforeAll(async () => {
   // Start with site halted to test auto-start behavior
   await runCli(`sites stop ${TEST_SITE}@local`).catch(() => {});
-  await new Promise(res => setTimeout(res, 3000));
-}, 30_000);
+  // Poll until halted — 3s flat wait isn't enough for Local to finish shutdown
+  await waitForRunStatus(TEST_SITE, 'halted', 25_000);
+}, 60_000);
 
 afterAll(async () => {
   // No teardown — leave site in current state
@@ -157,7 +160,8 @@ describe('nexus mcp call — availability check', () => {
 describe('auto-start lifecycle — content index on halted site', () => {
   it('site is halted before auto-start test', async () => {
     const status = await getSiteRunStatus(TEST_SITE);
-    if (status === null) { skipTest('Cannot determine site status — Local not running'); return; }
+    if (status === null) { skipTest('Cannot determine site status — Local CLI unreachable'); return; }
+    if (status === 'not-found') { skipTest(`${TEST_SITE} not found — create it: nexus sites create ${TEST_SITE}@local`); return; }
     if (status !== 'halted' && status !== 'stopped') {
       skipTest(`${TEST_SITE} is not halted (status: ${status}) — auto-start test requires halted state`);
       return;
@@ -168,7 +172,8 @@ describe('auto-start lifecycle — content index on halted site', () => {
   it('content index on halted site completes without error (auto-start expected)', async () => {
     // Guard: skip immediately if site doesn't exist — content index hangs for minutes on missing sites
     const status = await getSiteRunStatus(TEST_SITE);
-    if (status === null) { skipTest(`${TEST_SITE} not found — was it created by global setup?`); return; }
+    if (status === null) { skipTest('Local CLI unreachable'); return; }
+    if (status === 'not-found') { skipTest(`${TEST_SITE} not found — create it: nexus sites create ${TEST_SITE}@local`); return; }
 
     // This exercises the same site-start pipeline that ChatService triggers
     const r = await runCli([`content`, `index`, `${TEST_SITE}@local`], {
@@ -187,7 +192,7 @@ describe('auto-start lifecycle — content index on halted site', () => {
   it('after content index on previously-halted site: documentCount > 0', async () => {
     // Guard: skip immediately if site doesn't exist — waitForIndexed polls for minutes on missing sites
     const status = await getSiteRunStatus(TEST_SITE);
-    if (status === null) { skipTest(`${TEST_SITE} not found — skipping documentCount check`); return; }
+    if (status === null || status === 'not-found') { skipTest(`${TEST_SITE} not found — skipping documentCount check`); return; }
 
     const indexed = await waitForIndexed(TEST_SITE, 120_000);
     if (!indexed) { skipTest('Site did not index within 2 min'); return; }
@@ -252,12 +257,14 @@ describe('reindex on halted site — lifecycle completion', () => {
   beforeAll(async () => {
     // Halt the site for this test
     await runCli(`sites stop ${TEST_SITE}@local`).catch(() => {});
-    await new Promise(res => setTimeout(res, 3000));
-  }, 30_000);
+    // Poll until halted — flat 3s wait isn't reliable
+    await waitForRunStatus(TEST_SITE, 'halted', 25_000);
+  }, 60_000);
 
   it('site is halted before reindex lifecycle test', async () => {
     const status = await getSiteRunStatus(TEST_SITE);
-    if (status === null) { skipTest('Cannot determine site status'); return; }
+    if (status === null) { skipTest('Local CLI unreachable'); return; }
+    if (status === 'not-found') { skipTest(`${TEST_SITE} not found — create it: nexus sites create ${TEST_SITE}@local`); return; }
     if (status !== 'halted' && status !== 'stopped') {
       skipTest(`${TEST_SITE} not halted — reindex lifecycle test requires halted state`);
       return;

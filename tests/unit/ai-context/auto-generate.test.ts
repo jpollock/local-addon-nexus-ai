@@ -93,12 +93,12 @@ describe('autoGenerateContextFile', () => {
     );
   });
 
-  it('should skip generation if file already exists', async () => {
+  it('should regenerate file even when it already exists (keeps context current)', async () => {
     const sitePath = path.join(tempDir, 'test-site-2');
     await fs.mkdir(path.join(sitePath, 'app', 'public'), { recursive: true });
 
     const filePath = path.join(sitePath, 'app', 'public', 'AI-CONTEXT.md');
-    await fs.writeFile(filePath, '# Existing file', 'utf-8');
+    await fs.writeFile(filePath, '# Existing stale file', 'utf-8');
 
     const site = {
       id: 'test-site-2-id',
@@ -109,13 +109,14 @@ describe('autoGenerateContextFile', () => {
 
     await autoGenerateContextFile(site, localServices, metadataCache, registryStorage, logger);
 
-    // Check that file was not modified
+    // File should be overwritten with fresh content — not left as the stale version
     const content = await fs.readFile(filePath, 'utf-8');
-    expect(content).toBe('# Existing file');
+    expect(content).not.toBe('# Existing stale file');
+    expect(content).toContain('# AI Development Context - test-site-2');
 
-    // Check that skip was logged
+    // Regeneration should be logged
     expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining('AI context file already exists for test-site-2, skipping auto-generation'),
+      expect.stringContaining('Auto-generated AI context file for test-site-2'),
     );
   });
 

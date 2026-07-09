@@ -6,7 +6,7 @@ import type { NexusSettings } from '../../common/types';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
 import { switchProviderForSite } from '../mcp/modules/wp-connector/switch-provider';
-import type { SiteMetadataCache } from '../metadata/SiteMetadataCache';
+import type { SiteMetadataCache, SiteMetadata } from '../metadata/SiteMetadataCache';
 import type { GraphService } from '../events/GraphService';
 import { autoGenerateContextFile } from '../ai-context/auto-generate';
 import { generateMuPluginContent } from '../ai-gateway/mu-plugin-template';
@@ -34,7 +34,10 @@ async function applyGatewayChange(
   const siteConfigs = (settingsStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
   const siteConfig = siteConfigs[site.id];
 
-  if (!siteConfig) return;
+  if (!siteConfig) {
+    logger.info(`${tag} Skipping "${site.name}" — AI not configured on this site. Gateway will be applied after Setup AI.`);
+    return;
+  }
 
   const gatewayToggleChanged = !!siteConfig.useLocalGateway !== globalUseGateway;
   // Also detect provider change for sites already using the gateway
@@ -188,10 +191,26 @@ export function registerLifecycleHooks(
     const metadataRefreshPromise = (async () => {
       if (metadataCache && localServices) {
         try {
+          // siteStarted fires before MySQL accepts connections. Poll until the DB is ready
+          // (up to 30s) so WP-CLI commands that bootstrap WordPress don't fail silently.
+          const dbDeadline = Date.now() + 30_000;
+          while (Date.now() < dbDeadline) {
+            const remaining = Math.max(dbDeadline - Date.now(), 1000);
+            const probe = await localServices.wpCliRun(site.id, ['eval', "echo 'db_ready';"], {
+              timeoutMs: Math.min(remaining, 10_000),
+            });
+            if (probe.success && probe.stdout?.trim() === 'db_ready') break;
+            await new Promise((r) => setTimeout(r, 1_000));
+          }
+
           const [
             wpVersion, plugins, themes,
             siteUrl, adminEmail,
             mysqlVersionResult, postCountResult, userCountResult, phpVersionResult,
+            sessionTokensResult,
+            wpConfigMtimeResult,
+            userCountByRoleResult,
+            wpSettingsResult,
           ] = await Promise.allSettled([
             localServices.getWpVersion(site.id),
             localServices.getPlugins(site.id),
@@ -209,6 +228,61 @@ export function registerLifecycleHooks(
             localServices.wpCliRun(site.id, ['eval', 'global $wpdb; echo (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->users}");']),
             // PHP version — WP-CLI runs under the site's PHP, so phpversion() is accurate
             localServices.wpCliRun(site.id, ['eval', 'echo phpversion();']),
+            // lastActiveSession: most recent login timestamp from active session_tokens
+            localServices.wpCliRun(site.id, [
+              'eval',
+              `global $wpdb;
+$rows = $wpdb->get_results("
+  SELECT u.ID, um.meta_value
+  FROM {$wpdb->users} u
+  LEFT JOIN {$wpdb->usermeta} um
+    ON um.user_id = u.ID AND um.meta_key = 'session_tokens'
+");
+$latest = null;
+foreach ($rows as $r) {
+  $tokens = $r->meta_value ? maybe_unserialize($r->meta_value) : null;
+  if (is_array($tokens) && !empty($tokens)) {
+    $logins = array_column($tokens, 'login');
+    if (!empty($logins)) {
+      $t = max($logins);
+      if ($latest === null || $t > $latest) $latest = $t;
+    }
+  }
+}
+echo $latest !== null ? (int)$latest : '';`,
+            ]),
+            // wpConfigMtime: file mtime as proxy for salt rotation age
+            localServices.wpCliRun(site.id, [
+              'eval',
+              `echo (int)filemtime(ABSPATH . 'wp-config.php');`,
+            ]),
+            // userCountByRole: role breakdown via capabilities user meta
+            localServices.wpCliRun(site.id, [
+              'eval',
+              `global $wpdb;
+$rows = $wpdb->get_results(
+  "SELECT meta_value FROM {$wpdb->usermeta} WHERE meta_key = '{$wpdb->prefix}capabilities'",
+  ARRAY_A
+);
+$counts = [];
+foreach ($rows as $r) {
+  $caps = maybe_unserialize($r['meta_value']);
+  if (is_array($caps)) {
+    foreach (array_keys($caps) as $role) {
+      $counts[$role] = ($counts[$role] ?? 0) + 1;
+    }
+  }
+}
+echo json_encode($counts);`,
+            ]),
+            // WordPress settings — key options from wp_options for digital twin + AI context
+            localServices.wpCliRun(site.id, [
+              'eval',
+              `$keys = ['blogname','blogdescription','blogpublic','show_on_front','posts_per_page','default_comment_status','permalink_structure','timezone_string','users_can_register','default_role','WPLANG'];
+$out = [];
+foreach ($keys as $k) { $v = get_option($k); if ($v !== false) $out[$k] = $v; }
+echo json_encode($out);`,
+            ]),
           ]);
 
           // Parse post count result
@@ -239,6 +313,50 @@ export function registerLifecycleHooks(
             ? (phpVersionResult.value.stdout ?? '').trim() || undefined
             : undefined;
 
+          let lastActiveSession: number | undefined;
+          if (sessionTokensResult.status === 'fulfilled' && sessionTokensResult.value.success) {
+            const raw = (sessionTokensResult.value.stdout ?? '').trim();
+            const ts = parseInt(raw, 10);
+            if (!isNaN(ts) && ts > 0) lastActiveSession = ts;
+          }
+
+          let wpConfigMtime: number | undefined;
+          if (wpConfigMtimeResult.status === 'fulfilled' && wpConfigMtimeResult.value.success) {
+            const raw = (wpConfigMtimeResult.value.stdout ?? '').trim();
+            const ts = parseInt(raw, 10);
+            if (!isNaN(ts) && ts > 0) wpConfigMtime = ts;
+          }
+
+          let userCountByRole: Record<string, number> | undefined;
+          if (userCountByRoleResult.status === 'fulfilled' && userCountByRoleResult.value.success) {
+            try {
+              const parsed = JSON.parse((userCountByRoleResult.value.stdout ?? '').trim());
+              if (parsed && typeof parsed === 'object') userCountByRole = parsed;
+            } catch { /* ignore */ }
+          }
+
+          let wpSettings: SiteMetadata['wpSettings'] | undefined;
+          if (wpSettingsResult.status === 'fulfilled' && wpSettingsResult.value.success) {
+            try {
+              const parsed = JSON.parse((wpSettingsResult.value.stdout ?? '').trim());
+              if (parsed && typeof parsed === 'object') {
+                wpSettings = {
+                  blogname: parsed.blogname,
+                  blogdescription: parsed.blogdescription,
+                  blogpublic: parsed.blogpublic,
+                  show_on_front: parsed.show_on_front,
+                  posts_per_page: parsed.posts_per_page != null ? Number(parsed.posts_per_page) : undefined,
+                  default_comment_status: parsed.default_comment_status,
+                  permalink_structure: parsed.permalink_structure,
+                  timezone_string: parsed.timezone_string,
+                  users_can_register: parsed.users_can_register,
+                  default_role: parsed.default_role,
+                  WPLANG: parsed.WPLANG,
+                };
+              }
+            } catch { /* ignore */ }
+          }
+
           metadataCache.set(site.id, {
             wpVersion: wpVersion.status === 'fulfilled' ? (wpVersion.value ?? 'unknown') : 'unknown',
             phpVersion: phpFromWpCli ?? site.phpVersion ?? undefined,
@@ -262,11 +380,29 @@ export function registerLifecycleHooks(
             userCount: userCountResult.status === 'fulfilled' && userCountResult.value.success
               ? (parseInt((userCountResult.value.stdout ?? '').trim(), 10) || undefined)
               : undefined,
+            lastActiveSession,
+            userCountByRole,
+            wpConfigMtime,
+            wpSettings,
             updateSource: 'lifecycle',
             scanDepth: 'full',
           });
 
           logger.info(`[NexusAI] Refreshed metadata cache for ${site.name} (WP ${wpVersion.status === 'fulfilled' ? wpVersion.value : '?'}, ${postCount ?? '?'} posts)`);
+
+          // Persist L2 analytics to graph.db so fleet_sql can query across sites
+          try {
+            graphService?.updateSiteStats?.(site.id, {
+              postCount,
+              postCountByType,
+              userCount: userCountResult.status === 'fulfilled' && userCountResult.value.success
+                ? (parseInt((userCountResult.value.stdout ?? '').trim(), 10) || undefined)
+                : undefined,
+              lastPostAt,
+              lastActiveSession,
+              userCountByRole,
+            });
+          } catch { /* non-fatal */ }
 
           // Mirror L2 data to graph.db so it survives restarts and is
           // available to fleet queries without going through SiteMetadataCache.
@@ -306,6 +442,13 @@ export function registerLifecycleHooks(
             } catch (graphErr) {
               logger.warn(`[NexusAI] graph.db write failed for ${site.name} (non-fatal):`, graphErr);
             }
+
+            // Persist WordPress settings to graph.db for fleet_sql queries
+            if (wpSettings) {
+              try {
+                graphService.updateSiteSettings(site.id, wpSettings as Record<string, string | number>);
+              } catch { /* non-fatal */ }
+            }
           }
         } catch (err) {
           logger.error(`[NexusAI] Metadata refresh failed for ${site.name}:`, err);
@@ -334,6 +477,13 @@ export function registerLifecycleHooks(
     // Wait for metadata refresh to complete before continuing
     await metadataRefreshPromise;
 
+    // Index settings as a searchable document — after metadataRefreshPromise so wpSettings is populated
+    const cachedSettings = metadataCache?.get?.(site.id)?.wpSettings;
+    if (cachedSettings && Object.keys(cachedSettings).length > 0) {
+      pipeline.indexSettingsDocument(site.id, site.name, cachedSettings as Record<string, string | number>)
+        .catch((err) => logger.error(`[NexusAI] Settings document indexing failed for ${site.name}:`, err));
+    }
+
     // Auto-sync AI credentials to WP 7.0+ sites
     if (localServices && settingsStorage) {
       try {
@@ -361,7 +511,7 @@ export function registerLifecycleHooks(
       }
     }
 
-    // Auto-generate AI context file if missing
+    // Regenerate AI context file on every site start — keeps it current after content changes
     if (localServices && settingsStorage && metadataCache) {
       try {
         await autoGenerateContextFile(site, localServices, metadataCache, settingsStorage, logger);

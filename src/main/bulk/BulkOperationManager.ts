@@ -22,6 +22,7 @@ export interface BulkOpDeps {
     getPlugins(siteId: string): Promise<Array<{ name: string; title: string; version: string; status: string }>>;
     getThemes(siteId: string): Promise<Array<{ name: string; title: string; version: string; status: string }>>;
     getWpVersion(siteId: string): Promise<string | null>;
+    getOption(siteId: string, option: string): Promise<string | null>;
   };
   /** Optional: metadata cache to update after reindex (same refresh as lifecycle hook) */
   metadataCache?: {
@@ -33,6 +34,7 @@ export interface BulkOpDeps {
     upsertSite(site: any): Promise<void>;
     upsertPlugin(plugin: any): Promise<number>;
     deletePlugins(siteId: string): Promise<void>;
+    updateSiteSettings(siteId: string, settings: Record<string, string | number>): void;
   };
   onProgress: (opId: string, status: BulkOperationStatus) => void;
   /** Optional: called for 'setup-ai' bulk operations */
@@ -273,7 +275,7 @@ export class BulkOperationManager {
 
     const mysqlPort = site.services?.mysql?.port ?? 3306;
 
-    await this.deps.contentPipeline.indexSite({
+    const indexResult = await this.deps.contentPipeline.indexSite({
       siteId,
       siteName: site.name,
       mysqlHost: '127.0.0.1',
@@ -285,27 +287,58 @@ export class BulkOperationManager {
     });
 
     // Refresh metadata cache after indexing — same as lifecycle hook does on siteStarted.
-    // Without this, INDEX_ALL_AUTO leaves MetadataCache empty even after full indexing.
+    // postCount is metadata, not a content-index concern — collect it here alongside other fields.
     if (this.deps.metadataCache) {
       try {
-        const [wpVersion, plugins, themes] = await Promise.all([
+        const [wpVersion, plugins, themes, postCountResult] = await Promise.all([
           this.deps.siteDataBridge.getWpVersion(siteId),
           this.deps.siteDataBridge.getPlugins(siteId),
           this.deps.siteDataBridge.getThemes(siteId),
+          this.deps.siteDataBridge.wpCliRun(siteId, [
+            'eval',
+            `global $wpdb;
+$r=$wpdb->get_results("SELECT post_type,COUNT(*) c FROM {$wpdb->posts} WHERE post_status='publish' GROUP BY post_type",ARRAY_A);
+$total=0; $byType=[];
+foreach($r as $row){ $byType[$row['post_type']]=(int)$row['c']; $total+=(int)$row['c']; }
+echo json_encode(['total'=>$total,'byType'=>$byType]);`,
+          ]),
         ]);
-        // phpVersion comes from Local's site config (not WP-CLI) — read from site object
+
         const siteObj = this.deps.siteDataBridge.resolveSiteObject(siteId) as any;
         const phpVersion = siteObj?.phpVersion ?? siteObj?.php?.version ?? null;
+
+        let postCount: number | undefined;
+        let postCountByType: Record<string, number> | undefined;
+        if (postCountResult.success && postCountResult.stdout?.trim()) {
+          try {
+            const parsed = JSON.parse(postCountResult.stdout.trim());
+            postCount = parsed.total ?? undefined;
+            postCountByType = parsed.byType ?? undefined;
+          } catch { /* ignore */ }
+        }
+        // Fallback: use documentsIndexed from the pipeline (excludes system post types)
+        if (postCount == null && indexResult?.documentsIndexed) {
+          postCount = indexResult.documentsIndexed;
+        }
 
         this.deps.metadataCache.set(siteId, {
           wpVersion: wpVersion ?? 'unknown',
           phpVersion: phpVersion ?? undefined,
+          postCount,
+          postCountByType,
           plugins: plugins.map(p => ({ name: p.name, title: p.title, version: p.version, status: p.status as 'active' | 'inactive' })),
           themes: themes.map(t => ({ name: t.name, title: t.title, version: t.version, status: t.status as 'active' | 'inactive' })),
           updateSource: 'lifecycle' as const,
-          scanDepth: 'metadata' as const,
+          scanDepth: 'full' as const,
           lastUpdated: Date.now(),
         });
+
+        // Persist postCount to graph.db so fleet_sql queries stay accurate
+        if (this.deps.graphService && postCount != null) {
+          try {
+            (this.deps.graphService as any).updateSiteStats?.(siteId, { postCount, postCountByType });
+          } catch { /* non-fatal */ }
+        }
       } catch {
         // Non-fatal — index succeeded, metadata refresh best-effort
       }
@@ -421,14 +454,61 @@ export class BulkOperationManager {
 
     const now = Date.now();
 
-    // 1. Sync site metadata — get WP version and PHP version via WP-CLI
-    const [wpVersion, phpResult] = await Promise.allSettled([
+    // 1. Sync site metadata — get WP version, PHP, and settings via WP-CLI
+    // WP-CLI is open — grab everything in one parallel batch
+    const [wpVersion, phpResult, siteUrlResult, adminEmailResult, wpSettingsResult, postCountResult, userCountResult] = await Promise.allSettled([
       this.deps.siteDataBridge.getWpVersion(siteId),
       this.deps.siteDataBridge.wpCliRun(siteId, ['eval', 'echo phpversion();']),
+      this.deps.siteDataBridge.getOption(siteId, 'siteurl'),
+      this.deps.siteDataBridge.getOption(siteId, 'admin_email'),
+      this.deps.siteDataBridge.wpCliRun(siteId, [
+        'eval',
+        `$keys = ['blogname','blogdescription','blogpublic','show_on_front','posts_per_page','default_comment_status','permalink_structure','timezone_string','users_can_register','default_role','WPLANG'];
+$out = [];
+foreach ($keys as $k) { $v = get_option($k); if ($v !== false) $out[$k] = $v; }
+echo json_encode($out);`,
+      ]),
+      this.deps.siteDataBridge.wpCliRun(siteId, [
+        'eval',
+        `global $wpdb;
+$r=$wpdb->get_results("SELECT post_type,COUNT(*) c,MAX(post_date_gmt) ld FROM {$wpdb->posts} WHERE post_status='publish' GROUP BY post_type",ARRAY_A);
+$total=0;$byType=[];$last=null;
+foreach($r as $row){ $byType[$row['post_type']]=(int)$row['c']; $total+=(int)$row['c']; if(!$last||$row['ld']>$last)$last=$row['ld']; }
+echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
+      ]),
+      this.deps.siteDataBridge.wpCliRun(siteId, ['eval', 'global $wpdb; echo (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->users}");']),
     ]);
+
     const phpVersion = phpResult.status === 'fulfilled' && phpResult.value?.success
       ? (phpResult.value.stdout ?? '').trim() || null
       : (site as any).phpVersion ?? (site as any).php?.version ?? null;
+
+    let wpSettings: Record<string, string | number> | undefined;
+    if (wpSettingsResult.status === 'fulfilled' && wpSettingsResult.value?.success) {
+      try {
+        const parsed = JSON.parse((wpSettingsResult.value.stdout ?? '').trim());
+        if (parsed && typeof parsed === 'object') wpSettings = parsed;
+      } catch { /* ignore */ }
+    }
+
+    let postCount: number | null = null;
+    let postCountByType: string | null = null;
+    let lastPostAt: number | null = null;
+    if (postCountResult.status === 'fulfilled' && postCountResult.value?.success) {
+      try {
+        const p = JSON.parse((postCountResult.value.stdout ?? '').trim());
+        postCount = p.total ?? null;
+        postCountByType = p.byType ? JSON.stringify(p.byType) : null;
+        if (p.lastPostAt) { const t = new Date(p.lastPostAt + ' UTC').getTime(); if (t) lastPostAt = t; }
+      } catch { /* ignore */ }
+    }
+
+    const userCount: number | null = (userCountResult.status === 'fulfilled' && userCountResult.value?.success)
+      ? (parseInt((userCountResult.value.stdout ?? '').trim(), 10) || null)
+      : null;
+
+    const siteUrl = siteUrlResult.status === 'fulfilled' ? siteUrlResult.value ?? null : null;
+    const adminEmail = adminEmailResult.status === 'fulfilled' ? adminEmailResult.value ?? null : null;
 
     await this.deps.graphService.upsertSite({
       id: siteId,
@@ -436,11 +516,22 @@ export class BulkOperationManager {
       domain: site.domain,
       wp_version: wpVersion.status === 'fulfilled' ? (wpVersion.value || null) : null,
       php_version: phpVersion,
+      site_url: siteUrl,
+      admin_email: adminEmail,
       last_sync_at: now,
       is_active: true,
       created_at: now,
       updated_at: now,
     });
+
+    // Persist everything we collected while WP-CLI was open
+    try {
+      (this.deps.graphService as any).getDb?.()?.prepare(
+        `UPDATE sites SET post_count=COALESCE(?,post_count), post_count_by_type=COALESCE(?,post_count_by_type),
+         last_post_at=COALESCE(?,last_post_at), user_count=COALESCE(?,user_count),
+         settings_json=COALESCE(?,settings_json) WHERE id=?`,
+      ).run(postCount, postCountByType, lastPostAt, userCount, wpSettings ? JSON.stringify(wpSettings) : null, siteId);
+    } catch { /* non-fatal */ }
 
     // 2. Sync plugins (delete all, then re-insert)
     await this.deps.graphService.deletePlugins(siteId);

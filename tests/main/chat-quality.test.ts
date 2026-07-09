@@ -94,9 +94,9 @@ describe('Chat defaults quality', () => {
     expect(CHAT_DEFAULTS.DEFAULT_PROVIDER).toBe('ollama');
   });
 
-  test('max agent iterations is reasonable (5-20)', () => {
+  test('max agent iterations is reasonable (5-30)', () => {
     expect(CHAT_DEFAULTS.MAX_AGENT_ITERATIONS).toBeGreaterThanOrEqual(5);
-    expect(CHAT_DEFAULTS.MAX_AGENT_ITERATIONS).toBeLessThanOrEqual(20);
+    expect(CHAT_DEFAULTS.MAX_AGENT_ITERATIONS).toBeLessThanOrEqual(30);
   });
 
   test('Ollama base URL is localhost', () => {

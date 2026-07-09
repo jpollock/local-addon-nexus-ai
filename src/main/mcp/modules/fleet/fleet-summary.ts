@@ -6,7 +6,10 @@ export const fleetSummaryHandler: McpToolHandler = {
   definition: {
     name: 'fleet_summary',
     description:
-      'Aggregate overview across ALL WordPress sites — local + WP Engine. WordPress/PHP version distribution, most common plugins, content totals, and integration presence. Reads from content index (local) and graph.db (WPE). Use for a quick fleet health snapshot or to find version distribution before a bulk update.',
+      'Aggregate overview across ALL WordPress sites — local + WP Engine. Returns WordPress/PHP version distribution, most common plugins, and integration presence (WooCommerce, ACF). ' +
+      'IMPORTANT: The "Content" section shows LanceDB vector index counts (documents and chunks) — these are NOT WordPress post counts. A single post produces 3-6 index chunks. ' +
+      'For actual WordPress post/page counts, use fleet_sql or nexus_get_site_twin. ' +
+      'Reads from index registry (local) and graph.db (WPE). Use for version distribution or plugin inventory snapshots.',
     inputSchema: {
       type: 'object',
       properties: {},

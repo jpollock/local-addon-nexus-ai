@@ -92,6 +92,8 @@ export class SiteDigitalTwinService {
       twin.postCount  = meta.postCount;
       twin.postCountByType = meta.postCountByType;
       twin.lastPostAt = meta.lastPostAt;
+      twin.lastActiveSession = meta.lastActiveSession;
+      twin.wpConfigMtime = meta.wpConfigMtime;
 
       if (meta.wpVersion)  sources['wpVersion']  = src('wpVersion');
       if (meta.phpVersion) sources['phpVersion']  = src('phpVersion');
@@ -101,6 +103,8 @@ export class SiteDigitalTwinService {
       if (meta.activeTheme) sources['activeTheme'] = src('activeTheme');
       if (meta.postCount != null) sources['postCount'] = src('postCount');
       if (meta.lastPostAt != null) sources['lastPostAt'] = src('lastPostAt');
+      if (meta.lastActiveSession != null) sources['lastActiveSession'] = src('lastActiveSession');
+      if (meta.wpConfigMtime != null) sources['wpConfigMtime'] = src('wpConfigMtime');
 
       // Plugins
       if (meta.plugins?.length) {
@@ -445,6 +449,14 @@ export class SiteDigitalTwinService {
 
     if (twin.postCount != null) {
       lines.push(`- **Posts:** ${twin.postCount} published`);
+    }
+
+    if (twin.wpConfigMtime) {
+      const ageDays = Math.floor((Date.now() - twin.wpConfigMtime * 1000) / (24 * 60 * 60 * 1000));
+      const ageLabel = ageDays > 365
+        ? `⚠️ ${Math.floor(ageDays / 365)}y ${ageDays % 365}d ago (consider rotating salts)`
+        : `${ageDays}d ago`;
+      lines.push(`- **wp-config.php last modified:** ${ageLabel}`);
     }
 
     if (twin.indexState) {

@@ -13,6 +13,7 @@ export const wpePullHandler: McpToolHandler = {
       'DESTRUCTIVE: overwrites the local site\'s files (and database if include_database=true). ' +
       'Run local_export_site BEFORE this if the user wants a backup of the local state. ' +
       'include_database defaults to false — set true for a full environment pull (recommended). ' +
+      'Set database_only=true to pull ONLY the database with no file sync — use this when files are already in sync and you just need fresh content/data. ' +
       'ASYNC: returns immediately. Poll local_operation_status every 20s until complete. ' +
       'Typically takes 1–5 minutes depending on site size.',
     inputSchema: {
@@ -22,6 +23,10 @@ export const wpePullHandler: McpToolHandler = {
         include_database: {
           type: 'boolean',
           description: 'Include database in the pull. Defaults to false.',
+        },
+        database_only: {
+          type: 'boolean',
+          description: 'Pull only the database, skipping all file sync. Useful when files are already in sync. Mutually exclusive with include_database=false.',
         },
         remote_install_id: {
           type: 'string',
@@ -141,15 +146,18 @@ export const wpePullHandler: McpToolHandler = {
 
       // Fire-and-forget: wpePull.pull() is a long-running operation.
       // Return immediately and let the user poll local_operation_status.
+      const dbOnly = args.database_only === true;
       const pullPromise = services.localServices.wpePull.pull({
-        includeSql: args.include_database === true,
+        includeSql: dbOnly || args.include_database === true,
         wpengineInstallName: installName,
         wpengineInstallId: installId,
         wpengineSiteId: remoteSiteId,
         wpenginePrimaryDomain: primaryDomain,
         localSiteId: site.id,
         environment,
-        isMagicSync: false,
+        // DB-only: isMagicSync + empty files array hits Local's early exit that skips rsync
+        isMagicSync: dbOnly,
+        files: dbOnly ? [] : undefined,
       }).catch(() => { /* errors surfaced in Local UI */ });
 
       // SECOND UPDATE: After pull completes, re-save hostConnections to ensure it persists
@@ -169,9 +177,11 @@ export const wpePullHandler: McpToolHandler = {
           status: 'in_progress',
           site: site.name,
           install: installName,
-          include_database: args.include_database === true,
+          mode: dbOnly ? 'database_only' : (args.include_database === true ? 'files_and_database' : 'files_only'),
           linked: true,
-          message: `Pull started. The site is now linked to "${installName}" in Local.`,
+          message: dbOnly
+            ? `Database-only pull started from "${installName}". Files are not being synced.`
+            : `Pull started. The site is now linked to "${installName}" in Local.`,
           next_steps: 'Poll local_operation_status every 15-30s to track progress. Operation typically takes 1-3 minutes.',
         }, null, 2),
       );

@@ -217,6 +217,56 @@ export class ContentPipeline {
     return this.indexSite(info);
   }
 
+  /**
+   * Index a settings document for the site so settings are searchable via vector/content search.
+   * Uses postId=0 as a sentinel (real WordPress post IDs start at 1).
+   * Safe to call after indexSite completes — upserts so it's idempotent.
+   */
+  async indexSettingsDocument(siteId: string, siteName: string, settings: Record<string, string | number | undefined | null>): Promise<void> {
+    const { vectorStore, embeddingService } = this.deps;
+    try {
+      const label = (k: string, v: string | number | undefined | null): string => {
+        if (v == null || v === '') return '';
+        const labels: Record<string, string> = {
+          blogname: `Site title: ${v}`,
+          blogdescription: `Tagline: ${v}`,
+          blogpublic: v === '1' ? 'Visible to search engines' : 'Hidden from search engines (discourage indexing)',
+          show_on_front: v === 'page' ? 'Front page displays a static page' : 'Front page displays latest posts',
+          posts_per_page: `Blog shows ${v} posts per page`,
+          default_comment_status: `Comments ${v === 'open' ? 'enabled' : 'disabled'} by default`,
+          permalink_structure: `Permalink structure: ${v}`,
+          timezone_string: `Timezone: ${v}`,
+          users_can_register: v === '1' ? 'Anyone can register as a user' : 'User registration disabled',
+          default_role: `Default user role: ${v}`,
+          WPLANG: `Site language: ${v}`,
+        };
+        return labels[k] ?? `${k}: ${v}`;
+      };
+      const lines = Object.entries(settings)
+        .map(([k, v]) => label(k, v))
+        .filter(Boolean);
+      if (lines.length === 0) return;
+
+      const content = `WordPress settings for ${siteName}.\n${lines.join('. ')}.`;
+      const vector = await embeddingService.embed(content);
+      await vectorStore.upsert(siteId, [{
+        id: `${siteId}_settings`,
+        siteId,
+        title: `${siteName} — Site Settings`,
+        content,
+        postType: 'site-settings',
+        postId: 0,
+        chunkIndex: 0,
+        vector,
+        metadata: JSON.stringify({ source: 'wp-options' }),
+        indexedAt: Date.now(),
+        post_date_gmt: '',
+        post_modified_gmt: new Date().toISOString(),
+        doc_url: '',
+      }]);
+    } catch { /* non-fatal — settings indexing is best-effort */ }
+  }
+
   async removeSite(siteId: string): Promise<void> {
     await this.deps.vectorStore.dropSite(siteId);
     this.deps.indexRegistry.remove(siteId);

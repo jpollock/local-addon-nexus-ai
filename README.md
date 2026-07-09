@@ -78,13 +78,13 @@ Leverages Local's secure channels to WP Engine:
 - Semantic search across all site content with relevance scoring
 - WooCommerce product extraction (price, SKU, stock, attributes, categories)
 - ACF custom field enrichment (text, repeater, group, flexible content)
-- Fleet-wide analytics (drift detection, health monitoring, plugin usage)
+- Fleet-wide analytics (drift detection, health monitoring, plugin usage, `fleet_sql` SQL queries over graph.db)
 - WP-CLI execution on both local and remote WP Engine installs via SSH
 - Ollama integration with automatic site context injection
 - 3-tier safety system with confirmation tokens for destructive operations
 - Per-platform packaging with native binary stripping
 
-**→ [What's New in v0.4.0](docs-site/docs/reference/whats-new-may-2026.md)**
+**→ [What's New in v0.5.0](docs-site/docs/reference/whats-new-july-2026.md)**
 
 ## WP Engine Remote Management
 

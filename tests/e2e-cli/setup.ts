@@ -80,9 +80,15 @@ async function runCliSetup(args: string[], timeoutMs = 60_000): Promise<{ stdout
   });
 }
 
-/** Parse the JSON site list, stripping any update-notification prefix that appears before the JSON. */
+/** Parse the JSON site list. Output is {"local": [...], "wpe": [...]} — find { before [ to avoid
+ *  slicing mid-object (slicing at [ gives "[...], wpe: [...]}" which fails JSON.parse). */
 function parseSiteList(stdout: string): any[] {
-  const start = stdout.indexOf('[');
+  const bracketIdx = stdout.indexOf('[');
+  const braceIdx = stdout.indexOf('{');
+  let start: number;
+  if (bracketIdx === -1) start = braceIdx;
+  else if (braceIdx === -1) start = bracketIdx;
+  else start = Math.min(bracketIdx, braceIdx);
   if (start === -1) return [];
   try {
     const parsed = JSON.parse(stdout.slice(start));

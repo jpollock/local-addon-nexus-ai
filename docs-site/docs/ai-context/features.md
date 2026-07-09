@@ -6,7 +6,7 @@ keywords: [features, capabilities, what works, verified]
 
 # Verified Features
 
-**Last Verified:** 2026-03-25
+**Last Verified:** 2026-07-08
 
 This document lists **only features that actually exist** in the current implementation.
 
@@ -153,13 +153,36 @@ wp_plugin_list { install_name: "myinstprod" }
 - Event tracking (WordPress actions/filters)
 - Graph database for site relationships
 
-**9 advanced tools:**
-- `compare_sites` - Side-by-side comparison
-- `detect_drift` - Find diverging sites
-- `analyze_plugin_usage` - Fleet-wide plugin stats
-- `get_fleet_health` - Overall health metrics
-- `track_site_changes` - Monitor modifications
-- And more...
+**Key tools:**
+- `fleet_overview` — adaptive fleet summary (auto-detects local-only vs WPE fleet)
+- `fleet_sql` — read-only SQL over graph.db; schema: `sites`, `plugins`, `content`, `users`
+- `fleet_summary` — aggregate stats
+- `fleet_health_summary` — per-site health scores
+- `fleet_filter` — filter by preset criterion (outdated-php, no-ssl, low-health, etc.)
+- `detect_drift` — find sites diverging from baseline
+- `nexus_fleet_plugins` — fleet-wide plugin inventory
+
+---
+
+### Fleet Analytics (graph.db)
+
+**Status:** ✅ Fully implemented (v0.5.0)
+
+Nexus AI maintains a relational graph database at `~/Library/Application Support/Local/nexus-ai/graph.db`. Data is collected on every site start via WP-CLI and persisted as structured columns — queryable via `fleet_sql`.
+
+**Data collected per site:**
+- `wp_version`, `php_version`, `site_url`, `admin_email`, `active_theme`
+- `post_count_by_type` — JSON per-post-type publish counts
+- `user_count_by_role` — JSON role distribution
+- `settings_json` — key WordPress options (blogname, timezone, active_plugins, etc.)
+- `last_post_at` — Unix timestamp of most recent published post
+- `last_active_session` — Unix timestamp of most recent user login
+- `environment` — WPE environment type (production/staging/development)
+
+**Example query:**
+```sql
+SELECT wp_version, COUNT(*) as sites FROM sites GROUP BY wp_version ORDER BY sites DESC
+```
 
 ---
 

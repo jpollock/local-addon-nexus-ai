@@ -22,6 +22,7 @@
  */
 
 import { Command } from 'commander';
+import { exec } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
@@ -62,7 +63,11 @@ function deleteItem(entry: { path: string; isDir?: boolean }): 'deleted' | 'not-
   try {
     if (!fs.existsSync(entry.path)) return 'not-found';
     if (entry.isDir) {
-      fs.rmSync(entry.path, { recursive: true, force: true });
+      // Rename first (atomic O(1)), then delete in background — avoids blocking
+      // for minutes on large directories (LanceDB vectors: 1M+ files, multi-GB)
+      const tmpPath = entry.path + '_deleting_' + Date.now();
+      fs.renameSync(entry.path, tmpPath);
+      exec(`rm -rf "${tmpPath}"`); // fire-and-forget
     } else {
       fs.unlinkSync(entry.path);
     }
@@ -100,7 +105,7 @@ export const resetCommand = new Command('reset')
 
     if (existing.length === 0) {
       console.log('\n✓ Already clean — no Nexus AI data found.\n');
-      return;
+      process.exit(0);
     }
 
     // Warning header
@@ -120,7 +125,7 @@ export const resetCommand = new Command('reset')
 
     if (options.dryRun) {
       console.log('DRY RUN — nothing deleted. Remove --dry-run to execute.\n');
-      return;
+      process.exit(0);
     }
 
     // Confirmation
@@ -152,5 +157,5 @@ export const resetCommand = new Command('reset')
     console.log(`\n${deleted} items deleted${errors > 0 ? `, ${errors} errors` : ''}.`);
     console.log('\nRestart Local — Nexus AI will initialize from scratch.\n');
 
-    if (errors > 0) process.exit(1);
+    process.exit(errors > 0 ? 1 : 0);
   });

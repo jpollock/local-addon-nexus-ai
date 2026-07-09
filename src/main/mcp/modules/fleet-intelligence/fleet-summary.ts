@@ -9,8 +9,10 @@ export const fleetSummaryHandler: McpToolHandler = {
   definition: {
     name: 'nexus_fleet_summary',
     description:
-      'Get a fleet-wide summary from cached twin data: WordPress and PHP version distribution, ' +
-      'twin completeness breakdown, recent post activity, and stale site count. ' +
+      'Get a summary of LOCAL sites from cached twin data: WordPress and PHP version distribution, ' +
+      'twin completeness breakdown (none/filesystem/metadata/indexed), recent post activity, and stale site count. ' +
+      'LOCAL SITES ONLY — does not include WP Engine installs. ' +
+      'For WPE installs, use wpe_fleet_versions or fleet_sql. ' +
       'No live calls — instant response from cache.',
     inputSchema: {
       type: 'object',

@@ -386,6 +386,7 @@ export class WPESyncService {
       created_at: now,
       updated_at: now,
       source: 'wpe',
+      environment: (install.environment as 'production' | 'staging' | 'development') ?? 'production',
       remote_install_id: install.install_id,
       remote_domain: install.primary_domain,
     };
@@ -734,6 +735,7 @@ export class WPESyncService {
           created_at: now,
           updated_at: now,
           source: 'wpe',
+          environment: (i.environment as 'production' | 'staging' | 'development') ?? 'production',
           remote_install_id: i.id,
           remote_domain: capiDomain,
         });

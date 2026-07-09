@@ -1,0 +1,32 @@
+id: FA-02-plugin-inventory
+description: Fleet analytics — which sites have a specific plugin installed
+suite: fleet-analytics
+moment: analytics
+tier: 1
+frequency: regular
+stakes: low
+mode: [mcp]
+prompt: "Which of my sites have WooCommerce installed? List them with the plugin version on each."
+
+guardrails:
+  reads_only: true
+  scope: both
+
+context:
+  description: "Plugin presence and version across fleet"
+  notes: |
+    Plugin data is in graph.db plugins table and queryable via find_sites_with_plugin.
+    fleet_sql can also answer this:
+      SELECT s.name, p.version FROM plugins p
+      JOIN sites s ON s.id = p.site_id
+      WHERE p.slug = 'woocommerce' AND p.is_active = 1
+
+    The agent should list each site name and version, not just a count.
+    If WooCommerce is not found, clearly state none are installed.
+
+expected:
+  task_completed: true
+  key_steps:
+    - calls find_sites_with_plugin OR fleet_sql with plugin slug
+    - returns site names where WooCommerce is found (or none found message)
+    - includes version for each site when available

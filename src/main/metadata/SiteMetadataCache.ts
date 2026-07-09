@@ -68,6 +68,30 @@ export interface SiteMetadata {
 
   /** Total WordPress user count (requires WP-CLI — only set on 'full' scans). */
   userCount?: number;
+
+  /** Unix timestamp of most recent session_tokens login; null = no active sessions or no session data (requires WP-CLI). */
+  lastActiveSession?: number;
+
+  /** WordPress user count broken down by role (requires WP-CLI). */
+  userCountByRole?: Record<string, number>;
+
+  /** Unix timestamp of wp-config.php mtime; proxy for salt rotation age (requires WP-CLI). */
+  wpConfigMtime?: number;
+
+  /** Key WordPress option values collected from wp_options (requires WP-CLI). */
+  wpSettings?: {
+    blogname?: string;           // Site title
+    blogdescription?: string;    // Tagline
+    blogpublic?: '0' | '1';      // Search engine visibility
+    show_on_front?: 'posts' | 'page'; // Front page displays
+    posts_per_page?: number;     // Blog pages show N posts
+    default_comment_status?: 'open' | 'closed';
+    permalink_structure?: string; // e.g. "/%postname%/"
+    timezone_string?: string;    // e.g. "America/Chicago"
+    users_can_register?: '0' | '1';
+    default_role?: string;       // e.g. "subscriber"
+    WPLANG?: string;             // e.g. "en_US"
+  };
 }
 
 export interface SiteMetadataWithAge extends SiteMetadata {

@@ -1710,7 +1710,7 @@ export function createResolvers(context: ResolverContext) {
                     const bareEnv = bareCached?.environment ?? 'production';
                     const bareOp = classifyWpCliOp(command);
                     if (!isOperationAllowed(bareOp, bareEnv, bareSettings, wpeRow.name)) {
-                      return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${bareEnv}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
+                      return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${bareEnv}" environments. Adjust in Nexus AI → Settings → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
                     }
                     const result = await services.localServices.remoteWpCliRun(wpeRow.name, command);
                     return {
@@ -1772,7 +1772,7 @@ export function createResolvers(context: ResolverContext) {
             const wpeEnv = parsed.environment ?? wpeCached?.environment ?? 'production';
             const wpeOp = classifyWpCliOp(command);
             if (!isOperationAllowed(wpeOp, wpeEnv, wpeSettings, installNameOnly)) {
-              return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${wpeEnv}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
+              return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${wpeEnv}" environments. Adjust in Nexus AI → Settings → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
             }
 
             const result = await services.localServices.remoteWpCliRun(installNameOnly, command);
@@ -1903,7 +1903,7 @@ export function createResolvers(context: ResolverContext) {
             const pluginListCached = pluginListCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installNameOnly);
             const pluginListEnv = parsed.environment ?? pluginListCached?.environment ?? 'production';
             if (!isOperationAllowed('wpcli_read', pluginListEnv, pluginListSettings, installNameOnly)) {
-              return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${pluginListEnv}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.`, plugins: [] };
+              return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${pluginListEnv}" environments. Adjust in Nexus AI → Settings → WP Engine Access.`, plugins: [] };
             }
 
             const wpCliResult = await services.localServices.remoteWpCliRun(
@@ -2410,7 +2410,7 @@ export function createResolvers(context: ResolverContext) {
           if (!isOperationAllowed('push', envForCheck, cacheSettings, parsed.installName!)) {
             return {
               success: false,
-              error: `Operation blocked: this operation is not permitted on "${envForCheck}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.`,
+              error: `Operation blocked: this operation is not permitted on "${envForCheck}" environments. Adjust in Nexus AI → Settings → WP Engine Access.`,
             };
           }
 
@@ -4672,7 +4672,7 @@ export function createResolvers(context: ResolverContext) {
           const cachedForDelete = deleteCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === nameForCheck);
           const envForDelete = cachedForDelete?.environment ?? 'production';
           if (!isOperationAllowed('delete', envForDelete, deleteSettings, nameForCheck)) {
-            return { success: false, error: `Operation blocked: delete is not permitted on "${envForDelete}" environments. Adjust in Nexus Preferences → WP Engine → WP Engine Access.` };
+            return { success: false, error: `Operation blocked: delete is not permitted on "${envForDelete}" environments. Adjust in Nexus AI → Settings → WP Engine Access.` };
           }
           const install = await services.localServices.capiDirect(`/installs/${installId}`) as any;
           if (!confirmName) return { success: false, error: `Pass --confirm-name "${install?.name || installId}" to confirm deletion` };

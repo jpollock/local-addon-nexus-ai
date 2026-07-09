@@ -1,0 +1,25 @@
+id: SF-05-complex-combo
+description: Site Finder — composite filter, WooCommerce sites on old PHP
+suite: site-finder
+tier: 2
+mode: [mcp]
+prompt: "WooCommerce sites on outdated PHP"
+
+expected_filter_json:
+  plugins: ["woocommerce"]
+  phpEolOnly: true
+
+guardrails:
+  must_not_return_all: true
+  must_not:
+    - return sites with WooCommerce but modern PHP
+    - return sites on old PHP but without WooCommerce
+    - ask for clarification (both constraints are well-defined)
+
+notes: |
+  Tests that the AI correctly combines two filter types into one query.
+  Both constraints must be applied with AND logic (not OR).
+
+scoring_weights:
+  filter_correct: 70
+  results_accurate: 30

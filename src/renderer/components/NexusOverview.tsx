@@ -131,6 +131,7 @@ interface FleetSummaryData {
   wpVersions: FleetVersionEntry[];
   phpVersions: FleetVersionEntry[];
   completeness: { none: number; filesystem: number; metadata: number; indexed: number };
+  wpeSync?: { synced: number; neverSynced: number };
   staleCount: number;
   neverScannedCount: number;
 }
@@ -1288,15 +1289,17 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       );
     }
 
-    const { total, totalLocal, totalWpe, wpVersions, phpVersions, completeness, staleCount, neverScannedCount } = fleetSummary;
+    const { total, totalLocal, totalWpe, wpVersions, phpVersions, completeness, wpeSync, staleCount, neverScannedCount } = fleetSummary;
 
     // Show top 3 WP versions
     const topWp = wpVersions.slice(0, 3);
     const otherWpCount = wpVersions.slice(3).reduce((s, e) => s + (e.version !== 'unknown' ? e.count : 0), 0);
 
-    // Show top 3 PHP versions
-    const topPhp = phpVersions.slice(0, 3);
-    const otherPhpCount = phpVersions.slice(3).reduce((s, e) => s + (e.version !== 'unknown' ? e.count : 0), 0);
+    // Show top 3 PHP versions; track unknown separately so it's always surfaced
+    const knownPhp = phpVersions.filter(e => e.version !== 'unknown');
+    const unknownPhpEntry = phpVersions.find(e => e.version === 'unknown');
+    const topPhp = knownPhp.slice(0, 3);
+    const otherPhpCount = knownPhp.slice(3).reduce((s, e) => s + e.count, 0);
 
     const versionListStyle: React.CSSProperties = {
       fontSize: '12px',
@@ -1358,12 +1361,17 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
             otherPhpCount > 0
               ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)' } }, `+${otherPhpCount} on other versions`)
               : null,
+            unknownPhpEntry
+              ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)', fontStyle: 'italic' } },
+                  `${unknownPhpEntry.count} unknown (need SSH sync)`,
+                )
+              : null,
           ),
         ),
 
-        // Completeness column
+        // Local Twins + WPE Sync column
         React.createElement('div', { style: colStyle },
-          React.createElement('div', { style: labelStyle }, 'Twin Data'),
+          React.createElement('div', { style: labelStyle }, 'Local Twins'),
           React.createElement('div', { style: versionListStyle },
             completeness.indexed > 0
               ? React.createElement('div', null, `\u2705 indexed: ${completeness.indexed}`)
@@ -1378,6 +1386,22 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
               ? React.createElement('div', null, `\u274C none: ${completeness.none}`)
               : null,
           ),
+          wpeSync && totalWpe > 0
+            ? React.createElement('div', { style: { marginTop: 10 } },
+                React.createElement('div', { style: { ...labelStyle, marginBottom: 4 } }, 'WPE Sync'),
+                React.createElement('div', { style: versionListStyle },
+                  React.createElement('div', null,
+                    React.createElement('span', { style: { fontWeight: 500 } }, `${wpeSync.synced}/${totalWpe}`),
+                    React.createElement('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: '6px' } }, 'synced'),
+                  ),
+                  wpeSync.neverSynced > 0
+                    ? React.createElement('div', { style: { color: 'var(--nxai-card-sub)', fontStyle: 'italic' } },
+                        `${wpeSync.neverSynced} need SSH sync`,
+                      )
+                    : null,
+                ),
+              )
+            : null,
         ),
 
         // Freshness column

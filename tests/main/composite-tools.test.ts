@@ -73,10 +73,13 @@ describe('Composite Tools', () => {
     expect(registry.allToolNames()).toContain('nexus_plugin_audit');
   });
 
-  test('all tools require localServices', () => {
+  test('nexus_site_audit requires localServices; nexus_plugin_audit only requires siteData', () => {
     const noLocal = makeServices();
     (noLocal as any).localServices = undefined;
-    expect(registry.list(noLocal)).toHaveLength(0);
+    // nexus_plugin_audit is available without localServices (isAvailable: !!services.siteData)
+    // nexus_site_audit requires localServices
+    expect(registry.list(noLocal)).toHaveLength(1);
+    expect(registry.list(noLocal)[0].name).toBe('nexus_plugin_audit');
   });
 
   // ---------------------------------------------------------------------------
@@ -140,12 +143,19 @@ describe('Composite Tools', () => {
       expect(result.content[0].text).toContain('not found');
     });
 
-    test('rejects halted site', async () => {
+    test('auto-starts and audits a halted site', async () => {
       localServices.getSiteStatus.mockReturnValue('halted');
+      localServices.wpCliRun.mockImplementation((_siteId: string, args: string[]) => {
+        // Readiness probe returns 'ready' immediately so waitForDatabaseReady exits
+        if (args[0] === 'eval') return Promise.resolve({ stdout: 'ready', success: true });
+        return Promise.resolve({ stdout: 'ok', success: true });
+      });
+
       const result = await registry.call('nexus_site_audit', { site: 'Test Site' }, services);
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('halted');
-    });
+
+      expect(localServices.startSite).toHaveBeenCalledWith('site-1');
+      expect(result.isError).toBeUndefined();
+    }, 10_000);
 
     test('handles partial failures gracefully', async () => {
       localServices.getWpVersion.mockRejectedValue(new Error('version failed'));
@@ -175,10 +185,12 @@ describe('Composite Tools', () => {
 
   // ---------------------------------------------------------------------------
   // nexus_plugin_audit
+  // Uses SiteDataResolver — works for all sites (running=WP-CLI, halted=cache/index)
   // ---------------------------------------------------------------------------
 
   describe('nexus_plugin_audit', () => {
-    test('audits plugins across all running sites', async () => {
+    test('audits plugins across all running sites and shows update info', async () => {
+      // wpCliRun for update dry-run returns one update for akismet
       localServices.wpCliRun.mockResolvedValue({
         stdout: JSON.stringify([
           { name: 'akismet', version: '5.0', update_version: '5.1' },
@@ -193,20 +205,14 @@ describe('Composite Tools', () => {
 
       // Fleet header
       expect(text).toContain('Fleet Plugin Audit');
-      expect(text).toContain('2 sites');
-
-      // Both sites audited
+      // Both sites appear
       expect(text).toContain('Test Site');
       expect(text).toContain('Staging');
-
-      // Update info
-      expect(text).toContain('v5.1');
-
-      // Summary
-      expect(text).toMatch(/Total.*4 plugins/); // 2 plugins × 2 sites
+      // Update info (format: "akismet: v5.0 → v5.1")
+      expect(text).toContain('v5.0 → v5.1');
     });
 
-    test('only audits running sites', async () => {
+    test('halted sites with no cache show no-data message', async () => {
       localServices.getAllSiteStatuses.mockReturnValue({
         'site-1': 'running',
         'site-2': 'halted',
@@ -216,24 +222,31 @@ describe('Composite Tools', () => {
 
       expect(result.isError).toBeUndefined();
       const text = result.content[0].text;
-      expect(text).toContain('1 sites');
+      // Both sites appear in the report
       expect(text).toContain('Test Site');
-      expect(text).not.toContain('Staging');
+      expect(text).toContain('Staging');
+      // site-2 has no data (no cache, no index configured in test)
+      expect(text).toContain('No plugin data available');
+      // site-1 has plugin data
+      expect(text).toContain('2 plugins installed');
     });
 
-    test('returns error when no sites are running', async () => {
+    test('returns success (no isError) even when all sites have no data', async () => {
       localServices.getAllSiteStatuses.mockReturnValue({
         'site-1': 'halted',
         'site-2': 'halted',
       });
 
       const result = await registry.call('nexus_plugin_audit', {}, services);
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('No running sites');
+      // No error — just reports no data available per site
+      expect(result.isError).toBeUndefined();
+      const text = result.content[0].text;
+      expect(text).toContain('No plugin data available');
+      expect(text).toContain('0 updates available');
     });
 
-    test('handles per-site errors gracefully', async () => {
-      // First site works, second throws
+    test('handles per-site WP-CLI errors gracefully', async () => {
+      // site-1 succeeds, site-2 throws on getPlugins → falls through to empty
       let callCount = 0;
       localServices.getPlugins.mockImplementation(() => {
         callCount++;
@@ -249,19 +262,21 @@ describe('Composite Tools', () => {
 
       expect(result.isError).toBeUndefined();
       const text = result.content[0].text;
-      // One site has data, one has error
-      expect(text).toContain('1 plugins');
-      expect(text).toContain('connection refused');
+      // site-1 has data, site-2 falls back to no-data message
+      expect(text).toContain('1 plugins installed');
+      expect(text).toContain('No plugin data available');
     });
 
-    test('reports total plugins and updates in summary', async () => {
+    test('reports update count in footer summary', async () => {
       localServices.wpCliRun.mockResolvedValue({ stdout: '[]', success: true });
 
       const result = await registry.call('nexus_plugin_audit', {}, services);
       const text = result.content[0].text;
 
-      expect(text).toContain('4 plugins'); // 2 plugins × 2 sites
-      expect(text).toContain('0 updates');
+      // Footer summary format: "N updates available across M/total sites with data"
+      expect(text).toContain('0 updates available');
+      // Both running sites have 2 plugins each (from getPlugins mock)
+      expect(text).toContain('2 plugins installed');
     });
   });
 });

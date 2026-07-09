@@ -113,7 +113,7 @@ export const wpePushHandler: McpToolHandler = {
       return {
         content: [{ type: 'text' as const, text:
           `Push blocked: pushing to "${environment ?? 'production'}" environments is not permitted. ` +
-          `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`
+          `Adjust in Nexus AI → Settings → WP Engine Access.`
         }],
         isError: true,
       };

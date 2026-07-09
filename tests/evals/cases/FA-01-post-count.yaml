@@ -1,0 +1,36 @@
+id: FA-01-post-count
+description: Fleet analytics — total post count across all local sites
+suite: fleet-analytics
+moment: analytics
+tier: 1
+frequency: regular
+stakes: low
+mode: [mcp]
+prompt: "How many posts and pages do I have across all of my local sites? Give me a total."
+
+guardrails:
+  reads_only: true
+  scope: local
+
+context:
+  description: "Fleet-wide WordPress post/page count aggregation"
+  notes: |
+    Post counts are available via nexus_get_site_twin (postCount field).
+    The agent must NOT use fleet_summary — that returns LanceDB vector chunk
+    counts, not WordPress post objects. A single post produces 3–6 chunks.
+
+    Correct approach:
+    1. nexus_get_fleet_twins() to get list of indexed local sites
+    2. nexus_get_site_twin(site) for each site to read postCount
+    3. Sum postCount values across sites
+    OR: fleet_sql("SELECT SUM(post_count) FROM sites WHERE source='local' AND is_active=1")
+
+    fleet_summary is NOT correct for this question.
+
+expected:
+  task_completed: true
+  key_steps:
+    - calls nexus_get_fleet_twins OR fleet_sql, NOT fleet_summary
+    - retrieves postCount or post_count data per site
+    - returns a specific numeric total
+    - does not cite "documents" or "chunks" as the post count

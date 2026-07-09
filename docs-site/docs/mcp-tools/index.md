@@ -473,10 +473,15 @@ await callTool("nexus_bulk_operation", {
 
 ### Fleet Tools
 
-- [nexus_list_sites](fleet.md)
-- [nexus_get_site_info](fleet.md)
-- [nexus_fleet_health](fleet.md)
-- [nexus_bulk_operation](fleet.md)
+- [fleet_overview](fleet.md) — adaptive fleet summary (local-only vs WPE auto-detected)
+- [fleet_sql](fleet.md) — read-only SQL over graph.db (`sites`, `plugins`, `content`, `users`)
+- [fleet_summary](fleet.md)
+- [fleet_health_summary](fleet.md)
+- [fleet_filter](fleet.md)
+- [fleet_search](fleet.md)
+- [nexus_fleet_plugins](fleet.md)
+- [fleet_database_health](fleet.md)
+- [nexus_plugin_audit](fleet.md)
 
 ### Telemetry Tools
 

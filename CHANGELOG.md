@@ -5,6 +5,66 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.5.0] — 2026-07-08
+
+### Added
+- **`fleet_sql`** — Read-only SQL query tool over graph.db. Write SELECT queries against the
+  `sites`, `plugins`, `content`, and `users` tables to answer fleet-wide questions directly:
+  version distributions, plugin inventory, user counts, content volume. Blocked verbs
+  (INSERT/UPDATE/DELETE/DROP/MERGE etc.) are rejected. Full schema reference in the tool
+  description.
+- **`fleet_overview`** — Adaptive fleet summary that auto-detects fleet type. Local-only users
+  get a local-fleet answer; WPE users get a combined local + WPE summary. Canonical tool for
+  "tell me about my fleet" and open-ended fleet overview questions.
+- **WordPress settings indexing** — `settings_json` (key WordPress options), `user_count_by_role`
+  (role distribution), `post_count_by_type` (per post-type counts), and `last_post_at`
+  (most recent publish timestamp) are now persisted to graph.db for all local sites on every
+  site start. Queryable via `fleet_sql` and exposed in `fleet_overview`.
+- **`lastActiveSession`** — Collected from WordPress `session_tokens` user meta via WP-CLI;
+  persisted to graph.db. Identifies sites with recent logged-in activity.
+- **`wpConfigMtime`** — Filesystem modification time of `wp-config.php`; used as a proxy for
+  salt/secret key rotation age in fleet analytics.
+- **`environment` column in graph.db `sites` table** — WPE installs now carry their environment
+  type (`production`, `staging`, `development`) in the graph so `fleet_sql` queries can filter
+  by environment.
+- **Site Finder P0–P3 filter expansion** — Four new filter categories with a TDD eval harness
+  (8 eval cases): PHP EOL detection, plugin presence (version-aware), last-activity recency, and
+  hidden settings detection.
+- **Fleet Analytics server instructions** — Routing rules, `fleet_sql` schema reference, and
+  query examples embedded in the MCP server context so AI agents write correct SQL on the first
+  attempt.
+
+### Changed
+- **WPE deep refresh now uses native WP-CLI** — Previously used `wp eval` to collect
+  `postCountByType`, `lastPostAt`, `userCount`, `userCountByRole`, and `lastActiveSession`. WPE's
+  SSH gateway blocks `wp eval`; refresh was silently returning empty data. Each metric now uses
+  a direct WP-CLI command (`wp post list --format=count`, `wp user list --format=count`, etc.).
+- **`fleet_overview` is the canonical "fleet overview" tool** — Server instructions updated to
+  route open-ended fleet questions to `fleet_overview` before any other fleet tool.
+- **`find_outdated_sites` freshness check** — Now uses `ssh_last_sync_at` from graph.db to
+  determine whether plugin data is current (was incorrectly using the content index timestamp).
+- **`wpe-refresh` staleness guard** — `ssh_last_sync_at` prevents a CAPI sync from resetting
+  the SSH staleness flag, avoiding stale SSH data being treated as fresh.
+
+### Fixed
+- **`nexus reset --factory --confirm` timed out** on large vector stores (1M+ LanceDB files,
+  multi-GB). `fs.rmSync({ recursive: true })` blocked Node's event loop for the full deletion.
+  Fixed with an atomic `fs.renameSync` (O(1)) followed by a background `rm -rf`. The command
+  now returns in under 2 seconds regardless of vector store size.
+- **`nexus reset` early-exit paths** (`--dry-run`, already-clean) returned without calling
+  `process.exit(0)`, leaving the bootstrap GraphQL connection open and hanging the process
+  indefinitely. All exit paths now call `process.exit`.
+- **Global e2e setup falsely reported fixture sites as "not found"** — `parseSiteList` searched
+  for `[` first, but `nexus sites list --json` outputs `{"local":[...],"wpe":[...]}`. Slicing
+  from `[` produced invalid JSON; `JSON.parse` threw; both fixture sites showed missing. Fixed by
+  taking `Math.min(bracketIdx, braceIdx)`.
+- **Blocked-operation error** now correctly routes users to **Settings → WP Engine Access** (was
+  incorrectly pointing to Preferences).
+- **`fleet_overview` sync guidance** now says "Settings tab" not "Preferences" for the WPE
+  scheduler enable toggle.
+
+---
+
 ## [0.3.2] — 2026-05-15
 
 ### Added

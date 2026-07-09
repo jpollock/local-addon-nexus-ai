@@ -57,7 +57,7 @@ export const waitForSshHandler: McpToolHandler = {
         content: [{
           type: 'text' as const,
           text: `Operation blocked: this operation is not permitted on "${environment}" environments. ` +
-            `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`,
+            `Adjust in Nexus AI → Settings → WP Engine Access.`,
         }],
         isError: true,
       };

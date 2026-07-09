@@ -1,0 +1,27 @@
+id: SF-06-plugin-version
+description: Site Finder — plugin version range query (P1 — pluginVersion)
+suite: site-finder
+tier: 2
+mode: [mcp]
+prompt: "sites with ACF older than 6.3"
+
+expected_filter_json:
+  pluginVersion:
+    slug: "advanced-custom-fields"
+    olderThan: "6.3.0"
+
+guardrails:
+  must_not_return_all: true
+  must_not:
+    - return sites where ACF >= 6.3
+    - return sites with no ACF installed
+
+notes: |
+  Tests semver version comparison in the filter handler.
+  ACF slug is 'advanced-custom-fields'. The AI must know this mapping.
+  Version comparison must use semver logic: "6.3" < "6.10" (semver), not string compare.
+
+scoring_weights:
+  filter_correct: 70
+  slug_correct: 20
+  results_accurate: 10

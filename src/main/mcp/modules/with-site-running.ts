@@ -20,8 +20,14 @@ export async function waitForDatabaseReady(
   services.logger.info(`[withSiteRunning] Waiting for database to be ready for site ${siteId}…`);
 
   while (Date.now() < deadline) {
+    // Cap each individual poll to the remaining deadline so a hanging wpCliRun
+    // call does not block past the outer timeout (2-min default >> 30s outer deadline).
+    const remainingMs = Math.max(deadline - Date.now(), 1000);
     try {
-      const result = await services.localServices!.wpCliRun(siteId, ['eval', "echo 'ready';"]);
+      const result = await services.localServices!.wpCliRun(
+        siteId, ['eval', "echo 'ready';"],
+        { timeoutMs: Math.min(remainingMs, 10_000) }, // at most 10s per poll attempt
+      );
       if (result.success && result.stdout?.trim() === 'ready') {
         services.logger.info(`[withSiteRunning] Database ready for site ${siteId}`);
         return;
@@ -41,8 +47,9 @@ export async function withSiteRunning<T>(
   work: () => Promise<T>,
 ): Promise<T> {
   const ls = services.localServices!;
-  const statuses = ls.getAllSiteStatuses() as Record<string, string>;
-  const wasRunning = statuses[siteId] === 'running';
+  // Use getSiteStatus() (live process manager query) rather than getAllSiteStatuses()
+  // which can return stale data after a Local restart and cause auto-start to be skipped.
+  const wasRunning = ls.getSiteStatus(siteId) === 'running';
 
   if (!wasRunning) {
     services.logger.info(`[withSiteRunning] Site ${siteId} is halted — auto-starting`);

@@ -63,6 +63,7 @@ export function buildSiteContext(
   siteData: any,
   metadataCache: any,
   indexRegistry: any,
+  siteStatus?: 'running' | 'halted' | 'unknown',
 ): AssistantContext {
   const allSites = siteData.getSites();
   const site = allSites[siteId] as any;
@@ -73,32 +74,63 @@ export function buildSiteContext(
   const allPlugins: Array<{ name?: string; title?: string; status: string }> = meta?.plugins ?? [];
   const isFullScan = !meta?.scanDepth || meta.scanDepth === 'full';
 
-  // For full scans: use active plugin titles. For filesystem scans: use installed dir names.
+  // For full scans: use active plugin titles + versions. For filesystem scans: use installed dir names.
   let activePlugins: string[] = [];
   if (isFullScan && allPlugins.length > 0) {
     activePlugins = allPlugins
       .filter((p) => p.status === 'active')
-      .map((p) => p.title ?? p.name ?? '')
+      .map((p) => {
+        const title = p.title ?? p.name ?? '';
+        const version = (p as any).version;
+        return version ? `${title} (${version})` : title;
+      })
       .filter(Boolean)
       .slice(0, 20);
   }
   const installedPluginCount = meta?.installedPlugins?.length ?? allPlugins.length;
+  const inactivePluginCount = allPlugins.filter((p) => p.status === 'inactive').length;
+
+  // Human-readable last-indexed age for freshness context
+  let lastIndexedAgo: string | null = null;
+  if (indexEntry?.lastIndexed) {
+    const ageMs = Date.now() - indexEntry.lastIndexed;
+    const mins = Math.round(ageMs / 60_000);
+    lastIndexedAgo = mins < 60 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`;
+  }
+
+  // Most recent post date from WordPress — collected via WP-CLI on site start
+  let lastPostAt: string | null = null;
+  if (meta?.lastPostAt) {
+    lastPostAt = new Date(meta.lastPostAt).toLocaleDateString('en-US', {
+      year: 'numeric', month: 'long', day: 'numeric',
+    });
+  }
 
   return {
     mode: 'site',
     siteId,
     siteName: site?.name ?? siteId,
-    phpVersion: site?.phpVersion ?? meta?.phpVersion ?? null,
+    siteUrl: meta?.siteUrl ?? null,
+    phpVersion: meta?.phpVersion ?? site?.phpVersion ?? null,
     wpVersion: meta?.wpVersion ?? null,
     pluginCount: activePlugins.length || installedPluginCount,
     activePlugins: activePlugins.length > 0 ? activePlugins : undefined,
     installedPluginCount,
+    inactivePluginCount: inactivePluginCount > 0 ? inactivePluginCount : undefined,
     activeTheme: meta?.activeTheme ?? undefined,
     postCount: meta?.postCount ?? undefined,
     userCount: meta?.userCount ?? undefined,
+    lastPostAt,
+    wpSettings: meta?.wpSettings
+      ? Object.fromEntries(
+          Object.entries(meta.wpSettings).filter(([, v]) => v != null) as [string, string | number][],
+        ) as Record<string, string | number>
+      : undefined,
     scanDepth: meta?.scanDepth ?? (meta ? 'full' : undefined),
     indexState: indexEntry?.state ?? 'not_indexed',
     documentCount: indexEntry?.documentCount ?? 0,
+    lastIndexedAgo,
+    siteStatus: siteStatus ?? 'unknown',
   };
 }
 

@@ -439,6 +439,12 @@ export interface AssistantContext {
   indexState?: string;
   documentCount?: number;
   linkedWpeInstall?: string | null;
+  siteStatus?: 'running' | 'halted' | 'unknown';
+  siteUrl?: string | null;
+  inactivePluginCount?: number;
+  lastIndexedAgo?: string | null;
+  lastPostAt?: string | null;
+  wpSettings?: Record<string, string | number | undefined>;
 }
 
 export interface FleetInsight {

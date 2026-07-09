@@ -1,0 +1,32 @@
+id: SF-07-ambiguous-query
+description: Site Finder — ambiguous query that should trigger clarification
+suite: site-finder
+tier: 1
+mode: [mcp]
+prompt: "sites with outdated plugins"
+
+expected_behavior: needsClarification
+
+expected_clarification_contains:
+  - "Ask/Tell"
+  - "out of date"
+
+guardrails:
+  must_not:
+    - return all sites (the pre-fix bug)
+    - return an empty result set silently
+    - pretend it can check plugin update status
+
+notes: |
+  "Outdated plugins" requires comparing installed versions against WordPress.org
+  latest — data we don't have in the Site Finder. The AI should ask the user to
+  use the Ask/Tell tab for this query, which DOES have the fleet_sql tools to
+  answer it (as demonstrated in the fleet analysis screenshot).
+
+  Regression guard: before our fix this returned all 320 sites. After fix it
+  should return needsClarification with helpful guidance.
+
+scoring_weights:
+  triggers_clarification: 50
+  helpful_message: 30
+  no_false_results: 20

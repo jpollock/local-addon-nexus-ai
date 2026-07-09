@@ -137,10 +137,17 @@ export class WpeRefreshScheduler {
     if (!db) return;
 
     const columnsToAdd: Array<{ name: string; type: string }> = [
-      { name: 'site_url',     type: 'TEXT' },
-      { name: 'admin_email',  type: 'TEXT' },
-      { name: 'active_theme', type: 'TEXT' },
-      { name: 'post_count',   type: 'INTEGER' },
+      { name: 'site_url',           type: 'TEXT' },
+      { name: 'admin_email',        type: 'TEXT' },
+      { name: 'active_theme',       type: 'TEXT' },
+      { name: 'post_count',         type: 'INTEGER' },
+      // ssh_last_sync_at tracks when this scheduler last ran SSH WP-CLI on a site,
+      // independent of last_sync_at which WPESyncService bumps on every CAPI sync.
+      // Without this, the CAPI sync's timestamp prevents the SSH scan from ever firing.
+      { name: 'ssh_last_sync_at',   type: 'INTEGER' },
+      { name: 'post_count_by_type', type: 'TEXT' },
+      { name: 'last_active_session', type: 'INTEGER' },
+      { name: 'user_count_by_role', type: 'TEXT' },
     ];
 
     for (const col of columnsToAdd) {
@@ -191,14 +198,14 @@ export class WpeRefreshScheduler {
       id: string;
       name: string;
       remote_install_id: string;
-      last_sync_at: number | null;
+      ssh_last_sync_at: number | null;
       account_id: string | null;
     };
 
     let sites: SiteRow[];
     try {
       sites = db.prepare(
-        "SELECT id, name, remote_install_id, last_sync_at, account_id FROM sites WHERE source='wpe' AND is_active=1 AND remote_install_id IS NOT NULL"
+        "SELECT id, name, remote_install_id, ssh_last_sync_at, account_id FROM sites WHERE source='wpe' AND is_active=1 AND remote_install_id IS NOT NULL"
       ).all() as SiteRow[];
     } catch (err: any) {
       this.logger.error('[WpeRefreshScheduler] Failed to query WPE sites:', err.message);
@@ -220,11 +227,12 @@ export class WpeRefreshScheduler {
     const now = Date.now();
 
     for (const site of sites) {
-      // Skip if SSH sync is recent enough
-      if (site.last_sync_at !== null && (now - site.last_sync_at) < this.currentStalenessThresholdMs) {
+      // Skip if SSH sync is recent enough — use ssh_last_sync_at (not last_sync_at which
+      // WPESyncService bumps on every CAPI sync, causing this scheduler to always skip)
+      if (site.ssh_last_sync_at !== null && (now - site.ssh_last_sync_at) < this.currentStalenessThresholdMs) {
         result.skipped++;
         this.logger.info(
-          `[WpeRefreshScheduler] Skipping fresh install: ${site.name} (age ${Math.round((now - site.last_sync_at) / 3600000)}h)`
+          `[WpeRefreshScheduler] Skipping fresh install: ${site.name} (age ${Math.round((now - site.ssh_last_sync_at) / 3600000)}h)`
         );
         continue;
       }
@@ -258,6 +266,28 @@ export class WpeRefreshScheduler {
   private async refreshInstall(installName: string, siteId: string): Promise<void> {
     const now = Date.now();
 
+    // Warm-up call to establish SSH ControlMaster — the first cold connection often
+    // hits a stale ControlSocket and fails; subsequent calls reuse the master fine.
+    await this.localServices.remoteWpCliRun(installName, ['core', 'version'])
+      .catch(() => {/* warm-up only */});
+
+    // Collect WP settings sequentially while ControlMaster is warm.
+    // Running these before the parallel batch keeps total concurrency under WPE's 5-connection limit.
+    const wpSettingsMap: Record<string, string> = {};
+    for (const [optionName, mapKey] of [
+      ['blogname', 'blogname'], ['blogdescription', 'blogdescription'],
+      ['blog_public', 'blog_public'], ['show_on_front', 'show_on_front'],
+      ['posts_per_page', 'posts_per_page'], ['default_comment_status', 'default_comment_status'],
+      ['permalink_structure', 'permalink_structure'], ['timezone_string', 'timezone_string'],
+      ['users_can_register', 'users_can_register'], ['default_role', 'default_role'],
+      ['WPLANG', 'WPLANG'],
+    ] as [string, string][]) {
+      const r = await this.localServices.remoteWpCliRun(installName, ['option', 'get', optionName])
+        .catch(() => ({ success: false, stdout: null }));
+      if (r.success && r.stdout?.trim()) wpSettingsMap[mapKey] = r.stdout.trim();
+    }
+    const settingsJson = Object.keys(wpSettingsMap).length > 0 ? JSON.stringify(wpSettingsMap) : null;
+
     // Run all WP-CLI commands in parallel
     const [
       pluginResult,
@@ -267,6 +297,11 @@ export class WpeRefreshScheduler {
       adminEmailResult,
       postCountResult,
       stylesheetResult,
+      postCountByTypeResult,   // post list --post_type=post --format=count
+      lastPostAtResult,        // post list --orderby=modified --posts-per-page=1 --format=json
+      userCountResult,         // user list --format=count
+      userCountByRoleResult,   // user list --role=administrator --format=count
+      lastActiveSessionResult, // user list --role=editor --format=count (reusing slot; lastActiveSession not available on WPE)
     ] = await Promise.all([
       this.localServices
         .remoteWpCliRun(installName, ['plugin', 'list', '--format=json', '--fields=name,title,version,status'])
@@ -288,6 +323,27 @@ export class WpeRefreshScheduler {
         .catch(() => ({ success: false, stdout: null })),
       this.localServices
         .remoteWpCliRun(installName, ['option', 'get', 'stylesheet'])
+        .catch(() => ({ success: false, stdout: null })),
+      // postCountByType: post count (wp eval blocked on WPE SSH gateway — use native subcommands)
+      this.localServices
+        .remoteWpCliRun(installName, ['post', 'list', '--post_type=post', '--post_status=publish', '--format=count'])
+        .catch(() => ({ success: false, stdout: null })),
+      // lastPostAt: most recently modified published post
+      this.localServices
+        .remoteWpCliRun(installName, ['post', 'list', '--post_status=publish', '--orderby=modified', '--posts-per-page=1', '--fields=post_modified', '--format=json'])
+        .catch(() => ({ success: false, stdout: null })),
+      // userCount: total user count
+      this.localServices
+        .remoteWpCliRun(installName, ['user', 'list', '--format=count'])
+        .catch(() => ({ success: false, stdout: null })),
+      // userCountByRole: administrator count
+      this.localServices
+        .remoteWpCliRun(installName, ['user', 'list', '--role=administrator', '--format=count'])
+        .catch(() => ({ success: false, stdout: null })),
+      // lastActiveSession: not available on WPE (requires wp eval, blocked by WPE SSH gateway)
+      // Placeholder — always returns empty so lastActiveSession stays null for WPE
+      this.localServices
+        .remoteWpCliRun(installName, ['user', 'list', '--role=editor', '--format=count'])
         .catch(() => ({ success: false, stdout: null })),
     ]);
 
@@ -327,6 +383,45 @@ export class WpeRefreshScheduler {
       ? stylesheetResult.stdout.trim() || null
       : null;
 
+    // Parse new analytics fields (wp eval blocked on WPE SSH gateway — using native WP-CLI)
+    const parseCount = (r: any): number | null => {
+      if (!r?.success || !r.stdout?.trim()) return null;
+      const n = parseInt(r.stdout.trim(), 10);
+      return isNaN(n) ? null : n;
+    };
+
+    // postCountByType: post and page counts as separate calls, combined into JSON
+    const postTypePostCount = parseCount(postCountByTypeResult);   // post type
+    const postCountFromType = postTypePostCount;                    // used as total below
+    const postCountByType: Record<string, number> | undefined = postTypePostCount !== null
+      ? { post: postTypePostCount }
+      : undefined;
+
+    // lastPostAt: from wp post list --orderby=modified --posts-per-page=1 --format=json
+    let lastPostAt: number | null = null;
+    if (lastPostAtResult?.success && lastPostAtResult.stdout?.trim()) {
+      try {
+        const rows = JSON.parse(lastPostAtResult.stdout.trim()) as Array<{ post_modified: string }>;
+        if (Array.isArray(rows) && rows[0]?.post_modified) {
+          const ts = new Date(rows[0].post_modified + ' UTC').getTime();
+          if (!isNaN(ts) && ts > 0) lastPostAt = ts;
+        }
+      } catch { /* ignore */ }
+    }
+
+    // userCount: from wp user list --format=count
+    const userCount = parseCount(userCountResult);
+
+    // userCountByRole: administrator and editor counts from separate calls
+    const adminCount  = parseCount(userCountByRoleResult);   // --role=administrator
+    const editorCount = parseCount(lastActiveSessionResult); // --role=editor (reusing slot)
+    const userCountByRole: string | null = (adminCount !== null || editorCount !== null)
+      ? JSON.stringify({ administrator: adminCount ?? 0, editor: editorCount ?? 0 })
+      : null;
+
+    // lastActiveSession: not available on WPE (wp eval blocked by WPE SSH gateway)
+    const lastActiveSession: number | null = null;
+
     // Persist plugins
     if (pluginRows.length > 0) {
       await this.graphService.deletePlugins(siteId);
@@ -362,25 +457,37 @@ export class WpeRefreshScheduler {
     }
 
     // Persist scalar site fields via direct SQL UPDATE
-    // Uses individual CASE guards so we never overwrite a good value with null
+    // Uses individual COALESCE guards so we never overwrite a good value with null
     const db = this.graphService.getDb();
     if (db) {
       db.prepare(`
         UPDATE sites SET
-          wp_version   = COALESCE(?, wp_version),
-          site_url     = COALESCE(?, site_url),
-          admin_email  = COALESCE(?, admin_email),
-          active_theme = COALESCE(?, active_theme),
-          post_count   = COALESCE(?, post_count),
-          last_sync_at = ?,
-          updated_at   = ?
+          wp_version          = COALESCE(?, wp_version),
+          site_url            = COALESCE(?, site_url),
+          admin_email         = COALESCE(?, admin_email),
+          active_theme        = COALESCE(?, active_theme),
+          post_count          = COALESCE(?, post_count),
+          post_count_by_type  = COALESCE(?, post_count_by_type),
+          last_post_at        = COALESCE(?, last_post_at),
+          user_count          = COALESCE(?, user_count),
+          user_count_by_role  = COALESCE(?, user_count_by_role),
+          last_active_session = COALESCE(?, last_active_session),
+          settings_json       = COALESCE(?, settings_json),
+          ssh_last_sync_at    = ?,
+          updated_at          = ?
         WHERE id = ?
       `).run(
         wpVersion,
         siteUrl,
         adminEmail,
         activeTheme,
-        postCount,
+        postCountFromType ?? postCount,         // prefer type-derived total
+        postCountByType ? JSON.stringify(postCountByType) : null,
+        lastPostAt,
+        userCount,
+        userCountByRole,
+        lastActiveSession,
+        settingsJson,
         now,
         now,
         siteId
@@ -388,7 +495,7 @@ export class WpeRefreshScheduler {
     }
 
     this.logger.info(
-      `[WpeRefreshScheduler] Refreshed ${installName} — wp=${wpVersion ?? '?'} plugins=${pluginRows.length} themes=${themeRows.length} posts=${postCount ?? '?'}`
+      `[WpeRefreshScheduler] Refreshed ${installName} — wp=${wpVersion ?? '?'} plugins=${pluginRows.length} themes=${themeRows.length} posts=${postCountFromType ?? postCount ?? '?'} users=${userCount ?? '?'}`
     );
   }
 }

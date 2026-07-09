@@ -148,6 +148,9 @@ const styles = {
     fontWeight: 700,
     letterSpacing: '0.08em',
     textTransform: 'uppercase' as const,
+    // opacity removed from container — applied to label text only so status dots render at full vividity
+  },
+  cardHeaderLabel: {
     opacity: 0.6,
   },
   row: {
@@ -207,6 +210,7 @@ const styles = {
 export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTabState> {
   private mounted = false;
   private _onSettingsApplied: (() => void) | null = null;
+  private _onIndexProgress: ((_: any, data: any) => void) | null = null;
 
   state: NexusSiteTabState = {
     indexEntry: null,
@@ -238,6 +242,15 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     this.fetchData();
     this._onSettingsApplied = () => { if (this.mounted) this.fetchData(); };
     window.addEventListener('nexus-ai:settings-applied', this._onSettingsApplied);
+
+    // Re-fetch when the lifecycle hook finishes indexing this site — handles the case
+    // where componentDidUpdate fires (site→running) before indexSite completes.
+    this._onIndexProgress = (_: any, data: any) => {
+      if (data?.siteId === this.props.site.id && (data?.state === 'indexed' || data?.state === 'error')) {
+        if (this.mounted) this.fetchData();
+      }
+    };
+    this.props.electron.ipcRenderer.on(IPC_CHANNELS.INDEX_PROGRESS, this._onIndexProgress);
   }
 
   componentDidUpdate(prevProps: NexusSiteTabProps): void {
@@ -257,6 +270,9 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     this.mounted = false;
     if (this._onSettingsApplied) {
       window.removeEventListener('nexus-ai:settings-applied', this._onSettingsApplied);
+    }
+    if (this._onIndexProgress) {
+      this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.INDEX_PROGRESS, this._onIndexProgress);
     }
   }
 
@@ -588,7 +604,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       dotColor !== null
         ? React.createElement('span', { style: dot(dotColor) })
         : null,
-      header,
+      React.createElement('span', { style: styles.cardHeaderLabel }, header),
     );
     return React.createElement('div', { style: styles.card }, headerEl, ...body);
   }
@@ -668,7 +684,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     const isAIConfigured = !!siteAIConfig;
     const canSetupAI = wpVersion === null || isWp7OrLater(wpVersion);
     const gatewayActive = aiStatus?.gatewayProvider === 'active';
-    const gatewayPending = useLocalGateway && !gatewayActive;
+    const gatewayPending = useLocalGateway && !gatewayActive && isAIConfigured;
 
     const headerDotColor = isAIConfigured ? UI_COLORS.STATUS_RUNNING : '#888';
 
@@ -877,7 +893,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     return React.createElement('div', { style: styles.cardFull },
       React.createElement('div', { style: styles.cardHeader },
         React.createElement('span', { style: dot(headerDotColor) }),
-        'Database Health',
+        React.createElement('span', { style: styles.cardHeaderLabel }, 'Database Health'),
       ),
       scoreDisplay,
       issuesList,
@@ -916,7 +932,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
 
     return React.createElement('div', { style: styles.cardFull },
       React.createElement('div', { style: styles.cardHeader },
-        'Tools',
+        React.createElement('span', { style: styles.cardHeaderLabel }, 'Tools'),
       ),
       this.cardRow('AI Context File',
         React.createElement('span', { style: dot(contextColor) }),

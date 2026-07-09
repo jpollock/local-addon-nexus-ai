@@ -54,9 +54,62 @@ test('buildSiteContext returns mode=site with correct siteId', () => {
   expect(ctx.siteId).toBe('site-1');
 });
 
-test('buildSiteContext reads phpVersion from site object', () => {
+test('buildSiteContext includes plugin version in activePlugins when version is available', () => {
+  const cacheWithVersions = {
+    get: (id: string) => id === 'site-1'
+      ? {
+          wpVersion: '7.0', scanDepth: 'full',
+          plugins: [
+            { name: 'woocommerce', title: 'WooCommerce', version: '8.5.2', status: 'active' },
+            { name: 'elementor', title: 'Elementor', version: '3.21.0', status: 'active' },
+            { name: 'inactive-plugin', title: 'Inactive', version: '1.0', status: 'inactive' },
+          ],
+        }
+      : null,
+  };
+  const ctx = buildSiteContext('site-1', mockSiteData as any, cacheWithVersions as any, mockIndexRegistry as any);
+  expect(ctx.activePlugins).toBeDefined();
+  expect(ctx.activePlugins!.some(p => p.includes('WooCommerce (8.5.2)'))).toBe(true);
+  expect(ctx.activePlugins!.some(p => p.includes('Elementor (3.21.0)'))).toBe(true);
+  // Inactive plugins excluded
+  expect(ctx.activePlugins!.some(p => p.includes('Inactive'))).toBe(false);
+});
+
+test('buildSiteContext omits version parenthetical when version is missing', () => {
+  const cacheNoVersion = {
+    get: (id: string) => id === 'site-1'
+      ? { wpVersion: '7.0', scanDepth: 'full', plugins: [{ name: 'acf', title: 'ACF', status: 'active' }] }
+      : null,
+  };
+  const ctx = buildSiteContext('site-1', mockSiteData as any, cacheNoVersion as any, mockIndexRegistry as any);
+  expect(ctx.activePlugins).toBeDefined();
+  expect(ctx.activePlugins![0]).toBe('ACF');
+  expect(ctx.activePlugins![0]).not.toContain('(');
+});
+
+test('buildSiteContext falls back to site.phpVersion when cache has none', () => {
+  // site-1 has phpVersion '7.4' in the site object; the cache mock has no phpVersion field
   const ctx = buildSiteContext('site-1', mockSiteData as any, mockMetadataCache as any, mockIndexRegistry as any);
   expect(ctx.phpVersion).toBe('7.4');
+});
+
+test('buildSiteContext prefers meta.phpVersion over site.phpVersion', () => {
+  // WP-CLI result (meta) should win over Local static site object — it reflects actual running PHP
+  const cacheWithPhp = {
+    get: (id: string) => id === 'site-1'
+      ? { wpVersion: '7.0', phpVersion: '8.3.1', plugins: [], scanDepth: 'full' }
+      : null,
+  };
+  const ctx = buildSiteContext('site-1', mockSiteData as any, cacheWithPhp as any, mockIndexRegistry as any);
+  // meta says 8.3.1, site object says 7.4 — meta wins
+  expect(ctx.phpVersion).toBe('8.3.1');
+});
+
+test('buildSiteContext returns null phpVersion when both site and cache have none', () => {
+  const siteDataNoPhp = { getSites: () => ({ 'site-1': { id: 'site-1', name: 'acme', phpVersion: null } }) };
+  const cacheNoPhp = { get: () => ({ wpVersion: '7.0', plugins: [], scanDepth: 'full' }) };
+  const ctx = buildSiteContext('site-1', siteDataNoPhp as any, cacheNoPhp as any, mockIndexRegistry as any);
+  expect(ctx.phpVersion).toBeNull();
 });
 
 test('buildSiteContext reads indexState from indexRegistry', () => {

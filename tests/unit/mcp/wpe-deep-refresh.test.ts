@@ -72,16 +72,21 @@ function makeServices(overrides: {
   };
 }
 
-// Helper: build a remoteWpCliRun mock that returns realistic results for all 7 calls
+// Build a remoteWpCliRun mock that handles all SSH calls via args-based routing.
+// The implementation now makes: 1 warm-up + 11 settings option gets + 13 parallel = 25 calls.
 function makeFullRemoteWpCliRun() {
-  return jest.fn()
-    .mockResolvedValueOnce({ success: true, stdout: PLUGIN_JSON })          // plugin list
-    .mockResolvedValueOnce({ success: true, stdout: THEME_JSON })           // theme list
-    .mockResolvedValueOnce({ success: true, stdout: '6.5.2\n' })            // core version
-    .mockResolvedValueOnce({ success: true, stdout: 'https://mysite.wpengine.com\n' }) // siteurl
-    .mockResolvedValueOnce({ success: true, stdout: 'admin@mysite.com\n' }) // admin_email
-    .mockResolvedValueOnce({ success: true, stdout: '42\n' })               // post list --format=count
-    .mockResolvedValueOnce({ success: true, stdout: 'twentytwentyfive\n' }); // stylesheet
+  return jest.fn().mockImplementation((_install: string, args: string[]) => {
+    if (args[0] === 'plugin') return Promise.resolve({ success: true, stdout: PLUGIN_JSON });
+    if (args[0] === 'theme')  return Promise.resolve({ success: true, stdout: THEME_JSON });
+    if (args[0] === 'core')   return Promise.resolve({ success: true, stdout: '6.5.2\n' });
+    if (args[0] === 'option' && args[2] === 'siteurl')    return Promise.resolve({ success: true, stdout: 'https://mysite.wpengine.com\n' });
+    if (args[0] === 'option' && args[2] === 'admin_email') return Promise.resolve({ success: true, stdout: 'admin@mysite.com\n' });
+    if (args[0] === 'option' && args[2] === 'stylesheet')  return Promise.resolve({ success: true, stdout: 'twentytwentyfive\n' });
+    if (args[0] === 'post' && args.includes('--format=count') && !args.includes('--post_type=post') && !args.includes('--post_type=page'))
+      return Promise.resolve({ success: true, stdout: '42\n' });
+    // All other calls (settings option gets, user lists, extra post lists): return empty ok
+    return Promise.resolve({ success: true, stdout: '' });
+  });
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -109,8 +114,8 @@ describe('wpe_site_deep_refresh', () => {
     expect(result.content[0].text).toMatch(/SSH key not found/i);
   });
 
-  // 3. Calls all 7 SSH WP-CLI commands in parallel
-  it('calls 7 SSH WP-CLI commands', async () => {
+  // 3. Calls SSH WP-CLI commands (1 warm-up + 11 settings + 13 parallel)
+  it('calls all SSH WP-CLI commands', async () => {
     const remoteWpCliRun = makeFullRemoteWpCliRun();
     const services = makeServices({
       localServices: makeLocalServices({ remoteWpCliRun }),
@@ -118,7 +123,7 @@ describe('wpe_site_deep_refresh', () => {
 
     await deepRefreshHandler.execute({ install_name: 'mysite' }, services as any);
 
-    expect(remoteWpCliRun).toHaveBeenCalledTimes(7);
+    expect(remoteWpCliRun).toHaveBeenCalledTimes(25);
 
     // Verify each expected command was issued
     expect(remoteWpCliRun).toHaveBeenCalledWith('mysite', ['plugin', 'list', '--format=json', '--fields=name,title,version,status']);
@@ -184,14 +189,17 @@ describe('wpe_site_deep_refresh', () => {
 
   // 6. Handles SSH failure gracefully (partial results)
   it('includes partial error note when some SSH calls fail', async () => {
-    const remoteWpCliRun = jest.fn()
-      .mockResolvedValueOnce({ success: false, stdout: 'SSH error', stderr: '' }) // plugin list fails
-      .mockResolvedValueOnce({ success: true, stdout: THEME_JSON })              // theme list ok
-      .mockResolvedValueOnce({ success: true, stdout: '6.5.2\n' })
-      .mockResolvedValueOnce({ success: true, stdout: 'https://mysite.wpengine.com\n' })
-      .mockResolvedValueOnce({ success: true, stdout: 'admin@mysite.com\n' })
-      .mockResolvedValueOnce({ success: true, stdout: '10\n' })
-      .mockResolvedValueOnce({ success: true, stdout: 'twentytwentyfive\n' });
+    // Route by args: plugin list fails, everything else succeeds
+    const remoteWpCliRun = jest.fn().mockImplementation((_install: string, args: string[]) => {
+      if (args[0] === 'plugin') return Promise.resolve({ success: false, stdout: 'SSH error', stderr: '' });
+      if (args[0] === 'theme')  return Promise.resolve({ success: true, stdout: THEME_JSON });
+      if (args[0] === 'core')   return Promise.resolve({ success: true, stdout: '6.5.2\n' });
+      if (args[0] === 'option' && args[2] === 'siteurl')     return Promise.resolve({ success: true, stdout: 'https://mysite.wpengine.com\n' });
+      if (args[0] === 'option' && args[2] === 'admin_email') return Promise.resolve({ success: true, stdout: 'admin@mysite.com\n' });
+      if (args[0] === 'option' && args[2] === 'stylesheet')  return Promise.resolve({ success: true, stdout: 'twentytwentyfive\n' });
+      if (args[0] === 'post' && args.includes('--format=count')) return Promise.resolve({ success: true, stdout: '10\n' });
+      return Promise.resolve({ success: true, stdout: '' });
+    });
 
     const services = makeServices({
       localServices: makeLocalServices({ remoteWpCliRun }),

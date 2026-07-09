@@ -677,7 +677,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     const canSetupAI = wpVersion === null || isWp7OrLater(wpVersion);
     const isAIConfigured = !!siteAIConfig;
     const gatewayActive = aiStatus ? (aiStatus.gatewayProvider === 'active') : false;
-    const gatewayPending = useLocalGateway && !gatewayActive;
+    const gatewayPending = useLocalGateway && !gatewayActive && isAIConfigured;
 
     if (aiStatus) {
       // Provider picker — shown inline when user clicks Install AI Tools or Change Provider

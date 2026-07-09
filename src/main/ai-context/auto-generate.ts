@@ -38,16 +38,7 @@ export async function autoGenerateContextFile(
     const fs = require('fs').promises;
     const path = require('path');
 
-    // Check if file already exists
     const filePath = path.join(site.path, 'app', 'public', 'AI-CONTEXT.md');
-    try {
-      await fs.access(filePath);
-      // File exists, no need to generate
-      logger.info(`[NexusAI] AI context file already exists for ${site.name}, skipping auto-generation`);
-      return;
-    } catch {
-      // File doesn't exist, continue with generation
-    }
 
     // Get site metadata
     const metadata = metadataCache?.getWithAge(site.id);

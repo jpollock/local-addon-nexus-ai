@@ -235,10 +235,18 @@ export class GraphService {
 
     // Migration: add SSH-enriched WPE site fields if missing
     for (const [col, def] of [
-      ['site_url',     'TEXT'],
-      ['admin_email',  'TEXT'],
-      ['active_theme', 'TEXT'],
-      ['post_count',   'INTEGER'],
+      ['site_url',            'TEXT'],
+      ['admin_email',         'TEXT'],
+      ['active_theme',        'TEXT'],
+      ['post_count',          'INTEGER'],
+      ['user_count',          'INTEGER'],
+      ['last_post_at',        'INTEGER'],
+      ['post_count_by_type',  'TEXT'],
+      ['last_active_session', 'INTEGER'],
+      ['user_count_by_role',  'TEXT'],
+      ['ssh_last_sync_at',    'INTEGER'],
+      ['settings_json',       'TEXT'],
+      ['environment',         'TEXT'],
     ] as [string, string][]) {
       if (!this.hasColumn('sites', col)) {
         this.db.transaction(() => {
@@ -325,8 +333,8 @@ export class GraphService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(`
-      INSERT INTO sites (id, name, domain, wp_version, php_version, account_id, last_sync_at, is_active, created_at, updated_at, source, remote_install_id, remote_domain)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sites (id, name, domain, wp_version, php_version, account_id, last_sync_at, is_active, created_at, updated_at, source, environment, remote_install_id, remote_domain)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         domain = excluded.domain,
@@ -337,6 +345,7 @@ export class GraphService {
         is_active = excluded.is_active,
         updated_at = excluded.updated_at,
         source = excluded.source,
+        environment = COALESCE(excluded.environment, environment),
         remote_install_id = excluded.remote_install_id,
         remote_domain = excluded.remote_domain
     `);
@@ -353,9 +362,47 @@ export class GraphService {
       site.created_at,
       site.updated_at,
       site.source ?? 'local',
+      site.environment ?? null,
       site.remote_install_id ?? null,
       site.remote_domain ?? null
     );
+  }
+
+  /** Write L2 analytics data for a local site without touching other columns. */
+  updateSiteStats(siteId: string, stats: {
+    postCount?: number;
+    postCountByType?: Record<string, number>;
+    userCount?: number;
+    lastPostAt?: number;
+    lastActiveSession?: number;
+    userCountByRole?: Record<string, number>;
+  }): void {
+    if (!this.db) return;
+    this.db.prepare(
+      `UPDATE sites
+       SET post_count          = COALESCE(?, post_count),
+           post_count_by_type  = COALESCE(?, post_count_by_type),
+           user_count          = COALESCE(?, user_count),
+           last_post_at        = COALESCE(?, last_post_at),
+           last_active_session = COALESCE(?, last_active_session),
+           user_count_by_role  = COALESCE(?, user_count_by_role)
+       WHERE id = ?`
+    ).run(
+      stats.postCount         ?? null,
+      stats.postCountByType   ? JSON.stringify(stats.postCountByType)  : null,
+      stats.userCount         ?? null,
+      stats.lastPostAt        ?? null,
+      stats.lastActiveSession ?? null,
+      stats.userCountByRole   ? JSON.stringify(stats.userCountByRole)  : null,
+      siteId,
+    );
+  }
+
+  updateSiteSettings(siteId: string, settings: Record<string, string | number | undefined | null>): void {
+    if (!this.db) return;
+    this.db.prepare(
+      `UPDATE sites SET settings_json = ? WHERE id = ?`,
+    ).run(JSON.stringify(settings), siteId);
   }
 
   async upsertAccount(account: { id: string; name: string; nickname?: string }): Promise<void> {
@@ -397,6 +444,9 @@ export class GraphService {
       remote_install_id: row.remote_install_id,
       remote_domain: row.remote_domain,
       account_id: row.account_id,
+      post_count: (row as any).post_count ?? undefined,
+      user_count: (row as any).user_count ?? undefined,
+      last_post_at: (row as any).last_post_at ?? undefined,
     };
   }
 
@@ -438,6 +488,9 @@ export class GraphService {
       remote_install_id: row.remote_install_id,
       remote_domain: row.remote_domain,
       account_id: row.account_id,
+      post_count: (row as any).post_count ?? undefined,
+      user_count: (row as any).user_count ?? undefined,
+      last_post_at: (row as any).last_post_at ?? undefined,
     }));
   }
 
@@ -1011,18 +1064,18 @@ export class GraphService {
       graphDbSize = fs.statSync(this.dbPath).size;
     }
 
-    // Get vector DB directory size
+    // Get vector DB directory size (async to avoid blocking main process)
     let vectorDbSize = 0;
     let vectorTableCount = 0;
     if (fs.existsSync(vectorDbPath)) {
-      const getDirectorySize = (dirPath: string): number => {
+      const getDirectorySize = async (dirPath: string): Promise<number> => {
         let size = 0;
-        const files = fs.readdirSync(dirPath);
+        const files = await fs.promises.readdir(dirPath);
         for (const file of files) {
           const filePath = path.join(dirPath, file);
-          const stats = fs.statSync(filePath);
+          const stats = await fs.promises.stat(filePath);
           if (stats.isDirectory()) {
-            size += getDirectorySize(filePath);
+            size += await getDirectorySize(filePath);
             if (file.startsWith('site_')) vectorTableCount++;
           } else {
             size += stats.size;
@@ -1030,7 +1083,7 @@ export class GraphService {
         }
         return size;
       };
-      vectorDbSize = getDirectorySize(vectorDbPath);
+      vectorDbSize = await getDirectorySize(vectorDbPath);
     }
 
     return {

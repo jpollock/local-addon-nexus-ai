@@ -66,7 +66,7 @@ export const deepRefreshHandler: McpToolHandler = {
         content: [{
           type: 'text' as const,
           text: `Operation blocked: this operation is not permitted on "${environment}" environments. ` +
-            `Adjust in Nexus Preferences → WP Engine → WP Engine Access.`,
+            `Adjust in Nexus AI → Settings → WP Engine Access.`,
         }],
         isError: true,
       };
@@ -84,7 +84,7 @@ export const deepRefreshHandler: McpToolHandler = {
       siteId = row?.id ?? null;
     }
 
-    // Run all 7 SSH WP-CLI calls in parallel
+    // Run all SSH WP-CLI calls in parallel
     let pluginResult: any;
     let themeResult: any;
     let versionResult: any;
@@ -92,11 +92,50 @@ export const deepRefreshHandler: McpToolHandler = {
     let adminEmailResult: any;
     let postCountResult: any;
     let activeThemeResult: any;
+    let postTypePostResult: any;
+    let postTypePageResult: any;
+    let lastPostAtResult: any;
+    let userCountResult: any;
+    let adminCountResult: any;
+    let editorCountResult: any;
+    // Collect WP settings FIRST, sequentially — this establishes the SSH ControlMaster
+    // connection so the large parallel batch below can reuse it without hitting WPE's
+    // 5-concurrent-connection limit.
+    //
+    // Warm-up: the first SSH call always hits ControlSocket stale-socket warnings and
+    // may fail. Run a throwaway call first to establish ControlMaster cleanly.
+    await services.localServices.remoteWpCliRun(installName, ['core', 'version'])
+      .catch(() => {/* warm-up only — result ignored */});
+
+    const settingsKeys: Array<[string, string]> = [
+      // [option_name_in_wp_options, key_for_our_map]
+      ['blogname',               'blogname'],
+      ['blogdescription',        'blogdescription'],
+      ['blog_public',            'blog_public'],        // search-engine visibility
+      ['show_on_front',          'show_on_front'],
+      ['posts_per_page',         'posts_per_page'],
+      ['default_comment_status', 'default_comment_status'],
+      ['permalink_structure',    'permalink_structure'],
+      ['timezone_string',        'timezone_string'],
+      ['users_can_register',     'users_can_register'],
+      ['default_role',           'default_role'],
+      ['WPLANG',                 'WPLANG'],
+    ];
+    const wpSettingsMap: Record<string, string> = {};
+    for (const [optionName, mapKey] of settingsKeys) {
+      const r = await services.localServices.remoteWpCliRun(installName, ['option', 'get', optionName])
+        .catch(() => ({ success: false, stdout: null }));
+      if (r.success && r.stdout?.trim()) wpSettingsMap[mapKey] = r.stdout.trim();
+    }
+    const wpSettingsJsonStr = Object.keys(wpSettingsMap).length > 0
+      ? JSON.stringify(wpSettingsMap) : null;
 
     try {
       [
         pluginResult, themeResult, versionResult,
         siteUrlResult, adminEmailResult, postCountResult, activeThemeResult,
+        postTypePostResult, postTypePageResult, lastPostAtResult,
+        userCountResult, adminCountResult, editorCountResult,
       ] = await Promise.all([
         services.localServices.remoteWpCliRun(installName, ['plugin', 'list', '--format=json', '--fields=name,title,version,status']),
         services.localServices.remoteWpCliRun(installName, ['theme', 'list', '--format=json', '--fields=name,title,version,status']),
@@ -105,6 +144,34 @@ export const deepRefreshHandler: McpToolHandler = {
         services.localServices.remoteWpCliRun(installName, ['option', 'get', 'admin_email']),
         services.localServices.remoteWpCliRun(installName, ['post', 'list', '--post_status=publish', '--format=count']),
         services.localServices.remoteWpCliRun(installName, ['option', 'get', 'stylesheet']),
+        // New: post count for 'post' type (wp eval is blocked on WPE SSH gateway)
+        services.localServices.remoteWpCliRun(installName,
+          ['post', 'list', '--post_type=post', '--post_status=publish', '--format=count'],
+        ).catch(() => ({ success: false, stdout: null })),
+        // New: page count
+        services.localServices.remoteWpCliRun(installName,
+          ['post', 'list', '--post_type=page', '--post_status=publish', '--format=count'],
+        ).catch(() => ({ success: false, stdout: null })),
+        // New: most recently modified published post date
+        services.localServices.remoteWpCliRun(installName,
+          ['post', 'list', '--post_status=publish', '--orderby=modified', '--posts-per-page=1', '--fields=post_modified', '--format=json'],
+        ).catch(() => ({ success: false, stdout: null })),
+        // New: total user count
+        services.localServices.remoteWpCliRun(installName,
+          ['user', 'list', '--format=count'],
+        ).catch(() => ({ success: false, stdout: null })),
+        // New: administrator count (most security-relevant role)
+        services.localServices.remoteWpCliRun(installName,
+          ['user', 'list', '--role=administrator', '--format=count'],
+        ).catch(() => ({ success: false, stdout: null })),
+        // New: editor count
+        services.localServices.remoteWpCliRun(installName,
+          ['user', 'list', '--role=editor', '--format=count'],
+        ).catch(() => ({ success: false, stdout: null })),
+        // WordPress settings — wp eval and wp db query are blocked on WPE SSH gateway.
+        // Use wp option get per key, collected AFTER the main batch to stay under
+        // WPE's 5-concurrent-connection limit. Returns a synthetic result object.
+        Promise.resolve({ success: true, stdout: '__deferred__' }),
       ]);
     } catch (err: any) {
       return {
@@ -164,18 +231,71 @@ export const deepRefreshHandler: McpToolHandler = {
       errors.push(`core version failed: ${versionResult.stdout || 'unknown'}`);
     }
 
-    // Persist scalar fields in one UPDATE
+    // Persist scalar fields in one UPDATE (including new analytics fields)
     if (siteId && graphService?.getDb?.()) {
-      const siteUrl    = siteUrlResult.success    ? siteUrlResult.stdout?.trim()    || null : null;
-      const adminEmail = adminEmailResult.success ? adminEmailResult.stdout?.trim() || null : null;
-      const postCount  = postCountResult.success  ? parseInt(postCountResult.stdout?.trim() || '0', 10) || null : null;
+      const siteUrl     = siteUrlResult.success    ? siteUrlResult.stdout?.trim()    || null : null;
+      const adminEmail  = adminEmailResult.success ? adminEmailResult.stdout?.trim() || null : null;
+      const postCount   = postCountResult.success  ? parseInt(postCountResult.stdout?.trim() || '0', 10) || null : null;
       const activeTheme = activeThemeResult.success ? activeThemeResult.stdout?.trim() || null : null;
+
+      // Parse new analytics fields (using native WP-CLI — wp eval blocked on WPE SSH gateway)
+      const parseCount = (r: any): number | null => {
+        if (!r?.success || !r.stdout?.trim()) return null;
+        const n = parseInt(r.stdout.trim(), 10);
+        return isNaN(n) ? null : n;
+      };
+
+      const postTypePosts = parseCount(postTypePostResult);
+      const postTypePages = parseCount(postTypePageResult);
+      const postCountByType: string | null = (postTypePosts !== null || postTypePages !== null)
+        ? JSON.stringify({ post: postTypePosts ?? 0, page: postTypePages ?? 0 })
+        : null;
+
+      let lastPostAt: number | null = null;
+      if (lastPostAtResult?.success && lastPostAtResult.stdout?.trim()) {
+        try {
+          const rows = JSON.parse(lastPostAtResult.stdout.trim()) as Array<{ post_modified: string }>;
+          if (Array.isArray(rows) && rows[0]?.post_modified) {
+            const ts = new Date(rows[0].post_modified + ' UTC').getTime();
+            if (!isNaN(ts) && ts > 0) lastPostAt = ts;
+          }
+        } catch { /* ignore */ }
+      }
+
+      const userCount = parseCount(userCountResult);
+      const adminCount = parseCount(adminCountResult);
+      const editorCount = parseCount(editorCountResult);
+      const userCountByRole: string | null = (adminCount !== null || editorCount !== null)
+        ? JSON.stringify({ administrator: adminCount ?? 0, editor: editorCount ?? 0 })
+        : null;
+
+      // lastActiveSession not available on WPE (requires wp eval, blocked by WPE SSH gateway)
+      const lastActiveSession: number | null = null;
+
+      // Parse settings (option list returns [{option_name, option_value}] array)
+      const settingsJson: string | null = wpSettingsJsonStr;
 
       graphService.getDb().prepare(`
         UPDATE sites
-           SET wp_version=?, site_url=?, admin_email=?, active_theme=?, post_count=?, last_sync_at=?
+           SET wp_version          = COALESCE(?, wp_version),
+               site_url            = COALESCE(?, site_url),
+               admin_email         = COALESCE(?, admin_email),
+               active_theme        = COALESCE(?, active_theme),
+               post_count          = COALESCE(?, post_count),
+               post_count_by_type  = COALESCE(?, post_count_by_type),
+               last_post_at        = COALESCE(?, last_post_at),
+               user_count          = COALESCE(?, user_count),
+               user_count_by_role  = COALESCE(?, user_count_by_role),
+               last_active_session = COALESCE(?, last_active_session),
+               settings_json       = COALESCE(?, settings_json),
+               ssh_last_sync_at    = ?,
+               last_sync_at        = ?
          WHERE id=?
-      `).run(wpVersion, siteUrl, adminEmail, activeTheme, postCount, now, siteId);
+      `).run(
+        wpVersion, siteUrl, adminEmail, activeTheme, postCount,
+        postCountByType, lastPostAt, userCount, userCountByRole, lastActiveSession,
+        settingsJson, now, now, siteId,
+      );
     }
 
     // Build summary
@@ -192,6 +312,7 @@ export const deepRefreshHandler: McpToolHandler = {
       `- Site URL: ${siteUrl}`,
       `- Admin email: ${adminEmail}`,
       `- ${postCount} published posts`,
+      `- Settings: ${wpSettingsJsonStr ? Object.keys(JSON.parse(wpSettingsJsonStr)).length + ' keys collected' : 'unavailable'}`,
     ].join('\n') + errorNote;
 
     return { content: [{ type: 'text' as const, text: summary }] };

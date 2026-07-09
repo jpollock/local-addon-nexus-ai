@@ -63,6 +63,23 @@ interface InterpretedFilters {
   wpVersions?: string[];
   contentQuery?: string;
   searchText?: string;
+  minPluginCount?: number;
+  maxPluginCount?: number;
+  minPostCount?: number;
+  maxPostCount?: number;
+  minUserCount?: number;
+  maxUserCount?: number;
+  stalePostDays?: number;
+  recentPostDays?: number;
+  phpEolOnly?: boolean;
+  wpVersionOlderThan?: string;
+  pluginVersion?: { slug: string; olderThan: string };
+  commentsDisabled?: boolean;
+  hiddenFromSearch?: boolean;
+  selfRegistrationOpen?: boolean;
+  staticFrontPage?: boolean;
+  plainPermalinks?: boolean;
+  source?: string;
 }
 
 // -- Styles --
@@ -309,8 +326,16 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
       if (!this.mounted) return;
 
       if (!result.success) {
-        // Don't show raw API errors to user — fall back gracefully
-        this.setState({ loading: false, error: 'Could not parse query — try adjusting the wording.' });
+        const errorMsg = result.error?.includes('No API key') || result.error?.includes('not available')
+          ? 'AI search requires a configured provider. Check Nexus AI → Settings, or use Manual mode.'
+          : 'Could not parse query — try rephrasing, or switch to Manual mode.';
+        // Restore the query so the user can edit and retry rather than losing their input
+        this.setState({ loading: false, error: errorMsg, query: queryText });
+        return;
+      }
+
+      if (result.needsClarification && result.question) {
+        this.setState({ loading: false, error: result.question, query: queryText });
         return;
       }
 
@@ -643,6 +668,23 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     if (filters.plugins?.length) items.push(`Plugins: ${filters.plugins.join(', ')}`);
     if (filters.themes?.length) items.push(`Themes: ${filters.themes.join(', ')}`);
     if (filters.contentQuery) items.push(`Content: "${filters.contentQuery}"`);
+    if (filters.minPluginCount) items.push(`Plugins: ${filters.minPluginCount}+`);
+    if (filters.maxPluginCount) items.push(`Plugins: <${filters.maxPluginCount}`);
+    if (filters.minPostCount) items.push(`Posts: ${filters.minPostCount}+`);
+    if (filters.maxPostCount) items.push(`Posts: <${filters.maxPostCount}`);
+    if (filters.minUserCount) items.push(`Users: ${filters.minUserCount}+`);
+    if (filters.maxUserCount) items.push(`Users: <${filters.maxUserCount}`);
+    if (filters.stalePostDays) items.push(`Not updated in: ${filters.stalePostDays}+ days`);
+    if (filters.recentPostDays) items.push(`Updated within: ${filters.recentPostDays} days`);
+    if (filters.phpEolOnly) items.push(`PHP: end-of-life`);
+    if (filters.wpVersionOlderThan) items.push(`WP: older than ${filters.wpVersionOlderThan}`);
+    if (filters.pluginVersion) items.push(`${filters.pluginVersion.slug} < ${filters.pluginVersion.olderThan}`);
+    if (filters.commentsDisabled !== undefined) items.push(filters.commentsDisabled ? `Comments: disabled` : `Comments: enabled`);
+    if (filters.hiddenFromSearch !== undefined) items.push(filters.hiddenFromSearch ? `Search engines: blocked` : `Search engines: not blocked`);
+    if (filters.selfRegistrationOpen !== undefined) items.push(filters.selfRegistrationOpen ? `Registration: open` : `Registration: closed`);
+    if (filters.staticFrontPage !== undefined) items.push(filters.staticFrontPage ? `Front page: static` : `Front page: blog roll`);
+    if (filters.plainPermalinks !== undefined) items.push(filters.plainPermalinks ? `Permalinks: plain` : `Permalinks: pretty`);
+    if (filters.source) items.push(`Source: ${filters.source}`);
 
     if (items.length === 0) return null;
 

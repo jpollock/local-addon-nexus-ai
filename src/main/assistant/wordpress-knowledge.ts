@@ -71,6 +71,11 @@ export const PLUGIN_NAME_TO_SLUG: Record<string, string> = {
 const WP_KNOWLEDGE = `
 ## WordPress & PHP Knowledge
 
+### WordPress versions
+- WordPress 7.0: Current stable release (shipped May 2026). This is normal and expected — do NOT flag as unrecognized or problematic.
+- WordPress 6.9.x: Previous stable — upgrade to 7.0 is recommended
+- WordPress 6.8.x and below: Outdated
+
 ### PHP End-of-Life (end-of-life) dates
 - PHP 7.2: end-of-life November 2020 — no security patches
 - PHP 7.3: end-of-life December 2021 — high risk
@@ -90,10 +95,13 @@ const WP_KNOWLEDGE = `
 - Backup: updraftplus, backwpup, duplicator
 
 ### Nexus AI capabilities
-- Can find sites by plugin, theme, PHP version, WP version
-- Can search indexed post/page content semantically
-- Can start/stop local sites, trigger indexing, show fleet stats
+- CAN list active plugins with their installed versions (versions are in the site context when available)
+- CAN find sites by plugin, theme, PHP version, WP version
+- CAN search indexed post/page content semantically
+- CAN start/stop local sites, trigger indexing, show fleet stats
+- CANNOT determine if a plugin is outdated (no access to WordPress.org current versions) — for update status, direct user to WP Admin → Plugins OR suggest the Ask/Tell tab for fleet-wide plugin analysis
 - CANNOT modify WordPress databases or update plugins directly
+- When asked about out-of-date plugins on THIS site: list the installed versions you know from context, then say "To see if these need updates, check WP Admin → Plugins. For fleet-wide outdated plugin analysis across all your sites, use the Ask/Tell tab."
 
 `;
 
@@ -131,9 +139,9 @@ Leave "sites" as an empty array — the system populates it from real data.
 "customer onboarding posts" → { "intent": "content-search", "filter": { "contentQuery": "customer onboarding" }, "sites": [], "actions": [] }
 
 ### Site-mode query examples (when a ## Current site context section is present):
-"any issues to fix?" → { "intent": "site-info", "summary": "WordPress 6.9.4 is outdated — current version is 7.0. PHP version unknown (start site for details). AI plugin is not configured on this site.", "sites": [], "actions": [], "needsClarification": false }
+"any issues to fix?" → { "intent": "site-info", "summary": "Use the PHP and WordPress version data in the site context above. Report actual EOL status, outdated core, and missing AI configuration. Do not fabricate versions or say 'start the site' if the PHP line already says the site is running.", "sites": [], "actions": [], "needsClarification": false }
 "what plugins are active?" → { "intent": "site-info", "summary": "Active plugins: Advanced Custom Fields, WooCommerce, Yoast SEO. Start the site to get a full up-to-date list.", "sites": [], "actions": [], "needsClarification": false }
-"which plugins have updates?" → { "intent": "site-info", "summary": "Plugin update status requires the site to be running. Start the site and use WP Admin → Plugins to check for updates.", "sites": [], "actions": [], "needsClarification": false }
+"which plugins have updates?" → { "intent": "site-info", "summary": "List the installed plugin versions from the site context above. I cannot determine if they are outdated. To check for updates: visit [site-url]/wp-admin/plugins.php. For fleet-wide outdated plugin analysis, use the Ask/Tell tab.", "sites": [], "actions": [], "needsClarification": false }
 
 Return ONLY the JSON object. No markdown, no code blocks.
 `;
@@ -155,22 +163,38 @@ You are assisting with a fleet of ${context.localSiteCount ?? 0} local WordPress
 ${context.indexedCount ?? 0} sites have indexed content available for search.
 ${context.fleetInsights?.map(i => `- ${i.kind.toUpperCase()}: ${i.title} — ${i.detail}`).join('\n') ?? ''}`
     : (() => {
+      const isRunning = context.siteStatus === 'running';
       const pluginLine = context.activePlugins && context.activePlugins.length > 0
         ? `Active plugins (${context.pluginCount}): ${context.activePlugins.join(', ')}`
         : context.scanDepth === 'filesystem'
         ? `Installed plugins: ${context.installedPluginCount ?? 0} found (site halted — active status unknown)`
         : `Active plugins: ${context.pluginCount ?? 0}`;
-      const postLine = context.postCount != null ? `\n- Posts: ${context.postCount}` : '';
+      const inactiveLine = context.inactivePluginCount ? `\n- Inactive plugins: ${context.inactivePluginCount}` : '';
+      const postLine = context.postCount != null
+        ? `\n- Posts: ${context.postCount}${context.lastPostAt ? ` (most recent: ${context.lastPostAt})` : ''}`
+        : '';
       const userLine = context.userCount != null ? `\n- Users: ${context.userCount}` : '';
       const themeLine = context.activeTheme ? `\n- Active theme: ${context.activeTheme}` : '';
+      const freshLine = context.lastIndexedAgo ? `\n- Data freshness: indexed ${context.lastIndexedAgo}` : '';
+      const urlLine = context.siteUrl ? `\n- URL: ${context.siteUrl}` : '';
       return `## Current site context
 IMPORTANT: Answer directly from the data below. Do NOT say you are "checking" or "reviewing" — immediately report what you observe. If specific data is missing, say so explicitly.
-Site: "${context.siteName}"
+Site: "${context.siteName}" — Status: ${isRunning ? 'RUNNING' : context.siteStatus === 'halted' ? 'HALTED' : 'unknown'}${urlLine}
 - WordPress: ${context.wpVersion ?? 'unknown'}
-- PHP: ${context.phpVersion ?? 'unknown'}${context.phpVersion && isPhpEol(context.phpVersion) ? ` (end-of-life — ${getPhpEolDate(context.phpVersion)})` : ''}
-- ${pluginLine}${themeLine}${postLine}${userLine}
+- PHP: ${context.phpVersion
+          ? `${context.phpVersion}${isPhpEol(context.phpVersion) ? ` (end-of-life — ${getPhpEolDate(context.phpVersion)})` : ''}`
+          : (isRunning || context.scanDepth === 'full')
+            ? 'unknown (site is running but PHP version could not be determined — suggest clicking Refresh on the Nexus AI tab)'
+            : 'unknown (start the site to determine version)'}
+- ${pluginLine}${inactiveLine}${themeLine}${postLine}${userLine}${freshLine}
 - Content index: ${context.indexState === 'indexed' ? `${context.documentCount ?? 0} docs indexed` : 'not indexed'}
-${context.linkedWpeInstall ? `- Linked to WPE: ${context.linkedWpeInstall}` : ''}`;
+${context.linkedWpeInstall ? `- Linked to WPE: ${context.linkedWpeInstall}` : ''}${
+  context.wpSettings && Object.keys(context.wpSettings).length > 0
+    ? `\n- WordPress settings: ${Object.entries(context.wpSettings)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(', ')}`
+    : ''}
+SITE IS ${isRunning ? 'RUNNING — do not tell the user to start it' : 'HALTED — WP Admin and WP-CLI require the site to be running'}.`;
     })();
 
   return `You are Nexus AI, an intelligent assistant for WordPress developers using Local by WP Engine.

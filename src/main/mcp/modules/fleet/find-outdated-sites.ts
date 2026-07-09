@@ -11,7 +11,6 @@
  */
 import { McpToolHandler, McpToolResult } from '../../types';
 import { groupByVersion, compareVersions } from './version-utils';
-import { fleetFreshnessWarning } from '../../../twin/twin-helpers';
 
 interface SiteRecord {
   id: string;
@@ -119,11 +118,13 @@ export const findOutdatedSitesHandler: McpToolHandler = {
       lines.push(...formatPluginMismatches(pluginData, graphSites));
     }
 
-    const indexEntries = sourceFilter !== 'wpe'
-      ? services.indexRegistry.listAll().filter((e) => e.structure)
-      : [];
-    const warning = fleetFreshnessWarning(indexEntries);
-    if (warning) lines.push(warning);
+    // Plugin version freshness comes from graph.db last_sync_at, NOT from the
+    // content index (IndexRegistry). Using the content index timestamp was wrong:
+    // reindex_site updates LanceDB embeddings but does NOT refresh plugin versions.
+    // Plugin versions are updated by WPE metadata sync (WpeRefreshScheduler) and
+    // CAPI sync (WPESyncService) — both write to graph.db sites.last_sync_at.
+    const syncWarning = pluginSyncFreshnessWarning(graphService, sourceFilter);
+    if (syncWarning) lines.push(syncWarning);
 
     return ok(lines.join('\n'));
   },
@@ -246,4 +247,49 @@ function formatPluginMismatches(
 
 function ok(text: string): McpToolResult {
   return { content: [{ type: 'text', text }] };
+}
+
+/**
+ * Check plugin data freshness using graph.db last_sync_at — the correct
+ * source for plugin version data. IndexRegistry/LanceDB timestamps are for
+ * content embeddings, not plugin versions, and suggest the wrong remediation.
+ */
+function pluginSyncFreshnessWarning(graphService: any, sourceFilter: string): string | null {
+  if (!graphService?.getDb) return null;
+  try {
+    const db = graphService.getDb();
+    if (!db) return null;
+
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    // Check the oldest last_sync_at across relevant sites
+    const q = sourceFilter === 'wpe'
+      ? "SELECT MIN(last_sync_at) as oldest, COUNT(*) as total, COUNT(CASE WHEN last_sync_at IS NULL THEN 1 END) as never_synced FROM sites WHERE source='wpe' AND is_active=1"
+      : sourceFilter === 'local'
+      ? "SELECT MIN(last_sync_at) as oldest, COUNT(*) as total, COUNT(CASE WHEN last_sync_at IS NULL THEN 1 END) as never_synced FROM sites WHERE source='local' AND is_active=1"
+      : "SELECT MIN(last_sync_at) as oldest, COUNT(*) as total, COUNT(CASE WHEN last_sync_at IS NULL THEN 1 END) as never_synced FROM sites WHERE is_active=1";
+
+    const row = db.prepare(q).get() as { oldest: number | null; total: number; never_synced: number } | undefined;
+    if (!row || row.total === 0) return null;
+
+    if (row.never_synced > 0) {
+      return `> ℹ️ ${row.never_synced} of ${row.total} sites have never been synced — plugin data may be missing. ` +
+        `Enable "Site info updates" in Nexus AI → Settings to schedule automatic syncs.`;
+    }
+
+    if (!row.oldest) return null;
+    const ageMs = now - row.oldest;
+    const ageDays = Math.floor(ageMs / DAY_MS);
+
+    // Only warn if stalest site is > 2 days old (WPE syncs every 4h when enabled)
+    if (ageDays >= 2) {
+      return `> ℹ️ Plugin data for some sites is ${ageDays}d old. ` +
+        `Enable "Site info updates" in Nexus AI → Settings to schedule automatic SSH syncs, ` +
+        `or call \`wpe_site_deep_refresh\` for specific installs.`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
