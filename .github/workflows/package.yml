@@ -62,6 +62,10 @@ jobs:
             echo "✅ Model downloaded and saved to R2 cache"
           fi
 
+      - name: Setup MSVC (Windows only)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build
         run: npm run build
 
