@@ -19,7 +19,7 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             arch: x64
-          - os: windows-latest
+          - os: windows-2022
             platform: win32
             arch: x64
 
@@ -68,19 +68,8 @@ jobs:
 
       - name: Configure node-gyp for Windows
         if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          if (Test-Path $vswherePath) {
-            $vsInstalls = & $vswherePath -all -format json | ConvertFrom-Json
-            Write-Host "VS installs found: $($vsInstalls.Count)"
-            foreach ($vs in $vsInstalls) { Write-Host "  $($vs.displayName) @ $($vs.installationPath)" }
-          } else {
-            Write-Host "WARNING: vswhere not found at expected path"
-          }
-          "VSWHERE=$vswherePath" >> $env:GITHUB_ENV
-          "GYP_MSVS_VERSION=2022" >> $env:GITHUB_ENV
-          npm config set msvs_version 2022
+        shell: cmd
+        run: npm config set msvs_version 2022
 
       - name: Build
         run: npm run build
