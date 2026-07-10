@@ -2772,9 +2772,10 @@ Answer:`,
           if (!wpeSite.post_count || wpeSite.post_count < validated.minPostCount) matches = false;
         }
 
-        // Min user count filter
-        if (matches && validated?.minUserCount) {
-          if (!wpeSite.user_count || wpeSite.user_count < validated.minUserCount) matches = false;
+        // Min user count filter — query users table (sites.user_count is not populated for WPE)
+        if (matches && validated?.minUserCount && db) {
+          const row = db.prepare(`SELECT COUNT(*) as c FROM users WHERE site_id = ?`).get(wpeSite.id) as { c: number } | undefined;
+          if (!row || row.c < validated.minUserCount) matches = false;
         }
 
         // Stale post filter
@@ -2806,8 +2807,9 @@ Answer:`,
         if (matches && validated?.maxPostCount != null) {
           if (wpeSite.post_count != null && wpeSite.post_count >= validated.maxPostCount) matches = false;
         }
-        if (matches && validated?.maxUserCount != null) {
-          if (wpeSite.user_count != null && wpeSite.user_count >= validated.maxUserCount) matches = false;
+        if (matches && validated?.maxUserCount != null && db) {
+          const row = db.prepare(`SELECT COUNT(*) as c FROM users WHERE site_id = ?`).get(wpeSite.id) as { c: number } | undefined;
+          if (row && row.c >= validated.maxUserCount) matches = false;
         }
 
         // P1: pluginVersion

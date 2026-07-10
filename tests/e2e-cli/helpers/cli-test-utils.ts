@@ -88,26 +88,31 @@ export async function getLocalSites(): Promise<Array<{ name: string; status: str
 }
 
 /**
- * Known fixture site used by WP-CLI and export tests.
- * Prefer this over arbitrary user sites to avoid names with spaces.
- */
-const PREFERRED_TEST_SITE = process.env.CLI_E2E_TEST_SITE ?? 'nexus-e2e-cli-test-site';
-
-/**
  * Get a running local site suitable for CLI tests.
- * Prefers the e2e fixture site; falls back to any running site WITHOUT spaces in the name.
+ * When CLI_E2E_TEST_SITE is set (by globalSetup after WP-CLI validation), prefers that site.
+ * Falls back to any running site WITHOUT spaces in the name.
  * Sites with spaces in their names break CLI argument parsing when interpolated into strings.
+ *
+ * NOTE: No hardcoded fallback site name. If CLI_E2E_TEST_SITE is not set, the fixture failed
+ * WP-CLI validation in setup.ts and should not be used for WP-CLI tests.
  */
 export async function getRunningSite(): Promise<{ name: string; status: string; id: string } | null> {
   const sites = await getLocalSites();
   const running = sites.filter((s) => s.status === 'running' && s.name);
 
-  // 1. Prefer the known fixture site
-  const fixture = running.find((s) => s.name === PREFERRED_TEST_SITE);
-  if (fixture) return fixture;
+  // 1. Prefer the validated fixture site (only set when WP-CLI confirmed working in globalSetup)
+  const preferredName = process.env.CLI_E2E_TEST_SITE;
+  if (preferredName) {
+    const fixture = running.find((s) => s.name === preferredName);
+    if (fixture) return fixture;
+  }
 
-  // 2. Fall back to any running site with no spaces (safe for CLI string interpolation)
-  return running.find((s) => !s.name.includes(' ')) || null;
+  // 2. Fall back to any running site with no spaces (safe for CLI string interpolation),
+  //    excluding sites that setup.ts flagged as WP-CLI-broken.
+  const brokenSites = new Set(
+    (process.env.CLI_E2E_WP_BROKEN_SITES ?? '').split(',').filter(Boolean),
+  );
+  return running.find((s) => !s.name.includes(' ') && !brokenSites.has(s.name)) || null;
 }
 
 /**
