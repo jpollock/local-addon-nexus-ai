@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { ContentPipeline } from '../../src/main/content/ContentPipeline';
-import { VectorStore } from '../../src/main/vector-store/VectorStore';
+import { SqliteVecStore } from '../../src/main/vector-store/SqliteVecStore';
 import { IndexRegistry, RegistryStorage } from '../../src/main/content/IndexRegistry';
 import { MySQLExtractor, SiteConnectionInfo } from '../../src/main/content/MySQLExtractor';
 import { FileScanner } from '../../src/main/content/FileScanner';
@@ -54,7 +54,7 @@ const SITE_INFO: SiteConnectionInfo = {
 
 describe('Error Recovery', () => {
   let tmpDir: string;
-  let vectorStore: VectorStore;
+  let vectorStore: SqliteVecStore;
   let indexRegistry: IndexRegistry;
   let mockExtractor: jest.Mocked<MySQLExtractor>;
   let mockScanner: jest.Mocked<FileScanner>;
@@ -62,7 +62,7 @@ describe('Error Recovery', () => {
 
   beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-recovery-'));
-    vectorStore = new VectorStore(tmpDir);
+    vectorStore = new SqliteVecStore(tmpDir + "/vectors.db");
     await vectorStore.initialize();
 
     indexRegistry = new IndexRegistry(createMockStorage());

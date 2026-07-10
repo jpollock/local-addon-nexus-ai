@@ -69,7 +69,6 @@
     "rebuild": "electron-rebuild -v 37.8.0 -f -w better-sqlite3"
   },
   "dependencies": {
-    "@lancedb/lancedb": "^0.13.0",
     "apache-arrow": ">=13.0.0 <=17.0.0",
     "better-sqlite3": "^11.10.0",
     "commander": "^11.1.0",

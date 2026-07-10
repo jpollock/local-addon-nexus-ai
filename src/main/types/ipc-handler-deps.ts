@@ -94,7 +94,7 @@ export interface IpcHandlerDeps {
   /** Event processor for the graph event queue. */
   eventProcessor: EventProcessor;
 
-  /** Absolute path to the LanceDB vector store directory. */
+  /** Absolute path to the vector store file (vectors.db). */
   vectorDbPath: string;
 
   // ── Optional services ────────────────────────────────────────────────────

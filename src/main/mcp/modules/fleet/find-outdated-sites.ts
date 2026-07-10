@@ -120,7 +120,7 @@ export const findOutdatedSitesHandler: McpToolHandler = {
 
     // Plugin version freshness comes from graph.db last_sync_at, NOT from the
     // content index (IndexRegistry). Using the content index timestamp was wrong:
-    // reindex_site updates LanceDB embeddings but does NOT refresh plugin versions.
+    // reindex_site updates vector embeddings but does NOT refresh plugin versions.
     // Plugin versions are updated by WPE metadata sync (WpeRefreshScheduler) and
     // CAPI sync (WPESyncService) — both write to graph.db sites.last_sync_at.
     const syncWarning = pluginSyncFreshnessWarning(graphService, sourceFilter);
@@ -251,7 +251,7 @@ function ok(text: string): McpToolResult {
 
 /**
  * Check plugin data freshness using graph.db last_sync_at — the correct
- * source for plugin version data. IndexRegistry/LanceDB timestamps are for
+ * source for plugin version data. IndexRegistry/vector store timestamps are for
  * content embeddings, not plugin versions, and suggest the wrong remediation.
  */
 function pluginSyncFreshnessWarning(graphService: any, sourceFilter: string): string | null {

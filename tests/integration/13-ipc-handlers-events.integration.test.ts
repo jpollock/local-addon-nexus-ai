@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { GraphService } from '../../src/main/events/GraphService';
 import { EventProcessor } from '../../src/main/events/EventProcessor';
-import { VectorStore } from '../../src/main/vector-store/VectorStore';
+import { SqliteVecStore } from '../../src/main/vector-store/SqliteVecStore';
 import { EmbeddingService } from '../../src/main/embeddings/EmbeddingService';
 import { IPC_CHANNELS } from '../../src/common/constants';
 import type { EventTimelineEntry, EventStats } from '../../src/common/types';
@@ -55,19 +55,19 @@ describe('Event Tracking IPC Handlers (Sprint 1)', () => {
   let vectorDbPath: string;
   let graphService: GraphService;
   let eventProcessor: EventProcessor;
-  let vectorStore: VectorStore;
+  let vectorStore: SqliteVecStore;
   let embeddingService: EmbeddingService;
 
   beforeAll(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-ipc-events-'));
     graphDbPath = path.join(tmpDir, 'graph.db');
-    vectorDbPath = path.join(tmpDir, 'vectors');
+    vectorDbPath = path.join(tmpDir, 'vectors.db');
 
     // Initialize services
     graphService = new GraphService(graphDbPath);
     await graphService.initialize();
 
-    vectorStore = new VectorStore(vectorDbPath);
+    vectorStore = new SqliteVecStore(vectorDbPath);
     await vectorStore.initialize();
 
     embeddingService = new EmbeddingService(MODELS_DIR);

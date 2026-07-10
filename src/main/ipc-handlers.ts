@@ -1502,7 +1502,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   const filterEngine = new FilterEngine({ graphService, indexRegistry, siteDataBridge: siteData });
 
   // Determine query storage path (alongside vector DB)
-  const queryStoragePath = vectorDbPath.replace(/\/vectors\/?$/, '');
+  const queryStoragePath = vectorDbPath.replace(/[/\\]vectors\.db$/, '');
   const queryStorage = new QueryStorage(queryStoragePath);
   queryStorage.load().catch(err => localLogger.error('[NexusAI] Failed to load saved queries:', err.message));
 
@@ -1613,7 +1613,7 @@ Answer:`,
     ]);
 
     // Normalise content results to ContentSearchResult shape, then deduplicate
-    // by postId — LanceDB stores one row per chunk so the same post can appear
+    // by postId — the vector store stores one row per chunk so the same post can appear
     // multiple times. Keep only the highest-scoring chunk per post.
     const raw = ((rawContentResults as any).results ?? []).map((r: any) => ({
       type: 'content' as const,
@@ -3389,7 +3389,7 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
     }
   });
 
-  // Reset content index: drop all LanceDB vector tables + clear IndexRegistry.
+  // Reset content index: drop all vector store tables + clear IndexRegistry.
   // Leaves graph DB, site metadata, settings, WPE cache, and AI config untouched.
   safeHandle(IPC_CHANNELS.RESET_CONTENT_INDEX, async () => {
     try {
@@ -3416,7 +3416,7 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
   // Factory reset: wipe ALL Nexus AI data — same as `nexus reset --factory`
   // Deletes: IndexRegistry, SiteMetadataCache, Settings, API key status,
   //          Site AI configs, WPE install cache, DB scan cache,
-  //          Graph DB (SQLite), Vector store (LanceDB).
+  //          Graph DB (SQLite), Vector store (sqlite-vec).
   // Survives: API keys (Keychain), WPE OAuth session, telemetry ID.
   // Local MUST be restarted after this — electron-store would recreate files on exit.
   safeHandle(IPC_CHANNELS.FACTORY_RESET, async () => {

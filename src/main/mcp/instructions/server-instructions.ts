@@ -247,7 +247,7 @@ When you need a fleet-wide total, fan out across site twins:
 ### Critical disambiguation
 
 **"Indexed documents" ≠ "posts and pages"**
-- \`fleet_summary\` reports *document count* = LanceDB vector chunks. A single post typically produces 3–6 chunks.
+- \`fleet_summary\` reports *document count* = vector index chunks. A single post typically produces 3–6 chunks.
 - WordPress post/page counts come from \`nexus_get_site_twin\` → \`postCount\` / \`pageCount\`.
 - **Never cite document counts when the user asks about posts, pages, or content volume.**
 - \`fleet_summary\` is for fleet infrastructure overview (indexed site count, chunk counts, integration presence) — not WordPress content metrics.

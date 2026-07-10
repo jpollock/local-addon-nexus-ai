@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { EmbeddingService } from '../../src/main/embeddings/EmbeddingService';
-import { VectorStore } from '../../src/main/vector-store/VectorStore';
+import { SqliteVecStore } from '../../src/main/vector-store/SqliteVecStore';
 import { IndexRegistry } from '../../src/main/content/IndexRegistry';
 import { ToolRegistry } from '../../src/main/mcp/tool-registry';
 import { registerContentTools } from '../../src/main/mcp/modules/content/index';
@@ -74,18 +74,18 @@ describe('Service Initialization', () => {
     );
   });
 
-  test('VectorStore initializes and creates db directory', async () => {
-    const dbPath = path.join(tmpDir, 'vector-boot-test');
-    const store = new VectorStore(dbPath);
+  test('SqliteVecStore initializes and creates db file', async () => {
+    const dbPath = path.join(tmpDir, 'vector-boot-test.db');
+    const store = new SqliteVecStore(dbPath);
     await store.initialize();
     expect(fs.existsSync(dbPath)).toBe(true);
   });
 
-  test('VectorStore rejects operations before initialize()', async () => {
-    const store = new VectorStore(path.join(tmpDir, 'uninit'));
+  test('SqliteVecStore rejects operations before initialize()', async () => {
+    const store = new SqliteVecStore(path.join(tmpDir, 'uninit.db'));
     // Do NOT call initialize()
     await expect(store.listSites()).rejects.toThrow(
-      'VectorStore not initialized. Call initialize() first.',
+      'SqliteVecStore not initialized. Call initialize() first.',
     );
   });
 

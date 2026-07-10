@@ -425,7 +425,7 @@ export class WPESyncService {
 
     // Content indexing does NOT run here.
     // syncInstall is the metadata path only: WP version, plugins, users → graph.db.
-    // Content extraction (posts/pages → LanceDB) runs exclusively via:
+    // Content extraction (posts/pages → vector store) runs exclusively via:
     //   1. indexAllWpeContent() triggered by Operations tab "Index content" button
     //   2. The wpeContentIndex scheduled timer (if wpeContentIndexAutoEnabled = true)
     // This ensures content indexing never runs on app startup or during metadata sync.

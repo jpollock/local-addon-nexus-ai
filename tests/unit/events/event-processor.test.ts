@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { EventProcessor } from '../../../src/main/events/EventProcessor';
 import { GraphService } from '../../../src/main/events/GraphService';
-import { VectorStore } from '../../../src/main/vector-store/VectorStore';
+import type { IVectorStore } from '../../../src/main/vector-store/IVectorStore';
 import { EmbeddingService } from '../../../src/main/embeddings/EmbeddingService';
 import {
   WordPressEvent,
@@ -17,7 +17,7 @@ import {
 describe('EventProcessor', () => {
   let processor: EventProcessor;
   let graphService: GraphService;
-  let vectorStore: VectorStore;
+  let vectorStore: IVectorStore;
   let embeddingService: EmbeddingService;
   let testDbPath: string;
   let testVectorPath: string;
