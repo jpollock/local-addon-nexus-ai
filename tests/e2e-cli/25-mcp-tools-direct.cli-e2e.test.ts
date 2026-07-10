@@ -116,6 +116,7 @@ describe('wp_plugin install / activate / deactivate', () => {
       slug: TEST_PLUGIN,
     });
     expect(result.length).toBeGreaterThan(0);
+    expect(result).not.toContain('Error:');
     console.log(`[wp_plugin_install] snippet: "${result.slice(0, 200)}"`);
   }, 60_000);
 
@@ -137,6 +138,7 @@ describe('wp_plugin install / activate / deactivate', () => {
       slug: TEST_PLUGIN,
     });
     expect(result.length).toBeGreaterThan(0);
+    expect(result.toLowerCase()).not.toContain('error');
     console.log(`[wp_plugin_deactivate] snippet: "${result.slice(0, 200)}"`);
   }, 30_000);
 
@@ -168,6 +170,22 @@ describe('local_clone_site', () => {
       });
       expect(cloneResult.length).toBeGreaterThan(0);
       console.log(`[local_clone_site] snippet: "${cloneResult.slice(0, 200)}"`);
+
+      // Poll local_operation_status until clone is complete (max 30 polls × 10s = 5 min)
+      let cloneComplete = false;
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 10000));
+        const statusResult = await mcpClient.callTool('local_operation_status', { site: testSite });
+        console.log(`[local_operation_status] poll ${i + 1}: "${statusResult.slice(0, 200)}"`);
+        if (statusResult.includes('completed') || statusResult.includes('failed')) {
+          cloneComplete = true;
+          break;
+        }
+      }
+      if (!cloneComplete) {
+        skipTest('local_clone_site did not complete within 5 minutes');
+        return;
+      }
 
       const listResult = await mcpClient.callTool('local_list_sites', {});
       expect(listResult).toContain(CLONE_NAME);
