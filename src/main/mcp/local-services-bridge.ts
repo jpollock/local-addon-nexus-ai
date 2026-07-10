@@ -748,6 +748,9 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       const site = requireSite(siteId);
       const pm = svc('siteProcessManager');
       const dataSvc = svc('siteData');
+      if (!pm) {
+        throw new Error(`Site manager (pm) unavailable for site ${siteId}`);
+      }
       if (!dataSvc?.updateSite) {
         throw new Error('siteData service unavailable — cannot change PHP version');
       }

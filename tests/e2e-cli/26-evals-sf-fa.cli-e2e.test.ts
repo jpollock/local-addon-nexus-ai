@@ -17,6 +17,7 @@ import * as yaml from 'js-yaml';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenAI } from '@google/genai';
 import { describe, it, expect, beforeAll } from '@jest/globals';
+import { skipTest } from './helpers/cli-test-utils';
 import {
   loadConnectionInfo,
   NexusMcpClient,
@@ -99,7 +100,7 @@ async function runAgent(prompt: string) {
 
 function runCaseTest(c: EvalCase): void {
   it(`${c.id}: ${c.description}`, async () => {
-    if (skipAll) return;
+    if (skipAll) { skipTest('API key absent or MCP unreachable'); return; }
 
     const result = await runAgent(c.prompt);
     expect(result.finalText.length).toBeGreaterThan(0);
