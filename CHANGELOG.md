@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.5.1] — 2026-07-10
+
+### Added
+- **Anthropic Claude Fable 5** (`claude-fable-5`) — most capable Anthropic model (GA June 9, 2026).
+  Added to Nexus Chat model picker and AI Gateway catalog.
+- **Anthropic Claude Opus 4.8** (`claude-opus-4-8`) — flagship Anthropic model. Added to model
+  picker and gateway catalog.
+- **Anthropic Claude Sonnet 5** (`claude-sonnet-5`) — balanced Anthropic model. Added to model
+  picker and gateway catalog.
+- **OpenAI GPT-5.6 family** (`gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`) — GA
+  July 9, 2026. Added to gateway routing and default model fallback list.
+- **OpenAI GPT-5.5** (`gpt-5.5`) — added to gateway routing and default fallback list.
+
+### Changed
+- **Claude Sonnet 4.6 and Opus 4.6 restored** — `claude-sonnet-4-6` and `claude-opus-4-6` were
+  inadvertently dropped in the initial model update; both are back in the Anthropic model picker
+  and gateway catalog.
+
+### Removed
+- **Retired Anthropic models** — `claude-sonnet-4-20250514` and `claude-opus-4-20250514` removed
+  from all model lists (retired by Anthropic on June 15, 2026). Existing configurations that
+  reference these model IDs will fall back to the global provider default.
+- **Legacy OpenAI models removed from default picker** — `o3-mini`, `o1`, and `o1-mini` removed
+  from the default model fallback list. They remain in the gateway routing table so existing
+  configurations continue to work.
+
+---
+
 ## [0.5.0] — 2026-07-08
 
 ### Added
