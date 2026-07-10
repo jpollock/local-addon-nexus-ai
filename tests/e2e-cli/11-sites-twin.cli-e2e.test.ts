@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { runCli, getLocalSites, skipTest } from './helpers/cli-test-utils';
+import { runCli, getLocalSites, skipTest, getRunningSite } from './helpers/cli-test-utils';
 
 // ---------------------------------------------------------------------------
 // nexus sites list — unified view (Phase 5)
@@ -152,5 +152,24 @@ describe('nexus sites refresh', () => {
     // Exit 0 whether site is running or not (falls back to filesystem scan)
     expect([0, 1]).toContain(r.exitCode);
     expect(r.output.length).toBeGreaterThan(0);
+  });
+
+  it('@local suffix accepted — same exit code as bare name', async () => {
+    const sites = await getLocalSites();
+    if (sites.length === 0) { skipTest('No local sites'); return; }
+    const name = sites[0].name;
+    const bareResult  = await runCli(`sites refresh ${name}`, { timeout: 60000 });
+    const localResult = await runCli(`sites refresh ${name}@local`, { timeout: 60000 });
+    expect(localResult.exitCode).toBe(bareResult.exitCode);
+    expect(localResult.output).toContain(name);
+  });
+
+  it('--force with @local suffix triggers enrichment on running site', async () => {
+    const site = await getRunningSite();
+    if (!site) { skipTest('No running local site (CLI_E2E_TEST_SITE not set)'); return; }
+    const r = await runCli(`sites refresh ${site.name}@local --force`, { timeout: 90000 });
+    expect(r.exitCode).toBe(0);
+    // --force on a running site always succeeds and prints the site name
+    expect(r.output).toContain(site.name);
   });
 });
