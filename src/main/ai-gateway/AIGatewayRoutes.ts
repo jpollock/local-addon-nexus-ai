@@ -34,8 +34,11 @@ type ChatProvider = 'anthropic' | 'openai' | 'google';
  * Falls back to the globally configured provider for unknown models.
  */
 const MODEL_PROVIDER_MAP: Record<string, ChatProvider> = {
-  // Anthropic — current models (as of May 2026)
-  'claude-opus-4-7':            'anthropic', // flagship
+  // Anthropic — current models (as of July 2026)
+  'claude-fable-5':             'anthropic', // most capable (GA June 9 2026)
+  'claude-opus-4-8':            'anthropic', // flagship
+  'claude-sonnet-5':            'anthropic', // balanced
+  'claude-opus-4-7':            'anthropic',
   'claude-opus-4-6':            'anthropic',
   'claude-sonnet-4-6':          'anthropic',
   'claude-haiku-4-5-20251001':  'anthropic',
@@ -44,10 +47,15 @@ const MODEL_PROVIDER_MAP: Record<string, ChatProvider> = {
   'claude-sonnet-4-5-20250929': 'anthropic',
   'claude-opus-4-5-20251101':   'anthropic',
   'claude-opus-4-1-20250805':   'anthropic',
-  // Anthropic — deprecated (retire June 15 2026)
-  'claude-sonnet-4-20250514':   'anthropic',
-  'claude-opus-4-20250514':     'anthropic',
+  // NOTE: claude-sonnet-4-20250514 and claude-opus-4-20250514 removed (retired June 15 2026)
 
+  // OpenAI — GPT-5.6 family (GA July 2026)
+  'gpt-5.6':          'openai', // alias for gpt-5.6-sol
+  'gpt-5.6-sol':      'openai',
+  'gpt-5.6-terra':    'openai',
+  'gpt-5.6-luna':     'openai',
+  // OpenAI — GPT-5.5
+  'gpt-5.5':          'openai',
   // OpenAI — GPT-4.1 family
   'gpt-4.1':          'openai',
   'gpt-4.1-mini':     'openai',
@@ -55,15 +63,14 @@ const MODEL_PROVIDER_MAP: Record<string, ChatProvider> = {
   // OpenAI — GPT-4o family
   'gpt-4o':           'openai',
   'gpt-4o-mini':      'openai',
-  // OpenAI — reasoning models (current)
+  // OpenAI — reasoning models
   'o4-mini':          'openai',
   'o3':               'openai',
-  // OpenAI — reasoning models (deprecated, kept for existing integrations)
   'o3-mini':          'openai',
   'o1':               'openai',
   'o1-mini':          'openai',
 
-  // Google — Gemini 2.5 (stable, as of May 2026 per ai.google.dev/gemini-api/docs/models)
+  // Google — Gemini 2.5 (stable)
   'gemini-2.5-pro':        'google',
   'gemini-2.5-flash':      'google',
   'gemini-2.5-flash-lite': 'google',
@@ -75,19 +82,26 @@ const MODEL_PROVIDER_MAP: Record<string, ChatProvider> = {
 /** Models surfaced in /models by provider */
 const CATALOG = {
   anthropic: [
+    { id: 'claude-fable-5',            label: 'Claude Fable 5',    tier: 'powerful' },
+    { id: 'claude-opus-4-8',           label: 'Claude Opus 4.8',   tier: 'powerful' },
+    { id: 'claude-sonnet-5',           label: 'Claude Sonnet 5',   tier: 'balanced' },
     { id: 'claude-opus-4-7',           label: 'Claude Opus 4.7',   tier: 'powerful' },
-    { id: 'claude-opus-4-6',           label: 'Claude Opus 4.6',   tier: 'powerful' },
     { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6', tier: 'balanced' },
     { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  tier: 'fast'     },
   ],
   openai: [
-    { id: 'gpt-4.1',      label: 'GPT-4.1',      tier: 'powerful'  },
-    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', tier: 'balanced'  },
-    { id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', tier: 'fast'      },
-    { id: 'gpt-4o',       label: 'GPT-4o',        tier: 'powerful'  },
-    { id: 'gpt-4o-mini',  label: 'GPT-4o Mini',   tier: 'balanced'  },
-    { id: 'o4-mini',      label: 'o4-mini',        tier: 'reasoning' },
-    { id: 'o3',           label: 'o3',              tier: 'reasoning' },
+    { id: 'gpt-5.6',       label: 'GPT-5.6',        tier: 'powerful'  },
+    { id: 'gpt-5.6-sol',   label: 'GPT-5.6 Sol',    tier: 'powerful'  },
+    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra',  tier: 'balanced'  },
+    { id: 'gpt-5.6-luna',  label: 'GPT-5.6 Luna',   tier: 'fast'      },
+    { id: 'gpt-5.5',       label: 'GPT-5.5',         tier: 'powerful'  },
+    { id: 'gpt-4.1',       label: 'GPT-4.1',         tier: 'powerful'  },
+    { id: 'gpt-4.1-mini',  label: 'GPT-4.1 Mini',   tier: 'balanced'  },
+    { id: 'gpt-4.1-nano',  label: 'GPT-4.1 Nano',   tier: 'fast'      },
+    { id: 'gpt-4o',        label: 'GPT-4o',           tier: 'powerful'  },
+    { id: 'gpt-4o-mini',   label: 'GPT-4o Mini',     tier: 'balanced'  },
+    { id: 'o4-mini',       label: 'o4-mini',           tier: 'reasoning' },
+    { id: 'o3',            label: 'o3',                tier: 'reasoning' },
   ],
   openai_image: [
     { id: 'gpt-image-1',      label: 'GPT Image 1',      tier: 'image' },

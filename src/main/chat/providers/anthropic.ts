@@ -9,7 +9,7 @@ export class AnthropicProvider implements AIProvider {
   readonly id = 'anthropic';
   readonly displayName = 'Anthropic';
   readonly requiresApiKey = true;
-  readonly defaultModels = ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-6'];
+  readonly defaultModels = ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
 
   async *streamChat(
     messages: ChatMessage[],

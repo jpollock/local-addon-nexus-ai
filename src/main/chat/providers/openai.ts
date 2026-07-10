@@ -8,7 +8,7 @@ export class OpenAIProvider implements AIProvider {
   readonly id = 'openai';
   readonly displayName = 'OpenAI';
   readonly requiresApiKey = true;
-  readonly defaultModels = ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o4-mini', 'o3', 'o3-mini', 'o1', 'o1-mini'];
+  readonly defaultModels = ['gpt-5.6', 'gpt-5.5', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o4-mini', 'o3'];
 
   async *streamChat(
     messages: ChatMessage[],
