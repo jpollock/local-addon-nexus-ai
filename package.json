@@ -45,6 +45,7 @@
     "pretest:e2e": "echo 'Requires Local running with Nexus AI addon loaded'",
     "test:cli-e2e": "jest --config tests/e2e-cli/jest.cli-e2e.config.js",
     "test:cli-e2e:verbose": "jest --config tests/e2e-cli/jest.cli-e2e.config.js --verbose",
+    "test:evals": "jest --config tests/e2e-cli/jest.evals.config.js",
     "pretest:cli-e2e": "echo 'Requires PRODUCTION Local running (/Applications/Local.app)'",
     "test:stress": "jest --config tests/stress/jest.stress.config.js",
     "test:stress:verbose": "jest --config tests/stress/jest.stress.config.js --verbose",
