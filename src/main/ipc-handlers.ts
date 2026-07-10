@@ -3460,10 +3460,14 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
         try { if (fs.existsSync(dbPath)) { fs.unlinkSync(dbPath); deleted++; } } catch { /* best effort */ }
       }
 
-      // Vector store
+      // Vector store (legacy LanceDB directory + current sqlite-vec file)
       const vectorsDir = path.join(dataDir, prefix, 'vectors');
       try {
         if (fs.existsSync(vectorsDir)) { fs.rmSync(vectorsDir, { recursive: true, force: true }); deleted++; }
+      } catch { /* best effort */ }
+      const vectorsDbPath = path.join(dataDir, prefix, 'vectors.db');
+      try {
+        if (fs.existsSync(vectorsDbPath)) { fs.unlinkSync(vectorsDbPath); deleted++; }
       } catch { /* best effort */ }
 
       localLogger.info(`[NexusAI] Factory reset: ${deleted} items deleted`);
