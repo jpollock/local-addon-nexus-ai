@@ -86,6 +86,7 @@ const CATALOG = {
     { id: 'claude-opus-4-8',           label: 'Claude Opus 4.8',   tier: 'powerful' },
     { id: 'claude-sonnet-5',           label: 'Claude Sonnet 5',   tier: 'balanced' },
     { id: 'claude-opus-4-7',           label: 'Claude Opus 4.7',   tier: 'powerful' },
+    { id: 'claude-opus-4-6',           label: 'Claude Opus 4.6',   tier: 'powerful' },
     { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6', tier: 'balanced' },
     { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  tier: 'fast'     },
   ],
