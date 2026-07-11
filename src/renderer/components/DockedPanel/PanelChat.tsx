@@ -243,12 +243,10 @@ export class PanelChat extends React.Component<Props, State> {
     this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM, this.streamListener);
 
     // Listen for action count updates
-    this.actionListener = (_event: any, sessionId: string, data: { sessionId: string; actionCount: number }) => {
+    this.actionListener = (_event: any, sessionId: string, _data: { sessionId: string; actionCount: number }) => {
       if (sessionId !== this.state.activeSessionId) return;
       // Keep local actionCount in sync so persistSession writes the correct value.
       this.setState((s) => ({ actionCount: s.actionCount + 1 }));
-      // Trigger sidebar badge refresh — onSessionSaved with empty args is the signal
-      this.props.onSessionSaved({} as any, []);
     };
     this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_SESSION_ACTION_RECORDED, this.actionListener);
 
@@ -484,11 +482,11 @@ export class PanelChat extends React.Component<Props, State> {
         timestamp: Date.now(),
       }));
 
-    this.props.onSessionSaved(session, chatMessages);
     await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_SAVE, {
       session,
       messages: chatMessages,
     });
+    this.props.onSessionSaved(session, chatMessages);
   }
 
   handleStop() {
