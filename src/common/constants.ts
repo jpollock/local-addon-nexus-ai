@@ -145,6 +145,7 @@ export const IPC_CHANNELS = {
   CHAT_SESSION_DELETE: `${ADDON_PREFIX}:sessions:delete`,
   CHAT_SESSION_ACTION_RECORDED: `${ADDON_PREFIX}:sessions:action-recorded`,
   ACTIVITY_FILTER: `${ADDON_PREFIX}:activity:filter`,
+  OPEN_CHAT_SESSION: `${ADDON_PREFIX}:open-session`,
 
   // WPE Site Sync (Phase 1)
   WPE_SYNC_ALL: `${ADDON_PREFIX}:wpe:sync-all`,

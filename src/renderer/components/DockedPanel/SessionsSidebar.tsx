@@ -277,7 +277,16 @@ export class SessionsSidebar extends React.Component<Props, State> {
                   session.actionCount > 0
                     ? React.createElement(
                         'span',
-                        { style: styles.actionBadge },
+                        {
+                          style: { ...styles.actionBadge, cursor: 'pointer', textDecoration: 'underline' },
+                          onClick: (e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            this.props.electron.ipcRenderer.send(IPC_CHANNELS.ACTIVITY_FILTER, {
+                              sessionId: session.id,
+                              sessionTitle: session.title,
+                            });
+                          },
+                        },
                         `${session.actionCount} actions`,
                       )
                     : null,

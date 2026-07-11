@@ -1,4 +1,5 @@
 import React from 'react';
+import { IPC_CHANNELS } from '../../../common/constants';
 import { DockedPanel } from './DockedPanel';
 import { PanelChat } from './PanelChat';
 import { ContextSelector } from './ContextSelector';
@@ -39,6 +40,8 @@ function readState(): ContainerState {
 }
 
 export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
+  private openSessionListener: ((_: any, payload: { sessionId: string }) => void) | null = null;
+
   constructor(props: ContainerProps) {
     super(props);
     this.state = readState();
@@ -62,10 +65,19 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
 
   componentDidMount() {
     this.syncReflowStyle();
+    // Deep-link: open panel and activate a specific session from the Activity tab
+    this.openSessionListener = (_: any, { sessionId }: { sessionId: string }) => {
+      this.setState({ open: true, activeSessionId: sessionId });
+    };
+    this.props.electron.ipcRenderer.on(IPC_CHANNELS.OPEN_CHAT_SESSION, this.openSessionListener);
   }
 
   componentWillUnmount() {
     this.removeReflowStyle();
+    if (this.openSessionListener) {
+      this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.OPEN_CHAT_SESSION, this.openSessionListener);
+      this.openSessionListener = null;
+    }
   }
 
   private syncReflowStyle() {
