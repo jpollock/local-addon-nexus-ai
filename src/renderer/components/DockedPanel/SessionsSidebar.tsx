@@ -5,6 +5,7 @@ import type { ChatSession } from '../../../common/types';
 interface Props {
   electron: any;
   activeSessionId: string | null;
+  version?: number;
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
 }
@@ -142,6 +143,12 @@ export class SessionsSidebar extends React.Component<Props, State> {
 
   componentDidMount() {
     this.loadSessions();
+  }
+
+  componentDidUpdate(prevProps: Props) {
+    if (prevProps.version !== this.props.version) {
+      this.loadSessions();
+    }
   }
 
   async loadSessions() {

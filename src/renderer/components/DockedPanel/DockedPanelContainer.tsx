@@ -15,6 +15,7 @@ interface ContainerState {
   size: PanelSize;
   activeSessionId: string | null;
   showSessions: boolean;
+  sessionListVersion: number;
 }
 
 const STORAGE_KEY = 'nexus-panel-state';
@@ -35,10 +36,11 @@ function readState(): ContainerState {
         size: parsed.size === 'full' ? 'full' : 'docked',
         activeSessionId: parsed.activeSessionId ?? null,
         showSessions: false,
+        sessionListVersion: 0,
       };
     }
   } catch { /* ignore */ }
-  return { open: false, size: 'docked', activeSessionId: null, showSessions: false };
+  return { open: false, size: 'docked', activeSessionId: null, showSessions: false, sessionListVersion: 0 };
 }
 
 export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
@@ -129,20 +131,21 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   render() {
-    const { open, size, activeSessionId, showSessions } = this.state;
+    const { open, size, activeSessionId, showSessions, sessionListVersion } = this.state;
 
     const panelContent = React.createElement(PanelChat, {
       electron: this.props.electron,
       sessionId: activeSessionId,
       selectedSiteIds: [],
       onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
-      onSessionSaved: (_session: any, _messages: any) => { /* sidebar will refresh on next open */ },
+      onSessionSaved: () => this.setState((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
     });
 
     const sessionsSidebar = size === 'full' || showSessions
       ? React.createElement(SessionsSidebar, {
           electron: this.props.electron,
           activeSessionId,
+          version: sessionListVersion,
           onSelectSession: this.setActiveSession,
           onNewSession: () => this.setActiveSession(null),
         })

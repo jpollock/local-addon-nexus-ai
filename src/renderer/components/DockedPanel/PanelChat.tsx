@@ -58,7 +58,7 @@ const styles = {
     borderRadius: '12px 12px 2px 12px',
     padding: '8px 12px',
     fontSize: 13,
-    maxWidth: '80%',
+    maxWidth: 480,
     wordBreak: 'break-word' as const,
   },
   assistantBubble: {
@@ -68,7 +68,7 @@ const styles = {
     borderRadius: '2px 12px 12px 12px',
     padding: '8px 12px',
     fontSize: 13,
-    maxWidth: '90%',
+    maxWidth: 580,
     wordBreak: 'break-word' as const,
     whiteSpace: 'pre-wrap' as const,
   },
@@ -115,13 +115,6 @@ const styles = {
     alignSelf: 'flex-end',
     height: 36,
   }),
-  thinkingDots: {
-    color: '#868d98',
-    fontSize: 18,
-    letterSpacing: 3,
-    alignSelf: 'flex-start',
-    padding: '4px 14px',
-  },
 };
 
 /** Fire-and-forget telemetry helper. Never throws. */
@@ -150,6 +143,65 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 function providerLabel(id: string): string {
   return PROVIDER_LABELS[id] ?? id;
+}
+
+const TOOL_NAMES: Record<string, string> = {
+  fleet_overview: 'Fleet Overview',
+  fleet_search: 'Fleet Search',
+  fleet_sql: 'Fleet SQL Query',
+  fleet_health_summary: 'Fleet Health Check',
+  fleet_filter: 'Fleet Filter',
+  fleet_summary: 'Fleet Summary',
+  nexus_list_sites: 'List Sites',
+  nexus_site_audit: 'Site Audit',
+  nexus_site_refresh: 'Refresh Site',
+  get_site_structure: 'Get Site Structure',
+  get_site_health: 'Site Health',
+  wp_plugin_list: 'List Plugins',
+  wp_plugin_update: 'Update Plugin',
+  wp_plugin_install: 'Install Plugin',
+  wp_plugin_activate: 'Activate Plugin',
+  wp_plugin_deactivate: 'Deactivate Plugin',
+  wp_core_update: 'Update WordPress Core',
+  wp_core_version: 'Check WordPress Version',
+  wp_site_health: 'Site Health Check',
+  wp_eval: 'Run PHP Code',
+  wp_search_replace: 'Search & Replace Database',
+  local_wpe_push: 'Push to WP Engine',
+  local_wpe_pull: 'Pull from WP Engine',
+  local_clone_site: 'Clone Site',
+  local_delete_site: 'Delete Local Site',
+  local_export_site: 'Export Site',
+  wpe_promote_environment: 'Promote Environment',
+  wpe_delete_install: 'Delete WP Engine Install',
+  wpe_delete_site: 'Delete WP Engine Site',
+  clean_database_items: 'Clean Database',
+  scan_database_health: 'Scan Database Health',
+  reindex_site: 'Reindex Site',
+  search_site_content: 'Search Site Content',
+};
+
+const TOOL_EFFECTS: Record<string, string> = {
+  local_wpe_push: 'Overwrites the live WP Engine environment with local files.',
+  local_wpe_pull: 'Overwrites local site with files from WP Engine.',
+  local_delete_site: 'Permanently removes the local site and all its files.',
+  wpe_delete_install: 'Permanently deletes a WP Engine environment and all its content.',
+  wpe_delete_site: 'Permanently deletes a WP Engine site and all its installs.',
+  wpe_promote_environment: 'Overwrites the destination environment with source content.',
+  clean_database_items: 'Permanently removes selected database rows.',
+  wp_core_update: 'Updates WordPress core files on the site.',
+  wp_plugin_install: 'Installs a new plugin on the site.',
+  wp_plugin_update: 'Updates plugin files on the site.',
+  wp_search_replace: 'Modifies data across the entire WordPress database.',
+  wp_eval: 'Executes PHP code directly on the site.',
+};
+
+function toolDisplayName(name: string): string {
+  return TOOL_NAMES[name] ?? name.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function toolEffect(name: string): string {
+  return TOOL_EFFECTS[name] ?? `Runs ${toolDisplayName(name)} on your WordPress sites.`;
 }
 
 export class PanelChat extends React.Component<Props, State> {
@@ -504,9 +556,9 @@ export class PanelChat extends React.Component<Props, State> {
         }
         return React.createElement(ActionCard, {
           key: tc.id,
-          title: tc.name,
-          effect: `Tool: ${tc.name}`,
-          destructive: false,
+          title: toolDisplayName(tc.name),
+          effect: toolEffect(tc.name),
+          destructive: tc.name in TOOL_EFFECTS,
           onConfirm: () => {
             this.handleApprove(tc.id);
             try { track(this.props.electron.ipcRenderer, 'nexus_panel_action_confirmed', { destructive: false }); } catch (_) {}
@@ -516,10 +568,16 @@ export class PanelChat extends React.Component<Props, State> {
         });
       });
 
+    const bubbleContent = msg.content
+      ? msg.content
+      : msg.streaming
+      ? React.createElement('span', { style: { color: '#868d98', letterSpacing: '0.15em', opacity: 0.7 } }, '· · ·')
+      : '';
+
     return React.createElement(
       'div',
       { key: msg.id },
-      React.createElement('div', { style: bubbleStyle }, msg.content || (msg.streaming ? '…' : '')),
+      React.createElement('div', { style: bubbleStyle }, bubbleContent),
       ...toolCards,
     );
   }
@@ -545,9 +603,6 @@ export class PanelChat extends React.Component<Props, State> {
             )
           : null,
         messages.map((m) => this.renderMessage(m)),
-        streaming && !messages.some((m) => m.streaming && m.content)
-          ? React.createElement('div', { style: styles.thinkingDots }, '···')
-          : null,
       ),
       offline
         ? React.createElement(

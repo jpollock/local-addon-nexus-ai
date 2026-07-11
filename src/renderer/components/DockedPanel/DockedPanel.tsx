@@ -244,7 +244,6 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
               {
                 style: iconBtnStyle(this.hov('expand')),
                 onClick: () => onSetSize('full'),
-                title: 'Expand to full screen',
                 'aria-label': 'Expand to full screen',
                 onMouseEnter: this.onEnter('expand'),
                 onMouseLeave: this.onLeave(),
@@ -256,7 +255,6 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
               {
                 style: iconBtnStyle(this.hov('contract')),
                 onClick: () => onSetSize('docked'),
-                title: 'Back to docked',
                 'aria-label': 'Back to docked',
                 onMouseEnter: this.onEnter('contract'),
                 onMouseLeave: this.onLeave(),
@@ -269,7 +267,6 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           {
             style: iconBtnStyle(this.hov('collapse')),
             onClick: onClose,
-            title: 'Collapse to bubble',
             'aria-label': 'Collapse to bubble',
             onMouseEnter: this.onEnter('collapse'),
             onMouseLeave: this.onLeave(),
