@@ -108,7 +108,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   render() {
-    const { open, size, activeSessionId, selectedSiteIds } = this.state;
+    const { open, size, activeSessionId, selectedSiteIds, showSessions } = this.state;
 
     const panelContent = React.createElement(
       'div',
@@ -133,7 +133,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       }),
     );
 
-    const sessionsSidebar = size === 'full'
+    const sessionsSidebar = size === 'full' || showSessions
       ? React.createElement(SessionsSidebar, {
           electron: this.props.electron,
           activeSessionId,
@@ -151,6 +151,8 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
         onClose: this.closePanel,
         onSetSize: this.setSize,
         sessionsSidebar,
+        showSessions,
+        onToggleSessions: () => this.setState((s) => ({ showSessions: !s.showSessions })),
       },
       panelContent,
     );

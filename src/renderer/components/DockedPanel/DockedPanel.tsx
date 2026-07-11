@@ -10,6 +10,8 @@ export interface Props {
   onSetSize: (size: PanelSize) => void;
   children?: React.ReactNode;
   sessionsSidebar?: React.ReactNode;
+  onToggleSessions?: () => void;
+  showSessions?: boolean;
 }
 
 const PANEL_WIDTH = 384;
@@ -91,12 +93,13 @@ const styles = {
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column' as const,
+    position: 'relative' as const,
   },
 };
 
 export class DockedPanel extends React.Component<Props> {
   render() {
-    const { open, size, onOpen, onClose, onSetSize, children, sessionsSidebar } = this.props;
+    const { open, size, onOpen, onClose, onSetSize, children, sessionsSidebar, onToggleSessions, showSessions } = this.props;
 
     if (!open) {
       return React.createElement(
@@ -131,6 +134,16 @@ export class DockedPanel extends React.Component<Props> {
         React.createElement(
           'div',
           { style: styles.headerControls },
+          // Clock / sessions toggle — only in docked mode
+          !isFull ? React.createElement(
+            'button',
+            {
+              style: { ...styles.iconBtn, color: showSessions ? '#29b6cf' : '#868d98' },
+              onClick: onToggleSessions,
+              title: 'Chat history',
+            },
+            '◷',
+          ) : null,
           // Expand/compress toggle
           React.createElement(
             'button',
@@ -171,7 +184,18 @@ export class DockedPanel extends React.Component<Props> {
               children ?? null,
             ),
           )
-        : React.createElement('div', { style: styles.panelBody }, children ?? null),
+        : React.createElement(
+            'div',
+            { style: styles.panelBody },
+            showSessions
+              ? React.createElement(
+                  'div',
+                  { style: { position: 'absolute' as const, inset: 0, background: '#23272f', zIndex: 1 } },
+                  sessionsSidebar ?? null,
+                )
+              : null,
+            children ?? null,
+          ),
     );
   }
 }
