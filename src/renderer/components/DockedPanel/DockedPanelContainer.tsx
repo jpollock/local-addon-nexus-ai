@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-const React = require('react');
+import React from 'react';
 
 type PanelSize = 'docked' | 'full';
 
@@ -27,7 +26,7 @@ function readState(): ContainerState {
   return { open: false, size: 'docked', activeSessionId: null };
 }
 
-export class DockedPanelContainer extends React.Component<any, ContainerState> {
+export class DockedPanelContainer extends React.Component<{}, ContainerState> {
   constructor(props: {}) {
     super(props);
     this.state = readState();
