@@ -1,4 +1,5 @@
 import React from 'react';
+import { DockedPanel } from './DockedPanel';
 
 type PanelSize = 'docked' | 'full';
 
@@ -97,13 +98,16 @@ export class DockedPanelContainer extends React.Component<{}, ContainerState> {
 
   render() {
     const { open, size, activeSessionId } = this.state;
-
-    // DockedPanel component wired in Task 6
     return React.createElement(
-      'div',
-      { id: 'nexus-docked-panel-root' },
-      // placeholder — Task 6 wires in DockedPanel
-      null,
+      DockedPanel,
+      {
+        open,
+        size,
+        onOpen: this.openPanel,
+        onClose: this.closePanel,
+        onSetSize: this.setSize,
+      },
+      null, // PanelChat wired in Task 8
     );
   }
 }
