@@ -109,6 +109,8 @@ describe('deleteSession', () => {
     saveSession(db, makeSession(), [makeMessage()]);
     deleteSession(db, 'sess-1');
     expect(getSession(db, 'sess-1')).toBeNull();
+    const msgCount = (db.prepare('SELECT COUNT(*) as n FROM chat_messages WHERE session_id = ?').get('sess-1') as any).n;
+    expect(msgCount).toBe(0);
   });
 });
 

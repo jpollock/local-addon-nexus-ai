@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { ChatSession, ChatMessage } from '../../common/types';
 
 export function createSessionTables(db: Database.Database): void {
+  db.pragma('foreign_keys = ON');
   db.exec(`
     CREATE TABLE IF NOT EXISTS chat_sessions (
       id           TEXT PRIMARY KEY,
