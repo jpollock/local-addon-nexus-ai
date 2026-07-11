@@ -26,6 +26,14 @@ import type { GraphService } from './events/GraphService';
 import type { EventProcessor } from './events/EventProcessor';
 import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
 import { scanDatabase } from './mcp/modules/db-scanner/db-scanner';
+import {
+  createSessionTables,
+  listSessions,
+  getSession,
+  saveSession,
+  deleteSession,
+  pruneSessions,
+} from './ipc/chat-sessions';
 import { switchProviderForSite } from './mcp/modules/wp-connector/switch-provider';
 import { generateEventSummary } from './events/event-summary';
 import type { EventTimelineEntry, EventStats, StartupStatus } from '../common/types';
@@ -95,6 +103,7 @@ const DEFAULT_SETTINGS: NexusSettings = {
   excludedSiteIds: [],
   wpeSyncAutoEnabled: false,    // opt-in: user must explicitly enable WPE sync
   wpeRefreshAutoEnabled: false, // opt-in: user must explicitly enable SSH refresh
+  chatRetentionDays: 30 as (7 | 30 | 90 | null),
 };
 
 export interface IpcHandlerDeps {
@@ -289,6 +298,15 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // Initialize audit logger for tracking remote operations
   const auditLogger = new AuditLogger(registryStorage);
+
+  // Schema migration + session pruning: run once on startup
+  {
+    const db = graphService.getDb();
+    if (db) {
+      createSessionTables(db);
+      pruneSessions(db);
+    }
+  }
 
   /**
    * Notify Local's main UI to refresh site groups after a mutation.
@@ -4812,6 +4830,35 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   });
 
   // Note: CREDENTIAL_EVENT is a push channel (main → renderer); no handler needed.
+
+  // =========================================================================
+  // Docked Chat Panel — Session persistence (Task 3)
+  // =========================================================================
+
+  safeHandle(IPC_CHANNELS.CHAT_SESSION_LIST, async () => {
+    const db = graphService.getDb();
+    return listSessions(db!);
+  });
+
+  safeHandle(IPC_CHANNELS.CHAT_SESSION_GET, async (_event: any, { sessionId }: { sessionId: string }) => {
+    const db = graphService.getDb();
+    return getSession(db!, sessionId);
+  });
+
+  safeHandle(IPC_CHANNELS.CHAT_SESSION_SAVE, async (_event: any, { session, messages }: { session: any; messages: any[] }) => {
+    const db = graphService.getDb();
+    saveSession(db!, session, messages);
+  });
+
+  safeHandle(IPC_CHANNELS.CHAT_SESSION_DELETE, async (_event: any, { sessionId }: { sessionId: string }) => {
+    const db = graphService.getDb();
+    deleteSession(db!, sessionId);
+  });
+
+  ipcMain.on(IPC_CHANNELS.ACTIVITY_FILTER, (_event: any, _payload: { sessionId: string; sessionTitle: string }) => {
+    // Renderer handles opening the Activity tab — main process is a passthrough here.
+    // Future: emit to other windows if needed.
+  });
 
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
 }
