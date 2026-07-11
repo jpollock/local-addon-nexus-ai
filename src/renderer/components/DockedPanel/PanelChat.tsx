@@ -133,6 +133,7 @@ function truncateAtWord(text: string, maxLen: number): string {
 export class PanelChat extends React.Component<Props, State> {
   private logRef = React.createRef<HTMLDivElement>();
   private streamListener: ((_event: any, sessionId: string, event: any) => void) | null = null;
+  private actionListener: ((...args: any[]) => void) | null = null;
 
   constructor(props: Props) {
     super(props);
@@ -160,6 +161,15 @@ export class PanelChat extends React.Component<Props, State> {
       this.onStreamEvent(event);
     };
     this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM, this.streamListener);
+
+    // Listen for action count updates
+    this.actionListener = (_event: any, sessionId: string, data: { sessionId: string; actionCount: number }) => {
+      if (sessionId !== this.state.activeSessionId) return;
+      // Trigger sidebar badge refresh — onSessionSaved with empty args is the signal
+      this.props.onSessionSaved({} as any, []);
+    };
+    this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_SESSION_ACTION_RECORDED, this.actionListener);
+
     this.loadSettings();
     if (this.props.sessionId) {
       this.loadSession(this.props.sessionId);
@@ -170,6 +180,10 @@ export class PanelChat extends React.Component<Props, State> {
     if (this.streamListener) {
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_STREAM, this.streamListener);
       this.streamListener = null;
+    }
+    if (this.actionListener) {
+      this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_SESSION_ACTION_RECORDED, this.actionListener);
+      this.actionListener = null;
     }
   }
 
