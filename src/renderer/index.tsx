@@ -202,7 +202,7 @@ export default function renderer(context: any): void {
   dockedPanelRoot.id = 'nexus-docked-panel';
   document.body.appendChild(dockedPanelRoot);
   ReactDOM.render(
-    React.createElement(DockedPanelContainer),
+    React.createElement(DockedPanelContainer, { electron }),
     dockedPanelRoot,
   );
 

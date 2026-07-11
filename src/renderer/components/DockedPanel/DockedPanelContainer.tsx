@@ -3,6 +3,10 @@ import { DockedPanel } from './DockedPanel';
 
 type PanelSize = 'docked' | 'full';
 
+interface ContainerProps {
+  electron: any;
+}
+
 interface ContainerState {
   open: boolean;
   size: PanelSize;
@@ -27,8 +31,8 @@ function readState(): ContainerState {
   return { open: false, size: 'docked', activeSessionId: null };
 }
 
-export class DockedPanelContainer extends React.Component<{}, ContainerState> {
-  constructor(props: {}) {
+export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
+  constructor(props: ContainerProps) {
     super(props);
     this.state = readState();
     this.openPanel = this.openPanel.bind(this);
