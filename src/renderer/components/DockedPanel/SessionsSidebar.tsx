@@ -281,6 +281,8 @@ export class SessionsSidebar extends React.Component<Props, State> {
                           style: { ...styles.actionBadge, cursor: 'pointer', textDecoration: 'underline' },
                           onClick: (e: React.MouseEvent) => {
                             e.stopPropagation();
+                            // Notifies Activity tab to filter by session; receiver needs adding
+                            // to EventTimeline once it carries session_id.
                             this.props.electron.ipcRenderer.send(IPC_CHANNELS.ACTIVITY_FILTER, {
                               sessionId: session.id,
                               sessionTitle: session.title,

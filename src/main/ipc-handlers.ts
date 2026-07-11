@@ -4856,12 +4856,16 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     deleteSession(db!, sessionId);
   });
 
+  // Remove any listeners from a prior hot-reload before re-registering.
+  ipcMain.removeAllListeners(IPC_CHANNELS.ACTIVITY_FILTER);
   ipcMain.on(IPC_CHANNELS.ACTIVITY_FILTER, (_event: any, _payload: { sessionId: string; sessionTitle: string }) => {
     // Renderer handles opening the Activity tab — main process is a passthrough here.
     // Future: emit to other windows if needed.
   });
 
   // Telemetry — fire-and-forget from renderer (ipcRenderer.send)
+  // Remove any listeners from a prior hot-reload before re-registering.
+  ipcMain.removeAllListeners(IPC_CHANNELS.TELEMETRY_TRACK);
   ipcMain.on(IPC_CHANNELS.TELEMETRY_TRACK, (_event: any, { event, properties }: { event: string; properties?: Record<string, unknown> }) => {
     try {
       CloudflareTransmitter.recordEvent({

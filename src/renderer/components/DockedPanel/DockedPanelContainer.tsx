@@ -70,7 +70,8 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
 
   componentDidMount() {
     this.syncReflowStyle();
-    // Deep-link: open panel and activate a specific session from the Activity tab
+    // Deep-link: open panel and activate a specific session from the Activity tab.
+    // Receives from Activity tab "View chat →" link once activity events carry session_id.
     this.openSessionListener = (_: any, { sessionId }: { sessionId: string }) => {
       this.setState({ open: true, activeSessionId: sessionId });
     };

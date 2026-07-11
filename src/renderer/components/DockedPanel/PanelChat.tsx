@@ -35,6 +35,10 @@ interface State {
   // even before the parent re-render propagates the prop update.
   activeSessionId: string | null;
   offline: boolean;
+  // Tracks the DB-persisted action_count so persistSession never resets it to 0.
+  actionCount: number;
+  // Mirrors chatRetentionDays setting; null means keep forever.
+  retentionDays: number | null;
 }
 
 const styles = {
@@ -167,6 +171,8 @@ export class PanelChat extends React.Component<Props, State> {
       model: 'claude-sonnet-5',
       activeSessionId: props.sessionId,
       offline: false,
+      actionCount: 0,
+      retentionDays: 30,
     };
     this.handleInput = this.handleInput.bind(this);
     this.handleSend = this.handleSend.bind(this);
@@ -187,6 +193,8 @@ export class PanelChat extends React.Component<Props, State> {
     // Listen for action count updates
     this.actionListener = (_event: any, sessionId: string, data: { sessionId: string; actionCount: number }) => {
       if (sessionId !== this.state.activeSessionId) return;
+      // Keep local actionCount in sync so persistSession writes the correct value.
+      this.setState((s) => ({ actionCount: s.actionCount + 1 }));
       // Trigger sidebar badge refresh — onSessionSaved with empty args is the signal
       this.props.onSessionSaved({} as any, []);
     };
@@ -229,7 +237,11 @@ export class PanelChat extends React.Component<Props, State> {
       const settings = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_SETTINGS);
       const providerId = settings?.aiProvider || 'anthropic';
       const model = settings?.aiModel || 'claude-sonnet-5';
-      this.setState({ providerId, model });
+      // chatRetentionDays: undefined means the setting was never saved — keep the 30-day default.
+      const retentionDays = settings?.chatRetentionDays !== undefined
+        ? (settings.chatRetentionDays as number | null)
+        : 30;
+      this.setState({ providerId, model, retentionDays });
     } catch {
       // Keep defaults
     }
@@ -247,7 +259,9 @@ export class PanelChat extends React.Component<Props, State> {
         role: m.role,
         content: m.content,
       }));
-      this.setState({ messages });
+      // Restore the DB-persisted action count so persistSession never resets it to 0.
+      const actionCount: number = result.session?.actionCount ?? 0;
+      this.setState({ messages, actionCount });
     } catch { /* ignore */ }
   }
 
@@ -364,6 +378,7 @@ export class PanelChat extends React.Component<Props, State> {
     const firstUser = messages.find((m) => m.role === 'user');
     const title = firstUser ? truncateAtWord(firstUser.content, 60) : 'New chat';
 
+    const { actionCount, retentionDays } = this.state;
     const session: ChatSession = {
       id: sessionId,
       title,
@@ -372,8 +387,8 @@ export class PanelChat extends React.Component<Props, State> {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       pinned: false,
-      actionCount: 0,
-      expiresAt: Date.now() + 30 * 86400000,
+      actionCount,
+      expiresAt: retentionDays === null ? null : Date.now() + retentionDays * 86400000,
     };
 
     const chatMessages: ChatMessage[] = messages
