@@ -22,6 +22,11 @@ interface ContainerState {
 const STORAGE_KEY = 'nexus-panel-state';
 const REFLOW_STYLE_ID = 'nexus-panel-reflow';
 
+/** Fire-and-forget telemetry helper. Never throws. */
+function track(ipcRenderer: any, event: string, properties: Record<string, unknown> = {}) {
+  try { ipcRenderer.send(IPC_CHANNELS.TELEMETRY_TRACK, { event, properties }); } catch (_) {}
+}
+
 function readState(): ContainerState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -105,6 +110,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
 
   openPanel() {
     this.setState({ open: true });
+    try { track(this.props.electron.ipcRenderer, 'nexus_panel_opened', { size: this.state.size }); } catch (_) {}
   }
 
   closePanel() {

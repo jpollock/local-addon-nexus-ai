@@ -237,6 +237,9 @@ export const IPC_CHANNELS = {
   CREDENTIAL_API_KEY_SET:    `${ADDON_PREFIX}:credential:api-key:set`,
   CREDENTIAL_API_KEY_STATUS: `${ADDON_PREFIX}:credential:api-key:status`,
   CREDENTIAL_API_KEY_CLEAR:  `${ADDON_PREFIX}:credential:api-key:clear`,
+
+  // Telemetry (fire-and-forget from renderer → main)
+  TELEMETRY_TRACK: `${ADDON_PREFIX}:telemetry`,
 } as const;
 
 // ---------------------------------------------------------------------------

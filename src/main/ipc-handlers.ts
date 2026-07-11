@@ -84,6 +84,7 @@ import {
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
+import { CloudflareTransmitter } from './telemetry/CloudflareTransmitter';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -4858,6 +4859,16 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   ipcMain.on(IPC_CHANNELS.ACTIVITY_FILTER, (_event: any, _payload: { sessionId: string; sessionTitle: string }) => {
     // Renderer handles opening the Activity tab — main process is a passthrough here.
     // Future: emit to other windows if needed.
+  });
+
+  // Telemetry — fire-and-forget from renderer (ipcRenderer.send)
+  ipcMain.on(IPC_CHANNELS.TELEMETRY_TRACK, (_event: any, { event, properties }: { event: string; properties?: Record<string, unknown> }) => {
+    try {
+      CloudflareTransmitter.recordEvent({
+        event_type: event,
+        ...(properties as any),
+      });
+    } catch { /* never block the renderer */ }
   });
 
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');

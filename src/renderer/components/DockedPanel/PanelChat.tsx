@@ -120,6 +120,11 @@ const styles = {
   },
 };
 
+/** Fire-and-forget telemetry helper. Never throws. */
+function track(ipcRenderer: any, event: string, properties: Record<string, unknown> = {}) {
+  try { ipcRenderer.send(IPC_CHANNELS.TELEMETRY_TRACK, { event, properties }); } catch (_) {}
+}
+
 function makeId(): string {
   return Math.random().toString(36).slice(2);
 }
@@ -324,6 +329,7 @@ export class PanelChat extends React.Component<Props, State> {
       sessionId = makeId();
       this.setState({ activeSessionId: sessionId });
       this.props.onSessionCreated(sessionId);
+      try { track(this.props.electron.ipcRenderer, 'nexus_panel_session_created', {}); } catch (_) {}
     }
 
     this.setState(
@@ -347,6 +353,7 @@ export class PanelChat extends React.Component<Props, State> {
       model,
       siteId,
     );
+    try { track(this.props.electron.ipcRenderer, 'nexus_panel_message_sent', { siteCount: this.props.selectedSiteIds.length }); } catch (_) {}
   }
 
   async persistSession() {
@@ -439,7 +446,11 @@ export class PanelChat extends React.Component<Props, State> {
           title: tc.name,
           effect: `Tool: ${tc.name}`,
           destructive: false,
-          onConfirm: () => { this.handleApprove(tc.id); this.inputRef.current?.focus(); },
+          onConfirm: () => {
+            this.handleApprove(tc.id);
+            try { track(this.props.electron.ipcRenderer, 'nexus_panel_action_confirmed', { destructive: false }); } catch (_) {}
+            this.inputRef.current?.focus();
+          },
           onCancel: () => { this.handleCancel(tc.id); this.inputRef.current?.focus(); },
         }),
       );
