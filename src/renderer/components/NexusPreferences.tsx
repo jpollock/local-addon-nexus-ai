@@ -340,6 +340,14 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     });
   };
 
+  handleRetentionChange = (days: 7 | 30 | 90 | null): void => {
+    this.setState((prev) => {
+      const next = { ...prev.settings, chatRetentionDays: days };
+      this.notifyChange(next);
+      return { settings: next };
+    }, () => { this.saveNow(this.state.settings); });
+  };
+
   handleAutoIndexToggle = (): void => {
     this.setState((prev) => {
       const next = { ...prev.settings, autoIndex: !prev.settings.autoIndex };
@@ -1411,6 +1419,37 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         : null,
     );
 
+    // Section 5: Chat History
+    const section5 = React.createElement('div', { style: sectionStyle },
+      this.renderSectionHeader('chat-history', 'Chat History'),
+      expandedSections.has('chat-history')
+        ? React.createElement('div', null,
+            React.createElement('div', { style: descStyle }, 'Choose how long chat session history is stored locally.'),
+            React.createElement(
+              'div',
+              { style: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 } },
+              React.createElement('label', { style: { color: '#868d98', fontSize: 12 } }, 'Keep chat history for'),
+              React.createElement(
+                'select',
+                {
+                  style: { background: '#23272f', border: '1px solid #2c313a', borderRadius: 4, color: '#e4e7ec', fontSize: 12, padding: '4px 8px' },
+                  value: String(settings.chatRetentionDays ?? 30),
+                  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+                    const raw = e.target.value;
+                    const val = raw === 'null' ? null : Number(raw) as 7 | 30 | 90;
+                    this.handleRetentionChange(val);
+                  },
+                },
+                React.createElement('option', { value: '7' }, '7 days'),
+                React.createElement('option', { value: '30' }, '30 days'),
+                React.createElement('option', { value: '90' }, '90 days'),
+                React.createElement('option', { value: 'null' }, 'Forever'),
+              ),
+            ),
+          )
+        : null,
+    );
+
     // Note: Auto-Indexing, Sync Schedule, and WPE Access & Permissions have
     // moved to the Nexus AI Settings tab for a cleaner separation of concerns.
 
@@ -1422,6 +1461,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       section2,
       section3,
       section4,
+      section5,
     );
   }
 }
