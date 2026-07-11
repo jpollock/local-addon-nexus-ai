@@ -2,6 +2,7 @@ import React from 'react';
 import { DockedPanel } from './DockedPanel';
 import { PanelChat } from './PanelChat';
 import { ContextSelector } from './ContextSelector';
+import { SessionsSidebar } from './SessionsSidebar';
 
 type PanelSize = 'docked' | 'full';
 
@@ -132,6 +133,15 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       }),
     );
 
+    const sessionsSidebar = size === 'full'
+      ? React.createElement(SessionsSidebar, {
+          electron: this.props.electron,
+          activeSessionId,
+          onSelectSession: this.setActiveSession,
+          onNewSession: () => this.setActiveSession(null),
+        })
+      : null;
+
     return React.createElement(
       DockedPanel,
       {
@@ -140,6 +150,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
         onOpen: this.openPanel,
         onClose: this.closePanel,
         onSetSize: this.setSize,
+        sessionsSidebar,
       },
       panelContent,
     );

@@ -9,6 +9,7 @@ export interface Props {
   onClose: () => void;
   onSetSize: (size: PanelSize) => void;
   children?: React.ReactNode;
+  sessionsSidebar?: React.ReactNode;
 }
 
 const PANEL_WIDTH = 384;
@@ -95,7 +96,7 @@ const styles = {
 
 export class DockedPanel extends React.Component<Props> {
   render() {
-    const { open, size, onOpen, onClose, onSetSize, children } = this.props;
+    const { open, size, onOpen, onClose, onSetSize, children, sessionsSidebar } = this.props;
 
     if (!open) {
       return React.createElement(
@@ -153,7 +154,24 @@ export class DockedPanel extends React.Component<Props> {
         ),
       ),
       // Body
-      React.createElement('div', { style: styles.panelBody }, children ?? null),
+      isFull
+        ? React.createElement(
+            'div',
+            { style: { display: 'flex', height: '100%' } },
+            // Sessions column
+            React.createElement(
+              'div',
+              { style: { width: 264, flexShrink: 0, borderRight: '1px solid #2c313a' } },
+              sessionsSidebar ?? null,
+            ),
+            // Chat centered
+            React.createElement(
+              'div',
+              { style: { flex: 1, maxWidth: 720, margin: '0 auto', height: '100%', overflow: 'hidden' } },
+              children ?? null,
+            ),
+          )
+        : React.createElement('div', { style: styles.panelBody }, children ?? null),
     );
   }
 }
