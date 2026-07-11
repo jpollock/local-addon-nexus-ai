@@ -226,9 +226,21 @@ export class PanelChat extends React.Component<Props, State> {
   }
 
   componentDidUpdate(prevProps: Props) {
-    if (prevProps.sessionId !== this.props.sessionId && this.props.sessionId) {
-      this.setState({ activeSessionId: this.props.sessionId });
-      this.loadSession(this.props.sessionId);
+    if (prevProps.sessionId !== this.props.sessionId) {
+      if (this.props.sessionId) {
+        this.setState({ activeSessionId: this.props.sessionId });
+        this.loadSession(this.props.sessionId);
+      } else {
+        // New chat — reset all message state
+        this.setState({
+          messages: [],
+          activeSessionId: null,
+          streaming: false,
+          streamingId: null,
+          actionCount: 0,
+          input: '',
+        });
+      }
     }
   }
 
@@ -274,22 +286,41 @@ export class PanelChat extends React.Component<Props, State> {
         ),
       }));
     } else if (event.type === 'tool_call_start') {
+      // Show a non-blocking running indicator — main process executes read tools immediately.
+      // Only tier-3 tools pause for approval (tool_call_approval_needed fires later).
       this.setState((s) => {
         const msgs = s.messages.map((m) => {
           if (m.id !== streamingId) return m;
-          const toolCalls = [
-            ...(m.toolCalls ?? []),
-            {
-              id: event.id,
-              name: event.name,
-              args: '',
-              status: 'awaiting_approval' as const,
-            },
-          ];
-          return { ...m, toolCalls };
+          return {
+            ...m,
+            toolCalls: [
+              ...(m.toolCalls ?? []),
+              { id: event.id, name: event.name, args: '', status: 'running' as const },
+            ],
+          };
         });
         return { messages: msgs };
       });
+    } else if (event.type === 'tool_call_approval_needed') {
+      // Tier-3 destructive tool — upgrade whichever message owns this toolCall id
+      this.setState((s) => ({
+        messages: s.messages.map((m) => ({
+          ...m,
+          toolCalls: (m.toolCalls ?? []).map((tc) =>
+            tc.id === event.id ? { ...tc, status: 'awaiting_approval' as const } : tc,
+          ),
+        })),
+      }));
+    } else if (event.type === 'tool_call_result') {
+      // Tool finished — hide the indicator
+      this.setState((s) => ({
+        messages: s.messages.map((m) => ({
+          ...m,
+          toolCalls: (m.toolCalls ?? []).map((tc) =>
+            tc.id === event.id ? { ...tc, status: 'done' as const } : tc,
+          ),
+        })),
+      }));
     } else if (event.type === 'error') {
       this.setState((s) => ({
         streaming: false,
@@ -454,9 +485,24 @@ export class PanelChat extends React.Component<Props, State> {
     const bubbleStyle = msg.role === 'user' ? styles.userBubble : styles.assistantBubble;
 
     const toolCards = (msg.toolCalls ?? [])
-      .filter((tc) => tc.status === 'awaiting_approval')
-      .map((tc) =>
-        React.createElement(ActionCard, {
+      .filter((tc) => tc.status === 'running' || tc.status === 'awaiting_approval')
+      .map((tc) => {
+        if (tc.status === 'running') {
+          return React.createElement(
+            'div',
+            {
+              key: tc.id,
+              style: {
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 0', color: '#868d98', fontSize: 12,
+              },
+            },
+            React.createElement('span', { style: { color: '#5fd2e5', fontSize: 13 } }, '⚡'),
+            React.createElement('span', null, tc.name),
+            React.createElement('span', { style: { opacity: 0.5 } }, '…'),
+          );
+        }
+        return React.createElement(ActionCard, {
           key: tc.id,
           title: tc.name,
           effect: `Tool: ${tc.name}`,
@@ -467,8 +513,8 @@ export class PanelChat extends React.Component<Props, State> {
             this.inputRef.current?.focus();
           },
           onCancel: () => { this.handleCancel(tc.id); this.inputRef.current?.focus(); },
-        }),
-      );
+        });
+      });
 
     return React.createElement(
       'div',
@@ -547,7 +593,7 @@ export class PanelChat extends React.Component<Props, State> {
         'div',
         { style: { padding: '3px 14px 6px', color: '#868d98', fontSize: 10, display: 'flex', gap: 6, flexShrink: 0 } },
         React.createElement('span', null, `${providerName} · ${modelName}`),
-        React.createElement('span', null, '· Confirm required for actions'),
+        React.createElement('span', null, '· Confirm required for destructive actions'),
       ),
     );
   }
