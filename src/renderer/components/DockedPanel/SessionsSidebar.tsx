@@ -13,6 +13,9 @@ interface State {
   sessions: ChatSession[];
   search: string;
   loading: boolean;
+  hoveredId: string | null;
+  renamingId: string | null;
+  renameValue: string;
 }
 
 const styles = {
@@ -95,6 +98,21 @@ const styles = {
     padding: '24px 12px',
     textAlign: 'center' as const,
   },
+  hoverControls: {
+    display: 'flex',
+    gap: 4,
+    marginTop: 4,
+  },
+  renameInput: {
+    background: '#23272f',
+    border: '1px solid #29b6cf',
+    borderRadius: 3,
+    color: '#e4e7ec',
+    fontSize: 12,
+    padding: '2px 6px',
+    outline: 'none',
+    width: '100%',
+  },
 };
 
 function relativeTime(ms: number): string {
@@ -114,9 +132,12 @@ function daysUntilExpiry(expiresAt: number): number {
 export class SessionsSidebar extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { sessions: [], search: '', loading: false };
+    this.state = { sessions: [], search: '', loading: false, hoveredId: null, renamingId: null, renameValue: '' };
     this.handleSearch = this.handleSearch.bind(this);
     this.handleDelete = this.handleDelete.bind(this);
+    this.handlePin = this.handlePin.bind(this);
+    this.handleStartRename = this.handleStartRename.bind(this);
+    this.handleRenameCommit = this.handleRenameCommit.bind(this);
   }
 
   componentDidMount() {
@@ -143,13 +164,53 @@ export class SessionsSidebar extends React.Component<Props, State> {
     this.setState({ search: e.target.value });
   }
 
+  async handlePin(e: React.MouseEvent, session: ChatSession) {
+    e.stopPropagation();
+    const updated = {
+      ...session,
+      pinned: !session.pinned,
+      expiresAt: session.pinned ? Date.now() + 30 * 86400000 : null,
+    };
+    await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_SAVE, { session: updated, messages: [] });
+    this.loadSessions();
+  }
+
+  handleStartRename(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    const session = this.state.sessions.find((s) => s.id === id);
+    this.setState({ renamingId: id, renameValue: session ? session.title : '' });
+  }
+
+  async handleRenameCommit(session: ChatSession) {
+    const { renameValue } = this.state;
+    const updated = { ...session, title: renameValue };
+    await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_SAVE, { session: updated, messages: [] });
+    this.setState({ renamingId: null, renameValue: '' });
+    this.loadSessions();
+  }
+
   render() {
     const { activeSessionId, onSelectSession, onNewSession } = this.props;
-    const { sessions, search, loading } = this.state;
+    const { sessions, search, loading, hoveredId, renamingId, renameValue } = this.state;
+
+    const smallIconBtn: React.CSSProperties = {
+      background: 'none',
+      border: 'none',
+      cursor: 'pointer',
+      color: '#868d98',
+      padding: '2px 4px',
+      fontSize: 11,
+    };
 
     const filtered = search
       ? sessions.filter((s) => s.title.toLowerCase().includes(search.toLowerCase()))
       : sessions;
+
+    // Pinned sessions appear first
+    const sorted = [...filtered].sort((a, b) => {
+      if (a.pinned === b.pinned) return 0;
+      return a.pinned ? -1 : 1;
+    });
 
     return React.createElement(
       'div',
@@ -174,10 +235,12 @@ export class SessionsSidebar extends React.Component<Props, State> {
         { style: styles.list },
         loading
           ? React.createElement('div', { style: styles.empty }, 'Loading…')
-          : filtered.length === 0
+          : sorted.length === 0
           ? React.createElement('div', { style: styles.empty }, 'No chats yet')
-          : filtered.map((session) => {
+          : sorted.map((session) => {
               const isActive = session.id === activeSessionId;
+              const isHovered = hoveredId === session.id;
+              const isRenaming = renamingId === session.id;
               const daysLeft = session.expiresAt ? daysUntilExpiry(session.expiresAt) : null;
               const showExpiry = daysLeft !== null && !session.pinned && daysLeft <= 7;
 
@@ -186,9 +249,27 @@ export class SessionsSidebar extends React.Component<Props, State> {
                 {
                   key: session.id,
                   style: styles.row(isActive),
-                  onClick: () => onSelectSession(session.id),
+                  onClick: () => !isRenaming && onSelectSession(session.id),
+                  onMouseEnter: () => this.setState({ hoveredId: session.id }),
+                  onMouseLeave: () => this.setState({ hoveredId: null }),
                 },
-                React.createElement('div', { style: styles.rowTitle }, session.title),
+                isRenaming
+                  ? React.createElement('input', {
+                      style: styles.renameInput,
+                      value: renameValue,
+                      autoFocus: true,
+                      onClick: (e: React.MouseEvent) => e.stopPropagation(),
+                      onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                        this.setState({ renameValue: e.target.value }),
+                      onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+                        if (e.key === 'Enter') {
+                          this.handleRenameCommit(session);
+                        } else if (e.key === 'Escape') {
+                          this.setState({ renamingId: null, renameValue: '' });
+                        }
+                      },
+                    })
+                  : React.createElement('div', { style: styles.rowTitle }, session.pinned ? `📌 ${session.title}` : session.title),
                 React.createElement(
                   'div',
                   { style: styles.rowMeta },
@@ -208,6 +289,30 @@ export class SessionsSidebar extends React.Component<Props, State> {
                       )
                     : null,
                 ),
+                isHovered && !isRenaming
+                  ? React.createElement(
+                      'div',
+                      { style: styles.hoverControls },
+                      React.createElement(
+                        'button',
+                        { style: smallIconBtn, onClick: (e: React.MouseEvent) => this.handlePin(e, session) },
+                        session.pinned ? '📌' : '📍',
+                      ),
+                      React.createElement(
+                        'button',
+                        { style: smallIconBtn, onClick: (e: React.MouseEvent) => this.handleStartRename(e, session.id) },
+                        '✏',
+                      ),
+                      React.createElement(
+                        'button',
+                        {
+                          style: { ...smallIconBtn, color: '#e05252' },
+                          onClick: (e: React.MouseEvent) => this.handleDelete(e, session.id),
+                        },
+                        '✕',
+                      ),
+                    )
+                  : null,
               );
             }),
       ),
