@@ -131,6 +131,18 @@ function truncateAtWord(text: string, maxLen: number): string {
   return lastSpace > 0 ? trimmed.slice(0, lastSpace) : trimmed;
 }
 
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: 'Claude',
+  openai: 'OpenAI',
+  google: 'Gemini',
+  ollama: 'Ollama',
+  'local-gateway': 'Gateway',
+};
+
+function providerLabel(id: string): string {
+  return PROVIDER_LABELS[id] ?? id;
+}
+
 export class PanelChat extends React.Component<Props, State> {
   private logRef = React.createRef<HTMLDivElement>();
   private streamListener: ((_event: any, sessionId: string, event: any) => void) | null = null;
@@ -440,7 +452,10 @@ export class PanelChat extends React.Component<Props, State> {
   }
 
   render() {
-    const { messages, input, streaming, offline } = this.state;
+    const { messages, input, streaming, offline, providerId, model } = this.state;
+
+    const providerName = providerLabel(providerId);
+    const modelName = model;
 
     return React.createElement(
       'div',
@@ -448,6 +463,14 @@ export class PanelChat extends React.Component<Props, State> {
       React.createElement(
         'div',
         { ref: this.logRef, style: styles.log, 'aria-live': 'polite' },
+        messages.length === 0
+          ? React.createElement(
+              'div',
+              { style: { padding: '24px 14px', color: '#868d98', textAlign: 'center' as const, fontSize: 13 } },
+              React.createElement('div', { style: { color: '#29b6cf', fontSize: 18, marginBottom: 8 } }, 'Nexus'),
+              React.createElement('div', null, 'Ask anything about your WordPress sites.'),
+            )
+          : null,
         messages.map((m) => this.renderMessage(m)),
         streaming && !messages.some((m) => m.streaming && m.content)
           ? React.createElement('div', { style: styles.thinkingDots }, '···')
@@ -490,6 +513,12 @@ export class PanelChat extends React.Component<Props, State> {
               streaming ? '■' : '↑',
             ),
           ),
+      React.createElement(
+        'div',
+        { style: { padding: '3px 14px 6px', color: '#868d98', fontSize: 10, display: 'flex', gap: 6, flexShrink: 0 } },
+        React.createElement('span', null, `${providerName} · ${modelName}`),
+        React.createElement('span', null, '· Confirm required for actions'),
+      ),
     );
   }
 }
