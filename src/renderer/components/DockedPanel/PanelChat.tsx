@@ -288,11 +288,6 @@ export class PanelChat extends React.Component<Props, State> {
       () => this.scrollToBottom(),
     );
 
-    // Build history from non-system, non-streaming messages
-    const history = this.state.messages
-      .filter((m) => m.role !== 'system' && !m.streaming)
-      .map((m) => ({ role: m.role, content: m.content }));
-
     const siteId = this.props.selectedSiteIds[0];
 
     // CHAT_SEND positional args: sessionId, message, providerId, model, siteId?
