@@ -145,6 +145,7 @@ function providerLabel(id: string): string {
 
 export class PanelChat extends React.Component<Props, State> {
   private logRef = React.createRef<HTMLDivElement>();
+  private inputRef = React.createRef<HTMLTextAreaElement>();
   private streamListener: ((_event: any, sessionId: string, event: any) => void) | null = null;
   private actionListener: ((...args: any[]) => void) | null = null;
   private offlineListener: (() => void) | null = null;
@@ -438,8 +439,8 @@ export class PanelChat extends React.Component<Props, State> {
           title: tc.name,
           effect: `Tool: ${tc.name}`,
           destructive: false,
-          onConfirm: () => this.handleApprove(tc.id),
-          onCancel: () => this.handleCancel(tc.id),
+          onConfirm: () => { this.handleApprove(tc.id); this.inputRef.current?.focus(); },
+          onCancel: () => { this.handleCancel(tc.id); this.inputRef.current?.focus(); },
         }),
       );
 
@@ -495,6 +496,7 @@ export class PanelChat extends React.Component<Props, State> {
             'div',
             { style: styles.inputRow },
             React.createElement('textarea', {
+              ref: this.inputRef,
               style: styles.textarea,
               value: input,
               onChange: this.handleInput,
@@ -502,6 +504,7 @@ export class PanelChat extends React.Component<Props, State> {
               placeholder: 'Ask anything about your sites…',
               disabled: streaming,
               rows: 1,
+              'aria-label': 'Chat input',
             }),
             React.createElement(
               'button',
@@ -509,6 +512,7 @@ export class PanelChat extends React.Component<Props, State> {
                 style: styles.sendBtn(streaming || !input.trim()),
                 disabled: streaming || !input.trim(),
                 onClick: streaming ? this.handleStop : this.handleSend,
+                'aria-label': streaming ? 'Stop generation' : 'Send message',
               },
               streaming ? '■' : '↑',
             ),

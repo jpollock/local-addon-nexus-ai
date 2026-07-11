@@ -119,6 +119,7 @@ export class ActionCard extends React.Component<Props, State> {
             style: styles.confirmBtn(confirmDisabled),
             disabled: confirmDisabled,
             onClick: confirmDisabled ? undefined : onConfirm,
+            'aria-label': 'Confirm action',
           },
           'Confirm',
         ),
