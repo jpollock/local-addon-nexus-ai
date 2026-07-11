@@ -34,6 +34,7 @@ interface State {
   // Local copy of sessionId so CHAT_STOP/CHAT_TOOL_APPROVE always have it
   // even before the parent re-render propagates the prop update.
   activeSessionId: string | null;
+  offline: boolean;
 }
 
 const styles = {
@@ -134,6 +135,8 @@ export class PanelChat extends React.Component<Props, State> {
   private logRef = React.createRef<HTMLDivElement>();
   private streamListener: ((_event: any, sessionId: string, event: any) => void) | null = null;
   private actionListener: ((...args: any[]) => void) | null = null;
+  private offlineListener: (() => void) | null = null;
+  private onlineListener: (() => void) | null = null;
 
   constructor(props: Props) {
     super(props);
@@ -145,6 +148,7 @@ export class PanelChat extends React.Component<Props, State> {
       providerId: 'anthropic',
       model: 'claude-sonnet-5',
       activeSessionId: props.sessionId,
+      offline: false,
     };
     this.handleInput = this.handleInput.bind(this);
     this.handleSend = this.handleSend.bind(this);
@@ -170,6 +174,12 @@ export class PanelChat extends React.Component<Props, State> {
     };
     this.props.electron.ipcRenderer.on(IPC_CHANNELS.CHAT_SESSION_ACTION_RECORDED, this.actionListener);
 
+    // Listen for offline/online events
+    this.offlineListener = () => this.setState({ offline: true });
+    this.onlineListener = () => this.setState({ offline: false });
+    window.addEventListener('offline', this.offlineListener);
+    window.addEventListener('online', this.onlineListener);
+
     this.loadSettings();
     if (this.props.sessionId) {
       this.loadSession(this.props.sessionId);
@@ -185,6 +195,8 @@ export class PanelChat extends React.Component<Props, State> {
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_SESSION_ACTION_RECORDED, this.actionListener);
       this.actionListener = null;
     }
+    if (this.offlineListener) window.removeEventListener('offline', this.offlineListener);
+    if (this.onlineListener) window.removeEventListener('online', this.onlineListener);
   }
 
   componentDidUpdate(prevProps: Props) {
@@ -246,6 +258,15 @@ export class PanelChat extends React.Component<Props, State> {
         });
         return { messages: msgs };
       });
+    } else if (event.type === 'error') {
+      this.setState((s) => ({
+        streaming: false,
+        streamingId: null,
+        messages: [
+          ...s.messages.filter((m) => m.id !== s.streamingId),
+          { id: makeId(), role: 'system' as const, content: `Error: ${event.message}` },
+        ],
+      }));
     } else if (event.type === 'done') {
       this.setState(
         (s) => ({
@@ -419,7 +440,7 @@ export class PanelChat extends React.Component<Props, State> {
   }
 
   render() {
-    const { messages, input, streaming } = this.state;
+    const { messages, input, streaming, offline } = this.state;
 
     return React.createElement(
       'div',
@@ -432,28 +453,43 @@ export class PanelChat extends React.Component<Props, State> {
           ? React.createElement('div', { style: styles.thinkingDots }, '···')
           : null,
       ),
-      React.createElement(
-        'div',
-        { style: styles.inputRow },
-        React.createElement('textarea', {
-          style: styles.textarea,
-          value: input,
-          onChange: this.handleInput,
-          onKeyDown: this.handleKeyDown,
-          placeholder: 'Ask anything about your sites…',
-          disabled: streaming,
-          rows: 1,
-        }),
-        React.createElement(
-          'button',
-          {
-            style: styles.sendBtn(streaming || !input.trim()),
-            disabled: streaming || !input.trim(),
-            onClick: streaming ? this.handleStop : this.handleSend,
-          },
-          streaming ? '■' : '↑',
-        ),
-      ),
+      offline
+        ? React.createElement(
+            'div',
+            {
+              style: {
+                padding: 12,
+                color: '#e0a94b',
+                textAlign: 'center' as const,
+                fontSize: 12,
+                background: '#1a1e24',
+                borderTop: '1px solid #2c313a',
+              },
+            },
+            'No network connection — history is still available.',
+          )
+        : React.createElement(
+            'div',
+            { style: styles.inputRow },
+            React.createElement('textarea', {
+              style: styles.textarea,
+              value: input,
+              onChange: this.handleInput,
+              onKeyDown: this.handleKeyDown,
+              placeholder: 'Ask anything about your sites…',
+              disabled: streaming,
+              rows: 1,
+            }),
+            React.createElement(
+              'button',
+              {
+                style: styles.sendBtn(streaming || !input.trim()),
+                disabled: streaming || !input.trim(),
+                onClick: streaming ? this.handleStop : this.handleSend,
+              },
+              streaming ? '■' : '↑',
+            ),
+          ),
     );
   }
 }
