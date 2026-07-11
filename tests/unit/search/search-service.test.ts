@@ -2,14 +2,14 @@
  * Unit tests for SearchService
  */
 import { SearchService } from '../../../src/main/search/SearchService';
-import type { VectorStore } from '../../../src/main/vector-store/VectorStore';
+import type { IVectorStore } from '../../../src/main/vector-store/IVectorStore';
 import type { GraphService } from '../../../src/main/events/GraphService';
 import type { EmbeddingService } from '../../../src/main/embeddings/EmbeddingService';
 import type { IndexRegistry } from '../../../src/main/content/IndexRegistry';
 
 describe('SearchService', () => {
   let searchService: SearchService;
-  let mockVectorStore: jest.Mocked<VectorStore>;
+  let mockVectorStore: jest.Mocked<IVectorStore>;
   let mockGraphService: jest.Mocked<GraphService>;
   let mockEmbeddingService: jest.Mocked<EmbeddingService>;
   let mockIndexRegistry: jest.Mocked<IndexRegistry>;

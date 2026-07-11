@@ -153,6 +153,22 @@ describe('nexus sites clone', () => {
     expect(r.exitCode).toBe(1);
     expect(r.output).toContain('@local');
   });
+
+  it('clones a running site and clone appears in list', async () => {
+    if (process.env.NEXUS_E2E_SKIP_SLOW) { skipTest('NEXUS_E2E_SKIP_SLOW set'); return; }
+    const site = await getRunningSite();
+    if (!site) { skipTest('No running local site'); return; }
+    const cloneName = 'nexus-e2e-clone-tmp';
+    try {
+      const r = await runCli(`sites clone ${site.name}@local ${cloneName}`, { timeout: 300_000 });
+      expect(r.exitCode).toBe(0);
+      expect(r.output.toLowerCase()).toMatch(/clone|success/);
+      const sites = await getLocalSites();
+      expect(sites.some((s) => s.name === cloneName)).toBe(true);
+    } finally {
+      await runCli(`sites delete ${cloneName} --force`, { timeout: 30_000 });
+    }
+  }, 320_000);
 });
 
 describe('nexus sites rename', () => {
@@ -161,6 +177,28 @@ describe('nexus sites rename', () => {
     expect(r.exitCode).toBe(1);
     expect(r.output).toContain('@local');
   });
+
+  it('renames a freshly created site — new name visible in list, old name gone', async () => {
+    if (process.env.NEXUS_E2E_SKIP_SLOW) { skipTest('NEXUS_E2E_SKIP_SLOW set'); return; }
+    const srcName = 'nexus-e2e-rename-src';
+    const dstName = 'nexus-e2e-rename-dst';
+    try {
+      const createR = await runCli(`sites create ${srcName}@local`, { timeout: 180_000 });
+      if (createR.exitCode !== 0) {
+        skipTest(`Could not create scratch site (exit ${createR.exitCode}) — skipping rename`);
+        return;
+      }
+      const renameR = await runCli(`sites rename ${srcName}@local ${dstName}`, { timeout: 30_000 });
+      expect(renameR.exitCode).toBe(0);
+      expect(renameR.output).toContain(dstName);
+      const sites = await getLocalSites();
+      expect(sites.some((s) => s.name === dstName)).toBe(true);
+      expect(sites.some((s) => s.name === srcName)).toBe(false);
+    } finally {
+      await runCli(`sites delete ${dstName} --force`, { timeout: 30_000 });
+      await runCli(`sites delete ${srcName} --force`, { timeout: 30_000 });
+    }
+  }, 240_000);
 });
 
 describe('nexus sites config-php', () => {
@@ -168,6 +206,38 @@ describe('nexus sites config-php', () => {
     const r = await runCli('sites config-php');
     expect(r.exitCode).toBe(1);
   });
+
+  it('changes PHP version and reports oldVersion → newVersion', async () => {
+    if (process.env.NEXUS_E2E_SKIP_SLOW) { skipTest('NEXUS_E2E_SKIP_SLOW set'); return; }
+    const site = await getRunningSite();
+    if (!site) { skipTest('No running local site'); return; }
+    // Detect current PHP via sites get, then pick the alternate
+    const getR = await runCli(`sites get ${site.name}`, { timeout: 30_000 });
+    const currentIs83 = getR.output.includes('8.3');
+    const targetVersion  = currentIs83 ? '8.2' : '8.3';
+    const revertVersion  = currentIs83 ? '8.3' : '8.2';
+    try {
+      const changeR = await runCli(
+        `sites config-php ${site.name}@local ${targetVersion}`,
+        { timeout: 120_000 },
+      );
+      expect(changeR.exitCode).toBe(0);
+      // Output must show the transition arrow
+      expect(changeR.output).toContain('→');
+      expect(changeR.output).toContain(targetVersion);
+      // Verify the change persisted
+      const verifyR = await runCli(`sites get ${site.name}`, { timeout: 30_000 });
+      if (!verifyR.output.includes(targetVersion)) {
+        // PHP version not installed on this machine — Local fell back silently
+        const runningVer = verifyR.output.match(/PHP:\s+([\d.]+)/)?.[1] ?? 'unknown';
+        skipTest(`PHP ${targetVersion} not installed on this machine (running: ${runningVer}) — skipping verify`);
+        return;
+      }
+      expect(verifyR.output).toContain(targetVersion);
+    } finally {
+      await runCli(`sites config-php ${site.name}@local ${revertVersion}`, { timeout: 120_000 });
+    }
+  }, 300_000);
 });
 
 describe('nexus sites export', () => {

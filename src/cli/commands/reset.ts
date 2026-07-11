@@ -10,7 +10,7 @@
  *   - WPE install cache
  *   - DB scan cache
  *   - Graph DB (SQLite — plugins, themes, users, WPE sites, events)
- *   - Vector store (LanceDB — all embeddings)
+ *   - Vector store (sqlite-vec — all embeddings)
  *
  * What survives:
  *   - API keys (stored in macOS Keychain, not in these files)
@@ -42,7 +42,7 @@ function getDataFiles(dataDir: string): Array<{ label: string; path: string; isD
     { label: 'Graph DB (plugins, themes, users, events)', path: path.join(dataDir, ADDON_PREFIX, 'graph.db') },
     { label: 'Graph DB WAL files',                     path: path.join(dataDir, ADDON_PREFIX, 'graph.db-shm') },
     { label: 'Graph DB WAL files',                     path: path.join(dataDir, ADDON_PREFIX, 'graph.db-wal') },
-    { label: 'Vector store / embeddings (LanceDB)',    path: path.join(dataDir, ADDON_PREFIX, 'vectors'), isDir: true },
+    { label: 'Vector store / embeddings (sqlite-vec)', path: path.join(dataDir, ADDON_PREFIX, 'vectors.db') },
   ];
 }
 
@@ -64,7 +64,7 @@ function deleteItem(entry: { path: string; isDir?: boolean }): 'deleted' | 'not-
     if (!fs.existsSync(entry.path)) return 'not-found';
     if (entry.isDir) {
       // Rename first (atomic O(1)), then delete in background — avoids blocking
-      // for minutes on large directories (LanceDB vectors: 1M+ files, multi-GB)
+      // for minutes on large directories
       const tmpPath = entry.path + '_deleting_' + Date.now();
       fs.renameSync(entry.path, tmpPath);
       exec(`rm -rf "${tmpPath}"`); // fire-and-forget

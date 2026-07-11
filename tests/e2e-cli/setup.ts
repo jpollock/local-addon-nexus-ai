@@ -138,7 +138,23 @@ async function ensureFixtureSiteRunning(siteName: string, envKey?: string): Prom
     console.log(`[CLI E2E Setup] ✅ ${siteName} already running`);
   }
 
-  if (envKey) process.env[envKey] = siteName;
+  // Validate WP-CLI can boot WordPress (requires DB access) — a site pulled from WPE
+  // may have MU plugins that crash WP bootstrap in a local environment.
+  // wp option-get requires a full DB-connected WP bootstrap (unlike wp core version
+  // which only reads version.php from disk). Only set the env key if this passes.
+  if (envKey) {
+    const wpCliCheck = await runCliSetup(['wp', 'option-get', `${siteName}@local`, 'blogname'], 20_000);
+    if (wpCliCheck.exitCode !== 0) {
+      console.warn(`[CLI E2E Setup] ⚠ ${siteName} is running but WP-CLI cannot boot WordPress (exit ${wpCliCheck.exitCode}).`);
+      console.warn(`[CLI E2E Setup]   This site may be a WPE pull with incompatible MU plugins or a broken DB.`);
+      console.warn(`[CLI E2E Setup]   WP-CLI tests will be skipped. To fix: delete ${siteName} and recreate as a fresh local site.`);
+      // Mark this site as broken so getRunningSite() won't fall back to it either.
+      const prev = process.env.CLI_E2E_WP_BROKEN_SITES ?? '';
+      process.env.CLI_E2E_WP_BROKEN_SITES = prev ? `${prev},${siteName}` : siteName;
+      return;
+    }
+    process.env[envKey] = siteName;
+  }
 }
 
 export default async function globalSetup() {

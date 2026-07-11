@@ -4,7 +4,7 @@
  * Unified search orchestration across all data sources.
  * Combines vector search (content) with metadata search (plugins, themes, users).
  */
-import type { VectorStore } from '../vector-store/VectorStore';
+import type { IVectorStore } from '../vector-store/IVectorStore';
 import type { GraphService } from '../events/GraphService';
 import type { EmbeddingService } from '../embeddings/EmbeddingService';
 import type { IndexRegistry } from '../content/IndexRegistry';
@@ -21,7 +21,7 @@ import type { SearchResult as VectorSearchResult } from '../../common/types';
 
 export class SearchService {
   constructor(
-    private vectorStore: VectorStore,
+    private vectorStore: IVectorStore,
     private graphService: GraphService,
     private embeddingService: EmbeddingService,
     private indexRegistry: IndexRegistry

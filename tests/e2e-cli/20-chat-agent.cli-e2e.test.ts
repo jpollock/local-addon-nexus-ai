@@ -101,7 +101,14 @@ beforeAll(async () => {
 async function cleanupAiCreatedSites(): Promise<void> {
   // The AI may call local_create_site when asked about a non-existent site.
   // A site created without WordPress being installed poisons later tests.
-  const strayNames = ['nexus-e2e-test'];
+  //
+  // nexus-e2e-cli-test-site: only clean it up if CLI_E2E_TEST_SITE was NOT set at
+  // globalSetup time (meaning the site didn't exist / was broken beforehand). If it
+  // WAS pre-existing, we must not delete it — it's the shared fixture other tests need.
+  const strayNames: string[] = ['nexus-e2e-test'];
+  if (!process.env.CLI_E2E_TEST_SITE) {
+    strayNames.push('nexus-e2e-cli-test-site');
+  }
   for (const name of strayNames) {
     try {
       const r1 = await mcpClient.callTool('local_delete_site', { site: name });
@@ -144,11 +151,14 @@ describe('Chat agent — tool selection', () => {
   it('calls wp_core_version when asked about WP version', async () => {
     if (skipAll) return;
 
-    // Use a site that is guaranteed to exist (the e2e fixture site from global setup)
-    // rather than nexus-e2e-test. Asking about a non-existent site can cause the
-    // AI to call local_create_site to "help", which creates an empty (no-WordPress)
-    // site that poisons later tests expecting a proper WordPress installation.
-    const siteName = process.env.CLI_E2E_TEST_SITE ?? 'nexus-e2e-cli-test-site';
+    // Require CLI_E2E_TEST_SITE — if it's not set the fixture site is missing or
+    // broken, and falling back to the hardcoded name risks the AI calling
+    // local_create_site (creating an empty non-WordPress site that poisons test 03).
+    if (!process.env.CLI_E2E_TEST_SITE) {
+      console.log('[SKIP] CLI_E2E_TEST_SITE not set — fixture site missing or broken, skipping');
+      return;
+    }
+    const siteName = process.env.CLI_E2E_TEST_SITE;
     const listResult = await runAgent(`What WordPress version is ${siteName} running?`);
 
     const called = listResult.toolCalls.some(

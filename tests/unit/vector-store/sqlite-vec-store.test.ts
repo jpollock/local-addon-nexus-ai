@@ -1,0 +1,384 @@
+// tests/unit/vector-store/sqlite-vec-store.test.ts
+import * as os from 'os';
+import * as path from 'path';
+import * as fs from 'fs';
+import { SqliteVecStore } from '../../../src/main/vector-store/SqliteVecStore';
+import type { VectorDocument } from '../../../src/common/types';
+import { VECTOR_DIMENSIONS } from '../../../src/common/constants';
+
+function tmpDb(): string {
+  return path.join(os.tmpdir(), `test-vec-${process.hrtime.bigint()}.db`);
+}
+
+export function makeDoc(overrides: Partial<VectorDocument> = {}): VectorDocument {
+  return {
+    id: 'wp_site1_1',
+    siteId: 'site-1',
+    title: 'Hello World',
+    content: 'This is a test post about hello world.',
+    postType: 'post',
+    postId: 1,
+    chunkIndex: 0,
+    vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.1),
+    metadata: JSON.stringify({ excerpt: 'test' }),
+    indexedAt: Date.now(),
+    post_date_gmt: '2024-01-01T00:00:00',
+    post_modified_gmt: '2024-01-01T00:00:00',
+    doc_url: 'https://example.com/hello-world',
+    ...overrides,
+  };
+}
+
+describe('SqliteVecStore — initialize/close', () => {
+  it('initializes and closes without error', async () => {
+    const dbPath = tmpDb();
+    const store = new SqliteVecStore(dbPath);
+    await store.initialize();
+    await store.close();
+    fs.unlinkSync(dbPath);
+  });
+
+  it('throws when upsert is called before initialize', async () => {
+    const store = new SqliteVecStore(tmpDb());
+    await expect(store.upsert('site-1', [])).rejects.toThrow('not initialized');
+  });
+});
+
+describe('upsert + getSiteStats', () => {
+  let store: SqliteVecStore;
+  let dbPath: string;
+
+  beforeEach(async () => {
+    dbPath = tmpDb();
+    store = new SqliteVecStore(dbPath);
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  });
+
+  it('inserts a document without error', async () => {
+    await expect(store.upsert('site-1', [makeDoc()])).resolves.not.toThrow();
+  });
+
+  it('is idempotent — same id twice yields count of 1', async () => {
+    const doc = makeDoc();
+    await store.upsert('site-1', [doc]);
+    await store.upsert('site-1', [doc]);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(1);
+  });
+
+  it('inserts a batch and all rows appear in stats', async () => {
+    const docs = Array.from({ length: 5 }, (_, i) =>
+      makeDoc({ id: `wp_s_${i}`, postId: i }),
+    );
+    await store.upsert('site-1', docs);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(5);
+    expect(stats.documentCount).toBe(5);
+  });
+
+  it('skips empty array without error', async () => {
+    await expect(store.upsert('site-1', [])).resolves.not.toThrow();
+  });
+
+  it('getSiteStats returns zeros for unindexed site', async () => {
+    const stats = await store.getSiteStats('no-such-site');
+    expect(stats).toEqual({ siteId: 'no-such-site', documentCount: 0, chunkCount: 0, lastIndexed: 0 });
+  });
+
+  it('getSiteStats counts chunks vs unique posts correctly', async () => {
+    const docs = [
+      makeDoc({ id: 'wp_s_1_c0', postId: 1, chunkIndex: 0 }),
+      makeDoc({ id: 'wp_s_1_c1', postId: 1, chunkIndex: 1 }),
+      makeDoc({ id: 'wp_s_2_c0', postId: 2, chunkIndex: 0 }),
+    ];
+    await store.upsert('site-1', docs);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(3);
+    expect(stats.documentCount).toBe(2); // 2 unique post IDs
+  });
+});
+
+describe('search', () => {
+  let store: SqliteVecStore;
+  let dbPath: string;
+
+  beforeEach(async () => {
+    dbPath = tmpDb();
+    store = new SqliteVecStore(dbPath);
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  });
+
+  it('returns empty array for non-existent site', async () => {
+    const results = await store.search('no-such-site', new Float32Array(VECTOR_DIMENSIONS).fill(0), { limit: 5 });
+    expect(results).toEqual([]);
+  });
+
+  it('returns results ranked by score descending', async () => {
+    const docA = makeDoc({ id: 'wp_s_1', postId: 1, vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.5) });
+    const docB = makeDoc({ id: 'wp_s_2', postId: 2, vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) });
+    await store.upsert('site-1', [docA, docB]);
+
+    const query = new Float32Array(VECTOR_DIMENSIONS).fill(1.0);
+    const results = await store.search('site-1', query, { limit: 5 });
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].postId).toBe(2); // docB is closest to query
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i].score).toBeLessThanOrEqual(results[i - 1].score);
+    }
+  });
+
+  it('deduplicates — only the highest-scoring chunk per postId is returned', async () => {
+    const chunk0 = makeDoc({ id: 'wp_s_1_c0', postId: 1, chunkIndex: 0, vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.5) });
+    const chunk1 = makeDoc({ id: 'wp_s_1_c1', postId: 1, chunkIndex: 1, vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) });
+    await store.upsert('site-1', [chunk0, chunk1]);
+
+    const results = await store.search('site-1', new Float32Array(VECTOR_DIMENSIONS).fill(1.0), { limit: 10 });
+    const postOneHits = results.filter(r => r.postId === 1);
+    expect(postOneHits.length).toBe(1);
+  });
+
+  it('filters by relevanceFloor', async () => {
+    // Very dissimilar vector (all zeros vs query of all ones — maximum distance)
+    const doc = makeDoc({ id: 'wp_s_1', postId: 1, vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.0) });
+    await store.upsert('site-1', [doc]);
+
+    const query = new Float32Array(VECTOR_DIMENSIONS).fill(1.0);
+    const results = await store.search('site-1', query, { limit: 10, relevanceFloor: 0.99 });
+    expect(results).toEqual([]);
+  });
+
+  it('filters by postType when specified', async () => {
+    const postDoc = makeDoc({ id: 'wp_s_1', postId: 1, postType: 'post', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) });
+    const pageDoc = makeDoc({ id: 'wp_s_2', postId: 2, postType: 'page', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) });
+    await store.upsert('site-1', [postDoc, pageDoc]);
+
+    const results = await store.search('site-1', new Float32Array(VECTOR_DIMENSIONS).fill(1.0), { limit: 10, postType: 'post' });
+    expect(results.every(r => r.postType === 'post')).toBe(true);
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it('rejects invalid postType to prevent injection', async () => {
+    await store.upsert('site-1', [makeDoc()]);
+    await expect(
+      store.search('site-1', new Float32Array(VECTOR_DIMENSIONS).fill(0), { limit: 5, postType: "post'; DROP TABLE docs;--" }),
+    ).rejects.toThrow('Invalid postType');
+  });
+});
+
+describe('searchAcrossSites', () => {
+  let store: SqliteVecStore;
+  let dbPath: string;
+
+  beforeEach(async () => {
+    dbPath = tmpDb();
+    store = new SqliteVecStore(dbPath);
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  });
+
+  it('returns empty map for unindexed sites', async () => {
+    const results = await store.searchAcrossSites(['no-site'], new Float32Array(VECTOR_DIMENSIONS).fill(0), { limit: 5 });
+    expect(results.size).toBe(0);
+  });
+
+  it('returns results for each indexed site', async () => {
+    await store.upsert('site-a', [makeDoc({ id: 'wp_a_1', siteId: 'site-a', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) })]);
+    await store.upsert('site-b', [makeDoc({ id: 'wp_b_1', siteId: 'site-b', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) })]);
+
+    const results = await store.searchAcrossSites(
+      ['site-a', 'site-b'],
+      new Float32Array(VECTOR_DIMENSIONS).fill(1.0),
+      { limit: 5 },
+    );
+    expect(results.has('site-a')).toBe(true);
+    expect(results.has('site-b')).toBe(true);
+  });
+
+  it('FTS boost: document matching queryText scores higher than vector-only peer', async () => {
+    // Both docs have the same vector (fill(0.98)) and the query is fill(1.0).
+    // L2 distance ≈ 0.39 → score ≈ 0.61 for both (above the 0.35 floor).
+    // The FTS-matching doc receives a +0.1 boost → ≈ 0.71, clearly above the peer at ≈ 0.61.
+    // Using identical-but-non-query vectors avoids the score-1.0 cap that would mask the boost.
+    const withKeyword = makeDoc({
+      id: 'wp_s_1', postId: 1,
+      title: 'woocommerce payment gateway',
+      content: 'Configure woocommerce payment gateway for your store.',
+      vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.98),
+    });
+    const withoutKeyword = makeDoc({
+      id: 'wp_s_2', postId: 2,
+      title: 'Shopping cart setup',
+      content: 'Setting up your shopping cart for checkout.',
+      vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.98),
+    });
+    await store.upsert('site-1', [withKeyword, withoutKeyword]);
+
+    const results = await store.searchAcrossSites(
+      ['site-1'],
+      new Float32Array(VECTOR_DIMENSIONS).fill(1.0),
+      { limit: 10, queryText: 'woocommerce payment' },
+    );
+    const hits = results.get('site-1') ?? [];
+    const keywordHit = hits.find(r => r.postId === 1);
+    const noKeywordHit = hits.find(r => r.postId === 2);
+    expect(keywordHit).toBeDefined();
+    expect(noKeywordHit).toBeDefined();
+    expect(keywordHit!.score).toBeGreaterThan(noKeywordHit!.score);
+  });
+
+  it('FTS-only result is included with score 0.45 when vector match is below floor', async () => {
+    const ftsOnlyDoc = makeDoc({
+      id: 'wp_s_1', postId: 1,
+      title: 'uniquekeyword alpha',
+      content: 'This post is about uniquekeyword alpha concepts.',
+      vector: new Float32Array(VECTOR_DIMENSIONS).fill(0.0), // will be far from query
+    });
+    await store.upsert('site-1', [ftsOnlyDoc]);
+
+    const results = await store.searchAcrossSites(
+      ['site-1'],
+      new Float32Array(VECTOR_DIMENSIONS).fill(1.0),     // opposite vector → low similarity
+      { limit: 10, queryText: 'uniquekeyword', relevanceFloor: 0.99 }, // floor kills vector result
+    );
+    const hits = results.get('site-1') ?? [];
+    const ftsResult = hits.find(r => r.postId === 1);
+    expect(ftsResult).toBeDefined();
+    expect(ftsResult!.score).toBe(0.45);
+  });
+
+  it('excludes post types in excludedTypes', async () => {
+    await store.upsert('site-1', [
+      makeDoc({ id: 'wp_s_1', postId: 1, postType: 'post', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) }),
+      makeDoc({ id: 'wp_s_2', postId: 2, postType: 'attachment', vector: new Float32Array(VECTOR_DIMENSIONS).fill(1.0) }),
+    ]);
+    const results = await store.searchAcrossSites(
+      ['site-1'],
+      new Float32Array(VECTOR_DIMENSIONS).fill(1.0),
+      { limit: 10, excludedTypes: ['attachment'] },
+    );
+    const hits = results.get('site-1') ?? [];
+    expect(hits.every(r => r.postType !== 'attachment')).toBe(true);
+  });
+});
+
+describe('CRUD — lookupById / delete / dropSite / dropAllTables / listSites / cleanupExcludedTypes', () => {
+  let store: SqliteVecStore;
+  let dbPath: string;
+
+  beforeEach(async () => {
+    dbPath = tmpDb();
+    store = new SqliteVecStore(dbPath);
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  });
+
+  // lookupById
+  it('lookupById returns null for non-existent site', async () => {
+    expect(await store.lookupById('no-site', 'any-id')).toBeNull();
+  });
+
+  it('lookupById returns null for non-existent document', async () => {
+    await store.upsert('site-1', [makeDoc()]);
+    expect(await store.lookupById('site-1', 'no-such-doc')).toBeNull();
+  });
+
+  it('lookupById returns id, title, content for existing document', async () => {
+    await store.upsert('site-1', [makeDoc({ id: 'wp_s_1', title: 'My Post', content: 'My Content' })]);
+    const result = await store.lookupById('site-1', 'wp_s_1');
+    expect(result).toMatchObject({ id: 'wp_s_1', title: 'My Post', content: 'My Content' });
+  });
+
+  // delete
+  it('delete removes specific document ids from all three tables', async () => {
+    await store.upsert('site-1', [
+      makeDoc({ id: 'wp_s_1', postId: 1 }),
+      makeDoc({ id: 'wp_s_2', postId: 2 }),
+    ]);
+    await store.delete('site-1', ['wp_s_1']);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(1);
+  });
+
+  it('delete with __all__ sentinel clears all docs for the site', async () => {
+    await store.upsert('site-1', [
+      makeDoc({ id: 'wp_s_1', postId: 1 }),
+      makeDoc({ id: 'wp_s_2', postId: 2 }),
+    ]);
+    await store.delete('site-1', ['__all__']);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(0);
+  });
+
+  // dropSite
+  it('dropSite removes all three tables so getSiteStats returns zeros', async () => {
+    await store.upsert('site-1', [makeDoc()]);
+    await store.dropSite('site-1');
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(0);
+  });
+
+  it('dropSite does not throw for non-existent site', async () => {
+    await expect(store.dropSite('no-such-site')).resolves.not.toThrow();
+  });
+
+  // dropAllTables
+  it('dropAllTables clears all sites and returns a positive count', async () => {
+    await store.upsert('site-x', [makeDoc({ id: 'wp_x_1', siteId: 'site-x' })]);
+    await store.upsert('site-y', [makeDoc({ id: 'wp_y_1', siteId: 'site-y' })]);
+    const count = await store.dropAllTables();
+    expect(count).toBeGreaterThan(0);
+    expect(await store.listSites()).toEqual([]);
+  });
+
+  // listSites
+  it('listSites returns empty when nothing is indexed', async () => {
+    expect(await store.listSites()).toEqual([]);
+  });
+
+  it('listSites returns siteIds of indexed sites', async () => {
+    await store.upsert('site-a', [makeDoc({ id: 'wp_a_1', siteId: 'site-a' })]);
+    await store.upsert('site-b', [makeDoc({ id: 'wp_b_1', siteId: 'site-b' })]);
+    const sites = await store.listSites();
+    expect(sites).toContain('site-a');
+    expect(sites).toContain('site-b');
+  });
+
+  // cleanupExcludedTypes
+  it('cleanupExcludedTypes removes docs of excluded post types', async () => {
+    await store.upsert('site-1', [
+      makeDoc({ id: 'wp_s_1', postId: 1, postType: 'post' }),
+      makeDoc({ id: 'wp_s_2', postId: 2, postType: 'attachment' }),
+    ]);
+    const result = await store.cleanupExcludedTypes(['attachment']);
+    expect(result.docsRemoved).toBe(1);
+    expect(result.tablesScanned).toBe(1);
+    const stats = await store.getSiteStats('site-1');
+    expect(stats.chunkCount).toBe(1);
+  });
+
+  it('cleanupExcludedTypes returns zeros for empty types list', async () => {
+    await store.upsert('site-1', [makeDoc()]);
+    const result = await store.cleanupExcludedTypes([]);
+    expect(result.docsRemoved).toBe(0);
+    expect(result.tablesScanned).toBe(0);
+  });
+});

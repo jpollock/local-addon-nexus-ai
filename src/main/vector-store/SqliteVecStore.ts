@@ -1,0 +1,462 @@
+// src/main/vector-store/SqliteVecStore.ts
+import Database from 'better-sqlite3';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const sqliteVec = require('sqlite-vec') as { load: (db: unknown) => void; serialize: (vec: Float32Array) => Uint8Array };
+import { VECTOR_DIMENSIONS } from '../../common/constants';
+import { VectorDocument, SearchOptions, SearchResult, SiteIndexStats } from '../../common/types';
+import type { IVectorStore } from './IVectorStore';
+
+export class SqliteVecStore implements IVectorStore {
+  private db: Database.Database | null = null;
+
+  constructor(private readonly dbPath: string) {}
+
+  async initialize(): Promise<void> {
+    this.db = new Database(this.dbPath);
+    sqliteVec.load(this.db);
+    this.db.pragma('journal_mode = WAL');
+    this.db.pragma('synchronous = NORMAL');
+  }
+
+  private get conn(): Database.Database {
+    if (!this.db) throw new Error('SqliteVecStore not initialized. Call initialize() first.');
+    return this.db;
+  }
+
+  private static validateSiteId(siteId: string): string {
+    if (!/^[a-zA-Z0-9_-]+$/.test(siteId)) {
+      throw new Error(`Invalid siteId "${siteId}": must contain only letters, numbers, hyphens, and underscores.`);
+    }
+    return siteId;
+  }
+
+  private static validatePostType(postType: string): string {
+    if (!/^[a-z0-9_-]+$/i.test(postType)) {
+      throw new Error(`Invalid postType "${postType}": must contain only letters, numbers, hyphens, and underscores.`);
+    }
+    return postType;
+  }
+
+  private tablePrefix(siteId: string): string {
+    SqliteVecStore.validateSiteId(siteId);
+    return `site_${siteId}`;
+  }
+
+  private ensureTables(siteId: string): void {
+    const p = this.tablePrefix(siteId);
+    this.conn.exec(`
+      CREATE TABLE IF NOT EXISTS "${p}_docs" (
+        id TEXT PRIMARY KEY,
+        site_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        post_type TEXT NOT NULL,
+        post_id INTEGER NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        metadata TEXT NOT NULL,
+        indexed_at INTEGER NOT NULL,
+        post_date_gmt TEXT,
+        post_modified_gmt TEXT,
+        doc_url TEXT
+      );
+      CREATE VIRTUAL TABLE IF NOT EXISTS "${p}_vec" USING vec0(
+        embedding FLOAT[${VECTOR_DIMENSIONS}]
+      );
+      CREATE VIRTUAL TABLE IF NOT EXISTS "${p}_fts" USING fts5(title, content);
+    `);
+  }
+
+  // Implemented in Task 2
+  async upsert(siteId: string, documents: VectorDocument[]): Promise<void> {
+    if (!this.db) throw new Error('SqliteVecStore not initialized. Call initialize() first.');
+    if (documents.length === 0) return;
+    this.ensureTables(siteId);
+    const p = this.tablePrefix(siteId);
+
+    const getRowid = this.conn.prepare<[string]>(`SELECT rowid FROM "${p}_docs" WHERE id = ?`);
+    const deleteVec = this.conn.prepare<[number]>(`DELETE FROM "${p}_vec" WHERE rowid = ?`);
+    const deleteFts = this.conn.prepare<[number]>(`DELETE FROM "${p}_fts" WHERE rowid = ?`);
+    const deleteDoc = this.conn.prepare<[string]>(`DELETE FROM "${p}_docs" WHERE id = ?`);
+    const insertDoc = this.conn.prepare(
+      `INSERT INTO "${p}_docs" (id, site_id, title, content, post_type, post_id, chunk_index, metadata, indexed_at, post_date_gmt, post_modified_gmt, doc_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    // vec0 v0.1.9 does not accept a parameterised rowid — use LAST_INSERT_ROWID() instead
+    const insertVec = this.conn.prepare(`INSERT INTO "${p}_vec" (rowid, embedding) VALUES (LAST_INSERT_ROWID(), ?)`);
+    const insertFts = this.conn.prepare(`INSERT INTO "${p}_fts" (rowid, title, content) VALUES (LAST_INSERT_ROWID(), ?, ?)`);
+
+    const upsertAll = this.conn.transaction((docs: VectorDocument[]) => {
+      for (const doc of docs) {
+        const existing = getRowid.get(doc.id) as { rowid: number } | undefined;
+        if (existing) {
+          deleteVec.run(existing.rowid);
+          deleteFts.run(existing.rowid);
+          deleteDoc.run(doc.id);
+        }
+        insertDoc.run(
+          doc.id, doc.siteId, doc.title, doc.content, doc.postType,
+          doc.postId, doc.chunkIndex, doc.metadata, doc.indexedAt,
+          doc.post_date_gmt ?? null, doc.post_modified_gmt ?? null, doc.doc_url ?? null,
+        );
+        // Serialize Float32Array to raw IEEE-754 bytes; vec0 accepts a BLOB blob
+        insertVec.run(Buffer.from(doc.vector.buffer, doc.vector.byteOffset, doc.vector.byteLength));
+        insertFts.run(doc.title, doc.content);
+      }
+    });
+
+    upsertAll(documents);
+  }
+
+  // Implemented in Task 3
+  async search(
+    siteId: string,
+    queryVector: Float32Array | number[],
+    options: SearchOptions,
+  ): Promise<SearchResult[]> {
+    // Validate postType early — before any DB access — to prevent injection
+    if (options.postType) {
+      SqliteVecStore.validatePostType(options.postType);
+    }
+
+    const p = this.tablePrefix(siteId);
+    const tableExists = this.conn.prepare(
+      `SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`,
+    ).get(`${p}_docs`);
+    if (!tableExists) return [];
+
+    const limit = options.limit ?? 10;
+    const relevanceFloor = options.relevanceFloor ?? 0.3;
+    const fetchLimit = limit * 3;
+    const vec = queryVector instanceof Float32Array ? queryVector : new Float32Array(queryVector);
+    // Convert to raw IEEE-754 bytes — sqliteVec.serialize does not exist in v0.1.9
+    const blob = Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength);
+
+    // Step 1: ANN search — preferred simpler form per vec0 v0.1.9
+    const vecRows = this.conn.prepare(
+      `SELECT rowid, distance FROM "${p}_vec" WHERE embedding MATCH ? AND k = ? ORDER BY distance`,
+    ).all(blob, fetchLimit) as Array<{ rowid: number; distance: number }>;
+
+    if (vecRows.length === 0) return [];
+
+    // Step 2: fetch doc metadata for the matching rowids
+    const rowidToDistance = new Map(vecRows.map(r => [r.rowid, r.distance]));
+    const placeholders = vecRows.map(() => '?').join(', ');
+    const rowidParams = vecRows.map(r => r.rowid);
+
+    type RawDoc = {
+      rowid: number;
+      id: string;
+      title: string;
+      content: string;
+      post_type: string;
+      post_id: number;
+      metadata: string;
+    };
+
+    let docRows: RawDoc[];
+    if (options.postType) {
+      docRows = this.conn.prepare(
+        `SELECT rowid, id, title, content, post_type, post_id, metadata FROM "${p}_docs" WHERE rowid IN (${placeholders}) AND post_type = ?`,
+      ).all(...rowidParams, options.postType) as RawDoc[];
+    } else {
+      docRows = this.conn.prepare(
+        `SELECT rowid, id, title, content, post_type, post_id, metadata FROM "${p}_docs" WHERE rowid IN (${placeholders})`,
+      ).all(...rowidParams) as RawDoc[];
+    }
+
+    // Step 3: compute scores, apply relevanceFloor, dedup by postId (keep best chunk)
+    // cosine_sim = 1 - L2² / 2  (exact for unit-normalised vectors; stable for non-unit test vecs)
+    const byPostId = new Map<number, SearchResult>();
+    for (const doc of docRows) {
+      const distance = rowidToDistance.get(doc.rowid) ?? 1;
+      const score = 1 - (distance * distance) / 2;
+      if (score < relevanceFloor) continue;
+      const existing = byPostId.get(doc.post_id);
+      if (!existing || score > existing.score) {
+        byPostId.set(doc.post_id, {
+          id: doc.id,
+          title: doc.title,
+          content: doc.content,
+          postType: doc.post_type,
+          postId: doc.post_id,
+          score,
+          metadata: doc.metadata,
+        });
+      }
+    }
+
+    return Array.from(byPostId.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+  }
+
+  // Implemented in Task 4
+  async searchAcrossSites(
+    siteIds: string[],
+    queryVector: Float32Array | number[],
+    options: SearchOptions & { queryText?: string; excludedTypes?: string[] },
+    _concurrency = 5,
+  ): Promise<Map<string, SearchResult[]>> {
+    if (options.postType) SqliteVecStore.validatePostType(options.postType);
+    (options.excludedTypes ?? []).forEach(t => SqliteVecStore.validatePostType(t));
+
+    const results = new Map<string, SearchResult[]>();
+    const vec = queryVector instanceof Float32Array ? queryVector : new Float32Array(queryVector);
+    // Serialize to raw IEEE-754 bytes — same pattern as search()
+    const blob = Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength);
+    const limit = options.limit ?? 3;
+    const vectorFloor = options.relevanceFloor ?? 0.35;
+    const excludedTypes = new Set(options.excludedTypes ?? []);
+
+    for (const siteId of siteIds) {
+      const p = this.tablePrefix(siteId);
+      const tableExists = this.conn.prepare(
+        `SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`,
+      ).get(`${p}_docs`);
+      if (!tableExists) continue;
+
+      try {
+        type RawDocRow = {
+          id: string;
+          title: string;
+          content: string;
+          post_type: string;
+          post_id: number;
+          metadata: string;
+        };
+
+        // ── Vector ANN search — primary relevance signal ─────────────────────
+        const vecRows = this.conn.prepare(
+          `SELECT d.id, d.title, d.content, d.post_type, d.post_id, d.metadata, v.distance
+           FROM (SELECT rowid, distance FROM "${p}_vec" WHERE embedding MATCH ? AND k = ? ORDER BY distance) v
+           JOIN "${p}_docs" d ON d.rowid = v.rowid
+           ORDER BY v.distance`,
+        ).all(blob, limit * 4) as (RawDocRow & { distance: number })[];
+
+        // Build id → SearchResult map: only entries above floor, not in excluded types
+        // cosine_sim = 1 - L2² / 2  (exact for unit-normalised vectors; stable for non-unit test vecs)
+        const vecMap = new Map<string, SearchResult>();
+        for (const row of vecRows) {
+          const score = 1 - (row.distance * row.distance) / 2;
+          if (score >= vectorFloor && !excludedTypes.has(row.post_type)) {
+            vecMap.set(row.id, {
+              id: row.id,
+              title: row.title,
+              content: row.content,
+              postType: row.post_type,
+              postId: row.post_id,
+              score,
+              metadata: row.metadata,
+            });
+          }
+        }
+
+        // ── FTS5 keyword search — catches exact terms the vector misses ───────
+        const ftsMatchIds = new Set<string>();
+        const ftsExtraMap = new Map<string, SearchResult>();
+
+        if (options.queryText) {
+          try {
+            // Two-step: get rowids from FTS5 (table name — not alias — required for MATCH
+            // in this SQLite version), then look up doc metadata by rowid.
+            const ftsHits = this.conn.prepare(
+              `SELECT rowid FROM "${p}_fts" WHERE "${p}_fts" MATCH ? LIMIT ?`,
+            ).all(options.queryText, limit * 2) as { rowid: number }[];
+
+            if (ftsHits.length > 0) {
+              const ftsPh = ftsHits.map(() => '?').join(', ');
+              const ftsRowids = ftsHits.map(r => r.rowid);
+              const ftsDocs = this.conn.prepare(
+                `SELECT id, title, content, post_type, post_id, metadata
+                 FROM "${p}_docs" WHERE rowid IN (${ftsPh})`,
+              ).all(...ftsRowids) as RawDocRow[];
+
+              for (const row of ftsDocs) {
+                if (excludedTypes.has(row.post_type)) continue;
+                ftsMatchIds.add(row.id);
+                if (!vecMap.has(row.id)) {
+                  // FTS-only result: fixed score 0.45
+                  ftsExtraMap.set(row.id, {
+                    id: row.id,
+                    title: row.title,
+                    content: row.content,
+                    postType: row.post_type,
+                    postId: row.post_id,
+                    score: 0.45,
+                    metadata: row.metadata,
+                  });
+                }
+              }
+            }
+          } catch {
+            // FTS table not yet populated or invalid query syntax — vector-only for this site
+          }
+        }
+
+        // ── Boost overlap: vector results that also appear in FTS ─────────────
+        for (const [id, result] of vecMap) {
+          if (ftsMatchIds.has(id)) {
+            result.score = Math.min(1.0, result.score + 0.1);
+          }
+        }
+
+        // ── Merge, dedup by postId (keep best score), sort, slice ─────────────
+        const allResults = [...vecMap.values(), ...ftsExtraMap.values()];
+        const bestByPostId = new Map<number, SearchResult>();
+        for (const result of allResults) {
+          const existing = bestByPostId.get(result.postId);
+          if (!existing || result.score > existing.score) {
+            bestByPostId.set(result.postId, result);
+          }
+        }
+
+        const hits = Array.from(bestByPostId.values())
+          .sort((a, b) => b.score - a.score)
+          .slice(0, limit);
+
+        if (hits.length > 0) {
+          results.set(siteId, hits);
+        }
+      } catch {
+        // Site search failed — skip this site
+      }
+    }
+
+    return results;
+  }
+
+  // Implemented in Task 5
+  async lookupById(siteId: string, docId: string): Promise<{ id: string; content: string; title: string } | null> {
+    if (!/^[a-zA-Z0-9:_\-]+$/.test(docId)) return null;
+    const p = this.tablePrefix(siteId);
+    const tableExists = this.conn.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(`${p}_docs`);
+    if (!tableExists) return null;
+    const row = this.conn.prepare(`SELECT id, title, content FROM "${p}_docs" WHERE id = ?`).get(docId) as
+      | { id: string; title: string; content: string }
+      | undefined;
+    return row ?? null;
+  }
+
+  async delete(siteId: string, documentIds: string[]): Promise<void> {
+    const p = this.tablePrefix(siteId);
+    const tableExists = this.conn.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(`${p}_docs`);
+    if (!tableExists) return;
+
+    const getRowid = this.conn.prepare<[string]>(`SELECT rowid FROM "${p}_docs" WHERE id = ?`);
+    const deleteVec = this.conn.prepare<[number]>(`DELETE FROM "${p}_vec" WHERE rowid = ?`);
+    const deleteFts = this.conn.prepare<[number]>(`DELETE FROM "${p}_fts" WHERE rowid = ?`);
+    const deleteDoc = this.conn.prepare<[string]>(`DELETE FROM "${p}_docs" WHERE id = ?`);
+
+    if (documentIds.length === 1 && documentIds[0] === '__all__') {
+      this.conn.transaction(() => {
+        this.conn.exec(`DELETE FROM "${p}_vec"`);
+        this.conn.exec(`DELETE FROM "${p}_fts"`);
+        this.conn.exec(`DELETE FROM "${p}_docs"`);
+      })();
+      return;
+    }
+
+    this.conn.transaction(() => {
+      for (const id of documentIds) {
+        const existing = getRowid.get(id) as { rowid: number } | undefined;
+        if (existing) {
+          deleteVec.run(existing.rowid);
+          deleteFts.run(existing.rowid);
+          deleteDoc.run(id);
+        }
+      }
+    })();
+  }
+
+  async dropSite(siteId: string): Promise<void> {
+    const p = this.tablePrefix(siteId);
+    this.conn.transaction(() => {
+      this.conn.exec(`DROP TABLE IF EXISTS "${p}_fts"`);
+      this.conn.exec(`DROP TABLE IF EXISTS "${p}_vec"`);
+      this.conn.exec(`DROP TABLE IF EXISTS "${p}_docs"`);
+    })();
+  }
+
+  async dropAllTables(): Promise<number> {
+    const sites = await this.listSites();
+    for (const siteId of sites) {
+      await this.dropSite(siteId);
+    }
+    return sites.length;
+  }
+
+  async listSites(): Promise<string[]> {
+    const rows = this.conn.prepare(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'site_%_docs' ORDER BY name`,
+    ).all() as { name: string }[];
+    // Strip "site_" prefix and "_docs" suffix to recover the original siteId (hyphens preserved)
+    return rows.map(({ name }) => name.slice('site_'.length, -'_docs'.length));
+  }
+
+  async cleanupExcludedTypes(
+    excludedTypes: string[],
+    onProgress?: (current: number, total: number, tableName: string) => void,
+  ): Promise<{ tablesScanned: number; docsRemoved: number }> {
+    if (excludedTypes.length === 0) return { tablesScanned: 0, docsRemoved: 0 };
+    excludedTypes.forEach(t => SqliteVecStore.validatePostType(t));
+
+    const sites = await this.listSites();
+    let docsRemoved = 0;
+    const placeholders = excludedTypes.map(() => '?').join(', ');
+
+    for (let i = 0; i < sites.length; i++) {
+      const siteId = sites[i];
+      const p = this.tablePrefix(siteId);
+      onProgress?.(i + 1, sites.length, `${p}_docs`);
+
+      try {
+        const toDelete = this.conn.prepare(
+          `SELECT rowid, id FROM "${p}_docs" WHERE post_type IN (${placeholders})`,
+        ).all(...excludedTypes) as { rowid: number; id: string }[];
+
+        if (toDelete.length === 0) continue;
+
+        const deleteVec = this.conn.prepare<[number]>(`DELETE FROM "${p}_vec" WHERE rowid = ?`);
+        const deleteFts = this.conn.prepare<[number]>(`DELETE FROM "${p}_fts" WHERE rowid = ?`);
+        const deleteDoc = this.conn.prepare<[string]>(`DELETE FROM "${p}_docs" WHERE id = ?`);
+
+        this.conn.transaction(() => {
+          for (const { rowid, id } of toDelete) {
+            deleteVec.run(rowid);
+            deleteFts.run(rowid);
+            deleteDoc.run(id);
+          }
+        })();
+
+        docsRemoved += toDelete.length;
+      } catch { /* skip site on error */ }
+    }
+
+    return { tablesScanned: sites.length, docsRemoved };
+  }
+
+  // Implemented in Task 2 (needed by upsert tests)
+  async getSiteStats(siteId: string): Promise<SiteIndexStats> {
+    const p = this.tablePrefix(siteId);
+    const tableExists = this.conn.prepare(
+      `SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`,
+    ).get(`${p}_docs`);
+    if (!tableExists) return { siteId, documentCount: 0, chunkCount: 0, lastIndexed: 0 };
+
+    const row = this.conn.prepare(
+      `SELECT COUNT(*) as chunk_count, COUNT(DISTINCT post_id) as doc_count, COALESCE(MAX(indexed_at), 0) as last_indexed FROM "${p}_docs"`,
+    ).get() as { chunk_count: number; doc_count: number; last_indexed: number };
+
+    return { siteId, documentCount: row.doc_count, chunkCount: row.chunk_count, lastIndexed: row.last_indexed };
+  }
+
+  // No-op — SQLite doesn't need LanceDB-style compaction
+  async optimize(_siteId: string): Promise<void> { /* intentional no-op */ }
+
+  async close(): Promise<void> {
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+  }
+}

@@ -45,6 +45,7 @@
     "pretest:e2e": "echo 'Requires Local running with Nexus AI addon loaded'",
     "test:cli-e2e": "jest --config tests/e2e-cli/jest.cli-e2e.config.js",
     "test:cli-e2e:verbose": "jest --config tests/e2e-cli/jest.cli-e2e.config.js --verbose",
+    "test:evals": "jest --config tests/e2e-cli/jest.evals.config.js",
     "pretest:cli-e2e": "echo 'Requires PRODUCTION Local running (/Applications/Local.app)'",
     "test:stress": "jest --config tests/stress/jest.stress.config.js",
     "test:stress:verbose": "jest --config tests/stress/jest.stress.config.js --verbose",
@@ -69,7 +70,6 @@
     "rebuild": "electron-rebuild -v 37.8.0 -f -w better-sqlite3"
   },
   "dependencies": {
-    "@lancedb/lancedb": "^0.13.0",
     "apache-arrow": ">=13.0.0 <=17.0.0",
     "better-sqlite3": "^11.10.0",
     "commander": "^11.1.0",
@@ -81,6 +81,7 @@
     "p-limit": "^7.3.0",
     "p-queue": "^6.6.2",
     "react-window": "^1.8.10",
+    "sqlite-vec": "^0.1.9",
     "tar": "^6.2.1",
     "zod": "^3.22.4"
   },

@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
-import { VectorStore } from '../../../src/main/vector-store/VectorStore';
+import { SqliteVecStore } from '../../../src/main/vector-store/SqliteVecStore';
 import { EmbeddingService } from '../../../src/main/embeddings/EmbeddingService';
 import { ContentPipeline } from '../../../src/main/content/ContentPipeline';
 import { MySQLExtractor } from '../../../src/main/content/MySQLExtractor';
@@ -52,12 +52,12 @@ function createMemoryStorage(): RegistryStorage {
 }
 
 /**
- * Integration test harness. Boots real ONNX embeddings, real LanceDB vector store,
+ * Integration test harness. Boots real ONNX embeddings, real sqlite-vec vector store,
  * real MCP server, and real tool registry — no mocks for the core pipeline.
  */
 export class TestHarness {
   embeddingService!: EmbeddingService;
-  vectorStore!: VectorStore;
+  vectorStore!: SqliteVecStore;
   contentPipeline!: ContentPipeline;
   indexRegistry!: IndexRegistry;
   registry!: ToolRegistry;
@@ -83,8 +83,8 @@ export class TestHarness {
     this.tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-integration-'));
 
     // Initialize real services
-    const vectorDbPath = path.join(this.tmpDir, 'vectors');
-    this.vectorStore = new VectorStore(vectorDbPath);
+    const vectorDbPath = path.join(this.tmpDir, 'vectors.db');
+    this.vectorStore = new SqliteVecStore(vectorDbPath);
     await this.vectorStore.initialize();
 
     this.embeddingService = new EmbeddingService(MODELS_DIR);

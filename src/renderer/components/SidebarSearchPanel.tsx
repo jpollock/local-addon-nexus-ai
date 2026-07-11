@@ -314,8 +314,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     if (!this.state.query.trim() || this.state.loading) return;
 
     const queryText = this.state.query;
-    // Single-turn: clear query immediately so UX reflects that this is one-shot
-    this.setState({ loading: true, error: null, query: '', resultsCount: null, localResults: [], wpeResults: [] });
+    this.setState({ loading: true, error: null, interpretedFilters: null, resultsCount: null, localResults: [], wpeResults: [] });
 
     try {
       const result = await this.props.electron.ipcRenderer.invoke(
@@ -329,13 +328,12 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
         const errorMsg = result.error?.includes('No API key') || result.error?.includes('not available')
           ? 'AI search requires a configured provider. Check Nexus AI → Settings, or use Manual mode.'
           : 'Could not parse query — try rephrasing, or switch to Manual mode.';
-        // Restore the query so the user can edit and retry rather than losing their input
-        this.setState({ loading: false, error: errorMsg, query: queryText });
+        this.setState({ loading: false, error: errorMsg });
         return;
       }
 
       if (result.needsClarification && result.question) {
-        this.setState({ loading: false, error: result.question, query: queryText });
+        this.setState({ loading: false, error: result.question });
         return;
       }
 

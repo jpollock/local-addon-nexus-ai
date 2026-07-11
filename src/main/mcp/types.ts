@@ -1,4 +1,4 @@
-import { VectorStore } from '../vector-store/VectorStore';
+import type { IVectorStore } from '../vector-store/IVectorStore';
 import { EmbeddingService } from '../embeddings/EmbeddingService';
 import { ContentPipeline } from '../content/ContentPipeline';
 import { IndexRegistry } from '../content/IndexRegistry';
@@ -101,7 +101,7 @@ export interface McpToolHandler {
  * Injected during module registration.
  */
 export interface NexusServices {
-  vectorStore: VectorStore;
+  vectorStore: IVectorStore;
   embeddingService: EmbeddingService;
   contentPipeline: ContentPipeline;
   indexRegistry: IndexRegistry;

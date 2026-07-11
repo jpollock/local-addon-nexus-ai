@@ -13,7 +13,7 @@ import { GraphService } from './GraphService';
 import { Site } from './types';
 import { RemoteContentExtractor } from '../content/RemoteContentExtractor';
 import { EmbeddingService } from '../embeddings/EmbeddingService';
-import { VectorStore } from '../vector-store/VectorStore';
+import type { IVectorStore } from '../vector-store/IVectorStore';
 import { VectorDocument } from '../../common/types';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import type { RegistryStorage } from '../content/IndexRegistry';
@@ -53,7 +53,7 @@ export interface WPESyncServiceOptions {
   localServices: LocalServicesBridge;
   remoteContentExtractor?: RemoteContentExtractor;
   embeddingService?: EmbeddingService;
-  vectorStore?: VectorStore;
+  vectorStore?: IVectorStore;
   logger?: any;
   registryStorage?: RegistryStorage;
   indexRegistry?: IndexRegistry;
@@ -68,7 +68,7 @@ export class WPESyncService {
   private localServices: LocalServicesBridge;
   private remoteContentExtractor?: RemoteContentExtractor;
   private embeddingService?: EmbeddingService;
-  private vectorStore?: VectorStore;
+  private vectorStore?: IVectorStore;
   private logger: any;
   private registryStorage?: RegistryStorage;
   private indexRegistry?: IndexRegistry;
@@ -425,7 +425,7 @@ export class WPESyncService {
 
     // Content indexing does NOT run here.
     // syncInstall is the metadata path only: WP version, plugins, users → graph.db.
-    // Content extraction (posts/pages → LanceDB) runs exclusively via:
+    // Content extraction (posts/pages → vector store) runs exclusively via:
     //   1. indexAllWpeContent() triggered by Operations tab "Index content" button
     //   2. The wpeContentIndex scheduled timer (if wpeContentIndexAutoEnabled = true)
     // This ensures content indexing never runs on app startup or during metadata sync.

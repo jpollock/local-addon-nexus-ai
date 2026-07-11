@@ -742,6 +742,31 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
       return [];
     },
 
+    // --- PHP version management ---
+
+    async changePhpVersion(siteId: string, version: string): Promise<void> {
+      const site = requireSite(siteId);
+      const pm = svc('siteProcessManager');
+      const dataSvc = svc('siteData');
+      if (!pm) {
+        throw new Error(`Site manager (pm) unavailable for site ${siteId}`);
+      }
+      if (!dataSvc?.updateSite) {
+        throw new Error('siteData service unavailable — cannot change PHP version');
+      }
+      const wasRunning = pm.getSiteStatus(site) === 'running';
+      if (wasRunning) {
+        await pm.stop(site);
+      }
+      // Persist the new PHP version in site data; Local reads it on next start
+      dataSvc.updateSite(siteId, { phpVersion: version });
+      if (wasRunning) {
+        // Re-fetch so start() sees the updated phpVersion
+        const updatedSite = requireSite(siteId);
+        await pm.start(updatedSite);
+      }
+    },
+
     // --- Site Groups (Local native — via SitesOrganizationService) ---
 
     getSiteGroups(): Array<{ id: string; name: string; siteIds: string[]; index: number }> {

@@ -948,6 +948,9 @@ sitesCommand
     try {
       const client = getClient({ timeout: 120000 });
 
+      // Strip @local suffix — the bare name is what the resolver and site list use
+      const bareName = target.replace(/@local$/i, '');
+
       // Resolve whether this is a WPE site by checking the sites list
       const listResult = await client.mutate<{ nexusSitesList: any }>(`
         mutation {
@@ -960,13 +963,13 @@ sitesCommand
 
       const localNames: string[] = (listResult.nexusSitesList.local ?? []).map((s: any) => s.name.toLowerCase());
       const wpeSite = (listResult.nexusSitesList.wpe ?? []).find(
-        (s: any) => s.name?.toLowerCase() === target.toLowerCase() ||
-                    s.installId?.toLowerCase() === target.toLowerCase()
+        (s: any) => s.name?.toLowerCase() === bareName.toLowerCase() ||
+                    s.installId?.toLowerCase() === bareName.toLowerCase()
       );
 
-      const isWpe = !localNames.includes(target.toLowerCase()) && !!wpeSite;
+      const isWpe = !localNames.includes(bareName.toLowerCase()) && !!wpeSite;
 
-      console.log(`\nRefreshing twin for ${target}${isWpe ? ' (WPE via SSH)' : ''}...`);
+      console.log(`\nRefreshing twin for ${bareName}${isWpe ? ' (WPE via SSH)' : ''}...`);
 
       if (isWpe) {
         const result = await client.mutate<{ nexusWpeSiteDeepRefresh: any }>(`
@@ -979,7 +982,7 @@ sitesCommand
 
         const r = result.nexusWpeSiteDeepRefresh;
         if (!r.success) { console.error(`\n❌ ${r.error}`); process.exit(1); }
-        console.log(`\n✅ ${target} refreshed via SSH`);
+        console.log(`\n✅ ${bareName} refreshed via SSH`);
         console.log(`   WP ${r.wpVersion ?? '?'} · ${r.pluginCount} plugins · ${r.themeCount} themes\n`);
         return;
       }
@@ -993,7 +996,7 @@ sitesCommand
             report
           }
         }
-      `, { target, force: options.force ?? false });
+      `, { target: bareName, force: options.force ?? false });
 
       const { success, error, report } = result.nexusSiteRefresh;
       if (!success) { console.error(`\n❌ ${error}`); process.exit(1); }

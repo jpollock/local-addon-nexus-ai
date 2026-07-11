@@ -19,7 +19,7 @@ import type { NexusSettings } from '../common/types';
 import type { IndexRegistry, RegistryStorage } from './content/IndexRegistry';
 import type { ContentPipeline } from './content/ContentPipeline';
 import type { EmbeddingService } from './embeddings/EmbeddingService';
-import type { VectorStore } from './vector-store/VectorStore';
+import type { IVectorStore } from './vector-store/IVectorStore';
 import type { McpServer } from './mcp/McpServer';
 import type { LocalServicesBridge } from './mcp/local-services-bridge';
 import type { GraphService } from './events/GraphService';
@@ -102,7 +102,7 @@ export interface IpcHandlerDeps {
   indexRegistry: IndexRegistry;
   embeddingService: EmbeddingService;
   contentPipeline: ContentPipeline;
-  vectorStore: VectorStore;
+  vectorStore: IVectorStore;
   registryStorage: RegistryStorage;
   localLogger: any;
   getMcpServer: () => McpServer | null;
@@ -1502,7 +1502,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   const filterEngine = new FilterEngine({ graphService, indexRegistry, siteDataBridge: siteData });
 
   // Determine query storage path (alongside vector DB)
-  const queryStoragePath = vectorDbPath.replace(/\/vectors\/?$/, '');
+  const queryStoragePath = vectorDbPath.replace(/[/\\]vectors\.db$/, '');
   const queryStorage = new QueryStorage(queryStoragePath);
   queryStorage.load().catch(err => localLogger.error('[NexusAI] Failed to load saved queries:', err.message));
 
@@ -1613,7 +1613,7 @@ Answer:`,
     ]);
 
     // Normalise content results to ContentSearchResult shape, then deduplicate
-    // by postId — LanceDB stores one row per chunk so the same post can appear
+    // by postId — the vector store stores one row per chunk so the same post can appear
     // multiple times. Keep only the highest-scoring chunk per post.
     const raw = ((rawContentResults as any).results ?? []).map((r: any) => ({
       type: 'content' as const,
@@ -2772,9 +2772,10 @@ Answer:`,
           if (!wpeSite.post_count || wpeSite.post_count < validated.minPostCount) matches = false;
         }
 
-        // Min user count filter
-        if (matches && validated?.minUserCount) {
-          if (!wpeSite.user_count || wpeSite.user_count < validated.minUserCount) matches = false;
+        // Min user count filter — query users table (sites.user_count is not populated for WPE)
+        if (matches && validated?.minUserCount && db) {
+          const row = db.prepare(`SELECT COUNT(*) as c FROM users WHERE site_id = ?`).get(wpeSite.id) as { c: number } | undefined;
+          if (!row || row.c < validated.minUserCount) matches = false;
         }
 
         // Stale post filter
@@ -2806,8 +2807,9 @@ Answer:`,
         if (matches && validated?.maxPostCount != null) {
           if (wpeSite.post_count != null && wpeSite.post_count >= validated.maxPostCount) matches = false;
         }
-        if (matches && validated?.maxUserCount != null) {
-          if (wpeSite.user_count != null && wpeSite.user_count >= validated.maxUserCount) matches = false;
+        if (matches && validated?.maxUserCount != null && db) {
+          const row = db.prepare(`SELECT COUNT(*) as c FROM users WHERE site_id = ?`).get(wpeSite.id) as { c: number } | undefined;
+          if (row && row.c >= validated.maxUserCount) matches = false;
         }
 
         // P1: pluginVersion
@@ -3389,7 +3391,7 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
     }
   });
 
-  // Reset content index: drop all LanceDB vector tables + clear IndexRegistry.
+  // Reset content index: drop all vector store tables + clear IndexRegistry.
   // Leaves graph DB, site metadata, settings, WPE cache, and AI config untouched.
   safeHandle(IPC_CHANNELS.RESET_CONTENT_INDEX, async () => {
     try {
@@ -3416,7 +3418,7 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
   // Factory reset: wipe ALL Nexus AI data — same as `nexus reset --factory`
   // Deletes: IndexRegistry, SiteMetadataCache, Settings, API key status,
   //          Site AI configs, WPE install cache, DB scan cache,
-  //          Graph DB (SQLite), Vector store (LanceDB).
+  //          Graph DB (SQLite), Vector store (sqlite-vec).
   // Survives: API keys (Keychain), WPE OAuth session, telemetry ID.
   // Local MUST be restarted after this — electron-store would recreate files on exit.
   safeHandle(IPC_CHANNELS.FACTORY_RESET, async () => {
@@ -3458,10 +3460,14 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
         try { if (fs.existsSync(dbPath)) { fs.unlinkSync(dbPath); deleted++; } } catch { /* best effort */ }
       }
 
-      // Vector store
+      // Vector store (legacy LanceDB directory + current sqlite-vec file)
       const vectorsDir = path.join(dataDir, prefix, 'vectors');
       try {
         if (fs.existsSync(vectorsDir)) { fs.rmSync(vectorsDir, { recursive: true, force: true }); deleted++; }
+      } catch { /* best effort */ }
+      const vectorsDbPath = path.join(dataDir, prefix, 'vectors.db');
+      try {
+        if (fs.existsSync(vectorsDbPath)) { fs.unlinkSync(vectorsDbPath); deleted++; }
       } catch { /* best effort */ }
 
       localLogger.info(`[NexusAI] Factory reset: ${deleted} items deleted`);

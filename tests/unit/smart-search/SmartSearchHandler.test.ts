@@ -1,6 +1,6 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { SmartSearchHandler } from '../../../src/main/smart-search/SmartSearchHandler';
-import { VectorStore } from '../../../src/main/vector-store/VectorStore';
+import type { IVectorStore } from '../../../src/main/vector-store/IVectorStore';
 import { EmbeddingService } from '../../../src/main/embeddings/EmbeddingService';
 import { SynonymStore } from '../../../src/main/smart-search/SynonymStore';
 import { SemanticConfig } from '../../../src/main/smart-search/SemanticConfig';
@@ -34,7 +34,7 @@ const mockVectorStore = {
   delete: jest.fn().mockResolvedValue(undefined),
   search: jest.fn().mockResolvedValue([]),
   lookupById: jest.fn().mockResolvedValue(null),
-} as unknown as VectorStore;
+} as unknown as IVectorStore;
 
 const mockEmbedding = {
   isReady: jest.fn().mockReturnValue(true),

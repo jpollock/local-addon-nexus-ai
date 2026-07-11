@@ -1,5 +1,5 @@
 import { IncomingMessage, ServerResponse } from 'http';
-import type { VectorStore } from '../vector-store/VectorStore';
+import type { IVectorStore } from '../vector-store/IVectorStore';
 import type { EmbeddingService } from '../embeddings/EmbeddingService';
 import type { SynonymStore } from './SynonymStore';
 import type { SemanticConfig } from './SemanticConfig';
@@ -54,7 +54,7 @@ function detectOperation(query: string, variables: Record<string, any>): string 
 
 export class SmartSearchHandler {
   constructor(
-    private vectorStore: VectorStore,
+    private vectorStore: IVectorStore,
     private embeddingService: EmbeddingService,
     private synonymStore: SynonymStore,
     private semanticConfig: SemanticConfig,

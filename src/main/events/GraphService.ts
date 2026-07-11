@@ -1064,26 +1064,41 @@ export class GraphService {
       graphDbSize = fs.statSync(this.dbPath).size;
     }
 
-    // Get vector DB directory size (async to avoid blocking main process)
+    // Get vector DB size
     let vectorDbSize = 0;
     let vectorTableCount = 0;
     if (fs.existsSync(vectorDbPath)) {
-      const getDirectorySize = async (dirPath: string): Promise<number> => {
-        let size = 0;
-        const files = await fs.promises.readdir(dirPath);
-        for (const file of files) {
-          const filePath = path.join(dirPath, file);
-          const stats = await fs.promises.stat(filePath);
-          if (stats.isDirectory()) {
-            size += await getDirectorySize(filePath);
-            if (file.startsWith('site_')) vectorTableCount++;
-          } else {
-            size += stats.size;
+      const stat = fs.statSync(vectorDbPath);
+      if (stat.isFile()) {
+        // sqlite-vec layout — single database file
+        vectorDbSize = stat.size;
+        try {
+          const db = require('better-sqlite3')(vectorDbPath, { readonly: true });
+          const rows = db.prepare(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'site_%_docs'"
+          ).all() as Array<{ name: string }>;
+          vectorTableCount = rows.length;
+          db.close();
+        } catch { /* non-fatal — leave count at 0 */ }
+      } else {
+        // directory layout (legacy)
+        const getDirectorySize = async (dirPath: string): Promise<number> => {
+          let size = 0;
+          const files = await fs.promises.readdir(dirPath);
+          for (const file of files) {
+            const filePath = path.join(dirPath, file);
+            const stats = await fs.promises.stat(filePath);
+            if (stats.isDirectory()) {
+              size += await getDirectorySize(filePath);
+              if (file.startsWith('site_')) vectorTableCount++;
+            } else {
+              size += stats.size;
+            }
           }
-        }
-        return size;
-      };
-      vectorDbSize = await getDirectorySize(vectorDbPath);
+          return size;
+        };
+        vectorDbSize = await getDirectorySize(vectorDbPath);
+      }
     }
 
     return {

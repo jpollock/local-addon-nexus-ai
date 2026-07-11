@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import Database from 'better-sqlite3';
-import { VectorStore } from '../../../src/main/vector-store/VectorStore';
+import { SqliteVecStore } from '../../../src/main/vector-store/SqliteVecStore';
 import { EmbeddingService } from '../../../src/main/embeddings/EmbeddingService';
 import { SmartSearchHandler } from '../../../src/main/smart-search/SmartSearchHandler';
 import { SynonymStore } from '../../../src/main/smart-search/SynonymStore';
@@ -39,14 +39,14 @@ async function callHandler(handler: SmartSearchHandler, body: object, siteId = S
 }
 
 let tmpDir: string;
-let vectorStore: VectorStore;
+let vectorStore: SqliteVecStore;
 let embeddingService: EmbeddingService;
 let db: InstanceType<typeof Database>;
 let handler: SmartSearchHandler;
 
 beforeAll(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-ss-int-'));
-  vectorStore = new VectorStore(path.join(tmpDir, 'vectors'));
+  vectorStore = new SqliteVecStore(path.join(tmpDir, 'vectors.db'));
   await vectorStore.initialize();
 
   embeddingService = new EmbeddingService(MODEL_DIR);

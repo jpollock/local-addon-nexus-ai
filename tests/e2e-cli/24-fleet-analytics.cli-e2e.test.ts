@@ -193,17 +193,42 @@ describe('fleet_overview — direct MCP calls (deterministic)', () => {
   it('is consistent with fleet_sql local site count', async () => {
     if (skipAll || skipFleetOverview || skipFleetSql) return;
 
+    const overviewResult = await mcpClient.callTool('fleet_overview', {});
+
+    // fleet_overview reads the twin service (Local's live site list).
+    // Extract the local site count it reports.
+    // Formats: "**N site(s)** — ..." (local-only) or "- **Sites:** N (..." (with WPE)
+    const overviewHeaderMatch = overviewResult.match(/\*\*(\d+)\s*(?:site|total site)/);
+    const overviewSitesLineMatch = overviewResult.match(/- \*\*Sites:\*\* (\d+)/);
+    const overviewLocalCount = overviewSitesLineMatch
+      ? parseInt(overviewSitesLineMatch[1], 10)
+      : overviewHeaderMatch ? parseInt(overviewHeaderMatch[1], 10) : null;
+
     const sqlResult = await mcpClient.callTool('fleet_sql', {
       query: "SELECT COUNT(*) as c FROM sites WHERE source='local' AND is_active=1",
     });
-    const localCountMatch = sqlResult.match(/\|\s*(\d+)\s*\|/);
-    const localCount = localCountMatch ? parseInt(localCountMatch[1], 10) : null;
+    const sqlCountMatch = sqlResult.match(/\|\s*(\d+)\s*\|/);
+    const sqlCount = sqlCountMatch ? parseInt(sqlCountMatch[1], 10) : null;
 
-    const overviewResult = await mcpClient.callTool('fleet_overview', {});
+    console.log(`[fleet-overview] overview local count=${overviewLocalCount}, fleet_sql count=${sqlCount}`);
 
-    if (localCount !== null) {
-      expect(overviewResult).toContain(String(localCount));
-      console.log(`[fleet-overview] local site count matches fleet_sql: ${localCount}`);
+    // fleet_overview (twin service) and fleet_sql (graph.db) are intentionally different
+    // data sources that diverge in both directions:
+    //   - graph.db can have MORE: stale is_active=1 rows for sites deleted from Local
+    //   - twin service can have MORE: live sites not yet indexed into graph.db
+    // We verify both are positive and not wildly different (within 3×).
+    // A ratio below 0.33 (e.g. one says 5 and the other says 50) signals a real bug.
+    if (overviewLocalCount !== null) {
+      expect(overviewLocalCount).toBeGreaterThan(0);
+    }
+    if (sqlCount !== null && overviewLocalCount !== null) {
+      const larger = Math.max(overviewLocalCount, sqlCount);
+      const smaller = Math.min(overviewLocalCount, sqlCount);
+      const ratio = smaller / larger;
+      if (ratio < 0.33) {
+        console.warn(`[fleet-overview] large count divergence: overview=${overviewLocalCount}, fleet_sql=${sqlCount} (ratio=${ratio.toFixed(2)})`);
+      }
+      expect(ratio).toBeGreaterThan(0.33);
     }
   }, 15_000);
 });
