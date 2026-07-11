@@ -197,9 +197,12 @@ export default function renderer(context: any): void {
   const ReactDOM = require('react-dom');
   ReactDOM.render(React.createElement(SidebarSearchContainer), container);
 
-  // Mount docked panel container to body
+  // Mount docked panel container to body.
+  // pointer-events:none so this full-page fixed div doesn't intercept Local's clicks;
+  // the panel and bubble inside both set pointer-events:all explicitly.
   const dockedPanelRoot = document.createElement('div');
   dockedPanelRoot.id = 'nexus-docked-panel';
+  dockedPanelRoot.style.cssText = 'pointer-events:none;position:fixed;inset:0;z-index:8999;';
   document.body.appendChild(dockedPanelRoot);
   ReactDOM.render(
     React.createElement(DockedPanelContainer, { electron }),

@@ -2,7 +2,6 @@ import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { DockedPanel } from './DockedPanel';
 import { PanelChat } from './PanelChat';
-import { ContextSelector } from './ContextSelector';
 import { SessionsSidebar } from './SessionsSidebar';
 
 type PanelSize = 'docked' | 'full';
@@ -15,7 +14,6 @@ interface ContainerState {
   open: boolean;
   size: PanelSize;
   activeSessionId: string | null;
-  selectedSiteIds: string[];
   showSessions: boolean;
 }
 
@@ -36,12 +34,11 @@ function readState(): ContainerState {
         open: Boolean(parsed.open),
         size: parsed.size === 'full' ? 'full' : 'docked',
         activeSessionId: parsed.activeSessionId ?? null,
-        selectedSiteIds: [],
         showSessions: false,
       };
     }
   } catch { /* ignore */ }
-  return { open: false, size: 'docked', activeSessionId: null, selectedSiteIds: [], showSessions: false };
+  return { open: false, size: 'docked', activeSessionId: null, showSessions: false };
 }
 
 export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
@@ -54,6 +51,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     this.closePanel = this.closePanel.bind(this);
     this.setSize = this.setSize.bind(this);
     this.setActiveSession = this.setActiveSession.bind(this);
+    this.newChat = this.newChat.bind(this);
   }
 
   componentDidUpdate(_: {}, prevState: ContainerState) {
@@ -126,31 +124,20 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     this.setState({ activeSessionId: id });
   }
 
-  render() {
-    const { open, size, activeSessionId, selectedSiteIds, showSessions } = this.state;
+  newChat() {
+    this.setState({ activeSessionId: null, showSessions: false });
+  }
 
-    const panelContent = React.createElement(
-      'div',
-      { style: { display: 'flex', flexDirection: 'column' as const, height: '100%', overflow: 'hidden' } },
-      // Context pill row
-      React.createElement(
-        'div',
-        { style: { padding: '8px 12px', borderBottom: '1px solid #2c313a', flexShrink: 0 } },
-        React.createElement(ContextSelector, {
-          electron: this.props.electron,
-          selectedSiteIds,
-          onChange: (ids: string[]) => this.setState({ selectedSiteIds: ids }),
-        }),
-      ),
-      // Chat
-      React.createElement(PanelChat, {
-        electron: this.props.electron,
-        sessionId: activeSessionId,
-        selectedSiteIds,
-        onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
-        onSessionSaved: (_session: any, _messages: any) => { /* sidebar will refresh on next open */ },
-      }),
-    );
+  render() {
+    const { open, size, activeSessionId, showSessions } = this.state;
+
+    const panelContent = React.createElement(PanelChat, {
+      electron: this.props.electron,
+      sessionId: activeSessionId,
+      selectedSiteIds: [],
+      onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
+      onSessionSaved: (_session: any, _messages: any) => { /* sidebar will refresh on next open */ },
+    });
 
     const sessionsSidebar = size === 'full' || showSessions
       ? React.createElement(SessionsSidebar, {
@@ -169,6 +156,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
         onOpen: this.openPanel,
         onClose: this.closePanel,
         onSetSize: this.setSize,
+        onNewChat: this.newChat,
         sessionsSidebar,
         showSessions,
         onToggleSessions: () => this.setState((s) => ({ showSessions: !s.showSessions })),
