@@ -6,6 +6,7 @@ import { NexusSiteTab } from './components/NexusSiteTab';
 import { NexusSiteTabSummary } from './components/NexusSiteTabSummary';
 import { SidebarSearchPanel } from './components/SidebarSearchPanel';
 import { ConnectionsPanel } from './components/credentials/ConnectionsPanel';
+import { DockedPanelContainer } from './components/DockedPanel/DockedPanelContainer';
 import { IPC_CHANNELS } from '../common/constants';
 import { nexusStore } from './store/NexusStateManager';
 import type { NexusState } from './store/NexusStateManager';
@@ -195,6 +196,15 @@ export default function renderer(context: any): void {
   // Use old React API (Local uses React 16, not 18)
   const ReactDOM = require('react-dom');
   ReactDOM.render(React.createElement(SidebarSearchContainer), container);
+
+  // Mount docked panel container to body
+  const dockedPanelRoot = document.createElement('div');
+  dockedPanelRoot.id = 'nexus-docked-panel';
+  document.body.appendChild(dockedPanelRoot);
+  ReactDOM.render(
+    React.createElement(DockedPanelContainer),
+    dockedPanelRoot,
+  );
 
   // Inject search button into Local's sidebar toolbar
   const injectSearchButton = () => {
