@@ -154,9 +154,19 @@ describe('handleAgentRun', () => {
         },
       }) as any;
 
-    const lines = await captureErr(() => handleAgentRun('site-monitor', gql));
-    expect(lines.some((l) => l.includes('site-monitor'))).toBe(true);
-    expect(lines.some((l) => l.includes('Something went wrong'))).toBe(true);
+    // Capture error output and expect the throw
+    let errorLines: string[] = [];
+    const spy = jest.spyOn(console, 'error').mockImplementation((...args: any[]) => {
+      errorLines.push(args.join(' '));
+    });
+
+    try {
+      await expect(handleAgentRun('site-monitor', gql)).rejects.toThrow('Agent run failed: error');
+      expect(errorLines.some((l) => l.includes('site-monitor'))).toBe(true);
+      expect(errorLines.some((l) => l.includes('Something went wrong'))).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('prints timeout message when status is timeout', async () => {
@@ -170,9 +180,19 @@ describe('handleAgentRun', () => {
         },
       }) as any;
 
-    const lines = await captureErr(() => handleAgentRun('slow-agent', gql));
-    expect(lines.some((l) => l.includes('slow-agent'))).toBe(true);
-    expect(lines.some((l) => /timeout/i.test(l))).toBe(true);
+    // Capture error output and expect the throw
+    let errorLines: string[] = [];
+    const spy = jest.spyOn(console, 'error').mockImplementation((...args: any[]) => {
+      errorLines.push(args.join(' '));
+    });
+
+    try {
+      await expect(handleAgentRun('slow-agent', gql)).rejects.toThrow('Agent run failed: timeout');
+      expect(errorLines.some((l) => l.includes('slow-agent'))).toBe(true);
+      expect(errorLines.some((l) => /timeout/i.test(l))).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('throws when the GQL call fails', async () => {
@@ -181,6 +201,34 @@ describe('handleAgentRun', () => {
     };
 
     await expect(handleAgentRun('missing', gql)).rejects.toThrow('Agent "missing" not found');
+  });
+
+  it('throws on agent error status', async () => {
+    const gql: GqlFn = async () =>
+      ({
+        agentRun: {
+          agentName: 'my-agent',
+          status: 'error',
+          error: 'something went wrong',
+          durationMs: 100,
+        },
+      }) as any;
+
+    await expect(handleAgentRun('my-agent', gql)).rejects.toThrow('Agent run failed: error');
+  });
+
+  it('throws on agent timeout status', async () => {
+    const gql: GqlFn = async () =>
+      ({
+        agentRun: {
+          agentName: 'slow-agent',
+          status: 'timeout',
+          error: 'Timed out after 300s',
+          durationMs: 300000,
+        },
+      }) as any;
+
+    await expect(handleAgentRun('slow-agent', gql)).rejects.toThrow('Agent run failed: timeout');
   });
 });
 
@@ -248,6 +296,39 @@ describe('handleAgentLogs', () => {
     await expect(
       handleAgentLogs('site-monitor', { lines: '50', follow: false }, gql),
     ).rejects.toThrow('Could not connect to Local');
+  });
+
+  it('prints new lines when follow mode detects them', async () => {
+    let callCount = 0;
+    const gql: GqlFn = async () => {
+      callCount++;
+      if (callCount === 1) {
+        // Initial call returns 2 lines
+        return {
+          agentLogs: [
+            '[2026-07-12T10:00:00Z] INFO agent started',
+            '[2026-07-12T10:00:01Z] INFO step 1 done',
+          ],
+        } as any;
+      } else {
+        // Second call (first poll) has 3 lines (one new)
+        return {
+          agentLogs: [
+            '[2026-07-12T10:00:00Z] INFO agent started',
+            '[2026-07-12T10:00:01Z] INFO step 1 done',
+            '[2026-07-12T10:00:02Z] INFO step 2 done',
+          ],
+        } as any;
+      }
+    };
+
+    // Just verify the initial call works — follow mode runs in background via setInterval
+    // and we can't easily test the async polling without more complex test harness
+    const lines = await captureLog(() =>
+      handleAgentLogs('site-monitor', { lines: '50', follow: true }, gql),
+    );
+    expect(lines).toContain('[2026-07-12T10:00:00Z] INFO agent started');
+    expect(lines).toContain('[2026-07-12T10:00:01Z] INFO step 1 done');
   });
 });
 

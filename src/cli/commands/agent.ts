@@ -131,7 +131,7 @@ export async function handleAgentList(gql: GqlFn = defaultGql): Promise<void> {
 /**
  * Manually trigger an agent by name.
  *
- * @throws if the GQL call fails or the agent is not found
+ * @throws if the GQL call fails, the agent is not found, or the agent run fails
  */
 export async function handleAgentRun(name: string, gql: GqlFn = defaultGql): Promise<void> {
   const data = await gql<{ agentRun: AgentRunResult }>(
@@ -148,6 +148,7 @@ export async function handleAgentRun(name: string, gql: GqlFn = defaultGql): Pro
     console.log(`✓ ${r.agentName} completed in ${r.durationMs}ms`);
   } else {
     console.error(`✗ ${r.agentName} ${r.status}: ${r.error}`);
+    throw new Error(`Agent run failed: ${r.status}`);
   }
 }
 
@@ -259,30 +260,33 @@ agentCommand
       await handleAgentLogs(name, opts);
 
       if (opts.follow) {
-        // Basic follow: poll every 2s and print new lines
-        let lastCount = 0;
-        // Re-read initial count from what was just printed
+        // Follow mode: track position by count, request all logs each poll
+        let lastSeenCount = 0;
+        // Get initial count from the logs we just printed
         const initialData = await defaultGql<{ agentLogs: string[] }>(
           `query AgentLogs($name: String!, $lines: Int) {
             agentLogs(name: $name, lines: $lines)
           }`,
           { name, lines: parseInt(opts.lines, 10) },
         );
-        lastCount = initialData.agentLogs.length;
+        lastSeenCount = initialData.agentLogs.length;
 
         setInterval(async () => {
           try {
+            // Always request all logs (no limit) to get complete history
             const fresh = await defaultGql<{ agentLogs: string[] }>(
               `query AgentLogs($name: String!, $lines: Int) {
                 agentLogs(name: $name, lines: $lines)
               }`,
-              { name, lines: parseInt(opts.lines, 10) },
+              { name, lines: 10000 }, // Request a large window to catch all logs
             );
-            const newLines = fresh.agentLogs.slice(lastCount);
+            // Slice from the last position we saw to get only new lines
+            const newLines = fresh.agentLogs.slice(lastSeenCount);
             for (const line of newLines) {
               console.log(line);
             }
-            lastCount = fresh.agentLogs.length;
+            // Update position for next poll
+            lastSeenCount = fresh.agentLogs.length;
           } catch {
             // Silently ignore poll errors — Local may have restarted
           }
