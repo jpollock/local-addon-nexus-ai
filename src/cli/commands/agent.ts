@@ -267,7 +267,7 @@ agentCommand
           `query AgentLogs($name: String!, $lines: Int) {
             agentLogs(name: $name, lines: $lines)
           }`,
-          { name, lines: parseInt(opts.lines, 10) },
+          { name, lines: 10000 },
         );
         lastSeenCount = initialData.agentLogs.length;
 
