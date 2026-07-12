@@ -14,6 +14,11 @@ export class AgentScheduler {
   }
 
   register(agent: AgentDefinition): void {
+    // If agent is already registered, unregister first to avoid duplicates
+    if (Array.from(this.tasks.keys()).some(key => key.startsWith(`${agent.name}::`))) {
+      this.unregister(agent.name);
+    }
+
     const cronTriggers = agent.triggers.filter((t): t is CronTrigger => t.type === 'cron');
     if (cronTriggers.length === 0) return;
 
@@ -28,8 +33,8 @@ export class AgentScheduler {
         logger.info(`AgentScheduler: firing "${agent.name}" (cron: ${trigger.expression})`);
         try {
           await this.runner.run(agent);
-        } catch (err: any) {
-          logger.error(`AgentScheduler: unhandled error from runner for "${agent.name}": ${err.message}`);
+        } catch (err: unknown) {
+          logger.error(`AgentScheduler: unhandled error from runner for "${agent.name}": ${err instanceof Error ? err.message : String(err)}`);
         }
       });
 
@@ -42,6 +47,7 @@ export class AgentScheduler {
     for (const [key, task] of this.tasks.entries()) {
       if (key.startsWith(`${name}::`)) {
         task.stop();
+        task.destroy();
         this.tasks.delete(key);
       }
     }
