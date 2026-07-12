@@ -75,7 +75,11 @@ export class AgentRegistry {
   watch(): void {
     fs.watch(this.agentsDir, { persistent: false }, async () => {
       logger.info('AgentRegistry: change detected — reloading agents');
-      await this.load();
+      try {
+        await this.load();
+      } catch (err: any) {
+        logger.error(`AgentRegistry: reload failed: ${err.message}`);
+      }
     });
   }
 }
