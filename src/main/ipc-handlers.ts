@@ -300,14 +300,8 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   // Initialize audit logger for tracking remote operations
   const auditLogger = new AuditLogger(registryStorage);
 
-  // Schema migration + session pruning: run once on startup
-  {
-    const db = graphService.getDb();
-    if (db) {
-      createSessionTables(db);
-      pruneSessions(db);
-    }
-  }
+  // createSessionTables / pruneSessions are called in index.ts after graphService.initialize()
+  // because graphService.getDb() is null here (registerIpcHandlers runs before the async init).
 
   /**
    * Notify Local's main UI to refresh site groups after a mutation.
@@ -4843,12 +4837,23 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
   safeHandle(IPC_CHANNELS.CHAT_SESSION_GET, async (_event: any, { sessionId }: { sessionId: string }) => {
     const db = graphService.getDb();
-    return getSession(db!, sessionId);
+    localLogger.info('[NexusAI] CHAT_SESSION_GET — db:', db ? 'ready' : 'NULL', 'sessionId:', sessionId);
+    if (!db) return null;
+    const result = getSession(db, sessionId);
+    localLogger.info('[NexusAI] CHAT_SESSION_GET — result:', result ? `${result.messages?.length ?? 0} messages` : 'null');
+    return result;
   });
 
   safeHandle(IPC_CHANNELS.CHAT_SESSION_SAVE, async (_event: any, { session, messages }: { session: any; messages: any[] }) => {
     const db = graphService.getDb();
-    saveSession(db!, session, messages);
+    localLogger.info('[NexusAI] CHAT_SESSION_SAVE — db:', db ? 'ready' : 'NULL', 'session:', session?.id, 'messages:', messages?.length);
+    if (!db) {
+      localLogger.error('[NexusAI] CHAT_SESSION_SAVE — db is null, cannot save');
+      return { success: false, error: 'db not ready' };
+    }
+    saveSession(db, session, messages);
+    localLogger.info('[NexusAI] CHAT_SESSION_SAVE — saved ok');
+    return { success: true };
   });
 
   safeHandle(IPC_CHANNELS.CHAT_SESSION_DELETE, async (_event: any, { sessionId }: { sessionId: string }) => {

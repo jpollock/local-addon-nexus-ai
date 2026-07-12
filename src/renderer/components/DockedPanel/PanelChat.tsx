@@ -263,6 +263,16 @@ export class PanelChat extends React.Component<Props, State> {
   }
 
   componentWillUnmount() {
+    // Safety net: persist whatever we have so collapsing the panel never loses the active chat.
+    // persistSession filters out streaming messages, so a partial save is always safe.
+    const { messages, activeSessionId } = this.state;
+    const sessionId = activeSessionId ?? this.props.sessionId;
+    const hasContent = messages.some((m) => m.role !== 'system');
+    console.log('[NexusAI] PanelChat unmounting — sessionId:', sessionId, 'messages:', messages.length, 'hasContent:', hasContent);
+    if (sessionId && hasContent) {
+      this.persistSession().catch(() => {});
+    }
+
     if (this.streamListener) {
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.CHAT_STREAM, this.streamListener);
       this.streamListener = null;
@@ -310,11 +320,13 @@ export class PanelChat extends React.Component<Props, State> {
   }
 
   async loadSession(sessionId: string) {
+    console.log('[NexusAI] loadSession — loading', sessionId);
     try {
       const result = await this.props.electron.ipcRenderer.invoke(
         IPC_CHANNELS.CHAT_SESSION_GET,
         { sessionId },
       );
+      console.log('[NexusAI] loadSession — result:', result ? `${result.messages?.length ?? 0} messages` : 'null');
       if (!result) return;
       const messages: UIMessage[] = (result.messages ?? []).map((m: ChatMessage) => ({
         id: m.id,
@@ -324,7 +336,9 @@ export class PanelChat extends React.Component<Props, State> {
       // Restore the DB-persisted action count so persistSession never resets it to 0.
       const actionCount: number = result.session?.actionCount ?? 0;
       this.setState({ messages, actionCount });
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error('[NexusAI] loadSession failed:', err);
+    }
   }
 
   onStreamEvent(event: any) {
@@ -452,41 +466,48 @@ export class PanelChat extends React.Component<Props, State> {
   }
 
   async persistSession() {
-    const { messages, activeSessionId } = this.state;
-    const sessionId = activeSessionId ?? this.props.sessionId;
-    if (!sessionId) return;
+    try {
+      const { messages, activeSessionId } = this.state;
+      const sessionId = activeSessionId ?? this.props.sessionId;
+      console.log('[NexusAI] persistSession — sessionId:', sessionId, 'total messages:', messages.length);
+      if (!sessionId) return;
 
-    const firstUser = messages.find((m) => m.role === 'user');
-    const title = firstUser ? truncateAtWord(firstUser.content, 60) : 'New chat';
+      const firstUser = messages.find((m) => m.role === 'user');
+      const title = firstUser ? truncateAtWord(firstUser.content, 60) : 'New chat';
 
-    const { actionCount, retentionDays } = this.state;
-    const session: ChatSession = {
-      id: sessionId,
-      title,
-      scopeLabel: `${this.props.selectedSiteIds.length} site${this.props.selectedSiteIds.length !== 1 ? 's' : ''}`,
-      scopeSiteIds: this.props.selectedSiteIds,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      pinned: false,
-      actionCount,
-      expiresAt: retentionDays === null ? null : Date.now() + retentionDays * 86400000,
-    };
+      const { actionCount, retentionDays } = this.state;
+      const session: ChatSession = {
+        id: sessionId,
+        title,
+        scopeLabel: `${this.props.selectedSiteIds.length} site${this.props.selectedSiteIds.length !== 1 ? 's' : ''}`,
+        scopeSiteIds: this.props.selectedSiteIds,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        pinned: false,
+        actionCount,
+        expiresAt: retentionDays === null ? null : Date.now() + retentionDays * 86400000,
+      };
 
-    const chatMessages: ChatMessage[] = messages
-      .filter((m) => m.role !== 'system' && !m.streaming)
-      .map((m) => ({
-        id: m.id,
-        sessionId,
-        role: m.role,
-        content: m.content,
-        timestamp: Date.now(),
-      }));
+      const chatMessages: ChatMessage[] = messages
+        .filter((m) => m.role !== 'system' && !m.streaming)
+        .map((m) => ({
+          id: m.id,
+          sessionId,
+          role: m.role,
+          content: m.content,
+          timestamp: Date.now(),
+        }));
 
-    await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_SAVE, {
-      session,
-      messages: chatMessages,
-    });
-    this.props.onSessionSaved(session, chatMessages);
+      console.log('[NexusAI] persistSession — saving', chatMessages.length, 'messages, title:', title);
+      const saveResult = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CHAT_SESSION_SAVE, {
+        session,
+        messages: chatMessages,
+      });
+      console.log('[NexusAI] persistSession — IPC result:', saveResult);
+      this.props.onSessionSaved(session, chatMessages);
+    } catch (err) {
+      console.error('[NexusAI] persistSession failed:', err);
+    }
   }
 
   handleStop() {

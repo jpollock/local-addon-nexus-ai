@@ -115,7 +115,7 @@ const styles = {
     right: 0,
     bottom: 0,
     width: full ? undefined : PANEL_WIDTH,
-    left: full ? 358 : undefined,
+    left: full ? 68 : undefined,
     background: '#23272f',
     borderLeft: '1px solid #2c313a',
     display: 'flex',
