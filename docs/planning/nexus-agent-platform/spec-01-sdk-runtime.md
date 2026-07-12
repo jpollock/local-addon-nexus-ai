@@ -14,6 +14,7 @@ The foundation of the Nexus Agent Platform:
 1. **SDK** — the `defineAgent` contract (internal module `src/main/agent-sdk/`)
 2. **Event Bus** — durable SQLite-backed event routing (`src/main/agent-event-bus/`)
 3. **Runtime** — agent discovery, scheduling, execution, state (`src/main/agent-runtime/`)
+4. **Developer surface** — minimal CLI + fixture agent to make the runtime observable without the Builder
 
 Builder (authoring toolchain) and Publisher (Atlas deploy + npm registry) are Spec 02 and 03.
 
@@ -303,6 +304,22 @@ src/main/
     DaemonManager.ts
     AgentStateStore.ts
     NexusToolProvider.ts  ← implements ToolProvider using existing MCP ToolRegistry
+
+src/cli/commands/
+  agent.ts                ← nexus agent list / run / logs / emit
+
+tests/
+  fixtures/
+    agents/
+      hello-nexus/
+        agent.ts          ← fixture agent for unit + integration tests
+        package.json
+  unit/
+    agent-sdk/
+    agent-event-bus/
+    agent-runtime/
+  integration/
+    agent-runtime.test.ts ← end-to-end: load fixture → fire trigger → assert state
 ```
 
 ---
@@ -332,13 +349,97 @@ src/main/
 
 ---
 
+## Developer Surface (testability without the Builder)
+
+Without the Builder, the runtime is a black box. These four additions make it observable on day one, without requiring any Builder tooling.
+
+### 1. Fixture agent (`tests/fixtures/agents/hello-nexus/`)
+
+A minimal agent checked into the repo, used for unit tests, integration tests, and manual smoke testing. Exercises all three execution modes across separate fixture files.
+
+```typescript
+// tests/fixtures/agents/hello-nexus/agent.ts
+export default defineAgent({
+  name: 'hello-nexus',
+  version: '1.0.0',
+  triggers: [cron('* * * * *')],          // every minute — easy to trigger manually
+  tools: ['nexus_list_sites'],
+  async run({ tools, state, log }) {
+    const sites = await tools.invoke('nexus_list_sites', {});
+    log.info(`hello-nexus: found ${sites.length} sites`);
+    state.set('lastRunSiteCount', sites.length);
+  },
+});
+```
+
+No install required — tests import the fixture directly. For manual testing, symlink or copy into the agents directory.
+
+### 2. Minimal CLI commands
+
+Three commands added to the existing `nexus` CLI (not Builder scope — these are runtime observability):
+
+```bash
+# List all registered agents, trigger types, last run timestamp, status
+nexus agent list
+
+# Manually trigger any agent immediately (bypasses cron/event scheduling)
+nexus agent run <name>
+
+# Tail the agent's log output (last N lines, or follow)
+nexus agent logs <name> [--follow] [--lines=50]
+```
+
+`nexus agent run` is the primary manual testing tool. It fires the agent's `run()` with a synthetic trigger context, exactly as the scheduler would — same tool injection, same state store, same logging.
+
+### 3. Test event publisher
+
+One command to inject a synthetic event into the bus, enabling manual testing of reactive and daemon agents without a live WordPress site:
+
+```bash
+# Publish a synthetic event to the event bus
+nexus agent emit <event> [--site <site-name>] [--payload <json>]
+
+# Examples:
+nexus agent emit wp:post.published --site mysite --payload '{"post_id": 42}'
+nexus agent emit wpe:deploy.completed
+nexus agent emit local:site.started --site devsite
+```
+
+Events published this way go through the full bus pipeline — written to SQLite, dispatched to subscribers — indistinguishable from real events.
+
+### 4. Unit and integration tests
+
+**Unit tests** (one per runtime component):
+- `AgentRegistry` — scan, load, hot-reload
+- `AgentScheduler` — cron registration, fire, unregister
+- `AgentRunner` — context injection, timeout, error handling, `onError` callback
+- `DaemonManager` — fork, heartbeat, restart backoff, clean shutdown
+- `AgentStateStore` — get/set/delete, isolation between agents
+- `AgentEventBus` — publish, subscribe, pattern matching, replay
+
+**Integration test** (end-to-end with fixture agent):
+1. Load `hello-nexus` fixture into a test registry
+2. Fire a synthetic cron trigger via `AgentRunner`
+3. Assert: `nexus_list_sites` tool was called
+4. Assert: `lastRunSiteCount` written to `AgentStateStore`
+5. Assert: log lines captured
+
+**Reactive integration test:**
+1. Subscribe `hello-nexus` (event variant) to `wp:post.published`
+2. Call `bus.publish({ type: 'post.published', namespace: 'wp', ... })`
+3. Assert agent ran and produced expected state
+
+---
+
 ## Out of Scope (deferred to Spec 02 / 03)
 
-- `nexus agent create` scaffolder
-- `nexus agent dev` hot-reload CLI mode
-- `nexus agent validate` linter
-- `nexus agent publish` → npm registry
-- `nexus agent deploy` → Atlas
-- Visual agent status UI in Local (surfaces log lines from IPC — deferred but the IPC channel is designed for it)
-- `AtlasToolProvider` implementation (WP REST + CAPI wrappers)
-- Hosted runtime (non-Local execution target)
+- `nexus agent create` scaffolder (Spec 02)
+- `nexus agent dev` hot-reload CLI mode (Spec 02)
+- `nexus agent validate` linter (Spec 02)
+- `nexus agent publish` → npm registry (Spec 03)
+- `nexus agent deploy` → Atlas (Spec 03)
+- Visual agent status UI in Local — the IPC channel is designed for it, but the UI surface is Spec 02
+- `AtlasToolProvider` implementation (WP REST + CAPI wrappers) (Spec 03)
+- Hosted runtime (non-Local execution target) (future)
+
+**Note:** `nexus agent list`, `nexus agent run`, `nexus agent logs`, and `nexus agent emit` are **in scope for Spec 01** — they are runtime observability, not Builder tooling.
