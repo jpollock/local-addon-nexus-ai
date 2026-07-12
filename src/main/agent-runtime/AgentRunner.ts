@@ -1,7 +1,12 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { createLogger } from '../logging/Logger';
-import type { AgentDefinition, NexusEvent, AgentResult, AgentContext, AIClient } from '../agent-sdk/types';
+import type { AgentDefinition, NexusEvent, AgentResult, AgentContext, AIClient, AgentLogger } from '../agent-sdk/types';
 import type { AgentStateStore } from './AgentStateStore';
-import type { NexusToolProvider } from './NexusToolProvider';
+import { NexusToolProvider } from './NexusToolProvider';
+import type { ToolRegistry } from '../mcp/tool-registry';
+import type { NexusServices } from '../mcp/types';
 
 const logger = createLogger('AgentRunner');
 const DEFAULT_TIMEOUT_MS = 300_000;
@@ -15,25 +20,65 @@ class TimeoutError extends Error {
 
 export class AgentRunner {
   private stateStore: AgentStateStore;
-  private toolProvider: NexusToolProvider;
+  private toolRegistry: ToolRegistry;
+  private services: NexusServices;
   private aiClient: AIClient;
 
-  constructor(stateStore: AgentStateStore, toolProvider: NexusToolProvider, aiClient: AIClient) {
+  constructor(
+    stateStore: AgentStateStore,
+    toolRegistry: ToolRegistry,
+    services: NexusServices,
+    aiClient: AIClient,
+  ) {
     this.stateStore = stateStore;
-    this.toolProvider = toolProvider;
+    this.toolRegistry = toolRegistry;
+    this.services = services;
     this.aiClient = aiClient;
   }
 
   async run(agent: AgentDefinition, event?: NexusEvent): Promise<AgentResult> {
     const startedAt = Date.now();
     const timeoutMs = agent.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    const agentLog = createLogger(`agent:${agent.name}`);
+    const agentName = agent.name;
+
+    // Build per-agent tool provider with scope enforcement
+    const toolProvider = new NexusToolProvider(
+      this.toolRegistry,
+      this.services,
+      agent.tools?.length ? agent.tools : undefined,
+    );
+
+    // Build file-backed logger — writes to both the standard logger and a per-agent log file
+    const logDir = path.join(
+      os.homedir(),
+      'Library',
+      'Application Support',
+      'Local',
+      'nexus-ai',
+      'agent-logs',
+    );
+    try { fs.mkdirSync(logDir, { recursive: true }); } catch { /* ignore */ }
+    const logFile = path.join(logDir, `${agentName}.log`);
+    const appLog = createLogger(`agent:${agentName}`);
+
+    function appendLog(level: string, msg: string): void {
+      try {
+        fs.appendFileSync(logFile, `[${level}] ${new Date().toISOString()} ${msg}\n`);
+      } catch { /* log file write errors are non-fatal */ }
+    }
+
+    const agentLog: AgentLogger = {
+      info:  (msg: string) => { appLog.info(msg);  appendLog('INFO',  msg); },
+      warn:  (msg: string) => { appLog.warn(msg);  appendLog('WARN',  msg); },
+      error: (msg: string) => { appLog.error(msg); appendLog('ERROR', msg); },
+      debug: (msg: string) => { appLog.debug(msg); appendLog('DEBUG', msg); },
+    };
 
     const ctx: AgentContext = {
       trigger: agent.triggers[0],
       event,
-      tools: this.toolProvider,
-      state: this.stateStore.buildHandle(agent.name),
+      tools: toolProvider,
+      state: this.stateStore.buildHandle(agentName),
       ai: this.aiClient,
       log: agentLog,
     };

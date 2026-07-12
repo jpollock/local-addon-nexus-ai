@@ -174,11 +174,33 @@ export async function handleAgentLogs(
 
   if (data.agentLogs.length === 0) {
     console.log(`No logs available for agent "${name}".`);
-    return;
+  } else {
+    for (const line of data.agentLogs) {
+      console.log(line);
+    }
   }
 
-  for (const line of data.agentLogs) {
-    console.log(line);
+  if (opts.follow) {
+    // Follow mode: poll every 2s for new log lines, using the injected gql
+    const LOG_QUERY = `query AgentLogs($name: String!, $lines: Int) {
+      agentLogs(name: $name, lines: $lines)
+    }`;
+    // Fetch full history to establish the current position
+    const initialData = await gql<{ agentLogs: string[] }>(LOG_QUERY, { name, lines: 10000 });
+    let lastSeenCount = initialData.agentLogs.length;
+
+    setInterval(async () => {
+      try {
+        const fresh = await gql<{ agentLogs: string[] }>(LOG_QUERY, { name, lines: 10000 });
+        const newLines = fresh.agentLogs.slice(lastSeenCount);
+        for (const line of newLines) {
+          console.log(line);
+        }
+        lastSeenCount = fresh.agentLogs.length;
+      } catch {
+        // Silently ignore poll errors — Local may have restarted
+      }
+    }, 2000);
   }
 }
 
@@ -258,40 +280,6 @@ agentCommand
   .action(async (name: string, opts: LogsOptions) => {
     try {
       await handleAgentLogs(name, opts);
-
-      if (opts.follow) {
-        // Follow mode: track position by count, request all logs each poll
-        let lastSeenCount = 0;
-        // Get initial count from the logs we just printed
-        const initialData = await defaultGql<{ agentLogs: string[] }>(
-          `query AgentLogs($name: String!, $lines: Int) {
-            agentLogs(name: $name, lines: $lines)
-          }`,
-          { name, lines: 10000 },
-        );
-        lastSeenCount = initialData.agentLogs.length;
-
-        setInterval(async () => {
-          try {
-            // Always request all logs (no limit) to get complete history
-            const fresh = await defaultGql<{ agentLogs: string[] }>(
-              `query AgentLogs($name: String!, $lines: Int) {
-                agentLogs(name: $name, lines: $lines)
-              }`,
-              { name, lines: 10000 }, // Request a large window to catch all logs
-            );
-            // Slice from the last position we saw to get only new lines
-            const newLines = fresh.agentLogs.slice(lastSeenCount);
-            for (const line of newLines) {
-              console.log(line);
-            }
-            // Update position for next poll
-            lastSeenCount = fresh.agentLogs.length;
-          } catch {
-            // Silently ignore poll errors — Local may have restarted
-          }
-        }, 2000);
-      }
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
       process.exit(1);

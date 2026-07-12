@@ -11,9 +11,17 @@ function makeRunner() {
       scratch: {},
     }),
   };
-  const toolProvider = { invoke: jest.fn().mockResolvedValue([]) };
+  // Mock ToolRegistry — none of the unit-test agents invoke tools,
+  // so `call` will not be hit, but we provide a valid mock for completeness.
+  const toolRegistry = {
+    call: jest.fn().mockResolvedValue({
+      isError: false,
+      content: [{ type: 'text', text: '[]' }],
+    }),
+  };
+  const services = {};
   const aiClient = { complete: jest.fn().mockResolvedValue('ok') };
-  return new AgentRunner(stateStore as any, toolProvider as any, aiClient as any);
+  return new AgentRunner(stateStore as any, toolRegistry as any, services as any, aiClient as any);
 }
 
 describe('AgentRunner', () => {

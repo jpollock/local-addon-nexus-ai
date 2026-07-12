@@ -5,6 +5,7 @@ const WP_EVENT_MAP: Record<string, { namespace: string; type: string }> = {
   post_created:         { namespace: 'wp', type: 'post.created' },
   post_updated:         { namespace: 'wp', type: 'post.updated' },
   post_deleted:         { namespace: 'wp', type: 'post.deleted' },
+  post_published:       { namespace: 'wp', type: 'post.published' },
   plugin_installed:     { namespace: 'wp', type: 'plugin.installed' },
   plugin_activated:     { namespace: 'wp', type: 'plugin.activated' },
   plugin_deactivated:   { namespace: 'wp', type: 'plugin.deactivated' },

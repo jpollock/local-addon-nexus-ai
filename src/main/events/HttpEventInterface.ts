@@ -14,6 +14,7 @@ const EVENT_TYPES: EventType[] = [
   'post_created',
   'post_updated',
   'post_deleted',
+  'post_published',
   'plugin_installed',
   'plugin_activated',
   'plugin_deactivated',

@@ -10,7 +10,6 @@ import { AgentEventBus } from '../../src/main/agent-event-bus/AgentEventBus';
 import { AgentStateStore } from '../../src/main/agent-runtime/AgentStateStore';
 import { AgentRunner } from '../../src/main/agent-runtime/AgentRunner';
 import { AgentScheduler } from '../../src/main/agent-runtime/AgentScheduler';
-import { NexusToolProvider } from '../../src/main/agent-runtime/NexusToolProvider';
 import { defineAgent, cron, on } from '../../src/main/agent-sdk';
 import type { NexusEvent } from '../../src/main/agent-sdk/types';
 
@@ -24,9 +23,9 @@ function makeInMemoryStack() {
       isError: false,
     })),
   };
-  const toolProvider = new NexusToolProvider(fakeRegistry as any, {} as any, undefined);
   const aiClient = { complete: jest.fn().mockResolvedValue('') };
-  const runner = new AgentRunner(stateStore, toolProvider, aiClient);
+  // Pass toolRegistry + services directly — AgentRunner constructs NexusToolProvider per-run
+  const runner = new AgentRunner(stateStore, fakeRegistry as any, {} as any, aiClient);
   return { db, bus, stateStore, runner, fakeRegistry };
 }
 

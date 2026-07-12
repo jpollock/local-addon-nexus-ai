@@ -59,7 +59,6 @@ import { OpportunisticScheduler } from './scheduler/OpportunisticScheduler';
 import type { StartupStatus } from '../common/types';
 import { AgentStateStore } from './agent-runtime/AgentStateStore';
 import { AgentRegistry } from './agent-runtime/AgentRegistry';
-import { NexusToolProvider } from './agent-runtime/NexusToolProvider';
 import { AgentRunner } from './agent-runtime/AgentRunner';
 import { AgentScheduler } from './agent-runtime/AgentScheduler';
 import { DaemonManager } from './agent-runtime/DaemonManager';
@@ -470,9 +469,9 @@ export default function main(context: any): void {
 
         const agentStateStore = new AgentStateStore(agentDb);
         const agentRegistry = new AgentRegistry();
-        const agentToolProvider = new NexusToolProvider(registry, nexusServices as any, undefined);
         const agentAiClient = { complete: async (_prompt: string) => '' }; // placeholder — wire to ChatService in Spec 02
-        const agentRunner = new AgentRunner(agentStateStore, agentToolProvider, agentAiClient);
+        // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
+        const agentRunner = new AgentRunner(agentStateStore, registry, nexusServices as any, agentAiClient);
         agentScheduler = new AgentScheduler(agentRunner);
         daemonManager = new DaemonManager(agentEventBus);
 
@@ -491,6 +490,23 @@ export default function main(context: any): void {
           if (hasStreamTrigger) {
             try { daemonManager.start(agent); } catch (err: any) {
               localLogger.warn(`[NexusAI] Failed to start daemon for "${agent.name}": ${err.message}`);
+            }
+          }
+          // Wire reactive (event) and webhook triggers to the event bus
+          for (const trigger of agent.triggers) {
+            if (trigger.type === 'event') {
+              agentEventBus.subscribe(trigger.pattern, async (event) => {
+                await agentRunner.run(agent, event).catch((err: Error) => {
+                  localLogger.error(`[AgentPlatform] Reactive run error for "${agent.name}": ${err.message}`);
+                });
+              });
+            } else if (trigger.type === 'webhook') {
+              // Subscribe to namespaced webhook events; full routing expanded in Spec 02
+              agentEventBus.subscribe(`webhook:${trigger.path ?? '*'}`, async (event) => {
+                await agentRunner.run(agent, event).catch((err: Error) => {
+                  localLogger.error(`[AgentPlatform] Webhook run error for "${agent.name}": ${err.message}`);
+                });
+              });
             }
           }
         }
