@@ -6,14 +6,11 @@ import type { NexusToolProvider } from './NexusToolProvider';
 const logger = createLogger('AgentRunner');
 const DEFAULT_TIMEOUT_MS = 300_000;
 
-function makeLogger(agentName: string) {
-  const base = createLogger(`agent:${agentName}`);
-  return {
-    info:  (msg: string, ...args: unknown[]) => base.info(msg, ...args),
-    warn:  (msg: string, ...args: unknown[]) => base.warn(msg, ...args),
-    error: (msg: string, ...args: unknown[]) => base.error(msg, ...args),
-    debug: (msg: string, ...args: unknown[]) => base.debug(msg, ...args),
-  };
+class TimeoutError extends Error {
+  constructor() {
+    super('Agent timeout');
+    this.name = 'TimeoutError';
+  }
 }
 
 export class AgentRunner {
@@ -30,7 +27,7 @@ export class AgentRunner {
   async run(agent: AgentDefinition, event?: NexusEvent): Promise<AgentResult> {
     const startedAt = Date.now();
     const timeoutMs = agent.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    const agentLog = makeLogger(agent.name);
+    const agentLog = createLogger(`agent:${agent.name}`);
 
     const ctx: AgentContext = {
       trigger: agent.triggers[0],
@@ -44,25 +41,40 @@ export class AgentRunner {
     let status: AgentResult['status'] = 'success';
     let error: string | undefined;
 
+    let timeoutHandle: NodeJS.Timeout | undefined;
+
     try {
-      await Promise.race([
-        agent.run(ctx),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('__TIMEOUT__')), timeoutMs)
-        ),
-      ]);
-    } catch (err: any) {
-      if (err.message === '__TIMEOUT__') {
+      try {
+        await Promise.race([
+          agent.run(ctx),
+          new Promise<never>((_, reject) => {
+            timeoutHandle = setTimeout(() => reject(new TimeoutError()), timeoutMs);
+          }),
+        ]);
+      } finally {
+        if (timeoutHandle !== undefined) {
+          clearTimeout(timeoutHandle);
+        }
+      }
+    } catch (err: unknown) {
+      if (err instanceof TimeoutError) {
         status = 'timeout';
         error = `Agent "${agent.name}" timed out after ${timeoutMs}ms`;
         logger.warn(error);
-      } else {
+        if (agent.onError) {
+          try { await agent.onError(err, ctx); } catch { /* onError must not throw */ }
+        }
+      } else if (err instanceof Error) {
         status = 'error';
-        error = err.message ?? String(err);
+        error = err.message;
         logger.error(`Agent "${agent.name}" failed: ${error}`);
         if (agent.onError) {
           try { await agent.onError(err, ctx); } catch { /* onError must not throw */ }
         }
+      } else {
+        status = 'error';
+        error = String(err);
+        logger.error(`Agent "${agent.name}" failed: ${error}`);
       }
     }
 

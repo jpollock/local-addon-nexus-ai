@@ -73,4 +73,19 @@ describe('AgentRunner', () => {
     const result = await runner.run(agent);
     expect(result.status).toBe('timeout');
   }, 1000);
+
+  it('calls onError on timeout', async () => {
+    const onError = jest.fn().mockResolvedValue(undefined);
+    const agent = defineAgent({
+      name: 'f', version: '1.0.0', triggers: [cron('* * * * *')],
+      timeoutMs: 50,
+      run: async () => new Promise(resolve => setTimeout(resolve, 200)),
+      onError,
+    });
+    const runner = makeRunner();
+    const result = await runner.run(agent);
+    expect(result.status).toBe('timeout');
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0].name).toBe('TimeoutError');
+  }, 1000);
 });
