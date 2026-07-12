@@ -497,9 +497,9 @@ export default function main(context: any): void {
         agentScheduler.start();
 
         // Expose agent platform on services so GraphQL resolvers can access it
-        (nexusServices as any).agentRegistry = agentRegistry;
-        (nexusServices as any).agentRunner = agentRunner;
-        (nexusServices as any).agentEventBus = agentEventBus;
+        nexusServices.agentRegistry = agentRegistry;
+        nexusServices.agentRunner = agentRunner;
+        nexusServices.agentEventBus = agentEventBus;
 
         localLogger.info(`[NexusAI] Agent platform initialized: ${agentRegistry.list().length} agent(s) loaded`);
       } else {

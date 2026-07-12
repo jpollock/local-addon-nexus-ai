@@ -136,6 +136,10 @@ export interface NexusServices {
   twinService?: import('../twin/SiteDigitalTwinService').SiteDigitalTwinService;
   /** Phase 3: Append-only file-based audit log for Tier 2/3 operations */
   operationAuditLog?: import('../audit/OperationAuditLog').OperationAuditLog;
+  /** Agent platform runtime components */
+  agentRegistry?: import('../agent-runtime/AgentRegistry').AgentRegistry;
+  agentRunner?: import('../agent-runtime/AgentRunner').AgentRunner;
+  agentEventBus?: import('../agent-event-bus/AgentEventBus').AgentEventBus;
 }
 
 /**
