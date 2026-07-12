@@ -57,6 +57,15 @@ import { SemanticConfig } from './smart-search/SemanticConfig';
 import { TrackerStore } from './smart-search/TrackerStore';
 import { OpportunisticScheduler } from './scheduler/OpportunisticScheduler';
 import type { StartupStatus } from '../common/types';
+import { AgentStateStore } from './agent-runtime/AgentStateStore';
+import { AgentRegistry } from './agent-runtime/AgentRegistry';
+import { NexusToolProvider } from './agent-runtime/NexusToolProvider';
+import { AgentRunner } from './agent-runtime/AgentRunner';
+import { AgentScheduler } from './agent-runtime/AgentScheduler';
+import { DaemonManager } from './agent-runtime/DaemonManager';
+import { AgentEventBus } from './agent-event-bus/AgentEventBus';
+import { registerLocalLifecycleBridge } from './agent-event-bus/bridges/local-lifecycle-bridge';
+import { createWpEventsBridgeHandler } from './agent-event-bus/bridges/wp-events-bridge';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -186,7 +195,11 @@ export default function main(context: any): void {
   // Checkpoint WAL on clean shutdown so committed writes survive a restart.
   // Also run a passive checkpoint every 5 minutes to keep WAL size bounded.
   const { app } = require('electron');
-  app.on('before-quit', () => { graphService.close().catch(() => {}); });
+  app.on('before-quit', () => {
+    agentScheduler?.stop();
+    daemonManager?.stopAll().catch(() => {});
+    graphService.close().catch(() => {});
+  });
   setInterval(() => {
     try { graphService.getDb()?.pragma('wal_checkpoint(PASSIVE)'); } catch {}
   }, 5 * 60 * 1000);
@@ -252,6 +265,8 @@ export default function main(context: any): void {
     logger: localLogger,
     storage: registryStorage,
     authToken: savedWebhookToken ?? undefined,
+    // Forward-ref: _wpEventsBridgeCallback is set once AgentEventBus is ready
+    onEvent: (siteId, eventType, payload) => { _wpEventsBridgeCallback?.(siteId, eventType, payload); },
   });
 
   // Initialize WPE sync service (Phase 1-2)
@@ -373,6 +388,16 @@ export default function main(context: any): void {
   let haltedRefreshScheduler: HaltedSiteRefreshScheduler;
   let wpeRefreshScheduler: WpeRefreshScheduler;
 
+  // Agent platform: scheduler and daemon manager declared here so the before-quit
+  // handler and onSettingsUpdated closure can reach them. Assigned inside the IIFE.
+  let agentScheduler: AgentScheduler | undefined;
+  let daemonManager: DaemonManager | undefined;
+
+  // Forward reference for the wp-events bridge callback — set once AgentEventBus
+  // is initialized inside the async IIFE. The HttpEventInterface constructor is
+  // called before the IIFE, so we use a late-binding closure.
+  let _wpEventsBridgeCallback: ((siteId: string, eventType: string, payload: Record<string, unknown>) => void) | undefined;
+
   // WPE content index timer — inline interval-based scheduler for indexAllWpeContent.
   // Declared here so the onSettingsUpdated closure can restart/stop it reactively.
   let wpeContentIndexTimer: ReturnType<typeof setInterval> | null = null;
@@ -435,6 +460,50 @@ export default function main(context: any): void {
         localLogger.info('[NexusAI] SmartSearchHandler wired to /smart-search/graphql');
       } else {
         localLogger.warn('[NexusAI] GraphDB not available — SmartSearch disabled');
+      }
+
+      // Agent Platform initialization — requires GraphDB (same connection as SmartSearch)
+      const agentDb = graphService.getDb();
+      if (agentDb) {
+        const agentEventBus = new AgentEventBus(agentDb);
+        agentEventBus.pruneOldEvents(30); // prune events older than 30 days on startup
+
+        const agentStateStore = new AgentStateStore(agentDb);
+        const agentRegistry = new AgentRegistry();
+        const agentToolProvider = new NexusToolProvider(registry, nexusServices as any, undefined);
+        const agentAiClient = { complete: async (_prompt: string) => '' }; // placeholder — wire to ChatService in Spec 02
+        const agentRunner = new AgentRunner(agentStateStore, agentToolProvider, agentAiClient);
+        agentScheduler = new AgentScheduler(agentRunner);
+        daemonManager = new DaemonManager(agentEventBus);
+
+        // Wire the wp-events bridge (releases the forward reference set at construction time)
+        _wpEventsBridgeCallback = createWpEventsBridgeHandler(agentEventBus);
+
+        // Wire local lifecycle bridge into Local's hook system
+        registerLocalLifecycleBridge(agentEventBus, context.hooks);
+
+        // Load agent definitions from disk and register them
+        await agentRegistry.load();
+        for (const agent of agentRegistry.list()) {
+          agentScheduler.register(agent);
+          // Only daemonize agents that declare a stream trigger
+          const hasStreamTrigger = agent.triggers.some(t => t.type === 'stream');
+          if (hasStreamTrigger) {
+            try { daemonManager.start(agent); } catch (err: any) {
+              localLogger.warn(`[NexusAI] Failed to start daemon for "${agent.name}": ${err.message}`);
+            }
+          }
+        }
+        agentScheduler.start();
+
+        // Expose agent platform on services so GraphQL resolvers can access it
+        (nexusServices as any).agentRegistry = agentRegistry;
+        (nexusServices as any).agentRunner = agentRunner;
+        (nexusServices as any).agentEventBus = agentEventBus;
+
+        localLogger.info(`[NexusAI] Agent platform initialized: ${agentRegistry.list().length} agent(s) loaded`);
+      } else {
+        localLogger.warn('[NexusAI] GraphDB not available — agent platform disabled');
       }
 
       setStartupPhase('EventProcessor');

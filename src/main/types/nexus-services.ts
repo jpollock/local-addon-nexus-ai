@@ -158,4 +158,15 @@ export interface NexusServices {
    */
   operationAuditLog?: OperationAuditLog;
 
+  // ── Agent Platform services (Task 11) ───────────────────────────────────
+
+  /** Agent registry — manages loaded agent definitions. */
+  agentRegistry?: import('../agent-runtime/AgentRegistry').AgentRegistry;
+
+  /** Agent runner — executes agent runs with tool and state access. */
+  agentRunner?: import('../agent-runtime/AgentRunner').AgentRunner;
+
+  /** Agent event bus — SQLite-backed pub/sub for agent platform events. */
+  agentEventBus?: import('../agent-event-bus/AgentEventBus').AgentEventBus;
+
 }
