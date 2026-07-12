@@ -39,6 +39,7 @@ export interface HttpEventInterfaceOptions {
   storage: RegistryStorage;
   port?: number;
   authToken?: string;
+  onEvent?: (siteId: string, eventType: string, payload: Record<string, unknown>) => void;
 }
 
 export interface ConnectionInfo {
@@ -56,12 +57,14 @@ export class HttpEventInterface {
   private running = false;
   private aiGatewayRoutes: AIGatewayRoutes;
   private smartSearchHandler?: SmartSearchHandler;
+  private onEvent?: (siteId: string, eventType: string, payload: Record<string, unknown>) => void;
 
   constructor(options: HttpEventInterfaceOptions) {
     this.eventProcessor = options.eventProcessor;
     this.logger = options.logger;
     this.port = options.port ?? 0;
     this.authToken = options.authToken ?? this.generateToken();
+    this.onEvent = options.onEvent;
 
     // Initialize AI Gateway routes
     this.aiGatewayRoutes = new AIGatewayRoutes({
@@ -313,6 +316,9 @@ export class HttpEventInterface {
           event_id: eventId,
           message: 'Event queued for processing',
         }));
+
+        // Notify bridge (fire-and-forget)
+        this.onEvent?.(event.site_id, event.event_type, event.payload as unknown as Record<string, unknown>);
 
         // Trigger async processing (fire-and-forget)
         setImmediate(() => {
