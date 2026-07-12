@@ -5099,6 +5099,101 @@ export function createResolvers(context: ResolverContext) {
           return { ...empty, success: false, error: err.message };
         }
       },
+
+      // ======================================================================
+      // Agent Platform — agentRun (Task 10)
+      // ======================================================================
+
+      agentRun: async (_parent: ResolverParent, { name }: { name: string }, ctx: any) => {
+        // TODO (Task 11): wire ctx.services.agentRegistry and ctx.services.agentRunner
+        const registry = ctx?.services?.agentRegistry;
+        const runner   = ctx?.services?.agentRunner;
+        if (!registry || !runner) {
+          throw new Error('Agent runtime not initialised — ensure AgentRegistry and AgentRunner are wired into NexusServices (Task 11)');
+        }
+        const agent = registry.get(name);
+        if (!agent) throw new Error(`Agent "${name}" not found`);
+        const result = await runner.run(agent);
+        return {
+          agentName:  result.agentName,
+          status:     result.status,
+          error:      result.error ?? null,
+          durationMs: result.finishedAt - result.startedAt,
+        };
+      },
+
+      // ======================================================================
+      // Agent Platform — agentEmit (Task 10)
+      // ======================================================================
+
+      agentEmit: async (
+        _parent: ResolverParent,
+        { event, siteId, payload }: { event: string; siteId?: string; payload?: string },
+        ctx: any,
+      ) => {
+        // TODO (Task 11): wire ctx.services.agentEventBus
+        const bus = ctx?.services?.agentEventBus;
+        if (!bus) {
+          throw new Error('AgentEventBus not initialised — wire it into NexusServices (Task 11)');
+        }
+        const colonIdx = event.indexOf(':');
+        if (colonIdx <= 0 || colonIdx === event.length - 1) {
+          throw new Error(`Invalid event format "${event}" — expected "namespace:type"`);
+        }
+        const namespace = event.slice(0, colonIdx);
+        const type      = event.slice(colonIdx + 1);
+        bus.publish({
+          namespace,
+          type,
+          key:       event,
+          siteId:    siteId ?? undefined,
+          payload:   payload ? JSON.parse(payload) : {},
+          createdAt: Date.now(),
+        });
+        return true;
+      },
+    },
+
+    // =========================================================================
+    // Agent Platform — Query resolvers (Task 10)
+    // =========================================================================
+
+    Query: {
+      agentList: async (_parent: ResolverParent, _args: unknown, ctx: any) => {
+        // TODO (Task 11): wire ctx.services.agentRegistry
+        const registry = ctx?.services?.agentRegistry;
+        if (!registry) {
+          throw new Error('AgentRegistry not initialised — wire it into NexusServices (Task 11)');
+        }
+        return registry.list().map((def: any) => ({
+          name:         def.name,
+          version:      def.version,
+          description:  def.description ?? null,
+          triggerTypes: def.triggers.map((t: any) => t.type),
+          status:       'registered',
+        }));
+      },
+
+      agentLogs: async (
+        _parent: ResolverParent,
+        { name, lines }: { name: string; lines?: number },
+        _ctx: any,
+      ) => {
+        const logPath = require('path').join(
+          require('os').homedir(),
+          'Library',
+          'Application Support',
+          'Local',
+          'nexus-ai',
+          'agent-logs',
+          `${name}.log`,
+        );
+        const fs = require('fs') as typeof import('fs');
+        if (!fs.existsSync(logPath)) return [];
+        const content = fs.readFileSync(logPath, 'utf-8');
+        const allLines = content.split('\n').filter(Boolean);
+        return allLines.slice(-(lines ?? 50));
+      },
     },
   };
 }

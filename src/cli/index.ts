@@ -25,6 +25,7 @@ import { troubleshootCommand } from './commands/troubleshoot';
 import { settingsCommand } from './commands/settings';
 import { resetCommand } from './commands/reset';
 import { systemCommand } from './commands/system';
+import { agentCommand } from './commands/agent';
 import { bootstrap } from './bootstrap';
 import { checkForUpdates, getCurrentVersion } from './utils/version';
 import { setBootstrapResult } from './utils/context';
@@ -56,6 +57,7 @@ program.addCommand(troubleshootCommand);
 program.addCommand(settingsCommand);
 program.addCommand(resetCommand);
 program.addCommand(systemCommand);
+program.addCommand(agentCommand);
 
 // Global error handler
 process.on('unhandledRejection', (error: any) => {

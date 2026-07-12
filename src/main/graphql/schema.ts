@@ -1928,4 +1928,52 @@ export const typeDefs = gql`
     onlyInB:           [PluginDiffEntry!]!
     versionMismatches: [PluginDiffEntry!]!
   }
+
+  # ============================================================================
+  # Agent Platform — read queries (Task 10)
+  # ============================================================================
+
+  extend type Query {
+    "List all registered Nexus agents"
+    agentList: [AgentInfo!]!
+
+    "Return the last N log lines for an agent (empty array if never run)"
+    agentLogs(name: String!, lines: Int): [String!]!
+  }
+
+  type AgentInfo {
+    "Agent name"
+    name: String!
+    "Agent version"
+    version: String!
+    "Agent description (optional)"
+    description: String
+    "Trigger type strings (e.g. cron, event, webhook)"
+    triggerTypes: [String!]!
+    "Registration status — always 'registered' for now"
+    status: String!
+  }
+
+  # ============================================================================
+  # Agent Platform — mutations (Task 10)
+  # ============================================================================
+
+  extend type Mutation {
+    "Manually trigger an agent by name"
+    agentRun(name: String!): AgentRunResult!
+
+    "Publish a synthetic event to the agent event bus"
+    agentEmit(event: String!, siteId: String, payload: String): Boolean!
+  }
+
+  type AgentRunResult {
+    "Agent name"
+    agentName: String!
+    "Run status: success | error | timeout"
+    status: String!
+    "Error message (null on success)"
+    error: String
+    "Duration in milliseconds"
+    durationMs: Int!
+  }
 `;
