@@ -1,5 +1,5 @@
 import { DaemonManager } from '../../../src/main/agent-runtime/DaemonManager';
-import { defineAgent, stream } from '../../../src/main/agent-sdk';
+import { defineAgent, stream, cron } from '../../../src/main/agent-sdk';
 import Database from 'better-sqlite3';
 import { AgentEventBus } from '../../../src/main/agent-event-bus/AgentEventBus';
 
@@ -37,7 +37,10 @@ describe('DaemonManager', () => {
   it('status() returns running after start', () => {
     const manager = new DaemonManager(makeBus());
     manager.start(daemonAgent);
-    expect(manager.status('daemon-test')).toBe('running');
+    const s = manager.status('daemon-test');
+    expect(s.status).toBe('running');
+    expect(s.name).toBe('daemon-test');
+    expect(typeof s.restarts).toBe('number');
     manager.stop('daemon-test');
   });
 
@@ -45,18 +48,24 @@ describe('DaemonManager', () => {
     const manager = new DaemonManager(makeBus());
     manager.start(daemonAgent);
     manager.stop('daemon-test');
-    expect(manager.status('daemon-test')).toBe('stopped');
+    expect(manager.status('daemon-test').status).toBe('stopped');
   });
 
-  it('ignores non-daemon agents (no stream trigger)', () => {
+  it('status() returns stopped object for unknown agent', () => {
     const manager = new DaemonManager(makeBus());
-    // defineAgent rejects empty triggers — shown here for documentation only.
-    // The actual guard being tested is the manager's own stream-trigger check.
-    // expect(() => defineAgent({ name: 'task', version: '1.0.0', triggers: [], run: jest.fn() })).toThrow();
-    const agentWithCron = defineAgent({ name: 'cron-only', version: '1.0.0', triggers: [{ type: 'cron', expression: '* * * * *' }], run: jest.fn() });
-    expect(() => manager.start(agentWithCron)).not.toThrow();
-    expect(manager.status('cron-only')).toBe('stopped'); // no daemon started
-    manager.stopAll();
+    const s = manager.status('unknown-agent');
+    expect(s).toEqual({ name: 'unknown-agent', status: 'stopped', restarts: 0 });
+  });
+
+  it('start() throws for non-stream agents', () => {
+    const manager = new DaemonManager(makeBus());
+    const nonStreamAgent = defineAgent({
+      name: 'non-stream',
+      version: '1.0.0',
+      triggers: [cron('* * * * *')],
+      run: async () => {},
+    });
+    expect(() => manager.start(nonStreamAgent)).toThrow('Agent "non-stream" has no stream triggers');
   });
 
   it('stopAll() resolves without throwing', async () => {

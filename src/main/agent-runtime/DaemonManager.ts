@@ -13,14 +13,23 @@ const WORKER_PATH = path.join(__dirname, 'daemon-worker');
 const HEARTBEAT_TIMEOUT_MS = 15_000;
 const MAX_RESTART_DELAY_MS = 5 * 60 * 1_000; // 5 minutes
 
-export type DaemonStatus = 'running' | 'stopped' | 'restarting';
+export interface DaemonStatus {
+  name: string;
+  pid?: number;
+  status: 'running' | 'stopped' | 'restarting' | 'error';
+  restarts: number;
+  startedAt?: number;
+}
+
+type InternalStatus = 'running' | 'stopped' | 'restarting' | 'error';
 
 interface DaemonEntry {
   agent: AgentDefinition;
   pattern: string;
   proc: ChildProcess | null;
-  status: DaemonStatus;
+  status: InternalStatus;
   restartCount: number;
+  startedAt?: number;
   lastHeartbeat: number;
   unsubscribeFromBus: (() => void) | null;
   heartbeatTimer: ReturnType<typeof setInterval> | null;
@@ -39,8 +48,10 @@ export class DaemonManager {
       (t): t is StreamTrigger => t.type === 'stream',
     );
 
-    // Silently skip agents that have no stream triggers — they are task/cron agents
-    if (streamTriggers.length === 0) return;
+    // Throw for agents that have no stream triggers — they cannot be daemonized
+    if (streamTriggers.length === 0) {
+      throw new Error(`Agent "${agent.name}" has no stream triggers`);
+    }
 
     const runningCount = Array.from(this.daemons.values()).filter(
       d => d.status === 'running',
@@ -56,6 +67,7 @@ export class DaemonManager {
       proc: null,
       status: 'stopped',
       restartCount: 0,
+      startedAt: undefined,
       lastHeartbeat: Date.now(),
       unsubscribeFromBus: null,
       heartbeatTimer: null,
@@ -90,12 +102,14 @@ export class DaemonManager {
       });
     } catch (err: any) {
       logger.warn(`DaemonManager: failed to fork worker for "${entry.agent.name}": ${err.message}`);
+      entry.status = 'error';
       this.scheduleRestart(entry);
       return;
     }
 
     entry.proc = proc;
     entry.status = 'running';
+    entry.startedAt = Date.now();
     entry.lastHeartbeat = Date.now();
 
     // Send init message — ignore channel-closed errors (process may exit fast)
@@ -126,6 +140,11 @@ export class DaemonManager {
 
     proc.on('exit', (code) => {
       if (entry.status === 'stopped') return; // intentional stop — do not restart
+      // Clear heartbeat interval so it doesn't fire against the dead process
+      if (entry.heartbeatTimer) {
+        clearInterval(entry.heartbeatTimer);
+        entry.heartbeatTimer = null;
+      }
       logger.warn(`DaemonManager: "${entry.agent.name}" exited with code ${code} — scheduling restart`);
       this.scheduleRestart(entry);
     });
@@ -180,14 +199,16 @@ export class DaemonManager {
     }
 
     if (entry.proc) {
-      try { entry.proc.send({ type: 'shutdown' }); } catch { /* already gone */ }
+      const proc = entry.proc;
+      entry.proc = null;
+      try { proc.send({ type: 'shutdown' }); } catch { /* already gone */ }
       // Give it 10s to exit gracefully, then SIGKILL
+      // Capture proc reference before nulling so the timer can still reach it
       const killTimer = setTimeout(() => {
-        try { entry.proc?.kill('SIGKILL'); } catch { /* already dead */ }
+        try { proc.kill('SIGKILL'); } catch { /* already dead */ }
       }, 10_000);
       // Unref so this timer does not keep the Jest process alive
       if (killTimer.unref) killTimer.unref();
-      entry.proc = null;
     }
   }
 
@@ -197,6 +218,16 @@ export class DaemonManager {
   }
 
   status(name: string): DaemonStatus {
-    return this.daemons.get(name)?.status ?? 'stopped';
+    const entry = this.daemons.get(name);
+    if (!entry) {
+      return { name, status: 'stopped', restarts: 0 };
+    }
+    return {
+      name,
+      pid: entry.proc?.pid,
+      status: entry.status,
+      restarts: entry.restartCount,
+      startedAt: entry.startedAt,
+    };
   }
 }
