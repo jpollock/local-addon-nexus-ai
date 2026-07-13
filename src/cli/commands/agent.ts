@@ -27,7 +27,7 @@ import * as os from 'os';
 export type GqlFn = <T>(query: string, variables?: Record<string, unknown>) => Promise<T>;
 
 /** Injected execSync function type — injectable for testing. */
-export type ExecSyncFn = (command: string, options?: { stdio?: string }) => Buffer | string;
+export type ExecSyncFn = (command: string, options?: { stdio?: string; cwd?: string }) => Buffer | string;
 
 function getLocalConnectionInfo(): { url: string; authToken: string } | null {
   const dataDir =
@@ -85,6 +85,12 @@ const AGENT_STATUS_QUERY = /* GraphQL */ `
       lastRunDurationMs
       lastRunError
     }
+  }
+`;
+
+const AGENT_RELOAD_MUTATION = /* GraphQL */ `
+  mutation {
+    agentReload
   }
 `;
 
@@ -295,6 +301,74 @@ export async function handleAgentLogs(
       resolve();
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// nexus agent install — install an npm agent package
+// ---------------------------------------------------------------------------
+
+/**
+ * Install a published agent package from npm into the agents directory,
+ * then trigger a hot reload of the agent registry via the agentReload mutation.
+ *
+ * @param pkg         - npm package name (e.g. `my-agent` or `@scope/my-agent`)
+ * @param _agentsDir  - Optional override for the agents root directory (used in tests only)
+ * @param execSyncFn  - Optional override for child_process.execSync (used in tests only)
+ * @param gql         - Optional override for the GQL transport (used in tests only)
+ */
+export async function handleAgentInstall(
+  pkg: string,
+  _agentsDir?: string,
+  execSyncFn?: ExecSyncFn,
+  gql: GqlFn = defaultGql,
+): Promise<void> {
+  const agentsDir =
+    _agentsDir ??
+    path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents');
+
+  fs.mkdirSync(agentsDir, { recursive: true });
+
+  console.log(`Installing ${pkg}...`);
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const execSync = execSyncFn ?? (require('child_process') as typeof import('child_process')).execSync;
+  try {
+    execSync(`npm install ${pkg} --prefix "${agentsDir}" --no-fund --no-audit`, {
+      stdio: 'inherit',
+      cwd: agentsDir,
+    });
+  } catch {
+    console.error(`\nInstall failed. Make sure the package name is correct.`);
+    process.exit(1);
+  }
+
+  // Read the installed package's metadata
+  const pkgName = pkg.startsWith('@') ? pkg : pkg.split('@')[0];
+  const pkgJsonPath = path.join(agentsDir, 'node_modules', pkgName, 'package.json');
+  let installedVersion = '?';
+  let installedName = pkgName;
+  if (fs.existsSync(pkgJsonPath)) {
+    try {
+      const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8')) as {
+        name?: string;
+        version?: string;
+      };
+      installedName = pkgJson.name ?? pkgName;
+      installedVersion = pkgJson.version ?? '?';
+    } catch {
+      /* ignore malformed package.json */
+    }
+  }
+
+  // Trigger registry reload via GraphQL mutation
+  try {
+    await gql(AGENT_RELOAD_MUTATION);
+    console.log(`Installed: ${installedName} v${installedVersion}`);
+    console.log('Agent registry reloaded. Run: nexus agent list');
+  } catch {
+    console.log(`Installed: ${installedName} v${installedVersion}`);
+    console.log('Reload failed — restart Local to activate the agent.');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -598,6 +672,13 @@ agentCommand
   .description('Type-check a TypeScript agent (and optionally validate tool names)')
   .action(async (name?: string) => {
     await handleAgentValidate(name);
+  });
+
+agentCommand
+  .command('install <package>')
+  .description('Install a published agent package from npm')
+  .action(async (pkg: string) => {
+    await handleAgentInstall(pkg);
   });
 
 agentCommand
