@@ -32,6 +32,10 @@ const fakeToolProvider = {
 };
 
 describe('AgentAIClient', () => {
+  beforeEach(() => {
+    fakeToolProvider.invoke.mockClear();
+  });
+
   it('returns text on first non-tool response', async () => {
     const client = new AgentAIClient(makeTextProvider('hello') as any, { model: 'test-model' }, fakeToolProvider as any);
     expect(await client.run('ping')).toBe('hello');
