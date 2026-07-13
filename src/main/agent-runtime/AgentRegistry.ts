@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { createLogger } from '../logging/Logger';
-import type { AgentDefinition, Unsubscribe } from '../agent-sdk/types';
+import type { AgentDefinition } from '../agent-sdk/types';
 
 const logger = createLogger('AgentRegistry');
 
