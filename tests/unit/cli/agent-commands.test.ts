@@ -19,6 +19,7 @@ import {
   handleAgentStatus,
   handleAgentCreate,
   handleAgentValidate,
+  handleAgentInstall,
   type GqlFn,
   type ExecSyncFn,
 } from '../../../src/cli/commands/agent';
@@ -768,5 +769,247 @@ describe('handleAgentValidate', () => {
     // Should not throw
     await expect(handleAgentValidate(undefined, agentsDir, execSyncOk)).resolves.toBeUndefined();
     expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  it('Phase 2 tools OK — all declared tools exist in runtime', async () => {
+    const agentSubdir = path.join(agentsDir, 'tools-agent');
+    fs.mkdirSync(agentSubdir, { recursive: true });
+
+    // Write a minimal valid TS agent with tools declared
+    const agentContent = `
+export default {
+  name: 'tools-agent',
+  version: '1.0.0',
+  tools: ['list_sites', 'nexus_list_sites']
+};
+`;
+    fs.writeFileSync(path.join(agentSubdir, 'agent.ts'), agentContent);
+
+    // Mock gql to return matching tools
+    const mockGql: GqlFn = async () =>
+      ({
+        mcpTools: [{ name: 'list_sites' }, { name: 'nexus_list_sites' }],
+      }) as any;
+
+    await handleAgentValidate('tools-agent', agentsDir, execSyncOk, mockGql);
+
+    expect(logLines.some((l) => l.includes('tools-agent') && l.includes('Tools OK'))).toBe(true);
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  it('Phase 2 tools error — declared tool not in runtime', async () => {
+    const agentSubdir = path.join(agentsDir, 'bad-tools-agent');
+    fs.mkdirSync(agentSubdir, { recursive: true });
+
+    // Agent declares a nonexistent tool
+    const agentContent = `
+export default {
+  name: 'bad-tools-agent',
+  version: '1.0.0',
+  tools: ['nonexistent_tool', 'list_sites']
+};
+`;
+    fs.writeFileSync(path.join(agentSubdir, 'agent.ts'), agentContent);
+
+    // Mock gql to return only one tool (missing 'nonexistent_tool')
+    const mockGql: GqlFn = async () =>
+      ({
+        mcpTools: [{ name: 'list_sites' }],
+      }) as any;
+
+    await expect(handleAgentValidate('bad-tools-agent', agentsDir, execSyncOk, mockGql)).rejects.toThrow(
+      'process.exit(1)',
+    );
+
+    expect(errLines.some((l) => l.includes('bad-tools-agent') && l.includes('Unknown tools'))).toBe(true);
+    expect(errLines.some((l) => l.includes('nonexistent_tool'))).toBe(true);
+  });
+
+  it('Phase 2 skipped — Local not running (gql rejects)', async () => {
+    const agentSubdir = path.join(agentsDir, 'skip-agent');
+    fs.mkdirSync(agentSubdir, { recursive: true });
+
+    // Agent declares tools
+    const agentContent = `
+export default {
+  name: 'skip-agent',
+  version: '1.0.0',
+  tools: ['list_sites']
+};
+`;
+    fs.writeFileSync(path.join(agentSubdir, 'agent.ts'), agentContent);
+
+    // Mock gql to reject (Local not running)
+    const mockGql: GqlFn = async () => {
+      throw new Error('Could not connect to Local');
+    };
+
+    await handleAgentValidate('skip-agent', agentsDir, execSyncOk, mockGql);
+
+    expect(logLines.some((l) => l.includes('skip-agent') && /skipped/i.test(l))).toBe(true);
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// nexus agent install
+// ---------------------------------------------------------------------------
+
+describe('handleAgentInstall', () => {
+  let agentsDir: string;
+  let exitSpy: ReturnType<typeof jest.spyOn>;
+  let logLines: string[];
+  let errLines: string[];
+  let logSpy: ReturnType<typeof jest.spyOn>;
+  let errSpy: ReturnType<typeof jest.spyOn>;
+
+  /** A mock execSync that succeeds (no throw) */
+  const execSyncOk: ExecSyncFn = (_cmd, _opts) => Buffer.from('');
+
+  /** A mock execSync that fails (simulates npm 404) */
+  const execSyncFail: ExecSyncFn = (_cmd, _opts) => {
+    throw new Error('npm ERR! 404 Not Found');
+  };
+
+  beforeEach(() => {
+    agentsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-agent-install-test-'));
+
+    exitSpy = jest.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
+      throw new Error(`process.exit(${code})`);
+    });
+
+    logLines = [];
+    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
+      logLines.push(args.join(' '));
+    });
+
+    errLines = [];
+    errSpy = jest.spyOn(console, 'error').mockImplementation((...args: any[]) => {
+      errLines.push(args.join(' '));
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(agentsDir, { recursive: true, force: true });
+    exitSpy.mockRestore();
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
+  it('creates the agents directory if it does not exist', async () => {
+    const newDir = path.join(agentsDir, 'subdir-that-does-not-exist');
+    const gql: GqlFn = async () => ({ agentReload: true }) as any;
+
+    await handleAgentInstall('my-pkg', newDir, execSyncOk, gql);
+
+    expect(fs.existsSync(newDir)).toBe(true);
+  });
+
+  it('prints "Installing <pkg>..." before running npm install', async () => {
+    const gql: GqlFn = async () => ({ agentReload: true }) as any;
+
+    await handleAgentInstall('my-pkg', agentsDir, execSyncOk, gql);
+
+    expect(logLines.some((l) => l.includes('Installing my-pkg'))).toBe(true);
+  });
+
+  it('prints installed name and version from package.json on success', async () => {
+    // Simulate npm install by pre-creating the package.json
+    const pkgDir = path.join(agentsDir, 'node_modules', 'my-pkg');
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(pkgDir, 'package.json'),
+      JSON.stringify({ name: 'my-pkg', version: '1.2.3' }),
+    );
+
+    const gql: GqlFn = async () => ({ agentReload: true }) as any;
+
+    await handleAgentInstall('my-pkg', agentsDir, execSyncOk, gql);
+
+    const joined = logLines.join('\n');
+    expect(joined).toContain('my-pkg');
+    expect(joined).toContain('1.2.3');
+  });
+
+  it('prints "v?" when package.json is not present after install', async () => {
+    const gql: GqlFn = async () => ({ agentReload: true }) as any;
+
+    await handleAgentInstall('no-manifest-pkg', agentsDir, execSyncOk, gql);
+
+    expect(logLines.some((l) => l.includes('no-manifest-pkg') && l.includes('v?'))).toBe(true);
+  });
+
+  it('prints registry-reloaded message when agentReload mutation succeeds', async () => {
+    const gql: GqlFn = async () => ({ agentReload: true }) as any;
+
+    await handleAgentInstall('my-pkg', agentsDir, execSyncOk, gql);
+
+    expect(logLines.some((l) => /reloaded/i.test(l))).toBe(true);
+  });
+
+  it('prints fallback message and does not throw when agentReload mutation fails', async () => {
+    const gql: GqlFn = async () => {
+      throw new Error('Local not running');
+    };
+
+    // Should resolve without throwing
+    await expect(handleAgentInstall('my-pkg', agentsDir, execSyncOk, gql)).resolves.toBeUndefined();
+    expect(logLines.some((l) => /restart local/i.test(l))).toBe(true);
+  });
+
+  it('exits with code 1 and prints error message when npm install fails', async () => {
+    const gql: GqlFn = async () => ({ agentReload: true }) as any;
+
+    await expect(
+      handleAgentInstall('nonexistent-pkg-xyz-404', agentsDir, execSyncFail, gql),
+    ).rejects.toThrow('process.exit(1)');
+
+    expect(errLines.some((l) => /install failed/i.test(l))).toBe(true);
+  });
+
+  it('calls the agentReload mutation after successful install', async () => {
+    let mutationCalled = false;
+    const gql: GqlFn = async (query) => {
+      if (query.includes('agentReload')) mutationCalled = true;
+      return { agentReload: true } as any;
+    };
+
+    await handleAgentInstall('my-pkg', agentsDir, execSyncOk, gql);
+
+    expect(mutationCalled).toBe(true);
+  });
+
+  it('does not call agentReload when npm install fails', async () => {
+    let mutationCalled = false;
+    const gql: GqlFn = async (query) => {
+      if (query.includes('agentReload')) mutationCalled = true;
+      return { agentReload: true } as any;
+    };
+
+    try {
+      await handleAgentInstall('bad-pkg', agentsDir, execSyncFail, gql);
+    } catch {
+      // expected process.exit(1)
+    }
+
+    expect(mutationCalled).toBe(false);
+  });
+
+  it('handles scoped packages (@scope/name) — reads correct package.json path', async () => {
+    // Scoped packages live at node_modules/@scope/name/package.json
+    const pkgDir = path.join(agentsDir, 'node_modules', '@myorg', 'my-agent');
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(pkgDir, 'package.json'),
+      JSON.stringify({ name: '@myorg/my-agent', version: '2.0.0' }),
+    );
+
+    const gql: GqlFn = async () => ({ agentReload: true }) as any;
+
+    await handleAgentInstall('@myorg/my-agent', agentsDir, execSyncOk, gql);
+
+    const joined = logLines.join('\n');
+    expect(joined).toContain('@myorg/my-agent');
+    expect(joined).toContain('2.0.0');
   });
 });
