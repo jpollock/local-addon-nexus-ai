@@ -24,7 +24,7 @@
 
 **The addon uses better-sqlite3** (native module):
 - Tests use system Node.js (MODULE_VERSION 127)
-- Local uses Electron Node.js (MODULE_VERSION 136)
+- Local uses Electron Node.js (MODULE_VERSION 146)
 - **Different binaries required** — one context breaks the other
 
 **Workflow:**
@@ -45,9 +45,25 @@ npm run rebuild    # For Local (recompiles for Electron)
 **See:** `docs/NATIVE_MODULES.md` for details.
 
 **Key versions:**
-- better-sqlite3: 11.10.0 (don't change this)
-- Electron (Local): 37.8.0
+- better-sqlite3: 12.11.1 (don't change this)
+- Electron (Local): 42.2.0
 - System Node: 22.16.0
+
+**node-abi registry patch required**: `@electron/rebuild`'s bundled `node-abi` doesn't know about Electron 42.2.0 yet. Both registry files need a manual patch with `"future": true` (NOT `false` — the boundary check requires it to be the last future entry):
+```bash
+for regPath in \
+  "node_modules/node-abi/abi_registry.json" \
+  "node_modules/@electron/rebuild/node_modules/node-abi/abi_registry.json"; do
+  node -e "
+    const fs = require('fs');
+    const reg = JSON.parse(fs.readFileSync('$regPath', 'utf8'));
+    const filtered = reg.filter(e => e.target !== '42.2.0');
+    filtered.push({ abi: '146', future: true, lts: false, runtime: 'electron', target: '42.2.0' });
+    fs.writeFileSync('$regPath', JSON.stringify(filtered, null, 2));
+  "
+done
+npm run rebuild
+```
 
 ---
 
