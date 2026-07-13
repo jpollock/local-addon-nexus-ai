@@ -158,7 +158,7 @@ export interface NexusServices {
    */
   operationAuditLog?: OperationAuditLog;
 
-  // ── Agent Platform services (Task 11) ───────────────────────────────────
+  // ── Agent Platform services (Task 7 onwards) ───────────────────────────
 
   /** Agent registry — manages loaded agent definitions. */
   agentRegistry?: import('../agent-runtime/AgentRegistry').AgentRegistry;
@@ -168,5 +168,11 @@ export interface NexusServices {
 
   /** Agent event bus — SQLite-backed pub/sub for agent platform events. */
   agentEventBus?: import('../agent-event-bus/AgentEventBus').AgentEventBus;
+
+  /** Agent state store — tracks last run status for each agent. */
+  agentStateStore?: import('../agent-runtime/AgentStateStore').AgentStateStore;
+
+  /** Agent reload function — reloads agents from disk. */
+  agentReload?: () => Promise<void>;
 
 }

@@ -66,6 +66,17 @@ interface ParsedTarget {
   installId?: string;
 }
 
+interface AgentStatusType {
+  name: string;
+  version: string;
+  description: string | null;
+  cronExpression: string | null;
+  lastRunAt: number | null;
+  lastRunStatus: string | null;
+  lastRunDurationMs: number | null;
+  lastRunError: string | null;
+}
+
 function formatTwinAge(ageMs: number): string {
   const s = Math.floor(ageMs / 1000);
   if (s < 60)   return 'just now';
@@ -5104,12 +5115,11 @@ export function createResolvers(context: ResolverContext) {
       // Agent Platform — agentRun (Task 10)
       // ======================================================================
 
-      agentRun: async (_parent: ResolverParent, { name }: { name: string }, ctx: any) => {
-        // TODO (Task 11): wire ctx.services.agentRegistry and ctx.services.agentRunner
-        const registry = ctx?.services?.agentRegistry;
-        const runner   = ctx?.services?.agentRunner;
+      agentRun: async (_parent: ResolverParent, { name }: { name: string }, _ctx: any) => {
+        const registry = services.agentRegistry;
+        const runner   = services.agentRunner;
         if (!registry || !runner) {
-          throw new Error('Agent runtime not initialised — ensure AgentRegistry and AgentRunner are wired into NexusServices (Task 11)');
+          throw new Error('Agent runtime not initialised — ensure AgentRegistry and AgentRunner are wired into NexusServices');
         }
         const agent = registry.get(name);
         if (!agent) throw new Error(`Agent "${name}" not found`);
@@ -5129,12 +5139,11 @@ export function createResolvers(context: ResolverContext) {
       agentEmit: async (
         _parent: ResolverParent,
         { event, siteId, payload }: { event: string; siteId?: string; payload?: string },
-        ctx: any,
+        _ctx: any,
       ) => {
-        // TODO (Task 11): wire ctx.services.agentEventBus
-        const bus = ctx?.services?.agentEventBus;
+        const bus = services.agentEventBus;
         if (!bus) {
-          throw new Error('AgentEventBus not initialised — wire it into NexusServices (Task 11)');
+          throw new Error('AgentEventBus not initialised — ensure agent platform is wired into NexusServices');
         }
         const colonIdx = event.indexOf(':');
         if (colonIdx <= 0 || colonIdx === event.length - 1) {
@@ -5152,6 +5161,17 @@ export function createResolvers(context: ResolverContext) {
         });
         return true;
       },
+
+      // ======================================================================
+      // Agent Platform — agentReload (Task 8)
+      // ======================================================================
+
+      agentReload: async (_: unknown, __: unknown, { services }: ResolverContext): Promise<boolean> => {
+        if (services.agentReload) {
+          await services.agentReload();
+        }
+        return true;
+      },
     },
 
     // =========================================================================
@@ -5159,11 +5179,10 @@ export function createResolvers(context: ResolverContext) {
     // =========================================================================
 
     Query: {
-      agentList: async (_parent: ResolverParent, _args: unknown, ctx: any) => {
-        // TODO (Task 11): wire ctx.services.agentRegistry
-        const registry = ctx?.services?.agentRegistry;
+      agentList: async (_parent: ResolverParent, _args: unknown, _ctx: any) => {
+        const registry = services.agentRegistry;
         if (!registry) {
-          throw new Error('AgentRegistry not initialised — wire it into NexusServices (Task 11)');
+          throw new Error('AgentRegistry not initialised — ensure agent platform is wired into NexusServices');
         }
         return registry.list().map((def: any) => ({
           name:         def.name,
@@ -5193,6 +5212,26 @@ export function createResolvers(context: ResolverContext) {
         const content = fs.readFileSync(logPath, 'utf-8');
         const allLines = content.split('\n').filter(Boolean);
         return allLines.slice(-(lines ?? 50));
+      },
+
+      agentStatus: (_: unknown, __: unknown, { services }: ResolverContext): AgentStatusType[] => {
+        const registry = services.agentRegistry;
+        const store = services.agentStateStore;
+        if (!registry) return [];
+        return registry.list().map(def => {
+          const last = store?.getLastRun(def.name);
+          const cronTrigger = def.triggers.find(t => t.type === 'cron') as import('../agent-sdk/types').CronTrigger | undefined;
+          return {
+            name: def.name,
+            version: def.version,
+            description: def.description ?? null,
+            cronExpression: cronTrigger?.expression ?? null,
+            lastRunAt: last ? last.startedAt : null,
+            lastRunStatus: last ? last.status : null,
+            lastRunDurationMs: last ? last.finishedAt - last.startedAt : null,
+            lastRunError: last?.error ?? null,
+          };
+        });
       },
     },
   };

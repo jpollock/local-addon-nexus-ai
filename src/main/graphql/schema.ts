@@ -1939,6 +1939,9 @@ export const typeDefs = gql`
 
     "Return the last N log lines for an agent (empty array if never run)"
     agentLogs(name: String!, lines: Int): [String!]!
+
+    "List agents with last-run status"
+    agentStatus: [AgentStatus!]!
   }
 
   type AgentInfo {
@@ -1954,6 +1957,29 @@ export const typeDefs = gql`
     status: String!
   }
 
+  # -----------------------------------------------------------------------
+  # Agent status + run history (Spec 02)
+  # -----------------------------------------------------------------------
+
+  type AgentStatus {
+    "Agent name"
+    name: String!
+    "Agent version"
+    version: String!
+    "Agent description"
+    description: String
+    "Cron expression (first cron trigger, if any)"
+    cronExpression: String
+    "Unix ms timestamp of last run start"
+    lastRunAt: Float
+    "Last run status: success | error | timeout | null"
+    lastRunStatus: String
+    "Last run duration in milliseconds"
+    lastRunDurationMs: Float
+    "Last run error message (if status = error)"
+    lastRunError: String
+  }
+
   # ============================================================================
   # Agent Platform — mutations (Task 10)
   # ============================================================================
@@ -1964,6 +1990,9 @@ export const typeDefs = gql`
 
     "Publish a synthetic event to the agent event bus"
     agentEmit(event: String!, siteId: String, payload: String): Boolean!
+
+    "Reload all agents from disk (used by nexus agent install)"
+    agentReload: Boolean!
   }
 
   type AgentRunResult {
