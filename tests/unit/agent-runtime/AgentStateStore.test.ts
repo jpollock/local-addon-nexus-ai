@@ -16,7 +16,9 @@ describe('AgentStateStore', () => {
     const db = new Database(':memory:');
     new AgentStateStore(db);
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[];
-    expect(tables.map((t: any) => t.name)).toContain('agent_state');
+    const tableNames = tables.map((t: any) => t.name);
+    expect(tableNames).toContain('agent_state');
+    expect(tableNames).toContain('agent_runs');
   });
 
   it('set and get a value', () => {
