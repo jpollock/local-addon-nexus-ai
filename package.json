@@ -67,11 +67,11 @@
     "package:mac-x64": "node scripts/package-addon.js --platform darwin --arch x64",
     "package:linux-x64": "node scripts/package-addon.js --platform linux --arch x64",
     "package:win-x64": "node scripts/package-addon.js --platform win32 --arch x64",
-    "rebuild": "electron-rebuild -v 37.8.0 -f -w better-sqlite3"
+    "rebuild": "electron-rebuild -v 42.2.0 -f -w better-sqlite3"
   },
   "dependencies": {
     "apache-arrow": ">=13.0.0 <=17.0.0",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.11.1",
     "commander": "^11.1.0",
     "graphql": "^16.13.2",
     "graphql-tag": "^2.12.6",
@@ -84,10 +84,11 @@
     "react-window": "^1.8.10",
     "sqlite-vec": "^0.1.9",
     "tar": "^6.2.1",
+    "ts-node": "^10.9.2",
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.3",
+    "@electron/rebuild": "^4.2.0",
     "@google/genai": "^2.6.0",
     "@playwright/test": "^1.58.2",
     "@types/better-sqlite3": "^7.6.13",

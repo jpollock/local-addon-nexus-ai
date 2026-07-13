@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { createLogger } from '../logging/Logger';
-import type { AgentDefinition } from '../agent-sdk/types';
+import type { AgentDefinition, Unsubscribe } from '../agent-sdk/types';
 
 const logger = createLogger('AgentRegistry');
 
@@ -14,6 +14,31 @@ export const AGENTS_DIR = path.join(
   'nexus-ai',
   'agents',
 );
+
+const SDK_PATH = path.resolve(__dirname, '..', 'agent-sdk', 'index.js');
+
+let tsNodeRegistered = false;
+
+function ensureTsNodeRegistered(): void {
+  if (tsNodeRegistered) return;
+  tsNodeRegistered = true;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const tsNode = require('ts-node') as typeof import('ts-node');
+    tsNode.register({
+      transpileOnly: true,
+      compilerOptions: {
+        module: 'CommonJS',
+        target: 'ES2020',
+        strict: true,
+        esModuleInterop: true,
+        paths: { '@nexus-ai/agent-sdk': [SDK_PATH] },
+      },
+    });
+  } catch (err: any) {
+    logger.warn(`AgentRegistry: ts-node not available — .ts agents will fail to load: ${err.message}`);
+  }
+}
 
 export class AgentRegistry {
   private agents = new Map<string, AgentDefinition>();
@@ -30,12 +55,32 @@ export class AgentRegistry {
       return;
     }
 
+    // Scan direct subdirectories
     const entries = fs.readdirSync(this.agentsDir, { withFileTypes: true });
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const agentDir = path.join(this.agentsDir, entry.name);
-      await this.loadAgent(agentDir);
+      if (!entry.isDirectory() || entry.name === 'node_modules') continue;
+      await this.loadAgent(path.join(this.agentsDir, entry.name));
     }
+
+    // Scan node_modules for published agent packages
+    const nodeModulesDir = path.join(this.agentsDir, 'node_modules');
+    if (fs.existsSync(nodeModulesDir)) {
+      const pkgs = fs.readdirSync(nodeModulesDir, { withFileTypes: true });
+      for (const pkg of pkgs) {
+        if (!pkg.isDirectory()) continue;
+        const pkgDir = path.join(nodeModulesDir, pkg.name);
+        const pkgJsonPath = path.join(pkgDir, 'package.json');
+        if (!fs.existsSync(pkgJsonPath)) continue;
+        try {
+          const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8')) as { main?: string };
+          const main = pkgJson.main ?? '';
+          if (path.basename(main) === 'agent.ts' || path.basename(main) === 'agent.js') {
+            await this.loadAgent(pkgDir);
+          }
+        } catch { /* skip malformed packages */ }
+      }
+    }
+
     logger.info(`AgentRegistry: loaded ${this.agents.size} agent(s)`);
   }
 
@@ -45,14 +90,16 @@ export class AgentRegistry {
     const entryPath = fs.existsSync(tsEntry) ? tsEntry : fs.existsSync(jsEntry) ? jsEntry : null;
     if (!entryPath) return;
 
+    if (entryPath.endsWith('.ts')) {
+      ensureTsNodeRegistered();
+    }
+
     try {
-      // Dynamic import — supports both ESM default exports and CJS module.exports.default
-      const mod = await import(entryPath);
-      let def: AgentDefinition = mod.default ?? mod;
-      // CJS module.exports = { default: ... } gets double-wrapped by dynamic import
-      if ((def as any)?.default && !(def as any)?.name && !(def as any)?.run) {
-        def = (def as any).default;
-      }
+      // Delete cached module so reload picks up fresh source
+      delete require.cache[require.resolve(entryPath)];
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      let def: AgentDefinition = require(entryPath);
+      if ((def as any)?.default) def = (def as any).default;
       if (!def?.name || !def?.run) {
         logger.warn(`AgentRegistry: ${agentDir} does not export a valid AgentDefinition`);
         return;
@@ -72,14 +119,58 @@ export class AgentRegistry {
     return Array.from(this.agents.values());
   }
 
-  watch(): void {
-    fs.watch(this.agentsDir, { persistent: false }, async () => {
-      logger.info('AgentRegistry: change detected — reloading agents');
-      try {
-        await this.load();
-      } catch (err: any) {
-        logger.error(`AgentRegistry: reload failed: ${err.message}`);
+  watch(
+    onUnload: (name: string) => void,
+    onReload: (def: AgentDefinition) => void,
+  ): void {
+    const debounceTimers = new Map<string, NodeJS.Timeout>();
+
+    const handler = (_eventType: string, filename: string | null) => {
+      if (!filename) return;
+      // Extract the agent name — first path segment under agentsDir
+      const segments = filename.split(path.sep);
+      const agentName = segments[0];
+      if (!agentName || agentName === 'node_modules') return;
+
+      if (debounceTimers.has(agentName)) {
+        clearTimeout(debounceTimers.get(agentName)!);
       }
-    });
+      debounceTimers.set(agentName, setTimeout(async () => {
+        debounceTimers.delete(agentName);
+        logger.info(`AgentRegistry: change detected in "${agentName}" — reloading`);
+
+        const agentDir = path.join(this.agentsDir, agentName);
+        if (!fs.existsSync(agentDir)) {
+          // Directory removed — just unload
+          if (this.agents.has(agentName)) {
+            this.agents.delete(agentName);
+            onUnload(agentName);
+          }
+          return;
+        }
+
+        // Unload first if previously registered
+        const existing = this.agents.get(agentName);
+        if (existing) {
+          this.agents.delete(agentName);
+          onUnload(agentName);
+        }
+
+        await this.loadAgent(agentDir);
+
+        const reloaded = this.agents.get(agentName);
+        if (reloaded) {
+          onReload(reloaded);
+        } else {
+          logger.warn(`AgentRegistry: "${agentName}" failed to reload — agent remains unloaded`);
+        }
+      }, 300));
+    };
+
+    try {
+      fs.watch(this.agentsDir, { persistent: false, recursive: true }, handler);
+    } catch (err: any) {
+      logger.warn(`AgentRegistry: fs.watch not available on this platform: ${err.message}`);
+    }
   }
 }
