@@ -65,6 +65,7 @@ import { DaemonManager } from './agent-runtime/DaemonManager';
 import { AgentEventBus } from './agent-event-bus/AgentEventBus';
 import { registerLocalLifecycleBridge } from './agent-event-bus/bridges/local-lifecycle-bridge';
 import { createWpEventsBridgeHandler } from './agent-event-bus/bridges/wp-events-bridge';
+import type { ResolvedAIProvider } from './ai/getAIProvider';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -469,9 +470,9 @@ export default function main(context: any): void {
 
         const agentStateStore = new AgentStateStore(agentDb);
         const agentRegistry = new AgentRegistry();
-        const agentAiClient = { complete: async (_prompt: string) => '' }; // placeholder — wire to ChatService in Spec 02
+        const agentResolvedProvider: ResolvedAIProvider = { provider: '', model: '', apiKey: '', useLocalGateway: false, isAvailable: false }; // placeholder — wire to getAIProvider() in Task 7
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
-        const agentRunner = new AgentRunner(agentStateStore, registry, nexusServices as any, agentAiClient);
+        const agentRunner = new AgentRunner(agentStateStore, registry, nexusServices as any, agentResolvedProvider);
         agentScheduler = new AgentScheduler(agentRunner);
         daemonManager = new DaemonManager(agentEventBus);
 

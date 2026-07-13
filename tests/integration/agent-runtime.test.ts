@@ -23,9 +23,9 @@ function makeInMemoryStack() {
       isError: false,
     })),
   };
-  const aiClient = { complete: jest.fn().mockResolvedValue('') };
+  const resolvedProvider = { provider: 'ollama', model: 'llama3.2', apiKey: '', useLocalGateway: false, isAvailable: false };
   // Pass toolRegistry + services directly — AgentRunner constructs NexusToolProvider per-run
-  const runner = new AgentRunner(stateStore, fakeRegistry as any, {} as any, aiClient);
+  const runner = new AgentRunner(stateStore, fakeRegistry as any, {} as any, resolvedProvider);
   return { db, bus, stateStore, runner, fakeRegistry };
 }
 
