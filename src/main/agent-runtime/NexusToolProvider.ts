@@ -35,14 +35,39 @@ export class NexusToolProvider implements ToolProvider {
       throw new Error(`Tool "${name}" is not declared in this agent's tools list`);
     }
 
+    // Audit: agents bypass McpSafetyWrapper, so we log tool calls here instead.
+    const startTime = Date.now();
+
     // Call the registry with 'agent' as the access method
     const result = await this.registry.call(name, args, this.services, 'agent' as any);
 
-    // If the tool returned an error, throw it
+    // Audit log the invocation (mirrors McpSafetyWrapper.auditLog for the agent path)
+    const duration_ms = Date.now() - startTime;
     if (result.isError) {
-      const text = result.content.find((c: any) => c.type === 'text')?.text ?? 'Tool error';
-      throw new Error(text);
+      const errorText = result.content.find((c: any) => c.type === 'text')?.text ?? 'Tool error';
+      this.services.auditLogger?.log({
+        timestamp: new Date().toISOString(),
+        toolName: name,
+        tier: 1,
+        params: args,
+        confirmed: null,
+        result: 'error',
+        error: errorText,
+        duration_ms,
+      });
+      throw new Error(errorText);
     }
+
+    this.services.auditLogger?.log({
+      timestamp: new Date().toISOString(),
+      toolName: name,
+      tier: 1,
+      params: args,
+      confirmed: null,
+      result: 'success',
+      error: undefined,
+      duration_ms,
+    });
 
     // Parse JSON content if possible, otherwise return raw text
     const textContent = result.content.find((c: any) => c.type === 'text')?.text;

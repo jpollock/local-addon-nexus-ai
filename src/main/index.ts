@@ -922,6 +922,15 @@ export default function main(context: any): void {
       if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
       wpeContentIndexTimer = null;
       if (newContentEnabled) startWpeContentIndexScheduler(newContentHours);
+
+      // Re-resolve agent provider when settings change (API key rotation, provider switch).
+      // agentRunner is stored on nexusServices so it's accessible here even though it was
+      // declared in the conditional if (agentDb) block above.
+      if (nexusServices.agentRunner) {
+        const updatedSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
+        const updatedProvider = getAIProvider(registryStorage, updatedSettings);
+        nexusServices.agentRunner.setProvider(updatedProvider);
+      }
     },
     emitNexusState,
   });

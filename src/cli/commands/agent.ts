@@ -328,6 +328,15 @@ export async function handleAgentInstall(
 
   fs.mkdirSync(agentsDir, { recursive: true });
 
+  // Validate the package name before shell interpolation to prevent injection attacks.
+  // Accepts: plain names (e.g. "my-agent"), scoped names ("@scope/my-agent"),
+  // and optionally a version specifier ("my-agent@1.0.0", "@scope/pkg@^2").
+  if (!/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*(@[^\s'"`;|&<>]+)?$/.test(pkg)) {
+    console.error(`Invalid package name: ${pkg}`);
+    process.exit(1);
+    return;
+  }
+
   console.log(`Installing ${pkg}...`);
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports

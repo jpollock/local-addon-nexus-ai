@@ -39,6 +39,15 @@ export class AgentRunner {
     this.resolvedProvider = resolvedProvider;
   }
 
+  /**
+   * Update the AI provider used for subsequent agent runs.
+   * Called from onSettingsUpdated so agents pick up provider/key changes
+   * without requiring a Local restart.
+   */
+  setProvider(provider: ResolvedAIProvider): void {
+    this.resolvedProvider = provider;
+  }
+
   async run(agent: AgentDefinition, event?: NexusEvent): Promise<AgentResult> {
     const startedAt = Date.now();
     const timeoutMs = agent.timeoutMs ?? DEFAULT_TIMEOUT_MS;

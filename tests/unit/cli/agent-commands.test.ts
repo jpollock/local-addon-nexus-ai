@@ -979,6 +979,26 @@ describe('handleAgentInstall', () => {
     expect(mutationCalled).toBe(true);
   });
 
+  it('exits with code 1 when package name contains shell-special characters', async () => {
+    const gql: GqlFn = async () => ({ agentReload: true }) as any;
+
+    await expect(
+      handleAgentInstall('evil; rm -rf /', agentsDir, execSyncOk, gql),
+    ).rejects.toThrow('process.exit(1)');
+
+    expect(errLines.some((l) => /invalid package name/i.test(l))).toBe(true);
+  });
+
+  it('exits with code 1 when package name contains backtick injection', async () => {
+    const gql: GqlFn = async () => ({ agentReload: true }) as any;
+
+    await expect(
+      handleAgentInstall('evil`whoami`', agentsDir, execSyncOk, gql),
+    ).rejects.toThrow('process.exit(1)');
+
+    expect(errLines.some((l) => /invalid package name/i.test(l))).toBe(true);
+  });
+
   it('does not call agentReload when npm install fails', async () => {
     let mutationCalled = false;
     const gql: GqlFn = async (query) => {
