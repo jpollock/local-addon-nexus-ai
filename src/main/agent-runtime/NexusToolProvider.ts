@@ -1,6 +1,7 @@
 import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
 import type { ToolProvider } from '../agent-sdk/types';
+import type { ProviderToolDefinition } from '../chat/providers/types';
 
 /**
  * Implements ToolProvider by wrapping ToolRegistry with scope enforcement.
@@ -15,6 +16,17 @@ export class NexusToolProvider implements ToolProvider {
     this.registry = registry;
     this.services = services;
     this.allowedTools = tools !== undefined ? new Set(tools) : undefined;
+  }
+
+  getProviderToolDefinitions(): ProviderToolDefinition[] {
+    const all = this.registry.list(this.services);
+    return all
+      .filter(tool => !this.allowedTools || this.allowedTools.has(tool.name))
+      .map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema,
+      }));
   }
 
   async invoke(name: string, args: Record<string, unknown>): Promise<unknown> {

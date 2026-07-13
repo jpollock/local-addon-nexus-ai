@@ -49,3 +49,31 @@ describe('NexusToolProvider', () => {
     await expect(provider.invoke('nexus_list_sites', {})).rejects.toThrow('Site not found');
   });
 });
+
+const fakeRegistry = {
+  list: () => [
+    { name: 'nexus_list_sites', description: 'List sites', inputSchema: { type: 'object', properties: {} } },
+    { name: 'nexus_secret',     description: 'Secret',     inputSchema: { type: 'object', properties: {} } },
+  ],
+  call: jest.fn(),
+};
+
+describe('NexusToolProvider.getProviderToolDefinitions', () => {
+  it('returns all tools when allowedTools is undefined', () => {
+    const p = new NexusToolProvider(fakeRegistry as any, {} as any, undefined);
+    expect(p.getProviderToolDefinitions()).toHaveLength(2);
+  });
+
+  it('filters to allowedTools when defined', () => {
+    const p = new NexusToolProvider(fakeRegistry as any, {} as any, ['nexus_list_sites']);
+    const defs = p.getProviderToolDefinitions();
+    expect(defs).toHaveLength(1);
+    expect(defs[0].name).toBe('nexus_list_sites');
+  });
+
+  it('maps inputSchema to parameters', () => {
+    const p = new NexusToolProvider(fakeRegistry as any, {} as any, undefined);
+    const defs = p.getProviderToolDefinitions();
+    expect(defs[0].parameters).toEqual({ type: 'object', properties: {} });
+  });
+});
