@@ -140,6 +140,8 @@ export interface NexusServices {
   agentRegistry?: import('../agent-runtime/AgentRegistry').AgentRegistry;
   agentRunner?: import('../agent-runtime/AgentRunner').AgentRunner;
   agentEventBus?: import('../agent-event-bus/AgentEventBus').AgentEventBus;
+  agentStateStore?: import('../agent-runtime/AgentStateStore').AgentStateStore;
+  agentReload?: () => Promise<void>;
 }
 
 /**

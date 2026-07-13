@@ -65,7 +65,8 @@ import { DaemonManager } from './agent-runtime/DaemonManager';
 import { AgentEventBus } from './agent-event-bus/AgentEventBus';
 import { registerLocalLifecycleBridge } from './agent-event-bus/bridges/local-lifecycle-bridge';
 import { createWpEventsBridgeHandler } from './agent-event-bus/bridges/wp-events-bridge';
-import type { ResolvedAIProvider } from './ai/getAIProvider';
+import { getAIProvider } from './ai/getAIProvider';
+import type { Unsubscribe, AgentDefinition } from './agent-sdk/types';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const LocalMain = require('@getflywheel/local/main');
@@ -470,9 +471,13 @@ export default function main(context: any): void {
 
         const agentStateStore = new AgentStateStore(agentDb);
         const agentRegistry = new AgentRegistry();
-        const agentResolvedProvider: ResolvedAIProvider = { provider: '', model: '', apiKey: '', useLocalGateway: false, isAvailable: false }; // placeholder — wire to getAIProvider() in Task 7
+
+        const resolvedAgentProvider = getAIProvider(
+          registryStorage,
+          registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null,
+        );
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
-        const agentRunner = new AgentRunner(agentStateStore, registry, nexusServices as any, agentResolvedProvider);
+        const agentRunner = new AgentRunner(agentStateStore, registry, nexusServices as any, resolvedAgentProvider);
         agentScheduler = new AgentScheduler(agentRunner);
         daemonManager = new DaemonManager(agentEventBus);
 
@@ -482,41 +487,85 @@ export default function main(context: any): void {
         // Wire local lifecycle bridge into Local's hook system
         registerLocalLifecycleBridge(agentEventBus, context.hooks);
 
-        // Load agent definitions from disk and register them
+        // Track event-bus subscriptions per agent for hot-reload cleanup
+        const agentUnsubs = new Map<string, Unsubscribe[]>();
+
+        function wireAgentTriggers(agent: AgentDefinition): void {
+          const unsubs: Unsubscribe[] = [];
+          for (const trigger of agent.triggers) {
+            if (trigger.type === 'cron') {
+              agentScheduler!.register(agent);
+            } else if (trigger.type === 'event') {
+              unsubs.push(
+                agentEventBus.subscribe(trigger.pattern, async (event) => {
+                  await agentRunner.run(agent, event).catch((err: Error) => {
+                    localLogger.error(`[NexusAI] Agent "${agent.name}" event trigger failed: ${err.message}`);
+                  });
+                }),
+              );
+            } else if (trigger.type === 'webhook') {
+              unsubs.push(
+                agentEventBus.subscribe(`webhook:${trigger.path ?? '*'}`, async (event) => {
+                  await agentRunner.run(agent, event).catch((err: Error) => {
+                    localLogger.error(`[NexusAI] Agent "${agent.name}" webhook trigger failed: ${err.message}`);
+                  });
+                }),
+              );
+            } else if (trigger.type === 'stream') {
+              daemonManager!.start(agent);
+            }
+          }
+          if (unsubs.length > 0) agentUnsubs.set(agent.name, unsubs);
+        }
+
         await agentRegistry.load();
         for (const agent of agentRegistry.list()) {
-          agentScheduler.register(agent);
-          // Only daemonize agents that declare a stream trigger
-          const hasStreamTrigger = agent.triggers.some(t => t.type === 'stream');
-          if (hasStreamTrigger) {
-            try { daemonManager.start(agent); } catch (err: any) {
-              localLogger.warn(`[NexusAI] Failed to start daemon for "${agent.name}": ${err.message}`);
-            }
-          }
-          // Wire reactive (event) and webhook triggers to the event bus
-          for (const trigger of agent.triggers) {
-            if (trigger.type === 'event') {
-              agentEventBus.subscribe(trigger.pattern, async (event) => {
-                await agentRunner.run(agent, event).catch((err: Error) => {
-                  localLogger.error(`[AgentPlatform] Reactive run error for "${agent.name}": ${err.message}`);
-                });
-              });
-            } else if (trigger.type === 'webhook') {
-              // Subscribe to namespaced webhook events; full routing expanded in Spec 02
-              agentEventBus.subscribe(`webhook:${trigger.path ?? '*'}`, async (event) => {
-                await agentRunner.run(agent, event).catch((err: Error) => {
-                  localLogger.error(`[AgentPlatform] Webhook run error for "${agent.name}": ${err.message}`);
-                });
-              });
-            }
-          }
+          wireAgentTriggers(agent);
         }
         agentScheduler.start();
+
+        // Hot reload — fs.watch fires onUnload/onReload for file changes in agents dir
+        agentRegistry.watch(
+          (name) => {
+            // Unsubscribe event-bus listeners
+            const unsubs = agentUnsubs.get(name) ?? [];
+            for (const unsub of unsubs) unsub();
+            agentUnsubs.delete(name);
+            // Unregister scheduler
+            agentScheduler!.unregister(name);
+            // Stop daemon if running
+            daemonManager!.stop(name);
+            localLogger.info(`[NexusAI] Agent "${name}" unloaded for hot reload`);
+          },
+          (def) => {
+            wireAgentTriggers(def);
+            localLogger.info(`[NexusAI] Agent "${def.name}" reloaded`);
+          },
+        );
+
+        // Expose agentReload for GraphQL mutation and nexus agent install
+        const agentReload = async (): Promise<void> => {
+          // Unload all agents
+          for (const agent of agentRegistry.list()) {
+            const unsubs = agentUnsubs.get(agent.name) ?? [];
+            for (const unsub of unsubs) unsub();
+            agentUnsubs.delete(agent.name);
+            agentScheduler!.unregister(agent.name);
+            daemonManager!.stop(agent.name);
+          }
+          await agentRegistry.load();
+          for (const agent of agentRegistry.list()) {
+            wireAgentTriggers(agent);
+          }
+          localLogger.info(`[NexusAI] All agents reloaded: ${agentRegistry.list().length} loaded`);
+        };
 
         // Expose agent platform on services so GraphQL resolvers can access it
         nexusServices.agentRegistry = agentRegistry;
         nexusServices.agentRunner = agentRunner;
         nexusServices.agentEventBus = agentEventBus;
+        nexusServices.agentStateStore = agentStateStore;
+        nexusServices.agentReload = agentReload;
 
         localLogger.info(`[NexusAI] Agent platform initialized: ${agentRegistry.list().length} agent(s) loaded`);
       } else {
