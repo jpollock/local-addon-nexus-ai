@@ -18,7 +18,9 @@ import {
   handleAgentEmit,
   handleAgentStatus,
   handleAgentCreate,
+  handleAgentValidate,
   type GqlFn,
+  type ExecSyncFn,
 } from '../../../src/cli/commands/agent';
 
 // ---------------------------------------------------------------------------
@@ -585,5 +587,186 @@ describe('handleAgentCreate', () => {
 
     // Sentinel file must still exist — we didn't wipe the dir
     expect(fs.existsSync(sentinel)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// nexus agent validate
+// ---------------------------------------------------------------------------
+
+describe('handleAgentValidate', () => {
+  let agentsDir: string;
+  let exitSpy: ReturnType<typeof jest.spyOn>;
+  let logLines: string[];
+  let errLines: string[];
+  let logSpy: ReturnType<typeof jest.spyOn>;
+  let errSpy: ReturnType<typeof jest.spyOn>;
+
+  /** A mock execSync that succeeds (no throw) */
+  const execSyncOk: ExecSyncFn = (_cmd, _opts) => Buffer.from('');
+
+  /** A mock execSync that fails with TS errors */
+  const execSyncFail: ExecSyncFn = (_cmd, _opts) => {
+    const err: any = new Error('tsc failed');
+    err.stdout = Buffer.from('agent.ts(1,5): error TS2322: Type mismatch');
+    err.stderr = Buffer.from('');
+    throw err;
+  };
+
+  beforeEach(() => {
+    agentsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-agent-validate-test-'));
+
+    exitSpy = jest.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
+      throw new Error(`process.exit(${code})`);
+    });
+
+    logLines = [];
+    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
+      logLines.push(args.join(' '));
+    });
+
+    errLines = [];
+    errSpy = jest.spyOn(console, 'error').mockImplementation((...args: any[]) => {
+      errLines.push(args.join(' '));
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(agentsDir, { recursive: true, force: true });
+    exitSpy.mockRestore();
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
+  it('prints "No agents directory found." when agents dir does not exist', async () => {
+    const nonexistent = path.join(os.tmpdir(), `nexus-no-such-dir-${Date.now()}`);
+    await handleAgentValidate(undefined, nonexistent, execSyncOk);
+    expect(logLines.some((l) => /no agents directory/i.test(l))).toBe(true);
+  });
+
+  it('exits with error when named agent directory does not exist', async () => {
+    await expect(handleAgentValidate('missing-agent', agentsDir, execSyncOk)).rejects.toThrow(
+      'process.exit(1)',
+    );
+    expect(errLines.some((l) => l.includes('missing-agent'))).toBe(true);
+  });
+
+  it('prints "No agents found to validate." when agents dir is empty', async () => {
+    await handleAgentValidate(undefined, agentsDir, execSyncOk);
+    expect(logLines.some((l) => /no agents found/i.test(l))).toBe(true);
+  });
+
+  it('prints "(no TypeScript validation)" for agents with agent.js (no .ts file)', async () => {
+    const agentSubdir = path.join(agentsDir, 'js-agent');
+    fs.mkdirSync(agentSubdir, { recursive: true });
+    fs.writeFileSync(path.join(agentSubdir, 'agent.js'), 'module.exports = {};');
+
+    await handleAgentValidate(undefined, agentsDir, execSyncOk);
+
+    expect(logLines.some((l) => l.includes('js-agent') && /no TypeScript/i.test(l))).toBe(true);
+  });
+
+  it('prints "✓ TypeScript OK" when execSync succeeds', async () => {
+    const agentSubdir = path.join(agentsDir, 'good-agent');
+    fs.mkdirSync(agentSubdir, { recursive: true });
+    fs.writeFileSync(path.join(agentSubdir, 'agent.ts'), '// valid ts');
+
+    await handleAgentValidate(undefined, agentsDir, execSyncOk);
+
+    expect(logLines.some((l) => l.includes('good-agent') && l.includes('TypeScript OK'))).toBe(true);
+  });
+
+  it('prints "✗ TypeScript errors:" and exits with code 1 when execSync throws', async () => {
+    const agentSubdir = path.join(agentsDir, 'bad-agent');
+    fs.mkdirSync(agentSubdir, { recursive: true });
+    fs.writeFileSync(path.join(agentSubdir, 'agent.ts'), 'const x: number = "not a number";');
+
+    await expect(handleAgentValidate(undefined, agentsDir, execSyncFail)).rejects.toThrow(
+      'process.exit(1)',
+    );
+
+    expect(errLines.some((l) => l.includes('bad-agent') && /TypeScript errors/i.test(l))).toBe(true);
+  });
+
+  it('includes the tsc error output in the error lines', async () => {
+    const agentSubdir = path.join(agentsDir, 'bad-agent');
+    fs.mkdirSync(agentSubdir, { recursive: true });
+    fs.writeFileSync(path.join(agentSubdir, 'agent.ts'), 'const x: number = "nope";');
+
+    try {
+      await handleAgentValidate(undefined, agentsDir, execSyncFail);
+    } catch {
+      // process.exit(1) throw
+    }
+
+    const allErr = errLines.join('\n');
+    expect(allErr).toContain('TS2322');
+  });
+
+  it('validates a named agent by name when found', async () => {
+    const agentSubdir = path.join(agentsDir, 'named-agent');
+    fs.mkdirSync(agentSubdir, { recursive: true });
+    fs.writeFileSync(path.join(agentSubdir, 'agent.ts'), '// valid');
+
+    await handleAgentValidate('named-agent', agentsDir, execSyncOk);
+
+    expect(logLines.some((l) => l.includes('named-agent') && l.includes('TypeScript OK'))).toBe(true);
+  });
+
+  it('skips node_modules directories when validating all agents', async () => {
+    // Create a node_modules dir (should be skipped) and a real agent dir
+    const nodeModulesDir = path.join(agentsDir, 'node_modules');
+    fs.mkdirSync(nodeModulesDir, { recursive: true });
+    fs.writeFileSync(path.join(nodeModulesDir, 'agent.ts'), '// should not be validated');
+
+    const realAgentDir = path.join(agentsDir, 'real-agent');
+    fs.mkdirSync(realAgentDir, { recursive: true });
+    fs.writeFileSync(path.join(realAgentDir, 'agent.ts'), '// valid');
+
+    await handleAgentValidate(undefined, agentsDir, execSyncOk);
+
+    // node_modules should not appear in log
+    expect(logLines.some((l) => l.includes('node_modules'))).toBe(false);
+    // real-agent should appear
+    expect(logLines.some((l) => l.includes('real-agent'))).toBe(true);
+  });
+
+  it('exits with code 1 when at least one of multiple agents fails TS check', async () => {
+    const goodDir = path.join(agentsDir, 'good-agent');
+    fs.mkdirSync(goodDir, { recursive: true });
+    fs.writeFileSync(path.join(goodDir, 'agent.ts'), '// ok');
+
+    const badDir = path.join(agentsDir, 'bad-agent');
+    fs.mkdirSync(badDir, { recursive: true });
+    fs.writeFileSync(path.join(badDir, 'agent.ts'), '// broken');
+
+    // execSync fails for bad-agent, succeeds for good-agent based on filename
+    const selectiveExecSync: ExecSyncFn = (cmd, opts) => {
+      if (cmd.includes('bad-agent')) return execSyncFail(cmd, opts);
+      return execSyncOk(cmd, opts);
+    };
+
+    await expect(handleAgentValidate(undefined, agentsDir, selectiveExecSync)).rejects.toThrow(
+      'process.exit(1)',
+    );
+
+    // good-agent should still show OK
+    expect(logLines.some((l) => l.includes('good-agent') && l.includes('TypeScript OK'))).toBe(true);
+    // bad-agent should show error
+    expect(errLines.some((l) => l.includes('bad-agent') && /TypeScript errors/i.test(l))).toBe(true);
+  });
+
+  it('does not exit with an error when all agents pass TS check', async () => {
+    const agentADir = path.join(agentsDir, 'agent-a');
+    fs.mkdirSync(agentADir, { recursive: true });
+    fs.writeFileSync(path.join(agentADir, 'agent.ts'), '// ok');
+
+    const agentBDir = path.join(agentsDir, 'agent-b');
+    fs.mkdirSync(agentBDir, { recursive: true });
+    fs.writeFileSync(path.join(agentBDir, 'agent.ts'), '// ok');
+
+    // Should not throw
+    await expect(handleAgentValidate(undefined, agentsDir, execSyncOk)).resolves.toBeUndefined();
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 });

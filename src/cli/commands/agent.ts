@@ -26,6 +26,9 @@ import * as os from 'os';
 /** Injected GQL function type — injectable for testing. */
 export type GqlFn = <T>(query: string, variables?: Record<string, unknown>) => Promise<T>;
 
+/** Injected execSync function type — injectable for testing. */
+export type ExecSyncFn = (command: string, options?: { stdio?: string }) => Buffer | string;
+
 function getLocalConnectionInfo(): { url: string; authToken: string } | null {
   const dataDir =
     process.platform === 'win32'
@@ -357,6 +360,134 @@ export async function handleAgentCreate(name: string, _agentsDir?: string): Prom
 }
 
 // ---------------------------------------------------------------------------
+// nexus agent validate
+// ---------------------------------------------------------------------------
+
+const AGENT_TOOL_NAMES_QUERY = /* GraphQL */ `
+  query {
+    mcpTools {
+      name
+    }
+  }
+`;
+
+/**
+ * Validate one or all agent definitions:
+ *   Phase 1 — TypeScript check via tsc --noEmit (requires agent.ts)
+ *   Phase 2 — Tool name check against the MCP registry (requires Local running)
+ *
+ * @param name        - Optional agent slug to validate. Validates all agents when omitted.
+ * @param _agentsDir  - Optional override for the agents root directory (used in tests only).
+ * @param execSyncFn  - Optional override for child_process.execSync (used in tests only).
+ * @param gql         - Optional override for the GQL transport (used in tests only).
+ */
+export async function handleAgentValidate(
+  name?: string,
+  _agentsDir?: string,
+  execSyncFn?: ExecSyncFn,
+  gql: GqlFn = defaultGql,
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const execSync = execSyncFn ?? (require('child_process') as typeof import('child_process')).execSync;
+
+  const agentsBaseDir =
+    _agentsDir ??
+    path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents');
+
+  // Collect target agent directories
+  const targets: string[] = [];
+  if (name) {
+    const agentDir = path.join(agentsBaseDir, name);
+    if (!fs.existsSync(agentDir)) {
+      console.error(`Error: agent "${name}" not found at ${agentDir}`);
+      process.exit(1);
+    }
+    targets.push(agentDir);
+  } else {
+    if (!fs.existsSync(agentsBaseDir)) {
+      console.log('No agents directory found.');
+      return;
+    }
+    const entries = fs.readdirSync(agentsBaseDir, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.isDirectory() && e.name !== 'node_modules') {
+        targets.push(path.join(agentsBaseDir, e.name));
+      }
+    }
+  }
+
+  if (targets.length === 0) {
+    console.log('No agents found to validate.');
+    return;
+  }
+
+  let hasErrors = false;
+
+  for (const agentDir of targets) {
+    const agentName = path.basename(agentDir);
+    const tsFile = path.join(agentDir, 'agent.ts');
+
+    if (!fs.existsSync(tsFile)) {
+      // JS agents skip TS validation
+      console.log(`${agentName}: agent.js (no TypeScript validation)`);
+      continue;
+    }
+
+    // Phase 1: TypeScript check via tsc --noEmit
+    try {
+      execSync(
+        `npx tsc --noEmit --strict --target ES2020 --module CommonJS --esModuleInterop --skipLibCheck "${tsFile}"`,
+        { stdio: 'pipe' },
+      );
+      console.log(`${agentName}: ✓ TypeScript OK`);
+    } catch (err: any) {
+      const output = (err.stdout?.toString() ?? '') + (err.stderr?.toString() ?? '');
+      console.error(`${agentName}: ✗ TypeScript errors:`);
+      console.error(
+        output
+          .trim()
+          .split('\n')
+          .map((l: string) => `  ${l}`)
+          .join('\n'),
+      );
+      hasErrors = true;
+      continue;
+    }
+
+    // Phase 2: tool name check (requires Local running)
+    try {
+      // Load the agent definition via require (ts-node must be registered in runtime)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      let def = require(tsFile);
+      if (def?.default) def = def.default;
+      const declaredTools: string[] = def?.tools ?? [];
+
+      if (declaredTools.length > 0) {
+        const result = await gql<{ mcpTools: { name: string }[] }>(AGENT_TOOL_NAMES_QUERY).catch(
+          () => null,
+        );
+        if (result) {
+          const knownTools = new Set(result.mcpTools.map((t) => t.name));
+          const unknown = declaredTools.filter((t) => !knownTools.has(t));
+          if (unknown.length > 0) {
+            console.error(`${agentName}: ✗ Unknown tools: ${unknown.join(', ')}`);
+            hasErrors = true;
+          } else {
+            console.log(`${agentName}: ✓ Tools OK (${declaredTools.length} declared)`);
+          }
+        } else {
+          console.log(`${agentName}: ⚠ Tool check skipped (Local not running)`);
+        }
+      }
+    } catch {
+      // Phase 2 failure is non-fatal — TS was fine
+    }
+  }
+
+  if (hasErrors) process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
 // nexus agent emit
 // ---------------------------------------------------------------------------
 
@@ -460,6 +591,13 @@ agentCommand
   .description('Scaffold a new TypeScript agent')
   .action(async (name: string) => {
     await handleAgentCreate(name);
+  });
+
+agentCommand
+  .command('validate [name]')
+  .description('Type-check a TypeScript agent (and optionally validate tool names)')
+  .action(async (name?: string) => {
+    await handleAgentValidate(name);
   });
 
 agentCommand
