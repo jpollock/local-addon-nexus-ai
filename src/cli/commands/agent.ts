@@ -517,11 +517,27 @@ export async function handleAgentValidate(
     }
 
     // Phase 1: TypeScript check via tsc --noEmit
+    // Write a temp tsconfig so @nexus-ai/agent-sdk path alias resolves to the
+    // compiled lib/main/agent-sdk (which ships .d.ts declarations).
+    const sdkDir = path.resolve(__dirname, '..', '..', 'main', 'agent-sdk');
+    const relSdkPath = path.relative(agentDir, sdkDir);
+    const tmpTsConfig = {
+      compilerOptions: {
+        strict: true,
+        noEmit: true,
+        target: 'ES2020',
+        module: 'CommonJS',
+        esModuleInterop: true,
+        skipLibCheck: true,
+        baseUrl: '.',
+        paths: { '@nexus-ai/agent-sdk': [relSdkPath] },
+      },
+      files: ['agent.ts'],
+    };
+    const tmpConfigPath = path.join(agentDir, '.nexus-tsconfig.json');
+    fs.writeFileSync(tmpConfigPath, JSON.stringify(tmpTsConfig, null, 2));
     try {
-      execSync(
-        `npx tsc --noEmit --strict --target ES2020 --module CommonJS --esModuleInterop --skipLibCheck "${tsFile}"`,
-        { stdio: 'pipe' },
-      );
+      execSync(`npx tsc --project "${tmpConfigPath}"`, { stdio: 'pipe' });
       console.log(`${agentName}: ✓ TypeScript OK`);
     } catch (err: any) {
       const output = (err.stdout?.toString() ?? '') + (err.stderr?.toString() ?? '');
@@ -534,7 +550,9 @@ export async function handleAgentValidate(
           .join('\n'),
       );
       hasErrors = true;
-      continue;
+    } finally {
+      try { fs.unlinkSync(tmpConfigPath); } catch { /* ignore */ }
+      if (hasErrors) continue;
     }
 
     // Phase 2: tool name check (requires Local running)
