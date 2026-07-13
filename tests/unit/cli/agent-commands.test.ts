@@ -7,11 +7,16 @@
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+// os is used for os.tmpdir() in test setup
 import {
   handleAgentList,
   handleAgentRun,
   handleAgentLogs,
   handleAgentEmit,
+  handleAgentStatus,
   type GqlFn,
 } from '../../../src/cli/commands/agent';
 
@@ -233,59 +238,148 @@ describe('handleAgentRun', () => {
 });
 
 // ---------------------------------------------------------------------------
-// nexus agent logs
+// nexus agent logs (filesystem-based since --follow was replaced with fs.watch)
 // ---------------------------------------------------------------------------
 
 describe('handleAgentLogs', () => {
-  it('prints each log line returned from the server', async () => {
+  let logDir: string;
+
+  beforeEach(() => {
+    logDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-agent-logs-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(logDir, { recursive: true, force: true });
+  });
+
+  it('prints each log line read from the log file', async () => {
+    fs.writeFileSync(
+      path.join(logDir, 'site-monitor.log'),
+      '[2026-07-12T10:00:00Z] INFO agent started\n[2026-07-12T10:00:01Z] INFO agent finished\n',
+    );
+
+    const lines = await captureLog(() =>
+      handleAgentLogs('site-monitor', { lines: '50', follow: false }, logDir),
+    );
+    const joined = lines.join('\n');
+    expect(joined).toContain('[2026-07-12T10:00:00Z] INFO agent started');
+    expect(joined).toContain('[2026-07-12T10:00:01Z] INFO agent finished');
+  });
+
+  it('prints a "no log file" message when the file does not exist', async () => {
+    const lines = await captureLog(() =>
+      handleAgentLogs('missing-agent', { lines: '50', follow: false }, logDir),
+    );
+    expect(lines.some((l) => /no log file/i.test(l))).toBe(true);
+  });
+
+  it('respects the --lines option (tail behavior)', async () => {
+    const content = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
+    fs.writeFileSync(path.join(logDir, 'site-monitor.log'), content);
+
+    const lines = await captureLog(() =>
+      handleAgentLogs('site-monitor', { lines: '3', follow: false }, logDir),
+    );
+    const joined = lines.join('\n');
+    expect(joined).toContain('line 8');
+    expect(joined).toContain('line 9');
+    expect(joined).toContain('line 10');
+    // 'line 1' is a substring of 'line 10', so check for 'line 1\n' specifically
+    expect(joined).not.toMatch(/^line 1$/m);
+    expect(joined).not.toMatch(/^line 2$/m);
+  });
+
+  it('reads the correct log file for the given agent name', async () => {
+    fs.writeFileSync(path.join(logDir, 'my-agent.log'), 'hello from my-agent\n');
+
+    const lines = await captureLog(() =>
+      handleAgentLogs('my-agent', { lines: '50', follow: false }, logDir),
+    );
+    expect(lines.join('\n')).toContain('hello from my-agent');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// nexus agent status
+// ---------------------------------------------------------------------------
+
+describe('handleAgentStatus', () => {
+  it('prints a table with agent name, trigger, and last-run info', async () => {
     const gql: GqlFn = async () =>
       ({
-        agentLogs: [
-          '[2026-07-12T10:00:00Z] INFO agent started',
-          '[2026-07-12T10:00:01Z] INFO agent finished',
+        agentStatus: [
+          {
+            name: 'hello-nexus',
+            version: '1.0.0',
+            description: 'Demo agent',
+            cronExpression: '*/5 * * * *',
+            lastRunAt: new Date('2026-07-12T10:00:00Z').getTime(),
+            lastRunStatus: 'success',
+            lastRunDurationMs: 1234,
+            lastRunError: null,
+          },
         ],
       }) as any;
 
-    const lines = await captureLog(() =>
-      handleAgentLogs('site-monitor', { lines: '50', follow: false }, gql),
-    );
-    expect(lines).toContain('[2026-07-12T10:00:00Z] INFO agent started');
-    expect(lines).toContain('[2026-07-12T10:00:01Z] INFO agent finished');
+    const lines = await captureLog(() => handleAgentStatus({}, gql));
+    const joined = lines.join('\n');
+    expect(joined).toContain('hello-nexus');
+    expect(joined).toContain('cron(');
+    expect(joined).toContain('success');
+    expect(joined).toContain('1.2s');
   });
 
-  it('prints "no logs available" when server returns empty array', async () => {
-    const gql: GqlFn = async () => ({ agentLogs: [] }) as any;
+  it('prints "never" and "—" for agents that have not run', async () => {
+    const gql: GqlFn = async () =>
+      ({
+        agentStatus: [
+          {
+            name: 'hello-nexus',
+            version: '1.0.0',
+            description: null,
+            cronExpression: null,
+            lastRunAt: null,
+            lastRunStatus: null,
+            lastRunDurationMs: null,
+            lastRunError: null,
+          },
+        ],
+      }) as any;
 
-    const lines = await captureLog(() =>
-      handleAgentLogs('site-monitor', { lines: '50', follow: false }, gql),
-    );
-    expect(lines.some((l) => /no logs/i.test(l))).toBe(true);
+    const lines = await captureLog(() => handleAgentStatus({}, gql));
+    const joined = lines.join('\n');
+    expect(joined).toContain('never');
+    expect(joined).toContain('—');
   });
 
-  it('passes the lines option to the GQL query', async () => {
-    let capturedVars: Record<string, unknown> | undefined;
-    const gql: GqlFn = async (_query: string, vars?: Record<string, unknown>) => {
-      capturedVars = vars;
-      return { agentLogs: [] } as any;
-    };
+  it('outputs JSON when --json is passed', async () => {
+    const gql: GqlFn = async () =>
+      ({
+        agentStatus: [
+          {
+            name: 'hello-nexus',
+            version: '1.0.0',
+            description: null,
+            cronExpression: null,
+            lastRunAt: null,
+            lastRunStatus: null,
+            lastRunDurationMs: null,
+            lastRunError: null,
+          },
+        ],
+      }) as any;
 
-    await captureLog(() =>
-      handleAgentLogs('site-monitor', { lines: '20', follow: false }, gql),
-    );
-    expect(capturedVars?.lines).toBe(20);
+    const lines = await captureLog(() => handleAgentStatus({ json: true }, gql));
+    const parsed = JSON.parse(lines.join('\n'));
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed[0].name).toBe('hello-nexus');
   });
 
-  it('passes the agent name to the GQL query', async () => {
-    let capturedVars: Record<string, unknown> | undefined;
-    const gql: GqlFn = async (_query: string, vars?: Record<string, unknown>) => {
-      capturedVars = vars;
-      return { agentLogs: [] } as any;
-    };
+  it('prints "no agents registered" when list is empty', async () => {
+    const gql: GqlFn = async () => ({ agentStatus: [] }) as any;
 
-    await captureLog(() =>
-      handleAgentLogs('my-agent', { lines: '50', follow: false }, gql),
-    );
-    expect(capturedVars?.name).toBe('my-agent');
+    const lines = await captureLog(() => handleAgentStatus({}, gql));
+    expect(lines.some((l) => /no agents/i.test(l))).toBe(true);
   });
 
   it('throws when the GQL call fails', async () => {
@@ -293,42 +387,7 @@ describe('handleAgentLogs', () => {
       throw new Error('Could not connect to Local');
     };
 
-    await expect(
-      handleAgentLogs('site-monitor', { lines: '50', follow: false }, gql),
-    ).rejects.toThrow('Could not connect to Local');
-  });
-
-  it('prints new lines when follow mode detects them', async () => {
-    let callCount = 0;
-    const gql: GqlFn = async () => {
-      callCount++;
-      if (callCount === 1) {
-        // Initial call returns 2 lines
-        return {
-          agentLogs: [
-            '[2026-07-12T10:00:00Z] INFO agent started',
-            '[2026-07-12T10:00:01Z] INFO step 1 done',
-          ],
-        } as any;
-      } else {
-        // Second call (first poll) has 3 lines (one new)
-        return {
-          agentLogs: [
-            '[2026-07-12T10:00:00Z] INFO agent started',
-            '[2026-07-12T10:00:01Z] INFO step 1 done',
-            '[2026-07-12T10:00:02Z] INFO step 2 done',
-          ],
-        } as any;
-      }
-    };
-
-    // Just verify the initial call works — follow mode runs in background via setInterval
-    // and we can't easily test the async polling without more complex test harness
-    const lines = await captureLog(() =>
-      handleAgentLogs('site-monitor', { lines: '50', follow: true }, gql),
-    );
-    expect(lines).toContain('[2026-07-12T10:00:00Z] INFO agent started');
-    expect(lines).toContain('[2026-07-12T10:00:01Z] INFO step 1 done');
+    await expect(handleAgentStatus({}, gql)).rejects.toThrow('Could not connect to Local');
   });
 });
 

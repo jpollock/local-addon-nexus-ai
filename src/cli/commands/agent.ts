@@ -67,8 +67,38 @@ async function defaultGql<T>(
 }
 
 // ---------------------------------------------------------------------------
+// GraphQL query constants
+// ---------------------------------------------------------------------------
+
+const AGENT_STATUS_QUERY = /* GraphQL */ `
+  query {
+    agentStatus {
+      name
+      version
+      description
+      cronExpression
+      lastRunAt
+      lastRunStatus
+      lastRunDurationMs
+      lastRunError
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Handler types
 // ---------------------------------------------------------------------------
+
+interface AgentStatusGql {
+  name: string;
+  version: string;
+  description: string | null;
+  cronExpression: string | null;
+  lastRunAt: number | null;
+  lastRunStatus: string | null;
+  lastRunDurationMs: number | null;
+  lastRunError: string | null;
+}
 
 interface AgentInfo {
   name: string;
@@ -129,6 +159,62 @@ export async function handleAgentList(gql: GqlFn = defaultGql): Promise<void> {
 }
 
 /**
+ * Show all agents with last-run status in a table.
+ *
+ * @throws if the GQL call fails
+ */
+export async function handleAgentStatus(
+  opts: { json?: boolean },
+  gql: GqlFn = defaultGql,
+): Promise<void> {
+  const result = await gql<{ agentStatus: AgentStatusGql[] }>(AGENT_STATUS_QUERY);
+  const agents = result.agentStatus;
+
+  if (opts.json) {
+    console.log(JSON.stringify(agents, null, 2));
+    return;
+  }
+
+  if (agents.length === 0) {
+    console.log('No agents registered. Create one with: nexus agent create <name>');
+    return;
+  }
+
+  const NAME_W = 24;
+  const TRIG_W = 20;
+  const TIME_W = 22;
+  const STAT_W = 10;
+  const DUR_W = 10;
+
+  const pad = (s: string, w: number) => s.slice(0, w).padEnd(w);
+
+  console.log(
+    pad('NAME', NAME_W) +
+      pad('TRIGGER', TRIG_W) +
+      pad('LAST RUN', TIME_W) +
+      pad('STATUS', STAT_W) +
+      pad('DURATION', DUR_W),
+  );
+  console.log('─'.repeat(NAME_W + TRIG_W + TIME_W + STAT_W + DUR_W));
+
+  for (const a of agents) {
+    const trigger = a.cronExpression ? `cron(${a.cronExpression})` : '—';
+    const lastRun = a.lastRunAt
+      ? new Date(a.lastRunAt).toISOString().replace('T', ' ').slice(0, 19)
+      : 'never';
+    const status = a.lastRunStatus ?? '—';
+    const dur = a.lastRunDurationMs != null ? `${(a.lastRunDurationMs / 1000).toFixed(1)}s` : '—';
+    console.log(
+      pad(a.name, NAME_W) +
+        pad(trigger, TRIG_W) +
+        pad(lastRun, TIME_W) +
+        pad(status, STAT_W) +
+        pad(dur, DUR_W),
+    );
+  }
+}
+
+/**
  * Manually trigger an agent by name.
  *
  * @throws if the GQL call fails, the agent is not found, or the agent run fails
@@ -153,55 +239,59 @@ export async function handleAgentRun(name: string, gql: GqlFn = defaultGql): Pro
 }
 
 /**
- * Show agent log output.
+ * Show agent log output, optionally following new entries with fs.watch.
  *
- * @throws if the GQL call fails
+ * @param _logDir - Optional override for the agent-logs directory (used in tests only).
  */
 export async function handleAgentLogs(
   name: string,
   opts: LogsOptions,
-  gql: GqlFn = defaultGql,
+  _logDir?: string,
 ): Promise<void> {
-  const lines = parseInt(opts.lines, 10);
-  const data = await gql<{ agentLogs: string[] }>(
-    `
-    query AgentLogs($name: String!, $lines: Int) {
-      agentLogs(name: $name, lines: $lines)
-    }
-  `,
-    { name, lines },
-  );
+  const logDir =
+    _logDir ??
+    path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agent-logs');
+  const logFile = path.join(logDir, `${name}.log`);
 
-  if (data.agentLogs.length === 0) {
-    console.log(`No logs available for agent "${name}".`);
-  } else {
-    for (const line of data.agentLogs) {
-      console.log(line);
-    }
+  if (!fs.existsSync(logFile)) {
+    console.log(`No log file for agent "${name}". Run the agent first: nexus agent run ${name}`);
+    return;
   }
 
-  if (opts.follow) {
-    // Follow mode: poll every 2s for new log lines, using the injected gql
-    const LOG_QUERY = `query AgentLogs($name: String!, $lines: Int) {
-      agentLogs(name: $name, lines: $lines)
-    }`;
-    // Fetch full history to establish the current position
-    const initialData = await gql<{ agentLogs: string[] }>(LOG_QUERY, { name, lines: 10000 });
-    let lastSeenCount = initialData.agentLogs.length;
+  const linesWanted = parseInt(opts.lines, 10);
+  const content = fs.readFileSync(logFile, 'utf-8');
+  const allLines = content.split('\n').filter(Boolean);
+  const tail = allLines.slice(-linesWanted);
+  console.log(tail.join('\n'));
 
-    setInterval(async () => {
-      try {
-        const fresh = await gql<{ agentLogs: string[] }>(LOG_QUERY, { name, lines: 10000 });
-        const newLines = fresh.agentLogs.slice(lastSeenCount);
-        for (const line of newLines) {
-          console.log(line);
-        }
-        lastSeenCount = fresh.agentLogs.length;
-      } catch {
-        // Silently ignore poll errors — Local may have restarted
+  if (!opts.follow) return;
+
+  let offset = fs.statSync(logFile).size;
+  const watcher = fs.watch(logFile, { persistent: false }, () => {
+    try {
+      const stat = fs.statSync(logFile);
+      if (stat.size <= offset) {
+        offset = stat.size;
+        return;
       }
-    }, 2000);
-  }
+      const fd = fs.openSync(logFile, 'r');
+      const buf = Buffer.alloc(stat.size - offset);
+      fs.readSync(fd, buf, 0, buf.length, offset);
+      fs.closeSync(fd);
+      offset = stat.size;
+      const newLines = buf.toString('utf-8').split('\n').filter(Boolean);
+      for (const line of newLines) console.log(line);
+    } catch {
+      /* log file may briefly disappear on rotation */
+    }
+  });
+
+  await new Promise<void>((resolve) => {
+    process.on('SIGINT', () => {
+      watcher.close();
+      resolve();
+    });
+  });
 }
 
 /**
@@ -276,10 +366,23 @@ agentCommand
   .command('logs <name>')
   .description('Show agent log output')
   .option('--lines <n>', 'Number of log lines to show', '50')
-  .option('--follow', 'Stream log output (polls every 2s)', false)
+  .option('--follow', 'Stream new log lines as they are written (uses fs.watch)', false)
   .action(async (name: string, opts: LogsOptions) => {
     try {
       await handleAgentLogs(name, opts);
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+agentCommand
+  .command('status')
+  .description('Show all agents with last-run status')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { json?: boolean }) => {
+    try {
+      await handleAgentStatus(opts);
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
