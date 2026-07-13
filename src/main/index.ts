@@ -512,7 +512,11 @@ export default function main(context: any): void {
                 }),
               );
             } else if (trigger.type === 'stream') {
-              daemonManager!.start(agent);
+              try {
+                daemonManager!.start(agent);
+              } catch (err: any) {
+                localLogger.warn(`[NexusAI] Failed to start daemon for "${agent.name}": ${err.message}`);
+              }
             }
           }
           if (unsubs.length > 0) agentUnsubs.set(agent.name, unsubs);
@@ -538,7 +542,11 @@ export default function main(context: any): void {
             localLogger.info(`[NexusAI] Agent "${name}" unloaded for hot reload`);
           },
           (def) => {
-            wireAgentTriggers(def);
+            try {
+              wireAgentTriggers(def);
+            } catch (err: any) {
+              localLogger.warn(`[NexusAI] Failed to wire agent triggers for "${def.name}" during reload: ${err.message}`);
+            }
             localLogger.info(`[NexusAI] Agent "${def.name}" reloaded`);
           },
         );
