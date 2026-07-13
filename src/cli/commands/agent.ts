@@ -296,7 +296,7 @@ export async function handleAgentLogs(
   });
 
   await new Promise<void>((resolve) => {
-    process.on('SIGINT', () => {
+    process.once('SIGINT', () => {
       watcher.close();
       resolve();
     });

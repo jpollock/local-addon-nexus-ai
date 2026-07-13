@@ -64,7 +64,7 @@ export class AgentRunner {
     const agentModel = agent.model ?? this.resolvedProvider.model;
     const aiClient = aiProvider
       ? new AgentAIClient(aiProvider, { apiKey: this.resolvedProvider.apiKey, model: agentModel }, toolProvider)
-      : { run: async (_prompt: string) => '' };  // fallback when provider unavailable
+      : { run: async (_prompt: string) => { logger.warn(`Agent "${agent.name}": AI provider "${this.resolvedProvider.provider}" unavailable — skipping AI call`); return ''; } };
 
     const logDir = path.join(
       os.homedir(),

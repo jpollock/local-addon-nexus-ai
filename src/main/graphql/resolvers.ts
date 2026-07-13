@@ -5156,7 +5156,7 @@ export function createResolvers(context: ResolverContext) {
           type,
           key:       event,
           siteId:    siteId ?? undefined,
-          payload:   payload ? JSON.parse(payload) : {},
+          payload:   payload ? (() => { try { return JSON.parse(payload); } catch { throw new Error(`agentEmit: payload is not valid JSON`); } })() : {},
           createdAt: Date.now(),
         });
         return true;
