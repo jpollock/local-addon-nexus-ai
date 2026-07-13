@@ -20,7 +20,7 @@ function makeRunner() {
     }),
   };
   const services = {};
-  const aiClient = { complete: jest.fn().mockResolvedValue('ok') };
+  const aiClient = { run: jest.fn().mockResolvedValue('ok') };
   return new AgentRunner(stateStore as any, toolRegistry as any, services as any, aiClient as any);
 }
 

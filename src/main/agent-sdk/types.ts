@@ -49,9 +49,15 @@ export interface AgentLogger {
   debug(msg: string, ...args: unknown[]): void;
 }
 
-// Minimal AIClient interface — fulfilled by existing chat providers
 export interface AIClient {
-  complete(prompt: string): Promise<string>;
+  run(prompt: string, opts?: { maxTurns?: number; model?: string }): Promise<string>;
+}
+
+export class AgentAILoopError extends Error {
+  constructor(public readonly turns: number) {
+    super(`Agent AI loop exceeded ${turns} turns without a final response`);
+    this.name = 'AgentAILoopError';
+  }
 }
 
 export interface AgentContext {
