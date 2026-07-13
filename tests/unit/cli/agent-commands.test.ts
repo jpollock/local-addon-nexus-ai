@@ -17,6 +17,7 @@ import {
   handleAgentLogs,
   handleAgentEmit,
   handleAgentStatus,
+  handleAgentCreate,
   type GqlFn,
 } from '../../../src/cli/commands/agent';
 
@@ -471,5 +472,118 @@ describe('handleAgentEmit', () => {
     await expect(
       handleAgentEmit('wp:post.published', { payload: '{}' }, gql),
     ).rejects.toThrow('Bus unavailable');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// nexus agent create (filesystem-based scaffolding)
+// ---------------------------------------------------------------------------
+
+describe('handleAgentCreate', () => {
+  let agentsDir: string;
+  let exitSpy: ReturnType<typeof jest.spyOn>;
+  let logLines: string[];
+  let errLines: string[];
+  let logSpy: ReturnType<typeof jest.spyOn>;
+  let errSpy: ReturnType<typeof jest.spyOn>;
+
+  beforeEach(() => {
+    agentsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-agent-create-test-'));
+
+    // Make process.exit throw so we can assert on it in tests
+    exitSpy = jest.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
+      throw new Error(`process.exit(${code})`);
+    });
+
+    logLines = [];
+    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
+      logLines.push(args.join(' '));
+    });
+
+    errLines = [];
+    errSpy = jest.spyOn(console, 'error').mockImplementation((...args: any[]) => {
+      errLines.push(args.join(' '));
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(agentsDir, { recursive: true, force: true });
+    exitSpy.mockRestore();
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
+  it('creates the agent directory and agent.ts file on success', async () => {
+    await handleAgentCreate('my-agent', agentsDir);
+
+    const agentDir = path.join(agentsDir, 'my-agent');
+    const agentFile = path.join(agentDir, 'agent.ts');
+    expect(fs.existsSync(agentDir)).toBe(true);
+    expect(fs.existsSync(agentFile)).toBe(true);
+  });
+
+  it('writes the agent name into the template', async () => {
+    await handleAgentCreate('hello-world', agentsDir);
+
+    const agentFile = path.join(agentsDir, 'hello-world', 'agent.ts');
+    const content = fs.readFileSync(agentFile, 'utf-8');
+    expect(content).toContain("name: 'hello-world'");
+    expect(content).toContain("'hello-world: starting'");
+    expect(content).toContain("'hello-world: done'");
+  });
+
+  it('template contains defineAgent and cron imports', async () => {
+    await handleAgentCreate('my-agent', agentsDir);
+
+    const content = fs.readFileSync(path.join(agentsDir, 'my-agent', 'agent.ts'), 'utf-8');
+    expect(content).toContain("from '@nexus-ai/agent-sdk'");
+    expect(content).toContain('defineAgent');
+    expect(content).toContain('cron(');
+  });
+
+  it('prints the created file path and run hint', async () => {
+    await handleAgentCreate('my-agent', agentsDir);
+
+    expect(logLines.some((l) => l.includes('agent.ts'))).toBe(true);
+    expect(logLines.some((l) => l.includes('nexus agent run my-agent'))).toBe(true);
+  });
+
+  it('exits with error when name contains uppercase letters', async () => {
+    await expect(handleAgentCreate('MyAgent', agentsDir)).rejects.toThrow('process.exit(1)');
+    expect(errLines.some((l) => /lowercase/i.test(l))).toBe(true);
+  });
+
+  it('exits with error when name contains spaces', async () => {
+    await expect(handleAgentCreate('my agent', agentsDir)).rejects.toThrow('process.exit(1)');
+    expect(errLines.some((l) => /lowercase/i.test(l))).toBe(true);
+  });
+
+  it('exits with error when name starts with a hyphen', async () => {
+    await expect(handleAgentCreate('-bad', agentsDir)).rejects.toThrow('process.exit(1)');
+    expect(errLines.some((l) => /lowercase/i.test(l))).toBe(true);
+  });
+
+  it('exits with error when agent already exists', async () => {
+    // Create the directory first so it "already exists"
+    fs.mkdirSync(path.join(agentsDir, 'existing-agent'), { recursive: true });
+
+    await expect(handleAgentCreate('existing-agent', agentsDir)).rejects.toThrow('process.exit(1)');
+    expect(errLines.some((l) => /already exists/i.test(l))).toBe(true);
+  });
+
+  it('does not overwrite an existing agent directory', async () => {
+    const agentDir = path.join(agentsDir, 'existing-agent');
+    fs.mkdirSync(agentDir, { recursive: true });
+    const sentinel = path.join(agentDir, 'sentinel.txt');
+    fs.writeFileSync(sentinel, 'do-not-delete');
+
+    try {
+      await handleAgentCreate('existing-agent', agentsDir);
+    } catch {
+      // expected process.exit(1) throw
+    }
+
+    // Sentinel file must still exist — we didn't wipe the dir
+    expect(fs.existsSync(sentinel)).toBe(true);
   });
 });

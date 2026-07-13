@@ -294,6 +294,72 @@ export async function handleAgentLogs(
   });
 }
 
+// ---------------------------------------------------------------------------
+// nexus agent create — scaffold a new agent
+// ---------------------------------------------------------------------------
+
+const AGENT_TEMPLATE = (name: string) => `import { defineAgent, cron } from '@nexus-ai/agent-sdk';
+
+export default defineAgent({
+  name: '${name}',
+  version: '1.0.0',
+  description: 'Describe what this agent does',
+  triggers: [cron('0 2 * * *')],   // daily at 2am — or change to your schedule
+  tools: ['nexus_list_sites'],
+
+  async run({ tools, state, ai, log }) {
+    log.info('${name}: starting');
+
+    const sites = await tools.invoke('nexus_list_sites', {});
+    log.info(\`Found \${Array.isArray(sites) ? sites.length : 0} site(s)\`);
+
+    // Uncomment to use AI:
+    // const summary = await ai.run('Summarize: ' + JSON.stringify(sites));
+
+    state.set('lastRunAt', Date.now());
+    log.info('${name}: done');
+  },
+});
+`;
+
+/**
+ * Scaffold a new TypeScript agent directory under `<agentsDir>/<name>/`.
+ *
+ * @param name      - Agent slug (lowercase letters, numbers, hyphens only)
+ * @param _agentsDir - Optional override for the agents root directory (used in tests only)
+ */
+export async function handleAgentCreate(name: string, _agentsDir?: string): Promise<void> {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+    console.error(
+      `Error: agent name must be lowercase letters, numbers, and hyphens (got: "${name}")`,
+    );
+    process.exit(1);
+  }
+
+  const agentsRoot =
+    _agentsDir ??
+    path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents');
+
+  const agentDir = path.join(agentsRoot, name);
+
+  if (fs.existsSync(agentDir)) {
+    console.error(`Error: agent "${name}" already exists at ${agentDir}`);
+    process.exit(1);
+  }
+
+  fs.mkdirSync(agentDir, { recursive: true });
+  const agentFile = path.join(agentDir, 'agent.ts');
+  fs.writeFileSync(agentFile, AGENT_TEMPLATE(name), 'utf-8');
+
+  console.log(`Created: ${agentFile}`);
+  console.log(`Run it:  nexus agent run ${name}`);
+  console.log(`Watch it reload automatically when you save the file.`);
+}
+
+// ---------------------------------------------------------------------------
+// nexus agent emit
+// ---------------------------------------------------------------------------
+
 /**
  * Publish a synthetic event to the agent event bus.
  *
@@ -387,6 +453,13 @@ agentCommand
       console.error(`Error: ${err.message}`);
       process.exit(1);
     }
+  });
+
+agentCommand
+  .command('create <name>')
+  .description('Scaffold a new TypeScript agent')
+  .action(async (name: string) => {
+    await handleAgentCreate(name);
   });
 
 agentCommand
