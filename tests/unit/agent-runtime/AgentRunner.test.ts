@@ -1,6 +1,15 @@
 import { AgentRunner } from '../../../src/main/agent-runtime/AgentRunner';
 import { defineAgent, cron, on } from '../../../src/main/agent-sdk';
 import type { AgentContext, NexusEvent } from '../../../src/main/agent-sdk/types';
+import type { ResolvedAIProvider } from '../../../src/main/ai/getAIProvider';
+
+const resolvedProvider: ResolvedAIProvider = {
+  provider: 'ollama',
+  model: 'llama3.2',
+  apiKey: '',
+  useLocalGateway: false,
+  isAvailable: false,
+};
 
 function makeRunner() {
   const stateStore = {
@@ -10,6 +19,7 @@ function makeRunner() {
       delete: jest.fn(),
       scratch: {},
     }),
+    recordRun: jest.fn().mockResolvedValue(undefined),
   };
   // Mock ToolRegistry — none of the unit-test agents invoke tools,
   // so `call` will not be hit, but we provide a valid mock for completeness.
@@ -20,8 +30,7 @@ function makeRunner() {
     }),
   };
   const services = {};
-  const aiClient = { run: jest.fn().mockResolvedValue('ok') };
-  return new AgentRunner(stateStore as any, toolRegistry as any, services as any, aiClient as any);
+  return new AgentRunner(stateStore as any, toolRegistry as any, services as any, resolvedProvider);
 }
 
 describe('AgentRunner', () => {

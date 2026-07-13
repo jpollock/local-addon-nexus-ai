@@ -2,9 +2,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createLogger } from '../logging/Logger';
-import type { AgentDefinition, NexusEvent, AgentResult, AgentContext, AIClient, AgentLogger } from '../agent-sdk/types';
+import type { AgentDefinition, NexusEvent, AgentResult, AgentContext, AgentLogger } from '../agent-sdk/types';
 import type { AgentStateStore } from './AgentStateStore';
 import { NexusToolProvider } from './NexusToolProvider';
+import { AgentAIClient } from './AgentAIClient';
+import { getProvider } from '../chat/providers/index';
+import type { ResolvedAIProvider } from '../ai/getAIProvider';
 import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
 
@@ -22,18 +25,18 @@ export class AgentRunner {
   private stateStore: AgentStateStore;
   private toolRegistry: ToolRegistry;
   private services: NexusServices;
-  private aiClient: AIClient;
+  private resolvedProvider: ResolvedAIProvider;
 
   constructor(
     stateStore: AgentStateStore,
     toolRegistry: ToolRegistry,
     services: NexusServices,
-    aiClient: AIClient,
+    resolvedProvider: ResolvedAIProvider,
   ) {
     this.stateStore = stateStore;
     this.toolRegistry = toolRegistry;
     this.services = services;
-    this.aiClient = aiClient;
+    this.resolvedProvider = resolvedProvider;
   }
 
   async run(agent: AgentDefinition, event?: NexusEvent): Promise<AgentResult> {
@@ -41,14 +44,19 @@ export class AgentRunner {
     const timeoutMs = agent.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const agentName = agent.name;
 
-    // Build per-agent tool provider with scope enforcement
     const toolProvider = new NexusToolProvider(
       this.toolRegistry,
       this.services,
       agent.tools?.length ? agent.tools : undefined,
     );
 
-    // Build file-backed logger — writes to both the standard logger and a per-agent log file
+    // Build AI client per-run so it gets this agent's scoped tool set
+    const aiProvider = getProvider(this.resolvedProvider.provider);
+    const agentModel = agent.model ?? this.resolvedProvider.model;
+    const aiClient = aiProvider
+      ? new AgentAIClient(aiProvider, { apiKey: this.resolvedProvider.apiKey, model: agentModel }, toolProvider)
+      : { run: async (_prompt: string) => '' };  // fallback when provider unavailable
+
     const logDir = path.join(
       os.homedir(),
       'Library',
@@ -64,7 +72,7 @@ export class AgentRunner {
     function appendLog(level: string, msg: string): void {
       try {
         fs.appendFileSync(logFile, `[${level}] ${new Date().toISOString()} ${msg}\n`);
-      } catch { /* log file write errors are non-fatal */ }
+      } catch { /* non-fatal */ }
     }
 
     const agentLog: AgentLogger = {
@@ -79,13 +87,12 @@ export class AgentRunner {
       event,
       tools: toolProvider,
       state: this.stateStore.buildHandle(agentName),
-      ai: this.aiClient,
+      ai: aiClient,
       log: agentLog,
     };
 
     let status: AgentResult['status'] = 'success';
     let error: string | undefined;
-
     let timeoutHandle: NodeJS.Timeout | undefined;
 
     try {
@@ -97,9 +104,7 @@ export class AgentRunner {
           }),
         ]);
       } finally {
-        if (timeoutHandle !== undefined) {
-          clearTimeout(timeoutHandle);
-        }
+        if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
       }
     } catch (err: unknown) {
       if (err instanceof TimeoutError) {
@@ -123,6 +128,8 @@ export class AgentRunner {
       }
     }
 
-    return { agentName: agent.name, startedAt, finishedAt: Date.now(), status, error };
+    const result: AgentResult = { agentName: agent.name, startedAt, finishedAt: Date.now(), status, error };
+    this.stateStore.recordRun(result);
+    return result;
   }
 }
