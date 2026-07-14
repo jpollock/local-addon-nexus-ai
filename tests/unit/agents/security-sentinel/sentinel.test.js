@@ -795,11 +795,11 @@ describe('security-sentinel', () => {
       expect(step3.toolArgs.code).toContain('evil-custom-slug');
     });
 
-    it('always includes steps 4–8', () => {
+    it('always includes steps 4, 6, 7, 8 (step 5 checksums deferred — not in checklist)', () => {
       const checklist = buildRemediationChecklist({}, [], 'sandbox');
       const steps = checklist.map(s => s.step);
       expect(steps).toContain(4);
-      expect(steps).toContain(5);
+      expect(steps).not.toContain(5); // Step 5 deferred: wp core verify-checksums runs via SSH, not wp_eval
       expect(steps).toContain(6);
       expect(steps).toContain(7);
       expect(steps).toContain(8);

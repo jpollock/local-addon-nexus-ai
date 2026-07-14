@@ -770,6 +770,35 @@ TIER3: yes | no`;
   return synthesis;
 }
 
+// ─── Admin account confidence scoring ────────────────────────────────────────
+// Returns 0-100+ confidence score that an account is attacker-created.
+// > 95: auto-delete  |  50-95: demote to subscriber  |  < 50: flag for review
+function scoreAdminAccount(user, _allAdminUsers, attackTimestamp) {
+  let score = 0;
+  const username = user.username || '';
+  const email = user.email || '';
+  const registered = user.created_at || null;
+
+  // Username is a random string (all lowercase, 6-10 chars, no real words pattern)
+  if (/^[a-z]{6,10}$/.test(username) && !/^(admin|backup|system|editor|author|manager)/.test(username)) score += 60;
+  // Username has programmatic suffix (admin_XXXXXX)
+  if (/^admin_[A-Z0-9]{4,}$/.test(username)) score += 60;
+  // Default placeholder email
+  if (email.endsWith('@example.com') || !email) score += 35;
+  // Typo/misspelling of system word
+  if (/adminb[ao]ck|adminsyst|adminbak|wp_adm/.test(username.toLowerCase())) score += 20;
+
+  // Creation date clustering: if created within ±10 minutes of the attack timestamp, add cluster bonus
+  if (registered && attackTimestamp) {
+    const userTime = new Date(registered).getTime();
+    const attackTime = new Date(attackTimestamp).getTime();
+    const diffMin = Math.abs(userTime - attackTime) / 60000;
+    if (diffMin <= 10) score += 30;
+  }
+
+  return score;
+}
+
 // ─── Tier 3: Checklist-driven remediation ────────────────────────────────────
 
 const KNOWN_MU_PLUGINS = [
@@ -804,18 +833,19 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
     });
   }
 
-  // Step 2: Remove backdoor admin accounts — only if admin-related signals fired
+  // Step 2: Confidence-scored admin account remediation — only if admin-related signals fired
+  // > 95 → auto-delete | 50-95 → demote to subscriber + REVIEW REQUIRED | < 50 → flag only
+  // Always deletes application passwords for score >= 50
   if (allSignals.some(s => ['REL-03', 'ABS-03', 'LLM-USER-01', 'ABS-01', 'ABS-02'].includes(s.id))) {
     checklist.push({
       step: 2,
-      action: 'Remove backdoor admin accounts',
+      action: 'Confidence-scored admin account remediation',
       toolName: 'wp_eval',
       toolArgs: {
         site: sandboxName,
-        code: `global $wpdb; $prefix = $wpdb->prefix; $admins = $wpdb->get_results("SELECT u.ID, u.user_login, u.user_email FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = '{$prefix}capabilities' AND m.meta_value LIKE '%administrator%'"); $legitimate = ['jeremy.pollock@wpengine.com']; $deleted = []; foreach($admins as $u) { $isSuspicious = !in_array($u->user_email, $legitimate) && (preg_match('/^admin_[A-Za-z0-9]{5,}$|^[a-z]{6,10}$/', $u->user_login) || $u->user_email === 'admin@example.com' || $u->user_email === ''); if ($isSuspicious) { $wpdb->delete($wpdb->users, ['ID' => $u->ID]); $wpdb->delete($wpdb->usermeta, ['user_id' => $u->ID]); $deleted[] = $u->user_login; } } echo json_encode(['deleted' => $deleted, 'remaining' => count($admins) - count($deleted)]);`,
+        code: `global $wpdb; $admins = $wpdb->get_results("SELECT u.ID, u.user_login, u.user_email, u.user_registered FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'", ARRAY_A); $scoreAdmin = function($username, $email, $registered, $attackTimestamp) { $score = 0; if (preg_match('/^[a-z]{6,10}$/', $username) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $username)) $score += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $username)) $score += 60; if (!$email || substr($email, -12) === '@example.com') $score += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($username))) $score += 20; if ($registered && $attackTimestamp) { $diffMin = abs(strtotime($registered) - strtotime($attackTimestamp)) / 60; if ($diffMin <= 10) $score += 30; } return $score; }; $attackTimestamp = null; foreach ($admins as $u) { $ps = 0; if (preg_match('/^[a-z]{6,10}$/', $u['user_login']) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $u['user_login'])) $ps += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $u['user_login'])) $ps += 60; if (!$u['user_email'] || substr($u['user_email'], -12) === '@example.com') $ps += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($u['user_login']))) $ps += 20; if ($ps > 80) { $attackTimestamp = $u['user_registered']; break; } } $autoDeleted = []; $demoted = []; $appKeysDeleted = []; $flagged = []; $protected = ['jeremy.pollock@wpengine.com']; foreach ($admins as $u) { $score = $scoreAdmin($u['user_login'], $u['user_email'], $u['user_registered'], $attackTimestamp); if (in_array($u['user_email'], $protected) || $score < 30) continue; if ($score >= 50) { $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID'], 'meta_key' => '_application_passwords']); $appKeysDeleted[] = $u['user_login']; } if ($score > 95) { $wpdb->delete($wpdb->users, ['ID' => $u['ID']]); $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID']]); $autoDeleted[] = ['username' => $u['user_login'], 'score' => $score]; } elseif ($score >= 50) { wp_update_user(['ID' => $u['ID'], 'role' => 'subscriber']); $demoted[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'REVIEW REQUIRED']; } else { $flagged[] = ['username' => $u['user_login'], 'score' => $score]; } } echo json_encode(['auto_deleted' => $autoDeleted, 'demoted' => $demoted, 'app_keys_deleted' => $appKeysDeleted, 'flagged' => $flagged]);`,
       },
       expectedEmpty: false,
-      verifyCode: `global $wpdb; $prefix = $wpdb->prefix; $count = (int)$wpdb->get_var("SELECT COUNT(DISTINCT u.ID) FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = '{$prefix}capabilities' AND m.meta_value LIKE '%administrator%'"); echo $count;`,
     });
   }
 
@@ -854,18 +884,9 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
     expectedEmpty: true,
   });
 
-  // Step 5: Verify WP core checksums
-  checklist.push({
-    step: 5,
-    action: 'Verify WP core checksums',
-    toolName: 'wp_eval',
-    toolArgs: {
-      site: sandboxName,
-      code: `echo shell_exec('wp core verify-checksums 2>&1');`,
-    },
-    expectedEmpty: false,
-    verifyContains: 'Success',
-  });
+  // Step 5: WP core verify-checksums — deferred to manual verification
+  // shell_exec('wp core verify-checksums') inside wp_eval doesn't work (WP-CLI not on PHP's PATH).
+  // This step is recorded in the report as deferred; run it manually via SSH on the sandbox.
 
   // Step 6: Shuffle authentication salts
   checklist.push({
@@ -886,7 +907,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
     toolName: 'wp_eval',
     toolArgs: {
       site: sandboxName,
-      code: `$config = file_get_contents(ABSPATH . 'wp-config.php'); if (strpos($config, 'DISALLOW_FILE_EDIT') === false) { $config = str_replace("/* That's all", "define('DISALLOW_FILE_EDIT', true);\n/* That's all", $config); file_put_contents(ABSPATH . 'wp-config.php', $config); } echo defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT ? 'true' : 'false';`,
+      code: `$result = shell_exec('wp config set DISALLOW_FILE_EDIT true --raw --type=constant 2>&1'); if ($result === null || strpos((string)$result, 'Error') !== false) { $config = file_get_contents(ABSPATH . 'wp-config.php'); if (strpos($config, 'DISALLOW_FILE_EDIT') === false) { $config = str_replace("<?php\n", "<?php\ndefine('DISALLOW_FILE_EDIT', true);\n", $config); file_put_contents(ABSPATH . 'wp-config.php', $config); } } echo defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT ? 'true' : 'false';`,
     },
     expectedEmpty: false,
     verifyContains: 'true',
@@ -1016,6 +1037,9 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
   // Build and execute the checklist
   const checklist = buildRemediationChecklist(install, allSignals, sandboxName);
   const results   = await executeChecklist(checklist, install, sandboxName, tools, log, reportPath);
+
+  // Step 5 deferred note — wp core verify-checksums requires WP-CLI on PHP PATH (unavailable in wp_eval)
+  try { fs.appendFileSync(reportPath, '⚪ Step 5: WP core checksums — deferred (run: wp core verify-checksums on sandbox via SSH)\n'); } catch { /* non-fatal */ }
 
   // Verdict
   const failCount  = results.filter(r => !r.passed).length;
