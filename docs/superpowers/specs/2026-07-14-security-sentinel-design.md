@@ -226,21 +226,88 @@ Synthesis logged in full alongside signal list — reasoning is auditable.
 
 ## 6. Tier 3 — Remediation
 
-**Human-confirmed. The agent prepares and verifies; the user approves the push.**
+**Checklist-driven. Every step is executed and verified. The report is the gate before push.**
+
+### Remediation report
+
+Written incrementally to `agents/security-sentinel/reports/{installName}/{timestamp}.md` as each step completes — crash-safe, human-readable, shareable. A JSON sidecar enables programmatic queries via `fleet_sql` history. The report ends with `READY TO PUSH` or `NOT SAFE TO PUSH — N step(s) failed` depending on verification results.
 
 ### Step 1: Remediation in sandbox
 
-Agent prepares and executes in the isolated sandbox:
+Agent executes sequentially. Each step: action → verify → log ✅/❌ → continue.
 
-1. Remove malicious files — prefer quarantine over delete: move to `wp-content/quarantine/{timestamp}/` with a manifest (enables one-click restore if false positive)
-2. `wp plugin delete {malicious-slugs}` — remove backdoor and attacker-installed plugins
-3. `wp user delete {id} --reassign={legitimate_admin_id}` — for each backdoor admin
-4. `wp config shuffle-salts` — invalidate all active sessions
-5. Apply hardening (close the doors that enabled entry):
-   - Add `define('DISALLOW_FILE_EDIT', true)` to wp-config.php
-   - Add `.htaccess` rules to block unauthenticated XML-RPC and user enumeration via REST API
-   - Block direct access to `wp-config.php` and `debug.log`
-6. Re-run Tier 1 + Tier 2 checks on sandbox — must pass clean before proceeding
+1. **Remove malicious files from `mu-plugins/`** — delete unexpected PHP files (those not in the known WPE managed list). Verify: `glob(WPMU_PLUGIN_DIR . '/*.php')` returns only known files.
+2. **Remove attacker plugins** — all plugins from the signal list (ABS-04, ABS-05), both active AND inactive. Verify: none of those directories exist.
+3. **Handle backdoor admin accounts** — see Admin Account Remediation Model below.
+4. **Delete application passwords** — for any account with confidence ≥50%, immediately delete all WordPress application passwords (`_application_passwords` usermeta). Cannot be deferred — app keys provide API access even if login is disabled.
+5. **Shuffle salts** — `wp config shuffle-salts` — invalidates all active sessions.
+6. **Apply hardening** — `define('DISALLOW_FILE_EDIT', true)` in wp-config.php; `.htaccess` rules to block unauthenticated XML-RPC and user enumeration via REST API.
+7. **Verify uploads/ clean** — no PHP files in the uploads directory.
+8. **Final re-scan** — re-run FS-01/02/04 checks on the sandbox. Must return 0 findings before proceeding.
+
+### Admin Account Remediation Model
+
+Account deletion is irreversible. The model uses a confidence score to decide what action to take. Never auto-delete without high confidence.
+
+**Confidence scoring — accumulate across signals:**
+
+| Signal | Points |
+|---|---|
+| Username is a random string (`oxhuhafz`, `admin_MT6ZqT`) | +60 |
+| Admin email is `@example.com` or no email set | +35 |
+| Created within ±10 minutes of a confirmed attacker account | +30 |
+| Created within the known attack window (from mtime clustering or activity log) | +30 |
+| No posts authored, no last login recorded | +10 |
+| LLM flagged as synthetic/attacker-pattern | +25 |
+| Username is a typo/misspelling of a system word (`adminbockup` = backup) | +20 |
+
+**Action by confidence:**
+
+| Score | Action |
+|---|---|
+| > 95 | Auto-delete account |
+| 50–95 | Demote to subscriber + delete application passwords + flag for human review |
+| < 50 | Flag in report only |
+
+**Creation date clustering** — the most reliable signal after direct pattern evidence. If two or more high-confidence attacker accounts (score > 80) share a creation timestamp cluster (within ±10 minutes), any other admin account created in that same window is treated as a cluster member and gains +30 points. The cluster timestamp also anchors the mtime scan window.
+
+**Application password rule** — delete application passwords for ANY account with score ≥ 50, regardless of whether the account is deleted or only demoted. Application passwords authenticate REST API calls independently of login credentials and 2FA.
+
+**Example — `theawfulpmtest`:**
+
+| Account | Signals | Score | Action |
+|---|---|---|---|
+| `admin` | Default username (+0), @example.com (+35), created in attack window (+30) | 65 | Demote + delete app keys |
+| `admin_MT6ZqT` | Random suffix (+60), created in attack window (+30), no posts (+10) | 100 | Auto-delete |
+| `adminbockup` | Typo of "backup" (+20), created within 2min of `admin_MT6ZqT` (+30), no posts (+10) | 60 | Demote + delete app keys |
+| `oxhuhafz` | Random string (+60), created in attack window (+30), no posts (+10) | 100 | Auto-delete |
+| `jeremy.pollock@wpengine.com` | No suspicious signals | 0 | Keep |
+
+**Note on `admin` account:** Demotion rather than deletion is safer because it may own content. The `admin` username can be renamed or deleted after content is transferred — a separate step surfaced in the report.
+
+### Step 2: Reconcile against existing local copy
+
+Before pushing, check whether a local site is formally linked to this WPE install. If a linked local site exists, run `compare_sites(sandbox, existingLocalSite)` and present the diff:
+
+```
+Content in the-awful-pm not in sandbox (would be lost if not merged):
+  - Draft post: "My Next Post" (unpublished, created 2026-07-10)
+  - Plugin settings: WooCommerce tax config
+
+Content in sandbox not in the-awful-pm (legitimate production content):
+  - 5 posts published since last local sync
+  - 12 media uploads
+```
+
+User decides how to handle the diff before approving push. Agent does not resolve content conflicts automatically.
+
+### Step 3: Push gate (human-confirmed)
+
+```
+./bin/nexus.js agent push <installName>
+```
+
+The push command reads the latest report for the install. If all checklist steps are ✅, it calls `local_wpe_push(sandbox, { include_database: true })` after explicit user confirmation. If any step is ❌, push is blocked with a clear message about what needs manual attention first.
 
 ### Step 2: Reconcile against existing local copy
 
