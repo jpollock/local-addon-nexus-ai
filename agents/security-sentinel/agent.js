@@ -600,7 +600,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
                   'nexus-ai-connector-config.php','site-compat-layer.php'];
         return !in_array($basename, $known);
       });
-      return json_encode(array_values($unexpected));
+      echo json_encode(array_values($unexpected));
     `,
   });
   try {
@@ -649,7 +649,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
           }
         }
       }
-      return json_encode(array_unique($found));
+      echo json_encode(array_unique($found));
     `,
   });
   try {
@@ -677,7 +677,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
       foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $file) {
         if ($file->getExtension() === 'php') $phpFiles[] = $file->getPathname();
       }
-      return json_encode($phpFiles);
+      echo json_encode($phpFiles);
     `,
   });
   try {
@@ -700,7 +700,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
       global $wpdb;
       $count = $wpdb->get_var("SELECT COUNT(DISTINCT u.ID) FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'");
       $wpCount = count(get_users(['role' => 'administrator']));
-      return json_encode(['db' => (int)$count, 'wp' => (int)$wpCount]);
+      echo json_encode(['db' => (int)$count, 'wp' => (int)$wpCount]);
     `,
   });
   let adminMismatch = false;
@@ -792,7 +792,7 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
             $moved[] = $slug;
           }
         }
-        return json_encode($moved);
+        echo json_encode($moved);
       `,
     });
   }
