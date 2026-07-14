@@ -529,4 +529,207 @@ describe('security-sentinel', () => {
       expect(result.sandboxName).toMatch(/^sentinel-theawfulpmtest-\d+$/);
     });
   });
+
+  describe('llmSynthesis', () => {
+    const { llmSynthesis } = require('../../../../agents/security-sentinel/agent')._test;
+
+    const install = { id: 'wpe-1', name: 'testsite', postCount: 16, environment: 'production', adminUsers: [] };
+    const log = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+    const tools = { invoke: jest.fn().mockResolvedValue('') };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('calls ai.run with all signals and site metadata', async () => {
+      const fakeAi = { run: jest.fn().mockResolvedValue('CLASSIFICATION: active-compromise\nREMEDIATION: delete wp-compat') };
+      await llmSynthesis(install, [{ id: 'ABS-05', title: 'wp-compat found' }], [], tools, fakeAi, log, 'sentinel-testsite-123');
+
+      expect(fakeAi.run).toHaveBeenCalledWith(expect.stringContaining('wp-compat found'));
+      expect(fakeAi.run).toHaveBeenCalledWith(expect.stringContaining('testsite'));
+    });
+
+    it('includes sandboxName in the prompt', async () => {
+      const fakeAi = { run: jest.fn().mockResolvedValue('CLASSIFICATION: false-positive\nTIER3: no') };
+      await llmSynthesis(install, [], [], tools, fakeAi, log, 'sentinel-testsite-999');
+
+      expect(fakeAi.run).toHaveBeenCalledWith(expect.stringContaining('sentinel-testsite-999'));
+    });
+
+    it('includes site environment and postCount in the prompt', async () => {
+      const fakeAi = { run: jest.fn().mockResolvedValue('CLASSIFICATION: false-positive\nTIER3: no') };
+      await llmSynthesis(install, [], [], tools, fakeAi, log, 'sentinel-testsite-123');
+
+      expect(fakeAi.run).toHaveBeenCalledWith(expect.stringContaining('production'));
+      expect(fakeAi.run).toHaveBeenCalledWith(expect.stringContaining('16'));
+    });
+
+    it('escalates to Tier 3 when synthesis includes TIER3: yes', async () => {
+      const fakeAi = { run: jest.fn().mockResolvedValue('CLASSIFICATION: high-risk\nTIER3: yes') };
+      const fakeTools = { invoke: jest.fn().mockResolvedValue('') };
+      await llmSynthesis(install, [], [], fakeTools, fakeAi, log, 'sentinel-testsite-123');
+
+      const evalCalls = fakeTools.invoke.mock.calls.filter(c => c[0] === 'wp_eval');
+      expect(evalCalls.length).toBeGreaterThan(0);
+    });
+
+    it('escalates to Tier 3 when any signal has critical severity', async () => {
+      const fakeAi = { run: jest.fn().mockResolvedValue('CLASSIFICATION: high-risk\nTIER3: no') };
+      const fakeTools = { invoke: jest.fn().mockResolvedValue('') };
+      const criticalSignal = { id: 'ABS-05', severity: 'critical', title: 'Backdoor found', detail: 'wp-compat detected' };
+
+      await llmSynthesis(install, [criticalSignal], [], fakeTools, fakeAi, log, 'sentinel-testsite-123');
+
+      const evalCalls = fakeTools.invoke.mock.calls.filter(c => c[0] === 'wp_eval');
+      expect(evalCalls.length).toBeGreaterThan(0);
+    });
+
+    it('does not escalate to Tier 3 when TIER3: no and no critical signals', async () => {
+      const fakeAi = { run: jest.fn().mockResolvedValue('CLASSIFICATION: misconfiguration\nTIER3: no') };
+      const fakeTools = { invoke: jest.fn().mockResolvedValue('') };
+      const medSignal = { id: 'EXP-03', severity: 'medium', title: 'File editor enabled', detail: 'DISALLOW_FILE_EDIT not set' };
+
+      await llmSynthesis(install, [medSignal], [], fakeTools, fakeAi, log, 'sentinel-testsite-123');
+
+      const evalCalls = fakeTools.invoke.mock.calls.filter(c => c[0] === 'wp_eval');
+      expect(evalCalls.length).toBe(0);
+    });
+
+    it('logs the synthesis result', async () => {
+      const fakeAi = { run: jest.fn().mockResolvedValue('CLASSIFICATION: false-positive\nTIER3: no') };
+      const fakeLog = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+      await llmSynthesis(install, [], [], tools, fakeAi, fakeLog, 'sentinel-testsite-123');
+
+      expect(fakeLog.warn).toHaveBeenCalledWith(expect.stringContaining('[Tier 2 Synthesis]'));
+    });
+
+    it('combines tier1 and fs signals in the prompt', async () => {
+      const fakeAi = { run: jest.fn().mockResolvedValue('CLASSIFICATION: false-positive\nTIER3: no') };
+      const tier1 = [{ id: 'ABS-01', severity: 'high', title: 'admin username', detail: 'Found admin' }];
+      const fsSignals = [{ id: 'FS-01', severity: 'critical', title: 'PHP in mu-plugins', detail: 'evil.php' }];
+
+      await llmSynthesis(install, tier1, fsSignals, tools, fakeAi, log, 'sentinel-testsite-123');
+
+      expect(fakeAi.run).toHaveBeenCalledWith(expect.stringContaining('ABS-01'));
+      expect(fakeAi.run).toHaveBeenCalledWith(expect.stringContaining('FS-01'));
+    });
+  });
+
+  describe('tier3Remediate', () => {
+    const { tier3Remediate } = require('../../../../agents/security-sentinel/agent')._test;
+
+    const install = { id: 'wpe-1', name: 'testsite', environment: 'production' };
+    const log = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('quarantines plugins from ABS-05 signals via wp_eval', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('["wp-compat"]') };
+      const signal = { id: 'ABS-05', severity: 'critical', title: 'Known backdoor plugin detected: wp-compat', detail: 'backdoor' };
+
+      await tier3Remediate(install, 'CLASSIFICATION: active-compromise', [signal], 'sandbox-abc', tools, log);
+
+      const quarantineCall = tools.invoke.mock.calls.find(
+        c => c[0] === 'wp_eval' && c[1].code.includes('quarantine')
+      );
+      expect(quarantineCall).toBeDefined();
+      expect(quarantineCall[1].site).toBe('sandbox-abc');
+      expect(quarantineCall[1].code).toContain('wp-compat');
+    });
+
+    it('quarantines plugins from ABS-04 signals (file manager)', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('') };
+      const signal = { id: 'ABS-04', severity: 'high', title: 'File manager plugin(s) active: fileorganizer', detail: 'file manager' };
+
+      await tier3Remediate(install, 'CLASSIFICATION: high-risk', [signal], 'sandbox-abc', tools, log);
+
+      const quarantineCall = tools.invoke.mock.calls.find(
+        c => c[0] === 'wp_eval' && c[1].code.includes('quarantine')
+      );
+      expect(quarantineCall).toBeDefined();
+      expect(quarantineCall[1].code).toContain('fileorganizer');
+    });
+
+    it('does not invoke quarantine wp_eval when no malicious plugin signals', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('') };
+      const signal = { id: 'EXP-03', severity: 'medium', title: 'File editor enabled', detail: 'no DISALLOW_FILE_EDIT' };
+
+      await tier3Remediate(install, 'CLASSIFICATION: misconfiguration', [signal], 'sandbox-abc', tools, log);
+
+      const quarantineCall = tools.invoke.mock.calls.find(
+        c => c[0] === 'wp_eval' && c[1].code.includes('quarantine')
+      );
+      expect(quarantineCall).toBeUndefined();
+    });
+
+    it('logs manual review message for backdoor admin accounts (REL-03)', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('') };
+      const signal = { id: 'REL-03', severity: 'critical', title: 'New admin: hacker', detail: 'hacker account' };
+
+      await tier3Remediate(install, 'CLASSIFICATION: active-compromise', [signal], 'sandbox-abc', tools, log);
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('manual review required'));
+    });
+
+    it('logs manual review message for backdoor admin accounts (ABS-03)', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('') };
+      const signal = { id: 'ABS-03', severity: 'critical', title: 'Admin with example.com email', detail: 'example.com' };
+
+      await tier3Remediate(install, 'CLASSIFICATION: active-compromise', [signal], 'sandbox-abc', tools, log);
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('manual review required'));
+    });
+
+    it('invokes wp_eval to shuffle salts', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('') };
+
+      await tier3Remediate(install, 'CLASSIFICATION: high-risk', [], 'sandbox-abc', tools, log);
+
+      const saltCall = tools.invoke.mock.calls.find(
+        c => c[0] === 'wp_eval' && c[1].code.includes('shuffle-salts')
+      );
+      expect(saltCall).toBeDefined();
+      expect(saltCall[1].site).toBe('sandbox-abc');
+    });
+
+    it('invokes wp_eval to add DISALLOW_FILE_EDIT to wp-config.php', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('') };
+
+      await tier3Remediate(install, 'CLASSIFICATION: high-risk', [], 'sandbox-abc', tools, log);
+
+      const hardenCall = tools.invoke.mock.calls.find(
+        c => c[0] === 'wp_eval' && c[1].code.includes('DISALLOW_FILE_EDIT')
+      );
+      expect(hardenCall).toBeDefined();
+      expect(hardenCall[1].site).toBe('sandbox-abc');
+    });
+
+    it('logs manual step instructions including sandbox name', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('') };
+
+      await tier3Remediate(install, 'CLASSIFICATION: high-risk', [], 'sandbox-abc', tools, log);
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('sandbox-abc'));
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('MANUAL STEP REQUIRED'));
+    });
+
+    it('does not call local_wpe_push (requires human confirmation)', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('') };
+
+      await tier3Remediate(install, 'CLASSIFICATION: active-compromise', [], 'sandbox-abc', tools, log);
+
+      const pushCall = tools.invoke.mock.calls.find(c => c[0] === 'local_wpe_push');
+      expect(pushCall).toBeUndefined();
+    });
+
+    it('handles wp_eval errors gracefully (salt shuffle can fail)', async () => {
+      const tools = { invoke: jest.fn().mockRejectedValue(new Error('wp_eval failed')) };
+
+      await expect(
+        tier3Remediate(install, 'CLASSIFICATION: high-risk', [], 'sandbox-abc', tools, log)
+      ).resolves.toBeUndefined();
+    });
+  });
 });

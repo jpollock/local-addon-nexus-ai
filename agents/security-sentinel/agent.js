@@ -223,7 +223,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -634,7 +634,112 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log) {
   return { filesystemSignals: fsSignals, adminMismatch, sandboxName };
 }
 
-// LLM synthesis stub — implemented in Task 8
 async function llmSynthesis(install, tier1Signals, fsSignals, tools, ai, log, sandboxName) {
-  // No-op in Task 7; Task 8 will add LLM-assisted triage summary
+  const allSignals = [...tier1Signals, ...fsSignals];
+
+  const prompt = `You are a WordPress security analyst completing an investigation of a WP Engine production site.
+
+Site: ${install.name} (${install.environment}, ${install.postCount} posts)
+Sandbox for investigation: ${sandboxName}
+
+Security signals found:
+${allSignals.map(s => `[${(s.severity || 'unknown').toUpperCase()}] ${s.id}: ${s.title}`).join('\n')}
+
+Signal details:
+${allSignals.map(s => `${s.id}: ${s.detail || '(no detail)'}`).join('\n\n')}
+
+Based on these signals:
+1. Classify the situation: active-compromise | high-risk | misconfiguration | false-positive
+2. List the top 3 immediate remediation steps in priority order, with exact WP-CLI commands
+3. Identify anything that should be checked next that was not covered above
+4. Recommend whether to escalate to Tier 3 (fix + push) or monitor only
+
+Format:
+CLASSIFICATION: <one of the four values>
+IMMEDIATE ACTIONS:
+1. <action>
+2. <action>
+3. <action>
+NEXT CHECKS: <what to verify next>
+TIER3: yes | no`;
+
+  const synthesis = await ai.run(prompt);
+  log.warn(`[Tier 2 Synthesis] ${install.name}:\n${synthesis}`);
+
+  const shouldEscalateToTier3 = synthesis.includes('TIER3: yes') ||
+    allSignals.some(s => s.severity === 'critical');
+
+  if (shouldEscalateToTier3) {
+    log.warn(`[Tier 3] Preparing remediation plan for ${install.name}`);
+    await tier3Remediate(install, synthesis, allSignals, sandboxName, tools, log);
+  }
+}
+
+async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools, log) {
+  // Step 1: Apply remediations in sandbox
+  const maliciousPlugins = allSignals
+    .filter(s => ['ABS-04', 'ABS-05', 'REL-01'].includes(s.id))
+    .flatMap(s => {
+      const match = s.title.match(/plugin[^:]*:\s*(.+)/i);
+      return match ? match[1].split(',').map(p => p.trim()) : [];
+    });
+
+  if (maliciousPlugins.length > 0) {
+    log.warn(`[Tier 3] Quarantining plugins: ${maliciousPlugins.join(', ')}`);
+    await tools.invoke('wp_eval', {
+      site: sandboxName,
+      code: `
+        $quarantine = WP_CONTENT_DIR . '/quarantine/' . date('Y-m-d-His');
+        wp_mkdir_p($quarantine);
+        $plugins = ${JSON.stringify(maliciousPlugins)};
+        $moved = [];
+        foreach ($plugins as $slug) {
+          $src = WP_PLUGIN_DIR . '/' . $slug;
+          if (is_dir($src)) {
+            rename($src, $quarantine . '/' . $slug);
+            $moved[] = $slug;
+          }
+        }
+        return json_encode($moved);
+      `,
+    });
+  }
+
+  // Step 2: Delete backdoor admin accounts
+  const backdoorSignals = allSignals.filter(s => ['REL-03', 'ABS-03', 'LLM-USER-01'].includes(s.id));
+  if (backdoorSignals.length > 0) {
+    log.warn(`[Tier 3] Flagged suspicious admin accounts — manual review required before deletion`);
+    log.warn(`  Run on sandbox: wp user list --role=administrator`);
+  }
+
+  // Step 3: Shuffle salts
+  await tools.invoke('wp_eval', {
+    site: sandboxName,
+    code: `return shell_exec('wp config shuffle-salts 2>&1');`,
+  }).catch(() => {});
+
+  // Step 4: Apply hardening
+  await tools.invoke('wp_eval', {
+    site: sandboxName,
+    code: `
+      // Disable file editor
+      $config = file_get_contents(ABSPATH . 'wp-config.php');
+      if (strpos($config, 'DISALLOW_FILE_EDIT') === false) {
+        $config = str_replace("/* That's all", "define('DISALLOW_FILE_EDIT', true);\n/* That's all", $config);
+        file_put_contents(ABSPATH . 'wp-config.php', $config);
+      }
+      return 'hardening applied';
+    `,
+  }).catch(() => {});
+
+  // Step 5: Reconciliation — check for existing local copy before push
+  log.warn(`[Tier 3] Remediation prepared in sandbox: ${sandboxName}`);
+  log.warn(`[Tier 3] MANUAL STEP REQUIRED:`);
+  log.warn(`  1. Review sandbox: ${sandboxName}`);
+  log.warn(`  2. Check reconciliation: nexus agent run security-sentinel-reconcile`);
+  log.warn(`  3. If clean, push: nexus agent run security-sentinel-push`);
+  log.warn(`  Synthesis:\n${synthesis}`);
+
+  // Note: the actual local_wpe_push requires human confirmation — logged above
+  // A future Tier 3 interactive flow will present this through the Nexus UI
 }
