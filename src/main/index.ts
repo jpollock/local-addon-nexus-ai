@@ -595,6 +595,11 @@ export default function main(context: any): void {
       registryStorage.set('http_webhook_auth_token', httpInfo.authToken);
       registryStorage.set('http_webhook_info', httpInfo);
 
+      // Expose gateway URL and auth token on nexusServices so agent AI calls
+      // can route through the gateway (same credential model as WP site AI).
+      nexusServices.gatewayUrl = httpInfo.url;
+      nexusServices.gatewayAuthToken = httpInfo.authToken;
+
       // Signal readiness — lifecycle hooks waiting to index can now proceed
       resolveReady!();
 

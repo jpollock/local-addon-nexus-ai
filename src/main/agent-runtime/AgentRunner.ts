@@ -65,8 +65,12 @@ export class AgentRunner {
     const effectiveProvider = this.resolvedProvider.useLocalGateway ? 'local-gateway' : this.resolvedProvider.provider;
     const aiProvider = getProvider(effectiveProvider);
     const agentModel = agent.model ?? this.resolvedProvider.model;
+    // When using local-gateway, pass the gateway URL and auth token via apiKey/baseUrl
+    const providerConfig = effectiveProvider === 'local-gateway'
+      ? { apiKey: this.services.gatewayAuthToken ?? '', model: agentModel, baseUrl: this.services.gatewayUrl }
+      : { apiKey: this.resolvedProvider.apiKey, model: agentModel };
     const aiClient = aiProvider
-      ? new AgentAIClient(aiProvider, { apiKey: this.resolvedProvider.apiKey, model: agentModel }, toolProvider)
+      ? new AgentAIClient(aiProvider, providerConfig, toolProvider)
       : { run: async (_prompt: string) => { logger.warn(`Agent "${agent.name}": AI provider "${this.resolvedProvider.provider}" unavailable — skipping AI call`); return ''; } };
 
     const logDir = path.join(

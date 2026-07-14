@@ -142,6 +142,8 @@ export interface NexusServices {
   agentEventBus?: import('../agent-event-bus/AgentEventBus').AgentEventBus;
   agentStateStore?: import('../agent-runtime/AgentStateStore').AgentStateStore;
   agentReload?: () => Promise<void>;
+  gatewayUrl?: string;
+  gatewayAuthToken?: string;
 }
 
 /**
