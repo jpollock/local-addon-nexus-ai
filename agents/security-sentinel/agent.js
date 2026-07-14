@@ -153,6 +153,7 @@ function runFleetCorrelation(allResults, suspiciousSlugsFound) {
 module.exports = {
   name: 'security-sentinel',
   version: '1.0.0',
+  timeoutMs: 20 * 60 * 1000, // 20 minutes — Tier 2 pull + filesystem scan can take 10+ minutes
   description: 'Fleet-wide security surveillance — detects compromise and pre-breach exposure across all WPE installs',
   triggers: [
     { type: 'cron', expression: '*/15 * * * *' },
@@ -514,13 +515,21 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
   const sandboxName = `sentinel-${install.name}-${Date.now()}`;
   log.info(`[Tier 2] Creating sandbox: ${sandboxName}`);
 
-  // Create isolated sandbox — uses remote_install_id, NOT a formal link
-  await tools.invoke('local_create_site', { name: sandboxName });
-  await tools.invoke('local_wpe_pull', {
+  // Create isolated sandbox — uses remote_install_id (install name slug), NOT a formal link
+  const createResult = await tools.invoke('local_create_site', { name: sandboxName });
+  log.info(`[Tier 2] Sandbox created: ${String(createResult).slice(0, 100)}`);
+
+  const pullResult = await tools.invoke('local_wpe_pull', {
     site:              sandboxName,
-    remote_install_id: install.id,
+    remote_install_id: install.name, // graph id has 'wpe-' prefix; CAPI lookup accepts install name slug
     include_database:  true,
   });
+  const pullResultStr = String(pullResult);
+  log.info(`[Tier 2] Pull response: ${pullResultStr.slice(0, 200)}`);
+  if (pullResultStr.includes('error') || pullResultStr.includes('not found') || pullResultStr.includes('Error')) {
+    log.error(`[Tier 2] Pull failed to start for ${install.name}: ${pullResultStr.slice(0, 300)}`);
+    return;
+  }
 
   // local_wpe_pull is async — poll every 20s for status: completed or failed.
   // "running normally, no tracked operation" = site is idle, NOT a completion signal.
