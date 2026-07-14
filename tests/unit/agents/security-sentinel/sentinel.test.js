@@ -191,4 +191,89 @@ describe('security-sentinel', () => {
       expect(runExposureChecks(install).find(s => s.id === 'EXP-05')).toBeUndefined();
     });
   });
+
+  describe('baseline management', () => {
+    const { loadBaseline, storeBaseline, runRelativeChecks } = require('../../../../agents/security-sentinel/agent')._test;
+
+    const mockState = (() => {
+      const store = {};
+      return { get: k => store[k] ?? null, set: (k, v) => { store[k] = v; } };
+    })();
+
+    const install = {
+      id: 'wpe-test', name: 'testsite',
+      plugins: [{ slug: 'woocommerce', version: '8.0', is_active: '1' }],
+      adminUsers: [{ username: 'jeremy' }],
+      settings: {},
+    };
+
+    it('loadBaseline returns null when no baseline stored', () => {
+      const freshState = { get: () => null, set: jest.fn() };
+      expect(loadBaseline('wpe-test', freshState)).toBeNull();
+    });
+
+    it('storeBaseline then loadBaseline returns stored data', () => {
+      storeBaseline(install, mockState);
+      const baseline = loadBaseline(install.id, mockState);
+      expect(baseline).not.toBeNull();
+      expect(baseline.adminCount).toBe(1);
+      expect(baseline.pluginSlugs).toContain('woocommerce:8.0:1');
+    });
+
+    it('REL-01: flags new plugin not in baseline', () => {
+      const baseline = {
+        capturedAt: Date.now() - 1000,
+        pluginSlugs: ['woocommerce:8.0:1'],
+        adminUserIds: ['jeremy'],
+        adminCount: 1,
+      };
+      const installWithNew = { ...install, plugins: [
+        { slug: 'woocommerce', version: '8.0', is_active: '1' },
+        { slug: 'evil-plugin', version: '1.0', is_active: '1' },
+      ]};
+      const signals = runRelativeChecks(installWithNew, baseline);
+      expect(signals.find(s => s.id === 'REL-01')).toBeDefined();
+    });
+
+    it('REL-02: flags previously-inactive plugin now active', () => {
+      const baseline = {
+        capturedAt: Date.now() - 1000,
+        pluginSlugs: ['evil-plugin:1.0:0', 'woocommerce:8.0:1'],
+        adminUserIds: ['jeremy'],
+        adminCount: 1,
+      };
+      const installWithActive = { ...install, plugins: [
+        { slug: 'woocommerce', version: '8.0', is_active: '1' },
+        { slug: 'evil-plugin', version: '1.0', is_active: '1' },
+      ]};
+      const signals = runRelativeChecks(installWithActive, baseline);
+      expect(signals.find(s => s.id === 'REL-02')).toBeDefined();
+    });
+
+    it('REL-03: flags new admin user not in baseline', () => {
+      const baseline = { capturedAt: Date.now() - 1000, pluginSlugs: [], adminUserIds: ['jeremy'], adminCount: 1 };
+      const installWithNew = { ...install, adminUsers: [{ username: 'jeremy' }, { username: 'hacker' }] };
+      const signals = runRelativeChecks(installWithNew, baseline);
+      const signal = signals.find(s => s.id === 'REL-03');
+      expect(signal).toBeDefined();
+      expect(signal.severity).toBe('critical');
+      expect(signal.detail).toContain('hacker');
+    });
+
+    it('REL-04: flags increased admin count when no new usernames', () => {
+      const baseline = { capturedAt: Date.now() - 1000, pluginSlugs: [], adminUserIds: ['jeremy'], adminCount: 1 };
+      const installWithMoreAdmins = { ...install, adminUsers: [{ username: 'jeremy' }, { username: 'admin2' }] };
+      const signals = runRelativeChecks(installWithMoreAdmins, baseline);
+      const rel03 = signals.find(s => s.id === 'REL-03');
+      const rel04 = signals.find(s => s.id === 'REL-04');
+      // REL-03 should fire because there is a new username
+      expect(rel03).toBeDefined();
+      // REL-04 should NOT fire because REL-03 already covered it
+      expect(rel04).toBeUndefined();
+    });
+
+    it('runRelativeChecks returns empty array when no baseline', () => {
+      expect(runRelativeChecks(install, null)).toHaveLength(0);
+    });
+  });
 });

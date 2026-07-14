@@ -152,7 +152,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -329,7 +329,91 @@ If all usernames appear legitimate, start with "CLEAN:".`);
   };
 }
 
-function loadBaseline(installId, state) { return null; }
-function runRelativeChecks(install, baseline) { return []; }
-function storeBaseline(install, state) {}
+function storeBaseline(install, state) {
+  const baseline = {
+    capturedAt: Date.now(),
+    syncedAt:   install.sshLastSyncAt ?? null,
+    pluginSlugs: install.plugins
+      .map(p => `${p.slug}:${p.version || ''}:${p.is_active}`)
+      .sort(),
+    adminUserIds: install.adminUsers.map(u => u.username).sort(),
+    adminCount: install.adminUsers.length,
+  };
+  state.set(`baseline:${install.id}`, baseline);
+}
+
+function loadBaseline(installId, state) {
+  return state.get(`baseline:${installId}`) ?? null;
+}
+
+function runRelativeChecks(install, baseline) {
+  if (!baseline) return []; // Cold start — suppress all relative checks
+
+  const signals = [];
+  const currentSlugs = new Set(install.plugins.map(p => `${p.slug}:${p.version || ''}:${p.is_active}`));
+  const baselineSlugs = new Set(baseline.pluginSlugs);
+
+  // REL-01: New plugin appeared
+  const newPlugins = install.plugins.filter(p =>
+    !baselineSlugs.has(`${p.slug}:${p.version || ''}:${p.is_active}`) &&
+    !baseline.pluginSlugs.some(s => s.startsWith(`${p.slug}:`))
+  );
+  if (newPlugins.length > 0) {
+    signals.push({
+      id: 'REL-01', severity: 'high', category: 'active-compromise',
+      installName: install.name,
+      title: `New plugin(s) appeared since last scan: ${newPlugins.map(p => p.slug).join(', ')}`,
+      detail: `These plugins were not present in the last clean baseline: ${newPlugins.map(p => `${p.slug} v${p.version}`).join(', ')}`,
+      fix: 'Verify each new plugin was intentionally installed. If not, delete immediately.',
+    });
+  }
+
+  // REL-02: Previously-inactive plugin activated
+  const nowActive = install.plugins.filter(p => {
+    const baselineEntry = baseline.pluginSlugs.find(s => s.startsWith(`${p.slug}:`));
+    if (!baselineEntry) return false;
+    const wasActive = baselineEntry.split(':')[2] === '1';
+    return !wasActive && String(p.is_active) === '1';
+  });
+  if (nowActive.length > 0) {
+    signals.push({
+      id: 'REL-02', severity: 'high', category: 'active-compromise',
+      installName: install.name,
+      title: `Plugin(s) activated since last scan: ${nowActive.map(p => p.slug).join(', ')}`,
+      detail: `These plugins were installed but inactive in the baseline and are now active: ${nowActive.map(p => p.slug).join(', ')}`,
+      fix: 'Verify the plugin activation was intentional.',
+    });
+  }
+
+  // REL-03: New admin user
+  const currentUsernames = new Set(install.adminUsers.map(u => u.username));
+  const baselineUsernames = new Set(baseline.adminUserIds);
+  const newAdmins = install.adminUsers.filter(u => !baselineUsernames.has(u.username));
+  if (newAdmins.length > 0) {
+    signals.push({
+      id: 'REL-03', severity: 'critical', category: 'active-compromise',
+      installName: install.name,
+      title: `New administrator account(s) created since last scan: ${newAdmins.map(u => u.username).join(', ')}`,
+      detail: `New admin users: ${newAdmins.map(u => `${u.username} (${u.email || 'no email'})`).join(', ')}`,
+      fix: 'Delete each unauthorized admin account: wp user delete <id> --reassign=<legitimate-id>',
+    });
+  }
+
+  // REL-04: Admin count increased
+  if (install.adminUsers.length > baseline.adminCount) {
+    // Only add if not already covered by REL-03
+    if (newAdmins.length === 0) {
+      signals.push({
+        id: 'REL-04', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `Admin count increased from ${baseline.adminCount} to ${install.adminUsers.length}`,
+        detail: 'Administrator count increased but new accounts may be hidden from WordPress Users screen.',
+        fix: 'Check for hidden admin accounts by querying the database directly.',
+      });
+    }
+  }
+
+  return signals;
+}
+
 async function tier2Investigate(install, signals, tools, ai, log) {}
