@@ -169,6 +169,8 @@ module.exports = {
     log.info(`security-sentinel: collected data for ${installs.length} install(s)`);
 
     // Tier 1, Tier 2, Tier 3 — added in Tasks 3–10
+    const allInstallResults = [];
+
     for (const install of installs) {
       const signals = [];
 
@@ -187,6 +189,9 @@ module.exports = {
       const baseline = loadBaseline(install.id, state);
       signals.push(...runRelativeChecks(install, baseline));
 
+      // Capture signals into allInstallResults for fleet correlation
+      allInstallResults.push({ install, signals });
+
       const criticalCount = signals.filter(s => s.severity === 'critical').length;
       const highCount     = signals.filter(s => s.severity === 'high').length;
 
@@ -200,10 +205,6 @@ module.exports = {
     }
 
     // Fleet correlation (Task 6)
-    const allInstallResults = installs.map((install, idx) => ({
-      install,
-      signals: [], // Collect signals from the loop above
-    }));
 
     const suspiciousSlugsFound = new Set(
       allInstallResults
