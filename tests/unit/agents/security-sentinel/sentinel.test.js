@@ -348,4 +348,185 @@ describe('security-sentinel', () => {
       expect(runFleetCorrelation(results, new Set())).toHaveLength(0);
     });
   });
+
+  describe('tier2Investigate', () => {
+    const { tier2Investigate } = require('../../../../agents/security-sentinel/agent')._test;
+
+    function makeTools(overrides = {}) {
+      return {
+        invoke: jest.fn().mockImplementation((name, args) => {
+          if (name === 'local_create_site') return Promise.resolve('OK');
+          if (name === 'local_wpe_pull') return Promise.resolve('OK');
+          if (name === 'wp_eval') return Promise.resolve('[]');
+          return Promise.resolve('');
+        }),
+        ...overrides,
+      };
+    }
+
+    const install = { id: 'wpe-94b2', name: 'theawfulpmtest' };
+    const fakeAi = { run: jest.fn().mockResolvedValue('CLEAN') };
+    const fakeLog = { info: jest.fn(), warn: jest.fn() };
+
+    it('creates a sandbox site with correct naming pattern', async () => {
+      const tools = makeTools();
+      await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+
+      const createCall = tools.invoke.mock.calls.find(c => c[0] === 'local_create_site');
+      expect(createCall).toBeDefined();
+      expect(createCall[1].name).toMatch(/^sentinel-theawfulpmtest-\d+$/);
+    });
+
+    it('pulls from WPE using install.id as remote_install_id with include_database true', async () => {
+      const tools = makeTools();
+      await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+
+      const pullCall = tools.invoke.mock.calls.find(c => c[0] === 'local_wpe_pull');
+      expect(pullCall).toBeDefined();
+      expect(pullCall[1]).toMatchObject({
+        remote_install_id: 'wpe-94b2',
+        include_database: true,
+      });
+    });
+
+    it('sandbox name matches the site used in local_wpe_pull', async () => {
+      const tools = makeTools();
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+
+      const pullCall = tools.invoke.mock.calls.find(c => c[0] === 'local_wpe_pull');
+      expect(pullCall[1].site).toBe(result.sandboxName);
+    });
+
+    it('runs wp_eval checks in the sandbox (not the live site)', async () => {
+      const tools = makeTools();
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+
+      const evalCalls = tools.invoke.mock.calls.filter(c => c[0] === 'wp_eval');
+      expect(evalCalls.length).toBeGreaterThan(0);
+      for (const call of evalCalls) {
+        expect(call[1].site).toBe(result.sandboxName);
+      }
+    });
+
+    it('returns empty filesystemSignals and adminMismatch=false when wp_eval returns empty arrays', async () => {
+      const tools = makeTools();
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+
+      expect(result.filesystemSignals).toEqual([]);
+      expect(result.adminMismatch).toBe(false);
+    });
+
+    it('FS-01: flags unexpected PHP file in mu-plugins/', async () => {
+      const tools = {
+        invoke: jest.fn().mockImplementation((name, args) => {
+          if (name === 'local_create_site') return Promise.resolve('OK');
+          if (name === 'local_wpe_pull') return Promise.resolve('OK');
+          if (name === 'wp_eval' && args.code.includes('WPMU_PLUGIN_DIR')) {
+            return Promise.resolve(JSON.stringify(['/var/www/html/wp-content/mu-plugins/evil.php']));
+          }
+          return Promise.resolve('[]');
+        }),
+      };
+
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const fs01 = result.filesystemSignals.find(s => s.id === 'FS-01');
+      expect(fs01).toBeDefined();
+      expect(fs01.severity).toBe('critical');
+      expect(fs01.title).toContain('evil.php');
+    });
+
+    it('FS-02: flags obfuscated code in plugin files', async () => {
+      const tools = {
+        invoke: jest.fn().mockImplementation((name, args) => {
+          if (name === 'local_create_site') return Promise.resolve('OK');
+          if (name === 'local_wpe_pull') return Promise.resolve('OK');
+          if (name === 'wp_eval' && args.code.includes('eval')) {
+            return Promise.resolve(JSON.stringify(['/var/www/html/wp-content/plugins/bad/bad.php']));
+          }
+          return Promise.resolve('[]');
+        }),
+      };
+
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const fs02 = result.filesystemSignals.find(s => s.id === 'FS-02');
+      expect(fs02).toBeDefined();
+      expect(fs02.severity).toBe('critical');
+    });
+
+    it('FS-04: flags PHP file in uploads/', async () => {
+      const tools = {
+        invoke: jest.fn().mockImplementation((name, args) => {
+          if (name === 'local_create_site') return Promise.resolve('OK');
+          if (name === 'local_wpe_pull') return Promise.resolve('OK');
+          if (name === 'wp_eval' && args.code.includes('wp_upload_dir')) {
+            return Promise.resolve(JSON.stringify(['/var/www/html/wp-content/uploads/shell.php']));
+          }
+          return Promise.resolve('[]');
+        }),
+      };
+
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const fs04 = result.filesystemSignals.find(s => s.id === 'FS-04');
+      expect(fs04).toBeDefined();
+      expect(fs04.severity).toBe('critical');
+      expect(fs04.title).toContain('shell.php');
+    });
+
+    it('FS-MISMATCH: flags admin count divergence between DB and WordPress API', async () => {
+      const tools = {
+        invoke: jest.fn().mockImplementation((name, args) => {
+          if (name === 'local_create_site') return Promise.resolve('OK');
+          if (name === 'local_wpe_pull') return Promise.resolve('OK');
+          if (name === 'wp_eval' && args.code.includes('wp_capabilities')) {
+            return Promise.resolve(JSON.stringify({ db: 3, wp: 2 }));
+          }
+          return Promise.resolve('[]');
+        }),
+      };
+
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      expect(result.adminMismatch).toBe(true);
+      const mismatch = result.filesystemSignals.find(s => s.id === 'FS-MISMATCH');
+      expect(mismatch).toBeDefined();
+      expect(mismatch.severity).toBe('critical');
+      expect(mismatch.detail).toContain('hiding');
+    });
+
+    it('FS-MISMATCH: does not flag when DB count equals WordPress API count', async () => {
+      const tools = {
+        invoke: jest.fn().mockImplementation((name, args) => {
+          if (name === 'local_create_site') return Promise.resolve('OK');
+          if (name === 'local_wpe_pull') return Promise.resolve('OK');
+          if (name === 'wp_eval' && args.code.includes('wp_capabilities')) {
+            return Promise.resolve(JSON.stringify({ db: 2, wp: 2 }));
+          }
+          return Promise.resolve('[]');
+        }),
+      };
+
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      expect(result.adminMismatch).toBe(false);
+      expect(result.filesystemSignals.find(s => s.id === 'FS-MISMATCH')).toBeUndefined();
+    });
+
+    it('handles malformed wp_eval JSON gracefully (no throw)', async () => {
+      const tools = {
+        invoke: jest.fn().mockImplementation((name) => {
+          if (name === 'local_create_site') return Promise.resolve('OK');
+          if (name === 'local_wpe_pull') return Promise.resolve('OK');
+          if (name === 'wp_eval') return Promise.resolve('NOT_JSON_{{');
+          return Promise.resolve('');
+        }),
+      };
+
+      await expect(tier2Investigate(install, [], tools, fakeAi, fakeLog)).resolves.toBeDefined();
+    });
+
+    it('returns sandboxName in the result', async () => {
+      const tools = makeTools();
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+
+      expect(result.sandboxName).toMatch(/^sentinel-theawfulpmtest-\d+$/);
+    });
+  });
 });

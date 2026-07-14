@@ -223,7 +223,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -487,4 +487,154 @@ function runRelativeChecks(install, baseline) {
   return signals;
 }
 
-async function tier2Investigate(install, signals, tools, ai, log) {}
+async function tier2Investigate(install, tier1Signals, tools, ai, log) {
+  const sandboxName = `sentinel-${install.name}-${Date.now()}`;
+  log.info(`[Tier 2] Creating sandbox: ${sandboxName}`);
+
+  // Create isolated sandbox — uses remote_install_id, NOT a formal link
+  await tools.invoke('local_create_site', { name: sandboxName });
+  await tools.invoke('local_wpe_pull', {
+    site:              sandboxName,
+    remote_install_id: install.id,
+    include_database:  true,
+  });
+
+  log.info(`[Tier 2] Sandbox ready. Running filesystem checks...`);
+
+  // Filesystem checks via wp_eval (runs inside Local sandbox, not live site)
+  const fsSignals = [];
+
+  // FS-01: PHP files in mu-plugins/
+  const muPluginResult = await tools.invoke('wp_eval', {
+    site: sandboxName,
+    code: `
+      $dir = WPMU_PLUGIN_DIR;
+      $files = glob("$dir/*.php") ?: [];
+      $unexpected = array_filter($files, function($f) {
+        $basename = basename($f);
+        // WPE managed mu-plugins are expected
+        $known = ['wpe-wp-sign-on-plugin.php','wpe-cache-plugin.php',
+                  'wpengine-security-auditor.php','mu-plugin.php',
+                  'slt-force-strong-passwords.php','wpe-update-source-selector.php',
+                  'nexus-ai-connector-config.php','site-compat-layer.php'];
+        return !in_array($basename, $known);
+      });
+      return json_encode(array_values($unexpected));
+    `,
+  });
+  try {
+    const muFiles = JSON.parse(muPluginResult || '[]');
+    if (muFiles.length > 0) {
+      fsSignals.push({
+        id: 'FS-01', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `PHP file(s) in mu-plugins/: ${muFiles.map(f => f.split('/').pop()).join(', ')}`,
+        detail: `Unexpected PHP files in mu-plugins/ load on every request and cannot be deactivated: ${muFiles.join(', ')}`,
+        fix: `Remove via SSH: rm ${muFiles.join(' ')}`,
+      });
+    }
+  } catch {}
+
+  // FS-02: Obfuscation chains
+  const obfuscationResult = await tools.invoke('wp_eval', {
+    site: sandboxName,
+    code: `
+      $dirs = [WP_CONTENT_DIR . '/plugins', WP_CONTENT_DIR . '/mu-plugins', WP_CONTENT_DIR . '/themes'];
+      $patterns = [
+        '/eval\\s*\\(\\s*base64_decode/',
+        '/eval\\s*\\(\\s*gzinflate\\s*\\(\\s*base64_decode/',
+        '/eval\\s*\\(\\s*str_rot13/',
+        '/base64_decode.*base64_decode/',
+      ];
+      $found = [];
+      foreach ($dirs as $dir) {
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $file) {
+          if ($file->getExtension() !== 'php') continue;
+          $content = file_get_contents($file->getPathname());
+          foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $content)) {
+              $found[] = $file->getPathname();
+              break;
+            }
+          }
+        }
+      }
+      return json_encode(array_unique($found));
+    `,
+  });
+  try {
+    const obfFiles = JSON.parse(obfuscationResult || '[]');
+    if (obfFiles.length > 0) {
+      fsSignals.push({
+        id: 'FS-02', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `Obfuscated code (eval+base64/gzinflate/rot13) found in ${obfFiles.length} file(s)`,
+        detail: `Files containing obfuscation chains: ${obfFiles.join(', ')}`,
+        fix: 'Investigate each file. These patterns hide malicious payloads. Compare with original plugin/theme source.',
+      });
+    }
+  } catch {}
+
+  // FS-04: PHP files in uploads/
+  const uploadsResult = await tools.invoke('wp_eval', {
+    site: sandboxName,
+    code: `
+      $uploads = wp_upload_dir();
+      $dir = $uploads['basedir'];
+      $phpFiles = [];
+      foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $file) {
+        if ($file->getExtension() === 'php') $phpFiles[] = $file->getPathname();
+      }
+      return json_encode($phpFiles);
+    `,
+  });
+  try {
+    const phpUploads = JSON.parse(uploadsResult || '[]');
+    if (phpUploads.length > 0) {
+      fsSignals.push({
+        id: 'FS-04', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `PHP file(s) found in uploads/: ${phpUploads.map(f => f.split('/').pop()).join(', ')}`,
+        detail: `PHP files in uploads/ can be executed by visiting their URL directly: ${phpUploads.join(', ')}`,
+        fix: 'Delete all PHP files from uploads/. Add .htaccess rule to deny PHP execution in uploads.',
+      });
+    }
+  } catch {}
+
+  // Admin count mismatch (DB direct vs WP API — bypasses wp-compat style hooks)
+  const dbCountResult = await tools.invoke('wp_eval', {
+    site: sandboxName,
+    code: `
+      global $wpdb;
+      $count = $wpdb->get_var("SELECT COUNT(DISTINCT u.ID) FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'");
+      $wpCount = count(get_users(['role' => 'administrator']));
+      return json_encode(['db' => (int)$count, 'wp' => (int)$wpCount]);
+    `,
+  });
+  let adminMismatch = false;
+  try {
+    const counts = JSON.parse(dbCountResult || '{}');
+    if (counts.db && counts.wp && counts.db !== counts.wp) {
+      adminMismatch = true;
+      fsSignals.push({
+        id: 'FS-MISMATCH', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `Admin count mismatch: ${counts.db} in DB vs ${counts.wp} visible via WordPress`,
+        detail: `Direct DB query found ${counts.db} admins but WordPress reports ${counts.wp}. A plugin is hiding ${counts.db - counts.wp} account(s).`,
+        fix: "The wp-compat backdoor plugin hooks WordPress to hide accounts. Delete wp-compat first, then audit all admin accounts.",
+      });
+    }
+  } catch {}
+
+  log.info(`[Tier 2] Filesystem scan complete: ${fsSignals.length} finding(s)`);
+
+  // LLM synthesis (Task 8) — runs after filesystem checks
+  await llmSynthesis(install, tier1Signals, fsSignals, tools, ai, log, sandboxName);
+
+  return { filesystemSignals: fsSignals, adminMismatch, sandboxName };
+}
+
+// LLM synthesis stub — implemented in Task 8
+async function llmSynthesis(install, tier1Signals, fsSignals, tools, ai, log, sandboxName) {
+  // No-op in Task 7; Task 8 will add LLM-assisted triage summary
+}
