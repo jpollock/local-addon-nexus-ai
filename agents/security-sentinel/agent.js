@@ -159,7 +159,7 @@ module.exports = {
   tools: [
     'fleet_sql', 'wpe_site_deep_refresh', 'wp_user_list',
     'local_create_site', 'local_wpe_pull', 'local_wpe_push',
-    'compare_sites', 'wp_plugin_list', 'wp_eval',
+    'local_operation_status', 'compare_sites', 'wp_plugin_list', 'wp_eval',
   ],
 
   async run({ event, tools, ai, log, state }) {
@@ -514,6 +514,28 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
     remote_install_id: install.id,
     include_database:  true,
   });
+
+  // local_wpe_pull is async — poll every 20s for status: completed or failed.
+  // "running normally, no tracked operation" = site is idle, NOT a completion signal.
+  log.info(`[Tier 2] Pull initiated. Polling every 20s for completion...`);
+  let pullDone = false;
+  for (let i = 0; i < 30; i++) { // max 10 minutes (30 × 20s)
+    await new Promise(r => setTimeout(r, 20000));
+    try {
+      const status = await tools.invoke('local_operation_status', { site: sandboxName });
+      const statusStr = String(status);
+      log.info(`[Tier 2] Poll ${i + 1}/30: ${statusStr.slice(0, 120)}`);
+      if (statusStr.includes('completed')) { pullDone = true; break; }
+      if (statusStr.includes('failed')) {
+        log.error(`[Tier 2] Pull failed for ${install.name}: ${statusStr.slice(0, 200)}`);
+        return;
+      }
+      // 'in_progress' or 'no tracked operation' (still starting) — keep polling
+    } catch (err) {
+      log.warn(`[Tier 2] Poll error: ${err.message}`);
+    }
+  }
+  if (!pullDone) { log.warn(`[Tier 2] Pull timed out after 10 minutes for ${install.name}`); return; }
 
   log.info(`[Tier 2] Sandbox ready. Running filesystem checks...`);
 

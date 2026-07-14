@@ -228,7 +228,27 @@ export async function handleAgentStatus(
  *
  * @throws if the GQL call fails, the agent is not found, or the agent run fails
  */
-export async function handleAgentRun(name: string, gql: GqlFn = defaultGql): Promise<void> {
+export async function handleAgentRun(
+  name: string,
+  opts: { install?: string } = {},
+  gql: GqlFn = defaultGql,
+): Promise<void> {
+  if (opts.install) {
+    // Scope the run to a specific WPE install by emitting wpe:sync.completed
+    // Look up the siteId from fleet_sql
+    const fleetData = await gql<{ fleetSql: { rows: Array<{ id: string; name: string }> } }>(
+      `query { fleetSql(query: "SELECT id, name FROM sites WHERE source = 'wpe' AND name = '${opts.install}'") { rows { id name } } }`,
+    ).catch(() => null);
+    const siteId = (fleetData as any)?.fleetSql?.rows?.[0]?.id
+      ?? `wpe-${opts.install}`; // fallback: caller may pass the UUID directly
+
+    const payload = JSON.stringify({ siteId, installName: opts.install, installId: siteId });
+    await handleAgentEmit('wpe:sync.completed', { payload }, gql);
+    console.log(`✓ Triggered ${name} scoped to install "${opts.install}" (event: wpe:sync.completed)`);
+    console.log(`  Follow logs: nexus agent logs ${name} --follow`);
+    return;
+  }
+
   const data = await gql<{ agentRun: AgentRunResult }>(
     `
     mutation AgentRun($name: String!) {
@@ -651,9 +671,10 @@ agentCommand
 agentCommand
   .command('run <name>')
   .description('Manually trigger an agent by name')
-  .action(async (name: string) => {
+  .option('--install <name>', 'Scope run to a specific WPE install (emits wpe:sync.completed)')
+  .action(async (name: string, opts: { install?: string }) => {
     try {
-      await handleAgentRun(name);
+      await handleAgentRun(name, opts);
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
