@@ -531,27 +531,36 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
     return;
   }
 
-  // local_wpe_pull is async — poll every 20s for status: completed or failed.
-  // "running normally, no tracked operation" = site is idle, NOT a completion signal.
+  // local_wpe_pull is async — poll every 20s.
+  // The operation tracker briefly shows "completed" then clears to null (no tracked operation).
+  // Strategy: wait until we see in_progress, then treat the next non-in_progress as done.
   log.info(`[Tier 2] Pull initiated. Polling every 20s for completion...`);
   let pullDone = false;
+  let sawInProgress = false;
   for (let i = 0; i < 30; i++) { // max 10 minutes (30 × 20s)
     await new Promise(r => setTimeout(r, 20000));
     try {
       const status = await tools.invoke('local_operation_status', { site: sandboxName });
-      const statusStr = String(status);
-      log.info(`[Tier 2] Poll ${i + 1}/30: ${statusStr.slice(0, 120)}`);
-      if (statusStr.includes('completed')) { pullDone = true; break; }
+      const statusStr = typeof status === 'string' ? status : JSON.stringify(status);
+      log.info(`[Tier 2] Poll ${i + 1}/30: ${statusStr.slice(0, 200)}`);
       if (statusStr.includes('failed')) {
-        log.error(`[Tier 2] Pull failed for ${install.name}: ${statusStr.slice(0, 200)}`);
+        log.error(`[Tier 2] Pull failed for ${install.name}`);
         return;
       }
-      // 'in_progress' or 'no tracked operation' (still starting) — keep polling
+      if (statusStr.includes('in_progress')) {
+        sawInProgress = true;
+      } else if (statusStr.includes('completed')) {
+        pullDone = true; break;
+      } else if (sawInProgress) {
+        // Transitioned from in_progress to no-operation — pull finished
+        pullDone = true; break;
+      }
+      // Haven't seen in_progress yet (pull still registering) — keep polling
     } catch (err) {
       log.warn(`[Tier 2] Poll error: ${err.message}`);
     }
   }
-  if (!pullDone) { log.warn(`[Tier 2] Pull timed out after 10 minutes for ${install.name}`); return; }
+  if (!pullDone) { log.warn(`[Tier 2] Pull timed out for ${install.name}`); return; }
 
   log.info(`[Tier 2] Sandbox ready. Running filesystem checks...`);
 
