@@ -5166,7 +5166,7 @@ export function createResolvers(context: ResolverContext) {
       // Agent Platform — agentReload (Task 8)
       // ======================================================================
 
-      agentReload: async (_: unknown, __: unknown, { services }: ResolverContext): Promise<boolean> => {
+      agentReload: async (_: unknown, __: unknown, _ctx: unknown): Promise<boolean> => {
         if (services.agentReload) {
           await services.agentReload();
         }
@@ -5214,7 +5214,7 @@ export function createResolvers(context: ResolverContext) {
         return allLines.slice(-(lines ?? 50));
       },
 
-      agentStatus: (_: unknown, __: unknown, { services }: ResolverContext): AgentStatusType[] => {
+      agentStatus: (_: unknown, __: unknown, _ctx: unknown): AgentStatusType[] => {
         const registry = services.agentRegistry;
         const store = services.agentStateStore;
         if (!registry) return [];
