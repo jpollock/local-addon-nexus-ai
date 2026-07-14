@@ -133,4 +133,62 @@ describe('security-sentinel', () => {
       expect(signal.severity).toBe('high');
     });
   });
+
+  describe('llmUserAudit', () => {
+    const { llmUserAudit } = require('../../../../agents/security-sentinel/agent')._test;
+
+    it('returns empty signals for clearly legitimate usernames', async () => {
+      const fakeAi = { run: jest.fn().mockResolvedValue('These usernames all appear legitimate.') };
+      const users = [{ username: 'jeremy', email: 'j@wpengine.com' }];
+      const result = await llmUserAudit(users, fakeAi);
+      expect(result.signals).toHaveLength(0);
+    });
+
+    it('returns a critical signal when LLM flags synthetic usernames', async () => {
+      const fakeAi = { run: jest.fn().mockResolvedValue('SUSPICIOUS: admin_MT6ZqT appears programmatically generated; oxhuhafz is a random string.') };
+      const users = [
+        { username: 'admin_MT6ZqT', email: '' },
+        { username: 'oxhuhafz', email: '' },
+      ];
+      const result = await llmUserAudit(users, fakeAi);
+      expect(result.signals.length).toBeGreaterThan(0);
+      expect(result.signals[0].severity).toBe('critical');
+      expect(result.signals[0].id).toBe('LLM-USER-01');
+    });
+
+    it('calls ai.run with the username list', async () => {
+      const fakeAi = { run: jest.fn().mockResolvedValue('Looks fine.') };
+      const users = [{ username: 'testuser', email: 't@t.com' }];
+      await llmUserAudit(users, fakeAi);
+      expect(fakeAi.run).toHaveBeenCalledWith(expect.stringContaining('testuser'));
+    });
+  });
+
+  describe('runExposureChecks', () => {
+    const { runExposureChecks } = require('../../../../agents/security-sentinel/agent')._test;
+
+    it('EXP-03: flags missing DISALLOW_FILE_EDIT on production', () => {
+      const install = { name: 'test', environment: 'production', settings: { DISALLOW_FILE_EDIT: 'false' }, plugins: [] };
+      const signal = runExposureChecks(install).find(s => s.id === 'EXP-03');
+      expect(signal).toBeDefined();
+      expect(signal.severity).toBe('medium');
+    });
+
+    it('EXP-03: does not flag when DISALLOW_FILE_EDIT is true', () => {
+      const install = { name: 'test', environment: 'production', settings: { DISALLOW_FILE_EDIT: '1' }, plugins: [] };
+      expect(runExposureChecks(install).find(s => s.id === 'EXP-03')).toBeUndefined();
+    });
+
+    it('EXP-05: flags WP_DEBUG true on production', () => {
+      const install = { name: 'test', environment: 'production', settings: { WP_DEBUG: 'true' }, plugins: [] };
+      const signal = runExposureChecks(install).find(s => s.id === 'EXP-05');
+      expect(signal).toBeDefined();
+      expect(signal.severity).toBe('medium');
+    });
+
+    it('EXP-05: does not flag on non-production environments', () => {
+      const install = { name: 'test', environment: 'development', settings: { WP_DEBUG: 'true' }, plugins: [] };
+      expect(runExposureChecks(install).find(s => s.id === 'EXP-05')).toBeUndefined();
+    });
+  });
 });

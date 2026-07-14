@@ -152,7 +152,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -240,8 +240,95 @@ function runAbsoluteChecks(install) {
 
   return signals;
 }
-function runExposureChecks(install) { return []; }
-async function llmUserAudit(adminUsers, ai) { return { signals: [] }; }
+const KNOWN_SECURITY_PLUGINS = new Set([
+  'wordfence', 'all-in-one-wp-security', 'ithemes-security',
+  'better-wp-security', 'disable-xml-rpc', 'disable-json-api',
+  'wpengine-security-auditor',
+]);
+
+function runExposureChecks(install) {
+  const signals = [];
+  const { settings, plugins, environment } = install;
+  const isProduction = environment === 'production';
+
+  if (!isProduction) return signals; // Exposure checks only matter on production
+
+  // EXP-03: Theme/plugin editor enabled (DISALLOW_FILE_EDIT not set or false)
+  const fileEditValue = settings['DISALLOW_FILE_EDIT'];
+  const fileEditDisabled = fileEditValue === '1' || fileEditValue === 'true';
+  if (!fileEditDisabled) {
+    signals.push({
+      id: 'EXP-03', severity: 'medium', category: 'pre-breach',
+      installName: install.name,
+      title: 'Theme and plugin file editor is enabled',
+      detail: 'DISALLOW_FILE_EDIT is not set to true. A compromised admin account can inject PHP code directly from WP Admin.',
+      fix: "Add `define('DISALLOW_FILE_EDIT', true);` to wp-config.php",
+    });
+  }
+
+  // EXP-05: WP_DEBUG enabled on production
+  const wpDebug = settings['WP_DEBUG'];
+  if (wpDebug === 'true' || wpDebug === '1') {
+    signals.push({
+      id: 'EXP-05', severity: 'medium', category: 'pre-breach',
+      installName: install.name,
+      title: 'WP_DEBUG is enabled on production',
+      detail: 'Debug mode exposes PHP errors, file paths, database queries, and internal architecture to page visitors.',
+      fix: "Set `define('WP_DEBUG', false);` in wp-config.php",
+    });
+  }
+
+  // EXP-01 heuristic: user enumeration likely enabled if no known protection
+  const hasProtection = plugins.some(p => KNOWN_SECURITY_PLUGINS.has(p.slug) && String(p.is_active) === '1');
+  if (!hasProtection) {
+    signals.push({
+      id: 'EXP-01', severity: 'high', category: 'pre-breach',
+      installName: install.name,
+      title: 'User enumeration likely enabled (no security plugin detected)',
+      detail: 'No known security plugin is active. The REST API likely exposes usernames unauthenticated via /wp-json/wp/v2/users, enabling targeted brute-force attacks.',
+      fix: 'Install a security plugin that blocks user enumeration, or add a filter to require authentication on the /users REST endpoint.',
+    });
+  }
+
+  return signals;
+}
+
+async function llmUserAudit(adminUsers, ai) {
+  if (!adminUsers || adminUsers.length === 0) return { signals: [] };
+
+  const userList = adminUsers.map(u => `  - username: ${u.username}, email: ${u.email || '(none)'}`).join('\n');
+
+  const response = await ai.run(`You are a WordPress security analyst. Examine these administrator usernames and identify any that appear to be attacker-created accounts.
+
+Administrator accounts:
+${userList}
+
+Attacker-created accounts typically look like:
+- Programmatically generated suffixes: admin_MT6ZqT, admin_ABC123
+- Random strings: oxhuhafz, xkzpqrst
+- Misspellings of system words: adminbockup (backup), adminsysem (system)
+- Generic placeholders with no legitimate purpose
+
+If you find suspicious usernames, start your response with "SUSPICIOUS:" followed by the usernames and why.
+If all usernames appear legitimate, start with "CLEAN:".`);
+
+  const suspicious = response.startsWith('SUSPICIOUS:');
+
+  if (!suspicious) return { signals: [] };
+
+  return {
+    signals: [{
+      id: 'LLM-USER-01',
+      severity: 'critical',
+      category: 'active-compromise',
+      installName: adminUsers[0]?.installName ?? 'unknown',
+      title: 'LLM identified synthetic/attacker-pattern administrator usernames',
+      detail: response.slice('SUSPICIOUS:'.length).trim(),
+      fix: 'Delete each flagged administrator account after verifying it is not legitimate: wp user delete <id> --reassign=<legitimate-admin-id>',
+    }],
+  };
+}
+
 function loadBaseline(installId, state) { return null; }
 function runRelativeChecks(install, baseline) { return []; }
 function storeBaseline(install, state) {}
