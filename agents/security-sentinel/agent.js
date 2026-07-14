@@ -152,11 +152,94 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks },
 };
 
-// Stubs — replaced in each task below
-function runAbsoluteChecks(install) { return []; }
+// ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
+
+const FILE_MANAGER_SLUGS = new Set([
+  'fileorganizer', 'filester', 'file-manager-advanced',
+  'wp-file-manager', 'wp-filemanager',
+]);
+
+const KNOWN_BACKDOOR_SLUGS = new Set(['wp-compat']);
+
+function runAbsoluteChecks(install) {
+  const signals = [];
+  const { adminUsers, plugins, settings, postCount } = install;
+
+  // ABS-01: 'admin' username
+  if (adminUsers.some(u => u.username === 'admin')) {
+    signals.push({
+      id: 'ABS-01', severity: 'high', category: 'active-compromise',
+      installName: install.name,
+      title: "Default 'admin' username exists",
+      detail: "An administrator account with username 'admin' was found. This is the most commonly brute-forced username.",
+      fix: "Create a new administrator account with a unique username, reassign content, then delete the 'admin' account.",
+    });
+  }
+
+  // ABS-02: Admin count > 3 on a small site (< 100 posts)
+  if (adminUsers.length > 3 && postCount < 100) {
+    signals.push({
+      id: 'ABS-02', severity: 'high', category: 'active-compromise',
+      installName: install.name,
+      title: `Excessive administrators (${adminUsers.length}) on a ${postCount}-post site`,
+      detail: `${adminUsers.length} administrator accounts on a site with only ${postCount} posts is anomalous.`,
+      fix: 'Audit each administrator account. Remove or demote accounts that should not have full access.',
+    });
+  }
+
+  // ABS-03: @example.com email on admin
+  if (adminUsers.some(u => u.email && u.email.toLowerCase().endsWith('@example.com'))) {
+    const matched = adminUsers.filter(u => u.email && u.email.toLowerCase().endsWith('@example.com'));
+    signals.push({
+      id: 'ABS-03', severity: 'critical', category: 'active-compromise',
+      installName: install.name,
+      title: `Admin account with @example.com email: ${matched.map(u => u.username).join(', ')}`,
+      detail: "@example.com is the WordPress installer placeholder email. No legitimate admin retains it.",
+      fix: 'This account was likely created by the WordPress installer or an attacker. Verify and delete if not legitimate.',
+    });
+  }
+
+  // ABS-04: Active file manager plugins
+  const activeFileManagers = plugins.filter(p => FILE_MANAGER_SLUGS.has(p.slug) && String(p.is_active) === '1');
+  if (activeFileManagers.length > 0) {
+    signals.push({
+      id: 'ABS-04', severity: 'high', category: 'active-compromise',
+      installName: install.name,
+      title: `File manager plugin(s) active: ${activeFileManagers.map(p => p.slug).join(', ')}`,
+      detail: 'File manager plugins provide full filesystem write access from WP Admin. They are the primary mechanism for deploying webshells.',
+      fix: 'Deactivate and delete these plugins unless actively required. Filesystem access should go through SFTP/SSH.',
+    });
+  }
+
+  // ABS-05: Known backdoor plugin slugs
+  const backdoors = plugins.filter(p => KNOWN_BACKDOOR_SLUGS.has(p.slug));
+  if (backdoors.length > 0) {
+    signals.push({
+      id: 'ABS-05', severity: 'critical', category: 'active-compromise',
+      installName: install.name,
+      title: `Known backdoor plugin detected: ${backdoors.map(p => p.slug).join(', ')}`,
+      detail: `Plugin slug(s) match known malware from the June 2026 incident: ${backdoors.map(p => p.slug).join(', ')}`,
+      fix: 'Delete immediately via SSH: wp plugin delete <slug>. Do not deactivate — delete.',
+    });
+  }
+
+  // ABS-06: Default auth salts
+  const settingsValues = Object.values(settings);
+  if (settingsValues.some(v => typeof v === 'string' && v.includes('put your unique phrase here'))) {
+    signals.push({
+      id: 'ABS-06', severity: 'high', category: 'misconfiguration',
+      installName: install.name,
+      title: 'Default WordPress authentication salts in use',
+      detail: "Auth salts still contain the placeholder 'put your unique phrase here'. Session cookies can be forged.",
+      fix: 'Run: wp config shuffle-salts. All users will be logged out.',
+    });
+  }
+
+  return signals;
+}
 function runExposureChecks(install) { return []; }
 async function llmUserAudit(adminUsers, ai) { return { signals: [] }; }
 function loadBaseline(installId, state) { return null; }

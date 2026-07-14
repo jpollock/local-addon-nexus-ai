@@ -65,4 +65,72 @@ describe('security-sentinel', () => {
     expect(typeof agent.run).toBe('function');
     expect(agent._test).toBeTruthy();
   });
+
+  describe('runAbsoluteChecks', () => {
+    const { runAbsoluteChecks } = require('../../../../agents/security-sentinel/agent')._test;
+
+    const baseInstall = {
+      id: 'wpe-test', name: 'testsite', environment: 'production',
+      postCount: 16, adminUsers: [], plugins: [], settings: {},
+    };
+
+    it('ABS-01: flags admin username', () => {
+      const install = { ...baseInstall, adminUsers: [{ username: 'admin', email: 'j@example.com', roles: '["administrator"]' }] };
+      const signals = runAbsoluteChecks(install);
+      expect(signals.find(s => s.id === 'ABS-01')).toBeDefined();
+      expect(signals.find(s => s.id === 'ABS-01').severity).toBe('high');
+    });
+
+    it('ABS-01: does not flag non-admin username', () => {
+      const install = { ...baseInstall, adminUsers: [{ username: 'jeremy', email: 'j@wpengine.com', roles: '["administrator"]' }] };
+      expect(runAbsoluteChecks(install).find(s => s.id === 'ABS-01')).toBeUndefined();
+    });
+
+    it('ABS-02: flags admin count > 3 on small site', () => {
+      const admins = ['a','b','c','d'].map(u => ({ username: u, email: `${u}@x.com`, roles: '["administrator"]' }));
+      const install = { ...baseInstall, adminUsers: admins };
+      const signal = runAbsoluteChecks(install).find(s => s.id === 'ABS-02');
+      expect(signal).toBeDefined();
+      expect(signal.severity).toBe('high');
+    });
+
+    it('ABS-02: does not flag 2 admins on small site', () => {
+      const admins = ['a','b'].map(u => ({ username: u, email: `${u}@x.com`, roles: '["administrator"]' }));
+      const install = { ...baseInstall, adminUsers: admins };
+      expect(runAbsoluteChecks(install).find(s => s.id === 'ABS-02')).toBeUndefined();
+    });
+
+    it('ABS-03: flags @example.com email on admin', () => {
+      const install = { ...baseInstall, adminUsers: [{ username: 'admin', email: 'admin@example.com', roles: '["administrator"]' }] };
+      const signal = runAbsoluteChecks(install).find(s => s.id === 'ABS-03');
+      expect(signal).toBeDefined();
+      expect(signal.severity).toBe('critical');
+    });
+
+    it('ABS-04: flags active file manager plugin', () => {
+      const install = { ...baseInstall, plugins: [{ slug: 'fileorganizer', is_active: '1' }] };
+      const signal = runAbsoluteChecks(install).find(s => s.id === 'ABS-04');
+      expect(signal).toBeDefined();
+      expect(signal.severity).toBe('high');
+    });
+
+    it('ABS-04: does not flag inactive file manager', () => {
+      const install = { ...baseInstall, plugins: [{ slug: 'fileorganizer', is_active: '0' }] };
+      expect(runAbsoluteChecks(install).find(s => s.id === 'ABS-04')).toBeUndefined();
+    });
+
+    it('ABS-05: flags wp-compat slug', () => {
+      const install = { ...baseInstall, plugins: [{ slug: 'wp-compat', is_active: '1' }] };
+      const signal = runAbsoluteChecks(install).find(s => s.id === 'ABS-05');
+      expect(signal).toBeDefined();
+      expect(signal.severity).toBe('critical');
+    });
+
+    it('ABS-06: flags default auth salts', () => {
+      const install = { ...baseInstall, settings: { AUTH_KEY: 'put your unique phrase here' } };
+      const signal = runAbsoluteChecks(install).find(s => s.id === 'ABS-06');
+      expect(signal).toBeDefined();
+      expect(signal.severity).toBe('high');
+    });
+  });
 });
