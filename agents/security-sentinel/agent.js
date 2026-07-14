@@ -1,5 +1,19 @@
 'use strict';
 
+// ─── Tool result extractor ────────────────────────────────────────────────────
+// tools.invoke() may return a string, a plain object, or an MCP content wrapper.
+// This helper always extracts the raw text.
+function extractResult(result) {
+  if (result === null || result === undefined) return '';
+  if (typeof result === 'string') return result;
+  // MCP content array: { content: [{ type: 'text', text: '...' }] }
+  if (Array.isArray(result?.content)) return result.content.map(c => c.text || '').join('');
+  if (typeof result?.content === 'string') return result.content;
+  if (typeof result?.text === 'string') return result.text;
+  // Plain object (e.g. local_operation_status returns a JSON object directly)
+  return JSON.stringify(result);
+}
+
 // ─── Signal schema ───────────────────────────────────────────────────────────
 // severity: 'critical' | 'high' | 'medium' | 'low'
 // category: 'active-compromise' | 'pre-breach' | 'misconfiguration'
@@ -517,16 +531,16 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
 
   // Create isolated sandbox — uses remote_install_id (install name slug), NOT a formal link
   const createResult = await tools.invoke('local_create_site', { name: sandboxName });
-  log.info(`[Tier 2] Sandbox created: ${String(createResult).slice(0, 100)}`);
+  log.info(`[Tier 2] Sandbox created: ${extractResult(createResult).slice(0, 100)}`);
 
   const pullResult = await tools.invoke('local_wpe_pull', {
     site:              sandboxName,
     remote_install_id: install.name, // graph id has 'wpe-' prefix; CAPI lookup accepts install name slug
     include_database:  true,
   });
-  const pullResultStr = String(pullResult);
+  const pullResultStr = extractResult(pullResult);
   log.info(`[Tier 2] Pull response: ${pullResultStr.slice(0, 200)}`);
-  if (pullResultStr.includes('error') || pullResultStr.includes('not found') || pullResultStr.includes('Error')) {
+  if (pullResultStr.toLowerCase().includes('error') || pullResultStr.includes('not found')) {
     log.error(`[Tier 2] Pull failed to start for ${install.name}: ${pullResultStr.slice(0, 300)}`);
     return;
   }
@@ -547,12 +561,14 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
         log.error(`[Tier 2] Pull failed for ${install.name}`);
         return;
       }
-      if (statusStr.includes('in_progress')) {
+      if (statusStr.includes('"active"') || statusStr.includes('in_progress') || statusStr.includes('pulling')) {
         sawInProgress = true;
-      } else if (statusStr.includes('completed')) {
+        log.info(`[Tier 2] Pull in progress (${JSON.parse(statusStr).duration_seconds ?? '?'}s elapsed)`);
+      } else if (statusStr.includes('completed') || statusStr.includes('"done"') || statusStr.includes('"complete"')) {
         pullDone = true; break;
       } else if (sawInProgress) {
-        // Transitioned from in_progress to no-operation — pull finished
+        // Transitioned from active/pulling to no-operation — pull finished
+        log.info(`[Tier 2] Pull appears complete (operation cleared)`);
         pullDone = true; break;
       }
       // Haven't seen in_progress yet (pull still registering) — keep polling
@@ -588,7 +604,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
     `,
   });
   try {
-    const muFiles = JSON.parse(muPluginResult || '[]');
+    const muFiles = JSON.parse(extractResult(muPluginResult) || '[]');
     if (muFiles.length > 0) {
       fsSignals.push({
         id: 'FS-01', severity: 'critical', category: 'active-compromise',
@@ -637,7 +653,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
     `,
   });
   try {
-    const obfFiles = JSON.parse(obfuscationResult || '[]');
+    const obfFiles = JSON.parse(extractResult(obfuscationResult) || '[]');
     if (obfFiles.length > 0) {
       fsSignals.push({
         id: 'FS-02', severity: 'critical', category: 'active-compromise',
@@ -665,7 +681,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
     `,
   });
   try {
-    const phpUploads = JSON.parse(uploadsResult || '[]');
+    const phpUploads = JSON.parse(extractResult(uploadsResult) || '[]');
     if (phpUploads.length > 0) {
       fsSignals.push({
         id: 'FS-04', severity: 'critical', category: 'active-compromise',
@@ -689,7 +705,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
   });
   let adminMismatch = false;
   try {
-    const counts = JSON.parse(dbCountResult || '{}');
+    const counts = JSON.parse(extractResult(dbCountResult) || '{}');
     if (counts.db && counts.wp && counts.db !== counts.wp) {
       adminMismatch = true;
       fsSignals.push({
