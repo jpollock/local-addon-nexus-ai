@@ -180,6 +180,8 @@ Tier 2 triggers when any install has:
 
 The agent never pulls into an existing linked local copy (`the-awful-pm`, etc.). That copy may represent a clean pre-breach state and must be preserved. The sandbox is disposable — delete after push or after user dismisses findings.
 
+**Important — Local data model constraint:** Local enforces a soft one-to-one between local sites and WPE installs via `.find()` in `ConnectHostAdapterRemoteSite.ts`. Once a local site is linked to a WPE install, the Connect UI hides the "Pull to Local" button for that install, making a second formal link invisible. The sentinel sidesteps this entirely: the sandbox pull uses `remote_install_id` directly, not a formal link. No `hostConnections` entry is created; the sandbox does not appear in the Connect UI and does not interfere with the user's real linked site.
+
 ### Filesystem checks (Tier 2 only — run inside Local sandbox)
 
 | ID | Check | Severity |
@@ -242,7 +244,7 @@ Agent prepares and executes in the isolated sandbox:
 
 ### Step 2: Reconcile against existing local copy
 
-Before pushing, check whether a local site already linked to this WPE install exists. If yes, run `compare_sites(sandbox, existingLocalSite)` and present the diff:
+Before pushing, check whether a local site is formally linked to this WPE install. Query `local_list_sites` and check `hostConnections` (or `fleet_sql` on `settings_json`) for the WPE install's remoteSiteId. If a linked local site exists, run `compare_sites(sandbox, existingLocalSite)` and present the diff:
 
 ```
 Content in the-awful-pm not in sandbox (would be lost if not merged):
@@ -341,4 +343,4 @@ Passing criteria:
 2. **Tier 2 pull cost gate** — ≥1 Critical fires a pull automatically; recommend adding a pull-size estimate check first for installs > 2GB
 3. **Baseline cold-start on already-compromised fleet** — absolute and exposure checks catch the major indicators; known gap is novel malware with no matching slug
 4. **Pre-hack backup as test fixture** — import the pre-June-17 backup of `theawfulproductmanager.com` as a local site; run sentinel against it to confirm clean baseline, then against `theawfulpmtest` to confirm detection
-5. **Multiple local sites linked to same WPE install** — needs confirmation that Local supports this before the sandbox creation pattern can be relied upon
+5. ~~**Multiple local sites linked to same WPE install**~~ — **Resolved.** Local enforces soft one-to-one via `.find()` in `ConnectHostAdapterRemoteSite.ts`. Sentinel uses `remote_install_id` directly on a non-linked sandbox site — no conflict with the existing linked site, no UI interference.
