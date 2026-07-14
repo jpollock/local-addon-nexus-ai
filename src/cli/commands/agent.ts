@@ -234,17 +234,11 @@ export async function handleAgentRun(
   gql: GqlFn = defaultGql,
 ): Promise<void> {
   if (opts.install) {
-    // Scope the run to a specific WPE install by emitting wpe:sync.completed
-    // Look up the siteId from fleet_sql
-    const fleetData = await gql<{ fleetSql: { rows: Array<{ id: string; name: string }> } }>(
-      `query { fleetSql(query: "SELECT id, name FROM sites WHERE source = 'wpe' AND name = '${opts.install}'") { rows { id name } } }`,
-    ).catch(() => null);
-    const siteId = (fleetData as any)?.fleetSql?.rows?.[0]?.id
-      ?? `wpe-${opts.install}`; // fallback: caller may pass the UUID directly
-
-    const payload = JSON.stringify({ siteId, installName: opts.install, installId: siteId });
+    // Scope the run to a specific WPE install by emitting wpe:sync.completed.
+    // Pass installName — the agent resolves the siteId via its own fleet_sql call.
+    const payload = JSON.stringify({ installName: opts.install });
     await handleAgentEmit('wpe:sync.completed', { payload }, gql);
-    console.log(`✓ Triggered ${name} scoped to install "${opts.install}" (event: wpe:sync.completed)`);
+    console.log(`✓ Triggered ${name} scoped to install "${opts.install}"`);
     console.log(`  Follow logs: nexus agent logs ${name} --follow`);
     return;
   }

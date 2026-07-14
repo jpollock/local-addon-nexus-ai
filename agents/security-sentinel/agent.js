@@ -6,11 +6,14 @@
 
 // ─── Fleet data collection ────────────────────────────────────────────────────
 
-async function collectFleetData(tools, scopeInstallId) {
+async function collectFleetData(tools, scopeInstallId, scopeInstallName) {
   // Get all WPE installs (or just the one that triggered the event)
-  const siteFilter = scopeInstallId
-    ? `AND s.id = '${scopeInstallId}'`
-    : '';
+  let siteFilter = '';
+  if (scopeInstallId) {
+    siteFilter = `AND s.id = '${scopeInstallId}'`;
+  } else if (scopeInstallName) {
+    siteFilter = `AND s.name = '${scopeInstallName}'`;
+  }
 
   const sitesResult = await tools.invoke('fleet_sql', {
     query: `
@@ -81,11 +84,14 @@ function parseSqlResult(result) {
 // ─── Scope determination ──────────────────────────────────────────────────────
 
 function getScanScope(event) {
-  if (!event) return { installId: null }; // cron = sweep all
+  if (!event) return { installId: null, installName: null };
   if (event.namespace === 'wpe' && event.type === 'sync.completed') {
-    return { installId: event.payload?.siteId ?? null };
+    return {
+      installId:   event.payload?.siteId ?? null,
+      installName: event.payload?.installName ?? null,
+    };
   }
-  return { installId: null };
+  return { installId: null, installName: null };
 }
 
 // ─── Fleet correlation (Task 6) ───────────────────────────────────────────────
@@ -164,9 +170,10 @@ module.exports = {
 
   async run({ event, tools, ai, log, state }) {
     const scope = getScanScope(event);
-    log.info(`security-sentinel: starting sweep${scope.installId ? ` for ${scope.installId}` : ' (fleet-wide)'}`);
+    const scopeLabel = scope.installId || scope.installName || 'fleet-wide';
+    log.info(`security-sentinel: starting sweep for ${scopeLabel}`);
 
-    const installs = await collectFleetData(tools, scope.installId);
+    const installs = await collectFleetData(tools, scope.installId, scope.installName);
     log.info(`security-sentinel: ${installs.length} install(s) to check`);
 
     const allInstallResults = [];
