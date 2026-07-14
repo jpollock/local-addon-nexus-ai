@@ -21,6 +21,7 @@
 
 import type { GraphService } from '../events/GraphService';
 import type { LocalServicesBridge } from '../mcp/local-services-bridge';
+import type { AgentEventBus } from '../agent-event-bus/AgentEventBus';
 
 export interface WpeRefreshSchedulerOptions {
   graphService: GraphService;
@@ -46,6 +47,7 @@ export interface WpeRefreshSchedulerOptions {
     warn: (...args: any[]) => void;
     error: (...args: any[]) => void;
   };
+  agentEventBus?: AgentEventBus;
 }
 
 export interface WpeRefreshResult {
@@ -64,6 +66,7 @@ export class WpeRefreshScheduler {
   private currentStalenessThresholdMs: number;
   private readonly getAccountFilter: () => string[] | null | undefined;
   private readonly logger: WpeRefreshSchedulerOptions['logger'];
+  private readonly agentEventBus?: AgentEventBus;
 
   private timer: ReturnType<typeof setInterval> | null = null;
   private columnsEnsured = false;
@@ -76,6 +79,7 @@ export class WpeRefreshScheduler {
     this.currentStalenessThresholdMs = options.stalenessThresholdMs ?? this.intervalMs;
     this.getAccountFilter = options.getAccountFilter ?? (() => null);
     this.logger = options.logger;
+    this.agentEventBus = options.agentEventBus;
   }
 
   /**
@@ -241,6 +245,15 @@ export class WpeRefreshScheduler {
       try {
         await this.refreshInstall(site.name, site.id);
         result.scanned++;
+        // Notify agents that fresh graph data is available for this install
+        this.agentEventBus?.publish({
+          namespace: 'wpe',
+          type:      'sync.completed',
+          key:       'wpe:sync.completed',
+          siteId:    site.id,
+          payload:   { installName: site.name, installId: site.id, siteId: site.id },
+          createdAt: Date.now(),
+        });
       } catch (err: any) {
         result.failed++;
         this.logger.error(
@@ -286,6 +299,21 @@ export class WpeRefreshScheduler {
         .catch(() => ({ success: false, stdout: null }));
       if (r.success && r.stdout?.trim()) wpSettingsMap[mapKey] = r.stdout.trim();
     }
+
+    // Check wp-config constants (not options — need 'wp config get')
+    const fileEditResult = await this.localServices
+      .remoteWpCliRun(installName, ['config', 'get', 'DISALLOW_FILE_EDIT'])
+      .catch(() => ({ success: false, stdout: null }));
+    if (fileEditResult.success && fileEditResult.stdout?.trim()) {
+      wpSettingsMap['DISALLOW_FILE_EDIT'] = fileEditResult.stdout.trim();
+    }
+    const wpDebugResult = await this.localServices
+      .remoteWpCliRun(installName, ['config', 'get', 'WP_DEBUG'])
+      .catch(() => ({ success: false, stdout: null }));
+    if (wpDebugResult.success && wpDebugResult.stdout?.trim()) {
+      wpSettingsMap['WP_DEBUG'] = wpDebugResult.stdout.trim();
+    }
+
     const settingsJson = Object.keys(wpSettingsMap).length > 0 ? JSON.stringify(wpSettingsMap) : null;
 
     // Run all WP-CLI commands in parallel

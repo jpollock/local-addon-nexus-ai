@@ -737,6 +737,7 @@ export default function main(context: any): void {
         graphService,
         localServices: localServicesBridge,
         intervalMs: wpeRefreshHours * 60 * 60 * 1000,
+        agentEventBus: nexusServices.agentEventBus,
         getAccountFilter: () => {
           const s = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeAccountFilter?: string[] | null } | null;
           return s?.wpeAccountFilter ?? null;
