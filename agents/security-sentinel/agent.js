@@ -163,60 +163,59 @@ module.exports = {
 
   async run({ event, tools, ai, log, state }) {
     const scope = getScanScope(event);
-    log.info(`security-sentinel: starting sweep${scope.installId ? ` for install ${scope.installId}` : ' (fleet)'}`);
+    log.info(`security-sentinel: starting sweep${scope.installId ? ` for ${scope.installId}` : ' (fleet-wide)'}`);
 
     const installs = await collectFleetData(tools, scope.installId);
-    log.info(`security-sentinel: collected data for ${installs.length} install(s)`);
+    log.info(`security-sentinel: ${installs.length} install(s) to check`);
 
-    // Tier 1, Tier 2, Tier 3 — added in Tasks 3–10
     const allInstallResults = [];
 
     for (const install of installs) {
       const signals = [];
 
-      // Absolute checks (Tasks 3, 4)
+      // Tier 1: Absolute checks
       signals.push(...runAbsoluteChecks(install));
       signals.push(...runExposureChecks(install));
 
-      // LLM-assisted user audit if admin signals present (Task 4)
-      const adminSignals = signals.filter(s => s.id === 'ABS-01' || s.id === 'ABS-02');
-      if (adminSignals.length > 0) {
+      // Phase 1.5: LLM user audit if admin signals present
+      if (signals.some(s => s.id === 'ABS-01' || s.id === 'ABS-02')) {
         const audit = await llmUserAudit(install.adminUsers, ai);
         signals.push(...audit.signals);
       }
 
-      // Relative checks — requires baseline (Task 6)
+      // Relative checks
       const baseline = loadBaseline(install.id, state);
       signals.push(...runRelativeChecks(install, baseline));
 
-      // Capture signals into allInstallResults for fleet correlation
       allInstallResults.push({ install, signals });
 
       const criticalCount = signals.filter(s => s.severity === 'critical').length;
-      const highCount     = signals.filter(s => s.severity === 'high').length;
+      const highCount = signals.filter(s => s.severity === 'high').length;
 
-      if (criticalCount >= 1 || highCount >= 2) {
-        log.warn(`security-sentinel: escalating ${install.name} to Tier 2 (${criticalCount} critical, ${highCount} high)`);
-        await tier2Investigate(install, signals, tools, ai, log);
-      } else if (signals.length === 0) {
+      if (signals.length === 0) {
         storeBaseline(install, state);
-        log.info(`security-sentinel: ${install.name} — clean`);
+        log.info(`security-sentinel: ${install.name} — ✓ clean`);
+      } else if (criticalCount >= 1 || highCount >= 2) {
+        log.warn(`security-sentinel: ${install.name} — ESCALATING to Tier 2 (${criticalCount} critical, ${highCount} high)`);
+        signals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.id}: ${s.title}`));
+        await tier2Investigate(install, signals, tools, ai, log);
+      } else {
+        log.warn(`security-sentinel: ${install.name} — ${signals.length} finding(s):`);
+        signals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.id}: ${s.title}`));
       }
     }
 
-    // Fleet correlation (Task 6)
-
-    const suspiciousSlugsFound = new Set(
-      allInstallResults
-        .flatMap(r => r.signals)
+    // Fleet correlation
+    const suspiciousSlugs = new Set(
+      allInstallResults.flatMap(r => r.signals)
         .filter(s => s.id === 'ABS-05')
-        .map(s => s.title.match(/'([^']+)'/)?.[1])
+        .map(s => { const m = s.title.match(/'([^']+)'/); return m ? m[1] : null; })
         .filter(Boolean)
     );
-    const fleetSignals = runFleetCorrelation(allInstallResults, suspiciousSlugsFound);
+    const fleetSignals = runFleetCorrelation(allInstallResults, suspiciousSlugs);
     if (fleetSignals.length > 0) {
-      log.warn(`security-sentinel: fleet correlation found ${fleetSignals.length} cross-site signal(s)`);
-      fleetSignals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.title}`));
+      log.warn(`security-sentinel: FLEET CORRELATION — ${fleetSignals.length} cross-site signal(s):`);
+      fleetSignals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.id}: ${s.title}`));
     }
 
     log.info('security-sentinel: sweep complete');

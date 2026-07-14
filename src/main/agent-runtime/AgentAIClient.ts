@@ -47,7 +47,8 @@ export class AgentAIClient implements AIClient {
     const tools: ProviderToolDefinition[] = this.toolProvider.getProviderToolDefinitions();
     // TODO: thread an AbortSignal from AgentRunner's timeout Promise.race so that
     // in-flight HTTP requests are cancelled when the agent times out.
-    const signal = undefined as unknown as AbortSignal;
+    // Use a never-aborted signal for now so providers don't throw on signal.aborted.
+    const signal = new AbortController().signal;
 
     for (let turn = 0; turn < maxTurns; turn++) {
       const response = await collectStream(this.provider.streamChat(messages, tools, config, signal));
