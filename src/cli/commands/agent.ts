@@ -737,5 +737,72 @@ agentCommand
     }
   });
 
+agentCommand
+  .command('push <installName>')
+  .description('Push a remediated sandbox to WPE production (reads latest remediation report)')
+  .action(async (installName: string) => {
+    const reportsDir = path.join(
+      os.homedir(),
+      'Library',
+      'Application Support',
+      'Local',
+      'nexus-ai',
+      'agents',
+      'security-sentinel',
+      'reports',
+      installName,
+    );
+
+    if (!fs.existsSync(reportsDir)) {
+      console.error(`No remediation reports found for "${installName}".`);
+      console.error(`Run: nexus agent run security-sentinel --install ${installName}`);
+      process.exit(1);
+      return;
+    }
+
+    // Find the latest report (lexicographic sort — ISO timestamp filenames sort correctly)
+    const reports = fs
+      .readdirSync(reportsDir)
+      .filter((f) => f.endsWith('.md'))
+      .sort();
+
+    if (reports.length === 0) {
+      console.error(`No report files found in ${reportsDir}`);
+      process.exit(1);
+      return;
+    }
+
+    const latestReport = path.join(reportsDir, reports[reports.length - 1]);
+    const content = fs.readFileSync(latestReport, 'utf-8');
+
+    // Check all steps are ✅
+    const stepLines = content.split('\n').filter((l) => l.startsWith('✅') || l.startsWith('❌'));
+    const failedSteps = stepLines.filter((l) => l.startsWith('❌'));
+
+    console.log(`\nLatest report: ${latestReport}\n`);
+
+    if (failedSteps.length > 0) {
+      console.error(`NOT SAFE TO PUSH — ${failedSteps.length} step(s) failed:`);
+      for (const line of failedSteps) {
+        console.error(`  ${line}`);
+      }
+      console.error('\nFix failed steps before pushing.');
+      process.exit(1);
+      return;
+    }
+
+    if (stepLines.length === 0) {
+      console.error('No checklist steps found in report — remediation may not have completed.');
+      process.exit(1);
+      return;
+    }
+
+    console.log(`All ${stepLines.length} remediation step(s) passed. ✅`);
+    console.log(`\nSandbox for "${installName}" is ready to push.`);
+    console.log(`Push via Local Connect UI or run:\n`);
+    console.log(`  nexus mcp  # then use local_wpe_push tool`);
+    console.log(`\nOr find the sandbox name in the report header and push manually.`);
+  });
+
 export { agentCommand };
 export default agentCommand;

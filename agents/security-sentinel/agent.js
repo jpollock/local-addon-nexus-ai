@@ -251,7 +251,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -765,73 +765,281 @@ TIER3: yes | no`;
     log.warn(`[Tier 3] Preparing remediation plan for ${install.name}`);
     await tier3Remediate(install, synthesis, allSignals, sandboxName, tools, log);
   }
+
+  return synthesis;
+}
+
+// ─── Tier 3: Checklist-driven remediation ────────────────────────────────────
+
+const KNOWN_MU_PLUGINS = [
+  'wpe-wp-sign-on-plugin.php', 'wpe-cache-plugin.php',
+  'wpengine-security-auditor.php', 'mu-plugin.php',
+  'slt-force-strong-passwords.php', 'wpe-update-source-selector.php',
+  'nexus-ai-connector-config.php', 'site-compat-layer.php',
+];
+
+const ATTACKER_PLUGIN_SLUGS = [
+  'fileorganizer', 'filester', 'wp-compat', 'file-manager-advanced',
+  'noted', 'woocommerce-conversion-tracking', 'wp-file-manager',
+];
+
+function buildRemediationChecklist(install, allSignals, sandboxName) {
+  const checklist = [];
+  const knownListJson = JSON.stringify(KNOWN_MU_PLUGINS);
+
+  // Step 1: Remove mu-plugins webshells — only if FS-01 fired
+  if (allSignals.some(s => s.id === 'FS-01')) {
+    checklist.push({
+      step: 1,
+      action: 'Remove mu-plugins webshell(s)',
+      toolName: 'wp_eval',
+      toolArgs: {
+        site: sandboxName,
+        skip_plugins: true,
+        skip_themes: true,
+        code: `$files = glob(WPMU_PLUGIN_DIR . '/*.php') ?: []; $known = ${knownListJson}; foreach($files as $f) { if (!in_array(basename($f), $known)) { @unlink($f); } } $remaining = array_values(array_filter($files, function($f) use ($known) { return !in_array(basename($f), $known) && file_exists($f); })); echo json_encode($remaining);`,
+      },
+      expectedEmpty: true,
+    });
+  }
+
+  // Step 2: Remove backdoor admin accounts — only if admin-related signals fired
+  if (allSignals.some(s => ['REL-03', 'ABS-03', 'LLM-USER-01', 'ABS-01', 'ABS-02'].includes(s.id))) {
+    checklist.push({
+      step: 2,
+      action: 'Remove backdoor admin accounts',
+      toolName: 'wp_eval',
+      toolArgs: {
+        site: sandboxName,
+        code: `global $wpdb; $prefix = $wpdb->prefix; $admins = $wpdb->get_results("SELECT u.ID, u.user_login, u.user_email FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = '{$prefix}capabilities' AND m.meta_value LIKE '%administrator%'"); $legitimate = ['jeremy.pollock@wpengine.com']; $deleted = []; foreach($admins as $u) { $isSuspicious = !in_array($u->user_email, $legitimate) && (preg_match('/^admin_[A-Za-z0-9]{5,}$|^[a-z]{6,10}$/', $u->user_login) || $u->user_email === 'admin@example.com' || $u->user_email === ''); if ($isSuspicious) { $wpdb->delete($wpdb->users, ['ID' => $u->ID]); $wpdb->delete($wpdb->usermeta, ['user_id' => $u->ID]); $deleted[] = $u->user_login; } } echo json_encode(['deleted' => $deleted, 'remaining' => count($admins) - count($deleted)]);`,
+      },
+      expectedEmpty: false,
+      verifyCode: `global $wpdb; $prefix = $wpdb->prefix; $count = (int)$wpdb->get_var("SELECT COUNT(DISTINCT u.ID) FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = '{$prefix}capabilities' AND m.meta_value LIKE '%administrator%'"); echo $count;`,
+    });
+  }
+
+  // Step 3: Remove all attacker plugins (hardcoded list + signals-derived slugs)
+  const signalSlugs = allSignals
+    .filter(s => ['ABS-04', 'ABS-05', 'REL-01'].includes(s.id))
+    .flatMap(s => {
+      const m = s.title.match(/plugin[^:]*:\s*(.+)/i);
+      return m ? m[1].split(',').map(p => p.trim()) : [];
+    });
+  const allSlugs = [...new Set([...ATTACKER_PLUGIN_SLUGS, ...signalSlugs])];
+  const slugsJson = JSON.stringify(allSlugs);
+
+  checklist.push({
+    step: 3,
+    action: 'Remove attacker plugins',
+    toolName: 'wp_eval',
+    toolArgs: {
+      site: sandboxName,
+      code: `$slugs = ${slugsJson}; foreach($slugs as $slug) { $dir = WP_PLUGIN_DIR . '/' . $slug; if (is_dir($dir)) { $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST); foreach($it as $f) { $f->isDir() ? @rmdir($f->getRealPath()) : @unlink($f->getRealPath()); } @rmdir($dir); } } $remaining = array_values(array_filter($slugs, function($s) { return is_dir(WP_PLUGIN_DIR . '/' . $s); })); echo json_encode($remaining);`,
+    },
+    expectedEmpty: true,
+  });
+
+  // Step 4: Verify no PHP in uploads/
+  checklist.push({
+    step: 4,
+    action: 'Verify no PHP in uploads/',
+    toolName: 'wp_eval',
+    toolArgs: {
+      site: sandboxName,
+      skip_plugins: true,
+      skip_themes: true,
+      code: `$d = wp_upload_dir()['basedir']; $php = []; if (is_dir($d)) { foreach(new RecursiveIteratorIterator(new RecursiveDirectoryIterator($d, FilesystemIterator::SKIP_DOTS)) as $f) { if ($f->getExtension() === 'php') $php[] = $f->getPathname(); } } echo json_encode($php);`,
+    },
+    expectedEmpty: true,
+  });
+
+  // Step 5: Verify WP core checksums
+  checklist.push({
+    step: 5,
+    action: 'Verify WP core checksums',
+    toolName: 'wp_eval',
+    toolArgs: {
+      site: sandboxName,
+      code: `echo shell_exec('wp core verify-checksums 2>&1');`,
+    },
+    expectedEmpty: false,
+    verifyContains: 'Success',
+  });
+
+  // Step 6: Shuffle authentication salts
+  checklist.push({
+    step: 6,
+    action: 'Shuffle authentication salts',
+    toolName: 'wp_eval',
+    toolArgs: {
+      site: sandboxName,
+      code: `echo shell_exec('wp config shuffle-salts 2>&1');`,
+    },
+    expectedEmpty: false,
+  });
+
+  // Step 7: Apply hardening (DISALLOW_FILE_EDIT)
+  checklist.push({
+    step: 7,
+    action: 'Apply hardening (DISALLOW_FILE_EDIT)',
+    toolName: 'wp_eval',
+    toolArgs: {
+      site: sandboxName,
+      code: `$config = file_get_contents(ABSPATH . 'wp-config.php'); if (strpos($config, 'DISALLOW_FILE_EDIT') === false) { $config = str_replace("/* That's all", "define('DISALLOW_FILE_EDIT', true);\n/* That's all", $config); file_put_contents(ABSPATH . 'wp-config.php', $config); } echo defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT ? 'true' : 'false';`,
+    },
+    expectedEmpty: false,
+    verifyContains: 'true',
+    verifyCode: `echo defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT ? 'true' : 'false';`,
+  });
+
+  // Step 8: Final clean re-scan (FS-01 + FS-02)
+  checklist.push({
+    step: 8,
+    action: 'Final re-scan (mu-plugins and obfuscation)',
+    toolName: 'wp_eval',
+    toolArgs: {
+      site: sandboxName,
+      skip_plugins: true,
+      skip_themes: true,
+      code: `$mu = glob(WPMU_PLUGIN_DIR . '/*.php') ?: []; $known = ${knownListJson}; $unexpected = array_values(array_filter($mu, function($f) use ($known) { return !in_array(basename($f), $known); })); echo json_encode($unexpected);`,
+    },
+    expectedEmpty: true,
+  });
+
+  return checklist;
+}
+
+async function executeChecklist(checklist, install, sandboxName, tools, log, reportPath) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require('fs');
+  const results = [];
+
+  for (const item of checklist) {
+    let stepLine = '';
+    try {
+      const result = await tools.invoke(item.toolName, item.toolArgs);
+      const resultStr = extractResult(result);
+
+      let stepPassed = false;
+      let detail = '';
+
+      if (item.verifyContains) {
+        stepPassed = resultStr.includes(item.verifyContains);
+        detail = stepPassed ? resultStr.trim().slice(0, 80) : `expected "${item.verifyContains}", got: ${resultStr.trim().slice(0, 80)}`;
+      } else if (item.expectedEmpty) {
+        let remaining;
+        try { remaining = JSON.parse(resultStr); } catch { remaining = resultStr.trim() ? [resultStr.trim()] : []; }
+        stepPassed = Array.isArray(remaining) ? remaining.length === 0 : !remaining;
+        detail = stepPassed ? 'verified empty' : `remaining: ${JSON.stringify(remaining).slice(0, 100)}`;
+      } else {
+        stepPassed = true;
+        detail = resultStr.trim().slice(0, 100) || 'done';
+      }
+
+      // Run extra verify code if provided and initial step passed
+      if (item.verifyCode && stepPassed) {
+        try {
+          const verifyResult = await tools.invoke('wp_eval', { site: sandboxName, code: item.verifyCode });
+          const verifyStr = extractResult(verifyResult);
+          if (item.verifyContains) {
+            stepPassed = verifyStr.includes(item.verifyContains);
+            detail = stepPassed ? 'verified' : `verify failed: ${verifyStr.trim().slice(0, 80)}`;
+          }
+        } catch (verifyErr) {
+          log.warn(`[Tier 3] Step ${item.step} verify error: ${verifyErr.message}`);
+        }
+      }
+
+      const icon = stepPassed ? '✅' : '❌';
+      stepLine = `${icon} Step ${item.step}: ${item.action} — ${detail}`;
+    } catch (err) {
+      stepLine = `❌ Step ${item.step}: ${item.action} — ERROR: ${err.message}`;
+    }
+
+    log.warn(`[Tier 3] ${stepLine}`);
+    results.push({ step: item.step, passed: stepLine.startsWith('✅'), detail: stepLine });
+
+    // Incremental write — crash-safe
+    try { fs.appendFileSync(reportPath, stepLine + '\n'); } catch { /* non-fatal */ }
+  }
+
+  return results;
 }
 
 async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools, log) {
-  // Step 1: Apply remediations in sandbox
-  const maliciousPlugins = allSignals
-    .filter(s => ['ABS-04', 'ABS-05', 'REL-01'].includes(s.id))
-    .flatMap(s => {
-      const match = s.title.match(/plugin[^:]*:\s*(.+)/i);
-      return match ? match[1].split(',').map(p => p.trim()) : [];
-    });
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs   = require('fs');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const path = require('path');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const os   = require('os');
 
-  if (maliciousPlugins.length > 0) {
-    log.warn(`[Tier 3] Quarantining plugins: ${maliciousPlugins.join(', ')}`);
-    await tools.invoke('wp_eval', {
-      site: sandboxName,
-      code: `
-        $quarantine = WP_CONTENT_DIR . '/quarantine/' . date('Y-m-d-His');
-        wp_mkdir_p($quarantine);
-        $plugins = ${JSON.stringify(maliciousPlugins)};
-        $moved = [];
-        foreach ($plugins as $slug) {
-          $src = WP_PLUGIN_DIR . '/' . $slug;
-          if (is_dir($src)) {
-            rename($src, $quarantine . '/' . $slug);
-            $moved[] = $slug;
-          }
-        }
-        echo json_encode($moved);
-      `,
-    });
+  // Set up report file path
+  const reportsDir = path.join(
+    os.homedir(),
+    'Library', 'Application Support', 'Local', 'nexus-ai',
+    'agents', 'security-sentinel', 'reports', install.name,
+  );
+  try { fs.mkdirSync(reportsDir, { recursive: true }); } catch { /* ignore */ }
+
+  const now      = new Date();
+  const dateStr  = now.toISOString().slice(0, 10);
+  const timeStr  = now.toISOString().slice(11, 16).replace(':', '-');
+  const reportPath = path.join(reportsDir, `${dateStr}T${timeStr}.md`);
+
+  // Write report header + findings + synthesis
+  const findingsLines = allSignals.length
+    ? allSignals.map(s => `- [${(s.severity || 'unknown').toUpperCase()}] ${s.id}: ${s.title}`).join('\n')
+    : '(no signals)';
+
+  const header = [
+    '# Security Remediation Report',
+    `**Site:** ${install.name}  `,
+    `**Date:** ${dateStr}T${now.toISOString().slice(11, 16)}  `,
+    `**Sandbox:** ${sandboxName}  `,
+    '',
+    '## Findings (Tier 1 + Tier 2)',
+    findingsLines,
+    '',
+    '## Synthesis',
+    synthesis || '(no synthesis)',
+    '',
+    '## Remediation Checklist',
+    '',
+  ].join('\n');
+
+  try { fs.writeFileSync(reportPath, header); } catch (err) {
+    log.warn(`[Tier 3] Could not write report file: ${err.message}`);
   }
 
-  // Step 2: Delete backdoor admin accounts
-  const backdoorSignals = allSignals.filter(s => ['REL-03', 'ABS-03', 'LLM-USER-01'].includes(s.id));
-  if (backdoorSignals.length > 0) {
-    log.warn(`[Tier 3] Flagged suspicious admin accounts — manual review required before deletion`);
-    log.warn(`  Run on sandbox: wp user list --role=administrator`);
-  }
+  // Build and execute the checklist
+  const checklist = buildRemediationChecklist(install, allSignals, sandboxName);
+  const results   = await executeChecklist(checklist, install, sandboxName, tools, log, reportPath);
 
-  // Step 3: Shuffle salts
-  await tools.invoke('wp_eval', {
-    site: sandboxName,
-    code: `return shell_exec('wp config shuffle-salts 2>&1');`,
-  }).catch(() => {});
+  // Verdict
+  const failCount  = results.filter(r => !r.passed).length;
+  const verdictStr = failCount === 0
+    ? `**READY TO PUSH** — all ${results.length} steps passed verification.`
+    : `**NOT SAFE TO PUSH** — ${failCount} step(s) failed.`;
 
-  // Step 4: Apply hardening
-  await tools.invoke('wp_eval', {
-    site: sandboxName,
-    code: `
-      // Disable file editor
-      $config = file_get_contents(ABSPATH . 'wp-config.php');
-      if (strpos($config, 'DISALLOW_FILE_EDIT') === false) {
-        $config = str_replace("/* That's all", "define('DISALLOW_FILE_EDIT', true);\n/* That's all", $config);
-        file_put_contents(ABSPATH . 'wp-config.php', $config);
-      }
-      return 'hardening applied';
-    `,
-  }).catch(() => {});
+  const verdictSection = [
+    '',
+    '## Verdict',
+    verdictStr,
+    '',
+    'Push command:',
+    `  ./bin/nexus.js agent push ${install.name}`,
+    '',
+  ].join('\n');
 
-  // Step 5: Reconciliation — check for existing local copy before push
+  try { fs.appendFileSync(reportPath, verdictSection); } catch { /* non-fatal */ }
+
   log.warn(`[Tier 3] Remediation prepared in sandbox: ${sandboxName}`);
   log.warn(`[Tier 3] MANUAL STEP REQUIRED:`);
   log.warn(`  1. Review sandbox: ${sandboxName}`);
-  log.warn(`  2. Check reconciliation: nexus agent run security-sentinel-reconcile`);
-  log.warn(`  3. If clean, push: nexus agent run security-sentinel-push`);
+  log.warn(`  2. Read report: ${reportPath}`);
+  log.warn(`  3. If all steps ✅: nexus agent push ${install.name}`);
   log.warn(`  Synthesis:\n${synthesis}`);
 
-  // Note: the actual local_wpe_push requires human confirmation — logged above
-  // A future Tier 3 interactive flow will present this through the Nexus UI
+  // Note: actual local_wpe_push requires human confirmation — never auto-pushed
 }

@@ -625,64 +625,73 @@ describe('security-sentinel', () => {
       jest.clearAllMocks();
     });
 
-    it('quarantines plugins from ABS-05 signals via wp_eval', async () => {
-      const tools = { invoke: jest.fn().mockResolvedValue('["wp-compat"]') };
+    it('removes plugins from ABS-05 signals via wp_eval (delete, not quarantine)', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('[]') };
       const signal = { id: 'ABS-05', severity: 'critical', title: 'Known backdoor plugin detected: wp-compat', detail: 'backdoor' };
 
       await tier3Remediate(install, 'CLASSIFICATION: active-compromise', [signal], 'sandbox-abc', tools, log);
 
-      const quarantineCall = tools.invoke.mock.calls.find(
-        c => c[0] === 'wp_eval' && c[1].code.includes('quarantine')
+      // Step 3: plugin removal — code contains slug and rmdir/unlink (not quarantine)
+      const removeCall = tools.invoke.mock.calls.find(
+        c => c[0] === 'wp_eval' && c[1].code.includes('wp-compat') && c[1].code.includes('rmdir')
       );
-      expect(quarantineCall).toBeDefined();
-      expect(quarantineCall[1].site).toBe('sandbox-abc');
-      expect(quarantineCall[1].code).toContain('wp-compat');
+      expect(removeCall).toBeDefined();
+      expect(removeCall[1].site).toBe('sandbox-abc');
+      expect(removeCall[1].code).not.toContain('quarantine');
     });
 
-    it('quarantines plugins from ABS-04 signals (file manager)', async () => {
-      const tools = { invoke: jest.fn().mockResolvedValue('') };
-      const signal = { id: 'ABS-04', severity: 'high', title: 'File manager plugin(s) active: fileorganizer', detail: 'file manager' };
-
-      await tier3Remediate(install, 'CLASSIFICATION: high-risk', [signal], 'sandbox-abc', tools, log);
-
-      const quarantineCall = tools.invoke.mock.calls.find(
-        c => c[0] === 'wp_eval' && c[1].code.includes('quarantine')
-      );
-      expect(quarantineCall).toBeDefined();
-      expect(quarantineCall[1].code).toContain('fileorganizer');
-    });
-
-    it('does not invoke quarantine wp_eval when no malicious plugin signals', async () => {
-      const tools = { invoke: jest.fn().mockResolvedValue('') };
+    it('always attempts to remove hardcoded attacker plugin slugs (step 3 always runs)', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('[]') };
+      // Even with a non-plugin signal, step 3 still runs with the hardcoded list
       const signal = { id: 'EXP-03', severity: 'medium', title: 'File editor enabled', detail: 'no DISALLOW_FILE_EDIT' };
 
       await tier3Remediate(install, 'CLASSIFICATION: misconfiguration', [signal], 'sandbox-abc', tools, log);
 
-      const quarantineCall = tools.invoke.mock.calls.find(
-        c => c[0] === 'wp_eval' && c[1].code.includes('quarantine')
+      const removeCall = tools.invoke.mock.calls.find(
+        c => c[0] === 'wp_eval' && c[1].code.includes('fileorganizer') && c[1].code.includes('rmdir')
       );
-      expect(quarantineCall).toBeUndefined();
+      expect(removeCall).toBeDefined();
     });
 
-    it('logs manual review message for backdoor admin accounts (REL-03)', async () => {
-      const tools = { invoke: jest.fn().mockResolvedValue('') };
+    it('includes signal-derived slugs alongside the hardcoded list (ABS-04)', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('[]') };
+      const signal = { id: 'ABS-04', severity: 'high', title: 'File manager plugin(s) active: fileorganizer', detail: 'file manager' };
+
+      await tier3Remediate(install, 'CLASSIFICATION: high-risk', [signal], 'sandbox-abc', tools, log);
+
+      const removeCall = tools.invoke.mock.calls.find(
+        c => c[0] === 'wp_eval' && c[1].code.includes('fileorganizer') && c[1].code.includes('rmdir')
+      );
+      expect(removeCall).toBeDefined();
+    });
+
+    it('invokes wp_eval to attempt automated deletion of suspicious admin accounts (REL-03)', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('{"deleted":["hacker"],"remaining":1}') };
       const signal = { id: 'REL-03', severity: 'critical', title: 'New admin: hacker', detail: 'hacker account' };
 
       await tier3Remediate(install, 'CLASSIFICATION: active-compromise', [signal], 'sandbox-abc', tools, log);
 
-      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('manual review required'));
+      // Step 2 should fire (admin-related signal) with delete logic
+      const adminCall = tools.invoke.mock.calls.find(
+        c => c[0] === 'wp_eval' && c[1].code.includes('capabilities') && c[1].code.includes('delete')
+      );
+      expect(adminCall).toBeDefined();
+      expect(adminCall[1].site).toBe('sandbox-abc');
     });
 
-    it('logs manual review message for backdoor admin accounts (ABS-03)', async () => {
-      const tools = { invoke: jest.fn().mockResolvedValue('') };
+    it('invokes wp_eval to attempt automated deletion of suspicious admin accounts (ABS-03)', async () => {
+      const tools = { invoke: jest.fn().mockResolvedValue('{"deleted":[],"remaining":1}') };
       const signal = { id: 'ABS-03', severity: 'critical', title: 'Admin with example.com email', detail: 'example.com' };
 
       await tier3Remediate(install, 'CLASSIFICATION: active-compromise', [signal], 'sandbox-abc', tools, log);
 
-      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('manual review required'));
+      const adminCall = tools.invoke.mock.calls.find(
+        c => c[0] === 'wp_eval' && c[1].code.includes('capabilities') && c[1].code.includes('delete')
+      );
+      expect(adminCall).toBeDefined();
     });
 
-    it('invokes wp_eval to shuffle salts', async () => {
+    it('invokes wp_eval to shuffle salts (step 6)', async () => {
       const tools = { invoke: jest.fn().mockResolvedValue('') };
 
       await tier3Remediate(install, 'CLASSIFICATION: high-risk', [], 'sandbox-abc', tools, log);
@@ -694,7 +703,7 @@ describe('security-sentinel', () => {
       expect(saltCall[1].site).toBe('sandbox-abc');
     });
 
-    it('invokes wp_eval to add DISALLOW_FILE_EDIT to wp-config.php', async () => {
+    it('invokes wp_eval to add DISALLOW_FILE_EDIT to wp-config.php (step 7)', async () => {
       const tools = { invoke: jest.fn().mockResolvedValue('') };
 
       await tier3Remediate(install, 'CLASSIFICATION: high-risk', [], 'sandbox-abc', tools, log);
@@ -706,7 +715,7 @@ describe('security-sentinel', () => {
       expect(hardenCall[1].site).toBe('sandbox-abc');
     });
 
-    it('logs manual step instructions including sandbox name', async () => {
+    it('logs MANUAL STEP REQUIRED with sandbox name in all cases', async () => {
       const tools = { invoke: jest.fn().mockResolvedValue('') };
 
       await tier3Remediate(install, 'CLASSIFICATION: high-risk', [], 'sandbox-abc', tools, log);
@@ -724,12 +733,88 @@ describe('security-sentinel', () => {
       expect(pushCall).toBeUndefined();
     });
 
-    it('handles wp_eval errors gracefully (salt shuffle can fail)', async () => {
+    it('handles wp_eval errors gracefully — each step wrapped in try/catch', async () => {
       const tools = { invoke: jest.fn().mockRejectedValue(new Error('wp_eval failed')) };
 
       await expect(
         tier3Remediate(install, 'CLASSIFICATION: high-risk', [], 'sandbox-abc', tools, log)
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('buildRemediationChecklist', () => {
+    const { buildRemediationChecklist } = require('../../../../agents/security-sentinel/agent')._test;
+
+    it('includes step 1 only when FS-01 signal is present', () => {
+      const withFs01 = [{ id: 'FS-01', severity: 'critical', title: 'webshell' }];
+      const withoutFs01 = [{ id: 'ABS-05', severity: 'critical', title: 'wp-compat' }];
+
+      const hasStep1 = (signals) => buildRemediationChecklist({}, signals, 'sandbox').some(s => s.step === 1);
+      expect(hasStep1(withFs01)).toBe(true);
+      expect(hasStep1(withoutFs01)).toBe(false);
+    });
+
+    it('includes step 2 when admin-related signals present (REL-03, ABS-03, LLM-USER-01, ABS-01, ABS-02)', () => {
+      const ids = ['REL-03', 'ABS-03', 'LLM-USER-01', 'ABS-01', 'ABS-02'];
+      for (const id of ids) {
+        const checklist = buildRemediationChecklist({}, [{ id, severity: 'critical', title: id }], 'sandbox');
+        expect(checklist.some(s => s.step === 2)).toBe(true);
+      }
+    });
+
+    it('does not include step 2 when no admin signals', () => {
+      const signals = [{ id: 'EXP-03', severity: 'medium', title: 'file editor' }];
+      const checklist = buildRemediationChecklist({}, signals, 'sandbox');
+      expect(checklist.some(s => s.step === 2)).toBe(false);
+    });
+
+    it('always includes step 3 (plugin removal) regardless of signals', () => {
+      const checklist = buildRemediationChecklist({}, [], 'sandbox');
+      expect(checklist.some(s => s.step === 3)).toBe(true);
+    });
+
+    it('step 3 includes hardcoded attacker slugs', () => {
+      const checklist = buildRemediationChecklist({}, [], 'sandbox');
+      const step3 = checklist.find(s => s.step === 3);
+      expect(step3.toolArgs.code).toContain('wp-compat');
+      expect(step3.toolArgs.code).toContain('fileorganizer');
+    });
+
+    it('step 3 adds signal-derived slugs to the removal list', () => {
+      const signals = [{ id: 'ABS-05', severity: 'critical', title: 'Known backdoor plugin detected: evil-custom-slug' }];
+      const checklist = buildRemediationChecklist({}, signals, 'sandbox');
+      const step3 = checklist.find(s => s.step === 3);
+      expect(step3.toolArgs.code).toContain('evil-custom-slug');
+    });
+
+    it('always includes steps 4–8', () => {
+      const checklist = buildRemediationChecklist({}, [], 'sandbox');
+      const steps = checklist.map(s => s.step);
+      expect(steps).toContain(4);
+      expect(steps).toContain(5);
+      expect(steps).toContain(6);
+      expect(steps).toContain(7);
+      expect(steps).toContain(8);
+    });
+
+    it('sets sandboxName as site in all toolArgs', () => {
+      const checklist = buildRemediationChecklist({}, [], 'sentinel-mysite-12345');
+      for (const item of checklist) {
+        expect(item.toolArgs.site).toBe('sentinel-mysite-12345');
+      }
+    });
+
+    it('step 6 includes shuffle-salts', () => {
+      const checklist = buildRemediationChecklist({}, [], 'sandbox');
+      const step6 = checklist.find(s => s.step === 6);
+      expect(step6.toolArgs.code).toContain('shuffle-salts');
+    });
+
+    it('step 7 includes DISALLOW_FILE_EDIT and verifyContains "true"', () => {
+      const checklist = buildRemediationChecklist({}, [], 'sandbox');
+      const step7 = checklist.find(s => s.step === 7);
+      expect(step7.toolArgs.code).toContain('DISALLOW_FILE_EDIT');
+      expect(step7.verifyContains).toBe('true');
     });
   });
 });
