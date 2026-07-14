@@ -59,8 +59,11 @@ export class AgentRunner {
       agent.tools?.length ? agent.tools : undefined,
     );
 
-    // Build AI client per-run so it gets this agent's scoped tool set
-    const aiProvider = getProvider(this.resolvedProvider.provider);
+    // Build AI client per-run so it gets this agent's scoped tool set.
+    // When Local Gateway is enabled, route through the gateway so Nexus injects
+    // credentials — same model as per-site WordPress AI capabilities.
+    const effectiveProvider = this.resolvedProvider.useLocalGateway ? 'local-gateway' : this.resolvedProvider.provider;
+    const aiProvider = getProvider(effectiveProvider);
     const agentModel = agent.model ?? this.resolvedProvider.model;
     const aiClient = aiProvider
       ? new AgentAIClient(aiProvider, { apiKey: this.resolvedProvider.apiKey, model: agentModel }, toolProvider)

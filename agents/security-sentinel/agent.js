@@ -151,9 +151,10 @@ module.exports = {
   triggers: [
     { type: 'cron', expression: '*/15 * * * *' },
     { type: 'event', pattern: 'wpe:sync.completed' },
+    // wp:plugin.activated and wp:user.created work for local sites
     { type: 'event', pattern: 'wp:plugin.activated' },
     { type: 'event', pattern: 'wp:user.created' },
-    { type: 'event', pattern: 'local:site.started' },
+    // local:site.started EXCLUDED — triggers on sandbox creation → infinite loop
   ],
   tools: [
     'fleet_sql', 'wpe_site_deep_refresh', 'wp_user_list',
@@ -179,8 +180,12 @@ module.exports = {
 
       // Phase 1.5: LLM user audit if admin signals present
       if (signals.some(s => s.id === 'ABS-01' || s.id === 'ABS-02')) {
-        const audit = await llmUserAudit(install.adminUsers, ai);
-        signals.push(...audit.signals);
+        try {
+          const audit = await llmUserAudit(install.adminUsers, ai);
+          signals.push(...audit.signals);
+        } catch (err) {
+          log.warn(`security-sentinel: LLM user audit failed for ${install.name} — ${err.message} (skipping)`);
+        }
       }
 
       // Relative checks
@@ -190,14 +195,15 @@ module.exports = {
       allInstallResults.push({ install, signals });
 
       const criticalCount = signals.filter(s => s.severity === 'critical').length;
-      const highCount = signals.filter(s => s.severity === 'high').length;
+      // Only active-compromise signals count toward Tier 2 escalation — EXP (pre-breach) signals are informational
+      const compromiseHighCount = signals.filter(s => s.severity === 'high' && s.category === 'active-compromise').length;
 
       if (signals.length === 0) {
         log.info(`security-sentinel: ${install.name} — ✓ clean`);
-      } else if (criticalCount >= 1 || highCount >= 2) {
+      } else if (criticalCount >= 1 || compromiseHighCount >= 2) {
         log.warn(`security-sentinel: ${install.name} — ESCALATING to Tier 2 ...`);
         signals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.id}: ${s.title}`));
-        await tier2Investigate(install, signals, tools, ai, log);
+        await tier2Investigate(install, signals, tools, ai, log, state);
       } else {
         log.warn(`security-sentinel: ${install.name} — ${signals.length} finding(s):`);
         signals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.id}: ${s.title}`));
@@ -487,7 +493,17 @@ function runRelativeChecks(install, baseline) {
   return signals;
 }
 
-async function tier2Investigate(install, tier1Signals, tools, ai, log) {
+async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
+  // Cooldown: don't re-investigate the same install within 24 hours
+  const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+  const lastEscalation = state.get(`tier2-last:${install.id}`);
+  if (lastEscalation && (Date.now() - lastEscalation) < COOLDOWN_MS) {
+    const hoursAgo = Math.round((Date.now() - lastEscalation) / 3600000);
+    log.info(`[Tier 2] Skipping ${install.name} — escalated ${hoursAgo}h ago (cooldown: 24h)`);
+    return;
+  }
+  state.set(`tier2-last:${install.id}`, Date.now());
+
   const sandboxName = `sentinel-${install.name}-${Date.now()}`;
   log.info(`[Tier 2] Creating sandbox: ${sandboxName}`);
 
