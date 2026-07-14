@@ -88,6 +88,60 @@ function getScanScope(event) {
   return { installId: null };
 }
 
+// ─── Fleet correlation (Task 6) ───────────────────────────────────────────────
+
+function runFleetCorrelation(allResults, suspiciousSlugsFound) {
+  const signals = [];
+
+  // FLEET-01: Same suspicious plugin slug on 2+ installs
+  const slugToInstalls = {};
+  for (const { install } of allResults) {
+    for (const plugin of install.plugins) {
+      if (suspiciousSlugsFound.has(plugin.slug) || KNOWN_BACKDOOR_SLUGS.has(plugin.slug)) {
+        if (!slugToInstalls[plugin.slug]) slugToInstalls[plugin.slug] = [];
+        slugToInstalls[plugin.slug].push(install.name);
+      }
+    }
+  }
+  for (const [slug, installNames] of Object.entries(slugToInstalls)) {
+    if (installNames.length >= 2) {
+      signals.push({
+        id: 'FLEET-01', severity: 'critical', category: 'active-compromise',
+        installName: installNames.join(', '),
+        title: `Suspicious plugin '${slug}' found on ${installNames.length} installs`,
+        detail: `Same suspicious plugin slug '${slug}' on: ${installNames.join(', ')}. This suggests account-level compromise or a shared attack vector.`,
+        fix: 'This is likely a coordinated attack. Audit all listed installs immediately and check WPE portal for unauthorized SSH key additions.',
+      });
+    }
+  }
+
+  // FLEET-02: New admin accounts with matching email domains across installs
+  const emailDomainToInstalls = {};
+  for (const { install, signals: instSignals } of allResults) {
+    const newAdminSignal = instSignals.find(s => s.id === 'REL-03');
+    if (!newAdminSignal) continue;
+    for (const user of install.adminUsers) {
+      const domain = (user.email || '').split('@')[1];
+      if (!domain || domain === 'example.com') continue;
+      if (!emailDomainToInstalls[domain]) emailDomainToInstalls[domain] = [];
+      emailDomainToInstalls[domain].push(install.name);
+    }
+  }
+  for (const [domain, installNames] of Object.entries(emailDomainToInstalls)) {
+    if (installNames.length >= 2) {
+      signals.push({
+        id: 'FLEET-02', severity: 'critical', category: 'active-compromise',
+        installName: installNames.join(', '),
+        title: `New admin accounts with same email domain @${domain} across ${installNames.length} installs`,
+        detail: `Matching email domain @${domain} on new admin accounts across: ${installNames.join(', ')}`,
+        fix: 'Account-level compromise suspected. Audit portal access and SSH keys immediately.',
+      });
+    }
+  }
+
+  return signals;
+}
+
 // ─── Agent definition ─────────────────────────────────────────────────────────
 
 module.exports = {
@@ -145,14 +199,30 @@ module.exports = {
       }
     }
 
-    // Fleet correlation (Task 7)
-    // Added in Task 7
+    // Fleet correlation (Task 6)
+    const allInstallResults = installs.map((install, idx) => ({
+      install,
+      signals: [], // Collect signals from the loop above
+    }));
+
+    const suspiciousSlugsFound = new Set(
+      allInstallResults
+        .flatMap(r => r.signals)
+        .filter(s => s.id === 'ABS-05')
+        .map(s => s.title.match(/'([^']+)'/)?.[1])
+        .filter(Boolean)
+    );
+    const fleetSignals = runFleetCorrelation(allInstallResults, suspiciousSlugsFound);
+    if (fleetSignals.length > 0) {
+      log.warn(`security-sentinel: fleet correlation found ${fleetSignals.length} cross-site signal(s)`);
+      fleetSignals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.title}`));
+    }
 
     log.info('security-sentinel: sweep complete');
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────

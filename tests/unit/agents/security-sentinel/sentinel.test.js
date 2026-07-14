@@ -276,4 +276,76 @@ describe('security-sentinel', () => {
       expect(runRelativeChecks(install, null)).toHaveLength(0);
     });
   });
+
+  describe('runFleetCorrelation', () => {
+    const { runFleetCorrelation } = require('../../../../agents/security-sentinel/agent')._test;
+
+    it('flags same unknown plugin slug across 2+ installs', () => {
+      const results = [
+        { install: { id: 'wpe-1', name: 'site1', plugins: [{ slug: 'wp-compat', is_active: '1' }], adminUsers: [] }, signals: [] },
+        { install: { id: 'wpe-2', name: 'site2', plugins: [{ slug: 'wp-compat', is_active: '1' }], adminUsers: [] }, signals: [] },
+      ];
+      const signals = runFleetCorrelation(results, new Set(['wp-compat']));
+      const fleet01 = signals.find(s => s.id === 'FLEET-01');
+      expect(fleet01).toBeDefined();
+      expect(fleet01.severity).toBe('critical');
+      expect(fleet01.installName).toContain('site1');
+      expect(fleet01.installName).toContain('site2');
+    });
+
+    it('does not flag common legitimate plugins on multiple installs', () => {
+      const results = [
+        { install: { id: 'wpe-1', name: 'site1', plugins: [{ slug: 'woocommerce', is_active: '1' }], adminUsers: [] }, signals: [] },
+        { install: { id: 'wpe-2', name: 'site2', plugins: [{ slug: 'woocommerce', is_active: '1' }], adminUsers: [] }, signals: [] },
+      ];
+      expect(runFleetCorrelation(results, new Set())).toHaveLength(0);
+    });
+
+    it('flags suspicious slug found in suspiciousSlugsFound set', () => {
+      const results = [
+        { install: { id: 'wpe-1', name: 'site1', plugins: [{ slug: 'evil-plugin', is_active: '1' }], adminUsers: [] }, signals: [] },
+        { install: { id: 'wpe-2', name: 'site2', plugins: [{ slug: 'evil-plugin', is_active: '1' }], adminUsers: [] }, signals: [] },
+      ];
+      const signals = runFleetCorrelation(results, new Set(['evil-plugin']));
+      expect(signals.find(s => s.id === 'FLEET-01')).toBeDefined();
+    });
+
+    it('flags new admin accounts with matching email domain across installs', () => {
+      const results = [
+        { install: { id: 'wpe-1', name: 'site1', plugins: [], adminUsers: [{ username: 'admin1', email: 'attacker@evil.com' }] }, signals: [{ id: 'REL-03' }] },
+        { install: { id: 'wpe-2', name: 'site2', plugins: [], adminUsers: [{ username: 'admin2', email: 'attacker2@evil.com' }] }, signals: [{ id: 'REL-03' }] },
+      ];
+      const signals = runFleetCorrelation(results, new Set());
+      const fleet02 = signals.find(s => s.id === 'FLEET-02');
+      expect(fleet02).toBeDefined();
+      expect(fleet02.severity).toBe('critical');
+      expect(fleet02.installName).toContain('site1');
+      expect(fleet02.installName).toContain('site2');
+    });
+
+    it('does not flag FLEET-02 for installs without REL-03 signals', () => {
+      const results = [
+        { install: { id: 'wpe-1', name: 'site1', plugins: [], adminUsers: [{ username: 'admin1', email: 'attacker@evil.com' }] }, signals: [] },
+        { install: { id: 'wpe-2', name: 'site2', plugins: [], adminUsers: [{ username: 'admin2', email: 'attacker2@evil.com' }] }, signals: [] },
+      ];
+      const signals = runFleetCorrelation(results, new Set());
+      expect(signals.find(s => s.id === 'FLEET-02')).toBeUndefined();
+    });
+
+    it('ignores example.com domain in FLEET-02 check', () => {
+      const results = [
+        { install: { id: 'wpe-1', name: 'site1', plugins: [], adminUsers: [{ username: 'admin1', email: 'admin@example.com' }] }, signals: [{ id: 'REL-03' }] },
+        { install: { id: 'wpe-2', name: 'site2', plugins: [], adminUsers: [{ username: 'admin2', email: 'admin@example.com' }] }, signals: [{ id: 'REL-03' }] },
+      ];
+      const signals = runFleetCorrelation(results, new Set());
+      expect(signals.find(s => s.id === 'FLEET-02')).toBeUndefined();
+    });
+
+    it('returns empty array when no fleet correlations found', () => {
+      const results = [
+        { install: { id: 'wpe-1', name: 'site1', plugins: [{ slug: 'woocommerce', is_active: '1' }], adminUsers: [] }, signals: [] },
+      ];
+      expect(runFleetCorrelation(results, new Set())).toHaveLength(0);
+    });
+  });
 });
