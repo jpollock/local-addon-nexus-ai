@@ -41,21 +41,21 @@ describe('security-sentinel', () => {
 
   it('getScanScope returns installId for wpe:sync.completed event', () => {
     const event = { namespace: 'wpe', type: 'sync.completed', payload: { siteId: 'wpe-abc123' } };
-    expect(getScanScope(event)).toEqual({ installId: 'wpe-abc123' });
+    expect(getScanScope(event)).toEqual({ installId: 'wpe-abc123', installName: null });
   });
 
   it('getScanScope returns null installId for cron (no event)', () => {
-    expect(getScanScope(null)).toEqual({ installId: null });
+    expect(getScanScope(null)).toEqual({ installId: null, installName: null });
   });
 
   it('getScanScope returns null installId for non-wpe events', () => {
     const event = { namespace: 'wp', type: 'plugin.activated', payload: {} };
-    expect(getScanScope(event)).toEqual({ installId: null });
+    expect(getScanScope(event)).toEqual({ installId: null, installName: null });
   });
 
   it('getScanScope returns null installId when payload has no siteId', () => {
     const event = { namespace: 'wpe', type: 'sync.completed', payload: {} };
-    expect(getScanScope(event)).toEqual({ installId: null });
+    expect(getScanScope(event)).toEqual({ installId: null, installName: null });
   });
 
   it('module.exports has required fields', () => {
@@ -353,10 +353,18 @@ describe('security-sentinel', () => {
     const { tier2Investigate } = require('../../../../agents/security-sentinel/agent')._test;
 
     function makeTools(overrides = {}) {
+      let opStatusCalls = 0;
       return {
         invoke: jest.fn().mockImplementation((name, args) => {
           if (name === 'local_create_site') return Promise.resolve('OK');
-          if (name === 'local_wpe_pull') return Promise.resolve('OK');
+          if (name === 'local_wpe_pull') return Promise.resolve(JSON.stringify({ status: 'in_progress' }));
+          if (name === 'local_operation_status') {
+            opStatusCalls++;
+            // First call: "active" (pull in progress), subsequent calls: idle (pull done)
+            return opStatusCalls === 1
+              ? Promise.resolve(JSON.stringify({ status: 'active', local_status: 'pulling' }))
+              : Promise.resolve(JSON.stringify({ site: 'sandbox', operation: null, site_status: 'running' }));
+          }
           if (name === 'wp_eval') return Promise.resolve('[]');
           return Promise.resolve('');
         }),
@@ -370,7 +378,7 @@ describe('security-sentinel', () => {
 
     it('creates a sandbox site with correct naming pattern', async () => {
       const tools = makeTools();
-      await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      await tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0);
 
       const createCall = tools.invoke.mock.calls.find(c => c[0] === 'local_create_site');
       expect(createCall).toBeDefined();
@@ -379,19 +387,19 @@ describe('security-sentinel', () => {
 
     it('pulls from WPE using install.id as remote_install_id with include_database true', async () => {
       const tools = makeTools();
-      await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      await tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0);
 
       const pullCall = tools.invoke.mock.calls.find(c => c[0] === 'local_wpe_pull');
       expect(pullCall).toBeDefined();
       expect(pullCall[1]).toMatchObject({
-        remote_install_id: 'wpe-94b2',
+        remote_install_id: 'theawfulpmtest',
         include_database: true,
       });
     });
 
     it('sandbox name matches the site used in local_wpe_pull', async () => {
       const tools = makeTools();
-      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0);
 
       const pullCall = tools.invoke.mock.calls.find(c => c[0] === 'local_wpe_pull');
       expect(pullCall[1].site).toBe(result.sandboxName);
@@ -399,7 +407,7 @@ describe('security-sentinel', () => {
 
     it('runs wp_eval checks in the sandbox (not the live site)', async () => {
       const tools = makeTools();
-      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0);
 
       const evalCalls = tools.invoke.mock.calls.filter(c => c[0] === 'wp_eval');
       expect(evalCalls.length).toBeGreaterThan(0);
@@ -410,7 +418,7 @@ describe('security-sentinel', () => {
 
     it('returns empty filesystemSignals and adminMismatch=false when wp_eval returns empty arrays', async () => {
       const tools = makeTools();
-      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0);
 
       expect(result.filesystemSignals).toEqual([]);
       expect(result.adminMismatch).toBe(false);
@@ -428,7 +436,7 @@ describe('security-sentinel', () => {
         }),
       };
 
-      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0);
       const fs01 = result.filesystemSignals.find(s => s.id === 'FS-01');
       expect(fs01).toBeDefined();
       expect(fs01.severity).toBe('critical');
@@ -447,7 +455,7 @@ describe('security-sentinel', () => {
         }),
       };
 
-      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0);
       const fs02 = result.filesystemSignals.find(s => s.id === 'FS-02');
       expect(fs02).toBeDefined();
       expect(fs02.severity).toBe('critical');
@@ -465,7 +473,7 @@ describe('security-sentinel', () => {
         }),
       };
 
-      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0);
       const fs04 = result.filesystemSignals.find(s => s.id === 'FS-04');
       expect(fs04).toBeDefined();
       expect(fs04.severity).toBe('critical');
@@ -484,7 +492,7 @@ describe('security-sentinel', () => {
         }),
       };
 
-      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0);
       expect(result.adminMismatch).toBe(true);
       const mismatch = result.filesystemSignals.find(s => s.id === 'FS-MISMATCH');
       expect(mismatch).toBeDefined();
@@ -504,7 +512,7 @@ describe('security-sentinel', () => {
         }),
       };
 
-      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0);
       expect(result.adminMismatch).toBe(false);
       expect(result.filesystemSignals.find(s => s.id === 'FS-MISMATCH')).toBeUndefined();
     });
@@ -519,12 +527,12 @@ describe('security-sentinel', () => {
         }),
       };
 
-      await expect(tier2Investigate(install, [], tools, fakeAi, fakeLog)).resolves.toBeDefined();
+      await expect(tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0)).resolves.toBeDefined();
     });
 
     it('returns sandboxName in the result', async () => {
       const tools = makeTools();
-      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog);
+      const result = await tier2Investigate(install, [], tools, fakeAi, fakeLog, { get: () => null, set: () => {} }, 0);
 
       expect(result.sandboxName).toMatch(/^sentinel-theawfulpmtest-\d+$/);
     });

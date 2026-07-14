@@ -515,7 +515,7 @@ function runRelativeChecks(install, baseline) {
   return signals;
 }
 
-async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
+async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000) {
   // Cooldown: don't re-investigate the same install within 24 hours
   const COOLDOWN_MS = 24 * 60 * 60 * 1000;
   const lastEscalation = state.get(`tier2-last:${install.id}`);
@@ -548,11 +548,12 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state) {
   // local_wpe_pull is async — poll every 20s.
   // The operation tracker briefly shows "completed" then clears to null (no tracked operation).
   // Strategy: wait until we see in_progress, then treat the next non-in_progress as done.
+  // _pollIntervalMs = 0 means test mode — skip polling, assume pull succeeded immediately.
   log.info(`[Tier 2] Pull initiated. Polling every 20s for completion...`);
-  let pullDone = false;
+  let pullDone = _pollIntervalMs === 0; // test mode: skip poll loop
   let sawInProgress = false;
-  for (let i = 0; i < 30; i++) { // max 10 minutes (30 × 20s)
-    await new Promise(r => setTimeout(r, 20000));
+  for (let i = 0; i < 30 && !pullDone; i++) { // max 10 minutes (30 × 20s)
+    await new Promise(r => setTimeout(r, _pollIntervalMs));
     try {
       const status = await tools.invoke('local_operation_status', { site: sandboxName });
       const statusStr = typeof status === 'string' ? status : JSON.stringify(status);
