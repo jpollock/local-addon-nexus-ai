@@ -193,16 +193,17 @@ module.exports = {
       const highCount = signals.filter(s => s.severity === 'high').length;
 
       if (signals.length === 0) {
-        storeBaseline(install, state);
         log.info(`security-sentinel: ${install.name} — ✓ clean`);
       } else if (criticalCount >= 1 || highCount >= 2) {
-        log.warn(`security-sentinel: ${install.name} — ESCALATING to Tier 2 (${criticalCount} critical, ${highCount} high)`);
+        log.warn(`security-sentinel: ${install.name} — ESCALATING to Tier 2 ...`);
         signals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.id}: ${s.title}`));
         await tier2Investigate(install, signals, tools, ai, log);
       } else {
         log.warn(`security-sentinel: ${install.name} — ${signals.length} finding(s):`);
         signals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.id}: ${s.title}`));
       }
+      // Always store baseline so relative checks fire on next scan
+      storeBaseline(install, state);
     }
 
     // Fleet correlation
@@ -506,6 +507,8 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log) {
   // FS-01: PHP files in mu-plugins/
   const muPluginResult = await tools.invoke('wp_eval', {
     site: sandboxName,
+    skip_plugins: true,
+    skip_themes: true,
     code: `
       $dir = WPMU_PLUGIN_DIR;
       $files = glob("$dir/*.php") ?: [];
@@ -537,18 +540,27 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log) {
   // FS-02: Obfuscation chains
   const obfuscationResult = await tools.invoke('wp_eval', {
     site: sandboxName,
+    skip_plugins: true,
+    skip_themes: true,
     code: `
       $dirs = [WP_CONTENT_DIR . '/plugins', WP_CONTENT_DIR . '/mu-plugins', WP_CONTENT_DIR . '/themes'];
       $patterns = [
         '/eval\\s*\\(\\s*base64_decode/',
         '/eval\\s*\\(\\s*gzinflate\\s*\\(\\s*base64_decode/',
+        '/eval\\s*\\(\\s*gzuncompress\\s*\\(\\s*base64_decode/',
         '/eval\\s*\\(\\s*str_rot13/',
-        '/base64_decode.*base64_decode/',
+        '/base64_decode.*base64_decode/s',
+        '/eval\\s*\\(\\s*\\$/',
+        '/assert\\s*\\(\\s*\\$/',
+        '/create_function\\s*\\(/',
+        '/preg_replace\\s*\\(\\s*[\\'"].*\\/e/',
       ];
       $found = [];
       foreach ($dirs as $dir) {
+        if (!is_dir($dir)) continue;
         foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $file) {
           if ($file->getExtension() !== 'php') continue;
+          if ($file->getSize() > 5 * 1024 * 1024) continue; // skip files > 5MB
           $content = file_get_contents($file->getPathname());
           foreach ($patterns as $pattern) {
             if (preg_match($pattern, $content)) {
@@ -577,6 +589,8 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log) {
   // FS-04: PHP files in uploads/
   const uploadsResult = await tools.invoke('wp_eval', {
     site: sandboxName,
+    skip_plugins: true,
+    skip_themes: true,
     code: `
       $uploads = wp_upload_dir();
       $dir = $uploads['basedir'];
@@ -600,7 +614,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log) {
     }
   } catch {}
 
-  // Admin count mismatch (DB direct vs WP API — bypasses wp-compat style hooks)
+  // FS-MISMATCH: intentionally runs WITH plugins loaded to detect account-hiding hooks
   const dbCountResult = await tools.invoke('wp_eval', {
     site: sandboxName,
     code: `
