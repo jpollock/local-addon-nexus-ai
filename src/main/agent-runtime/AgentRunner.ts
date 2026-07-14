@@ -79,10 +79,12 @@ export class AgentRunner {
       'Application Support',
       'Local',
       'nexus-ai',
-      'agent-logs',
+      'agents',
+      agentName,
+      'logs',
     );
     try { fs.mkdirSync(logDir, { recursive: true }); } catch { /* ignore */ }
-    const logFile = path.join(logDir, `${agentName}.log`);
+    const logFile = path.join(logDir, 'agent.log');
     const appLog = createLogger(`agent:${agentName}`);
 
     function appendLog(level: string, msg: string): void {

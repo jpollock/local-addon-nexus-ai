@@ -5204,8 +5204,10 @@ export function createResolvers(context: ResolverContext) {
           'Application Support',
           'Local',
           'nexus-ai',
-          'agent-logs',
-          `${name}.log`,
+          'agents',
+          name,
+          'logs',
+          'agent.log',
         );
         const fs = require('fs') as typeof import('fs');
         if (!fs.existsSync(logPath)) return [];

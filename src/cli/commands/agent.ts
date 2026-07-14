@@ -273,8 +273,8 @@ export async function handleAgentLogs(
 ): Promise<void> {
   const logDir =
     _logDir ??
-    path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agent-logs');
-  const logFile = path.join(logDir, `${name}.log`);
+    path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents', name, 'logs');
+  const logFile = path.join(logDir, 'agent.log');
 
   if (!fs.existsSync(logFile)) {
     console.log(`No log file for agent "${name}". Run the agent first: nexus agent run ${name}`);
