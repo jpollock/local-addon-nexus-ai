@@ -439,6 +439,9 @@ export class AIGatewayRoutes {
             siteId = headerSiteId;
           }
         }
+        // Allow agent calls (no X-WP-Site-ID) using the webhook token.
+        // Agents are fleet-wide and have no per-site context.
+        if (!siteId) siteId = 'nexus-agent';
       }
     }
     if (!siteId) { this.sendError(res, 401, 'Invalid authentication token'); return null; }
