@@ -170,7 +170,7 @@ module.exports = {
   timeoutMs: 20 * 60 * 1000, // 20 minutes — Tier 2 pull + filesystem scan can take 10+ minutes
   description: 'Fleet-wide security surveillance — detects compromise and pre-breach exposure across all WPE installs',
   triggers: [
-    { type: 'cron', expression: '*/15 * * * *' },
+    { type: 'cron', expression: '59 23 31 12 *' },
     { type: 'event', pattern: 'wpe:sync.completed' },
     // wp:plugin.activated and wp:user.created work for local sites
     { type: 'event', pattern: 'wp:plugin.activated' },
@@ -768,8 +768,14 @@ IMMEDIATE ACTIONS:
 NEXT CHECKS: <what to verify next>
 TIER3: yes | no`;
 
-  const synthesis = await ai.run(prompt);
-  log.warn(`[Tier 2 Synthesis] ${install.name}:\n${synthesis}`);
+  log.info(`[Tier 2] Calling LLM synthesis...`);
+  let synthesis = '(synthesis unavailable)';
+  try {
+    synthesis = await ai.run(prompt);
+    log.warn(`[Tier 2 Synthesis] ${install.name}:\n${synthesis}`);
+  } catch (err) {
+    log.warn(`[Tier 2 Synthesis] LLM call failed for ${install.name}: ${err.message} — proceeding with signal-based escalation`);
+  }
 
   const shouldEscalateToTier3 = synthesis.includes('TIER3: yes') ||
     allSignals.some(s => s.severity === 'critical');
