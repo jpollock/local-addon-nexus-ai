@@ -2,7 +2,7 @@ import * as React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { IPC_CHANNELS } from '../../common/constants';
+import { IPC_CHANNELS } from '../../../common/constants';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
