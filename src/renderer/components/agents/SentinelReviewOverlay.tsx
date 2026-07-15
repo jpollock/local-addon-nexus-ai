@@ -185,6 +185,7 @@ export class SentinelReviewOverlay extends React.Component<OverlayProps, Overlay
     const { findings } = this.props.sentinelCase;
     const crits = findings.filter(f => f.sev === 'critical');
     const highs = findings.filter(f => f.sev === 'high');
+    const mediums = findings.filter(f => f.sev === 'medium');
     return React.createElement('div', { style: { marginBottom: 28 } },
       React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 } },
         React.createElement('h2', { style: { fontSize: 16, fontWeight: 600, color: 'var(--ag-text-primary)', margin: 0 } }, 'What the Sentinel found'),
@@ -193,7 +194,7 @@ export class SentinelReviewOverlay extends React.Component<OverlayProps, Overlay
       React.createElement('div', {
         style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
       },
-        ...[...crits, ...highs].map(f => this.renderFindingCard(f)),
+        ...[...crits, ...highs, ...mediums].map(f => this.renderFindingCard(f)),
       ),
     );
   }
@@ -246,6 +247,7 @@ export class SentinelReviewOverlay extends React.Component<OverlayProps, Overlay
   }
 
   private renderStep(step: RemediationStep, i: number, expandedStep: number | null, total: number) {
+    // total reserved for Task 3 border/divider logic
     const isExpanded = expandedStep === step.n;
     const byChip = BY_CHIP[step.by];
     const statusIcon = step.ok ? '✅' : step.deferred ? '⚪' : '❌';
