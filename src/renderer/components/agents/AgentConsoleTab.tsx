@@ -4,6 +4,7 @@ import { AgentsHub } from './AgentsHub';
 import { FleetActivityLedger } from './FleetActivityLedger';
 import { AgentWorkspace } from './AgentWorkspace';
 import { GenericApprovalDrawer, GenericApproval } from './GenericApprovalDrawer';
+import { rendererGql } from '../../utils/rendererGql';
 
 interface AgentConsoleTabProps {
   electron: any;
@@ -38,13 +39,15 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
 
   private async refreshAgents() {
     try {
-      const result = await this.props.electron.ipcRenderer.invoke('nexus:graphql', {
-        query: `{ agentStatus { name version description cronExpression lastRunAt lastRunStatus lastRunDurationMs lastRunError } }`,
-      });
-      if (result?.data?.agentStatus) {
-        agentStore.setState({ statuses: result.data.agentStatus });
+      const result = await rendererGql<{ agentStatus: any[] }>(
+        `{ agentStatus { name version description cronExpression lastRunAt lastRunStatus lastRunDurationMs lastRunError } }`,
+      );
+      if (result?.agentStatus) {
+        agentStore.setState({ statuses: result.agentStatus });
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[AgentConsoleTab] Failed to load agent statuses:', err);
+    }
   }
 
   private renderModeSwitch() {

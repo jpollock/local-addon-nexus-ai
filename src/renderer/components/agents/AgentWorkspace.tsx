@@ -2,6 +2,7 @@ import * as React from 'react';
 import { agentStore, AgentStatus } from './AgentStore';
 import { AgentWorkspaceSettings } from './AgentWorkspaceSettings';
 import { FleetActivityLedger } from './FleetActivityLedger';
+import { rendererGql } from '../../utils/rendererGql';
 
 type WorkspaceTab = 'overview' | 'approvals' | 'activity' | 'settings';
 
@@ -58,17 +59,20 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
   }
 
   private async runNow() {
-    const { agentId, electron } = this.props;
+    const { agentId } = this.props;
     this.setState({ running: true });
     try {
-      await electron.ipcRenderer.invoke('nexus:graphql', {
-        query: `mutation AgentRun($name: String!) { agentRun(name: $name) { status error } }`,
-        variables: { name: agentId },
-      });
+      await rendererGql(
+        `mutation AgentRun($name: String!) { agentRun(name: $name) { agentName status error } }`,
+        { name: agentId },
+      );
       this.setState({ showRunBanner: true });
       setTimeout(() => this.setState({ showRunBanner: false }), 4000);
-    } catch {}
-    this.setState({ running: false });
+    } catch (err) {
+      console.warn('[AgentWorkspace] Run now failed:', err);
+    } finally {
+      this.setState({ running: false });
+    }
   }
 
   private renderHeader() {
