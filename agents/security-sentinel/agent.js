@@ -180,7 +180,6 @@ module.exports = {
   tools: [
     'fleet_sql', 'wpe_site_deep_refresh', 'wp_user_list',
     'local_create_site', 'local_wpe_pull', 'local_wpe_push',
-    'local_stop_site', 'local_delete_site',
     'local_operation_status', 'compare_sites', 'wp_plugin_list', 'wp_eval',
   ],
 
@@ -725,17 +724,8 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
   // LLM synthesis (Task 8) — runs after filesystem checks
   await llmSynthesis(install, tier1Signals, fsSignals, tools, ai, log, sandboxName);
 
-  // Cleanup: stop and delete the sandbox site — it served its purpose
-  try {
-    await tools.invoke('local_stop_site', { site: sandboxName });
-  } catch { /* non-fatal — stop may fail if already stopped */ }
-  try {
-    await tools.invoke('local_delete_site', { site: sandboxName, trash_files: false });
-    log.info(`[Tier 2] Sandbox deleted: ${sandboxName}`);
-  } catch (err) {
-    log.warn(`[Tier 2] Sandbox cleanup failed (delete manually): ${err.message}`);
-  }
-
+  // Sandbox intentionally kept alive — the user will execute or dismiss via Sentinel Review UI.
+  // Deletion is handled by the nexus:sentinel:execute IPC handler after execution completes.
   return { filesystemSignals: fsSignals, adminMismatch, sandboxName };
 }
 

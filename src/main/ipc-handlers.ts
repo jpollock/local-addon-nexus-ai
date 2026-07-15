@@ -40,6 +40,7 @@ import { WPESyncService } from './events/WPESyncService';
 import { WpeAutoPullService } from './wpe-auto-pull';
 import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 import { AIContextGenerator } from './ai-context/AIContextGenerator';
+import { executeSentinelCommands } from './sentinel/SentinelExecutor';
 import type { AIContextData } from './ai-context/AIContextGenerator';
 import { AuditLogger, AUDITED_OPERATIONS } from './audit/AuditLogger';
 import {
@@ -4377,6 +4378,17 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       return { success: true, outputPath: params.outputPath };
     } catch (err: any) {
       return { success: false, error: err.message };
+    }
+  });
+
+  // Sentinel Review UI: execute remediation commands on a WPE install via SSH
+  safeHandle('nexus:sentinel:execute', async (_event: any, { installName, commands }: { installName: string; commands: string[] }) => {
+    try {
+      const result = await executeSentinelCommands(installName, commands, localServicesBridge);
+      return { success: result.success, steps: result.steps };
+    } catch (err: any) {
+      localLogger.error('[nexus:sentinel:execute] Execution failed:', err.message);
+      return { success: false, steps: [] };
     }
   });
 
