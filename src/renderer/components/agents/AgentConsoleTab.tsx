@@ -74,6 +74,49 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     this.refreshAgents();
   }
 
+  private renderSentinelModals(): React.ReactNode[] {
+    const { activeSentinelCase, executeDecisions, executeCommands } = this.state;
+    const { electron } = this.props;
+
+    // TODO: Replace FALLBACK_COMMANDS with real commands from SentinelReviewOverlay.generateCommands()
+    // in a follow-up task. These are placeholders to demonstrate the execute modal.
+    const FALLBACK_COMMANDS = [
+      'wp plugin delete fileorganizer filester wp-compat file-manager-advanced noted woocommerce-conversion-tracking wp-file-manager',
+      'rm wp-content/mu-plugins/index.php  # adjust path to actual webshell found',
+      'wp user delete <auto-deleted-uids> --reassign=<legitimate-uid>  # TODO: wire from account decisions',
+      'wp config shuffle-salts',
+      'wp config set DISALLOW_FILE_EDIT true --raw',
+    ];
+
+    const commands = executeCommands.length > 0 ? executeCommands : FALLBACK_COMMANDS;
+
+    const nodes: React.ReactNode[] = [];
+
+    if (activeSentinelCase && !executeDecisions) {
+      nodes.push(React.createElement(SentinelReviewOverlay, {
+        key: 'sentinel-review',
+        sentinelCase: activeSentinelCase,
+        onDismiss: () => this.setState({ activeSentinelCase: null }),
+        onExecute: (decisions: AccountDecisionMap) => {
+          this.setState({ executeDecisions: decisions, executeCommands: [] });
+        },
+      }));
+    }
+
+    if (executeDecisions && activeSentinelCase) {
+      nodes.push(React.createElement(ExecuteModal, {
+        key: 'execute-modal',
+        sentinelCase: activeSentinelCase,
+        commands,
+        electron,
+        onCancel: () => this.setState({ executeDecisions: null }),
+        onDone: () => this.handleExecuteDone(),
+      }));
+    }
+
+    return nodes;
+  }
+
   private async refreshAgents() {
     try {
       const result = await rendererGql<{ agentStatus: any[] }>(
@@ -132,26 +175,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
             this.setState({ activeApproval: null });
           },
         }),
-        activeSentinelCase && !executeDecisions && React.createElement(SentinelReviewOverlay, {
-          sentinelCase: activeSentinelCase,
-          onDismiss: () => this.setState({ activeSentinelCase: null }),
-          onExecute: (decisions: AccountDecisionMap) => {
-            this.setState({ executeDecisions: decisions, executeCommands: [] });
-          },
-        }),
-        executeDecisions && activeSentinelCase && React.createElement(ExecuteModal, {
-          sentinelCase: activeSentinelCase,
-          commands: executeCommands.length > 0 ? executeCommands : [
-            'wp plugin delete fileorganizer filester wp-compat file-manager-advanced noted woocommerce-conversion-tracking wp-file-manager',
-            'rm wp-content/mu-plugins/index.php',
-            'wp user delete 4 6 7 --reassign=1',
-            'wp config shuffle-salts',
-            'wp config set DISALLOW_FILE_EDIT true --raw',
-          ],
-          electron,
-          onCancel: () => this.setState({ executeDecisions: null }),
-          onDone: () => this.handleExecuteDone(),
-        }),
+        ...this.renderSentinelModals(),
       );
     }
 
@@ -166,26 +190,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
         : React.createElement(FleetActivityLedger, {
             onReviewEvent: (eventId: string) => this.openSentinelReview(eventId),
           }),
-      activeSentinelCase && !executeDecisions && React.createElement(SentinelReviewOverlay, {
-        sentinelCase: activeSentinelCase,
-        onDismiss: () => this.setState({ activeSentinelCase: null }),
-        onExecute: (decisions: AccountDecisionMap) => {
-          this.setState({ executeDecisions: decisions, executeCommands: [] });
-        },
-      }),
-      executeDecisions && activeSentinelCase && React.createElement(ExecuteModal, {
-        sentinelCase: activeSentinelCase,
-        commands: executeCommands.length > 0 ? executeCommands : [
-          'wp plugin delete fileorganizer filester wp-compat file-manager-advanced noted woocommerce-conversion-tracking wp-file-manager',
-          'rm wp-content/mu-plugins/index.php',
-          'wp user delete 4 6 7 --reassign=1',
-          'wp config shuffle-salts',
-          'wp config set DISALLOW_FILE_EDIT true --raw',
-        ],
-        electron,
-        onCancel: () => this.setState({ executeDecisions: null }),
-        onDone: () => this.handleExecuteDone(),
-      }),
+      ...this.renderSentinelModals(),
     );
   }
 }
