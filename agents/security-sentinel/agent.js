@@ -919,7 +919,30 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
     toolName: 'wp_eval',
     toolArgs: {
       site: sandboxName,
-      code: `if (defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT) { echo 'true'; } else { $result = shell_exec('wp config set DISALLOW_FILE_EDIT true --raw --type=constant 2>&1'); if (empty($result) || strpos((string)$result, 'Error') !== false) { $config = @file_get_contents(ABSPATH . 'wp-config.php'); if ($config && strpos($config, 'DISALLOW_FILE_EDIT') === false) { $config = preg_replace('/^<\\?php/', "<?php\ndefine('DISALLOW_FILE_EDIT', true);", $config, 1); @file_put_contents(ABSPATH . 'wp-config.php', $config); } } echo defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT ? 'true' : 'false'; }`,
+      code: `
+        // Phase 1: Check current state and where it's defined
+        $sources = [];
+        foreach (glob(WPMU_PLUGIN_DIR . '/*.php') ?: [] as $f) {
+          if (strpos(@file_get_contents($f), 'DISALLOW_FILE_EDIT') !== false) {
+            $sources[] = basename($f);
+          }
+        }
+        $isDefined = defined('DISALLOW_FILE_EDIT');
+        $currentValue = $isDefined ? DISALLOW_FILE_EDIT : null;
+        $setBy = !empty($sources) ? implode(', ', $sources) : 'wp-config.php';
+
+        if ($isDefined && $currentValue) {
+          echo 'true|already enforced by: ' . $setBy;
+        } else {
+          $config = @file_get_contents(ABSPATH . 'wp-config.php');
+          $added = false;
+          if ($config && strpos($config, 'DISALLOW_FILE_EDIT') === false) {
+            $config = preg_replace('/^<\\?php/', "<?php\\ndefine('DISALLOW_FILE_EDIT', true);", $config, 1);
+            $added = @file_put_contents(ABSPATH . 'wp-config.php', $config) !== false;
+          }
+          echo $added ? 'true|added to wp-config.php' : 'false|could not write wp-config.php';
+        }
+      `,
     },
     expectedEmpty: false,
     verifyContains: 'true',
