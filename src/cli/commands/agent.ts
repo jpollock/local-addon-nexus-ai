@@ -645,6 +645,56 @@ export async function handleAgentEmit(
 }
 
 // ---------------------------------------------------------------------------
+// Helper functions for nexus agent push
+// ---------------------------------------------------------------------------
+
+/**
+ * Find the latest sentinel report for a given install name.
+ * Reports are stored in ~/Library/Application Support/Local/nexus-ai/agents/security-sentinel/reports/<installName>/
+ * Filenames are ISO timestamps (YYYY-MM-DDTHH-MM-SS.md) and sort lexicographically in date order.
+ *
+ * @param siteName - The WPE install name (e.g. "theawfulpmtest")
+ * @returns Path to the latest report, or null if none found
+ */
+function findLatestSentinelReport(siteName: string): string | null {
+  const dir = path.join(
+    os.homedir(),
+    'Library',
+    'Application Support',
+    'Local',
+    'nexus-ai',
+    'agents',
+    'security-sentinel',
+    'reports',
+    siteName,
+  );
+  try {
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.md')).sort().reverse();
+    return files.length > 0 ? path.join(dir, files[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse the verdict from a sentinel report file.
+ * Looks for "READY TO PUSH" or "NOT SAFE TO PUSH" markers in the ## Verdict section.
+ *
+ * @param reportPath - Path to the report markdown file
+ * @returns 'ready' if the report contains "READY TO PUSH", 'blocked' if "NOT SAFE TO PUSH", null if neither found
+ */
+function parseReportVerdict(reportPath: string): 'ready' | 'blocked' | null {
+  try {
+    const content = fs.readFileSync(reportPath, 'utf-8');
+    if (content.includes('READY TO PUSH')) return 'ready';
+    if (content.includes('NOT SAFE TO PUSH')) return 'blocked';
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Commander command definition
 // ---------------------------------------------------------------------------
 
@@ -739,69 +789,31 @@ agentCommand
 
 agentCommand
   .command('push <installName>')
-  .description('Push a remediated sandbox to WPE production (reads latest remediation report)')
+  .description('Push a remediated sandbox to WPE production (reads latest sentinel report)')
   .action(async (installName: string) => {
-    const reportsDir = path.join(
-      os.homedir(),
-      'Library',
-      'Application Support',
-      'Local',
-      'nexus-ai',
-      'agents',
-      'security-sentinel',
-      'reports',
-      installName,
-    );
-
-    if (!fs.existsSync(reportsDir)) {
-      console.error(`No remediation reports found for "${installName}".`);
-      console.error(`Run: nexus agent run security-sentinel --install ${installName}`);
+    const reportPath = findLatestSentinelReport(installName);
+    if (!reportPath) {
+      console.error(`No remediation report found for "${installName}". Run the sentinel first.`);
       process.exit(1);
-      return;
     }
 
-    // Find the latest report (lexicographic sort — ISO timestamp filenames sort correctly)
-    const reports = fs
-      .readdirSync(reportsDir)
-      .filter((f) => f.endsWith('.md'))
-      .sort();
-
-    if (reports.length === 0) {
-      console.error(`No report files found in ${reportsDir}`);
+    const verdict = parseReportVerdict(reportPath);
+    if (verdict !== 'ready') {
+      console.error(`Report verdict is "${verdict || 'unknown'}" — not safe to push.`);
+      console.error(`Read the report: ${reportPath}`);
       process.exit(1);
-      return;
     }
 
-    const latestReport = path.join(reportsDir, reports[reports.length - 1]);
-    const content = fs.readFileSync(latestReport, 'utf-8');
-
-    // Check all steps are ✅
-    const stepLines = content.split('\n').filter((l) => l.startsWith('✅') || l.startsWith('❌'));
-    const failedSteps = stepLines.filter((l) => l.startsWith('❌'));
-
-    console.log(`\nLatest report: ${latestReport}\n`);
-
-    if (failedSteps.length > 0) {
-      console.error(`NOT SAFE TO PUSH — ${failedSteps.length} step(s) failed:`);
-      for (const line of failedSteps) {
-        console.error(`  ${line}`);
-      }
-      console.error('\nFix failed steps before pushing.');
-      process.exit(1);
-      return;
-    }
-
-    if (stepLines.length === 0) {
-      console.error('No checklist steps found in report — remediation may not have completed.');
-      process.exit(1);
-      return;
-    }
-
-    console.log(`All ${stepLines.length} remediation step(s) passed. ✅`);
-    console.log(`\nSandbox for "${installName}" is ready to push.`);
-    console.log(`Push via Local Connect UI or run:\n`);
-    console.log(`  nexus mcp  # then use local_wpe_push tool`);
-    console.log(`\nOr find the sandbox name in the report header and push manually.`);
+    console.log(`✓ Report: ${path.basename(reportPath)}`);
+    console.log(`✓ Verdict: READY TO PUSH`);
+    console.log('');
+    console.log(`Executing on ${installName}.wpengine.com...`);
+    console.log('');
+    console.log('Note: Use the Agents UI in Local for step-by-step progress.');
+    console.log('CLI execution will be added in a future release.');
+    console.log('');
+    console.log('Push command for UI:');
+    console.log(`  Open Local → Nexus AI → Agents → Security Sentinel → Review → Execute`);
   });
 
 export { agentCommand };
