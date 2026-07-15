@@ -83,24 +83,24 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
     const ipc = electron.ipcRenderer;
     const sites: SiteForRun[] = [];
 
-    // WPE installs via existing IPC channel (same as NexusOverview)
+    // WPE installs — returns { success, sites: Site[] } where Site has name, environment, account_id
     try {
-      const wpeSites = await ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES).catch(() => []);
-      for (const s of (wpeSites || [])) {
-        const name: string = s.name || s.installName || '';
+      const wpeResult = await ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES).catch(() => null);
+      const wpeSites: any[] = wpeResult?.sites || [];
+      for (const s of wpeSites) {
+        const name: string = s.name || '';
         const env = (s.environment || 'production') as SiteEnv;
-        const account: string = s.accountName || s.account || 'WP Engine';
         if (!name) continue;
-        sites.push({ id: s.id || name, name, displayName: name, account, environment: env, status: getSentinelStatus(name) });
+        sites.push({ id: s.id || name, name, displayName: name, account: s.account_id || 'WP Engine', environment: env, status: getSentinelStatus(name) });
       }
     } catch {}
 
-    // Local sites via existing IPC channel (same as NexusOverview)
+    // Local sites — returns Site[] directly with { id, name, status, ... }
     try {
-      const localSites = await ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => []);
+      const localSites: any[] = await ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => []);
       for (const s of (localSites || [])) {
         const name: string = s.name || '';
-        if (!name) continue;
+        if (!name || name.startsWith('sentinel-')) continue; // skip sentinel sandboxes
         sites.push({ id: s.id || name, name, displayName: name, account: 'Local sites', environment: 'local', status: getSentinelStatus(name) });
       }
     } catch {}
