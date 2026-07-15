@@ -2,6 +2,7 @@ import * as React from 'react';
 import { agentStore, AgentStatus } from './AgentStore';
 import { AgentWorkspaceSettings } from './AgentWorkspaceSettings';
 import { FleetActivityLedger } from './FleetActivityLedger';
+import { AgentRunModal } from './AgentRunModal';
 import { rendererGql } from '../../utils/rendererGql';
 
 type WorkspaceTab = 'overview' | 'approvals' | 'activity' | 'settings';
@@ -18,6 +19,7 @@ interface WorkspaceState {
   status: AgentStatus | null;
   running: boolean;
   showRunBanner: boolean;
+  showRunModal: boolean;
 }
 
 const ACCENTS: Record<string, string> = {
@@ -40,6 +42,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     status: null,
     running: false,
     showRunBanner: false,
+    showRunModal: false,
   };
   private unsub!: () => void;
 
@@ -124,7 +127,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
 
         // Run now button
         React.createElement('button', {
-          onClick: () => this.runNow(),
+          onClick: () => this.setState({ showRunModal: true }),
           disabled: running || !settings.enabled,
           style: {
             background: running || !settings.enabled ? 'var(--ag-bg-elevated)' : 'var(--ag-teal)',
@@ -223,6 +226,8 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
   render() {
     const { activeTab } = this.state;
     const { agentId, onReviewEvent } = this.props;
+    const { showRunModal } = this.state;
+    const settings = agentStore.getOrInitSettings(agentId);
 
     return React.createElement('div', { style: { padding: '24px 40px' } },
       this.renderHeader(),
@@ -234,6 +239,25 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         // Scoped to this agent in future — for now shows all
       }),
       activeTab === 'settings'  && React.createElement(AgentWorkspaceSettings, { agentId }),
+
+      // Run now site-selection modal
+      showRunModal && settings.enabled && React.createElement(AgentRunModal, {
+        agentName: this.state.status?.name || agentId,
+        agentId,
+        onCancel: () => this.setState({ showRunModal: false }),
+        onRun: async (siteNames) => {
+          this.setState({ showRunModal: false, running: true });
+          try {
+            // Emit scoped run events for each selected site
+            for (const name of siteNames) {
+              await this.runNow().catch(() => {});
+            }
+          } finally {
+            this.setState({ running: false, showRunBanner: true });
+            setTimeout(() => this.setState({ showRunBanner: false }), 4000);
+          }
+        },
+      }),
     );
   }
 }
