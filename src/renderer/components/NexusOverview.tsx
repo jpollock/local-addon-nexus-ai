@@ -23,6 +23,7 @@ import { SettingsTab } from './SettingsTab';
 import { FleetCompletenessWidget } from './FleetCompletenessWidget';
 import { AssistantPanel } from './AssistantPanel';
 import { ChatTab } from './ChatTab';
+import { AgentConsoleTab } from './agents/AgentConsoleTab';
 // Local's native notification components
 let toast: any = null;
 try {
@@ -158,7 +159,7 @@ interface NexusOverviewState {
   copiedField: string | null;
   loading: boolean;
   error: string | null;
-  activeTab: 'overview' | 'activity' | 'operations' | 'ask' | 'settings';
+  activeTab: 'overview' | 'activity' | 'operations' | 'ask' | 'settings' | 'agents';
   // Chat state lifted here so it survives tab switches (ChatTab remounts but picks these up)
   chatMessages: any[];
   chatSessionId: string;
@@ -1691,6 +1692,7 @@ renderTabBar(): React.ReactNode {
       { key: 'ask' as const, label: 'Ask/Tell' },
       { key: 'operations',   label: 'Operations' },
       { key: 'activity',     label: 'Activity' },
+      { key: 'agents',       label: 'Agents' },
       { key: 'settings',     label: 'Settings' },
     ];
 
@@ -2365,7 +2367,7 @@ renderTabBar(): React.ReactNode {
       case 'activity': return this.renderActivityTab();
       case 'operations': return this.renderOperationsTab();
       case 'settings': return React.createElement(SettingsTab, { electron: this.props.electron });
-      // 'ask' case removed — ChatTab is always mounted in render() and shown/hidden via CSS
+      // 'ask' and 'agents' cases handled in render() directly (no stats dependency)
       default: return this.renderOverviewTab();
     }
   }
@@ -2840,7 +2842,14 @@ renderTabBar(): React.ReactNode {
       ),
 
       // Content: each tab fills remaining height and scrolls independently
-      activeTab === 'ask'
+      // Agents tab: no stats dependency — renders AgentConsoleTab directly
+      activeTab === 'agents'
+        ? React.createElement('div', {
+            style: { flexGrow: 1, overflow: 'auto' as const, display: 'flex', flexDirection: 'column' as const },
+          },
+            React.createElement(AgentConsoleTab, { electron: this.props.electron }),
+          )
+        : activeTab === 'ask'
         // Ask/Tell: same flexGrow:1 + overflow:hidden wrapper that all other tabs use,
         // so ChatTab participates in the flex layout exactly like Overview/Search/etc.
         ? React.createElement('div', {
