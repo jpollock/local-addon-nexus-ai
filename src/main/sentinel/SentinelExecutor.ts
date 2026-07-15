@@ -21,16 +21,19 @@ export async function executeSentinelCommands(
   for (const command of commands) {
     const start = Date.now();
 
-    // Skip comments
-    if (command.trim().startsWith('#') || command.trim() === '') {
+    // Strip inline comments before processing
+    const cleanCommand = command.replace(/\s+#.*$/, '').trim();
+
+    // Skip full-line comments and blank lines
+    if (cleanCommand.startsWith('#') || cleanCommand === '') {
       steps.push({ command, ok: true, durationMs: 0 });
       continue;
     }
 
     try {
-      if (command.startsWith('rm ')) {
+      if (cleanCommand.startsWith('rm ')) {
         // File deletion via wp eval (safer than raw rm in WPE environment)
-        const filePath = command.replace(/^rm\s+(-\S+\s+)*/, '').trim();
+        const filePath = cleanCommand.replace(/^rm\s+(-\S+\s+)*/, '').trim();
         const safePath = filePath.replace(/'/g, "\\'");
         const result = await localServices.remoteWpCliRun(installName, [
           'eval',
@@ -46,7 +49,7 @@ export async function executeSentinelCommands(
         if (!ok) allOk = false;
       } else {
         // Standard WP-CLI command
-        const args = command.split(/\s+/);
+        const args = cleanCommand.split(/\s+/);
         const result = await localServices.remoteWpCliRun(installName, args);
         const ok = result.success;
         steps.push({

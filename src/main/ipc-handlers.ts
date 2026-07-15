@@ -4385,6 +4385,8 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   safeHandle('nexus:sentinel:execute', async (_event: any, { installName, commands }: { installName: string; commands: string[] }) => {
     try {
       const result = await executeSentinelCommands(installName, commands, localServicesBridge);
+      // TODO: delete sandbox site after successful execution
+      // Sandbox name is not currently passed with the request; needs protocol update
       return { success: result.success, steps: result.steps };
     } catch (err: any) {
       localLogger.error('[nexus:sentinel:execute] Execution failed:', err.message);

@@ -69,7 +69,7 @@ export class ExecuteModal extends React.Component<ModalProps, ModalState> {
 
         await new Promise(r => setTimeout(r, 300));
 
-        const stepResult = results[i] || { ok: true, durationMs: 500 };
+        const stepResult = results[i] || { ok: false, durationMs: 0, error: 'No result — execution may have failed' };
         this.setState(s => {
           const steps = [...s.steps];
           steps[i] = {
@@ -142,7 +142,7 @@ export class ExecuteModal extends React.Component<ModalProps, ModalState> {
       },
         React.createElement('span', { style: { color: 'var(--ag-red)', fontWeight: 600 } }, 'This cannot be undone. '),
         React.createElement('span', { style: { color: 'var(--ag-text-secondary)', fontSize: 13 } },
-          'The sandbox will be deleted after a successful run. The remediation report is kept permanently.',
+          'The sandbox will remain available for review. Delete it manually from Local when done. The remediation report is kept permanently.',
         ),
       ),
 

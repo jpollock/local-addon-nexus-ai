@@ -74,21 +74,29 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     this.refreshAgents();
   }
 
+  private generateCommands(sentinelCase: SentinelCase, decisions: AccountDecisionMap): string[] {
+    const pluginSlugs = ['fileorganizer', 'filester', 'wp-compat', 'file-manager-advanced',
+      'noted', 'woocommerce-conversion-tracking', 'wp-file-manager'];
+    const cmds: string[] = [];
+    cmds.push(`wp plugin delete ${pluginSlugs.join(' ')}`);
+    cmds.push('rm wp-content/mu-plugins/index.php');
+    const toDelete = sentinelCase.accounts
+      .filter(a => a.autoDeleted || decisions[a.id]?.decision === 'delete')
+      .map(a => a.uid).filter(Boolean);
+    if (toDelete.length > 0) {
+      cmds.push(`wp user delete ${toDelete.join(' ')} --reassign=1`);
+    }
+    for (const a of sentinelCase.accounts.filter(a => decisions[a.id]?.decision === 'keep')) {
+      cmds.push(`wp user update ${a.uid} --role=subscriber`);
+    }
+    cmds.push('wp config shuffle-salts');
+    cmds.push('wp config set DISALLOW_FILE_EDIT true --raw');
+    return cmds;
+  }
+
   private renderSentinelModals(): React.ReactNode[] {
     const { activeSentinelCase, executeDecisions, executeCommands } = this.state;
     const { electron } = this.props;
-
-    // TODO: Replace FALLBACK_COMMANDS with real commands from SentinelReviewOverlay.generateCommands()
-    // in a follow-up task. These are placeholders to demonstrate the execute modal.
-    const FALLBACK_COMMANDS = [
-      'wp plugin delete fileorganizer filester wp-compat file-manager-advanced noted woocommerce-conversion-tracking wp-file-manager',
-      'rm wp-content/mu-plugins/index.php  # adjust path to actual webshell found',
-      'wp user delete <auto-deleted-uids> --reassign=<legitimate-uid>  # TODO: wire from account decisions',
-      'wp config shuffle-salts',
-      'wp config set DISALLOW_FILE_EDIT true --raw',
-    ];
-
-    const commands = executeCommands.length > 0 ? executeCommands : FALLBACK_COMMANDS;
 
     const nodes: React.ReactNode[] = [];
 
@@ -98,7 +106,10 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
         sentinelCase: activeSentinelCase,
         onDismiss: () => this.setState({ activeSentinelCase: null }),
         onExecute: (decisions: AccountDecisionMap) => {
-          this.setState({ executeDecisions: decisions, executeCommands: [] });
+          const commands = activeSentinelCase
+            ? this.generateCommands(activeSentinelCase, decisions)
+            : [];
+          this.setState({ executeDecisions: decisions, executeCommands: commands });
         },
       }));
     }
@@ -107,7 +118,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
       nodes.push(React.createElement(ExecuteModal, {
         key: 'execute-modal',
         sentinelCase: activeSentinelCase,
-        commands,
+        commands: executeCommands,
         electron,
         onCancel: () => this.setState({ executeDecisions: null }),
         onDone: () => this.handleExecuteDone(),
