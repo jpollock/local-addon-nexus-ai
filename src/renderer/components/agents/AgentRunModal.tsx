@@ -2,7 +2,7 @@ import * as React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { rendererGql } from '../../utils/rendererGql';
+import { IPC_CHANNELS } from '../../common/constants';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +21,7 @@ interface SiteForRun {
 interface ModalProps {
   agentName: string;       // e.g. "Security Sentinel"
   agentId: string;         // e.g. "security-sentinel"
+  electron: any;           // Electron IPC — same pattern as NexusOverview
   onCancel: () => void;
   onRun: (siteNames: string[]) => void;
 }
@@ -78,79 +79,34 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
   }
 
   private async loadSites() {
+    const { electron } = this.props;
+    const ipc = electron.ipcRenderer;
     const sites: SiteForRun[] = [];
 
-    // WPE installs from graph
+    // WPE installs via existing IPC channel (same as NexusOverview)
     try {
-      const result = await rendererGql<{ data: string }>(
-        '{ fleetSql(query: "SELECT id, name, environment, settings_json FROM sites WHERE source = \'wpe\' ORDER BY name") }',
-      ).catch(() => null);
-
-      // Parse fleet_sql markdown table output
-      if (result) {
-        const rows = this.parseSqlMarkdown(String(result));
-        for (const row of rows) {
-          const name = row['name'] || '';
-          const env = (row['environment'] || 'production') as SiteEnv;
-          sites.push({
-            id: row['id'] || name,
-            name,
-            displayName: name,
-            account: this.inferAccount(name),
-            environment: env,
-            status: getSentinelStatus(name),
-          });
-        }
+      const wpeSites = await ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES).catch(() => []);
+      for (const s of (wpeSites || [])) {
+        const name: string = s.name || s.installName || '';
+        const env = (s.environment || 'production') as SiteEnv;
+        const account: string = s.accountName || s.account || 'WP Engine';
+        if (!name) continue;
+        sites.push({ id: s.id || name, name, displayName: name, account, environment: env, status: getSentinelStatus(name) });
       }
     } catch {}
 
-    // Local sites via fleet_sql
+    // Local sites via existing IPC channel (same as NexusOverview)
     try {
-      const result = await rendererGql<any>(
-        '{ fleetSql(query: "SELECT id, name FROM sites WHERE source = \'local\' ORDER BY name") }',
-      ).catch(() => null);
-      if (result) {
-        const rows = this.parseSqlMarkdown(String(result));
-        for (const row of rows) {
-          const name = row['name'] || '';
-          sites.push({
-            id: row['id'] || name,
-            name,
-            displayName: name,
-            account: 'Local sites',
-            environment: 'local',
-            status: getSentinelStatus(name),
-          });
-        }
+      const localSites = await ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => []);
+      for (const s of (localSites || [])) {
+        const name: string = s.name || '';
+        if (!name) continue;
+        sites.push({ id: s.id || name, name, displayName: name, account: 'Local sites', environment: 'local', status: getSentinelStatus(name) });
       }
     } catch {}
 
     const selected = new Set(sites.map(s => s.id));
     this.setState({ sites, selected, loading: false });
-  }
-
-  private parseSqlMarkdown(raw: string): Array<Record<string, string>> {
-    const lines = raw.split('\n').filter(l => l.startsWith('|') && !l.startsWith('| ---'));
-    if (lines.length < 2) return [];
-    const headers = lines[0].split('|').map(h => h.trim()).filter(Boolean);
-    return lines.slice(1).map(line => {
-      const vals = line.split('|').map(v => v.trim()).filter(Boolean);
-      const obj: Record<string, string> = {};
-      headers.forEach((h, i) => { obj[h] = vals[i] ?? ''; });
-      return obj;
-    });
-  }
-
-  private inferAccount(siteName: string): string {
-    // Infer account from known patterns — in production this comes from graph
-    const known: Record<string, string> = {
-      btwpe: 'btwpe', getflywheel: 'getflywheel', jpollock: 'devrel',
-      goldenecomm: 'Golden Ecomm', unicorn: 'Unicorn', w7579: 'w7579',
-    };
-    for (const [prefix, account] of Object.entries(known)) {
-      if (siteName.startsWith(prefix)) return account;
-    }
-    return 'WP Engine';
   }
 
   private getFiltered(): SiteForRun[] {

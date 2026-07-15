@@ -244,6 +244,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
       showRunModal && settings.enabled && React.createElement(AgentRunModal, {
         agentName: this.state.status?.name || agentId,
         agentId,
+        electron,
         onCancel: () => this.setState({ showRunModal: false }),
         onRun: async (siteNames) => {
           this.setState({ showRunModal: false, running: true });
