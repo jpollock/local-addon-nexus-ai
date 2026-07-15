@@ -3,7 +3,6 @@ import { agentStore, AgentStatus } from './AgentStore';
 import { AgentWorkspaceSettings } from './AgentWorkspaceSettings';
 import { FleetActivityLedger } from './FleetActivityLedger';
 import { AgentRunModal } from './AgentRunModal';
-import { rendererGql } from '../../utils/rendererGql';
 
 type WorkspaceTab = 'overview' | 'approvals' | 'activity' | 'settings';
 
@@ -18,7 +17,6 @@ interface WorkspaceState {
   activeTab: WorkspaceTab;
   status: AgentStatus | null;
   running: boolean;
-  showRunBanner: boolean;
   showRunModal: boolean;
 }
 
@@ -41,7 +39,6 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     activeTab: 'overview',
     status: null,
     running: false,
-    showRunBanner: false,
     showRunModal: false,
   };
   private unsub!: () => void;
@@ -61,25 +58,8 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     agentStore.unsubscribe(this.unsub);
   }
 
-  private async runNow() {
-    const { agentId } = this.props;
-    this.setState({ running: true });
-    try {
-      await rendererGql(
-        `mutation AgentRun($name: String!) { agentRun(name: $name) { agentName status error } }`,
-        { name: agentId },
-      );
-      this.setState({ showRunBanner: true });
-      setTimeout(() => this.setState({ showRunBanner: false }), 4000);
-    } catch (err) {
-      console.warn('[AgentWorkspace] Run now failed:', err);
-    } finally {
-      this.setState({ running: false });
-    }
-  }
-
   private renderHeader() {
-    const { status, running, showRunBanner } = this.state;
+    const { status, running } = this.state;
     const { agentId, onBack } = this.props;
     const accent = ACCENTS[agentId] || '#9aa1ac';
     const derivedStatus = agentStore.getAgentDerivedStatus(agentId);
@@ -140,14 +120,6 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         }, running ? '⟳ Running…' : '▶ Run now'),
       ),
 
-      // Ad-hoc run complete banner
-      showRunBanner && React.createElement('div', {
-        style: {
-          background: 'rgba(62,207,142,0.08)', border: '1px solid rgba(62,207,142,0.3)',
-          borderRadius: 8, padding: '10px 16px', marginBottom: 12,
-          fontSize: 13, color: 'var(--ag-green)',
-        },
-      }, '✓ Ad-hoc run complete — check Approvals and Activity for results.'),
     );
   }
 
@@ -246,17 +218,10 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         agentId,
         electron: this.props.electron,
         onCancel: () => this.setState({ showRunModal: false }),
-        onRun: async (siteNames) => {
-          this.setState({ showRunModal: false, running: true });
-          try {
-            // Emit scoped run events for each selected site
-            for (const name of siteNames) {
-              await this.runNow().catch(() => {});
-            }
-          } finally {
-            this.setState({ running: false, showRunBanner: true });
-            setTimeout(() => this.setState({ showRunBanner: false }), 4000);
-          }
+        onRun: (_siteNames: string[]) => {
+          // AgentRunModal.handleRun() already invoked AGENT_RUN_NOW via IPC.
+          // Just close the modal — RunToast/RunPill/RunDrawer take over from here.
+          this.setState({ showRunModal: false });
         },
       }),
     );

@@ -157,11 +157,23 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
     this.setState({ selected: new Set() });
   }
 
-  private handleRun() {
-    const { onRun } = this.props;
+  private async handleRun() {
+    const { onRun, electron, agentId } = this.props;
     const filtered = this.getFiltered();
     const toRun = filtered.filter(s => this.state.selected.has(s.id)).map(s => s.name);
-    onRun(toRun);
+
+    // Fire run-now IPC — returns { runId } immediately; main process fires
+    // AGENT_RUN_STARTED push which AgentConsoleTab feeds into RunStore.
+    try {
+      await electron.ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUN_NOW, {
+        agentId,
+        siteNames: toRun,
+      });
+    } catch (err) {
+      console.warn('[AgentRunModal] run-now IPC failed:', err);
+    }
+
+    onRun(toRun); // close the modal
   }
 
   render() {
