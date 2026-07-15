@@ -30,10 +30,11 @@ export async function executeSentinelCommands(
     try {
       if (command.startsWith('rm ')) {
         // File deletion via wp eval (safer than raw rm in WPE environment)
-        const filePath = command.replace(/^rm\s+/, '').trim();
+        const filePath = command.replace(/^rm\s+(-\S+\s+)*/, '').trim();
+        const safePath = filePath.replace(/'/g, "\\'");
         const result = await localServices.remoteWpCliRun(installName, [
           'eval',
-          `unlink(ABSPATH . '${filePath}'); echo file_exists(ABSPATH . '${filePath}') ? 'failed' : 'deleted';`,
+          `unlink(ABSPATH . '${safePath}'); echo file_exists(ABSPATH . '${safePath}') ? 'failed' : 'deleted';`,
         ]);
         const ok = result.success && (result.stdout ?? '').includes('deleted');
         steps.push({
