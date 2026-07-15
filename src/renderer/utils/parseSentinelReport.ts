@@ -52,9 +52,9 @@ function parseSteps(lines: string[]): RemediationStep[] {
     const deferred = icon === '⚪';
     const n = parseInt(nStr, 10);
     const by: 'agent' | 'wpe' = action.toLowerCase().includes('wpe platform') ||
-      action.toLowerCase().includes('already enforced') ? 'wpe' : 'agent';
+      action.toLowerCase().includes('already enforced') ? 'wpe' : 'agent'; // 'wpe' when action contains "wpe platform" or "already enforced"
     const review = n === 2; // Step 2 is the account remediation step
-    steps.push({ n, title, by, review, action, proof: action, ok: ok || deferred, deferred });
+    steps.push({ n, title, by, review, action, proof: action, ok: icon === '✅', deferred });
   }
   return steps;
 }
