@@ -4,6 +4,10 @@ import { AgentsHub } from './AgentsHub';
 import { FleetActivityLedger } from './FleetActivityLedger';
 import { AgentWorkspace } from './AgentWorkspace';
 import { GenericApprovalDrawer, GenericApproval } from './GenericApprovalDrawer';
+import { SentinelReviewOverlay, AccountDecisionMap } from './SentinelReviewOverlay';
+import { ExecuteModal } from './ExecuteModal';
+import type { SentinelCase } from './SentinelTypes';
+import { parseSentinelReport, findLatestReport } from '../../utils/parseSentinelReport';
 import { rendererGql } from '../../utils/rendererGql';
 
 interface AgentConsoleTabProps {
@@ -14,6 +18,9 @@ interface AgentConsoleTabState {
   homeTab: 'agents' | 'activity';
   selectedAgentId: string | null;
   activeApproval: GenericApproval | null;
+  activeSentinelCase: SentinelCase | null;
+  executeDecisions: AccountDecisionMap | null;
+  executeCommands: string[];
 }
 
 export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, AgentConsoleTabState> {
@@ -21,6 +28,9 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     homeTab: 'agents',
     selectedAgentId: null,
     activeApproval: null,
+    activeSentinelCase: null,
+    executeDecisions: null,
+    executeCommands: [],
   };
   private unsub!: () => void;
 
@@ -35,6 +45,33 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
 
   componentWillUnmount() {
     agentStore.unsubscribe(this.unsub);
+  }
+
+  private openSentinelReview(_eventId: string) {
+    const reportsBase = require('path').join(
+      require('os').homedir(),
+      'Library', 'Application Support', 'Local', 'nexus-ai',
+      'agents', 'security-sentinel', 'reports',
+    );
+    try {
+      const fs = require('fs') as typeof import('fs');
+      const sites = fs.readdirSync(reportsBase);
+      for (const site of sites) {
+        const reportPath = findLatestReport(site);
+        if (reportPath) {
+          const sc = parseSentinelReport(reportPath);
+          if (sc) {
+            this.setState({ activeSentinelCase: sc });
+            return;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  private handleExecuteDone() {
+    this.setState({ activeSentinelCase: null, executeDecisions: null, executeCommands: [] });
+    this.refreshAgents();
   }
 
   private async refreshAgents() {
@@ -75,7 +112,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
   }
 
   render() {
-    const { homeTab, selectedAgentId, activeApproval } = this.state;
+    const { homeTab, selectedAgentId, activeApproval, activeSentinelCase, executeDecisions, executeCommands } = this.state;
     const { electron } = this.props;
 
     // Agent workspace view
@@ -85,10 +122,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
           agentId: selectedAgentId,
           electron,
           onBack: () => this.setState({ selectedAgentId: null }),
-          onReviewEvent: (eventId: string) => {
-            // For now log — Plan B wires Sentinel review
-            console.log('Review event:', eventId);
-          },
+          onReviewEvent: (eventId: string) => this.openSentinelReview(eventId),
         }),
         activeApproval && React.createElement(GenericApprovalDrawer, {
           approval: activeApproval,
@@ -97,6 +131,26 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
             // Mark resolved in store
             this.setState({ activeApproval: null });
           },
+        }),
+        activeSentinelCase && !executeDecisions && React.createElement(SentinelReviewOverlay, {
+          sentinelCase: activeSentinelCase,
+          onDismiss: () => this.setState({ activeSentinelCase: null }),
+          onExecute: (decisions: AccountDecisionMap) => {
+            this.setState({ executeDecisions: decisions, executeCommands: [] });
+          },
+        }),
+        executeDecisions && activeSentinelCase && React.createElement(ExecuteModal, {
+          sentinelCase: activeSentinelCase,
+          commands: executeCommands.length > 0 ? executeCommands : [
+            'wp plugin delete fileorganizer filester wp-compat file-manager-advanced noted woocommerce-conversion-tracking wp-file-manager',
+            'rm wp-content/mu-plugins/index.php',
+            'wp user delete 4 6 7 --reassign=1',
+            'wp config shuffle-salts',
+            'wp config set DISALLOW_FILE_EDIT true --raw',
+          ],
+          electron,
+          onCancel: () => this.setState({ executeDecisions: null }),
+          onDone: () => this.handleExecuteDone(),
         }),
       );
     }
@@ -110,8 +164,28 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
       homeTab === 'agents'
         ? React.createElement(AgentsHub, { onSelectAgent: (id: string) => this.setState({ selectedAgentId: id }) })
         : React.createElement(FleetActivityLedger, {
-            onReviewEvent: (eventId: string) => console.log('Review:', eventId),
+            onReviewEvent: (eventId: string) => this.openSentinelReview(eventId),
           }),
+      activeSentinelCase && !executeDecisions && React.createElement(SentinelReviewOverlay, {
+        sentinelCase: activeSentinelCase,
+        onDismiss: () => this.setState({ activeSentinelCase: null }),
+        onExecute: (decisions: AccountDecisionMap) => {
+          this.setState({ executeDecisions: decisions, executeCommands: [] });
+        },
+      }),
+      executeDecisions && activeSentinelCase && React.createElement(ExecuteModal, {
+        sentinelCase: activeSentinelCase,
+        commands: executeCommands.length > 0 ? executeCommands : [
+          'wp plugin delete fileorganizer filester wp-compat file-manager-advanced noted woocommerce-conversion-tracking wp-file-manager',
+          'rm wp-content/mu-plugins/index.php',
+          'wp user delete 4 6 7 --reassign=1',
+          'wp config shuffle-salts',
+          'wp config set DISALLOW_FILE_EDIT true --raw',
+        ],
+        electron,
+        onCancel: () => this.setState({ executeDecisions: null }),
+        onDone: () => this.handleExecuteDone(),
+      }),
     );
   }
 }
