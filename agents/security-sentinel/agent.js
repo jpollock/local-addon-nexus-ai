@@ -180,6 +180,7 @@ module.exports = {
   tools: [
     'fleet_sql', 'wpe_site_deep_refresh', 'wp_user_list',
     'local_create_site', 'local_wpe_pull', 'local_wpe_push',
+    'local_stop_site', 'local_delete_site',
     'local_operation_status', 'compare_sites', 'wp_plugin_list', 'wp_eval',
   ],
 
@@ -724,6 +725,17 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
   // LLM synthesis (Task 8) — runs after filesystem checks
   await llmSynthesis(install, tier1Signals, fsSignals, tools, ai, log, sandboxName);
 
+  // Cleanup: stop and delete the sandbox site — it served its purpose
+  try {
+    await tools.invoke('local_stop_site', { site: sandboxName });
+  } catch { /* non-fatal — stop may fail if already stopped */ }
+  try {
+    await tools.invoke('local_delete_site', { site: sandboxName, trash_files: false });
+    log.info(`[Tier 2] Sandbox deleted: ${sandboxName}`);
+  } catch (err) {
+    log.warn(`[Tier 2] Sandbox cleanup failed (delete manually): ${err.message}`);
+  }
+
   return { filesystemSignals: fsSignals, adminMismatch, sandboxName };
 }
 
@@ -907,7 +919,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
     toolName: 'wp_eval',
     toolArgs: {
       site: sandboxName,
-      code: `$result = shell_exec('wp config set DISALLOW_FILE_EDIT true --raw --type=constant 2>&1'); if ($result === null || strpos((string)$result, 'Error') !== false) { $config = file_get_contents(ABSPATH . 'wp-config.php'); if (strpos($config, 'DISALLOW_FILE_EDIT') === false) { $config = str_replace("<?php\n", "<?php\ndefine('DISALLOW_FILE_EDIT', true);\n", $config); file_put_contents(ABSPATH . 'wp-config.php', $config); } } echo defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT ? 'true' : 'false';`,
+      code: `if (defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT) { echo 'true'; } else { $result = shell_exec('wp config set DISALLOW_FILE_EDIT true --raw --type=constant 2>&1'); if (empty($result) || strpos((string)$result, 'Error') !== false) { $config = @file_get_contents(ABSPATH . 'wp-config.php'); if ($config && strpos($config, 'DISALLOW_FILE_EDIT') === false) { $config = preg_replace('/^<\\?php/', "<?php\ndefine('DISALLOW_FILE_EDIT', true);", $config, 1); @file_put_contents(ABSPATH . 'wp-config.php', $config); } } echo defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT ? 'true' : 'false'; }`,
     },
     expectedEmpty: false,
     verifyContains: 'true',
