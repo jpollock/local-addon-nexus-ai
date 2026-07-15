@@ -8,7 +8,19 @@ import { SidebarSearchPanel } from './components/SidebarSearchPanel';
 import { IPC_CHANNELS } from '../common/constants';
 import { nexusStore } from './store/NexusStateManager';
 import type { NexusState } from './store/NexusStateManager';
-import '../styles/agent-console.css';
+// Agent console styles injected at runtime (CSS cannot be require()'d in Electron addon renderers)
+function injectAgentConsoleStyles(): void {
+  if (document.getElementById('agent-console-styles')) return;
+  const el = document.createElement('link');
+  el.id = 'agent-console-styles';
+  el.rel = 'stylesheet';
+  // Resolve path relative to this compiled file: lib/renderer/index.js → lib/styles/agent-console.css
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // lib/renderer/index.js → lib/renderer/styles/agent-console.css
+  el.href = 'file://' + require('path').resolve(__dirname, 'styles', 'agent-console.css');
+  document.head.appendChild(el);
+}
+injectAgentConsoleStyles();
 
 export default function renderer(context: any): void {
   console.log('[Nexus AI] Renderer initializing...');

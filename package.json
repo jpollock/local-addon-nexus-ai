@@ -25,7 +25,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "npm run clean && npm run compile && npm run create-entry-points && npm run download-model",
+    "build": "npm run clean && npm run compile && npm run copy-styles && npm run create-entry-points && npm run download-model",
     "compile": "tsc -p .",
     "create-entry-points": "node scripts/create-entry-points.js",
     "sync-wp-plugins": "node scripts/create-entry-points.js",
@@ -67,7 +67,8 @@
     "package:mac-x64": "node scripts/package-addon.js --platform darwin --arch x64",
     "package:linux-x64": "node scripts/package-addon.js --platform linux --arch x64",
     "package:win-x64": "node scripts/package-addon.js --platform win32 --arch x64",
-    "rebuild": "electron-rebuild -v 42.2.0 -f -w better-sqlite3"
+    "rebuild": "electron-rebuild -v 42.2.0 -f -w better-sqlite3",
+    "copy-styles": "mkdir -p lib/renderer/styles && cp src/renderer/styles/*.css lib/renderer/styles/"
   },
   "dependencies": {
     "apache-arrow": ">=13.0.0 <=17.0.0",
