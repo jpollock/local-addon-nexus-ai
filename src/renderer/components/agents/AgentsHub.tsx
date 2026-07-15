@@ -34,6 +34,10 @@ export class AgentsHub extends React.Component<AgentsHubProps, AgentsHubState> {
     return ids.size;
   }
 
+  private getAgentId(name: string): string {
+    return name.toLowerCase().replace(/\s+/g, '-');
+  }
+
   private renderInbox() {
     const pending = this.getTotalPending();
     const agentCount = this.getAgentsWithPending();
@@ -122,7 +126,7 @@ export class AgentsHub extends React.Component<AgentsHubProps, AgentsHubState> {
             ...statuses.map(s => React.createElement(AgentCard, {
               key: s.name,
               status: s,
-              onSelect: () => onSelectAgent(s.name.toLowerCase().replace(/\s+/g, '-')),
+              onSelect: () => onSelectAgent(this.getAgentId(s.name)),
             })),
           ),
     );

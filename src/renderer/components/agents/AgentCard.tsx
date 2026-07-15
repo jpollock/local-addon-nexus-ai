@@ -111,7 +111,10 @@ export class AgentCard extends React.Component<AgentCardProps, AgentCardState> {
           ),
           React.createElement('div', null,
             React.createElement('div', { style: { fontSize: 17, fontWeight: 600, color: 'var(--ag-text-primary)' } },
-              cadenceLabel.split(' ')[0] + ' ' + (cadenceLabel.split(' ')[1] || ''),
+              (() => {
+                const parts = cadenceLabel.split(' ');
+                return parts.length > 1 ? `${parts[0]} ${parts[1]}` : parts[0];
+              })(),
             ),
             React.createElement('div', { style: { fontSize: 10.5, color: 'var(--ag-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' } }, 'Schedule'),
           ),
