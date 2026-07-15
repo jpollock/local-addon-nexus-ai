@@ -46,27 +46,25 @@ export interface AgentSettings {
 export interface AgentState {
   statuses: AgentStatus[];          // from agentStatus GraphQL query
   selectedAgentId: string | null;
-  homeTab: 'agents' | 'activity';
+  // homeTab is managed locally in AgentConsoleTab component state
   activityEvents: ActivityEvent[];
   autonomyById: Record<string, 'suggest' | 'ask' | 'auto'>;
   agentSettings: Record<string, AgentSettings>;
   expandedEvents: Record<string, boolean>;
-  runningAgents: Set<string>;        // agents currently running ad-hoc
+  // runningAgents: managed locally in AgentWorkspace component state
 }
 
 const DEFAULT_STATE: AgentState = {
   statuses: [],
   selectedAgentId: null,
-  homeTab: 'agents',
   activityEvents: [],
   autonomyById: {},
   agentSettings: {},
   expandedEvents: {},
-  runningAgents: new Set(),
 };
 
 class AgentStore {
-  private state: AgentState = { ...DEFAULT_STATE, runningAgents: new Set() };
+  private state: AgentState = { ...DEFAULT_STATE };
   private listeners = new Set<() => void>();
 
   getState(): AgentState { return this.state; }
