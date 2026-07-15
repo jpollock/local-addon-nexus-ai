@@ -9,11 +9,6 @@ import { ExecuteModal } from './ExecuteModal';
 import type { SentinelCase } from './SentinelTypes';
 import { parseSentinelReport, findLatestReport } from '../../utils/parseSentinelReport';
 import { rendererGql } from '../../utils/rendererGql';
-import { runStore } from './RunStore';
-import { RunToast } from './RunToast';
-import { RunPill } from './RunPill';
-import { RunDrawer } from './RunDrawer';
-import { IPC_CHANNELS } from '../../../common/constants';
 
 interface AgentConsoleTabProps {
   electron: any;
@@ -38,8 +33,6 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     executeCommands: [],
   };
   private unsub!: () => void;
-  private runStartedHandler: ((_: any, payload: any) => void) | null = null;
-  private runCompleteHandler: ((_: any, payload: any) => void) | null = null;
 
   componentDidMount() {
     // Load agent statuses via IPC
@@ -48,33 +41,10 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     const update = () => this.forceUpdate();
     agentStore.subscribe(update);
     this.unsub = update;
-
-    // Wire agent run lifecycle IPC events → RunStore
-    const ipc = this.props.electron.ipcRenderer;
-    this.runStartedHandler = (_event: any, payload: any) => {
-      runStore.startRun(payload);
-    };
-    this.runCompleteHandler = (_event: any, payload: any) => {
-      runStore.completeRun(payload);
-      // OS notification when window is in background
-      if (typeof Notification !== 'undefined' && document.visibilityState === 'hidden') {
-        const state = runStore.getState();
-        new Notification(`${state.currentRun?.agentName || 'Agent'} run complete`, {
-          body: payload.failedCount === 0
-            ? 'All sites clean.'
-            : `${payload.failedCount} failed, ${(payload.findingsSites?.length || 0)} need review.`,
-        });
-      }
-    };
-    ipc.on(IPC_CHANNELS.AGENT_RUN_STARTED, this.runStartedHandler);
-    ipc.on(IPC_CHANNELS.AGENT_RUN_COMPLETE, this.runCompleteHandler);
   }
 
   componentWillUnmount() {
     agentStore.unsubscribe(this.unsub);
-    const ipc = this.props.electron.ipcRenderer;
-    if (this.runStartedHandler) ipc.removeListener(IPC_CHANNELS.AGENT_RUN_STARTED, this.runStartedHandler);
-    if (this.runCompleteHandler) ipc.removeListener(IPC_CHANNELS.AGENT_RUN_COMPLETE, this.runCompleteHandler);
   }
 
   private openSentinelReview(_eventId: string) {
@@ -199,18 +169,6 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     const { homeTab, selectedAgentId, activeApproval, activeSentinelCase, executeDecisions, executeCommands } = this.state;
     const { electron } = this.props;
 
-    // Run lifecycle overlays — fixed-position, self-manage via RunStore
-    const runOverlays = [
-      React.createElement(RunToast, {
-        onViewProgress: () => runStore.setState({ drawerOpen: true }),
-        onViewReport: () => runStore.setState({ drawerOpen: true }),
-      }),
-      React.createElement(RunPill, {
-        onOpen: () => runStore.setState({ drawerOpen: true }),
-      }),
-      React.createElement(RunDrawer, {}),
-    ];
-
     // Agent workspace view
     if (selectedAgentId) {
       return React.createElement('div', null,
@@ -229,7 +187,6 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
           },
         }),
         ...this.renderSentinelModals(),
-        ...runOverlays,
       );
     }
 
@@ -245,7 +202,6 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
             onReviewEvent: (eventId: string) => this.openSentinelReview(eventId),
           }),
       ...this.renderSentinelModals(),
-      ...runOverlays,
     );
   }
 }

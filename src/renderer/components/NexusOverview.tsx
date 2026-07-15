@@ -24,6 +24,10 @@ import { FleetCompletenessWidget } from './FleetCompletenessWidget';
 import { AssistantPanel } from './AssistantPanel';
 import { ChatTab } from './ChatTab';
 import { AgentConsoleTab } from './agents/AgentConsoleTab';
+import { runStore } from './agents/RunStore';
+import { RunToast } from './agents/RunToast';
+import { RunPill } from './agents/RunPill';
+import { RunDrawer } from './agents/RunDrawer';
 // Local's native notification components
 let toast: any = null;
 try {
@@ -354,6 +358,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   private indexProgressHandler: ((_: any, data: any) => void) | null = null;
   private mounted = false;
   private unsub?: () => void;
+  private runStartedHandler!: (...args: any[]) => void;
+  private runCompleteHandler!: (...args: any[]) => void;
 
   state: NexusOverviewState = {
     stats: null,
@@ -484,6 +490,22 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         this.checkWpeSyncStatus();
       }
     }, 10000);
+
+    // Wire agent run lifecycle IPC events → RunStore
+    // These live here (not in AgentConsoleTab) so they persist across tab switches
+    this.runStartedHandler = (_: any, payload: any) => {
+      runStore.startRun(payload);
+    };
+    this.runCompleteHandler = (_: any, payload: any) => {
+      runStore.completeRun(payload);
+      if (document.visibilityState === 'hidden') {
+        try {
+          new Notification('Run complete', { body: `${payload.agentName || 'Agent'} finished` });
+        } catch {}
+      }
+    };
+    ipc.on(IPC_CHANNELS.AGENT_RUN_STARTED, this.runStartedHandler);
+    ipc.on(IPC_CHANNELS.AGENT_RUN_COMPLETE, this.runCompleteHandler);
   }
 
   componentDidUpdate(_prevProps: NexusOverviewProps, prevState: NexusOverviewState): void {
@@ -501,6 +523,12 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.INDEX_PROGRESS, this.indexProgressHandler);
     }
     this.stopWpeSyncProgressPolling();
+    if (this.runStartedHandler) {
+      this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.AGENT_RUN_STARTED, this.runStartedHandler);
+    }
+    if (this.runCompleteHandler) {
+      this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.AGENT_RUN_COMPLETE, this.runCompleteHandler);
+    }
     this.unsub?.();
   }
 
@@ -2893,6 +2921,13 @@ renderTabBar(): React.ReactNode {
                   style: { flex: 1, overflowY: 'auto' as const, padding: '24px 32px', display: 'flex', flexDirection: 'column' as const },
                 }, this.renderActiveTab())
               : null,
+      // Run lifecycle overlays — mounted here (always-mounted parent) so they survive tab switches
+      React.createElement(RunToast, {
+        onViewProgress: () => runStore.toggleDrawer(),
+        onViewReport: () => runStore.toggleDrawer(),
+      }),
+      React.createElement(RunPill, { onOpen: () => runStore.toggleDrawer() }),
+      React.createElement(RunDrawer, null),
     );
   }
 }

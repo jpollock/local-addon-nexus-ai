@@ -156,9 +156,9 @@ export class RunDrawer extends React.Component<Record<string, never>, DrawerStat
         isDone && React.createElement('div', {
           style: { padding: '14px 22px', borderTop: '1px solid var(--ag-border-subtle)', display: 'flex', gap: 10, flexShrink: 0 },
         },
-          run.findingsSites.length > 0 && React.createElement('button', {
-            style: { flex: 2, padding: '9px 0', background: 'var(--ag-teal)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: 'var(--ag-on-teal)', cursor: 'pointer' },
-          }, `Review ${run.findingsSites.length} site${run.findingsSites.length !== 1 ? 's' : ''}`),
+          run.findingsSites.length > 0 && React.createElement('span', {
+            style: { flex: 2, fontSize: 12.5, color: 'var(--ag-text-muted)', display: 'flex', alignItems: 'center' },
+          }, 'Open the Agents tab to review findings'),
           React.createElement('button', {
             onClick: () => runStore.dismissRun(),
             style: { flex: 1, padding: '9px 0', background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border)', borderRadius: 8, fontSize: 13, color: 'var(--ag-text-secondary)', cursor: 'pointer' },

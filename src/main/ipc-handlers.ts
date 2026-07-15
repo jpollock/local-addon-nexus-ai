@@ -4385,6 +4385,26 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   // Agent Run Lifecycle — ad-hoc run triggering
   // =========================================================================
 
+  function parseRunOutcomes(logText: string, siteNames: string[]): {
+    doneCount: number;
+    failedCount: number;
+    findingsSites: string[];
+  } {
+    const findingsSites: string[] = [];
+    let failedCount = 0;
+    for (const site of siteNames) {
+      const escaped = site.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp(`${escaped}.*finding|finding.*${escaped}|ESCALATING.*${escaped}|${escaped}.*CRITICAL`, 'i').test(logText)) {
+        findingsSites.push(site);
+      }
+      if (new RegExp(`✗.*${escaped}|${escaped}.*failed|ERROR.*${escaped}`, 'i').test(logText)) {
+        failedCount++;
+      }
+    }
+    const doneCount = siteNames.length - failedCount;
+    return { doneCount, failedCount, findingsSites };
+  }
+
   safeHandle(IPC_CHANNELS.AGENT_RUN_NOW, async (_event, { agentId, siteNames }: { agentId: string; siteNames: string[] }) => {
     const runId = `run-${Date.now()}`;
     const agent = deps.nexusServices?.agentRegistry?.get(agentId);
@@ -4438,6 +4458,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const MAX_MS = 30 * 60 * 1000;
       const lastSize = fs.existsSync(logPath) ? fs.statSync(logPath).size : 0;
 
+      let logContent = '';
       await new Promise<void>(resolve => {
         const interval = setInterval(() => {
           waited += POLL_MS;
@@ -4446,12 +4467,27 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
             const content = fs.readFileSync(logPath, 'utf-8');
             // Check for sweep complete after the run started
             const afterStart = content.slice(lastSize);
-            if (afterStart.includes('sweep complete')) { clearInterval(interval); resolve(); }
+            if (afterStart.includes('sweep complete')) {
+              logContent = afterStart;
+              clearInterval(interval);
+              resolve();
+            }
           } catch { /* file may not exist yet */ }
         }, POLL_MS);
       });
 
-      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, doneCount, failedCount, findingsSites });
+      // If logContent is empty (timed out), try one final read
+      if (!logContent && fs.existsSync(logPath)) {
+        try { logContent = fs.readFileSync(logPath, 'utf-8').slice(lastSize); } catch {}
+      }
+
+      const outcomes = parseRunOutcomes(logContent, siteNames);
+      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
+        runId,
+        doneCount: outcomes.doneCount,
+        failedCount: outcomes.failedCount,
+        findingsSites: outcomes.findingsSites,
+      });
     })();
 
     return { runId };
