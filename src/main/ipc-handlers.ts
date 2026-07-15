@@ -4381,6 +4381,82 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     }
   });
 
+  // =========================================================================
+  // Agent Run Lifecycle — ad-hoc run triggering
+  // =========================================================================
+
+  safeHandle(IPC_CHANNELS.AGENT_RUN_NOW, async (_event, { agentId, siteNames }: { agentId: string; siteNames: string[] }) => {
+    const runId = `run-${Date.now()}`;
+    const agent = deps.nexusServices?.agentRegistry?.get(agentId);
+    const agentName = agent?.name || agentId;
+
+    // Broadcast run-started to all renderer windows immediately
+    const { BrowserWindow } = require('electron');
+    const broadcast = (channel: string, payload: unknown) => {
+      BrowserWindow.getAllWindows().forEach((w: any) => {
+        if (!w.isDestroyed()) w.webContents.send(channel, payload);
+      });
+    };
+
+    broadcast(IPC_CHANNELS.AGENT_RUN_STARTED, { runId, agentId, agentName, siteNames });
+
+    // Fire agent runs in background — one scoped wpe:sync.completed event per site
+    // so the sentinel picks each up and processes it
+    (async () => {
+      let doneCount = 0;
+      let failedCount = 0;
+      const findingsSites: string[] = [];
+
+      for (const siteName of siteNames) {
+        try {
+          if (deps.nexusServices?.agentEventBus) {
+            deps.nexusServices.agentEventBus.publish({
+              namespace: 'wpe',
+              type: 'sync.completed',
+              key: 'wpe:sync.completed',
+              siteId: siteName,
+              payload: { installName: siteName, installId: siteName, siteId: siteName },
+              createdAt: Date.now(),
+            });
+          }
+          doneCount++;
+        } catch {
+          failedCount++;
+        }
+      }
+
+      // Wait for the sweep to complete — poll the agent log for "sweep complete"
+      // Allow up to 30 minutes; broadcast complete when detected
+      const logPath = require('path').join(
+        require('os').homedir(),
+        'Library', 'Application Support', 'Local', 'nexus-ai',
+        'agents', agentId, 'logs', 'agent.log',
+      );
+      const fs = require('fs') as typeof import('fs');
+      let waited = 0;
+      const POLL_MS = 5000;
+      const MAX_MS = 30 * 60 * 1000;
+      const lastSize = fs.existsSync(logPath) ? fs.statSync(logPath).size : 0;
+
+      await new Promise<void>(resolve => {
+        const interval = setInterval(() => {
+          waited += POLL_MS;
+          if (waited >= MAX_MS) { clearInterval(interval); resolve(); return; }
+          try {
+            const content = fs.readFileSync(logPath, 'utf-8');
+            // Check for sweep complete after the run started
+            const afterStart = content.slice(lastSize);
+            if (afterStart.includes('sweep complete')) { clearInterval(interval); resolve(); }
+          } catch { /* file may not exist yet */ }
+        }, POLL_MS);
+      });
+
+      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, doneCount, failedCount, findingsSites });
+    })();
+
+    return { runId };
+  });
+
   // Sentinel Review UI: execute remediation commands on a WPE install via SSH
   safeHandle('nexus:sentinel:execute', async (_event: any, { installName, commands }: { installName: string; commands: string[] }) => {
     try {

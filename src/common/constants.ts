@@ -205,6 +205,11 @@ export const IPC_CHANNELS = {
   // AI Assistant (fleet panel, dashboard Ask tab, site tab)
   ASSISTANT_QUERY:   `${ADDON_PREFIX}:assistant:query`,
   ASSISTANT_CONTEXT: `${ADDON_PREFIX}:assistant:context`,
+
+  // Agent Run Lifecycle — ad-hoc run triggering + progress push
+  AGENT_RUN_NOW:      `${ADDON_PREFIX}:agent:run-now`,
+  AGENT_RUN_STARTED:  `${ADDON_PREFIX}:agent:run-started`,
+  AGENT_RUN_COMPLETE: `${ADDON_PREFIX}:agent:run-complete`,
 } as const;
 
 // ---------------------------------------------------------------------------
