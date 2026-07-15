@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { SentinelCase, RemediationStep, Finding } from './SentinelTypes';
+import type { SentinelCase, RemediationStep, Finding, AdminAccount } from './SentinelTypes';
 
 export type AccountDecisionMap = Record<string, {
   decision: 'delete' | 'keep' | null;
@@ -287,6 +287,134 @@ export class SentinelReviewOverlay extends React.Component<OverlayProps, Overlay
     );
   }
 
+  private renderAccounts() {
+    const { accounts } = this.props.sentinelCase;
+    const reviewRequired = accounts.filter(a => !a.autoDeleted && !a.legitimate);
+    if (reviewRequired.length === 0) return null;
+
+    const unresolved = reviewRequired.filter(a => !this.state.decisions[a.id]?.decision).length;
+    const allDone = unresolved === 0;
+
+    return React.createElement('div', { style: { marginBottom: 28 } },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 } },
+        React.createElement('h2', { style: { fontSize: 16, fontWeight: 600, color: 'var(--ag-text-primary)', margin: 0 } }, 'Accounts needing your decision'),
+        React.createElement('span', {
+          style: {
+            fontSize: 11.5, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
+            background: allDone ? 'rgba(62,207,142,0.14)' : 'rgba(245,181,68,0.14)',
+            color: allDone ? 'var(--ag-green)' : 'var(--ag-amber)',
+          },
+        }, allDone ? 'All resolved' : `${unresolved} pending`),
+      ),
+      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+        ...reviewRequired.map(a => this.renderAccountCard(a)),
+      ),
+    );
+  }
+
+  private renderAccountCard(account: AdminAccount) {
+    const { id, user, email, score, breakdown, staged } = account;
+    const dec = this.state.decisions[id] || { decision: null, keepReason: '' };
+    const { decision, keepReason } = dec;
+
+    const borderColor = decision === 'delete' ? 'rgba(244,104,95,0.4)'
+      : decision === 'keep' ? 'rgba(62,207,142,0.4)' : 'rgba(245,181,68,0.3)';
+    const bgColor = decision === 'delete' ? 'rgba(244,104,95,0.05)'
+      : decision === 'keep' ? 'rgba(62,207,142,0.05)' : 'transparent';
+
+    // Score bar color
+    const barColor = score >= 80 ? 'var(--ag-red)' : score >= 50 ? 'var(--ag-amber)' : 'var(--ag-green)';
+
+    return React.createElement('div', {
+      key: id,
+      style: {
+        background: `var(--ag-bg-card) ${bgColor}`, border: `1px solid ${borderColor}`,
+        borderRadius: 12, padding: '18px 20px', transition: 'border-color 0.15s, background 0.15s',
+      },
+    },
+      // Top: username + staged info
+      React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 14 } },
+        React.createElement('div', { style: { flex: 1 } },
+          React.createElement('div', { style: { fontSize: 15, fontWeight: 600, color: 'var(--ag-text-primary)', fontFamily: 'JetBrains Mono, monospace', marginBottom: 3 } }, user),
+          React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)' } },
+            `${email || '(no email)'} · ${staged}`,
+          ),
+        ),
+      ),
+
+      // Score bar
+      React.createElement('div', { style: { marginBottom: 14 } },
+        React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 5 } },
+          React.createElement('span', { style: { fontSize: 12, color: 'var(--ag-text-muted)' } }, 'Suspicion score'),
+          React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: barColor } }, `${score}/100`),
+        ),
+        React.createElement('div', {
+          style: { height: 6, background: 'var(--ag-bg-elevated)', borderRadius: 3, overflow: 'hidden' },
+        },
+          React.createElement('div', { style: { height: '100%', width: `${score}%`, background: barColor, borderRadius: 3, transition: 'width 0.3s' } }),
+        ),
+        // Breakdown chips
+        React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 } },
+          ...breakdown.map((b, i) =>
+            React.createElement('span', {
+              key: i,
+              style: {
+                fontSize: 11, color: 'var(--ag-red)', background: 'rgba(244,104,95,0.1)',
+                padding: '2px 8px', borderRadius: 5,
+              },
+            }, `${b.t} ${b.pts}`),
+          ),
+        ),
+      ),
+
+      // Decision buttons
+      React.createElement('div', { style: { display: 'flex', gap: 10 } },
+        React.createElement('button', {
+          onClick: () => this.setAccountDecision(id, decision === 'delete' ? null : 'delete'),
+          style: {
+            flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
+            background: decision === 'delete' ? 'var(--ag-red)' : 'transparent',
+            color: decision === 'delete' ? 'white' : 'var(--ag-red)',
+            border: `1.5px solid var(--ag-red)`,
+          },
+        }, 'Delete account'),
+        React.createElement('button', {
+          onClick: () => this.setAccountDecision(id, decision === 'keep' ? null : 'keep'),
+          style: {
+            flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
+            background: decision === 'keep' ? 'var(--ag-green)' : 'transparent',
+            color: decision === 'keep' ? 'white' : 'var(--ag-green)',
+            border: `1.5px solid var(--ag-green)`,
+          },
+        }, 'Keep account'),
+      ),
+
+      // Keep reason field (when keep is selected)
+      decision === 'keep' && React.createElement('div', { style: { marginTop: 10 } },
+        React.createElement('input', {
+          type: 'text',
+          placeholder: 'Required: reason for keeping this account',
+          value: keepReason,
+          onChange: (e: any) => this.setAccountDecision(id, 'keep', e.target.value),
+          style: {
+            width: '100%', background: 'var(--ag-bg-inset)', border: '1px solid var(--ag-border)',
+            borderRadius: 8, padding: '8px 12px', fontSize: 13, color: 'var(--ag-text-primary)',
+            boxSizing: 'border-box',
+          },
+        }),
+      ),
+
+      // Decision status line
+      decision && React.createElement('div', {
+        style: { marginTop: 10, fontSize: 12.5, color: decision === 'delete' ? 'var(--ag-red)' : 'var(--ag-green)' },
+      },
+        decision === 'delete'
+          ? 'Will be permanently deleted on production.'
+          : keepReason ? `Will be kept — demotion reverted. Reason: ${keepReason}` : 'Add a reason above to confirm.',
+      ),
+    );
+  }
+
   private renderFooter() {
     const canExec = this.canExecute();
     const note = this.getFooterNote();
@@ -325,7 +453,7 @@ export class SentinelReviewOverlay extends React.Component<OverlayProps, Overlay
         this.renderVerdict(),
         this.renderFindings(),
         this.renderChecklist(),
-        // Account decisions rendered in Task 3
+        this.renderAccounts(),
       ),
       this.renderFooter(),
     );
