@@ -8,6 +8,7 @@ import { SidebarSearchPanel } from './components/SidebarSearchPanel';
 import { IPC_CHANNELS } from '../common/constants';
 import { nexusStore } from './store/NexusStateManager';
 import type { NexusState } from './store/NexusStateManager';
+import '../styles/agent-console.css';
 
 export default function renderer(context: any): void {
   console.log('[Nexus AI] Renderer initializing...');

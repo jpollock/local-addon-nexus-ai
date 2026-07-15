@@ -1,0 +1,121 @@
+/* Agent Console — Design System Tokens */
+:root {
+  /* Backgrounds */
+  --ag-bg-app: #16181d;
+  --ag-bg-card: #1e2128;
+  --ag-bg-elevated: #23272f;
+  --ag-bg-inset: #1a1d23;
+  --ag-bg-code: #111318;
+
+  /* Borders */
+  --ag-border: #2b303a;
+  --ag-border-subtle: #23262d;
+  --ag-border-control: #2f343d;
+
+  /* Text */
+  --ag-text-primary: #e8eaed;
+  --ag-text-secondary: #9aa1ac;
+  --ag-text-muted: #6b7280;
+  --ag-text-faint: #5a6270;
+
+  /* Accent / semantic */
+  --ag-teal: #35d0c5;
+  --ag-on-teal: #08201e;
+  --ag-green: #3ecf8e;
+  --ag-amber: #f5b544;
+  --ag-red: #f4685f;
+  --ag-purple: #7b8cff;
+}
+
+/* Typography helpers */
+.ag-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Status pill base */
+.ag-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.ag-pill--review  { background: rgba(245,181,68,0.14);  color: var(--ag-amber); }
+.ag-pill--healthy { background: rgba(62,207,142,0.14);  color: var(--ag-green); }
+.ag-pill--paused  { background: rgba(154,161,172,0.12); color: var(--ag-text-secondary); }
+.ag-pill--disabled{ background: rgba(154,161,172,0.12); color: var(--ag-text-secondary); }
+
+/* Type chip */
+.ag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.ag-chip--action   { background: rgba(53,208,197,0.12);  color: var(--ag-teal); }
+.ag-chip--alert    { background: rgba(244,104,95,0.12);  color: var(--ag-red); }
+.ag-chip--report   { background: rgba(123,140,255,0.12); color: var(--ag-purple); }
+.ag-chip--info     { background: rgba(154,161,172,0.10); color: var(--ag-text-secondary); }
+
+/* Status chip */
+.ag-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ag-status-chip--review    { background: rgba(245,181,68,0.14);  color: var(--ag-amber); }
+.ag-status-chip--auto      { background: rgba(53,208,197,0.12);  color: var(--ag-teal); }
+.ag-status-chip--done      { background: rgba(62,207,142,0.14);  color: var(--ag-green); }
+.ag-status-chip--info      { background: rgba(154,161,172,0.10); color: var(--ag-text-secondary); }
+.ag-status-chip--dismissed { background: rgba(154,161,172,0.10); color: var(--ag-text-secondary); }
+
+/* Toggle switch */
+.ag-toggle {
+  position: relative;
+  width: 40px;
+  height: 23px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.ag-toggle--on  { background: var(--ag-green); }
+.ag-toggle--off { background: #3a4049; }
+.ag-toggle__knob {
+  position: absolute;
+  top: 3px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.15s;
+}
+.ag-toggle--on  .ag-toggle__knob { transform: translateX(20px); }
+.ag-toggle--off .ag-toggle__knob { transform: translateX(3px); }
+
+/* Checkbox */
+.ag-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid #3a4049;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, border-color 0.12s;
+}
+.ag-checkbox--checked {
+  background: var(--ag-teal);
+  border-color: var(--ag-teal);
+}
