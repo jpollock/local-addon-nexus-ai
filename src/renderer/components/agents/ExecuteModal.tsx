@@ -22,7 +22,6 @@ interface ModalProps {
 interface ModalState {
   phase: ExecPhase;
   steps: Step[];
-  runningIdx: number;
 }
 
 function commandsToSteps(commands: string[]): Step[] {
@@ -45,11 +44,10 @@ export class ExecuteModal extends React.Component<ModalProps, ModalState> {
   state: ModalState = {
     phase: 'confirm',
     steps: commandsToSteps(this.props.commands),
-    runningIdx: 0,
   };
 
   private async executeOnProduction() {
-    this.setState({ phase: 'running', runningIdx: 0 });
+    this.setState({ phase: 'running' });
     const { sentinelCase, commands, electron } = this.props;
 
     try {
@@ -62,7 +60,15 @@ export class ExecuteModal extends React.Component<ModalProps, ModalState> {
       // Animate steps completing based on results
       const results = result?.steps || [];
       for (let i = 0; i < this.state.steps.length; i++) {
+        // Mark current step as running BEFORE the delay
+        this.setState(s => {
+          const steps = [...s.steps];
+          steps[i] = { ...steps[i], status: 'running' };
+          return { steps };
+        });
+
         await new Promise(r => setTimeout(r, 300));
+
         const stepResult = results[i] || { ok: true, durationMs: 500 };
         this.setState(s => {
           const steps = [...s.steps];
@@ -72,13 +78,21 @@ export class ExecuteModal extends React.Component<ModalProps, ModalState> {
             durationMs: stepResult.durationMs,
             error: stepResult.error,
           };
-          return { steps, runningIdx: i + 1 };
+          return { steps };
         });
       }
     } catch {
       // IPC unavailable or handler not registered — fall back to mock step animation
       for (let i = 0; i < this.state.steps.length; i++) {
+        // Mark current step as running BEFORE the delay
+        this.setState(s => {
+          const steps = [...s.steps];
+          steps[i] = { ...steps[i], status: 'running' };
+          return { steps };
+        });
+
         await new Promise(r => setTimeout(r, 400 + Math.random() * 600));
+
         this.setState(s => {
           const steps = [...s.steps];
           steps[i] = {
@@ -86,7 +100,7 @@ export class ExecuteModal extends React.Component<ModalProps, ModalState> {
             status: 'done',
             durationMs: Math.floor(200 + Math.random() * 2000),
           };
-          return { steps, runningIdx: i + 1 };
+          return { steps };
         });
       }
     }
@@ -283,19 +297,35 @@ export class ExecuteModal extends React.Component<ModalProps, ModalState> {
         ),
       ),
 
-      // "Production is clean" banner
-      React.createElement('div', {
-        style: {
-          background: 'rgba(62,207,142,0.08)', border: '1px solid rgba(62,207,142,0.3)',
-          borderRadius: 8, padding: '14px 16px', marginTop: 16,
-          display: 'flex', alignItems: 'center', gap: 10,
-        },
-      },
-        React.createElement('span', { style: { fontSize: 16, color: 'var(--ag-green)' } }, '✓'),
-        React.createElement('span', {
-          style: { fontSize: 14, fontWeight: 600, color: 'var(--ag-green)' },
-        }, 'Production is clean'),
-      ),
+      // "Production is clean" banner — only shown when all steps succeeded
+      (() => {
+        const allOk = this.state.steps.every(s => s.status !== 'error');
+        return allOk
+          ? React.createElement('div', {
+              style: {
+                background: 'rgba(62,207,142,0.08)', border: '1px solid rgba(62,207,142,0.3)',
+                borderRadius: 8, padding: '14px 16px', marginTop: 16,
+                display: 'flex', alignItems: 'center', gap: 10,
+              },
+            },
+              React.createElement('span', { style: { fontSize: 16, color: 'var(--ag-green)' } }, '✓'),
+              React.createElement('span', {
+                style: { fontSize: 14, fontWeight: 600, color: 'var(--ag-green)' },
+              }, 'Production is clean'),
+            )
+          : React.createElement('div', {
+              style: {
+                background: 'rgba(244,104,95,0.08)', border: '1px solid rgba(244,104,95,0.3)',
+                borderRadius: 8, padding: '14px 16px', marginTop: 16,
+                display: 'flex', alignItems: 'center', gap: 10,
+              },
+            },
+              React.createElement('span', { style: { fontSize: 16, color: 'var(--ag-red)' } }, '⚠️'),
+              React.createElement('span', {
+                style: { fontSize: 14, fontWeight: 600, color: 'var(--ag-red)' },
+              }, 'Some steps failed — review required'),
+            );
+      })(),
 
       React.createElement('button', {
         onClick: onDone,
