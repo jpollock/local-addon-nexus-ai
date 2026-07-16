@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { agentStore, ActivityEvent } from './AgentStore';
+import { runStore } from './RunStore';
 
 interface LedgerProps {
   onReviewEvent: (eventId: string) => void;
@@ -11,6 +12,11 @@ interface LedgerState {
   statusFilter: 'all' | 'review' | 'completed' | 'dismissed';
   agentFilter: string;
   expandedEvents: Record<string, boolean>;
+  hoveredRow: string | null;
+}
+
+function formatAgentName(agentId: string): string {
+  return agentId.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 const ACCENTS: Record<string, string> = {
@@ -48,6 +54,7 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
     statusFilter: 'all',
     agentFilter: 'all',
     expandedEvents: {},
+    hoveredRow: null,
   };
   private unsub!: () => void;
 
@@ -82,7 +89,9 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
   private renderRow(event: ActivityEvent) {
     const { onReviewEvent } = this.props;
     const accent = ACCENTS[event.agentId] || '#9aa1ac';
-    const isActionable = event.status === 'review' && event.ref;
+    const isReviewable = event.status === 'review' && !!event.ref;
+    const isViewable = (event.status === 'done' || event.status === 'auto') &&
+      runStore.getState().currentRun?.runId === event.id;
     const isExpanded = this.state.expandedEvents[event.id];
     const isRollup = !!event.count;
 
@@ -101,6 +110,11 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
       review: '◷', auto: '✓', done: '✓', info: '·', dismissed: '✕',
     }[effectiveStatus(event)] || '·';
 
+    const statusLabel = {
+      review: 'Needs review', auto: 'Completed', done: 'Completed',
+      info: 'Info', dismissed: 'Dismissed',
+    }[effectiveStatus(event)] || 'Info';
+
     return React.createElement('div', { key: event.id },
       React.createElement('div', {
         onClick: isRollup ? () => {
@@ -108,10 +122,15 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
             expandedEvents: { ...s.expandedEvents, [event.id]: !s.expandedEvents[event.id] },
           }));
         } : undefined,
+        onMouseEnter: () => this.setState({ hoveredRow: event.id }),
+        onMouseLeave: () => this.setState({ hoveredRow: null }),
         style: {
           display: 'flex', alignItems: 'center', gap: 13,
-          padding: '13px 18px', cursor: isRollup ? 'pointer' : 'default',
+          padding: '13px 18px',
           borderTop: '1px solid var(--ag-border-subtle)',
+          cursor: isRollup || isViewable || isReviewable ? 'pointer' : 'default',
+          transition: 'background 0.1s',
+          background: this.state.hoveredRow === event.id ? 'var(--ag-bg-elevated)' : 'transparent',
         },
       },
         // Agent avatar
@@ -143,22 +162,32 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
         React.createElement('span', { className: `ag-chip ${typeClass}` }, event.type),
 
         // Status chip
-        React.createElement('span', { className: `ag-status-chip ${statusClass}` }, `${statusGlyph} ${event.status}`),
+        React.createElement('span', { className: `ag-status-chip ${statusClass}` }, `${statusGlyph} ${statusLabel}`),
 
         // Time
         React.createElement('span', {
           style: { width: 52, textAlign: 'right', fontSize: 12, color: 'var(--ag-text-muted)', fontFamily: 'JetBrains Mono, monospace', flexShrink: 0 },
         }, event.time),
 
-        // Review button
-        isActionable && React.createElement('button', {
+        // Review button (review-status rows)
+        isReviewable && React.createElement('button', {
           onClick: (ev: Event) => { ev.stopPropagation(); onReviewEvent(event.id); },
           style: {
             background: 'var(--ag-teal)', color: 'var(--ag-on-teal)',
-            border: 'none', borderRadius: 7, padding: '5px 12px',
+            border: 'none', borderRadius: 7, padding: '5px 14px',
             fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
           },
         }, 'Review'),
+
+        // View run button (completed rows where run is still in RunStore)
+        isViewable && React.createElement('button', {
+          onClick: (ev: Event) => { ev.stopPropagation(); runStore.toggleDrawer(); },
+          style: {
+            background: 'var(--ag-bg-elevated)', color: 'var(--ag-text-secondary)',
+            border: '1px solid var(--ag-border)', borderRadius: 7, padding: '5px 14px',
+            fontSize: 12, fontWeight: 500, cursor: 'pointer', flexShrink: 0,
+          },
+        }, 'View run'),
       ),
 
       // Rollup children
@@ -178,19 +207,12 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
     const allAgentIds = [...new Set(this.state.events.map(e => e.agentId))];
     const pendingCount = filtered.filter(e => e.status === 'review').length;
 
-    const segmentStyle = (active: boolean) => ({
-      padding: '5px 12px', borderRadius: 6, fontSize: 12.5, fontWeight: 500,
-      cursor: 'pointer', border: 'none',
-      background: active ? 'var(--ag-teal)' : 'transparent',
-      color: active ? 'var(--ag-on-teal)' : 'var(--ag-text-secondary)',
-    });
-
     return React.createElement('div', { style: { padding: '24px 40px' } },
 
       // Filter bar
       React.createElement('div', { style: { display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' } },
         React.createElement('input', {
-          type: 'text', placeholder: 'Search events…',
+          type: 'text', placeholder: 'Search actions, sites, plugins…',
           value: this.state.searchText,
           onChange: (e: any) => this.setState({ searchText: e.target.value }),
           style: {
@@ -199,16 +221,22 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
             padding: '10px 14px', fontSize: 13, color: 'var(--ag-text-primary)',
           },
         }),
-        // Status segments
-        React.createElement('div', {
-          style: { display: 'flex', background: 'var(--ag-bg-inset)', border: '1px solid var(--ag-border)', borderRadius: 10, padding: 4 },
-        },
-          (['all', 'review', 'completed', 'dismissed'] as const).map(s =>
-            React.createElement('button', {
-              key: s, onClick: () => this.setState({ statusFilter: s }),
-              style: segmentStyle(this.state.statusFilter === s),
-            }, s[0].toUpperCase() + s.slice(1)),
-          ),
+        // Status filter buttons (individual pills)
+        React.createElement('div', { style: { display: 'flex', gap: 6 } },
+          (['all', 'review', 'completed', 'dismissed'] as const).map(s => {
+            const active = this.state.statusFilter === s;
+            const label = s === 'review' ? 'Needs review' : s[0].toUpperCase() + s.slice(1);
+            return React.createElement('button', {
+              key: s,
+              onClick: () => this.setState({ statusFilter: s }),
+              style: {
+                padding: '6px 14px', borderRadius: 7, fontSize: 12.5, fontWeight: 500, cursor: 'pointer',
+                background: active ? 'var(--ag-teal)' : 'var(--ag-bg-inset)',
+                color: active ? 'var(--ag-on-teal)' : 'var(--ag-text-secondary)',
+                border: `1px solid ${active ? 'var(--ag-teal)' : 'var(--ag-border)'}`,
+              },
+            }, label);
+          }),
         ),
       ),
 
@@ -224,13 +252,13 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
               color: active ? 'var(--ag-teal)' : 'var(--ag-text-secondary)',
               border: `1px solid ${active ? 'rgba(53,208,197,0.4)' : 'var(--ag-border)'}`,
             },
-          }, id === 'all' ? 'All agents' : id);
+          }, id === 'all' ? 'All agents' : formatAgentName(id));
         }),
       ),
 
       // Result count
       React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)', marginBottom: 16 } },
-        `${filtered.length} events${pendingCount > 0 ? ` · ${pendingCount} need your review` : ''}`,
+        `${filtered.length} events${pendingCount > 0 ? ` • ${pendingCount} need your review` : ''}`,
       ),
 
       // Day groups
