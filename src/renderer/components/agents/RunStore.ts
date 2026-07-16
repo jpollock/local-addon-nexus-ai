@@ -87,7 +87,7 @@ class RunStore {
     this.startWatching(params.agentId, run.startedAt);
   }
 
-  completeRun(payload: { runId: string; doneCount: number; failedCount: number; findingsSites: string[] }): void {
+  completeRun(payload: { runId: string; doneCount: number; failedCount: number; findingsSites: string[]; cancelled?: boolean }): void {
     const run = this.state.currentRun;
     if (!run || run.runId !== payload.runId) return;
     this.stopWatching();
@@ -95,6 +95,7 @@ class RunStore {
       currentRun: {
         ...run,
         phase: 'done',
+        cancelled: payload.cancelled ?? false,
         endedAt: Date.now(),
         doneCount: payload.doneCount,
         failedCount: payload.failedCount,

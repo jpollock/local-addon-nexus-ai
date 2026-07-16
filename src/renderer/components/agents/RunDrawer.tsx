@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { runStore, Run, LogLine, SiteRunStatus } from './RunStore';
+import { IPC_CHANNELS } from '../../../common/constants';
 
 interface DrawerState { run: Run | null; elapsed: string; }
 
@@ -150,6 +151,22 @@ export class RunDrawer extends React.Component<Record<string, never>, DrawerStat
                   React.createElement('span', { style: { color: LOG_COLORS[line.level], wordBreak: 'break-word' as const } }, line.msg),
                 ),
               ),
+        ),
+
+        // Running: cancel button
+        !isDone && React.createElement('div', {
+          style: { padding: '14px 22px', borderTop: '1px solid var(--ag-border-subtle)', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 },
+        },
+          React.createElement('button', {
+            onClick: () => {
+              const r = runStore.getState().currentRun;
+              if (r) {
+                const electron = (window as any).electron;
+                electron?.ipcRenderer?.invoke(IPC_CHANNELS.AGENT_RUN_CANCEL, { runId: r.runId });
+              }
+            },
+            style: { padding: '9px 20px', background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border)', borderRadius: 8, fontSize: 13, color: 'var(--ag-red)', cursor: 'pointer' },
+          }, 'Cancel run'),
         ),
 
         // Completion actions

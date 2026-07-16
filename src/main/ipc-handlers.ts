@@ -4420,6 +4420,13 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
     broadcast(IPC_CHANNELS.AGENT_RUN_STARTED, { runId, agentId, agentName, siteNames });
 
+    // Cancel support — register an AbortController keyed by runId
+    const abortController = new AbortController();
+    const { signal } = abortController;
+    const runAbortMap: Map<string, AbortController> = (deps as any).__runAbortMap ??
+      ((deps as any).__runAbortMap = new Map());
+    runAbortMap.set(runId, abortController);
+
     // Fire agent runs in background — one scoped wpe:sync.completed event per site
     // so the sentinel picks each up and processes it
     (async () => {
@@ -4466,11 +4473,12 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       let logContent = '';
       await new Promise<void>(resolve => {
         const interval = setInterval(() => {
+          // Abort: stop polling and resolve immediately
+          if (signal.aborted) { clearInterval(interval); resolve(); return; }
           waited += POLL_MS;
           if (waited >= MAX_MS) { clearInterval(interval); resolve(); return; }
           try {
             const content = fs.readFileSync(logPath, 'utf-8');
-            // Check for sweep complete after the run started
             const afterStart = content.slice(lastSize);
             if (afterStart.includes('sweep complete')) {
               logContent = afterStart;
@@ -4479,7 +4487,16 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
             }
           } catch { /* file may not exist yet */ }
         }, POLL_MS);
+        // Also resolve immediately if aborted before the first tick
+        signal.addEventListener('abort', () => { clearInterval(interval); resolve(); });
       });
+
+      runAbortMap.delete(runId);
+
+      if (signal.aborted) {
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, doneCount: 0, failedCount: 0, findingsSites: [], cancelled: true });
+        return;
+      }
 
       // If logContent is empty (timed out), try one final read
       if (!logContent && fs.existsSync(logPath)) {
@@ -4496,6 +4513,13 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     })();
 
     return { runId };
+  });
+
+  // Cancel an in-progress agent run
+  safeHandle(IPC_CHANNELS.AGENT_RUN_CANCEL, (_event, { runId }: { runId: string }) => {
+    const runAbortMap: Map<string, AbortController> = (deps as any).__runAbortMap;
+    if (runAbortMap) runAbortMap.get(runId)?.abort();
+    return { ok: true };
   });
 
   // Sentinel Review UI: execute remediation commands on a WPE install via SSH

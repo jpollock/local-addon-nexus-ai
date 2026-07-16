@@ -208,6 +208,7 @@ export const IPC_CHANNELS = {
 
   // Agent Run Lifecycle — ad-hoc run triggering + progress push
   AGENT_RUN_NOW:      `${ADDON_PREFIX}:agent:run-now`,
+  AGENT_RUN_CANCEL:   `${ADDON_PREFIX}:agent:run-cancel`,
   AGENT_RUN_STARTED:  `${ADDON_PREFIX}:agent:run-started`,
   AGENT_RUN_COMPLETE: `${ADDON_PREFIX}:agent:run-complete`,
 } as const;

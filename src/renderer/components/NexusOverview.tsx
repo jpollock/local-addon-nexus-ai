@@ -24,6 +24,7 @@ import { FleetCompletenessWidget } from './FleetCompletenessWidget';
 import { AssistantPanel } from './AssistantPanel';
 import { ChatTab } from './ChatTab';
 import { AgentConsoleTab } from './agents/AgentConsoleTab';
+import { agentStore } from './agents/AgentStore';
 import { runStore } from './agents/RunStore';
 import { RunToast } from './agents/RunToast';
 import { RunPill } from './agents/RunPill';
@@ -498,9 +499,30 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     };
     this.runCompleteHandler = (_: any, payload: any) => {
       runStore.completeRun(payload);
+      // Add a completed-run row to Fleet activity ledger so the report stays retrievable
+      if (!payload.cancelled) {
+        const run = runStore.getState().currentRun;
+        const agentName = run?.agentName || payload.agentId || 'Agent';
+        const now = new Date();
+        const hh = now.getHours().toString().padStart(2, '0');
+        const mm = now.getMinutes().toString().padStart(2, '0');
+        const day = now.toISOString().slice(0, 10);
+        const cleanCount = payload.doneCount - (payload.failedCount || 0);
+        const sub = payload.findingsSites?.length > 0
+          ? `${payload.findingsSites.length} site${payload.findingsSites.length !== 1 ? 's' : ''} need review · ${cleanCount} clean`
+          : `${cleanCount} site${cleanCount !== 1 ? 's' : ''} clean`;
+        agentStore.setState({
+          activityEvents: [
+            { id: payload.runId, agentId: payload.agentId || 'security-sentinel', day, time: `${hh}:${mm}`,
+              type: 'Report', status: payload.findingsSites?.length > 0 ? 'review' : 'done',
+              text: `${agentName} sweep complete`, sub },
+            ...agentStore.getState().activityEvents,
+          ],
+        });
+      }
       if (document.visibilityState === 'hidden') {
         try {
-          new Notification('Run complete', { body: `${payload.agentName || 'Agent'} finished` });
+          new Notification('Run complete', { body: `${runStore.getState().currentRun?.agentName || 'Agent'} finished` });
         } catch {}
       }
     };
