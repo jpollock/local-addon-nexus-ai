@@ -96,20 +96,11 @@ export class AgentsHub extends React.Component<AgentsHubProps, AgentsHubState> {
 
     return React.createElement('div', { style: { padding: '24px 40px' } },
       // Page header
-      React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 } },
-        React.createElement('div', null,
-          React.createElement('h1', { style: { fontSize: 20, fontWeight: 600, color: 'var(--ag-text-primary)', margin: '0 0 4px' } }, 'Agents'),
-          React.createElement('p', { style: { fontSize: 13, color: 'var(--ag-text-secondary)', margin: 0 } },
-            'Autonomous agents working across your fleet • configure how much each can do on its own',
-          ),
+      React.createElement('div', { style: { marginBottom: 20 } },
+        React.createElement('h1', { style: { fontSize: 20, fontWeight: 600, color: 'var(--ag-text-primary)', margin: '0 0 4px' } }, 'Agents'),
+        React.createElement('p', { style: { fontSize: 13, color: 'var(--ag-text-secondary)', margin: 0 } },
+          'Autonomous agents working across your fleet • configure how much each can do on its own',
         ),
-        React.createElement('button', {
-          style: {
-            background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-control)',
-            borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500,
-            color: '#c8ccd2', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-          },
-        }, '+ Add agent'),
       ),
 
       // Inbox banner

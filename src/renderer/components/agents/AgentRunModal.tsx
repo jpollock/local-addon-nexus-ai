@@ -122,22 +122,16 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
 
   private getAccounts(): Array<{ id: string; label: string; count: number }> {
     const { sites } = this.state;
-    const counts: Record<string, number> = { all: sites.length, wpe: 0, local: 0 };
-    const accountCounts: Record<string, number> = {};
+    let wpe = 0, local = 0;
     for (const s of sites) {
-      if (s.environment === 'local') counts.local++;
-      else counts.wpe++;
-      accountCounts[s.account] = (accountCounts[s.account] || 0) + 1;
+      if (s.environment === 'local') local++;
+      else wpe++;
     }
-    const chips = [
-      { id: 'all', label: `All sites (${counts.all})`, count: counts.all },
-      { id: 'wpe', label: `WP Engine (${counts.wpe})`, count: counts.wpe },
-      { id: 'local', label: `Local (${counts.local})`, count: counts.local },
+    return [
+      { id: 'all',   label: `All sites (${sites.length})`, count: sites.length },
+      { id: 'wpe',   label: `WP Engine (${wpe})`,          count: wpe },
+      { id: 'local', label: `Local (${local})`,            count: local },
     ];
-    for (const [account, count] of Object.entries(accountCounts)) {
-      chips.push({ id: account, label: `${account} (${count})`, count });
-    }
-    return chips;
   }
 
   private toggleSite(id: string) {

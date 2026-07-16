@@ -12,7 +12,7 @@ interface ToastState {
 }
 
 export class RunToast extends React.Component<ToastProps, ToastState> {
-  state: ToastState = { run: runStore.getState().currentRun, startDismissed: false };
+  state: ToastState = { run: runStore.getState().currentRun, startDismissed: runStore.getState().drawerOpen };
   private unsub!: () => void;
   private autoTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -22,12 +22,14 @@ export class RunToast extends React.Component<ToastProps, ToastState> {
       const next = runStore.getState().currentRun;
       // When a new run starts, reset dismissed state
       if (next && (!prev || next.runId !== prev?.runId)) {
-        this.setState({ run: next, startDismissed: false });
+        this.setState({ run: next, startDismissed: runStore.getState().drawerOpen });
         // Auto-dismiss the start toast after 5s
         if (this.autoTimer) clearTimeout(this.autoTimer);
         this.autoTimer = setTimeout(() => this.setState({ startDismissed: true }), 5000);
       } else {
-        this.setState({ run: next });
+        // Auto-suppress start toast if drawer is open
+        const drawerOpen = runStore.getState().drawerOpen;
+        this.setState({ run: next, startDismissed: drawerOpen });
       }
     };
     runStore.subscribe(update);
