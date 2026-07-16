@@ -110,23 +110,14 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
   private generateCommands(sentinelCase: SentinelCase, decisions: AccountDecisionMap): string[] {
     const planData = (window as any).__nexusSentinelPlan;
     if (planData?.plan?.steps) {
-      // Derive WP-CLI commands from the typed plan step labels.
       const plan = planData.plan;
-      const cmds: string[] = [];
-      // Webshell must be removed FIRST — it runs on every WP-CLI call (MU plugin)
-      // and poisons subsequent commands with PHP warnings that look like errors.
-      cmds.push('rm wp-content/mu-plugins/index.php');
-      for (const step of plan.steps as any[]) {
-        const lbl: string = (step.label ?? '').toLowerCase();
-        if (lbl.includes('plugin')) {
-          cmds.push('wp plugin delete fileorganizer filester wp-compat file-manager-advanced noted woocommerce-conversion-tracking wp-file-manager');
-        } else if (lbl.includes('salt')) {
-          cmds.push('wp config shuffle-salts');
-        } else if (lbl.includes('disallow') || lbl.includes('hardening')) {
-          cmds.push('wp config set DISALLOW_FILE_EDIT true --raw');
-        }
-      }
-      // Account decisions
+      // Use the SDK-provided commands for tier-3 steps — these are the exact
+      // commands the sentinel verified in the sandbox
+      const cmds: string[] = (plan.steps as any[])
+        .filter((s: any) => s.tier === 3)
+        .map((s: any) => s.command as string)
+        .filter(Boolean);
+      // Account decisions (derived from the review overlay)
       const toDelete = sentinelCase.accounts
         .filter(a => a.autoDeleted || decisions[a.id]?.decision === 'delete')
         .map(a => a.uid).filter(Boolean);
@@ -139,7 +130,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
       return cmds;
     }
 
-    // Fallback: hardcoded list (for cases where no typed plan is stored).
+    // Fallback: hardcoded list (for cases where no typed plan is stored)
     const pluginSlugs = ['fileorganizer', 'filester', 'wp-compat', 'file-manager-advanced',
       'noted', 'woocommerce-conversion-tracking', 'wp-file-manager'];
     const cmds: string[] = [];
