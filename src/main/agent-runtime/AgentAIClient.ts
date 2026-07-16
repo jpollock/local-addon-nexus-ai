@@ -82,14 +82,50 @@ export class AgentAIClient implements AIClient {
     schema: Record<string, unknown>;
     schemaName?: string;
   }): Promise<T> {
-    // TODO: implement structured-output path (Task 3)
-    // For now, run a freeform prompt and JSON.parse the response.
-    void opts.system;
-    void opts.schema;
-    void opts.schemaName;
-    const raw = await this.run(
-      `${opts.prompt}\n\nRespond with valid JSON only. No markdown, no explanation.`,
-    );
-    return JSON.parse(raw) as T;
+    const { prompt, system, schema, schemaName = 'output' } = opts;
+
+    // Inject a synthetic tool whose schema IS the desired output.
+    // Instruct the model to call it — the arguments become our typed result.
+    const outputTool: ProviderToolDefinition = {
+      name: '__output__',
+      description: `Call this tool with the structured result. Schema name: ${schemaName}`,
+      parameters: schema,
+    };
+
+    const systemMsg = system
+      ? `${system}\n\nYou MUST call the __output__ tool with your response. Do not reply in plain text.`
+      : 'You MUST call the __output__ tool with your response. Do not reply in plain text.';
+
+    const messages: ChatMessage[] = [
+      { role: 'user', content: `${systemMsg}\n\n${prompt}` },
+    ];
+
+    const tools: ProviderToolDefinition[] = [outputTool, ...this.toolProvider.getProviderToolDefinitions()];
+    const signal = new AbortController().signal;
+
+    for (let turn = 0; turn < 5; turn++) {
+      const response = await collectStream(this.provider.streamChat(messages, tools, this.config, signal));
+
+      const outputCall = response.toolCalls.find(c => c.name === '__output__');
+      if (outputCall) {
+        // Arguments is the structured object the model produced.
+        // The model may nest the result under a 'result' key depending on schema shape.
+        const raw = outputCall.arguments;
+        return (raw?.result ?? raw) as T;
+      }
+
+      if (response.toolCalls.length === 0) {
+        throw new Error('generateObject: model did not call __output__ tool');
+      }
+
+      // Handle non-output tool calls normally (e.g. fleet_sql during analysis)
+      messages.push({ role: 'assistant', content: response.content, toolCalls: response.toolCalls });
+      for (const call of response.toolCalls) {
+        const result = await this.toolProvider.invoke(call.name, call.arguments);
+        messages.push({ role: 'tool', content: JSON.stringify(result), toolCallId: call.id });
+      }
+    }
+
+    throw new Error('generateObject: model did not call __output__ tool after 5 turns');
   }
 }
