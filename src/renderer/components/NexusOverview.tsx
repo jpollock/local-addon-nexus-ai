@@ -2949,7 +2949,7 @@ renderTabBar(): React.ReactNode {
         onViewReport: () => runStore.toggleDrawer(),
       }),
       React.createElement(RunPill, { onOpen: () => runStore.toggleDrawer() }),
-      React.createElement(RunDrawer, null),
+      React.createElement(RunDrawer, { electron: this.props.electron }),
     );
   }
 }

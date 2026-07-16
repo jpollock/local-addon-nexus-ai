@@ -14,7 +14,9 @@ const LOG_COLORS: Record<LogLine['level'], string> = {
   info: '#9aa1ac', ok: '#3ecf8e', warn: '#f5b544', error: '#f4685f',
 };
 
-export class RunDrawer extends React.Component<Record<string, never>, DrawerState> {
+interface DrawerProps { electron?: any; }
+
+export class RunDrawer extends React.Component<DrawerProps, DrawerState> {
   state: DrawerState = { run: runStore.getState().currentRun, elapsed: '0:00' };
   private unsub!: () => void;
   private ticker: ReturnType<typeof setInterval> | null = null;
@@ -162,8 +164,7 @@ export class RunDrawer extends React.Component<Record<string, never>, DrawerStat
             onClick: () => {
               const r = runStore.getState().currentRun;
               if (r) {
-                const electron = (window as any).electron;
-                electron?.ipcRenderer?.invoke(IPC_CHANNELS.AGENT_RUN_CANCEL, { runId: r.runId });
+                this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.AGENT_RUN_CANCEL, { runId: r.runId });
               }
             },
             style: { padding: '9px 20px', background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border)', borderRadius: 8, fontSize: 13, color: 'var(--ag-red)', cursor: 'pointer' },
