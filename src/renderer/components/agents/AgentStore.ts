@@ -22,6 +22,15 @@ export interface AgentStatus {
   lastRunError: string | null;
 }
 
+export interface RemediationPlan {
+  site?: string;
+  [key: string]: any;
+}
+
+export interface Finding {
+  [key: string]: any;
+}
+
 export interface ActivityEvent {
   id: string;
   agentId: string;
@@ -35,6 +44,8 @@ export interface ActivityEvent {
   siteName?: string;   // primary site this event is about (for report lookup)
   count?: number;
   children?: string[];
+  plan?: RemediationPlan;       // structured remediation plan from AgentResult
+  findings?: Finding[];         // structured findings from AgentResult
 }
 
 export interface AgentSettings {

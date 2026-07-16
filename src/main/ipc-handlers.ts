@@ -4495,6 +4495,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       );
       const lastSize = _fs.existsSync(logPath) ? _fs.statSync(logPath).size : 0;
 
+      let lastRunResult: unknown;
       try {
         // Run one site at a time via scoped event — agentRunner.run() resolves when done
         for (const siteName of siteNames) {
@@ -4503,7 +4504,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
             namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
             siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
           };
-          await runner.run(agent, scopedEvent);
+          lastRunResult = await runner.run(agent, scopedEvent);
         }
       } catch (err: any) {
         if (!signal.aborted) {
@@ -4528,9 +4529,13 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const outcomes = parseRunOutcomes(logContent, siteNames);
       broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
         runId,
+        agentId,
+        siteNames,
         doneCount: outcomes.doneCount,
         failedCount: outcomes.failedCount,
         findingsSites: outcomes.findingsSites,
+        findings: (lastRunResult as any)?.findings,
+        plan:     (lastRunResult as any)?.plan,
       });
     })();
 

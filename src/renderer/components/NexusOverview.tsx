@@ -519,10 +519,22 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
               type: 'Report', status: hasFindings ? 'review' : 'done',
               text: `${agentName} sweep complete`, sub,
               ref: hasFindings ? payload.runId : undefined,
-              siteName: payload.findingsSites?.[0] ?? (payload.siteNames?.[0] ?? undefined) },
+              siteName: payload.findingsSites?.[0] ?? (payload.siteNames?.[0] ?? undefined),
+              plan: payload.plan,
+              findings: payload.findings },
             ...agentStore.getState().activityEvents,
           ],
         });
+        // Expose latest plan/findings for AgentConsoleTab overlay
+        if (payload.plan || payload.findings) {
+          (this as any)._lastPlan = payload.plan;
+          (this as any)._lastPlanSite = payload.plan?.site ?? payload.findingsSites?.[0];
+          (window as any).__nexusSentinelPlan = {
+            plan:     payload.plan,
+            findings: payload.findings ?? [],
+            site:     payload.plan?.site ?? payload.findingsSites?.[0],
+          };
+        }
       }
       if (document.visibilityState === 'hidden') {
         try {
@@ -556,6 +568,12 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.AGENT_RUN_COMPLETE, this.runCompleteHandler);
     }
     this.unsub?.();
+  }
+
+  getLatestPlan(): { site: string; plan: any } | null {
+    const plan = (this as any)._lastPlan;
+    const site = (this as any)._lastPlanSite;
+    return plan ? { site, plan } : null;
   }
 
   refreshIndexEntries = async (): Promise<void> => {
