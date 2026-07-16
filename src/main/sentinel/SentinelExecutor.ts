@@ -92,7 +92,9 @@ export async function executeSentinelCommands(
         if (!ok) allOk = false;
       } else {
         // Standard WP-CLI command
-        const args = cleanCommand.split(/\s+/);
+        // Strip leading 'wp' — generateCommands includes it but remoteWpCliRun adds it too
+        const rawArgs = cleanCommand.split(/\s+/);
+        const args = rawArgs[0] === 'wp' ? rawArgs.slice(1) : rawArgs;
         const result = await localServices.remoteWpCliRun(installName, args);
         const ok = result.success;
         steps.push({

@@ -72,7 +72,11 @@ function loadPersisted(): Partial<AgentState> {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PERSIST_KEY) : null;
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return { agentSettings: parsed.agentSettings || {}, autonomyById: parsed.autonomyById || {} };
+    return {
+      agentSettings:  parsed.agentSettings  || {},
+      autonomyById:   parsed.autonomyById   || {},
+      activityEvents: parsed.activityEvents || [],
+    };
   } catch { return {}; }
 }
 
@@ -80,8 +84,9 @@ function savePersisted(state: AgentState): void {
   try {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(PERSIST_KEY, JSON.stringify({
-        agentSettings: state.agentSettings,
-        autonomyById: state.autonomyById,
+        agentSettings:  state.agentSettings,
+        autonomyById:   state.autonomyById,
+        activityEvents: state.activityEvents.slice(0, 100), // keep last 100
       }));
     }
   } catch {}
@@ -102,7 +107,7 @@ class AgentStore {
 
   setState(patch: Partial<AgentState>): void {
     this.state = { ...this.state, ...patch };
-    if ('agentSettings' in patch || 'autonomyById' in patch) savePersisted(this.state);
+    if ('agentSettings' in patch || 'autonomyById' in patch || 'activityEvents' in patch) savePersisted(this.state);
     if ('agentSettings' in patch && this.ipcSyncer) this.ipcSyncer(this.state.agentSettings);
     this.listeners.forEach(fn => fn());
   }
