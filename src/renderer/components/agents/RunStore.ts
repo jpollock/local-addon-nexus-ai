@@ -92,6 +92,7 @@ class RunStore {
   completeRun(payload: { runId: string; doneCount: number; failedCount: number; findingsSites: string[]; cancelled?: boolean }): void {
     const run = this.state.currentRun;
     if (!run || run.runId !== payload.runId) return;
+    this.flushLog(run.agentId);
     this.stopWatching();
     this.setState({
       currentRun: {
@@ -206,6 +207,38 @@ class RunStore {
         }
       }, 2000);
     }
+  }
+
+  private flushLog(agentId: string): void {
+    const logPath = path.join(
+      os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai',
+      'agents', agentId, 'logs', 'agent.log',
+    );
+    const run = this.state.currentRun;
+    if (!run) return;
+    try {
+      const stat = fs.statSync(logPath);
+      if (stat.size < this.logOffset) this.logOffset = 0;
+      if (stat.size <= this.logOffset) return;
+      const buf = Buffer.alloc(stat.size - this.logOffset);
+      const fd = fs.openSync(logPath, 'r');
+      fs.readSync(fd, buf, 0, buf.length, this.logOffset);
+      fs.closeSync(fd);
+      this.logOffset = stat.size;
+      const newLines = buf.toString('utf-8').split('\n').filter(Boolean);
+      const newLog: LogLine[] = [];
+      for (const raw of newLines) {
+        const parsed = parseLogLine(raw, run.startedAt);
+        if (!parsed) continue;
+        const secs = Math.floor((Date.now() - run.startedAt) / 1000);
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        newLog.push({ ts: `${m}:${s.toString().padStart(2, '0')}`, site: parsed.site, msg: parsed.msg, level: parsed.level });
+      }
+      if (newLog.length > 0) {
+        this.setState({ currentRun: { ...run, log: [...run.log, ...newLog].slice(-500) } });
+      }
+    } catch {}
   }
 
   private stopWatching(): void {
