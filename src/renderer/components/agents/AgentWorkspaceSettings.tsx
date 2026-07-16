@@ -79,7 +79,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     if (!settings.enabled) return 'Disabled — not running';
     const parts: string[] = [];
     const cadence = CADENCE_OPTIONS.find(o => o.value === settings.cadence);
-    if (cadence) parts.push(`Runs ${cadence.label.toLowerCase()}`);
+    if (settings.scheduleEnabled && cadence) parts.push(`Runs ${cadence.label.toLowerCase()}`);
     const catalog = EVENT_CATALOG[this.props.agentId] || [];
     const subCount = catalog.filter(e => settings.subscribedEvents[e.id] !== false).length;
     if (settings.eventsEnabled && subCount > 0) parts.push(`responds to ${subCount} event${subCount !== 1 ? 's' : ''}`);
@@ -92,6 +92,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
       style: {
         background: 'var(--ag-bg-card)', border: '1px solid var(--ag-border)', borderRadius: 12,
         padding: '20px 22px', marginBottom: 12, opacity: dimmed ? 0.45 : 1,
+        pointerEvents: dimmed ? 'none' : 'auto',
         transition: 'opacity 0.15s',
       },
     }, children);
@@ -142,7 +143,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
 
           // On a schedule
           React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 } },
-            React.createElement(ToggleSwitch, { checked: true, onChange: () => {} }), // always on
+            React.createElement(ToggleSwitch, { checked: settings.scheduleEnabled, onChange: (v) => this.updateSettings({ scheduleEnabled: v }) }),
             React.createElement('div', { style: { flex: 1 } },
               React.createElement('div', { style: { fontSize: 13.5, color: 'var(--ag-text-primary)' } }, 'On a schedule'),
             ),

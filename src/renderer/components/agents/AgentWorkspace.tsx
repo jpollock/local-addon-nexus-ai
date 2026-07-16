@@ -164,34 +164,15 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
 
   private renderOverviewTab() {
     const { agentId, onReviewEvent } = this.props;
-
-    // KPI grid
-    const kpis = [
-      { label: 'Sites monitored', val: '343', color: 'var(--ag-text-primary)' },
-      { label: 'Clean',           val: '341', color: 'var(--ag-green)' },
-      { label: 'Active threats',  val: '2',   color: 'var(--ag-red)' },
-      { label: 'Pending approval',val: '1',   color: 'var(--ag-amber)' },
-    ];
+    const pendingCount = agentStore.getState().activityEvents.filter(
+      e => e.agentId === agentId && e.status === 'review'
+    ).length;
 
     return React.createElement('div', null,
-      // KPI grid
-      React.createElement('div', {
-        style: { display: 'grid', gridTemplateColumns: `repeat(${kpis.length}, 1fr)`, gap: 12, marginBottom: 24 },
-      },
-        ...kpis.map(kpi =>
-          React.createElement('div', {
-            key: kpi.label,
-            style: { background: 'var(--ag-bg-card)', border: '1px solid var(--ag-border)', borderRadius: 12, padding: '16px 18px' },
-          },
-            React.createElement('div', { style: { fontSize: 11.5, color: 'var(--ag-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 } }, kpi.label),
-            React.createElement('div', { style: { fontSize: 32, fontWeight: 600, color: kpi.color || 'var(--ag-text-primary)' } }, kpi.val),
-          ),
-        ),
-      ),
-
-      // Needs your review
       React.createElement('div', { style: { fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ag-text-muted)', marginBottom: 12 } }, 'Needs your review'),
-      React.createElement('div', { style: { color: 'var(--ag-text-secondary)', fontSize: 13 } }, 'No pending approvals.'),
+      pendingCount > 0
+        ? React.createElement('div', { style: { color: 'var(--ag-amber)', fontSize: 13 } }, `${pendingCount} item${pendingCount !== 1 ? 's' : ''} need review — see Approvals tab.`)
+        : React.createElement('div', { style: { color: 'var(--ag-text-secondary)', fontSize: 13 } }, 'No pending approvals.'),
     );
   }
 

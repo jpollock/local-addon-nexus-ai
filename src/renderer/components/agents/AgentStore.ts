@@ -38,6 +38,7 @@ export interface ActivityEvent {
 
 export interface AgentSettings {
   enabled: boolean;
+  scheduleEnabled: boolean;
   cadence: string;  // '*/15 * * * *' | '0 * * * *' | '0 */6 * * *' | '0 0 * * *' | '0 0 * * 0'
   eventsEnabled: boolean;
   subscribedEvents: Record<string, boolean>;
@@ -91,6 +92,7 @@ class AgentStore {
   getDefaultSettings(agentId: string): AgentSettings {
     return {
       enabled: true,
+      scheduleEnabled: true,
       cadence: '*/15 * * * *',
       eventsEnabled: true,
       subscribedEvents: {},

@@ -4445,7 +4445,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
               type: 'sync.completed',
               key: 'wpe:sync.completed',
               siteId: siteName,
-              payload: { installName: siteName, installId: siteName, siteId: siteName },
+              payload: { installName: siteName },
               createdAt: Date.now(),
             });
           }
