@@ -4455,76 +4455,38 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       ((deps as any).__runAbortMap = new Map());
     runAbortMap.set(runId, abortController);
 
-    // Fire agent runs in background — one scoped wpe:sync.completed event per site
-    // so the sentinel picks each up and processes it
+    // Run agent directly via agentRunner — awaits actual completion, no log polling races
     (async () => {
-      // Capture log baseline BEFORE firing events — agent can complete before the
-      // for-loop returns, making lastSize stale if captured after.
-      const _fsEarly = require('fs') as typeof import('fs');
-      const _logPathEarly = require('path').join(
+      const runner = deps.nexusServices?.agentRunner;
+      if (!runner || !agent) {
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, { runId, doneCount: 0, failedCount: 1, findingsSites: [] });
+        return;
+      }
+
+      // Log baseline for outcome parsing after run completes
+      const _fs = require('fs') as typeof import('fs');
+      const logPath = require('path').join(
         require('os').homedir(),
         'Library', 'Application Support', 'Local', 'nexus-ai',
         'agents', agentId, 'logs', 'agent.log',
       );
-      const lastSize = _fsEarly.existsSync(_logPathEarly) ? _fsEarly.statSync(_logPathEarly).size : 0;
+      const lastSize = _fs.existsSync(logPath) ? _fs.statSync(logPath).size : 0;
 
-      let doneCount = 0;
-      let failedCount = 0;
-      const findingsSites: string[] = [];
-
-      for (const siteName of siteNames) {
-        try {
-          if (deps.nexusServices?.agentEventBus) {
-            deps.nexusServices.agentEventBus.publish({
-              namespace: 'wpe',
-              type: 'sync.completed',
-              key: 'wpe:sync.completed',
-              siteId: siteName,
-              payload: { installName: siteName },
-              createdAt: Date.now(),
-            });
-          }
-          doneCount++;
-        } catch {
-          failedCount++;
+      try {
+        // Run one site at a time via scoped event — agentRunner.run() resolves when done
+        for (const siteName of siteNames) {
+          if (signal.aborted) break;
+          const scopedEvent = {
+            namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
+            siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
+          };
+          await runner.run(agent, scopedEvent);
+        }
+      } catch (err: any) {
+        if (!signal.aborted) {
+          console.error('[AGENT_RUN_NOW] agent run error:', err?.message);
         }
       }
-
-      // Wait for the sweep to complete — poll the agent log for "sweep complete"
-      // Allow up to 30 minutes; broadcast complete when detected
-      const logPath = _logPathEarly;
-      const fs = _fsEarly;
-      let waited = 0;
-      const POLL_MS = 1000;
-      const MAX_MS = 30 * 60 * 1000;
-
-      let logContent = '';
-      await new Promise<void>(resolve => {
-        const interval = setInterval(() => {
-          // Abort: stop polling and resolve immediately
-          if (signal.aborted) { clearInterval(interval); resolve(); return; }
-          waited += POLL_MS;
-          if (waited >= MAX_MS) { clearInterval(interval); resolve(); return; }
-          try {
-            const content = fs.readFileSync(logPath, 'utf-8');
-            // If content is shorter than lastSize, the log was rotated — read the whole file
-            const afterStart = content.length < lastSize ? content : content.slice(lastSize);
-            // Require the ad-hoc site marker to appear BEFORE sweep complete — prevents
-            // a concurrent cron sweep's "sweep complete" from triggering early completion.
-            const siteMarker = siteNames.length === 1
-              ? `starting sweep for ${siteNames[0]}`
-              : 'starting sweep';
-            if (afterStart.includes('sweep complete') &&
-                (afterStart.includes(siteMarker) || siteNames.length === 0)) {
-              logContent = afterStart;
-              clearInterval(interval);
-              resolve();
-            }
-          } catch { /* file may not exist yet */ }
-        }, POLL_MS);
-        // Also resolve immediately if aborted before the first tick
-        signal.addEventListener('abort', () => { clearInterval(interval); resolve(); });
-      });
 
       runAbortMap.delete(runId);
 
@@ -4533,13 +4495,12 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         return;
       }
 
-      // If logContent is empty (timed out), try one final read
-      if (!logContent && fs.existsSync(logPath)) {
-        try {
-          const full = fs.readFileSync(logPath, 'utf-8');
-          logContent = full.length < lastSize ? full : full.slice(lastSize);
-        } catch {}
-      }
+      // Parse outcomes from the new log content written since we started
+      let logContent = '';
+      try {
+        const full = _fs.readFileSync(logPath, 'utf-8');
+        logContent = full.length < lastSize ? full : full.slice(lastSize);
+      } catch {}
 
       const outcomes = parseRunOutcomes(logContent, siteNames);
       broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
