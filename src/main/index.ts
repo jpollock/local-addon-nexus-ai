@@ -33,7 +33,7 @@ import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
-import { registerIpcHandlers } from './ipc-handlers';
+import { registerIpcHandlers, getAgentSetting } from './ipc-handlers';
 import { initializeProviders } from './chat/providers/index';
 import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
@@ -498,6 +498,7 @@ export default function main(context: any): void {
             } else if (trigger.type === 'event') {
               unsubs.push(
                 agentEventBus.subscribe(trigger.pattern, async (event) => {
+                  if (!getAgentSetting(agent.name, 'eventsEnabled')) return;
                   await agentRunner.run(agent, event).catch((err: Error) => {
                     localLogger.error(`[NexusAI] Agent "${agent.name}" event trigger failed: ${err.message}`);
                   });

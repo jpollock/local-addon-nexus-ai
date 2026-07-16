@@ -248,7 +248,15 @@ async function withSiteRunning<T>(
   }
 }
 
+// Shared agent settings — populated by AGENT_SETTINGS_UPDATE IPC, read by scheduler/event bus
+let _agentSettingsDepsRef: IpcHandlerDeps | null = null;
+export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabled' | 'eventsEnabled'): boolean {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  return cache?.get(agentId)?.[key] ?? true; // default true (permissive before settings sync)
+}
+
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
+  _agentSettingsDepsRef = deps;
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() CALLED - starting execution');
 
   // Clean up any existing handlers from previous loads (hot-reload scenario)
@@ -4432,6 +4440,21 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     const doneCount = siteNames.length - failedCount;
     return { doneCount, failedCount, findingsSites };
   }
+
+  // Agent settings cache — synced from renderer via AGENT_SETTINGS_UPDATE
+  const agentSettingsCache: Map<string, { enabled: boolean; scheduleEnabled: boolean; eventsEnabled: boolean }> =
+    (deps as any).__agentSettingsCache ?? ((deps as any).__agentSettingsCache = new Map());
+
+  safeHandle(IPC_CHANNELS.AGENT_SETTINGS_UPDATE, (_event, settings: Record<string, any>) => {
+    for (const [agentId, s] of Object.entries(settings ?? {})) {
+      agentSettingsCache.set(agentId, {
+        enabled:         s.enabled         ?? true,
+        scheduleEnabled: s.scheduleEnabled ?? true,
+        eventsEnabled:   s.eventsEnabled   ?? true,
+      });
+    }
+    return { ok: true };
+  });
 
   safeHandle(IPC_CHANNELS.AGENT_RUN_NOW, async (_event, { agentId, siteNames }: { agentId: string; siteNames: string[] }) => {
     const runId = `run-${Date.now()}`;

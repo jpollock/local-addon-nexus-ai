@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { agentStore } from './AgentStore';
+import { IPC_CHANNELS } from '../../../common/constants';
 import { AgentsHub } from './AgentsHub';
 import { FleetActivityLedger } from './FleetActivityLedger';
 import { AgentWorkspace } from './AgentWorkspace';
@@ -41,6 +42,10 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     const update = () => this.forceUpdate();
     agentStore.subscribe(update);
     this.unsub = update;
+    // Sync agent settings to main process so scheduler/event-bus respects toggles
+    agentStore.setIpcSyncer((settings) => {
+      this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.AGENT_SETTINGS_UPDATE, settings).catch(() => {});
+    });
   }
 
   componentWillUnmount() {

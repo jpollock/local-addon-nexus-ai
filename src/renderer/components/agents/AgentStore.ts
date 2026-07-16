@@ -89,12 +89,20 @@ function savePersisted(state: AgentState): void {
 class AgentStore {
   private state: AgentState = { ...DEFAULT_STATE, ...loadPersisted() };
   private listeners = new Set<() => void>();
+  private ipcSyncer: ((settings: Record<string, AgentSettings>) => void) | null = null;
+
+  setIpcSyncer(fn: (settings: Record<string, AgentSettings>) => void): void {
+    this.ipcSyncer = fn;
+    // Send current settings immediately on registration
+    fn(this.state.agentSettings);
+  }
 
   getState(): AgentState { return this.state; }
 
   setState(patch: Partial<AgentState>): void {
     this.state = { ...this.state, ...patch };
     if ('agentSettings' in patch || 'autonomyById' in patch) savePersisted(this.state);
+    if ('agentSettings' in patch && this.ipcSyncer) this.ipcSyncer(this.state.agentSettings);
     this.listeners.forEach(fn => fn());
   }
 

@@ -207,10 +207,11 @@ export const IPC_CHANNELS = {
   ASSISTANT_CONTEXT: `${ADDON_PREFIX}:assistant:context`,
 
   // Agent Run Lifecycle — ad-hoc run triggering + progress push
-  AGENT_RUN_NOW:      `${ADDON_PREFIX}:agent:run-now`,
-  AGENT_RUN_CANCEL:   `${ADDON_PREFIX}:agent:run-cancel`,
-  AGENT_RUN_STARTED:  `${ADDON_PREFIX}:agent:run-started`,
-  AGENT_RUN_COMPLETE: `${ADDON_PREFIX}:agent:run-complete`,
+  AGENT_RUN_NOW:        `${ADDON_PREFIX}:agent:run-now`,
+  AGENT_RUN_CANCEL:     `${ADDON_PREFIX}:agent:run-cancel`,
+  AGENT_RUN_STARTED:    `${ADDON_PREFIX}:agent:run-started`,
+  AGENT_RUN_COMPLETE:   `${ADDON_PREFIX}:agent:run-complete`,
+  AGENT_SETTINGS_UPDATE:`${ADDON_PREFIX}:agent:settings-update`,
 } as const;
 
 // ---------------------------------------------------------------------------
