@@ -4441,6 +4441,18 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     return { doneCount, failedCount, findingsSites };
   }
 
+  // Ad-hoc SELECT query against the graph DB — used by AgentWorkspace to render KPIs
+  safeHandle(IPC_CHANNELS.FLEET_SQL_QUERY, (_event, { query }: { query: string }) => {
+    try {
+      const db = graphService?.getDb?.();
+      if (!db) return { error: 'Graph DB not available' };
+      const rows = db.prepare(query).all();
+      return { rows };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  });
+
   // Agent settings cache — synced from renderer via AGENT_SETTINGS_UPDATE
   const agentSettingsCache: Map<string, { enabled: boolean; scheduleEnabled: boolean; eventsEnabled: boolean }> =
     (deps as any).__agentSettingsCache ?? ((deps as any).__agentSettingsCache = new Map());

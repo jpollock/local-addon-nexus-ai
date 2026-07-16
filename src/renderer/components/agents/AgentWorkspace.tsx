@@ -3,8 +3,16 @@ import { agentStore, AgentStatus } from './AgentStore';
 import { AgentWorkspaceSettings } from './AgentWorkspaceSettings';
 import { FleetActivityLedger } from './FleetActivityLedger';
 import { AgentRunModal } from './AgentRunModal';
+import { IPC_CHANNELS } from '../../../common/constants';
 
 type WorkspaceTab = 'overview' | 'approvals' | 'activity' | 'settings';
+
+interface KpiState {
+  label: string;
+  value: string | null;
+  color: string;
+  loading: boolean;
+}
 
 interface WorkspaceProps {
   agentId: string;
@@ -18,6 +26,8 @@ interface WorkspaceState {
   status: AgentStatus | null;
   running: boolean;
   showRunModal: boolean;
+  kpis: KpiState[];
+  kpisLoaded: boolean;
 }
 
 const ACCENTS: Record<string, string> = {
@@ -40,6 +50,8 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     status: null,
     running: false,
     showRunModal: false,
+    kpis: [],
+    kpisLoaded: false,
   };
   private unsub!: () => void;
 
@@ -52,6 +64,36 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     agentStore.subscribe(update);
     this.unsub = update;
     update();
+    this.loadKpis();
+  }
+
+  private async loadKpis() {
+    const { agentId } = this.props;
+    const status = agentStore.getState().statuses.find(s =>
+      s.name.toLowerCase().replace(/\s+/g, '-') === agentId
+    );
+    const kpiDefs = (status as any)?.kpis ?? [];
+    if (kpiDefs.length === 0) return;
+
+    this.setState({ kpisLoaded: false });
+    const colorMap: Record<string, string> = {
+      red: 'var(--ag-red)',
+      green: 'var(--ag-green)',
+      amber: 'var(--ag-amber)',
+      default: 'var(--ag-text-primary)',
+    };
+    const kpis: KpiState[] = await Promise.all(kpiDefs.map(async (kpi: any) => {
+      try {
+        const res = await this.props.electron.ipcRenderer.invoke(
+          IPC_CHANNELS.FLEET_SQL_QUERY, { query: kpi.query }
+        );
+        const value = res?.rows?.[0] ? String(Object.values(res.rows[0])[0]) : '—';
+        return { label: kpi.label, value, color: colorMap[kpi.color ?? 'default'] ?? colorMap.default, loading: false };
+      } catch {
+        return { label: kpi.label, value: '—', color: 'var(--ag-text-muted)', loading: false };
+      }
+    }));
+    this.setState({ kpis, kpisLoaded: true });
   }
 
   componentWillUnmount() {
@@ -164,12 +206,49 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
 
   private renderOverviewTab() {
     const { agentId } = this.props;
+    const { kpis, kpisLoaded } = this.state;
     const pendingCount = agentStore.getState().activityEvents.filter(
       e => e.agentId === agentId && e.status === 'review'
     ).length;
 
     return React.createElement('div', null,
-      React.createElement('div', { style: { fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ag-text-muted)', marginBottom: 12 } }, 'Needs your review'),
+      // KPI grid — rendered only when loaded and non-empty
+      kpisLoaded && kpis.length > 0 && React.createElement('div', {
+        style: {
+          display: 'grid',
+          gridTemplateColumns: `repeat(${Math.min(kpis.length, 4)}, 1fr)`,
+          gap: 12,
+          marginBottom: 24,
+        },
+      },
+        ...kpis.map(kpi => React.createElement('div', {
+          key: kpi.label,
+          style: {
+            background: 'var(--ag-bg-card)',
+            border: '1px solid var(--ag-border)',
+            borderRadius: 12,
+            padding: '16px 18px',
+          },
+        },
+          React.createElement('div', {
+            style: {
+              fontSize: 11.5,
+              color: 'var(--ag-text-secondary)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: 6,
+            },
+          }, kpi.label),
+          React.createElement('div', {
+            style: { fontSize: 32, fontWeight: 600, color: kpi.color },
+          }, kpi.value ?? '—'),
+        )),
+      ),
+
+      // Needs review section
+      React.createElement('div', {
+        style: { fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ag-text-muted)', marginBottom: 12 },
+      }, 'Needs your review'),
       pendingCount > 0
         ? React.createElement('button', {
             onClick: () => this.setState({ activeTab: 'approvals' }),
