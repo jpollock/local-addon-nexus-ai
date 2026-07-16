@@ -106,8 +106,9 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
       'agents', 'security-sentinel', 'reports',
     );
     try {
-      // Sort all report files across all sites by mtime — pick the newest
+      // Build candidate list — prefer the site named on the event, then sort by mtime
       const allReports: Array<{ path: string; mtime: number }> = [];
+      const siteHint = event?.siteName;
       const sites = fs.readdirSync(reportsBase);
       for (const site of sites) {
         const siteDir = path.join(reportsBase, site);
@@ -115,7 +116,9 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
           const files = fs.readdirSync(siteDir).filter((f: string) => f.endsWith('.md')).sort().reverse();
           if (files.length > 0) {
             const p = path.join(siteDir, files[0]);
-            allReports.push({ path: p, mtime: fs.statSync(p).mtimeMs });
+            const mtime = fs.statSync(p).mtimeMs;
+            // Boost the specific site so it sorts first even if not newest overall
+            allReports.push({ path: p, mtime: siteHint && site === siteHint ? Number.MAX_SAFE_INTEGER : mtime });
           }
         } catch {}
       }

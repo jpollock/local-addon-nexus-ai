@@ -266,6 +266,14 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     if (pending.length === 0) {
       return React.createElement('div', { style: { color: 'var(--ag-text-secondary)', fontSize: 13, padding: '24px 0' } }, 'No pending approvals.');
     }
+    const dismiss = (id: string) => {
+      agentStore.setState({
+        activityEvents: agentStore.getState().activityEvents.map(e =>
+          e.id === id ? { ...e, status: 'dismissed' as const } : e,
+        ),
+      });
+    };
+
     return React.createElement('div', null,
       ...pending.map(e =>
         React.createElement('div', {
@@ -273,13 +281,20 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
           style: { background: 'var(--ag-bg-card)', border: '1px solid var(--ag-border)', borderRadius: 12, padding: '16px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 14 },
         },
           React.createElement('div', { style: { flex: 1 } },
-            React.createElement('div', { style: { fontSize: 14, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 4 } }, e.text),
+            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 } },
+              React.createElement('div', { style: { fontSize: 14, fontWeight: 600, color: 'var(--ag-text-primary)' } }, e.siteName ?? e.text),
+              React.createElement('span', { style: { fontSize: 11.5, color: 'var(--ag-text-muted)' } }, e.time),
+            ),
             React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)' } }, e.sub),
           ),
           e.ref && React.createElement('button', {
             onClick: () => onReviewEvent(e.id),
             style: { background: 'var(--ag-teal)', color: 'var(--ag-on-teal)', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
           }, 'Review'),
+          React.createElement('button', {
+            onClick: () => dismiss(e.id),
+            style: { background: 'none', border: '1px solid var(--ag-border)', borderRadius: 8, padding: '8px 14px', fontSize: 13, color: 'var(--ag-text-muted)', cursor: 'pointer' },
+          }, 'Dismiss'),
         ),
       ),
     );
