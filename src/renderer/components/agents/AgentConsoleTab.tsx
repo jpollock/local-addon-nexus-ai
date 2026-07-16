@@ -102,6 +102,16 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
   }
 
   private handleExecuteDone() {
+    // Mark the matching activity event as done so the badge clears and ledger reflects completion
+    const sc = this.state.activeSentinelCase;
+    if (sc) {
+      const updated = agentStore.getState().activityEvents.map(e =>
+        e.status === 'review' && (e.siteName === sc.site || e.sub?.includes(sc.site))
+          ? { ...e, status: 'done' as const }
+          : e,
+      );
+      agentStore.setState({ activityEvents: updated });
+    }
     this.setState({ activeSentinelCase: null, executeDecisions: null, executeCommands: [] });
     this.refreshAgents();
   }
