@@ -8,7 +8,6 @@ import { GenericApprovalDrawer, GenericApproval } from './GenericApprovalDrawer'
 import { SentinelReviewOverlay, AccountDecisionMap } from './SentinelReviewOverlay';
 import { ExecuteModal } from './ExecuteModal';
 import type { SentinelCase } from './SentinelTypes';
-import { parseSentinelReport, findLatestReport } from '../../utils/parseSentinelReport';
 import { rendererGql } from '../../utils/rendererGql';
 
 interface AgentConsoleTabProps {
@@ -52,53 +51,43 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     agentStore.unsubscribe(this.unsub);
   }
 
-  private openSentinelReview(eventId: string) {
-    const path = require('path') as typeof import('path');
-    const fs   = require('fs')   as typeof import('fs');
-    const reportsBase = path.join(
-      require('os').homedir(),
-      'Library', 'Application Support', 'Local', 'nexus-ai',
-      'agents', 'security-sentinel', 'reports',
-    );
-
-    // Find the site name from the activity event — use it to look up the right report first
-    const event = agentStore.getState().activityEvents.find(e => e.id === eventId);
-    const siteHint = event?.siteName ?? null;
-
-    try {
-      const sites = fs.readdirSync(reportsBase);
-
-      // Collect all (site, reportPath, mtime) tuples and sort by most recent
-      const candidates: Array<{ site: string; reportPath: string; mtime: number }> = [];
-      for (const site of sites) {
-        const reportPath = findLatestReport(site);
-        if (!reportPath) continue;
-        try {
-          const mtime = fs.statSync(reportPath).mtimeMs;
-          candidates.push({ site, reportPath, mtime });
-        } catch {}
-      }
-
-      // If we know the site, try its report first
-      if (siteHint) {
-        const hintPath = findLatestReport(siteHint);
-        if (hintPath) {
-          const sc = parseSentinelReport(hintPath);
-          if (sc) { this.setState({ activeSentinelCase: sc }); return; }
-        }
-      }
-
-      // Fall back: sort all reports most-recent first
-      candidates.sort((a, b) => b.mtime - a.mtime);
-
-      for (const { reportPath } of candidates) {
-        const sc = parseSentinelReport(reportPath);
-        if (sc) {
-          this.setState({ activeSentinelCase: sc });
-          return;
-        }
-      }
-    } catch {}
+  private openSentinelReview(_eventId: string) {
+    // Prefer the typed RemediationPlan set by NexusOverview.runCompleteHandler (Task 4).
+    const planData = (window as any).__nexusSentinelPlan;
+    if (planData?.plan) {
+      const { plan, findings, site } = planData;
+      const siteName: string = plan.site ?? site ?? 'unknown';
+      const sc: SentinelCase = {
+        site: siteName,
+        host: `${siteName}.wpengine.com`,
+        env: 'PRODUCTION',
+        detectedAt: new Date().toISOString(),
+        reportPath: '',   // no file needed — data comes from typed plan
+        sandbox: { id: plan.sandbox ?? '', url: '' },
+        verdict: plan.verdict === 'ready' ? 'ready' : 'blocked',
+        failedSteps: (plan.steps as any[]).filter((s: any) => s.verificationResult === 'failed').length,
+        findings: ((findings ?? []) as any[]).map((f: any) => ({
+          id: f.id,
+          sev: f.severity as any,
+          title: f.title,
+          plain: f.description ?? f.title,
+        })),
+        steps: (plan.steps as any[]).map((s: any, i: number) => ({
+          n: i + 1,
+          title: s.label ?? '',
+          by: 'agent' as const,
+          review: false,
+          action: s.verificationOutput ?? '',
+          proof: s.verificationOutput ?? '',
+          ok: s.verificationResult !== 'failed',
+          deferred: false,
+        })),
+        accounts: [],
+      };
+      this.setState({ activeSentinelCase: sc });
+      return;
+    }
+    // No typed plan available (e.g. activity event predates SDK refactor) — no-op.
   }
 
   private handleExecuteDone(executedSteps?: Array<{ label: string; ok: boolean; durationMs: number }>) {
@@ -119,11 +108,41 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
   }
 
   private generateCommands(sentinelCase: SentinelCase, decisions: AccountDecisionMap): string[] {
+    const planData = (window as any).__nexusSentinelPlan;
+    if (planData?.plan?.steps) {
+      // Derive WP-CLI commands from the typed plan step labels.
+      const plan = planData.plan;
+      const cmds: string[] = [];
+      // Webshell must be removed FIRST — it runs on every WP-CLI call (MU plugin)
+      // and poisons subsequent commands with PHP warnings that look like errors.
+      cmds.push('rm wp-content/mu-plugins/index.php');
+      for (const step of plan.steps as any[]) {
+        const lbl: string = (step.label ?? '').toLowerCase();
+        if (lbl.includes('plugin')) {
+          cmds.push('wp plugin delete fileorganizer filester wp-compat file-manager-advanced noted woocommerce-conversion-tracking wp-file-manager');
+        } else if (lbl.includes('salt')) {
+          cmds.push('wp config shuffle-salts');
+        } else if (lbl.includes('disallow') || lbl.includes('hardening')) {
+          cmds.push('wp config set DISALLOW_FILE_EDIT true --raw');
+        }
+      }
+      // Account decisions
+      const toDelete = sentinelCase.accounts
+        .filter(a => a.autoDeleted || decisions[a.id]?.decision === 'delete')
+        .map(a => a.uid).filter(Boolean);
+      if (toDelete.length > 0) {
+        cmds.push(`wp user delete ${toDelete.join(' ')} --reassign=1`);
+      }
+      for (const a of sentinelCase.accounts.filter(a => decisions[a.id]?.decision === 'keep')) {
+        cmds.push(`wp user update ${a.uid} --role=subscriber`);
+      }
+      return cmds;
+    }
+
+    // Fallback: hardcoded list (for cases where no typed plan is stored).
     const pluginSlugs = ['fileorganizer', 'filester', 'wp-compat', 'file-manager-advanced',
       'noted', 'woocommerce-conversion-tracking', 'wp-file-manager'];
     const cmds: string[] = [];
-    // Webshell must be removed FIRST — it runs on every WP-CLI call (MU plugin)
-    // and poisons subsequent commands with PHP warnings that look like errors.
     cmds.push('rm wp-content/mu-plugins/index.php');
     cmds.push(`wp plugin delete ${pluginSlugs.join(' ')}`);
     const toDelete = sentinelCase.accounts
