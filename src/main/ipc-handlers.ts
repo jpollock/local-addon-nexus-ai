@@ -4479,7 +4479,8 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
           if (waited >= MAX_MS) { clearInterval(interval); resolve(); return; }
           try {
             const content = fs.readFileSync(logPath, 'utf-8');
-            const afterStart = content.slice(lastSize);
+            // If content is shorter than lastSize, the log was rotated — read the whole file
+            const afterStart = content.length < lastSize ? content : content.slice(lastSize);
             if (afterStart.includes('sweep complete')) {
               logContent = afterStart;
               clearInterval(interval);
@@ -4500,7 +4501,10 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
       // If logContent is empty (timed out), try one final read
       if (!logContent && fs.existsSync(logPath)) {
-        try { logContent = fs.readFileSync(logPath, 'utf-8').slice(lastSize); } catch {}
+        try {
+          const full = fs.readFileSync(logPath, 'utf-8');
+          logContent = full.length < lastSize ? full : full.slice(lastSize);
+        } catch {}
       }
 
       const outcomes = parseRunOutcomes(logContent, siteNames);
