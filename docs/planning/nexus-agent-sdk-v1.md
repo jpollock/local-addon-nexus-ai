@@ -456,12 +456,304 @@ async function invokeWithPermissionCheck(
 
 ---
 
+## 11. Durable Follow-Up / Multi-Phase Jobs
+
+**Motivation:** The post-deploy traffic analyzer must run immediately after a push (T+0) *and* again at T+24h and T+48h as part of the same logical job. A single `run()` call cannot span 48 hours. The runtime must persist the job and call `run()` again at the scheduled time.
+
+### `AgentRunContext.schedule`
+
+```typescript
+interface AgentScheduler {
+  // Schedule a follow-up run of this agent.
+  // The runtime persists the job across Local restarts.
+  // `payload` is passed back as `event.payload` on the follow-up call.
+  followUp(durationMs: number, payload?: Record<string, unknown>): void;
+
+  // Cancel a pending follow-up (identified by payload key)
+  cancel(payloadKey: string, payloadValue: unknown): void;
+}
+```
+
+**Usage — post-deploy analyzer:**
+
+```javascript
+async run({ event, tools, log, schedule }) {
+  const phase = event?.payload?.phase ?? 'immediate';
+  const installName = event?.payload?.installName;
+
+  if (phase === 'immediate') {
+    // T+0: check site accessibility
+    const health = await checkPageAccessibility(tools, installName);
+    log.action({ label: 'Accessibility check', result: health.ok ? 'ok' : 'failed' });
+
+    // Schedule T+24h follow-up
+    schedule.followUp(24 * 60 * 60 * 1000, { phase: 'day1', installName });
+    schedule.followUp(48 * 60 * 60 * 1000, { phase: 'day2', installName });
+
+    return { verdict: health.ok ? 'clean' : 'findings', sites: { [installName]: health } };
+  }
+
+  if (phase === 'day1' || phase === 'day2') {
+    // T+24h / T+48h: traffic comparison
+    const comparison = await compareTraffic(tools, ai, installName, phase);
+    return { verdict: comparison.anomalous ? 'findings' : 'clean', ... };
+  }
+}
+```
+
+**Trigger for the post-deploy analyzer:**
+```yaml
+triggers:
+  - type: event
+    pattern: nexus:site.pushed   # new event, fired by local_wpe_push on success
+```
+
+**Runtime behavior:** `schedule.followUp()` writes a `pending_followup` record to `agent_state`. On each startup and periodically, `AgentScheduler` checks for due follow-ups and fires `runner.run(agent, followUpEvent)`. Survives Local restarts.
+
+---
+
+## 12. HTTP Client Tool
+
+**Motivation:** Page accessibility checks, link auditing, vulnerability database lookups (WPScan, NVD), and external analytics APIs all require outbound HTTP. Currently no tool exposes this.
+
+### Manifest declaration
+
+```yaml
+permissions:
+  tier: 1
+  network:
+    - "*.wpengine.com"
+    - "api.wordpress.org"
+    - "wpscan.com"
+    - "api.nvd.nist.gov"
+```
+
+Agents declare the domains they need. The runtime enforces this — `tools.fetch()` to an undeclared domain throws `AgentPermissionError`.
+
+### `tools.fetch()`
+
+```typescript
+interface AgentTools {
+  // ... existing tools ...
+
+  // HTTP client — sandboxed to declared network domains
+  fetch(url: string, options?: {
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+    headers?: Record<string, string>;
+    body?: string;
+    timeoutMs?: number;
+  }): Promise<{
+    status: number;
+    ok: boolean;
+    text(): Promise<string>;
+    json<T = unknown>(): Promise<T>;
+  }>;
+}
+```
+
+**Usage — page accessibility check:**
+
+```javascript
+const res = await tools.fetch(`https://${installName}.wpengine.com/checkout`);
+log.action({
+  label: `Accessibility: /checkout`,
+  result: res.ok ? 'ok' : 'failed',
+  error: res.ok ? undefined : `HTTP ${res.status}`,
+});
+```
+
+**Usage — vulnerability lookup:**
+
+```javascript
+const vulns = await tools.fetch(
+  `https://api.wordpress.org/plugins/info/1.2/?action=plugin_information&request[slug]=woocommerce`,
+).then(r => r.json());
+```
+
+---
+
+## 13. Continuous / Daemon Agents
+
+**Motivation:** Uptime monitoring and SSL expiry checking need to run continuously — not on a cron tick or event, but as a long-running process that checks every N seconds and alerts immediately on failure.
+
+### Manifest
+
+```yaml
+triggers:
+  - type: stream        # long-running daemon
+    interval: 60000     # heartbeat every 60s
+```
+
+### `AgentDefinition` extensions
+
+```typescript
+interface AgentDefinition {
+  // ... existing fields ...
+
+  // Called once when the daemon starts
+  onStart?(context: AgentRunContext): Promise<void>;
+
+  // Called every `interval` ms — the heartbeat
+  run(context: AgentRunContext): Promise<AgentResult>;
+
+  // Called when the daemon is stopped (Local quit, agent unregistered)
+  onStop?(context: AgentRunContext): Promise<void>;
+}
+```
+
+**Usage — uptime monitor:**
+
+```javascript
+module.exports = {
+  name: 'uptime-monitor',
+  triggers: [{ type: 'stream', interval: 60_000 }],
+
+  async onStart({ state }) {
+    // Load monitored pages from state
+  },
+
+  async run({ tools, log, notify, state }) {
+    const pages = state.get('monitored_pages') ?? [];
+    const failures = [];
+
+    for (const page of pages) {
+      const res = await tools.fetch(page.url);
+      if (!res.ok) {
+        failures.push({ url: page.url, status: res.status });
+        log.finding({ id: 'UP-01', severity: 'critical', title: `${page.url} returned ${res.status}` });
+      }
+    }
+
+    if (failures.length > 0) {
+      notify.toast(`${failures.length} page(s) down`, 'critical');
+    }
+
+    return { verdict: failures.length > 0 ? 'findings' : 'clean', sites: {} };
+  },
+};
+```
+
+**Runtime behavior:** `AgentScheduler` starts a `setInterval` loop for stream agents. `onStop` fires when Local quits or the agent is disabled. The `run()` return value feeds the Fleet activity ledger like any other run, but only when `verdict !== 'clean'` (to avoid flooding the ledger with "all ok" entries).
+
+---
+
+## 14. Agent-to-Agent Data Sharing
+
+**Motivation:** The vulnerability scanner's findings should be visible to the dependency coordinator and the security sentinel. The dependency coordinator's "safe to update" signals should feed the sentinel's baseline checks. Agent-scoped tables are private by default — this defines how agents grant cross-agent read access.
+
+### Manifest declaration
+
+```yaml
+# In the reading agent (e.g. security-sentinel):
+permissions:
+  tier: 3
+  reads_from:
+    - agent: vulnerability-scanner
+      table: findings        # reads agent_vulnerability_scanner_findings
+    - agent: dependency-coordinator
+      table: update_status   # reads agent_dependency_coordinator_update_status
+```
+
+### `AgentStateClient` extension
+
+```typescript
+interface AgentStateClient {
+  // ... existing methods ...
+
+  // Read another agent's shared table (declared in manifest reads_from)
+  readFrom(agentName: string, tableName: string): AgentTable;
+}
+```
+
+**Usage — sentinel reading vulnerability findings:**
+
+```javascript
+// In security-sentinel's run():
+const vulnFindings = state
+  .readFrom('vulnerability-scanner', 'findings')
+  .query(
+    'SELECT * FROM findings WHERE site_id = ? AND severity IN (?,?) AND resolved = 0',
+    [install.id, 'critical', 'high']
+  );
+
+if (vulnFindings.length > 0) {
+  // Elevate severity — known CVE on this site
+  for (const f of vulnFindings) {
+    log.finding({ id: f.signal_id, severity: 'critical', title: f.title, site: install.name });
+  }
+}
+```
+
+**Runtime enforcement:** `AgentRunner` checks `reads_from` at call time. If `security-sentinel` tries to `readFrom('some-other-agent', 'secrets')` and it's not in its manifest, `AgentPermissionError` is thrown. The owning agent's table is still read-only to the requesting agent — `readFrom()` returns a table with no `insert/upsert/delete` methods.
+
+---
+
+## 15. Extended Manifest — Full Example
+
+Incorporating all additions (post-deploy analyzer as the full reference):
+
+```yaml
+name: post-deploy-analyzer
+version: 1.0.0
+description: Checks site health and traffic immediately after a WPE push, then monitors for 48h
+author:
+  name: WP Engine
+  verified: true
+
+triggers:
+  - type: event
+    pattern: nexus:site.pushed
+
+tools:
+  - fleet_sql
+  - wpe_get_install_usage   # traffic data
+
+permissions:
+  tier: 1                   # read-only — no production changes
+  scope: site               # only the site that was pushed
+  network:
+    - "*.wpengine.com"      # page accessibility checks
+
+runtime:
+  - local
+  - wpe                     # can run in cloud — no sandbox needed
+
+ui:
+  autonomy_description: "Monitors health automatically after every push — no approval needed"
+  kpis:
+    - label: Pushes analyzed
+      query: "SELECT COUNT(*) FROM agent_post_deploy_analyzer_runs"
+      color: default
+    - label: Issues detected
+      query: "SELECT COUNT(*) FROM agent_post_deploy_analyzer_findings WHERE resolved=0"
+      color: red
+```
+
+---
+
 ## Appendix: Event Catalog (published triggers)
 
-| Event | Pattern | Payload |
-|-------|---------|---------|
-| WPE sync complete | `wpe:sync.completed` | `{ installName, installId, siteId }` |
-| Plugin activated | `wp:plugin.activated` | `{ siteId, slug, version }` |
-| User created | `wp:user.created` | `{ siteId, userId, role }` |
-| Site indexed | `nexus:site.indexed` | `{ siteId, documentCount }` |
-| Agent run complete | `nexus:agent.completed` | `{ agentName, verdict, runId }` |
+| Event | Pattern | Payload | Status |
+|-------|---------|---------|--------|
+| WPE sync complete | `wpe:sync.completed` | `{ installName, installId, siteId }` | ✅ Implemented |
+| Plugin activated | `wp:plugin.activated` | `{ siteId, slug, version }` | ✅ Implemented |
+| User created | `wp:user.created` | `{ siteId, userId, role }` | ✅ Implemented |
+| Site indexed | `nexus:site.indexed` | `{ siteId, documentCount }` | ✅ Implemented |
+| Agent run complete | `nexus:agent.completed` | `{ agentName, verdict, runId }` | ✅ Implemented |
+| Site pushed to WPE | `nexus:site.pushed` | `{ localSite, installName, includeDatabase }` | 🔜 Needed |
+| Post published | `wp:post.published` | `{ siteId, postId, postType, url }` | 🔜 Needed |
+| SSL expiring | `nexus:ssl.expiring` | `{ installName, domainId, daysRemaining }` | 🔜 Needed |
+| Push failed | `nexus:site.push_failed` | `{ localSite, installName, error }` | 🔜 Needed |
+
+## Appendix: Agent Catalog
+
+| Agent | Tier | Triggers | Key tools | SDK gaps it exercises |
+|-------|------|----------|-----------|----------------------|
+| Security Sentinel | 3 | `wpe:sync.completed`, cron | fleet_sql, wp_eval, sandbox | — (reference impl) |
+| Post-Deploy Analyzer | 1 | `nexus:site.pushed` | fleet_sql, wpe_get_install_usage, fetch | Durable follow-up, HTTP client, new event |
+| Database Cleaner | 3 | cron, on-demand | fleet_sql, wp_eval | — (fits v1) |
+| Plugin Vulnerability Scanner | 1 | cron, `wpe:sync.completed` | fleet_sql, fetch | HTTP client, shared tables |
+| Dependency Coordinator | 2 | cron | fleet_sql, sandbox, local_wpe_push | Shared tables |
+| SSL / Domain Monitor | 1 | cron, stream | wpe_get_ssl_certificates, wpe_get_domains, fetch | HTTP client |
+| Post-Publish Content Auditor | 1 | `wp:post.published` | fleet_sql, fetch | HTTP client, new event |
+| Uptime Monitor | 1 | stream | fetch | Daemon/stream trigger, HTTP client |
