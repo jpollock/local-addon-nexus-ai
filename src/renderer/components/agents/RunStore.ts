@@ -116,7 +116,8 @@ class RunStore {
   getElapsed(): string {
     const run = this.state.currentRun;
     if (!run) return '0:00';
-    const secs = elapsedSeconds(run.startedAt);
+    const end = run.endedAt ?? Date.now();
+    const secs = Math.floor((end - run.startedAt) / 1000);
     const m = Math.floor(secs / 60);
     const s = secs % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;

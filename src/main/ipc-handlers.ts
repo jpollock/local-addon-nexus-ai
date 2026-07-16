@@ -4423,6 +4423,16 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     // Fire agent runs in background — one scoped wpe:sync.completed event per site
     // so the sentinel picks each up and processes it
     (async () => {
+      // Capture log baseline BEFORE firing events — agent can complete before the
+      // for-loop returns, making lastSize stale if captured after.
+      const _fsEarly = require('fs') as typeof import('fs');
+      const _logPathEarly = require('path').join(
+        require('os').homedir(),
+        'Library', 'Application Support', 'Local', 'nexus-ai',
+        'agents', agentId, 'logs', 'agent.log',
+      );
+      const lastSize = _fsEarly.existsSync(_logPathEarly) ? _fsEarly.statSync(_logPathEarly).size : 0;
+
       let doneCount = 0;
       let failedCount = 0;
       const findingsSites: string[] = [];
@@ -4447,16 +4457,11 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
       // Wait for the sweep to complete — poll the agent log for "sweep complete"
       // Allow up to 30 minutes; broadcast complete when detected
-      const logPath = require('path').join(
-        require('os').homedir(),
-        'Library', 'Application Support', 'Local', 'nexus-ai',
-        'agents', agentId, 'logs', 'agent.log',
-      );
-      const fs = require('fs') as typeof import('fs');
+      const logPath = _logPathEarly;
+      const fs = _fsEarly;
       let waited = 0;
-      const POLL_MS = 5000;
+      const POLL_MS = 1000;
       const MAX_MS = 30 * 60 * 1000;
-      const lastSize = fs.existsSync(logPath) ? fs.statSync(logPath).size : 0;
 
       let logContent = '';
       await new Promise<void>(resolve => {
