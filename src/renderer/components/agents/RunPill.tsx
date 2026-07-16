@@ -30,9 +30,10 @@ export class RunPill extends React.Component<PillProps, PillState> {
     if (!run || drawerOpen) return null;
 
     const isDone = run.phase === 'done';
+    const isCancelled = isDone && !!run.cancelled;
     const doneSites = Object.values(run.siteStatus).filter(s => s === 'done' || s === 'findings' || s === 'failed').length;
-    const isClean = isDone && run.failedCount === 0;
-    const accentColor = isDone ? (isClean ? 'var(--ag-green)' : 'var(--ag-amber)') : 'var(--ag-teal)';
+    const isClean = isDone && !isCancelled && run.failedCount === 0;
+    const accentColor = isCancelled ? 'var(--ag-text-muted)' : isDone ? (isClean ? 'var(--ag-green)' : 'var(--ag-amber)') : 'var(--ag-teal)';
     const totalSites = run.siteNames.length;
 
     // Progress bar width
@@ -57,7 +58,7 @@ export class RunPill extends React.Component<PillProps, PillState> {
         }, isDone ? (isClean ? '✓' : '!') : '⟳'),
         React.createElement('div', { style: { flex: 1, minWidth: 0 } },
           React.createElement('div', { style: { fontSize: 13, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 1 } },
-            isDone ? `${run.agentName} done` : `${run.agentName} running`,
+            isCancelled ? `${run.agentName} cancelled` : isDone ? `${run.agentName} done` : `${run.agentName} running`,
           ),
           React.createElement('div', { style: { fontSize: 11.5, color: 'var(--ag-text-muted)' } },
             isDone

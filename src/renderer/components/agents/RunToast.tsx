@@ -47,8 +47,9 @@ export class RunToast extends React.Component<ToastProps, ToastState> {
     if (!run) return null;
 
     const isDone = run.phase === 'done';
-    const isClean = isDone && run.failedCount === 0;
-    const accentColor = isDone ? (isClean ? 'var(--ag-green)' : 'var(--ag-amber)') : 'var(--ag-teal)';
+    const isCancelled = isDone && !!run.cancelled;
+    const isClean = isDone && !isCancelled && run.failedCount === 0;
+    const accentColor = isCancelled ? 'var(--ag-text-muted)' : isDone ? (isClean ? 'var(--ag-green)' : 'var(--ag-amber)') : 'var(--ag-teal)';
 
     // Start toast: show while running and not dismissed
     if (!isDone && !startDismissed) {
@@ -82,9 +83,11 @@ export class RunToast extends React.Component<ToastProps, ToastState> {
 
     // Completion toast: show when done until dismissed
     if (isDone) {
-      const summaryText = isClean
-        ? `${run.agentName} finished — all sites clean.`
-        : `${run.agentName} finished · ${run.failedCount} failed · ${run.findingsSites.length} need review`;
+      const summaryText = isCancelled
+        ? `${run.agentName} run cancelled.`
+        : isClean
+          ? `${run.agentName} finished — all sites clean.`
+          : `${run.agentName} finished · ${run.failedCount} failed · ${run.findingsSites.length} need review`;
       return React.createElement('div', {
         style: {
           position: 'fixed', top: 20, right: 20, width: 360, zIndex: 200,

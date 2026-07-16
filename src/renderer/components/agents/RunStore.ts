@@ -60,6 +60,7 @@ class RunStore {
   private state: RunState = { currentRun: null, drawerOpen: false };
   private listeners = new Set<() => void>();
   private watcher: fs.FSWatcher | null = null;
+  private watchPoll: ReturnType<typeof setInterval> | null = null;
   private logOffset = 0;
 
   getState(): RunState { return this.state; }
@@ -189,14 +190,15 @@ class RunStore {
     try {
       this.watcher = fs.watch(logPath, { persistent: false }, () => processNewLines());
     } catch {
-      // File may not exist yet — poll instead
-      const interval = setInterval(() => {
-        if (!this.state.currentRun) { clearInterval(interval); return; }
+      // File may not exist yet — poll until it appears, then switch to fs.watch
+      this.watchPoll = setInterval(() => {
+        if (!this.state.currentRun) { clearInterval(this.watchPoll!); this.watchPoll = null; return; }
         processNewLines();
         if (!this.watcher) {
           try {
             this.watcher = fs.watch(logPath, { persistent: false }, () => processNewLines());
-            clearInterval(interval);
+            clearInterval(this.watchPoll!);
+            this.watchPoll = null;
           } catch { /* keep polling */ }
         }
       }, 2000);
@@ -204,6 +206,7 @@ class RunStore {
   }
 
   private stopWatching(): void {
+    if (this.watchPoll) { clearInterval(this.watchPoll); this.watchPoll = null; }
     if (this.watcher) {
       try { this.watcher.close(); } catch {}
       this.watcher = null;

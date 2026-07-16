@@ -27,6 +27,7 @@ interface ModalProps {
 }
 
 interface ModalState {
+  isRunning: boolean;
   sites: SiteForRun[];
   selected: Set<string>;
   searchText: string;
@@ -72,6 +73,7 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
     searchText: '',
     accountFilter: 'all',
     loading: true,
+    isRunning: false,
   };
 
   async componentDidMount() {
@@ -152,6 +154,8 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
   }
 
   private async handleRun() {
+    if (this.state.isRunning) return;
+    this.setState({ isRunning: true });
     const { onRun, electron, agentId } = this.props;
     const filtered = this.getFiltered();
     const toRun = filtered.filter(s => this.state.selected.has(s.id)).map(s => s.name);
@@ -325,7 +329,7 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
           }, 'Cancel'),
           React.createElement('button', {
             onClick: () => this.handleRun(),
-            disabled: selectedCount === 0,
+            disabled: selectedCount === 0 || this.state.isRunning,
             style: {
               padding: '10px 22px', borderRadius: 9, border: 'none', fontSize: 13.5, fontWeight: 600, cursor: selectedCount === 0 ? 'not-allowed' : 'pointer',
               background: selectedCount === 0 ? 'var(--ag-bg-elevated)' : 'var(--ag-teal)',
