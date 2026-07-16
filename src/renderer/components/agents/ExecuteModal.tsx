@@ -285,6 +285,9 @@ export class ExecuteModal extends React.Component<ModalProps, ModalState> {
             React.createElement('div', {
               style: { fontSize: 12, color: 'var(--ag-text-muted)' },
             }, step.sub.slice(0, 60)),
+            step.status === 'error' && step.error && React.createElement('div', {
+              style: { fontSize: 11, color: 'var(--ag-red)', fontFamily: 'JetBrains Mono, monospace', marginTop: 2, maxWidth: 380, wordBreak: 'break-all' as const },
+            }, step.error.trim().slice(0, 300)),
           ),
           step.durationMs != null
             ? React.createElement('span', {
