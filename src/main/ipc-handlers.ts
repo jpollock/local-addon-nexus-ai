@@ -4385,17 +4385,45 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   // Agent Run Lifecycle — ad-hoc run triggering
   // =========================================================================
 
+  // Findings indicators in the sentinel log — present anywhere means at least one site has findings
+  const FINDINGS_RE = /finding\(s\)|ESCALATING|\[HIGH\]|\[CRITICAL\]|Tier 2|Active threat|remediation plan/i;
+  const FAILURE_RE = /ERROR:|fatal error|Exception:/i;
+
   function parseRunOutcomes(logText: string, siteNames: string[]): {
     doneCount: number;
     failedCount: number;
     findingsSites: string[];
   } {
+    // Single-site run: the log is scoped to that site — any findings indicator belongs to it.
+    // Multi-site: use per-site proximity matching (site name must appear within the log context).
+    if (siteNames.length === 1) {
+      const site = siteNames[0];
+      const hasFindings = FINDINGS_RE.test(logText);
+      const hasFailed = FAILURE_RE.test(logText) && !logText.includes('sweep complete');
+      return {
+        doneCount: hasFailed ? 0 : 1,
+        failedCount: hasFailed ? 1 : 0,
+        findingsSites: hasFindings && !hasFailed ? [site] : [],
+      };
+    }
+
     const findingsSites: string[] = [];
     let failedCount = 0;
     for (const site of siteNames) {
       const escaped = site.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      if (new RegExp(`${escaped}.*finding|finding.*${escaped}|ESCALATING.*${escaped}|${escaped}.*CRITICAL`, 'i').test(logText)) {
-        findingsSites.push(site);
+      // Site name on same line as finding indicator, OR site name in log AND global findings
+      const siteInLog = new RegExp(escaped, 'i').test(logText);
+      if (siteInLog && FINDINGS_RE.test(logText)) {
+        // Refine: check proximity (site name within 5 lines of a findings marker)
+        const lines = logText.split('\n');
+        let hasFinding = false;
+        for (let i = 0; i < lines.length; i++) {
+          if (new RegExp(escaped, 'i').test(lines[i])) {
+            const window = lines.slice(Math.max(0, i - 5), i + 6).join('\n');
+            if (FINDINGS_RE.test(window)) { hasFinding = true; break; }
+          }
+        }
+        if (hasFinding) findingsSites.push(site);
       }
       if (new RegExp(`✗.*${escaped}|${escaped}.*failed|ERROR.*${escaped}`, 'i').test(logText)) {
         failedCount++;
