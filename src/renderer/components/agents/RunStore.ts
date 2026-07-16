@@ -74,6 +74,7 @@ class RunStore {
   unsubscribe(fn: () => void): void { this.listeners.delete(fn); }
 
   startRun(params: { runId: string; agentId: string; agentName: string; siteNames: string[] }): void {
+    this.logOffset = 0;
     const run: Run = {
       ...params,
       phase: 'running',
@@ -138,6 +139,8 @@ class RunStore {
       if (!run) return;
       try {
         const stat = fs.statSync(logPath);
+        // Log was rotated (new file smaller than our offset) — restart from beginning
+        if (stat.size < this.logOffset) this.logOffset = 0;
         if (stat.size <= this.logOffset) return;
         const buf = Buffer.alloc(stat.size - this.logOffset);
         const fd = fs.openSync(logPath, 'r');
