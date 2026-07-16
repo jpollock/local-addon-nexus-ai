@@ -110,8 +110,10 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     const pluginSlugs = ['fileorganizer', 'filester', 'wp-compat', 'file-manager-advanced',
       'noted', 'woocommerce-conversion-tracking', 'wp-file-manager'];
     const cmds: string[] = [];
-    cmds.push(`wp plugin delete ${pluginSlugs.join(' ')}`);
+    // Webshell must be removed FIRST — it runs on every WP-CLI call (MU plugin)
+    // and poisons subsequent commands with PHP warnings that look like errors.
     cmds.push('rm wp-content/mu-plugins/index.php');
+    cmds.push(`wp plugin delete ${pluginSlugs.join(' ')}`);
     const toDelete = sentinelCase.accounts
       .filter(a => a.autoDeleted || decisions[a.id]?.decision === 'delete')
       .map(a => a.uid).filter(Boolean);
