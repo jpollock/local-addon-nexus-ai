@@ -94,15 +94,7 @@ export class AgentsHub extends React.Component<AgentsHubProps, AgentsHubState> {
     const { statuses } = this.state;
     const { onSelectAgent } = this.props;
 
-    return React.createElement('div', { style: { padding: '24px 40px' } },
-      // Page header
-      React.createElement('div', { style: { marginBottom: 20 } },
-        React.createElement('h1', { style: { fontSize: 20, fontWeight: 600, color: 'var(--ag-text-primary)', margin: '0 0 4px' } }, 'Agents'),
-        React.createElement('p', { style: { fontSize: 13, color: 'var(--ag-text-secondary)', margin: 0 } },
-          'Autonomous agents working across your fleet • configure how much each can do on its own',
-        ),
-      ),
-
+    return React.createElement('div', { style: { padding: '0 0 24px' } },
       // Inbox banner
       this.renderInbox(),
 

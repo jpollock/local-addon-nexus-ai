@@ -141,30 +141,6 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     }
   }
 
-  private renderModeSwitch() {
-    const { homeTab } = this.state;
-    const pendingCount = agentStore.getState().activityEvents.filter(e => e.status === 'review').length;
-
-    const segStyle = (active: boolean): React.CSSProperties => ({
-      padding: '5px 14px', borderRadius: 6, fontSize: 12.5, fontWeight: 500, cursor: 'pointer', border: 'none',
-      background: active ? 'var(--ag-teal)' : 'transparent',
-      color: active ? 'var(--ag-on-teal)' : 'var(--ag-text-secondary)',
-      display: 'flex', alignItems: 'center', gap: 6,
-    });
-
-    return React.createElement('div', {
-      style: { display: 'flex', background: 'var(--ag-bg-inset)', border: '1px solid var(--ag-border)', borderRadius: 10, padding: 4, marginBottom: 0 },
-    },
-      React.createElement('button', { onClick: () => this.setState({ homeTab: 'agents' }), style: segStyle(homeTab === 'agents') }, 'Agents'),
-      React.createElement('button', { onClick: () => this.setState({ homeTab: 'activity' }), style: segStyle(homeTab === 'activity') },
-        'Fleet activity',
-        pendingCount > 0 && React.createElement('span', {
-          style: { background: 'rgba(245,181,68,0.16)', color: 'var(--ag-amber)', borderRadius: 20, padding: '1px 7px', fontSize: 10, fontWeight: 600 },
-        }, pendingCount),
-      ),
-    );
-  }
-
   render() {
     const { homeTab, selectedAgentId, activeApproval, activeSentinelCase, executeDecisions, executeCommands } = this.state;
     const { electron } = this.props;
@@ -191,16 +167,50 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     }
 
     // Hub / ledger home view
-    return React.createElement('div', null,
-      // Mode switch (rendered inside the content area, not the tab bar)
-      React.createElement('div', { style: { padding: '16px 40px 0' } },
-        this.renderModeSwitch(),
+    const pendingCount = agentStore.getState().activityEvents.filter(e => e.status === 'review').length;
+
+    return React.createElement('div', { style: { padding: '24px 40px 0' } },
+      // Shared heading area
+      React.createElement('div', { style: { marginBottom: 20 } },
+        React.createElement('h1', { style: { fontSize: 20, fontWeight: 600, color: 'var(--ag-text-primary)', margin: '0 0 4px' } }, 'Agents'),
+        React.createElement('p', { style: { fontSize: 13, color: 'var(--ag-text-secondary)', margin: '0 0 20px' } },
+          'Autonomous agents working across your fleet • configure how much each can do on its own',
+        ),
+        // Tab bar — underline style
+        React.createElement('div', {
+          style: { display: 'flex', borderBottom: '1px solid var(--ag-border)', marginBottom: 0 },
+        },
+          React.createElement('button', {
+            onClick: () => this.setState({ homeTab: 'agents' }),
+            style: {
+              background: 'none', border: 'none', padding: '0 0 12px', marginRight: 28,
+              fontSize: 14, fontWeight: homeTab === 'agents' ? 500 : 400,
+              color: homeTab === 'agents' ? 'var(--ag-text-primary)' : 'var(--ag-text-muted)',
+              borderBottom: homeTab === 'agents' ? '2px solid var(--ag-teal)' : '2px solid transparent',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+            },
+          }, 'Agents'),
+          React.createElement('button', {
+            onClick: () => this.setState({ homeTab: 'activity' }),
+            style: {
+              background: 'none', border: 'none', padding: '0 0 12px', marginRight: 28,
+              fontSize: 14, fontWeight: homeTab === 'activity' ? 500 : 400,
+              color: homeTab === 'activity' ? 'var(--ag-text-primary)' : 'var(--ag-text-muted)',
+              borderBottom: homeTab === 'activity' ? '2px solid var(--ag-teal)' : '2px solid transparent',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+            },
+          },
+            'Fleet activity',
+            pendingCount > 0 && React.createElement('span', {
+              style: { background: 'rgba(245,181,68,0.20)', color: 'var(--ag-amber)', borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 600 },
+            }, pendingCount),
+          ),
+        ),
       ),
+      // Content
       homeTab === 'agents'
         ? React.createElement(AgentsHub, { onSelectAgent: (id: string) => this.setState({ selectedAgentId: id }) })
-        : React.createElement(FleetActivityLedger, {
-            onReviewEvent: (eventId: string) => this.openSentinelReview(eventId),
-          }),
+        : React.createElement(FleetActivityLedger, { onReviewEvent: (eventId: string) => this.openSentinelReview(eventId) }),
       ...this.renderSentinelModals(),
     );
   }
