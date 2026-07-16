@@ -75,4 +75,21 @@ export class AgentAIClient implements AIClient {
 
     throw new AgentAILoopError(maxTurns);
   }
+
+  async generateObject<T>(opts: {
+    prompt: string;
+    system?: string;
+    schema: Record<string, unknown>;
+    schemaName?: string;
+  }): Promise<T> {
+    // TODO: implement structured-output path (Task 3)
+    // For now, run a freeform prompt and JSON.parse the response.
+    void opts.system;
+    void opts.schema;
+    void opts.schemaName;
+    const raw = await this.run(
+      `${opts.prompt}\n\nRespond with valid JSON only. No markdown, no explanation.`,
+    );
+    return JSON.parse(raw) as T;
+  }
 }

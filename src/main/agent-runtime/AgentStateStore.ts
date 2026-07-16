@@ -65,6 +65,14 @@ export class AgentStateStore {
       set: (key: string, value: unknown) => store.set(agentName, key, value),
       delete: (key: string) => store.delete(agentName, key),
       scratch: {},
+      isCoolingDown(key: string, durationMs: number): boolean {
+        const ts = store.get<number>(agentName, `_cooldown:${key}`);
+        if (ts === undefined) return false;
+        return Date.now() - ts < durationMs;
+      },
+      setCooldown(key: string): void {
+        store.set(agentName, `_cooldown:${key}`, Date.now());
+      },
     };
   }
 

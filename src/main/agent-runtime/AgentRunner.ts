@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createLogger } from '../logging/Logger';
-import type { AgentDefinition, NexusEvent, AgentResult, AgentContext, AgentLogger } from '../agent-sdk/types';
+import type { AgentDefinition, NexusEvent, AgentResult, AgentContext, AgentLogger, Finding, AgentAction } from '../agent-sdk/types';
 import type { AgentStateStore } from './AgentStateStore';
 import { NexusToolProvider } from './NexusToolProvider';
 import { AgentAIClient } from './AgentAIClient';
@@ -71,7 +71,16 @@ export class AgentRunner {
       : { apiKey: this.resolvedProvider.apiKey, model: agentModel };
     const aiClient = aiProvider
       ? new AgentAIClient(aiProvider, providerConfig, toolProvider)
-      : { run: async (_prompt: string) => { logger.warn(`Agent "${agent.name}": AI provider "${this.resolvedProvider.provider}" unavailable — skipping AI call`); return ''; } };
+      : {
+          run: async (_prompt: string) => {
+            logger.warn(`Agent "${agent.name}": AI provider "${this.resolvedProvider.provider}" unavailable — skipping AI call`);
+            return '';
+          },
+          generateObject: async <T>(_opts: unknown): Promise<T> => {
+            logger.warn(`Agent "${agent.name}": AI provider "${this.resolvedProvider.provider}" unavailable — skipping generateObject call`);
+            return {} as T;
+          },
+        };
 
     const logDir = path.join(
       os.homedir(),
@@ -98,6 +107,26 @@ export class AgentRunner {
       warn:  (msg: string) => { appLog.warn(msg);  appendLog('WARN',  msg); },
       error: (msg: string) => { appLog.error(msg); appendLog('ERROR', msg); },
       debug: (msg: string) => { appLog.debug(msg); appendLog('DEBUG', msg); },
+      finding: (finding: Finding) => {
+        const msg = `[FINDING] ${finding.severity.toUpperCase()} ${finding.id}: ${finding.title}`;
+        appLog.warn(msg);
+        appendLog('FINDING', JSON.stringify(finding));
+      },
+      action: (action: AgentAction) => {
+        const msg = `[ACTION] ${action.label}${action.result ? ` → ${action.result}` : ''}`;
+        appLog.info(msg);
+        appendLog('ACTION', JSON.stringify(action));
+      },
+      phase: (name: string, description?: string) => {
+        const msg = `[PHASE] ${name}${description ? `: ${description}` : ''}`;
+        appLog.info(msg);
+        appendLog('PHASE', msg);
+      },
+      siteStatus: (site: string, status: string) => {
+        const msg = `[SITE] ${site} → ${status}`;
+        appLog.info(msg);
+        appendLog('SITE', msg);
+      },
     };
 
     const ctx: AgentContext = {

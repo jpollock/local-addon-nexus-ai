@@ -40,17 +40,32 @@ export interface AgentStateHandle {
   set(key: string, value: unknown): void;
   delete(key: string): void;
   scratch: Record<string, unknown>;
+  // Cooldown helpers — new
+  isCoolingDown(key: string, durationMs: number): boolean;
+  setCooldown(key: string): void;
 }
 
 export interface AgentLogger {
+  // Freeform — existing, keep
   info(msg: string, ...args: unknown[]): void;
   warn(msg: string, ...args: unknown[]): void;
   error(msg: string, ...args: unknown[]): void;
   debug(msg: string, ...args: unknown[]): void;
+  // Structured events — new
+  finding(finding: Finding): void;
+  action(action: AgentAction): void;
+  phase(name: string, description?: string): void;
+  siteStatus(site: string, status: 'running' | 'clean' | 'findings' | 'escalated' | 'error'): void;
 }
 
 export interface AIClient {
   run(prompt: string, opts?: { maxTurns?: number; model?: string }): Promise<string>;
+  generateObject<T>(opts: {
+    prompt: string;
+    system?: string;
+    schema: Record<string, unknown>;  // JSON Schema object describing T
+    schemaName?: string;
+  }): Promise<T>;
 }
 
 export class AgentAILoopError extends Error {
@@ -86,6 +101,53 @@ export interface AgentResult {
   startedAt: number;
   finishedAt: number;
   status: 'success' | 'error' | 'timeout';
+  error?: string;
+  // Domain output — populated by agents that conform to SDK v1
+  verdict?: 'clean' | 'findings' | 'escalated' | 'plan_ready' | 'error';
+  findings?: Finding[];
+  plan?: RemediationPlan;
+  sites?: Record<string, { status: string; findings: Finding[]; plan?: RemediationPlan }>;
+}
+
+// ─── Domain output types ──────────────────────────────────────────────────────
+
+export interface Finding {
+  id: string;
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  category?: 'active-compromise' | 'pre-breach' | 'misconfiguration' | 'informational';
+  title: string;
+  description?: string;
+  site?: string;
+  evidence?: Record<string, unknown>;
+  remediated?: boolean;
+}
+
+export interface RemediationStep {
+  id: string;
+  label: string;
+  command: string;
+  description?: string;
+  tier: 1 | 2 | 3;
+  requiresApproval: boolean;
+  verificationResult?: 'ok' | 'failed' | 'skipped';
+  verificationOutput?: string;
+}
+
+export interface RemediationPlan {
+  site: string;
+  sandbox?: string;
+  verified: boolean;
+  verdict: 'ready' | 'blocked';
+  summary?: string;
+  steps: RemediationStep[];
+}
+
+export interface AgentAction {
+  label: string;
+  command?: string;
+  site?: string;
+  result?: 'ok' | 'failed' | 'skipped';
+  durationMs?: number;
   error?: string;
 }
 
