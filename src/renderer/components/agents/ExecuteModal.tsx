@@ -16,7 +16,7 @@ interface ModalProps {
   commands: string[];
   electron: any;
   onCancel: () => void;
-  onDone: () => void;
+  onDone: (steps: Array<{ label: string; ok: boolean; durationMs: number }>) => void;
 }
 
 interface ModalState {
@@ -331,7 +331,7 @@ export class ExecuteModal extends React.Component<ModalProps, ModalState> {
       })(),
 
       React.createElement('button', {
-        onClick: onDone,
+        onClick: () => onDone(this.state.steps.map(s => ({ label: s.label, ok: s.status === 'done', durationMs: s.durationMs ?? 0 }))),
         style: {
           width: '100%', marginTop: 20, padding: '11px 0', borderRadius: 8,
           fontSize: 14, fontWeight: 600, cursor: 'pointer',

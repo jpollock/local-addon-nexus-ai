@@ -101,13 +101,15 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     } catch {}
   }
 
-  private handleExecuteDone() {
-    // Mark the matching activity event as done so the badge clears and ledger reflects completion
+  private handleExecuteDone(executedSteps?: Array<{ label: string; ok: boolean; durationMs: number }>) {
     const sc = this.state.activeSentinelCase;
     if (sc) {
+      const children = executedSteps?.map(s =>
+        `${s.ok ? '✅' : '❌'} ${s.label} — ${(s.durationMs / 1000).toFixed(1)}s`,
+      );
       const updated = agentStore.getState().activityEvents.map(e =>
         e.status === 'review' && (e.siteName === sc.site || e.sub?.includes(sc.site))
-          ? { ...e, status: 'done' as const }
+          ? { ...e, status: 'done' as const, count: executedSteps?.length, children }
           : e,
       );
       agentStore.setState({ activityEvents: updated });
@@ -165,7 +167,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
         commands: executeCommands,
         electron,
         onCancel: () => this.setState({ executeDecisions: null }),
-        onDone: () => this.handleExecuteDone(),
+        onDone: (steps) => this.handleExecuteDone(steps),
       }));
     }
 
