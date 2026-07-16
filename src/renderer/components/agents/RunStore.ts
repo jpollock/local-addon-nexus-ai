@@ -40,8 +40,11 @@ function parseLogLine(rawLine: string, startedAt: number): { site: string; msg: 
   const [, levelRaw, content] = timeMatch;
   const level: LogLine['level'] = levelRaw === 'WARN' ? 'warn' : levelRaw === 'ERROR' ? 'error' : 'info';
 
-  // Parse site from content: "security-sentinel: theawfulpmtest — ..."
-  const siteMatch = content.match(/^security-sentinel:\s+([\w-]+)\s+[—–]/);
+  // Parse site from content — two formats:
+  //   "security-sentinel: theawfulpmtest — ..."  (original)
+  //   "[site] theawfulpmtest — ↑ escalated"      (structured AgentRunner format)
+  const siteMatch = content.match(/^security-sentinel:\s+([\w-]+)\s+[—–]/)
+    ?? content.match(/^\[site\]\s+([\w-]+)\s+[—–]/);
   const site = siteMatch ? siteMatch[1] : '';
 
   // Determine ok vs info
@@ -173,9 +176,9 @@ class RunStore {
           if (parsed.site) {
             if (parsed.msg.includes('✓ clean')) {
               siteUpdates[parsed.site] = 'done';
-            } else if (parsed.msg.includes('ESCALATING') || parsed.msg.includes('Tier 2')) {
+            } else if (parsed.msg.includes('ESCALATING') || parsed.msg.includes('Tier 2') || parsed.msg.includes('↑ escalated')) {
               siteUpdates[parsed.site] = 'running';
-            } else if (parsed.msg.includes('finding(s)') || parsed.msg.includes('CRITICAL') || parsed.msg.includes('Active threat')) {
+            } else if (parsed.msg.includes('finding(s)') || parsed.msg.includes('CRITICAL') || parsed.msg.includes('Active threat') || parsed.msg.includes('→ findings')) {
               siteUpdates[parsed.site] = 'findings';
             }
           }

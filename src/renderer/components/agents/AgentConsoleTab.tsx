@@ -51,9 +51,17 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     agentStore.unsubscribe(this.unsub);
   }
 
-  private openSentinelReview(_eventId: string) {
-    // Prefer the typed RemediationPlan set by NexusOverview.runCompleteHandler (Task 4).
-    const planData = (window as any).__nexusSentinelPlan;
+  private openSentinelReview(eventId: string) {
+    // Prefer the plan stored on the specific activity event (set on AGENT_RUN_COMPLETE).
+    // Falls back to the global __nexusSentinelPlan for events that predate this field.
+    const event = agentStore.getState().activityEvents.find(e => e.id === eventId);
+    const eventPlan = (event as any)?.plan;
+    const eventFindings = (event as any)?.findings;
+
+    const planData = eventPlan
+      ? { plan: eventPlan, findings: eventFindings ?? [], site: (eventPlan as any).site }
+      : (window as any).__nexusSentinelPlan;
+
     if (planData?.plan) {
       const { plan, findings, site } = planData;
       const siteName: string = plan.site ?? site ?? 'unknown';

@@ -537,7 +537,7 @@ function runRelativeChecks(install, baseline) {
 
 async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000) {
   if (state.isCoolingDown(`tier2:${install.id}`, 24 * 60 * 60 * 1000)) {
-    const lastMs = state.get(`tier2:${install.id}`);
+    const lastMs = state.get(`_cooldown:tier2:${install.id}`);
     const hoursAgo = lastMs ? ((Date.now() - lastMs) / 3_600_000).toFixed(1) : '?';
     log.info(`[Tier 2] Skipping ${install.name} — escalated ${hoursAgo}h ago (cooldown: 24h)`);
     return null;
@@ -846,6 +846,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
     checklist.push({
       step: 1,
       action: 'Remove mu-plugins webshell(s)',
+      executableCommand: 'rm wp-content/mu-plugins/index.php',
       toolName: 'wp_eval',
       toolArgs: {
         site: sandboxName,
@@ -864,6 +865,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
     checklist.push({
       step: 2,
       action: 'Confidence-scored admin account remediation',
+      executableCommand: null,
       toolName: 'wp_eval',
       toolArgs: {
         site: sandboxName,
@@ -886,6 +888,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
   checklist.push({
     step: 3,
     action: 'Remove attacker plugins',
+    executableCommand: `wp plugin delete ${allSlugs.join(' ')}`,
     toolName: 'wp_eval',
     toolArgs: {
       site: sandboxName,
@@ -898,6 +901,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
   checklist.push({
     step: 4,
     action: 'Verify no PHP in uploads/',
+    executableCommand: null,
     toolName: 'wp_eval',
     toolArgs: {
       site: sandboxName,
@@ -916,6 +920,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
   checklist.push({
     step: 6,
     action: 'Shuffle authentication salts',
+    executableCommand: 'wp config shuffle-salts',
     toolName: 'wp_eval',
     toolArgs: {
       site: sandboxName,
@@ -928,6 +933,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
   checklist.push({
     step: 7,
     action: 'Apply hardening (DISALLOW_FILE_EDIT)',
+    executableCommand: 'wp config set DISALLOW_FILE_EDIT true --raw',
     toolName: 'wp_eval',
     toolArgs: {
       site: sandboxName,
@@ -965,6 +971,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
   checklist.push({
     step: 8,
     action: 'Final re-scan (mu-plugins and obfuscation)',
+    executableCommand: null,
     toolName: 'wp_eval',
     toolArgs: {
       site: sandboxName,
@@ -1109,7 +1116,7 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
   const steps = checklist.map((item, i) => ({
     id: `step-${item.step ?? i + 1}`,
     label: item.action,
-    command: item.action,
+    command: item.executableCommand ?? '',   // executable WP-CLI command, not display label
     tier: 3,
     requiresApproval: true,
     verificationResult: results[i]?.passed ? 'ok' : 'failed',
