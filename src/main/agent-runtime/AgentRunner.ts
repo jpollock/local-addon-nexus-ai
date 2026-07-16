@@ -102,30 +102,34 @@ export class AgentRunner {
       } catch { /* non-fatal */ }
     }
 
+    // Accumulators for structured log events — merged into AgentResult after run
+    const accFindings: Finding[] = [];
+    const accActions:  AgentAction[] = [];
+    const accSites:    Record<string, { status: string; findings: Finding[] }> = {};
+
     const agentLog: AgentLogger = {
       info:  (msg: string) => { appLog.info(msg);  appendLog('INFO',  msg); },
       warn:  (msg: string) => { appLog.warn(msg);  appendLog('WARN',  msg); },
       error: (msg: string) => { appLog.error(msg); appendLog('ERROR', msg); },
       debug: (msg: string) => { appLog.debug(msg); appendLog('DEBUG', msg); },
       finding: (finding: Finding) => {
-        const msg = `[FINDING] ${finding.severity.toUpperCase()} ${finding.id}: ${finding.title}`;
-        appLog.warn(msg);
-        appendLog('FINDING', JSON.stringify(finding));
+        accFindings.push(finding);
+        const sev = finding.severity === 'critical' || finding.severity === 'high' ? 'WARN' : 'INFO';
+        appendLog(sev, `[${finding.severity.toUpperCase()}] ${finding.id}: ${finding.title}${finding.site ? ` (${finding.site})` : ''}`);
       },
       action: (action: AgentAction) => {
-        const msg = `[ACTION] ${action.label}${action.result ? ` → ${action.result}` : ''}`;
-        appLog.info(msg);
-        appendLog('ACTION', JSON.stringify(action));
+        accActions.push(action);
+        appendLog(action.result === 'failed' ? 'WARN' : 'INFO',
+          `[action] ${action.label}${action.result ? ` — ${action.result}` : ''}${action.durationMs ? ` (${action.durationMs}ms)` : ''}`);
       },
       phase: (name: string, description?: string) => {
-        const msg = `[PHASE] ${name}${description ? `: ${description}` : ''}`;
-        appLog.info(msg);
-        appendLog('PHASE', msg);
+        appendLog('INFO', `[phase] ${name}${description ? ': ' + description : ''}`);
       },
       siteStatus: (site: string, status: string) => {
-        const msg = `[SITE] ${site} → ${status}`;
-        appLog.info(msg);
-        appendLog('SITE', msg);
+        if (!accSites[site]) accSites[site] = { status, findings: [] };
+        else accSites[site].status = status;
+        const icon = status === 'clean' ? '✓' : status === 'escalated' ? '↑' : status === 'error' ? '✗' : '→';
+        appendLog('INFO', `[site] ${site} — ${icon} ${status}`);
       },
     };
 
@@ -141,11 +145,12 @@ export class AgentRunner {
     let status: AgentResult['status'] = 'success';
     let error: string | undefined;
     let timeoutHandle: NodeJS.Timeout | undefined;
+    let agentReturnValue: unknown;
 
     try {
       try {
         await Promise.race([
-          agent.run(ctx),
+          agent.run(ctx).then((rv) => { agentReturnValue = rv; }),
           new Promise<never>((_, reject) => {
             timeoutHandle = setTimeout(() => reject(new TimeoutError()), timeoutMs);
           }),
@@ -176,6 +181,24 @@ export class AgentRunner {
     }
 
     const result: AgentResult = { agentName: agent.name, startedAt, finishedAt: Date.now(), status, error };
+
+    // Merge structured log events accumulated during the run
+    if (accFindings.length > 0) result.findings = accFindings;
+    if (Object.keys(accSites).length > 0) {
+      result.sites = Object.fromEntries(
+        Object.entries(accSites).map(([k, v]) => [k, { ...v, findings: accFindings.filter(f => f.site === k) }]),
+      );
+    }
+
+    // If the agent returned a typed AgentResult, its domain fields take precedence
+    if (agentReturnValue && typeof agentReturnValue === 'object') {
+      const rv = agentReturnValue as AgentResult;
+      if (rv.verdict)  result.verdict  = rv.verdict;
+      if (rv.findings) result.findings = rv.findings;
+      if (rv.plan)     result.plan     = rv.plan;
+      if (rv.sites)    result.sites    = rv.sites;
+    }
+
     this.stateStore.recordRun(result);
     return result;
   }

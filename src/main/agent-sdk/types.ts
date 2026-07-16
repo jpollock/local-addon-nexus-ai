@@ -92,7 +92,7 @@ export interface AgentDefinition {
   tools?: string[];           // declared tool names; undefined/empty = no tool access
   model?: string;             // default: inherits from Nexus settings
   timeoutMs?: number;         // default: 300_000 (5 min)
-  run: (ctx: AgentContext) => Promise<void>;
+  run: (ctx: AgentContext) => Promise<Partial<AgentResult> | void>;
   onError?: (err: Error, ctx: AgentContext) => Promise<void>;
 }
 
