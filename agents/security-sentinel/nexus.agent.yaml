@@ -1,0 +1,38 @@
+name: security-sentinel
+version: 1.0.0
+description: Fleet-wide security surveillance — detects compromise and pre-breach exposure across all WPE installs
+author:
+  name: WP Engine
+  verified: true
+
+triggers:
+  - type: event
+    pattern: wpe:sync.completed
+  - type: cron
+    expression: "*/15 * * * *"
+
+tools:
+  - fleet_sql
+  - wpe_site_deep_refresh
+  - local_create_site
+  - local_wpe_pull
+  - local_operation_status
+  - wp_eval
+  - local_wpe_push
+
+permissions:
+  tier: 3
+  scope: fleet
+
+runtime:
+  - local
+
+ui:
+  autonomy_description: "Investigates on its own • you approve anything on production"
+  kpis:
+    - label: Sites monitored
+      query: "SELECT COUNT(*) FROM sites WHERE source='wpe'"
+      color: default
+    - label: Active threats
+      query: "SELECT COUNT(DISTINCT site_id) FROM agent_security_sentinel_findings WHERE severity IN ('critical','high') AND resolved=0"
+      color: red

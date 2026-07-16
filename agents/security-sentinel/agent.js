@@ -192,6 +192,8 @@ module.exports = {
     log.info(`security-sentinel: ${installs.length} install(s) to check`);
 
     const allInstallResults = [];
+    const allFindings = [];
+    let latestPlan = null;
 
     for (const install of installs) {
       const signals = [];
@@ -220,15 +222,27 @@ module.exports = {
       // Only active-compromise signals count toward Tier 2 escalation — EXP (pre-breach) signals are informational
       const compromiseHighCount = signals.filter(s => s.severity === 'high' && s.category === 'active-compromise').length;
 
+      // Collect findings into allFindings
+      for (const sig of signals) {
+        allFindings.push({ id: sig.id, severity: sig.severity, title: sig.title, site: install.name, category: sig.category });
+      }
+
       if (signals.length === 0) {
         log.info(`security-sentinel: ${install.name} — ✓ clean`);
+        log.siteStatus(install.name, 'clean');
       } else if (criticalCount >= 1 || compromiseHighCount >= 2) {
-        log.warn(`security-sentinel: ${install.name} — ESCALATING to Tier 2 ...`);
-        signals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.id}: ${s.title}`));
-        await tier2Investigate(install, signals, tools, ai, log, state);
+        log.siteStatus(install.name, 'escalated');
+        log.phase('Tier 2', `Deep investigation: ${install.name}`);
+        signals.forEach(s => log.finding({
+          id: s.id, severity: s.severity, title: s.title,
+          description: s.detail, site: install.name,
+          category: s.category,
+        }));
+        const plan = await tier2Investigate(install, signals, tools, ai, log, state);
+        if (plan) latestPlan = plan;
       } else {
-        log.warn(`security-sentinel: ${install.name} — ${signals.length} finding(s):`);
-        signals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.id}: ${s.title}`));
+        log.siteStatus(install.name, 'findings');
+        signals.forEach(s => log.finding({ id: s.id, severity: s.severity, title: s.title, site: install.name }));
       }
       // Always store baseline so relative checks fire on next scan
       storeBaseline(install, state);
@@ -244,10 +258,16 @@ module.exports = {
     const fleetSignals = runFleetCorrelation(allInstallResults, suspiciousSlugs);
     if (fleetSignals.length > 0) {
       log.warn(`security-sentinel: FLEET CORRELATION — ${fleetSignals.length} cross-site signal(s):`);
-      fleetSignals.forEach(s => log.warn(`  [${s.severity.toUpperCase()}] ${s.id}: ${s.title}`));
+      fleetSignals.forEach(s => log.finding({ id: s.id, severity: s.severity, title: s.title, site: s.installName }));
     }
 
     log.info('security-sentinel: sweep complete');
+
+    const verdict = latestPlan ? 'plan_ready'
+      : allFindings.length > 0 ? 'findings'
+      : 'clean';
+
+    return { verdict, findings: allFindings, plan: latestPlan ?? undefined, sites: {} };
   },
 
   // Exported for unit testing only
@@ -516,15 +536,13 @@ function runRelativeChecks(install, baseline) {
 }
 
 async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000) {
-  // Cooldown: don't re-investigate the same install within 24 hours
-  const COOLDOWN_MS = 24 * 60 * 60 * 1000;
-  const lastEscalation = state.get(`tier2-last:${install.id}`);
-  if (lastEscalation && (Date.now() - lastEscalation) < COOLDOWN_MS) {
-    const hoursAgo = Math.round((Date.now() - lastEscalation) / 3600000);
+  if (state.isCoolingDown(`tier2:${install.id}`, 24 * 60 * 60 * 1000)) {
+    const lastMs = state.get(`tier2:${install.id}`);
+    const hoursAgo = lastMs ? ((Date.now() - lastMs) / 3_600_000).toFixed(1) : '?';
     log.info(`[Tier 2] Skipping ${install.name} — escalated ${hoursAgo}h ago (cooldown: 24h)`);
-    return;
+    return null;
   }
-  state.set(`tier2-last:${install.id}`, Date.now());
+  state.setCooldown(`tier2:${install.id}`);
 
   const sandboxName = `sentinel-${install.name}-${Date.now()}`;
   log.info(`[Tier 2] Creating sandbox: ${sandboxName}`);
@@ -542,7 +560,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
   log.info(`[Tier 2] Pull response: ${pullResultStr.slice(0, 200)}`);
   if (pullResultStr.toLowerCase().includes('error') || pullResultStr.includes('not found')) {
     log.error(`[Tier 2] Pull failed to start for ${install.name}: ${pullResultStr.slice(0, 300)}`);
-    return;
+    return null;
   }
 
   // local_wpe_pull is async — poll every 20s.
@@ -560,7 +578,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
       log.info(`[Tier 2] Poll ${i + 1}/30: ${statusStr.slice(0, 200)}`);
       if (statusStr.includes('failed')) {
         log.error(`[Tier 2] Pull failed for ${install.name}`);
-        return;
+        return null;
       }
       if (statusStr.includes('"active"') || statusStr.includes('in_progress') || statusStr.includes('pulling')) {
         sawInProgress = true;
@@ -577,7 +595,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
       log.warn(`[Tier 2] Poll error: ${err.message}`);
     }
   }
-  if (!pullDone) { log.warn(`[Tier 2] Pull timed out for ${install.name}`); return; }
+  if (!pullDone) { log.warn(`[Tier 2] Pull timed out for ${install.name}`); return null; }
 
   log.info(`[Tier 2] Sandbox ready. Running filesystem checks...`);
 
@@ -721,61 +739,59 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   log.info(`[Tier 2] Filesystem scan complete: ${fsSignals.length} finding(s)`);
 
-  // LLM synthesis (Task 8) — runs after filesystem checks
-  await llmSynthesis(install, tier1Signals, fsSignals, tools, ai, log, sandboxName);
+  // LLM synthesis — runs after filesystem checks
+  const plan = await llmSynthesis(install, tier1Signals, fsSignals, tools, ai, log, sandboxName);
 
   // Sandbox intentionally kept alive — the user will execute or dismiss via Sentinel Review UI.
   // Deletion is handled by the nexus:sentinel:execute IPC handler after execution completes.
-  return { filesystemSignals: fsSignals, adminMismatch, sandboxName };
+  return plan;
 }
 
 async function llmSynthesis(install, tier1Signals, fsSignals, tools, ai, log, sandboxName) {
   const allSignals = [...tier1Signals, ...fsSignals];
 
-  const prompt = `You are a WordPress security analyst completing an investigation of a WP Engine production site.
+  const schema = {
+    type: 'object',
+    properties: {
+      classification: {
+        type: 'string',
+        enum: ['active-compromise', 'high-risk', 'misconfiguration', 'false-positive'],
+      },
+      summary: { type: 'string', description: 'Two-sentence summary of the situation' },
+      escalateToTier3: { type: 'boolean', description: 'Whether to apply the remediation plan to production' },
+    },
+    required: ['classification', 'summary', 'escalateToTier3'],
+  };
 
+  const systemPrompt = `You are a WordPress security analyst completing an investigation of a WP Engine production site.
 Site: ${install.name} (${install.environment}, ${install.postCount} posts)
-Sandbox for investigation: ${sandboxName}
+Sandbox: ${sandboxName}`;
 
-Security signals found:
+  const userPrompt = `Security signals found:
 ${allSignals.map(s => `[${(s.severity || 'unknown').toUpperCase()}] ${s.id}: ${s.title}`).join('\n')}
 
 Signal details:
 ${allSignals.map(s => `${s.id}: ${s.detail || '(no detail)'}`).join('\n\n')}
 
-Based on these signals:
-1. Classify the situation: active-compromise | high-risk | misconfiguration | false-positive
-2. List the top 3 immediate remediation steps in priority order, with exact WP-CLI commands
-3. Identify anything that should be checked next that was not covered above
-4. Recommend whether to escalate to Tier 3 (fix + push) or monitor only
-
-Format:
-CLASSIFICATION: <one of the four values>
-IMMEDIATE ACTIONS:
-1. <action>
-2. <action>
-3. <action>
-NEXT CHECKS: <what to verify next>
-TIER3: yes | no`;
+Classify the situation and decide if the remediation plan should be applied to production.`;
 
   log.info(`[Tier 2] Calling LLM synthesis...`);
-  let synthesis = '(synthesis unavailable)';
+  let synthesis = { classification: 'active-compromise', summary: '(synthesis unavailable)', escalateToTier3: true };
+
   try {
-    synthesis = await ai.run(prompt);
-    log.warn(`[Tier 2 Synthesis] ${install.name}:\n${synthesis}`);
+    synthesis = await ai.generateObject({ prompt: userPrompt, system: systemPrompt, schema, schemaName: 'SentinelSynthesis' });
+    log.warn(`[Tier 2 Synthesis] ${install.name}: ${synthesis.classification} — ${synthesis.summary}`);
   } catch (err) {
-    log.warn(`[Tier 2 Synthesis] LLM call failed for ${install.name}: ${err.message} — proceeding with signal-based escalation`);
+    log.warn(`[Tier 2 Synthesis] LLM call failed for ${install.name}: ${err.message} — defaulting to escalate`);
   }
 
-  const shouldEscalateToTier3 = synthesis.includes('TIER3: yes') ||
-    allSignals.some(s => s.severity === 'critical');
-
-  if (shouldEscalateToTier3) {
-    log.warn(`[Tier 3] Preparing remediation plan for ${install.name}`);
-    await tier3Remediate(install, synthesis, allSignals, sandboxName, tools, log);
+  if (synthesis.escalateToTier3 || allSignals.some(s => s.severity === 'critical')) {
+    log.phase('Tier 3', `Preparing remediation plan for ${install.name}`);
+    const plan = await tier3Remediate(install, synthesis.summary, allSignals, sandboxName, tools, log);
+    return plan;
   }
 
-  return synthesis;
+  return null;
 }
 
 // ─── Admin account confidence scoring ────────────────────────────────────────
@@ -1090,12 +1106,31 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
 
   try { fs.appendFileSync(reportPath, verdictSection); } catch { /* non-fatal */ }
 
-  log.warn(`[Tier 3] Remediation prepared in sandbox: ${sandboxName}`);
-  log.warn(`[Tier 3] MANUAL STEP REQUIRED:`);
-  log.warn(`  1. Review sandbox: ${sandboxName}`);
-  log.warn(`  2. Read report: ${reportPath}`);
-  log.warn(`  3. If all steps ✅: nexus agent push ${install.name}`);
-  log.warn(`  Synthesis:\n${synthesis}`);
+  const steps = checklist.map((item, i) => ({
+    id: `step-${item.step ?? i + 1}`,
+    label: item.action,
+    command: item.action,
+    tier: 3,
+    requiresApproval: true,
+    verificationResult: results[i]?.passed ? 'ok' : 'failed',
+    verificationOutput: results[i]?.detail ?? '',
+  }));
+
+  const allPassed = steps.every(s => s.verificationResult !== 'failed');
+
+  log.action({
+    label: `Remediation prepared in sandbox: ${sandboxName}`,
+    site: install.name,
+    result: allPassed ? 'ok' : 'failed',
+  });
 
   // Note: actual local_wpe_push requires human confirmation — never auto-pushed
+  return {
+    site: install.name,
+    sandbox: sandboxName,
+    verified: allPassed,
+    verdict: allPassed ? 'ready' : 'blocked',
+    summary: synthesis,
+    steps,
+  };
 }
