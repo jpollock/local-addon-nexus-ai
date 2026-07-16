@@ -95,7 +95,55 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
       this.setState({ activeSentinelCase: sc });
       return;
     }
-    // No typed plan available (e.g. activity event predates SDK refactor) — no-op.
+    // Final fallback: read the most recent report file from disk.
+    // Covers events that predate the SDK refactor (no plan field) and cases
+    // where window.__nexusSentinelPlan was cleared (Local restart).
+    const path = require('path') as typeof import('path');
+    const fs   = require('fs')   as typeof import('fs');
+    const os   = require('os')   as typeof import('os');
+    const reportsBase = path.join(
+      os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai',
+      'agents', 'security-sentinel', 'reports',
+    );
+    try {
+      // Sort all report files across all sites by mtime — pick the newest
+      const allReports: Array<{ path: string; mtime: number }> = [];
+      const sites = fs.readdirSync(reportsBase);
+      for (const site of sites) {
+        const siteDir = path.join(reportsBase, site);
+        try {
+          const files = fs.readdirSync(siteDir).filter((f: string) => f.endsWith('.md')).sort().reverse();
+          if (files.length > 0) {
+            const p = path.join(siteDir, files[0]);
+            allReports.push({ path: p, mtime: fs.statSync(p).mtimeMs });
+          }
+        } catch {}
+      }
+      allReports.sort((a, b) => b.mtime - a.mtime);
+      for (const { path: reportPath } of allReports) {
+        const content = fs.readFileSync(reportPath, 'utf-8');
+        const lines = content.split('\n');
+        const site = (lines.find((l: string) => l.startsWith('**Site:**')) ?? '').replace('**Site:**', '').trim() || 'unknown';
+        const detectedAt = (lines.find((l: string) => l.startsWith('**Date:**')) ?? '').replace('**Date:**', '').trim();
+        const sandbox = (lines.find((l: string) => l.startsWith('**Sandbox:**')) ?? '').replace('**Sandbox:**', '').trim();
+        const verdict = content.includes('READY TO PUSH') ? 'ready' : 'blocked';
+        const findingsStart = lines.findIndex((l: string) => l.startsWith('## Findings'));
+        const checklistStart = lines.findIndex((l: string) => l.startsWith('## Remediation Checklist'));
+        const verdictIdx = lines.findIndex((l: string) => l.startsWith('## Verdict'));
+        const findingLines = findingsStart >= 0 && checklistStart >= 0 ? lines.slice(findingsStart + 1, checklistStart) : [];
+        const checklistLines = checklistStart >= 0 && verdictIdx >= 0 ? lines.slice(checklistStart + 1, verdictIdx) : [];
+        const findings = findingLines
+          .map((l: string) => { const m = l.match(/^- \[([\w]+)\]\s+([\w-]+):\s+(.+)$/); return m ? { id: m[2], sev: m[1].toLowerCase() as any, title: m[3], plain: m[3] } : null; })
+          .filter(Boolean) as any[];
+        const steps = checklistLines
+          .map((l: string, i: number) => { const m = l.match(/^([✅❌⚪])\s+Step\s+(\d+):\s+(.+?)(?:\s+—\s+(.*))?$/u); return m ? { n: i + 1, title: m[3], by: 'agent' as const, review: false, action: m[4] ?? '', proof: m[4] ?? '', ok: m[1] === '✅', deferred: m[1] === '⚪' } : null; })
+          .filter(Boolean) as any[];
+        if (findings.length > 0 || steps.length > 0) {
+          this.setState({ activeSentinelCase: { site, host: `${site}.wpengine.com`, env: 'PRODUCTION', detectedAt, reportPath, sandbox: { id: sandbox, url: '' }, verdict, failedSteps: steps.filter((s: any) => !s.ok).length, findings, steps, accounts: [] } });
+          return;
+        }
+      }
+    } catch {}
   }
 
   private handleExecuteDone(executedSteps?: Array<{ label: string; ok: boolean; durationMs: number }>) {
