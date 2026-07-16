@@ -200,10 +200,6 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
             React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-muted)' } }, 'Via Run now button'),
           ),
 
-          // Summary line
-          React.createElement('div', { style: { marginTop: 16, fontSize: 12.5, color: 'var(--ag-text-secondary)', borderTop: '1px solid var(--ag-border-subtle)', paddingTop: 12 } },
-            this.getRunSummary(),
-          ),
         ),
         !settings.enabled,
       ),

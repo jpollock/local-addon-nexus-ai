@@ -87,7 +87,7 @@ export class AgentCard extends React.Component<AgentCardProps, AgentCardState> {
           },
             React.createElement('span', {
               style: { fontSize: 15.5, fontWeight: 600, color: 'var(--ag-text-primary)', flex: 1 },
-            }, status.name),
+            }, status.name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())),
             React.createElement('span', { className: `ag-pill ${pillClass}` }, pillLabel),
           ),
           React.createElement('p', {

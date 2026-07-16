@@ -91,7 +91,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         React.createElement('div', { style: { flex: 1 } },
           React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 } },
             React.createElement('span', { style: { fontSize: 21, fontWeight: 600, color: 'var(--ag-text-primary)' } },
-              status?.name || agentId,
+              (status?.name || agentId).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
             ),
             React.createElement('span', { className: `ag-pill ${pillClass}` }, pillLabel),
           ),
@@ -163,7 +163,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
   }
 
   private renderOverviewTab() {
-    const { agentId, onReviewEvent } = this.props;
+    const { agentId } = this.props;
     const pendingCount = agentStore.getState().activityEvents.filter(
       e => e.agentId === agentId && e.status === 'review'
     ).length;
@@ -171,8 +171,38 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     return React.createElement('div', null,
       React.createElement('div', { style: { fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ag-text-muted)', marginBottom: 12 } }, 'Needs your review'),
       pendingCount > 0
-        ? React.createElement('div', { style: { color: 'var(--ag-amber)', fontSize: 13 } }, `${pendingCount} item${pendingCount !== 1 ? 's' : ''} need review — see Approvals tab.`)
+        ? React.createElement('button', {
+            onClick: () => this.setState({ activeTab: 'approvals' }),
+            style: { background: 'none', border: 'none', color: 'var(--ag-amber)', fontSize: 13, cursor: 'pointer', padding: 0, textDecoration: 'underline' },
+          }, `${pendingCount} item${pendingCount !== 1 ? 's' : ''} need${pendingCount === 1 ? 's' : ''} review — go to Approvals`)
         : React.createElement('div', { style: { color: 'var(--ag-text-secondary)', fontSize: 13 } }, 'No pending approvals.'),
+    );
+  }
+
+  private renderApprovalsTab() {
+    const { agentId, onReviewEvent } = this.props;
+    const pending = agentStore.getState().activityEvents.filter(
+      e => e.agentId === agentId && e.status === 'review'
+    );
+    if (pending.length === 0) {
+      return React.createElement('div', { style: { color: 'var(--ag-text-secondary)', fontSize: 13, padding: '24px 0' } }, 'No pending approvals.');
+    }
+    return React.createElement('div', null,
+      ...pending.map(e =>
+        React.createElement('div', {
+          key: e.id,
+          style: { background: 'var(--ag-bg-card)', border: '1px solid var(--ag-border)', borderRadius: 12, padding: '16px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 14 },
+        },
+          React.createElement('div', { style: { flex: 1 } },
+            React.createElement('div', { style: { fontSize: 14, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 4 } }, e.text),
+            React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)' } }, e.sub),
+          ),
+          e.ref && React.createElement('button', {
+            onClick: () => onReviewEvent(e.id),
+            style: { background: 'var(--ag-teal)', color: 'var(--ag-on-teal)', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+          }, 'Review'),
+        ),
+      ),
     );
   }
 
@@ -186,7 +216,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
       this.renderHeader(),
       this.renderTabBar(),
       activeTab === 'overview'  && this.renderOverviewTab(),
-      activeTab === 'approvals' && React.createElement('div', { style: { color: 'var(--ag-text-secondary)' } }, 'No pending approvals.'),
+      activeTab === 'approvals' && this.renderApprovalsTab(),
       activeTab === 'activity'  && React.createElement(FleetActivityLedger, {
         onReviewEvent,
         // Scoped to this agent in future — for now shows all

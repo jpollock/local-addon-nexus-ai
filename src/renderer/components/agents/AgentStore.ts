@@ -64,14 +64,37 @@ const DEFAULT_STATE: AgentState = {
   expandedEvents: {},
 };
 
+const PERSIST_KEY = 'nexus-ai:agent-store-v1';
+
+function loadPersisted(): Partial<AgentState> {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PERSIST_KEY) : null;
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return { agentSettings: parsed.agentSettings || {}, autonomyById: parsed.autonomyById || {} };
+  } catch { return {}; }
+}
+
+function savePersisted(state: AgentState): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(PERSIST_KEY, JSON.stringify({
+        agentSettings: state.agentSettings,
+        autonomyById: state.autonomyById,
+      }));
+    }
+  } catch {}
+}
+
 class AgentStore {
-  private state: AgentState = { ...DEFAULT_STATE };
+  private state: AgentState = { ...DEFAULT_STATE, ...loadPersisted() };
   private listeners = new Set<() => void>();
 
   getState(): AgentState { return this.state; }
 
   setState(patch: Partial<AgentState>): void {
     this.state = { ...this.state, ...patch };
+    if ('agentSettings' in patch || 'autonomyById' in patch) savePersisted(this.state);
     this.listeners.forEach(fn => fn());
   }
 

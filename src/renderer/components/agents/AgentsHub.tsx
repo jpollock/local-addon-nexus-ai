@@ -65,7 +65,7 @@ export class AgentsHub extends React.Component<AgentsHubProps, AgentsHubState> {
       // Text
       React.createElement('div', { style: { flex: 1 } },
         React.createElement('div', { style: { fontSize: 15, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 2 } },
-          isClean ? 'Nothing needs you right now' : `${pending} action${pending !== 1 ? 's' : ''} need your review`,
+          isClean ? 'Nothing needs you right now' : `${pending} action${pending !== 1 ? 's' : ''} need${pending === 1 ? 's' : ''} your review`,
         ),
         React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)' } },
           isClean
