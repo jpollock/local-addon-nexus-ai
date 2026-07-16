@@ -256,9 +256,15 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
         }),
       ),
 
-      // Result count
-      React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)', marginBottom: 16 } },
-        `${filtered.length} event${filtered.length !== 1 ? 's' : ''}${pendingCount > 0 ? ` • ${pendingCount} need${pendingCount === 1 ? 's' : ''} your review` : ''}`,
+      // Result count + Clear all
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', marginBottom: 16 } },
+        React.createElement('span', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)', flex: 1 } },
+          `${filtered.length} event${filtered.length !== 1 ? 's' : ''}${pendingCount > 0 ? ` • ${pendingCount} need${pendingCount === 1 ? 's' : ''} your review` : ''}`,
+        ),
+        this.state.events.length > 0 && React.createElement('button', {
+          onClick: () => agentStore.setState({ activityEvents: [] }),
+          style: { background: 'none', border: 'none', fontSize: 12, color: 'var(--ag-text-muted)', cursor: 'pointer', padding: '0 0 0 8px' },
+        }, 'Clear all'),
       ),
 
       // Day groups
