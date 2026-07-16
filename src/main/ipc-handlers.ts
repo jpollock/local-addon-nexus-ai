@@ -4509,7 +4509,13 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
             const content = fs.readFileSync(logPath, 'utf-8');
             // If content is shorter than lastSize, the log was rotated — read the whole file
             const afterStart = content.length < lastSize ? content : content.slice(lastSize);
-            if (afterStart.includes('sweep complete')) {
+            // Require the ad-hoc site marker to appear BEFORE sweep complete — prevents
+            // a concurrent cron sweep's "sweep complete" from triggering early completion.
+            const siteMarker = siteNames.length === 1
+              ? `starting sweep for ${siteNames[0]}`
+              : 'starting sweep';
+            if (afterStart.includes('sweep complete') &&
+                (afterStart.includes(siteMarker) || siteNames.length === 0)) {
               logContent = afterStart;
               clearInterval(interval);
               resolve();
