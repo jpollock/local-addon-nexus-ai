@@ -106,24 +106,31 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
       'agents', 'security-sentinel', 'reports',
     );
     try {
-      // Build candidate list — prefer the site named on the event, then sort by mtime
-      const allReports: Array<{ path: string; mtime: number }> = [];
       const siteHint = event?.siteName;
-      const sites = fs.readdirSync(reportsBase);
-      for (const site of sites) {
+      const allReports: Array<{ path: string; mtime: number }> = [];
+
+      // If we know the site, try it first — only fall back to other sites if no report exists
+      const tryDirs = siteHint
+        ? [siteHint, ...fs.readdirSync(reportsBase).filter((s: string) => s !== siteHint)]
+        : fs.readdirSync(reportsBase) as string[];
+
+      for (const site of tryDirs) {
         const siteDir = path.join(reportsBase, site);
         try {
           const files = fs.readdirSync(siteDir).filter((f: string) => f.endsWith('.md')).sort().reverse();
           if (files.length > 0) {
             const p = path.join(siteDir, files[0]);
-            const mtime = fs.statSync(p).mtimeMs;
-            // Boost the specific site so it sorts first even if not newest overall
-            allReports.push({ path: p, mtime: siteHint && site === siteHint ? Number.MAX_SAFE_INTEGER : mtime });
+            allReports.push({ path: p, mtime: fs.statSync(p).mtimeMs });
           }
         } catch {}
       }
-      allReports.sort((a, b) => b.mtime - a.mtime);
-      for (const { path: reportPath } of allReports) {
+
+      // If siteHint is set, only use a report for a different site as a last resort
+      // (prefer showing nothing over showing the wrong site)
+      const candidates = siteHint
+        ? allReports.filter(r => r.path.includes(`/${siteHint}/`))
+        : allReports.sort((a, b) => b.mtime - a.mtime);
+      for (const { path: reportPath } of candidates) {
         const content = fs.readFileSync(reportPath, 'utf-8');
         const lines = content.split('\n');
         const site = (lines.find((l: string) => l.startsWith('**Site:**')) ?? '').replace('**Site:**', '').trim() || 'unknown';
