@@ -518,7 +518,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
             { id: payload.runId, agentId: payload.agentId || 'security-sentinel', day, time: `${hh}:${mm}`,
               type: 'Report', status: hasFindings ? 'review' : 'done',
               text: `${agentName} sweep complete`, sub,
-              ref: hasFindings ? payload.runId : undefined },
+              ref: hasFindings ? payload.runId : undefined,
+              siteName: payload.findingsSites?.[0] ?? (payload.siteNames?.[0] ?? undefined) },
             ...agentStore.getState().activityEvents,
           ],
         });

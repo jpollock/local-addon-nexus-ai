@@ -32,6 +32,7 @@ export interface ActivityEvent {
   text: string;
   sub: string;
   ref?: string;
+  siteName?: string;   // primary site this event is about (for report lookup)
   count?: number;
   children?: string[];
 }

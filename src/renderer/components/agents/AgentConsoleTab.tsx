@@ -52,23 +52,50 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     agentStore.unsubscribe(this.unsub);
   }
 
-  private openSentinelReview(_eventId: string) {
-    const reportsBase = require('path').join(
+  private openSentinelReview(eventId: string) {
+    const path = require('path') as typeof import('path');
+    const fs   = require('fs')   as typeof import('fs');
+    const reportsBase = path.join(
       require('os').homedir(),
       'Library', 'Application Support', 'Local', 'nexus-ai',
       'agents', 'security-sentinel', 'reports',
     );
+
+    // Find the site name from the activity event — use it to look up the right report first
+    const event = agentStore.getState().activityEvents.find(e => e.id === eventId);
+    const siteHint = event?.siteName ?? null;
+
     try {
-      const fs = require('fs') as typeof import('fs');
       const sites = fs.readdirSync(reportsBase);
+
+      // Collect all (site, reportPath, mtime) tuples and sort by most recent
+      const candidates: Array<{ site: string; reportPath: string; mtime: number }> = [];
       for (const site of sites) {
         const reportPath = findLatestReport(site);
-        if (reportPath) {
-          const sc = parseSentinelReport(reportPath);
-          if (sc) {
-            this.setState({ activeSentinelCase: sc });
-            return;
-          }
+        if (!reportPath) continue;
+        try {
+          const mtime = fs.statSync(reportPath).mtimeMs;
+          candidates.push({ site, reportPath, mtime });
+        } catch {}
+      }
+
+      // If we know the site, try its report first
+      if (siteHint) {
+        const hintPath = findLatestReport(siteHint);
+        if (hintPath) {
+          const sc = parseSentinelReport(hintPath);
+          if (sc) { this.setState({ activeSentinelCase: sc }); return; }
+        }
+      }
+
+      // Fall back: sort all reports most-recent first
+      candidates.sort((a, b) => b.mtime - a.mtime);
+
+      for (const { reportPath } of candidates) {
+        const sc = parseSentinelReport(reportPath);
+        if (sc) {
+          this.setState({ activeSentinelCase: sc });
+          return;
         }
       }
     } catch {}
