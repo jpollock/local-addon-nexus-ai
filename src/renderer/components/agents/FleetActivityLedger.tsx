@@ -258,7 +258,7 @@ export class FleetActivityLedger extends React.Component<LedgerProps, LedgerStat
 
       // Result count
       React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)', marginBottom: 16 } },
-        `${filtered.length} events${pendingCount > 0 ? ` • ${pendingCount} need your review` : ''}`,
+        `${filtered.length} event${filtered.length !== 1 ? 's' : ''}${pendingCount > 0 ? ` • ${pendingCount} need${pendingCount === 1 ? 's' : ''} your review` : ''}`,
       ),
 
       // Day groups

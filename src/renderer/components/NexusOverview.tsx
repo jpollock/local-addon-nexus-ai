@@ -508,14 +508,17 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         const mm = now.getMinutes().toString().padStart(2, '0');
         const day = now.toISOString().slice(0, 10);
         const cleanCount = payload.doneCount - (payload.failedCount || 0);
-        const sub = payload.findingsSites?.length > 0
-          ? `${payload.findingsSites.length} site${payload.findingsSites.length !== 1 ? 's' : ''} need review · ${cleanCount} clean`
+        const findingsCount = payload.findingsSites?.length || 0;
+        const sub = findingsCount > 0
+          ? `${findingsCount} site${findingsCount !== 1 ? 's' : ''} need${findingsCount === 1 ? 's' : ''} review · ${cleanCount} clean`
           : `${cleanCount} site${cleanCount !== 1 ? 's' : ''} clean`;
+        const hasFindings = findingsCount > 0;
         agentStore.setState({
           activityEvents: [
             { id: payload.runId, agentId: payload.agentId || 'security-sentinel', day, time: `${hh}:${mm}`,
-              type: 'Report', status: payload.findingsSites?.length > 0 ? 'review' : 'done',
-              text: `${agentName} sweep complete`, sub },
+              type: 'Report', status: hasFindings ? 'review' : 'done',
+              text: `${agentName} sweep complete`, sub,
+              ref: hasFindings ? payload.runId : undefined },
             ...agentStore.getState().activityEvents,
           ],
         });

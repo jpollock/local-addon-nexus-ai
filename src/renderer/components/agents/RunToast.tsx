@@ -48,7 +48,7 @@ export class RunToast extends React.Component<ToastProps, ToastState> {
 
     const isDone = run.phase === 'done';
     const isCancelled = isDone && !!run.cancelled;
-    const isClean = isDone && !isCancelled && run.failedCount === 0;
+    const isClean = isDone && !isCancelled && run.failedCount === 0 && run.findingsSites.length === 0;
     const accentColor = isCancelled ? 'var(--ag-text-muted)' : isDone ? (isClean ? 'var(--ag-green)' : 'var(--ag-amber)') : 'var(--ag-teal)';
 
     // Start toast: show while running and not dismissed

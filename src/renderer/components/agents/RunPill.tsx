@@ -32,7 +32,7 @@ export class RunPill extends React.Component<PillProps, PillState> {
     const isDone = run.phase === 'done';
     const isCancelled = isDone && !!run.cancelled;
     const doneSites = Object.values(run.siteStatus).filter(s => s === 'done' || s === 'findings' || s === 'failed').length;
-    const isClean = isDone && !isCancelled && run.failedCount === 0;
+    const isClean = isDone && !isCancelled && run.failedCount === 0 && run.findingsSites.length === 0;
     const accentColor = isCancelled ? 'var(--ag-text-muted)' : isDone ? (isClean ? 'var(--ag-green)' : 'var(--ag-amber)') : 'var(--ag-teal)';
     const totalSites = run.siteNames.length;
 
