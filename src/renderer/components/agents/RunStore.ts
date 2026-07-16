@@ -94,9 +94,11 @@ class RunStore {
     if (!run || run.runId !== payload.runId) return;
     this.flushLog(run.agentId);
     this.stopWatching();
+    // Re-read currentRun after flush — flushLog may have updated log lines via setState
+    const flushed = this.state.currentRun ?? run;
     this.setState({
       currentRun: {
-        ...run,
+        ...flushed,
         phase: 'done',
         cancelled: payload.cancelled ?? false,
         endedAt: Date.now(),
