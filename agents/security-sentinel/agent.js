@@ -1098,7 +1098,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
       schemaName: 'SynthesizerResult',
       noTools: true,
     });
-    log.warn(`[Tier 2 Synthesis] ${install.name}: ${synthesis.verdict} — ${synthesis.attackSummary.slice(0, 120)}...`);
+    log.warn(`[Tier 2 Synthesis] ${install.name}: ${synthesis.classification} — ${(synthesis.summary || '').slice(0, 120)}...`);
   } catch (err) {
     log.warn(`[Tier 2 Synthesis] LLM call failed for ${install.name}: ${err.message} — defaulting to escalate`);
     synthesis = { verdict: 'active-compromise', attackSummary: '(synthesis unavailable)', entryPoint: 'unknown', temporalNarrative: '', attackerItems: [], legitimateItems: [], blindSpots: ['Synthesis failed'], remediationSteps: [] };
