@@ -93,6 +93,28 @@ export class AgentAIClient implements AIClient {
       parameters: schema,
     };
 
+    // For noTools calls (specialist analysis), use JSON-in-text strategy — more reliable
+    // than tool-use across all models, especially for complex schemas.
+    if (opts.noTools) {
+      const schemaStr = JSON.stringify(schema, null, 2);
+      const instruction = system
+        ? `${system}\n\nRespond ONLY with a valid JSON object matching this schema. No explanation, no markdown, just JSON.\nSchema:\n${schemaStr}`
+        : `Respond ONLY with a valid JSON object matching this schema. No explanation, no markdown, just JSON.\nSchema:\n${schemaStr}`;
+      const messages: ChatMessage[] = [{ role: 'user', content: `${instruction}\n\n${prompt}` }];
+      const signal = new AbortController().signal;
+      const response = await collectStream(this.provider.streamChat(messages, [], this.config, signal));
+      const text = response.content?.trim() ?? '';
+      // Strip markdown code fences if present
+      const stripped = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+      const jsonMatch = stripped.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { return JSON.parse(jsonMatch[0]) as T; } catch (e) {
+          throw new Error(`generateObject: model returned invalid JSON: ${(e as Error).message}`);
+        }
+      }
+      throw new Error('generateObject: model did not return a JSON object');
+    }
+
     const systemMsg = system
       ? `${system}\n\nYou MUST call the __output__ tool with your response. Do not reply in plain text.`
       : 'You MUST call the __output__ tool with your response. Do not reply in plain text.';
@@ -101,9 +123,7 @@ export class AgentAIClient implements AIClient {
       { role: 'user', content: `${systemMsg}\n\n${prompt}` },
     ];
 
-    const tools: ProviderToolDefinition[] = opts.noTools
-      ? [outputTool]
-      : [outputTool, ...this.toolProvider.getProviderToolDefinitions()];
+    const tools: ProviderToolDefinition[] = [outputTool, ...this.toolProvider.getProviderToolDefinitions()];
     const signal = new AbortController().signal;
 
     for (let turn = 0; turn < 5; turn++) {
@@ -111,14 +131,11 @@ export class AgentAIClient implements AIClient {
 
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {
-        // Arguments is the structured object the model produced.
-        // The model may nest the result under a 'result' key depending on schema shape.
         const raw = outputCall.arguments;
         return (raw?.result ?? raw) as T;
       }
 
       if (response.toolCalls.length === 0) {
-        // Model responded with text — try to parse as JSON before giving up
         const text = response.content?.trim() ?? '';
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
