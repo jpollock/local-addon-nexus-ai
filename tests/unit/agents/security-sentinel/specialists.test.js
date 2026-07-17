@@ -35,4 +35,26 @@ describe('Sentinel specialist modules', () => {
     expect(synthesizer.schema.required).toContain('entryPoint');
     expect(synthesizer.schema.required).toContain('temporalNarrative');
   });
+
+  it('collectSpecialistData returns all required keys', async () => {
+    const agent = require('../../../../agents/security-sentinel/agent');
+    const mockTools = {
+      invoke: jest.fn().mockResolvedValue('[]'),
+    };
+    // stub fetch for behavioral
+    const origFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({ status: 200, headers: new Map(), text: async () => '' });
+    const data = await agent._test.collectSpecialistData('test-sandbox', 'https://test.wpengine.com', mockTools);
+    global.fetch = origFetch;
+    expect(data).toHaveProperty('pluginDirectoriesRaw');
+    expect(data).toHaveProperty('patternScanOutput');
+    expect(data).toHaveProperty('postsContent');
+    expect(data).toHaveProperty('standardResponse');
+    // Verify behavioral fallback shapes are always present
+    expect(data.standardResponse).toHaveProperty('status');
+    expect(data.standardResponse).toHaveProperty('headers');
+    expect(data.standardResponse).toHaveProperty('bodyPreview');
+    expect(data.googlebotResponse).toHaveProperty('status');
+    expect(data.googleReferrerResponse).toHaveProperty('status');
+  });
 });

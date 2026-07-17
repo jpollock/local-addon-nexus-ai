@@ -271,7 +271,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -533,6 +533,196 @@ function runRelativeChecks(install, baseline) {
   }
 
   return signals;
+}
+
+// ─── Specialist data collection ───────────────────────────────────────────────
+// Collect raw data from sandbox for specialist AI calls.
+// Returns strings suitable for embedding in specialist prompts.
+// All nested behavioral response objects are always present with safe fallbacks.
+async function collectSpecialistData(sandboxName, siteUrl, tools) {
+  const results = await Promise.allSettled([
+
+    // Plugin directory listing with mtimes
+    tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $dir = WP_PLUGIN_DIR;
+        $out = [];
+        foreach (glob("$dir/*", GLOB_ONLYDIR) ?: [] as $d) {
+          $mtime = @filemtime($d);
+          $files = iterator_count(new RecursiveIteratorIterator(new RecursiveDirectoryIterator($d, FilesystemIterator::SKIP_DOTS)));
+          $out[] = ['name' => basename($d), 'mtime' => $mtime ? date('c', $mtime) : null, 'fileCount' => $files];
+        }
+        echo json_encode($out);
+      `,
+    }),
+
+    // Files recently modified (last 30 days) outside wp-admin and wp-includes
+    tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $cutoff = time() - 30 * 86400;
+        $root = ABSPATH;
+        $found = [];
+        $skip = ['wp-admin', 'wp-includes'];
+        $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
+        foreach ($it as $f) {
+          if (!$f->isFile()) continue;
+          foreach ($skip as $s) { if (strpos($f->getPathname(), "/$s/") !== false) continue 2; }
+          if ($f->getMTime() > $cutoff) {
+            $found[] = ['path' => str_replace($root, '', $f->getPathname()), 'mtime' => date('c', $f->getMTime()), 'ext' => $f->getExtension()];
+          }
+          if (count($found) >= 500) break; // cap output
+        }
+        echo json_encode($found);
+      `,
+    }),
+
+    // .htaccess files
+    tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $root = ABSPATH;
+        $files = [];
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)) as $f) {
+          if ($f->getFilename() === '.htaccess') {
+            $files[$f->getPathname()] = @file_get_contents($f->getPathname());
+          }
+        }
+        echo json_encode($files);
+      `,
+    }),
+
+    // Obfuscation pattern scan (pre-existing FS-02 code — reuse result)
+    tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $dirs = [WP_CONTENT_DIR . '/plugins', WP_CONTENT_DIR . '/mu-plugins', WP_CONTENT_DIR . '/themes'];
+        $patterns = ['/eval\\s*\\(\\s*base64_decode/','/eval\\s*\\(\\s*gzinflate\\s*\\(\\s*base64_decode/','/eval\\s*\\(\\s*str_rot13/','/assert\\s*\\(\\s*\\$/','/create_function\\s*\\(/'];
+        $found = []; $total = 0;
+        foreach ($dirs as $dir) {
+          if (!is_dir($dir)) continue;
+          foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $file) {
+            if ($file->getExtension() !== 'php' || $file->getSize() > 5*1024*1024) continue;
+            $total++;
+            $content = @file_get_contents($file->getPathname());
+            foreach ($patterns as $p) {
+              if (preg_match($p, $content, $m)) {
+                $found[] = ['file' => str_replace(ABSPATH, '', $file->getPathname()), 'pattern' => $p, 'snippet' => substr($content, max(0, strpos($content, $m[0]) - 20), 120)];
+                break;
+              }
+            }
+          }
+        }
+        echo json_encode(['matches' => $found, 'scanned' => $total]);
+      `,
+    }),
+
+    // Database: wp_posts content sample
+    tools.invoke('wp_eval', {
+      site: sandboxName,
+      code: `
+        global $wpdb;
+        $posts = $wpdb->get_results("SELECT ID, post_title, LEFT(post_content, 500) AS content_preview, post_status, post_type FROM {$wpdb->posts} LIMIT 200", ARRAY_A);
+        echo json_encode($posts);
+      `,
+    }),
+
+    // Database: autoloaded options + critical options
+    tools.invoke('wp_eval', {
+      site: sandboxName,
+      code: `
+        global $wpdb;
+        $auto = $wpdb->get_col("SELECT option_name FROM {$wpdb->options} WHERE autoload='yes'");
+        $critical = $wpdb->get_results("SELECT option_name, LEFT(option_value, 300) as option_value FROM {$wpdb->options} WHERE option_name IN ('siteurl','home','active_plugins','cron') LIMIT 10", ARRAY_A);
+        $tables = $wpdb->get_col('SHOW TABLES');
+        $std = ['posts','postmeta','comments','commentmeta','terms','termmeta','term_taxonomy','term_relationships','users','usermeta','options','links'];
+        $prefixed = array_map(fn($t) => $wpdb->prefix . $t, $std);
+        $extra = array_diff($tables, $prefixed);
+        echo json_encode(['autoloaded' => $auto, 'critical' => $critical, 'nonStandardTables' => array_values($extra)]);
+      `,
+    }),
+
+    // WP core checksums
+    tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `echo shell_exec('wp --skip-plugins --skip-themes core verify-checksums 2>&1');`,
+    }),
+
+    // Behavioral: external HTTP checks
+    (async () => {
+      const UA_CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/125 Safari/537.36';
+      const UA_GBOT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+      const headers = (ua, referer) => ({ 'User-Agent': ua, ...(referer ? { Referer: referer } : {}) });
+      const fetchSafe = async (url, opts) => {
+        try {
+          const r = await fetch(url, { ...opts, redirect: 'manual', signal: AbortSignal.timeout(10000) });
+          const text = await r.text().catch(() => '');
+          return { status: r.status, headers: Object.fromEntries(r.headers.entries()), bodyPreview: text.slice(0, 500) };
+        } catch (e) { return { status: 0, headers: {}, bodyPreview: e.message }; }
+      };
+      return {
+        standard:      await fetchSafe(siteUrl, { headers: headers(UA_CHROME) }),
+        googlebot:     await fetchSafe(siteUrl, { headers: headers(UA_GBOT) }),
+        googleReferer: await fetchSafe(siteUrl, { headers: headers(UA_CHROME, 'https://www.google.com/') }),
+        loginPage:     await fetchSafe(`${siteUrl}/wp-login.php`, { headers: headers(UA_CHROME) }),
+        xmlrpc:        await fetchSafe(`${siteUrl}/xmlrpc.php`, { headers: headers(UA_CHROME) }),
+        usersApi:      await fetchSafe(`${siteUrl}/wp-json/wp/v2/users`, { headers: headers(UA_CHROME) }),
+      };
+    })(),
+  ]);
+
+  const get = (i) => results[i].status === 'fulfilled' ? results[i].value : '(collection failed)';
+  const parseJson = (v, fallback = '[]') => { try { return JSON.parse(typeof v === 'string' ? v : JSON.stringify(v)); } catch { return JSON.parse(fallback); } };
+
+  const pluginDirs  = parseJson(get(0));
+  const recentFiles = parseJson(get(1));
+  const htaccess    = parseJson(get(2), '{}');
+  const scanResult  = parseJson(get(3), '{"matches":[],"scanned":0}');
+  const posts       = parseJson(get(4));
+  const dbData      = parseJson(get(5), '{"autoloaded":[],"critical":[],"nonStandardTables":[]}');
+  const coreChecks  = typeof get(6) === 'string' ? get(6) : JSON.stringify(get(6));
+  const behavioral  = typeof get(7) === 'object' && get(7) !== null ? get(7) : {};
+
+  // Safe fallback shape for all behavioral response objects
+  const emptyResponse = { status: 0, headers: {}, bodyPreview: '' };
+
+  return {
+    // For enumerator
+    pluginDirectoriesRaw:   JSON.stringify(pluginDirs, null, 2),
+    unexpectedFilesRaw:     JSON.stringify(recentFiles.filter(f => !['php','js','css','html','txt','md','json','png','jpg','gif','woff','woff2','svg','mo','po'].includes(f.ext)), null, 2),
+    htaccessPathsRaw:       Object.keys(htaccess).join('\n') || '(none found)',
+    nonStandardTablesRaw:   (dbData.nonStandardTables || []).join('\n') || '(none)',
+    autoloadedOptionsRaw:   (dbData.autoloaded || []).join('\n'),
+
+    // For integrity
+    coreChecksums:          coreChecks,
+    pluginChecksums:        '(wp plugin verify-checksums not run — add in Task 4)',
+    configPhpMtime:         '(captured via filesystem scan above)',
+
+    // For pattern
+    patternScanOutput:      JSON.stringify(scanResult, null, 2),
+    htaccessContents:       JSON.stringify(htaccess, null, 2),
+    recentlyModifiedFiles:  JSON.stringify(recentFiles, null, 2),
+
+    // For database
+    postsContent:           JSON.stringify(posts.slice(0, 50), null, 2),
+    autoloadedOptions:      JSON.stringify(dbData.autoloaded, null, 2),
+    criticalOptions:        JSON.stringify(dbData.critical, null, 2),
+    adminUsermeta:          '(not yet collected — add wp_usermeta query in Task 4)',
+    recentComments:         '(not yet collected — add wp_comments query in Task 4)',
+    nonStandardTableData:   JSON.stringify(dbData.nonStandardTables, null, 2),
+
+    // For behavioral — always present with safe fallbacks
+    standardResponse:       behavioral.standard       ?? emptyResponse,
+    googlebotResponse:      behavioral.googlebot      ?? emptyResponse,
+    googleReferrerResponse: behavioral.googleReferer  ?? emptyResponse,
+    loginPageStatus:        behavioral.loginPage?.status ?? 0,
+    xmlrpcStatus:           behavioral.xmlrpc?.status    ?? 0,
+    usersApiStatus:         behavioral.usersApi?.status  ?? 0,
+    usersApiBody:           behavioral.usersApi?.bodyPreview ?? '',
+    randomPostStatuses:     '(not yet collected)',
+  };
 }
 
 async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000) {
