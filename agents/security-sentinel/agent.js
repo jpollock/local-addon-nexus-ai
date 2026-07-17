@@ -1929,25 +1929,62 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
   const reportPath = path.join(reportsDir, `${dateStr}T${timeStr}.md`);
 
   // Write report header + findings + synthesis
-  const findingsLines = allSignals.length
-    ? allSignals.map(s => {
-        const evidenceLines = (s.evidence || []).map(e => `    - ${e}`).join('\n');
-        const line = `- [${(s.severity || 'unknown').toUpperCase()}] ${s.id}: ${s.title}`;
-        return evidenceLines ? `${line}\n${evidenceLines}` : line;
-      }).join('\n')
-    : '(no signals)';
+  // Group signals by category for structured report sections
+  const groupBy = (arr, fn) => arr.reduce((acc, x) => { const k = fn(x); (acc[k] = acc[k] || []).push(x); return acc; }, {});
+  const byCategory = groupBy(allSignals, s => s.id.startsWith('DB-') ? 'database' :
+                                             s.id.startsWith('CHK-') ? 'integrity' :
+                                             s.id.startsWith('FS-') ? 'filesystem' :
+                                             s.id.startsWith('TC-') ? 'temporal' : 'plugins_users');
+
+  const renderCategory = (title, signals) => {
+    if (!signals || signals.length === 0) return '';
+    const lines = signals.map(s => {
+      const sev = (s.severity || 'unknown').toUpperCase();
+      const evidence = (s.evidence || []).map(e => `  - ${e}`).join('\n');
+      return evidence
+        ? `- [${sev}] **${s.id}:** ${s.title}\n${evidence}`
+        : `- [${sev}] **${s.id}:** ${s.title}`;
+    }).join('\n');
+    return `### ${title}\n${lines}`;
+  };
+
+  const findingsBody = [
+    renderCategory('Plugin / User Anomalies', byCategory.plugins_users),
+    renderCategory('Filesystem Findings', byCategory.filesystem),
+    renderCategory('Temporal Cluster', byCategory.temporal),
+    renderCategory('Database Findings', byCategory.database),
+    renderCategory('Core / Plugin Integrity', byCategory.integrity),
+  ].filter(Boolean).join('\n\n');
+
+  const blindSpots = [
+    '- **Runtime-assembled payloads**: code that fetches and assembles its payload at request time leaves no local trace',
+    '- **Time-triggered or IP-conditional code**: only fires under specific conditions invisible to static analysis',
+    '- **Upstream compromised plugins**: if a plugin was backdoored before installation, its checksum matches the backdoored version',
+    '- **Image EXIF data**: not scanned for embedded PHP',
+    '- **Premium / non-wordpress.org plugins**: cannot verify checksums',
+    '- **Network-fetched payloads**: malware that downloads itself at runtime',
+    allSignals.some(s => s.id === 'DB-02') ? null : '- **Full wp_options table**: only autoloaded options were scanned',
+  ].filter(Boolean).join('\n');
+
+  const criticalCount = allSignals.filter(s => s.severity === 'critical').length;
+  const highCount     = allSignals.filter(s => s.severity === 'high').length;
 
   const header = [
     '# Security Remediation Report',
     `**Site:** ${install.name}  `,
     `**Date:** ${dateStr}T${now.toISOString().slice(11, 16)}  `,
     `**Sandbox:** ${sandboxName}  `,
+    `**Signals:** ${allSignals.length} total — ${criticalCount} critical, ${highCount} high`,
     '',
-    '## Findings (Tier 1 + Tier 2)',
-    findingsLines,
+    '## What the Sentinel Found',
+    '',
+    findingsBody || '(no signals detected)',
     '',
     '## Synthesis',
     synthesis || '(no synthesis)',
+    '',
+    '## Coverage Gaps (Blind Spots)',
+    blindSpots,
     '',
     '## Remediation Checklist',
     '',
