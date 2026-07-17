@@ -1025,7 +1025,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     }
   } catch {}
 
-  // ABS-06: Suspicious internal filenames within plugins
+  // ABS-09: Suspicious internal filenames within plugins
   // Files named check_file.php, shell.php, cmd.php, c99.php, r57.php, etc. signal attacker tools
   // regardless of whether they use obfuscation
   const suspiciousFileResult = await tools.invoke('wp_eval', {
@@ -1055,7 +1055,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     const suspiciousFiles = JSON.parse(extractResult(suspiciousFileResult) || '[]');
     if (suspiciousFiles.length > 0) {
       fsSignals.push({
-        id: 'ABS-06', severity: 'critical', category: 'active-compromise',
+        id: 'ABS-09', severity: 'critical', category: 'active-compromise',
         installName: install.name,
         title: `Suspicious internal filenames in plugins: ${suspiciousFiles.map(f => f.path.split('/').pop()).join(', ')}`,
         detail: 'Files with names matching known attacker tool patterns were found inside plugin directories.',
