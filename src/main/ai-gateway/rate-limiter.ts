@@ -6,7 +6,7 @@ import type { RegistryStorage } from '../content/IndexRegistry';
 import type { RateLimitConfig, RateLimitStatus } from './types';
 
 const STORAGE_KEY = 'nexus_ai_rate_limits';
-const DEFAULT_REQUESTS_PER_HOUR = 100;
+const DEFAULT_REQUESTS_PER_HOUR = 500;
 const DEFAULT_REQUESTS_PER_DAY = 500;
 const DEFAULT_COST_PER_DAY_USD = 10.0;
 

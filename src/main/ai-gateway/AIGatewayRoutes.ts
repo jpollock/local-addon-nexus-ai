@@ -175,9 +175,7 @@ export class AIGatewayRoutes {
     );
 
     // Agent calls (nexus-agent) are fleet-wide operations — exempt from per-site rate limit
-    const rateLimitStatus = siteId === 'nexus-agent'
-      ? { allowed: true }
-      : checkRateLimit(this.storage, siteId);
+    const rateLimitStatus = checkRateLimit(this.storage, siteId);
     if (!rateLimitStatus.allowed) {
       this.logger.warn(`[AIGateway] Rate limit exceeded for site ${siteId}: ${rateLimitStatus.reason}`);
       this.sendError(res, 429, rateLimitStatus.reason || 'Rate limit exceeded');
