@@ -118,6 +118,12 @@ export class AgentAIClient implements AIClient {
       }
 
       if (response.toolCalls.length === 0) {
+        // Model responded with text — try to parse as JSON before giving up
+        const text = response.content?.trim() ?? '';
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try { return JSON.parse(jsonMatch[0]) as T; } catch {}
+        }
         throw new Error('generateObject: model did not call __output__ tool');
       }
 

@@ -704,7 +704,7 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
 
     // For integrity
     coreChecksums:          coreChecks,
-    pluginChecksums:        '(wp plugin verify-checksums not run — add in Task 4)',
+    pluginChecksums:        '(not collected — mark all plugins as unverifiable)',
     configPhpMtime:         '(captured via filesystem scan above)',
 
     // For pattern
@@ -716,8 +716,8 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
     postsContent:           JSON.stringify(posts.slice(0, 50), null, 2),
     autoloadedOptions:      JSON.stringify(dbData.autoloaded, null, 2),
     criticalOptions:        JSON.stringify(dbData.critical, null, 2),
-    adminUsermeta:          '(not yet collected — add wp_usermeta query in Task 4)',
-    recentComments:         '(not yet collected — add wp_comments query in Task 4)',
+    adminUsermeta:          '(not collected)',
+    recentComments:         '(not collected)',
     nonStandardTableData:   JSON.stringify(dbData.nonStandardTables, null, 2),
 
     // For behavioral — always present with safe fallbacks
@@ -728,7 +728,7 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
     xmlrpcStatus:           behavioral.xmlrpc?.status    ?? 0,
     usersApiStatus:         behavioral.usersApi?.status  ?? 0,
     usersApiBody:           behavioral.usersApi?.bodyPreview ?? '',
-    randomPostStatuses:     '(not yet collected)',
+    randomPostStatuses:     '(not collected)',
   };
 }
 
