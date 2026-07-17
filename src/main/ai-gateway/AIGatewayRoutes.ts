@@ -174,7 +174,10 @@ export class AIGatewayRoutes {
       `[AIGateway] Chat request from site ${siteId}: model=${openAIRequest.model}, messages=${openAIRequest.messages.length}`,
     );
 
-    const rateLimitStatus = checkRateLimit(this.storage, siteId);
+    // Agent calls (nexus-agent) are fleet-wide operations — exempt from per-site rate limit
+    const rateLimitStatus = siteId === 'nexus-agent'
+      ? { allowed: true }
+      : checkRateLimit(this.storage, siteId);
     if (!rateLimitStatus.allowed) {
       this.logger.warn(`[AIGateway] Rate limit exceeded for site ${siteId}: ${rateLimitStatus.reason}`);
       this.sendError(res, 429, rateLimitStatus.reason || 'Rate limit exceeded');
