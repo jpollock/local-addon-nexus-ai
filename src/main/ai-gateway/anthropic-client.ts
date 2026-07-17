@@ -96,8 +96,8 @@ export async function callAnthropicAPI(
       reject(new Error('Anthropic API request timeout'));
     });
 
-    // 30 second timeout
-    req.setTimeout(30000);
+    // 120 second timeout — agent specialist calls can take longer than WordPress site AI calls
+    req.setTimeout(120000);
 
     req.write(body);
     req.end();

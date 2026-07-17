@@ -132,7 +132,7 @@ export async function callGoogleAPI(
 
     req.on('error', (err) => { logger?.error('[GoogleClient] Request error:', err); reject(err); });
     req.on('timeout', () => { req.destroy(); reject(new Error('Google API request timeout')); });
-    req.setTimeout(60000);
+    req.setTimeout(120000);
     req.write(body);
     req.end();
   });
