@@ -18,6 +18,7 @@ tools:
   - wp_plugin_list
   - compare_sites
   - local_create_site
+  - local_clone_site
   - local_wpe_pull
   - local_operation_status
   - wp_eval

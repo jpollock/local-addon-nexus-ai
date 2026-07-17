@@ -38,11 +38,12 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName) {
 
   const sitesResult = await tools.invoke('fleet_sql', {
     query: `
-      SELECT s.id, s.name, s.environment, s.ssh_last_sync_at,
+      SELECT s.id, s.name, s.source, s.environment, s.ssh_last_sync_at,
              s.post_count, s.user_count, s.settings_json,
              s.wp_version, s.php_version
       FROM sites s
-      WHERE s.source = 'wpe'
+      WHERE (s.source = 'wpe' OR s.source = 'local')
+        AND s.name NOT LIKE 'sentinel-%'
       ${siteFilter}
       ORDER BY s.name
     `,
@@ -71,6 +72,7 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName) {
     installs.push({
       id:            site.id,
       name:          site.name,
+      source:        site.source,      // 'wpe' or 'local'
       environment:   site.environment,
       sshLastSyncAt: site.ssh_last_sync_at,
       postCount:     Number(site.post_count) || 0,
@@ -786,55 +788,77 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
   const sandboxName = `sentinel-${install.name}-${Date.now()}`;
   log.info(`[Tier 2] Creating sandbox: ${sandboxName}`);
 
-  // Create isolated sandbox — uses remote_install_id (install name slug), NOT a formal link
-  const createResult = await tools.invoke('local_create_site', { name: sandboxName });
-  log.info(`[Tier 2] Sandbox created: ${extractResult(createResult).slice(0, 100)}`);
+  // Abstraction: create_local_test_sandbox
+  // WPE install  → create blank site + pull from WPE (files + DB over SSH, ~2 minutes)
+  // Local site   → clone the existing local site (filesystem copy, ~10 seconds)
+  const isLocal = install.source === 'local';
 
-  const pullResult = await tools.invoke('local_wpe_pull', {
-    site:              sandboxName,
-    remote_install_id: install.name, // graph id has 'wpe-' prefix; CAPI lookup accepts install name slug
-    include_database:  true,
-  });
-  const pullResultStr = extractResult(pullResult);
-  log.info(`[Tier 2] Pull response: ${pullResultStr.slice(0, 200)}`);
-  if (pullResultStr.toLowerCase().includes('error') || pullResultStr.includes('not found')) {
-    log.error(`[Tier 2] Pull failed to start for ${install.name}: ${pullResultStr.slice(0, 300)}`);
-    return null;
-  }
-
-  // local_wpe_pull is async — poll every 20s.
-  // The operation tracker briefly shows "completed" then clears to null (no tracked operation).
-  // Strategy: wait until we see in_progress, then treat the next non-in_progress as done.
-  // _pollIntervalMs = 0 means test mode — skip polling, assume pull succeeded immediately.
-  log.info(`[Tier 2] Pull initiated. Polling every 20s for completion...`);
-  let pullDone = _pollIntervalMs === 0; // test mode: skip poll loop
-  let sawInProgress = false;
-  for (let i = 0; i < 30 && !pullDone; i++) { // max 10 minutes (30 × 20s)
-    await new Promise(r => setTimeout(r, _pollIntervalMs));
-    try {
-      const status = await tools.invoke('local_operation_status', { site: sandboxName });
-      const statusStr = typeof status === 'string' ? status : JSON.stringify(status);
-      log.info(`[Tier 2] Poll ${i + 1}/30: ${statusStr.slice(0, 200)}`);
-      if (statusStr.includes('failed')) {
-        log.error(`[Tier 2] Pull failed for ${install.name}`);
-        return null;
-      }
-      if (statusStr.includes('"active"') || statusStr.includes('in_progress') || statusStr.includes('pulling')) {
-        sawInProgress = true;
-        log.info(`[Tier 2] Pull in progress (${JSON.parse(statusStr).duration_seconds ?? '?'}s elapsed)`);
-      } else if (statusStr.includes('completed') || statusStr.includes('"done"') || statusStr.includes('"complete"')) {
-        pullDone = true; break;
-      } else if (sawInProgress) {
-        // Transitioned from active/pulling to no-operation — pull finished
-        log.info(`[Tier 2] Pull appears complete (operation cleared)`);
-        pullDone = true; break;
-      }
-      // Haven't seen in_progress yet (pull still registering) — keep polling
-    } catch (err) {
-      log.warn(`[Tier 2] Poll error: ${err.message}`);
+  if (isLocal) {
+    // Clone the local site — instant, no SSH or WPE pull needed
+    log.info(`[Tier 2] Local site detected — cloning ${install.name} to ${sandboxName}`);
+    const cloneResult = await tools.invoke('local_clone_site', { site: install.name, new_name: sandboxName });
+    const cloneStr = extractResult(cloneResult);
+    if (cloneStr.toLowerCase().includes('error') || cloneStr.toLowerCase().includes('failed')) {
+      log.error(`[Tier 2] Clone failed for ${install.name}: ${cloneStr.slice(0, 300)}`);
+      return null;
     }
+    // local_clone_site is async — poll until complete
+    log.info(`[Tier 2] Clone initiated. Polling for completion...`);
+    let cloneDone = _pollIntervalMs === 0;
+    for (let i = 0; i < 30 && !cloneDone; i++) {
+      await new Promise(r => setTimeout(r, Math.max(_pollIntervalMs, 2000)));
+      try {
+        const status = await tools.invoke('local_operation_status', { site: sandboxName });
+        const statusStr = typeof status === 'string' ? status : JSON.stringify(status);
+        if (statusStr.includes('completed') || statusStr.includes('"done"')) { cloneDone = true; break; }
+        if (statusStr.includes('failed')) { log.error(`[Tier 2] Clone failed`); return null; }
+        log.info(`[Tier 2] Clone in progress...`);
+      } catch {}
+    }
+    if (!cloneDone) { log.warn(`[Tier 2] Clone timed out`); return null; }
+    log.info(`[Tier 2] Clone ready.`);
+  } else {
+    // WPE install — create blank site and pull from WPE
+    const createResult = await tools.invoke('local_create_site', { name: sandboxName });
+    log.info(`[Tier 2] Sandbox created: ${extractResult(createResult).slice(0, 100)}`);
+
+    const pullResult = await tools.invoke('local_wpe_pull', {
+      site:              sandboxName,
+      remote_install_id: install.name,
+      include_database:  true,
+    });
+    const pullResultStr = extractResult(pullResult);
+    log.info(`[Tier 2] Pull response: ${pullResultStr.slice(0, 200)}`);
+    if (pullResultStr.toLowerCase().includes('error') || pullResultStr.includes('not found')) {
+      log.error(`[Tier 2] Pull failed to start for ${install.name}: ${pullResultStr.slice(0, 300)}`);
+      return null;
+    }
+
+    log.info(`[Tier 2] Pull initiated. Polling every 20s for completion...`);
+    let pullDone = _pollIntervalMs === 0;
+    let sawInProgress = false;
+    for (let i = 0; i < 30 && !pullDone; i++) {
+      await new Promise(r => setTimeout(r, _pollIntervalMs));
+      try {
+        const status = await tools.invoke('local_operation_status', { site: sandboxName });
+        const statusStr = typeof status === 'string' ? status : JSON.stringify(status);
+        log.info(`[Tier 2] Poll ${i + 1}/30: ${statusStr.slice(0, 200)}`);
+        if (statusStr.includes('failed')) { log.error(`[Tier 2] Pull failed for ${install.name}`); return null; }
+        if (statusStr.includes('"active"') || statusStr.includes('in_progress') || statusStr.includes('pulling')) {
+          sawInProgress = true;
+          log.info(`[Tier 2] Pull in progress (${JSON.parse(statusStr).duration_seconds ?? '?'}s elapsed)`);
+        } else if (statusStr.includes('completed') || statusStr.includes('"done"') || statusStr.includes('"complete"')) {
+          pullDone = true; break;
+        } else if (sawInProgress) {
+          log.info(`[Tier 2] Pull appears complete (operation cleared)`);
+          pullDone = true; break;
+        }
+      } catch (err) {
+        log.warn(`[Tier 2] Poll error: ${err.message}`);
+      }
+    }
+    if (!pullDone) { log.warn(`[Tier 2] Pull timed out for ${install.name}`); return null; }
   }
-  if (!pullDone) { log.warn(`[Tier 2] Pull timed out for ${install.name}`); return null; }
 
   log.info(`[Tier 2] Sandbox ready. Running filesystem checks...`);
 
