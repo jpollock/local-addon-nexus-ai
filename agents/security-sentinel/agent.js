@@ -192,7 +192,8 @@ module.exports = {
   ],
   tools: [
     'fleet_sql', 'wpe_site_deep_refresh', 'wp_user_list',
-    'local_create_site', 'local_wpe_pull', 'local_wpe_push',
+    'local_create_site', 'local_clone_site', 'local_start_site',
+    'local_wpe_pull', 'local_wpe_push',
     'local_operation_status', 'compare_sites', 'wp_plugin_list', 'wp_eval',
   ],
 
