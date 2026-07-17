@@ -1,0 +1,79 @@
+id: sentinel-theawfulpmtest
+description: Security sentinel detects attack artifacts on theawfulpmtest (ground truth from incident)
+agent: security-sentinel
+site: theawfulpmtest
+
+# Fixture used: scripts/fixtures/theawfulpmtest-compromised.json
+# Current graph.db data + injected wp-compat + fileorganizer plugins.
+# Users pulled from live WPE graph: admin, admin_MT6ZqT, adminbockup, oxhuhafz are
+# synthetic attacker-created accounts present on the real install.
+
+ground_truth:
+  # Tier 1 signals (no sandbox required — fire from graph.db data alone)
+  tier1_must_detect:
+    - id: ABS-01
+      severity: high
+      description: Default 'admin' username present
+    - id: ABS-02
+      severity: high
+      description: Excessive administrators (5) on a 16-post site
+    - id: ABS-03
+      severity: critical
+      description: Admin account with @example.com email (admin@example.com)
+    - id: ABS-04
+      severity: high
+      description: Active file manager plugin — fileorganizer
+    - id: ABS-05
+      severity: critical
+      description: Known backdoor plugin wp-compat detected
+    - id: EXP-01
+      severity: high
+      description: No active security plugin — user enumeration likely enabled
+    - id: EXP-03
+      severity: medium
+      description: DISALLOW_FILE_EDIT not set on production
+
+  # Tier 2 signals (require sandbox + wp_eval filesystem scan)
+  tier2_must_detect:
+    - id: FS-01
+      description: PHP webshell in mu-plugins (index.php outside known list)
+    - id: FS-02
+      description: Obfuscated eval+base64 code in plugin or mu-plugin files
+    - id: TC-01
+      description: Temporal cluster — multiple attacker artifacts created within a 10-minute window
+
+  # LLM-based detection (runs during Tier 1 when admin signals present)
+  llm_must_detect:
+    - id: LLM-USER-01
+      description: Synthetic/attacker-pattern usernames — admin_MT6ZqT, adminbockup, oxhuhafz
+
+  # Remediation plan must reference these commands
+  must_recommend:
+    - rm wp-content/mu-plugins/index.php
+    - wp plugin delete wp-compat
+    - wp plugin delete fileorganizer
+    - wp config shuffle-salts
+
+  # Synthesizer blind spots must acknowledge these limitations
+  blind_spots_must_mention:
+    - runtime
+    - premium
+
+  # The entry point keyword analysis should surface these
+  entry_point_keywords:
+    - admin
+    - example.com
+    - brute
+
+# Scoring: minimum bar for this eval to pass
+scoring:
+  tier1_signal_coverage: 100  # all tier1_must_detect signals required
+  tier2_signal_coverage: 50   # at least FS-01 or FS-02 required (sandbox dependent)
+  remediation_commands: 2     # at least 2 of must_recommend must appear
+
+# Notes for eval runner
+notes:
+  - Tier 2 requires Local running and WPE SSH connectivity — skip in CI, run locally
+  - The LLM user audit fires only when ABS-01 or ABS-02 is present (both are)
+  - wp-compat and fileorganizer are injected into the compromised fixture; not in live graph.db
+  - 'admin' and 'example.com' users ARE in the live graph.db — no injection needed

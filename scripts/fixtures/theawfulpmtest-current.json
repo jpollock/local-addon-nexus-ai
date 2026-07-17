@@ -1,0 +1,215 @@
+{
+  "site": {
+    "id": "wpe-94b2335b-0f01-4e3c-9412-4ddacf93ce50",
+    "name": "theawfulpmtest",
+    "environment": "production",
+    "wp_version": "7.0",
+    "php_version": "8.4",
+    "post_count": 16,
+    "user_count": null,
+    "settings_json": "{\"blogname\":\"the-awful-pm\",\"blog_public\":\"1\",\"show_on_front\":\"posts\",\"posts_per_page\":\"10\",\"permalink_structure\":\"/%year%/%monthnum%/%day%/%postname%/\",\"users_can_register\":\"0\",\"default_role\":\"subscriber\"}",
+    "ssh_last_sync_at": 1784046711818
+  },
+  "plugins": [
+    {
+      "slug": "ads-benedict",
+      "name": "ads-benedict",
+      "version": "0.3.0",
+      "is_active": 0
+    },
+    {
+      "slug": "date-time-picker-field",
+      "name": "date-time-picker-field",
+      "version": "3.0",
+      "is_active": 0
+    },
+    {
+      "slug": "carbonbadge-block",
+      "name": "carbonbadge-block",
+      "version": "1.3.4",
+      "is_active": 0
+    },
+    {
+      "slug": "speedx-maintenance-mode/clone",
+      "name": "speedx-maintenance-mode/clone",
+      "version": "2.9.0",
+      "is_active": 0
+    },
+    {
+      "slug": "ocd-plugin-stats/clone",
+      "name": "ocd-plugin-stats/clone",
+      "version": "2.9.0",
+      "is_active": 0
+    },
+    {
+      "slug": "email-404/clone",
+      "name": "email-404/clone",
+      "version": "2.9.0",
+      "is_active": 0
+    },
+    {
+      "slug": "economic-market-news",
+      "name": "economic-market-news",
+      "version": "1.0.23",
+      "is_active": 0
+    },
+    {
+      "slug": "email-404/email-404",
+      "name": "email-404/email-404",
+      "version": "0.3.1",
+      "is_active": 0
+    },
+    {
+      "slug": "ez-overlay",
+      "name": "ez-overlay",
+      "version": "1.0",
+      "is_active": 0
+    },
+    {
+      "slug": "nexus-ai-connector",
+      "name": "nexus-ai-connector",
+      "version": "1.0.0",
+      "is_active": 0
+    },
+    {
+      "slug": "ocd-plugin-stats/ocd_plugin_stats",
+      "name": "ocd-plugin-stats/ocd_plugin_stats",
+      "version": "0.31",
+      "is_active": 0
+    },
+    {
+      "slug": "ranktool",
+      "name": "ranktool",
+      "version": "1.0",
+      "is_active": 0
+    },
+    {
+      "slug": "reset-thumbnails",
+      "name": "reset-thumbnails",
+      "version": "1.0",
+      "is_active": 0
+    },
+    {
+      "slug": "robokassa-for-jigoshop",
+      "name": "robokassa-for-jigoshop",
+      "version": "0.9.1",
+      "is_active": 0
+    },
+    {
+      "slug": "speedx-maintenance-mode/speedx-maintenance-mode",
+      "name": "speedx-maintenance-mode/speedx-maintenance-mode",
+      "version": "9.1",
+      "is_active": 0
+    },
+    {
+      "slug": "wp-bbcodes-to-html-parser",
+      "name": "wp-bbcodes-to-html-parser",
+      "version": "1.5",
+      "is_active": 0
+    },
+    {
+      "slug": "wp-open-comment-links-in-new-window",
+      "name": "wp-open-comment-links-in-new-window",
+      "version": "1.2",
+      "is_active": 0
+    },
+    {
+      "slug": "wp-share-simple",
+      "name": "wp-share-simple",
+      "version": "1.3",
+      "is_active": 0
+    },
+    {
+      "slug": "slt-force-strong-passwords",
+      "name": "slt-force-strong-passwords",
+      "version": "1.8.0",
+      "is_active": 0
+    },
+    {
+      "slug": "nexus-ai-connector-config",
+      "name": "nexus-ai-connector-config",
+      "version": null,
+      "is_active": 0
+    },
+    {
+      "slug": "site-compat-layer",
+      "name": "site-compat-layer",
+      "version": null,
+      "is_active": 0
+    },
+    {
+      "slug": "wpe-cache-plugin",
+      "name": "wpe-cache-plugin",
+      "version": "1.3.0",
+      "is_active": 0
+    },
+    {
+      "slug": "wpe-wp-sign-on-plugin",
+      "name": "wpe-wp-sign-on-plugin",
+      "version": "1.6.2",
+      "is_active": 0
+    },
+    {
+      "slug": "wpengine-security-auditor",
+      "name": "wpengine-security-auditor",
+      "version": "1.1.1",
+      "is_active": 0
+    },
+    {
+      "slug": "mu-plugin",
+      "name": "mu-plugin",
+      "version": "6.6.3",
+      "is_active": 0
+    },
+    {
+      "slug": "wpe-update-source-selector",
+      "name": "wpe-update-source-selector",
+      "version": "1.1.5",
+      "is_active": 0
+    },
+    {
+      "slug": "advanced-cache.php",
+      "name": "advanced-cache.php",
+      "version": null,
+      "is_active": 0
+    },
+    {
+      "slug": "object-cache.php",
+      "name": "object-cache.php",
+      "version": null,
+      "is_active": 0
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@example.com",
+      "roles": "[\"administrator\"]",
+      "created_at": 1784042292609
+    },
+    {
+      "username": "admin_MT6ZqT",
+      "email": "admin_MT6ZqT@theawfulproductmanager.com",
+      "roles": "[\"administrator\"]",
+      "created_at": 1784042292609
+    },
+    {
+      "username": "adminbockup",
+      "email": "adminbockup@wordpress.org",
+      "roles": "[\"administrator\"]",
+      "created_at": 1784042292609
+    },
+    {
+      "username": "jeremy.pollock@wpengine.com",
+      "email": "jeremy.pollock@wpengine.com",
+      "roles": "[\"administrator\"]",
+      "created_at": 1784042292609
+    },
+    {
+      "username": "oxhuhafz",
+      "email": "theawfulproductmanagerva@yahoo.com",
+      "roles": "[\"administrator\"]",
+      "created_at": 1784042292609
+    }
+  ]
+}
