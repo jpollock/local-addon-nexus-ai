@@ -112,10 +112,13 @@ export class GoogleProvider implements AIProvider {
         model: config.model,
         forceTool: config.forceTool ?? null,
         toolCount: tools.length,
-        schemaName: null, // filled by generateObject context
+        schemaName: null,
+        apiKeyPrefix: config.apiKey ? config.apiKey.slice(0, 8) + '...' : 'EMPTY',
+        apiKeyLen: config.apiKey?.length ?? 0,
+        baseUrl: config.baseUrl ?? '(direct)',
         requestBodyLen: body.length,
         requestBody: body,
-        status: null, // filled after response
+        status: null,
         responseBody: null,
         responseBodyLen: 0,
         durationMs: 0,
