@@ -98,9 +98,12 @@ function parseSqlResult(result) {
   if (lines.length < 2) return [];
   const headers = lines[0].split('|').map(h => h.trim()).filter(Boolean);
   return lines.slice(1).map(line => {
-    const vals = line.split('|').map(v => v.trim()).filter(Boolean);
+    // Use slice(1,-1) not filter(Boolean) — preserves NULL columns (empty cells)
+    // filter(Boolean) removes empty strings for NULL cols, shifting all values left
+    const parts = line.split('|');
+    const vals = parts.slice(1, parts.length - 1).map(v => v.trim());
     const obj = {};
-    headers.forEach((h, i) => { obj[h] = vals[i] ?? null; });
+    headers.forEach((h, i) => { obj[h] = vals[i] || null; });
     return obj;
   });
 }
@@ -198,7 +201,14 @@ module.exports = {
     const scopeLabel = scope.installId || scope.installName || 'fleet-wide';
     log.info(`security-sentinel: starting sweep for ${scopeLabel}`);
 
-    const installs = await collectFleetData(tools, scope.installId, scope.installName);
+    log.info('security-sentinel: calling collectFleetData...');
+    let installs;
+    try {
+      installs = await collectFleetData(tools, scope.installId, scope.installName);
+    } catch (err) {
+      log.error(`security-sentinel: collectFleetData threw: ${err.message}\n${err.stack}`);
+      return { verdict: 'error', findings: [], sites: {} };
+    }
     log.info(`security-sentinel: ${installs.length} install(s) to check`);
 
     const allInstallResults = [];
