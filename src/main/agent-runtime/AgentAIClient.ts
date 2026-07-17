@@ -108,6 +108,8 @@ export class AgentAIClient implements AIClient {
       // Use direct provider (bypasses local-gateway which doesn't translate tool_choice/tool_config)
       const targetProvider = this.directProvider ?? this.provider;
       const forcedConfig = { ...(this.directConfig ?? this.config), forceTool: '__output__' };
+      // TEMP: log which key is being used — remove after diagnosis
+      console.error(`[generateObject] schemaName=${opts.schemaName} usingDirect=${!!this.directProvider} keyPrefix=${forcedConfig.apiKey?.slice(0,8) ?? 'EMPTY'} keyLen=${forcedConfig.apiKey?.length ?? 0}`);
       const signal = new AbortController().signal;
       const response = await collectStream(targetProvider.streamChat(messages, [outputTool], forcedConfig, signal));
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
