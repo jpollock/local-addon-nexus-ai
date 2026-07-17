@@ -289,29 +289,41 @@ export async function handleAgentLogs(
 
   if (!opts.follow) return;
 
+  // Format a raw log line: strip [LEVEL] ISO-TIMESTAMP prefix, colorize by level
+  const RESET = '\x1b[0m', DIM = '\x1b[2m', YELLOW = '\x1b[33m', RED = '\x1b[31m', CYAN = '\x1b[36m';
+  const formatLine = (raw: string): string => {
+    const m = raw.match(/^\[(\w+)\]\s+[\d\-T:.Z]+\s+(.+)$/);
+    if (!m) return raw;
+    const [, level, msg] = m;
+    const now = new Date();
+    const ts = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const color = level === 'WARN' ? YELLOW : level === 'ERROR' ? RED : level === 'DEBUG' ? DIM : RESET;
+    return `${DIM}${ts}${RESET}  ${color}${msg}${RESET}`;
+  };
+
+  // Poll every 250ms — more reliable than fs.watch on macOS kqueue for fast-written files
   let offset = fs.statSync(logFile).size;
-  const watcher = fs.watch(logFile, { persistent: false }, () => {
+  const poll = () => {
     try {
       const stat = fs.statSync(logFile);
-      if (stat.size <= offset) {
-        offset = stat.size;
-        return;
-      }
+      if (stat.size < offset) offset = 0; // log rotated
+      if (stat.size <= offset) return;
       const fd = fs.openSync(logFile, 'r');
       const buf = Buffer.alloc(stat.size - offset);
       fs.readSync(fd, buf, 0, buf.length, offset);
       fs.closeSync(fd);
       offset = stat.size;
-      const newLines = buf.toString('utf-8').split('\n').filter(Boolean);
-      for (const line of newLines) console.log(line);
-    } catch {
-      /* log file may briefly disappear on rotation */
-    }
-  });
+      buf.toString('utf-8').split('\n').filter(Boolean).forEach(line => console.log(formatLine(line)));
+    } catch { /* log file may briefly disappear on rotation */ }
+  };
+
+  console.log(`${CYAN}Following ${logFile} — Ctrl+C to stop${RESET}\n`);
+  const interval = setInterval(poll, 250);
 
   await new Promise<void>((resolve) => {
     process.once('SIGINT', () => {
-      watcher.close();
+      clearInterval(interval);
+      console.log('\n');
       resolve();
     });
   });
