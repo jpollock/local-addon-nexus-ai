@@ -1434,25 +1434,25 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   // CHK-01: WP core file integrity
   log.info(`[Tier 2] Running core integrity checks...`);
-  const coreCheckResult = await tools.invoke('wp_eval', {
-    site: sandboxName, skip_plugins: true, skip_themes: true,
-    code: `
-      $output = shell_exec('wp --skip-plugins --skip-themes core verify-checksums 2>&1');
-      if ($output === null) {
-        echo json_encode(['status' => 'unavailable', 'failures' => [], 'raw' => '']);
-      } else {
-        $lines = explode("\\n", trim($output));
-        $failures = array_filter($lines, fn($l) => strpos($l, 'Error:') !== false || strpos($l, 'Warning:') !== false);
-        $ok = strpos($output, 'WordPress installation verifies against checksums') !== false;
-        echo json_encode([
-          'status' => $ok ? 'passed' : (count($failures) > 0 ? 'failed' : 'unknown'),
-          'failures' => array_values($failures),
-          'raw' => substr($output, 0, 500),
-        ]);
-      }
-    `,
-  });
   try {
+    const coreCheckResult = await tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $output = shell_exec('wp --skip-plugins --skip-themes core verify-checksums 2>&1');
+        if ($output === null) {
+          echo json_encode(['status' => 'unavailable', 'failures' => [], 'raw' => '']);
+        } else {
+          $lines = explode("\\n", trim($output));
+          $failures = array_filter($lines, fn($l) => strpos($l, 'Error:') !== false || strpos($l, 'Warning:') !== false);
+          $ok = strpos($output, 'WordPress installation verifies against checksums') !== false;
+          echo json_encode([
+            'status' => $ok ? 'passed' : (count($failures) > 0 ? 'failed' : 'unknown'),
+            'failures' => array_values($failures),
+            'raw' => substr($output, 0, 500),
+          ]);
+        }
+      `,
+    });
     const coreCheck = JSON.parse(extractResult(coreCheckResult) || '{"status":"unavailable","failures":[]}');
     if (coreCheck.status === 'failed' && coreCheck.failures.length > 0) {
       fsSignals.push({
@@ -1465,30 +1465,33 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
       });
     }
     log.info(`[Tier 2] Core integrity: ${coreCheck.status}`);
-  } catch {}
+  } catch (err) {
+    log.warn(`[Tier 2] CHK-01 failed: ${err.message}`);
+  }
 
   // CHK-02: Plugin integrity for wordpress.org plugins
-  const pluginCheckResult = await tools.invoke('wp_eval', {
-    site: sandboxName, skip_plugins: true, skip_themes: true,
-    code: `
-      $output = shell_exec('wp --skip-plugins --skip-themes plugin verify-checksums --all 2>&1');
-      if ($output === null) { echo json_encode(['status'=>'unavailable','failures':[]]); exit; }
-      $lines = explode("\\n", trim($output));
-      $failures = [];
-      $unverifiable = [];
-      foreach ($lines as $l) {
-        if (strpos($l, 'Error:') !== false) $failures[] = $l;
-        if (strpos($l, 'This plugin version was not found') !== false ||
-            strpos($l, 'could not be found') !== false) $unverifiable[] = $l;
-      }
-      echo json_encode([
-        'status' => count($failures) > 0 ? 'failed' : 'passed',
-        'failures' => $failures,
-        'unverifiable' => $unverifiable,
-      ]);
-    `,
-  });
+  log.info(`[Tier 2] Running plugin integrity checks...`);
   try {
+    const pluginCheckResult = await tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $output = shell_exec('wp --skip-plugins --skip-themes plugin verify-checksums --all 2>&1');
+        if ($output === null) { echo json_encode(['status'=>'unavailable','failures':[]]); exit; }
+        $lines = explode("\\n", trim($output));
+        $failures = [];
+        $unverifiable = [];
+        foreach ($lines as $l) {
+          if (strpos($l, 'Error:') !== false) $failures[] = $l;
+          if (strpos($l, 'This plugin version was not found') !== false ||
+              strpos($l, 'could not be found') !== false) $unverifiable[] = $l;
+        }
+        echo json_encode([
+          'status' => count($failures) > 0 ? 'failed' : 'passed',
+          'failures' => $failures,
+          'unverifiable' => $unverifiable,
+        ]);
+      `,
+    });
     const pluginCheck = JSON.parse(extractResult(pluginCheckResult) || '{"status":"unavailable","failures":[]}');
     if (pluginCheck.failures.length > 0) {
       fsSignals.push({
@@ -1503,7 +1506,10 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     if (pluginCheck.unverifiable && pluginCheck.unverifiable.length > 0) {
       log.info(`[Tier 2] ${pluginCheck.unverifiable.length} plugin(s) not verifiable (not on wordpress.org or version mismatch)`);
     }
-  } catch {}
+    log.info(`[Tier 2] Plugin integrity: ${pluginCheck.status}`);
+  } catch (err) {
+    log.warn(`[Tier 2] CHK-02 failed: ${err.message}`);
+  }
 
   log.info(`[Tier 2] Database scan complete: ${fsSignals.length} total finding(s) (FS + DB + CHK)`);
 
