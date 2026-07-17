@@ -79,7 +79,6 @@ async function main() {
   const b2 = JSON.parse(r2.body);
   if (b2.error) console.log('Error:', b2.error.message.slice(0, 200));
   else console.log('Success! Tool call:', b2.candidates?.[0]?.content?.parts?.[0]?.functionCall?.name);
-}
 
   // ── Test 3: STREAMING endpoint (what the addon actually uses) ──
   console.log('\n── Test 3: Streaming endpoint (streamGenerateContent?alt=sse) + tool_config ──');
