@@ -986,7 +986,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     const cluster = patternResult.temporalCluster;
     log.finding({
       id: 'TC-01', severity: 'critical', site: install.name,
-      title: `Temporal cluster: ${cluster.itemCount ?? 'multiple'} items within ${cluster.windowStart}–${cluster.windowEnd}`,
+      title: `Temporal cluster: ${cluster.itemCount ?? 'multiple'} items within ${cluster.windowStart ?? 'unknown'}–${cluster.windowEnd ?? 'unknown'}`,
       description: `Rapid bulk activity within a short window is the primary signal of an automated attack. Items: ${(cluster.items ?? []).join(', ')}`,
     });
   }
