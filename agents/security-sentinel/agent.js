@@ -316,6 +316,7 @@ function runAbsoluteChecks(install) {
       title: "Default 'admin' username exists",
       detail: "An administrator account with username 'admin' was found. This is the most commonly brute-forced username.",
       fix: "Create a new administrator account with a unique username, reassign content, then delete the 'admin' account.",
+      evidence: ['username: admin'],
     });
   }
 
@@ -327,6 +328,7 @@ function runAbsoluteChecks(install) {
       title: `Excessive administrators (${adminUsers.length}) on a ${postCount}-post site`,
       detail: `${adminUsers.length} administrator accounts on a site with only ${postCount} posts is anomalous.`,
       fix: 'Audit each administrator account. Remove or demote accounts that should not have full access.',
+      evidence: adminUsers.map(u => `${u.username} <${u.email || 'no email'}>`),
     });
   }
 
@@ -339,6 +341,7 @@ function runAbsoluteChecks(install) {
       title: `Admin account with @example.com email: ${matched.map(u => u.username).join(', ')}`,
       detail: "@example.com is the WordPress installer placeholder email. No legitimate admin retains it.",
       fix: 'This account was likely created by the WordPress installer or an attacker. Verify and delete if not legitimate.',
+      evidence: matched.map(u => `${u.username} <${u.email}>`),
     });
   }
 
@@ -351,6 +354,7 @@ function runAbsoluteChecks(install) {
       title: `File manager plugin(s) active: ${activeFileManagers.map(p => p.slug).join(', ')}`,
       detail: 'File manager plugins provide full filesystem write access from WP Admin. They are the primary mechanism for deploying webshells.',
       fix: 'Deactivate and delete these plugins unless actively required. Filesystem access should go through SFTP/SSH.',
+      evidence: activeFileManagers.map(p => `${p.slug} v${p.version || '?'}`),
     });
   }
 
@@ -363,6 +367,7 @@ function runAbsoluteChecks(install) {
       title: `Known backdoor plugin detected: ${backdoors.map(p => p.slug).join(', ')}`,
       detail: `Plugin slug(s) match known malware from the June 2026 incident: ${backdoors.map(p => p.slug).join(', ')}`,
       fix: 'Delete immediately via SSH: wp plugin delete <slug>. Do not deactivate — delete.',
+      evidence: backdoors.map(p => `${p.slug} (version: ${p.version || 'unknown'}, active: ${p.is_active})`),
     });
   }
 
@@ -375,6 +380,7 @@ function runAbsoluteChecks(install) {
       title: 'Default WordPress authentication salts in use',
       detail: "Auth salts still contain the placeholder 'put your unique phrase here'. Session cookies can be forged.",
       fix: 'Run: wp config shuffle-salts. All users will be logged out.',
+      evidence: ['wp-config.php contains default placeholder salts'],
     });
   }
 
@@ -403,6 +409,7 @@ function runExposureChecks(install) {
       title: 'Theme and plugin file editor is enabled',
       detail: 'DISALLOW_FILE_EDIT is not set to true. A compromised admin account can inject PHP code directly from WP Admin.',
       fix: "Add `define('DISALLOW_FILE_EDIT', true);` to wp-config.php",
+      evidence: [`DISALLOW_FILE_EDIT = ${fileEditValue ?? '(not set)'}`],
     });
   }
 
@@ -415,6 +422,7 @@ function runExposureChecks(install) {
       title: 'WP_DEBUG is enabled on production',
       detail: 'Debug mode exposes PHP errors, file paths, database queries, and internal architecture to page visitors.',
       fix: "Set `define('WP_DEBUG', false);` in wp-config.php",
+      evidence: [`WP_DEBUG = ${wpDebug}`],
     });
   }
 
@@ -427,6 +435,7 @@ function runExposureChecks(install) {
       title: 'User enumeration likely enabled (no security plugin detected)',
       detail: 'No known security plugin is active. The REST API likely exposes usernames unauthenticated via /wp-json/wp/v2/users, enabling targeted brute-force attacks.',
       fix: 'Install a security plugin that blocks user enumeration, or add a filter to require authentication on the /users REST endpoint.',
+      evidence: ['checked for: ' + [...KNOWN_SECURITY_PLUGINS].join(', ')],
     });
   }
 
@@ -1444,7 +1453,11 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
 
   // Write report header + findings + synthesis
   const findingsLines = allSignals.length
-    ? allSignals.map(s => `- [${(s.severity || 'unknown').toUpperCase()}] ${s.id}: ${s.title}`).join('\n')
+    ? allSignals.map(s => {
+        const evidenceLines = (s.evidence || []).map(e => `    - ${e}`).join('\n');
+        const line = `- [${(s.severity || 'unknown').toUpperCase()}] ${s.id}: ${s.title}`;
+        return evidenceLines ? `${line}\n${evidenceLines}` : line;
+      }).join('\n')
     : '(no signals)';
 
   const header = [
