@@ -975,13 +975,13 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
           $content = file_get_contents($file->getPathname());
           foreach ($patterns as $pattern) {
             if (preg_match($pattern, $content)) {
-              $found[] = $file->getPathname();
+              $found[] = ['file' => str_replace(ABSPATH, '', $file->getPathname()), 'pattern' => $pattern];
               break;
             }
           }
         }
       }
-      echo json_encode(array_unique($found));
+      echo json_encode($found);
     `,
   });
   try {
@@ -991,8 +991,59 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         id: 'FS-02', severity: 'critical', category: 'active-compromise',
         installName: install.name,
         title: `Obfuscated code (eval+base64/gzinflate/rot13) found in ${obfFiles.length} file(s)`,
-        detail: `Files containing obfuscation chains: ${obfFiles.join(', ')}`,
-        fix: 'Investigate each file. These patterns hide malicious payloads. Compare with original plugin/theme source.',
+        detail: `Files containing obfuscation chains: ${obfFiles.map(f => f.file || f).join(', ')}`,
+        fix: 'Inspect each file. Delete if not part of a legitimate plugin/theme. Compare with original plugin source.',
+        evidence: obfFiles.map(f => typeof f === 'string' ? f : `${f.file} — pattern: ${f.pattern || '?'}`),
+      });
+    }
+  } catch {}
+
+  // FS-03: PHP files in unexpected non-plugin locations: languages/, web root, uploads/ (obfuscated)
+  const broadScanResult = await tools.invoke('wp_eval', {
+    site: sandboxName, skip_plugins: true, skip_themes: true,
+    code: `
+      $patterns = ['/eval\\s*\\(.*base64_decode/s', '/eval\\s*\\(.*gzinflate/s', '/eval\\s*\\(.*str_rot13/s'];
+      $scanDirs = [
+        ABSPATH . 'wp-content/languages',
+        ABSPATH . 'wp-content/uploads',
+      ];
+      $rootPhp = glob(ABSPATH . '*.php') ?: [];
+      $knownRoot = ['index.php','wp-activate.php','wp-blog-header.php','wp-comments-post.php',
+                    'wp-config.php','wp-cron.php','wp-links-opml.php','wp-load.php',
+                    'wp-login.php','wp-mail.php','wp-settings.php','wp-signup.php',
+                    'wp-trackback.php','xmlrpc.php','wp-config-sample.php'];
+      $found = [];
+      foreach ($rootPhp as $f) {
+        if (!in_array(basename($f), $knownRoot)) {
+          $found[] = ['path' => str_replace(ABSPATH, '', $f), 'reason' => 'unknown PHP in web root'];
+        }
+      }
+      foreach ($scanDirs as $dir) {
+        if (!is_dir($dir)) continue;
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $file) {
+          if ($file->getExtension() !== 'php') continue;
+          $content = @file_get_contents($file->getPathname());
+          foreach ($patterns as $p) {
+            if (preg_match($p, $content)) {
+              $found[] = ['path' => str_replace(ABSPATH, '', $file->getPathname()), 'reason' => 'obfuscated code'];
+              break;
+            }
+          }
+        }
+      }
+      echo json_encode($found);
+    `,
+  });
+  try {
+    const broadFiles = JSON.parse(extractResult(broadScanResult) || '[]');
+    if (broadFiles.length > 0) {
+      fsSignals.push({
+        id: 'FS-03', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `Suspicious PHP files outside plugins/themes: ${broadFiles.length} file(s)`,
+        detail: 'PHP files were found in unexpected locations (web root, languages/, uploads/) or contain obfuscation.',
+        fix: 'Delete unknown PHP files from web root and languages/. PHP should not exist in uploads/.',
+        evidence: broadFiles.map(f => `${f.path} (${f.reason})`),
       });
     }
   } catch {}
@@ -1021,6 +1072,83 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         title: `PHP file(s) found in uploads/: ${phpUploads.map(f => f.split('/').pop()).join(', ')}`,
         detail: `PHP files in uploads/ can be executed by visiting their URL directly: ${phpUploads.join(', ')}`,
         fix: 'Delete all PHP files from uploads/. Add .htaccess rule to deny PHP execution in uploads.',
+      });
+    }
+  } catch {}
+
+  // FS-05: Suspicious .htaccess rules — PHP re-enable, external redirects, auto_prepend/append_file
+  const htaccessResult = await tools.invoke('wp_eval', {
+    site: sandboxName, skip_plugins: true, skip_themes: true,
+    code: `
+      $root = ABSPATH;
+      $findings = [];
+      foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)) as $f) {
+        if ($f->getFilename() !== '.htaccess') continue;
+        $content = @file_get_contents($f->getPathname());
+        $path = str_replace($root, '', $f->getPathname());
+        // PHP re-enabled in non-root .htaccess (especially in uploads/)
+        if (strpos($path, '/uploads/') !== false && preg_match('/\\.php/i', $content)) {
+          $findings[] = ['path' => $path, 'reason' => 'PHP execution enabled in uploads/', 'snippet' => substr($content, 0, 300)];
+        }
+        // External redirect rules
+        if (preg_match('/RewriteRule.*https?:\\/\\/(?!'.preg_quote($_SERVER["HTTP_HOST"] ?? 'localhost', '/').')/', $content, $m)) {
+          $findings[] = ['path' => $path, 'reason' => 'RewriteRule redirecting to external domain', 'snippet' => $m[0]];
+        }
+        // php_value re-enabling execution
+        if (preg_match('/php_value\\s+auto_prepend_file|php_value\\s+auto_append_file/', $content, $m)) {
+          $findings[] = ['path' => $path, 'reason' => 'auto_prepend/append_file set via php_value', 'snippet' => $m[0]];
+        }
+      }
+      echo json_encode($findings);
+    `,
+  });
+  try {
+    const htaccessFindings = JSON.parse(extractResult(htaccessResult) || '[]');
+    if (htaccessFindings.length > 0) {
+      fsSignals.push({
+        id: 'FS-05', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `Suspicious .htaccess rules in ${htaccessFindings.length} location(s)`,
+        detail: 'htaccess files with rules that re-enable PHP execution or redirect to external domains were found.',
+        fix: 'Review each file. Remove rules that allow PHP in uploads/ or redirect to external domains.',
+        evidence: htaccessFindings.map(f => `${f.path}: ${f.reason} — ${(f.snippet || '').slice(0, 80)}`),
+      });
+    }
+  } catch {}
+
+  // FS-06: ELF binary detection in wp-content/
+  const elfResult = await tools.invoke('wp_eval', {
+    site: sandboxName, skip_plugins: true, skip_themes: true,
+    code: `
+      $dir = WP_CONTENT_DIR;
+      $found = [];
+      $skipExts = ['php','js','css','html','htm','txt','md','json','xml','svg','png','jpg','jpeg','gif','webp','woff','woff2','ttf','eot','ico','map','pot','po','mo','log','ini','conf'];
+      foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $f) {
+        if (!$f->isFile()) continue;
+        $ext = strtolower($f->getExtension());
+        if (in_array($ext, $skipExts)) continue;
+        $fh = @fopen($f->getPathname(), 'rb');
+        if (!$fh) continue;
+        $header = fread($fh, 4);
+        fclose($fh);
+        // ELF header: \x7fELF
+        if ($header === "\x7fELF") {
+          $found[] = ['path' => str_replace(WP_CONTENT_DIR, 'wp-content', $f->getPathname()), 'size' => $f->getSize()];
+        }
+      }
+      echo json_encode($found);
+    `,
+  });
+  try {
+    const elfs = JSON.parse(extractResult(elfResult) || '[]');
+    if (elfs.length > 0) {
+      fsSignals.push({
+        id: 'FS-06', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `ELF binary (Linux executable) found in wp-content: ${elfs.length} file(s)`,
+        detail: 'Linux executables inside wp-content/ are not legitimate WordPress files. They are likely backdoors or crypto miners.',
+        fix: 'Delete immediately. Investigate when each was placed using filesystem timestamps and access logs.',
+        evidence: elfs.map(f => `${f.path} (${(f.size / 1024).toFixed(1)} KB)`),
       });
     }
   } catch {}
