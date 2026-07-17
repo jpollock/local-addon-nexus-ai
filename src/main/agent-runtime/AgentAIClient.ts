@@ -93,26 +93,28 @@ export class AgentAIClient implements AIClient {
       parameters: schema,
     };
 
-    // For noTools calls (specialist analysis), use JSON-in-text strategy — more reliable
-    // than tool-use across all models, especially for complex schemas.
+    // For noTools calls (specialist analysis): use forced tool invocation.
+    // The test script proved that tool_choice='any' with __output__ works reliably
+    // across Google and Anthropic. JSON-in-text was unreliable because the model
+    // returns text even when asked for JSON.
     if (opts.noTools) {
-      const schemaStr = JSON.stringify(schema, null, 2);
-      const instruction = system
-        ? `${system}\n\nRespond ONLY with a valid JSON object matching this schema. No explanation, no markdown, just JSON.\nSchema:\n${schemaStr}`
-        : `Respond ONLY with a valid JSON object matching this schema. No explanation, no markdown, just JSON.\nSchema:\n${schemaStr}`;
-      const messages: ChatMessage[] = [{ role: 'user', content: `${instruction}\n\n${prompt}` }];
+      const systemMsg = system ?? 'Analyze the provided data and call the __output__ tool with your structured findings.';
+      const messages: ChatMessage[] = [{ role: 'user', content: `${systemMsg}\n\n${prompt}` }];
+      const forcedConfig = { ...this.config, forceTool: '__output__' };
       const signal = new AbortController().signal;
-      const response = await collectStream(this.provider.streamChat(messages, [], this.config, signal));
-      const text = response.content?.trim() ?? '';
-      // Strip markdown code fences if present
-      const stripped = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
-      const jsonMatch = stripped.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try { return JSON.parse(jsonMatch[0]) as T; } catch (e) {
-          throw new Error(`generateObject: model returned invalid JSON: ${(e as Error).message}`);
-        }
+      const response = await collectStream(this.provider.streamChat(messages, [outputTool], forcedConfig, signal));
+      const outputCall = response.toolCalls.find(c => c.name === '__output__');
+      if (outputCall) {
+        const raw = outputCall.arguments;
+        return (raw?.result ?? raw) as T;
       }
-      throw new Error('generateObject: model did not return a JSON object');
+      // Fallback: model responded in text despite forced tool — try to parse JSON
+      const text = response.content?.trim() ?? '';
+      const jsonMatch = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim().match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { return JSON.parse(jsonMatch[0]) as T; } catch {}
+      }
+      throw new Error('generateObject: model did not call __output__ tool');
     }
 
     const systemMsg = system

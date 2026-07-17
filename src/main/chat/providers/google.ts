@@ -90,10 +90,15 @@ export class GoogleProvider implements AIProvider {
       })),
     }] : undefined;
 
+    const toolConfig = config.forceTool && geminiTools
+      ? { function_calling_config: { mode: 'ANY', allowed_function_names: [config.forceTool] } }
+      : undefined;
+
     const body = JSON.stringify({
       contents,
       ...(systemMessage ? { systemInstruction: { parts: [{ text: systemMessage.content }] } } : {}),
       ...(geminiTools ? { tools: geminiTools } : {}),
+      ...(toolConfig ? { tool_config: toolConfig } : {}),
     });
 
     try {

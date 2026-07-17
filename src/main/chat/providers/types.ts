@@ -18,6 +18,8 @@ export interface ChatProviderConfig {
   apiKey?: string;
   model: string;
   baseUrl?: string;
+  /** Force the model to call a specific tool. Maps to tool_choice (Anthropic) / tool_config (Google). */
+  forceTool?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -59,6 +59,10 @@ export class AnthropicProvider implements AIProvider {
       input_schema: t.parameters,
     })) : undefined;
 
+    const toolChoice = config.forceTool && anthropicTools
+      ? { type: 'tool', name: config.forceTool }
+      : undefined;
+
     const body = JSON.stringify({
       model: config.model,
       max_tokens: 4096,
@@ -66,6 +70,7 @@ export class AnthropicProvider implements AIProvider {
       messages: anthropicMessages,
       ...(systemMessage ? { system: systemMessage.content } : {}),
       ...(anthropicTools ? { tools: anthropicTools } : {}),
+      ...(toolChoice ? { tool_choice: toolChoice } : {}),
     });
 
     try {
