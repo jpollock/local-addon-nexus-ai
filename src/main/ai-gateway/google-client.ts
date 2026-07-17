@@ -135,10 +135,11 @@ export async function callGoogleAPI(
             model,
             choices: [{
               index: 0,
-              message: functionCallPart ? {
-                role: 'assistant' as const,
-                content: JSON.stringify({ tool_calls: [{ id: `call_${Date.now()}`, type: 'function', function: { name: functionCallPart.functionCall.name, arguments: JSON.stringify(functionCallPart.functionCall.args ?? {}) } }] }),
-              } : { role: 'assistant' as const, content: text },
+              message: (functionCallPart ? {
+                role: 'assistant',
+                content: null,
+                tool_calls: [{ id: `call_${Date.now()}`, type: 'function', function: { name: functionCallPart.functionCall.name, arguments: JSON.stringify(functionCallPart.functionCall.args ?? {}) } }],
+              } : { role: 'assistant', content: text }) as any,
               finish_reason: 'stop',
             }],
             usage: {
