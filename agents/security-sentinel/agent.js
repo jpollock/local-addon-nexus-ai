@@ -1258,6 +1258,182 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   log.info(`[Tier 2] Filesystem scan complete: ${fsSignals.length} finding(s)`);
 
+  // ─── Database content scan ─────────────────────────────────────────────────
+  log.info(`[Tier 2] Running database content scan...`);
+
+  // DB-01: wp_posts content scan — injected scripts, hidden spam content
+  const postsContentResult = await tools.invoke('wp_eval', {
+    site: sandboxName,
+    code: `
+      global $wpdb;
+      $posts = $wpdb->get_results(
+        "SELECT ID, post_title, post_status, post_type, post_date, LEFT(post_content, 1000) as content
+         FROM {$wpdb->posts}
+         WHERE post_status IN ('publish','draft','private','future','pending')
+           AND post_type NOT IN ('revision','auto-draft')
+         ORDER BY post_date DESC LIMIT 200",
+        ARRAY_A
+      );
+      $suspicious = [];
+      $spamPatterns = ['/<script/i', '/javascript:/i', '/base64_decode/i', '/eval\\s*\\(/i', '/document\\.write/i', '/\\.onload\\s*=/i'];
+      $spamKeywords = ['/casino/i', '/poker/i', '/slots?/i', '/gambling/i', '/kasyno/i', '/spielautomat/i', '/scommesse/i'];
+      foreach ($posts as $post) {
+        $content = $post['content'] ?? '';
+        $title = $post['post_title'] ?? '';
+        $reasons = [];
+        foreach ($spamPatterns as $p) {
+          if (preg_match($p, $content)) { $reasons[] = 'injected script/eval'; break; }
+        }
+        foreach ($spamKeywords as $p) {
+          if (preg_match($p, $title) || preg_match($p, $content)) { $reasons[] = 'casino/gambling spam'; break; }
+        }
+        if ($reasons) {
+          $suspicious[] = [
+            'id' => $post['ID'],
+            'title' => $post['post_title'],
+            'status' => $post['post_status'],
+            'date' => $post['post_date'],
+            'reasons' => $reasons,
+          ];
+        }
+      }
+      echo json_encode(['total' => count($posts), 'suspicious' => $suspicious]);
+    `,
+  });
+  try {
+    const postsData = JSON.parse(extractResult(postsContentResult) || '{}');
+    if ((postsData.suspicious || []).length > 0) {
+      fsSignals.push({
+        id: 'DB-01', severity: 'high', category: 'active-compromise',
+        installName: install.name,
+        title: `Suspicious post content: ${postsData.suspicious.length} of ${postsData.total} posts flagged`,
+        detail: 'Posts contain injected scripts or blackhat SEO spam content (casino/gambling keywords).',
+        fix: 'Delete spam posts. Inspect posts with injected scripts — remove the script tag or delete the post.',
+        evidence: postsData.suspicious.map(p => `[${p.status}] "${p.title}" (ID:${p.id}, ${p.date}) — ${p.reasons.join(', ')}`),
+      });
+    }
+  } catch {}
+
+  // DB-02: wp_options scan for injected code in autoloaded options
+  const optionsScanResult = await tools.invoke('wp_eval', {
+    site: sandboxName,
+    code: `
+      global $wpdb;
+      $options = $wpdb->get_results(
+        "SELECT option_name, LEFT(option_value, 500) as val FROM {$wpdb->options} WHERE autoload='yes'",
+        ARRAY_A
+      );
+      $suspicious = [];
+      $patterns = ['/eval\\s*\\(/i', '/base64_decode/i', '/<script/i', '/exec\\s*\\(/i', '/system\\s*\\(/i'];
+      foreach ($options as $opt) {
+        foreach ($patterns as $p) {
+          if (preg_match($p, $opt['val'])) {
+            $suspicious[] = ['name' => $opt['option_name'], 'snippet' => substr($opt['val'], 0, 150)];
+            break;
+          }
+        }
+      }
+      echo json_encode(['total' => count($options), 'suspicious' => $suspicious]);
+    `,
+  });
+  try {
+    const optData = JSON.parse(extractResult(optionsScanResult) || '{}');
+    if ((optData.suspicious || []).length > 0) {
+      fsSignals.push({
+        id: 'DB-02', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `Suspicious code in wp_options: ${optData.suspicious.length} autoloaded option(s) contain eval/exec/script`,
+        detail: 'Autoloaded options containing code patterns that execute on every page load.',
+        fix: 'Update or delete each flagged option: wp option update <name> ""',
+        evidence: optData.suspicious.map(o => `${o.name}: ${o.snippet.slice(0, 80)}...`),
+      });
+    }
+  } catch {}
+
+  // DB-03: wp_usermeta — serialized PHP objects with callable methods
+  const usermetaResult = await tools.invoke('wp_eval', {
+    site: sandboxName,
+    code: `
+      global $wpdb;
+      $admins = $wpdb->get_col(
+        "SELECT u.ID FROM {$wpdb->users} u
+         JOIN {$wpdb->usermeta} m ON u.ID = m.user_id
+         WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'"
+      );
+      $suspicious = [];
+      if ($admins) {
+        $meta = $wpdb->get_results(
+          "SELECT user_id, meta_key, LEFT(meta_value, 300) as meta_value
+           FROM {$wpdb->usermeta}
+           WHERE user_id IN (" . implode(',', array_map('intval', $admins)) . ")
+           AND meta_value LIKE 'O:%'",
+          ARRAY_A
+        );
+        foreach ($meta as $m) {
+          if (preg_match('/O:\\d+:"[^"]+":/', $m['meta_value'])) {
+            $suspicious[] = ['user_id' => $m['user_id'], 'key' => $m['meta_key'], 'snippet' => substr($m['meta_value'], 0, 100)];
+          }
+        }
+      }
+      echo json_encode($suspicious);
+    `,
+  });
+  try {
+    const metaData = JSON.parse(extractResult(usermetaResult) || '[]');
+    if (metaData.length > 0) {
+      fsSignals.push({
+        id: 'DB-03', severity: 'high', category: 'active-compromise',
+        installName: install.name,
+        title: `Serialized PHP objects in admin user meta: ${metaData.length} entry(ies)`,
+        detail: 'Serialized objects in wp_usermeta can execute code on deserialization. Used for persistence.',
+        fix: 'Inspect each meta value. Delete if not from a known legitimate plugin.',
+        evidence: metaData.map(m => `User ${m.user_id}, meta_key: ${m.key} — ${m.snippet}`),
+      });
+    }
+  } catch {}
+
+  // DB-04: wp_comments — SEO spam injection
+  const commentsResult = await tools.invoke('wp_eval', {
+    site: sandboxName,
+    code: `
+      global $wpdb;
+      $count = (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->comments}");
+      $sample = $wpdb->get_results(
+        "SELECT comment_ID, comment_author, comment_content, comment_date
+         FROM {$wpdb->comments}
+         WHERE comment_approved = '1'
+         ORDER BY comment_date DESC LIMIT 50",
+        ARRAY_A
+      );
+      $spamKeywords = ['/casino/i', '/poker/i', '/slot/i', '/gambling/i', '/kasyno/i', '/https?:\\/\\/[^\\s]{30,}/'];
+      $suspicious = [];
+      foreach ($sample as $c) {
+        foreach ($spamKeywords as $p) {
+          if (preg_match($p, $c['comment_content'])) {
+            $suspicious[] = ['id' => $c['comment_ID'], 'author' => $c['comment_author'], 'date' => $c['comment_date'], 'snippet' => substr($c['comment_content'], 0, 100)];
+            break;
+          }
+        }
+      }
+      echo json_encode(['total' => $count, 'suspicious' => $suspicious]);
+    `,
+  });
+  try {
+    const commData = JSON.parse(extractResult(commentsResult) || '{}');
+    if ((commData.suspicious || []).length > 0) {
+      fsSignals.push({
+        id: 'DB-04', severity: 'medium', category: 'active-compromise',
+        installName: install.name,
+        title: `Spam content in comments: ${commData.suspicious.length} of ${commData.total} total comments`,
+        detail: 'Approved comments with casino/gambling keywords or long URLs — common SEO spam injection vector.',
+        fix: 'Delete flagged comments: wp comment delete <id> --force',
+        evidence: commData.suspicious.map(c => `Comment ${c.id} by "${c.author}" (${c.date}): ${c.snippet}`),
+      });
+    }
+  } catch {}
+
+  log.info(`[Tier 2] Database scan complete: ${fsSignals.length} total finding(s) (FS + DB)`);
+
   // Collect raw data for all specialists in parallel
   log.phase('Data collection', `Gathering filesystem, DB and behavioral data for ${install.name}`);
   const siteUrl = `https://${install.name}.wpengine.com`;
