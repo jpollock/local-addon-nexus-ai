@@ -1432,7 +1432,80 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     }
   } catch {}
 
-  log.info(`[Tier 2] Database scan complete: ${fsSignals.length} total finding(s) (FS + DB)`);
+  // CHK-01: WP core file integrity
+  log.info(`[Tier 2] Running core integrity checks...`);
+  const coreCheckResult = await tools.invoke('wp_eval', {
+    site: sandboxName, skip_plugins: true, skip_themes: true,
+    code: `
+      $output = shell_exec('wp --skip-plugins --skip-themes core verify-checksums 2>&1');
+      if ($output === null) {
+        echo json_encode(['status' => 'unavailable', 'failures' => [], 'raw' => '']);
+      } else {
+        $lines = explode("\\n", trim($output));
+        $failures = array_filter($lines, fn($l) => strpos($l, 'Error:') !== false || strpos($l, 'Warning:') !== false);
+        $ok = strpos($output, 'WordPress installation verifies against checksums') !== false;
+        echo json_encode([
+          'status' => $ok ? 'passed' : (count($failures) > 0 ? 'failed' : 'unknown'),
+          'failures' => array_values($failures),
+          'raw' => substr($output, 0, 500),
+        ]);
+      }
+    `,
+  });
+  try {
+    const coreCheck = JSON.parse(extractResult(coreCheckResult) || '{"status":"unavailable","failures":[]}');
+    if (coreCheck.status === 'failed' && coreCheck.failures.length > 0) {
+      fsSignals.push({
+        id: 'CHK-01', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `WordPress core file tampering detected: ${coreCheck.failures.length} file(s) fail checksum`,
+        detail: 'Core file checksums do not match WordPress.org — files may have been injected or modified by the attacker.',
+        fix: 'Run: wp core download --skip-content --force to re-download core files. Then re-verify.',
+        evidence: coreCheck.failures.map(f => f.trim()),
+      });
+    }
+    log.info(`[Tier 2] Core integrity: ${coreCheck.status}`);
+  } catch {}
+
+  // CHK-02: Plugin integrity for wordpress.org plugins
+  const pluginCheckResult = await tools.invoke('wp_eval', {
+    site: sandboxName, skip_plugins: true, skip_themes: true,
+    code: `
+      $output = shell_exec('wp --skip-plugins --skip-themes plugin verify-checksums --all 2>&1');
+      if ($output === null) { echo json_encode(['status'=>'unavailable','failures':[]]); exit; }
+      $lines = explode("\\n", trim($output));
+      $failures = [];
+      $unverifiable = [];
+      foreach ($lines as $l) {
+        if (strpos($l, 'Error:') !== false) $failures[] = $l;
+        if (strpos($l, 'This plugin version was not found') !== false ||
+            strpos($l, 'could not be found') !== false) $unverifiable[] = $l;
+      }
+      echo json_encode([
+        'status' => count($failures) > 0 ? 'failed' : 'passed',
+        'failures' => $failures,
+        'unverifiable' => $unverifiable,
+      ]);
+    `,
+  });
+  try {
+    const pluginCheck = JSON.parse(extractResult(pluginCheckResult) || '{"status":"unavailable","failures":[]}');
+    if (pluginCheck.failures.length > 0) {
+      fsSignals.push({
+        id: 'CHK-02', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `Plugin file tampering: ${pluginCheck.failures.length} plugin(s) fail checksum verification`,
+        detail: 'Plugin files do not match WordPress.org checksums — the attacker may have injected code into a legitimate plugin file.',
+        fix: 'For each failing plugin: wp plugin install <slug> --force to reinstall from WordPress.org.',
+        evidence: pluginCheck.failures.map(f => f.trim()),
+      });
+    }
+    if (pluginCheck.unverifiable && pluginCheck.unverifiable.length > 0) {
+      log.info(`[Tier 2] ${pluginCheck.unverifiable.length} plugin(s) not verifiable (not on wordpress.org or version mismatch)`);
+    }
+  } catch {}
+
+  log.info(`[Tier 2] Database scan complete: ${fsSignals.length} total finding(s) (FS + DB + CHK)`);
 
   // Collect raw data for all specialists in parallel
   log.phase('Data collection', `Gathering filesystem, DB and behavioral data for ${install.name}`);
@@ -1887,9 +1960,6 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
   // Build and execute the checklist
   const checklist = buildRemediationChecklist(install, allSignals, sandboxName);
   const results   = await executeChecklist(checklist, install, sandboxName, tools, log, reportPath);
-
-  // Step 5 deferred note — wp core verify-checksums requires WP-CLI on PHP PATH (unavailable in wp_eval)
-  try { fs.appendFileSync(reportPath, '⚪ Step 5: WP core checksums — deferred (run: wp core verify-checksums on sandbox via SSH)\n'); } catch { /* non-fatal */ }
 
   // Verdict
   const failCount  = results.filter(r => !r.passed).length;
