@@ -2075,5 +2075,6 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
     verdict: allPassed ? 'ready' : 'blocked',
     summary: synthesis,
     steps,
+    reportPath,
   };
 }

@@ -177,7 +177,22 @@ export class SentinelReviewOverlay extends React.Component<OverlayProps, Overlay
             : 'Fix the failed steps before executing on production.',
         ),
       ),
-      React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-muted)', textAlign: 'right' } }, 'Verified on isolated\nlocal sandbox'),
+      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 } },
+        React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-muted)', textAlign: 'right' } }, 'Verified on isolated\nlocal sandbox'),
+        this.props.sentinelCase.reportPath
+          ? React.createElement('button', {
+              onClick: () => {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { shell } = require('electron');
+                shell.openPath(this.props.sentinelCase.reportPath);
+              },
+              style: {
+                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                fontSize: 11, color: 'var(--ag-text-secondary)', textDecoration: 'underline',
+              },
+            }, 'View Report')
+          : null,
+      ),
     );
   }
 

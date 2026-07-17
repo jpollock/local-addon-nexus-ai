@@ -70,7 +70,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
         host: `${siteName}.wpengine.com`,
         env: 'PRODUCTION',
         detectedAt: new Date().toISOString(),
-        reportPath: '',   // no file needed — data comes from typed plan
+        reportPath: (eventPlan as any)?.reportPath ?? '',
         sandbox: { id: plan.sandbox ?? '', url: '' },
         verdict: plan.verdict === 'ready' ? 'ready' : 'blocked',
         failedSteps: (plan.steps as any[]).filter((s: any) => s.verificationResult === 'failed').length,
