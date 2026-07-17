@@ -65,6 +65,7 @@ export interface AIClient {
     system?: string;
     schema: Record<string, unknown>;  // JSON Schema object describing T
     schemaName?: string;
+    noTools?: boolean;
   }): Promise<T>;
 }
 

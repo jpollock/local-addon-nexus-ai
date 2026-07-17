@@ -45,6 +45,24 @@ describe('AgentAIClient.generateObject', () => {
     ).rejects.toThrow('generateObject: model did not call __output__ tool');
   });
 
+  it('noTools: true only injects __output__ tool', async () => {
+    const capturedTools: any[] = [];
+    const mockProvider = {
+      streamChat: jest.fn().mockImplementation(async function*(messages: unknown, tools: any[]) {
+        capturedTools.push(...tools);
+        yield { type: 'tool_call_end', name: '__output__', id: 'c1', arguments: { verdict: 'clean' } };
+      }),
+    } as any;
+    const mockToolProvider = {
+      getProviderToolDefinitions: jest.fn().mockReturnValue([{ name: 'fleet_sql', parameters: {} }]),
+      invoke: jest.fn(),
+    } as any;
+    const client = new AgentAIClient(mockProvider, { model: 'claude-sonnet-5', apiKey: 'test' } as any, mockToolProvider);
+    await client.generateObject({ prompt: 'test', schema: { type: 'object', properties: { verdict: { type: 'string' } }, required: ['verdict'] }, noTools: true });
+    expect(capturedTools.map(t => t.name)).toEqual(['__output__']);
+    expect(mockToolProvider.getProviderToolDefinitions).not.toHaveBeenCalled();
+  });
+
   it('unwraps arguments directly when no top-level result key', async () => {
     const mockProvider = {
       streamChat: jest.fn().mockImplementation(async function*() {

@@ -81,6 +81,7 @@ export class AgentAIClient implements AIClient {
     system?: string;
     schema: Record<string, unknown>;
     schemaName?: string;
+    noTools?: boolean;
   }): Promise<T> {
     const { prompt, system, schema, schemaName = 'output' } = opts;
 
@@ -100,7 +101,9 @@ export class AgentAIClient implements AIClient {
       { role: 'user', content: `${systemMsg}\n\n${prompt}` },
     ];
 
-    const tools: ProviderToolDefinition[] = [outputTool, ...this.toolProvider.getProviderToolDefinitions()];
+    const tools: ProviderToolDefinition[] = opts.noTools
+      ? [outputTool]
+      : [outputTool, ...this.toolProvider.getProviderToolDefinitions()];
     const signal = new AbortController().signal;
 
     for (let turn = 0; turn < 5; turn++) {
