@@ -30,9 +30,14 @@ export class AgentAIClient implements AIClient {
   private provider: AIProvider;
   private config: ChatProviderConfig;
   private toolProvider: NexusToolProvider;
+  /** Direct provider (bypasses gateway) — used for generateObject forced-tool calls */
+  private directProvider?: AIProvider;
+  private directConfig?: ChatProviderConfig;
 
-  constructor(provider: AIProvider, config: ChatProviderConfig, toolProvider: NexusToolProvider) {
+  constructor(provider: AIProvider, config: ChatProviderConfig, toolProvider: NexusToolProvider, directProvider?: AIProvider, directConfig?: ChatProviderConfig) {
     this.provider = provider;
+    this.directProvider = directProvider;
+    this.directConfig = directConfig;
     this.config = config;
     this.toolProvider = toolProvider;
   }
@@ -100,9 +105,11 @@ export class AgentAIClient implements AIClient {
     if (opts.noTools) {
       const systemMsg = system ?? 'Analyze the provided data and call the __output__ tool with your structured findings.';
       const messages: ChatMessage[] = [{ role: 'user', content: `${systemMsg}\n\n${prompt}` }];
-      const forcedConfig = { ...this.config, forceTool: '__output__' };
+      // Use direct provider (bypasses local-gateway which doesn't translate tool_choice/tool_config)
+      const targetProvider = this.directProvider ?? this.provider;
+      const forcedConfig = { ...(this.directConfig ?? this.config), forceTool: '__output__' };
       const signal = new AbortController().signal;
-      const response = await collectStream(this.provider.streamChat(messages, [outputTool], forcedConfig, signal));
+      const response = await collectStream(targetProvider.streamChat(messages, [outputTool], forcedConfig, signal));
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {
         const raw = outputCall.arguments;

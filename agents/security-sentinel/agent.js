@@ -773,13 +773,15 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
 }
 
 async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000) {
-  if (state.isCoolingDown(`tier2:${install.id}`, 24 * 60 * 60 * 1000)) {
-    const lastMs = state.get(`_cooldown:tier2:${install.id}`);
-    const hoursAgo = lastMs ? ((Date.now() - lastMs) / 3_600_000).toFixed(1) : '?';
-    log.info(`[Tier 2] Skipping ${install.name} — escalated ${hoursAgo}h ago (cooldown: 24h)`);
-    return null;
-  }
-  state.setCooldown(`tier2:${install.id}`);
+  // DEV MODE: cooldown disabled for iteration speed
+  // TODO: re-enable before production by uncommenting below
+  // if (state.isCoolingDown(`tier2:${install.id}`, 24 * 60 * 60 * 1000)) {
+  //   const lastMs = state.get(`_cooldown:tier2:${install.id}`);
+  //   const hoursAgo = lastMs ? ((Date.now() - lastMs) / 3_600_000).toFixed(1) : '?';
+  //   log.info(`[Tier 2] Skipping ${install.name} — escalated ${hoursAgo}h ago (cooldown: 24h)`);
+  //   return null;
+  // }
+  // state.setCooldown(`tier2:${install.id}`);
 
   const sandboxName = `sentinel-${install.name}-${Date.now()}`;
   log.info(`[Tier 2] Creating sandbox: ${sandboxName}`);

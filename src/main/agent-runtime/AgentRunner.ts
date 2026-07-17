@@ -69,8 +69,12 @@ export class AgentRunner {
     const providerConfig = effectiveProvider === 'local-gateway'
       ? { apiKey: this.services.gatewayAuthToken ?? '', model: agentModel, baseUrl: this.services.gatewayUrl }
       : { apiKey: this.resolvedProvider.apiKey, model: agentModel };
+    // Direct provider config: used for generateObject forced-tool calls that need tool_config/tool_choice
+    // The local-gateway proxy doesn't translate these, so we bypass it for structured output calls
+    const directProvider = getProvider(this.resolvedProvider.provider);
+    const directConfig = { apiKey: this.resolvedProvider.apiKey, model: agentModel };
     const aiClient = aiProvider
-      ? new AgentAIClient(aiProvider, providerConfig, toolProvider)
+      ? new AgentAIClient(aiProvider, providerConfig, toolProvider, directProvider ?? undefined, directConfig)
       : {
           run: async (_prompt: string) => {
             logger.warn(`Agent "${agent.name}": AI provider "${this.resolvedProvider.provider}" unavailable — skipping AI call`);
