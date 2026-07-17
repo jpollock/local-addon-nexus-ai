@@ -806,7 +806,14 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   if (isLocal) {
     // Clone the local site — instant, no SSH or WPE pull needed
-    log.info(`[Tier 2] Local site detected — cloning ${install.name} to ${sandboxName}`);
+    log.info(`[Tier 2] Local site detected — starting ${install.name} then cloning to ${sandboxName}`);
+    // local_clone_site requires the source site to be running
+    try {
+      await tools.invoke('local_start_site', { site: install.name });
+      log.info(`[Tier 2] Source site started`);
+    } catch (startErr) {
+      log.info(`[Tier 2] Source site start skipped (may already be running): ${startErr.message}`);
+    }
     const cloneResult = await tools.invoke('local_clone_site', { site: install.name, new_name: sandboxName });
     const cloneStr = extractResult(cloneResult);
     if (cloneStr.toLowerCase().includes('error') || cloneStr.toLowerCase().includes('failed')) {
@@ -821,9 +828,9 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
       try {
         const status = await tools.invoke('local_operation_status', { site: sandboxName });
         const statusStr = typeof status === 'string' ? status : JSON.stringify(status);
-        if (statusStr.includes('completed') || statusStr.includes('"done"')) { cloneDone = true; break; }
+        log.info(`[Tier 2] Clone status: ${statusStr.slice(0, 150)}`);
+        if (statusStr.includes('completed') || statusStr.includes('"done"') || statusStr.includes('running') || statusStr === '{}' || statusStr === 'null') { cloneDone = true; break; }
         if (statusStr.includes('failed')) { log.error(`[Tier 2] Clone failed`); return null; }
-        log.info(`[Tier 2] Clone in progress...`);
       } catch {}
     }
     if (!cloneDone) { log.warn(`[Tier 2] Clone timed out`); return null; }
