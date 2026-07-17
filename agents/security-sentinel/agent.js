@@ -936,108 +936,50 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   log.info(`[Tier 2] Filesystem scan complete: ${fsSignals.length} finding(s)`);
 
-  // Collect raw data for all specialists in parallel
-  log.phase('Data collection', `Gathering filesystem, DB and behavioral data for ${install.name}`);
-  const siteUrl = `https://${install.name}.wpengine.com`;
-  const specialistData = await collectSpecialistData(sandboxName, siteUrl, tools);
-
-  // Fan out to five parallel specialist AI calls — each is pure reasoning over provided data
-  log.phase('Specialist analysis', `Running 5 parallel specialist checks on ${install.name}`);
-  const [enumeratorResult, integrityResult, patternResult, databaseResult, behavioralResult] =
-    await Promise.all([
-      ai.generateObject({
-        schema: enumeratorSpec.schema,
-        prompt: enumeratorSpec.buildPrompt({ ...specialistData, installName: install.name }),
-        schemaName: 'EnumeratorResult',
-        noTools: true,
-      }).catch(err => { log.warn(`[Specialist] Enumerator failed: ${err.message}`); return { pluginDirectories: [], unexpectedFiles: [], htaccessFiles: [], nonStandardTables: [], autoloadedOptions: [] }; }),
-
-      ai.generateObject({
-        schema: integritySpec.schema,
-        prompt: integritySpec.buildPrompt({ ...specialistData, installName: install.name, siteCreatedAt: install.sshLastSyncAt ?? 'unknown' }),
-        schemaName: 'IntegrityResult',
-        noTools: true,
-      }).catch(err => { log.warn(`[Specialist] Integrity failed: ${err.message}`); return { coreVerification: { status: 'unavailable', failures: [] }, pluginVerification: [], configPhpModified: false }; }),
-
-      ai.generateObject({
-        schema: patternSpec.schema,
-        prompt: patternSpec.buildPrompt({ ...specialistData, installName: install.name, compromiseWindowEstimate: null }),
-        schemaName: 'PatternResult',
-        noTools: true,
-      }).catch(err => { log.warn(`[Specialist] Pattern failed: ${err.message}`); return { criticalFindings: [], htaccessFindings: [], temporalCluster: { detected: false }, filesScanned: 0, filesClean: 0 }; }),
-
-      ai.generateObject({
-        schema: databaseSpec.schema,
-        prompt: databaseSpec.buildPrompt({ ...specialistData, installName: install.name }),
-        schemaName: 'DatabaseResult',
-        noTools: true,
-      }).catch(err => { log.warn(`[Specialist] Database failed: ${err.message}`); return { injectedContent: [], suspiciousCronHooks: [], optionAnomalies: [], nonStandardTableContent: [], samplingNote: 'Collection failed' }; }),
-
-      ai.generateObject({
-        schema: behavioralSpec.schema,
-        prompt: behavioralSpec.buildPrompt({ ...specialistData, installName: install.name, siteUrl }),
-        schemaName: 'BehavioralResult',
-        noTools: true,
-      }).catch(err => { log.warn(`[Specialist] Behavioral failed: ${err.message}`); return { cloakingDetected: false, loginPageStatus: 0, xmlrpcEnabled: false, userEnumerationEnabled: false, redirectsDetected: [], anomalies: [] }; }),
-    ]);
-
-  // Elevation: if temporal cluster detected, add to signals
-  if (patternResult.temporalCluster?.detected) {
-    const cluster = patternResult.temporalCluster;
-    log.finding({
-      id: 'TC-01', severity: 'critical', site: install.name,
-      title: `Temporal cluster: ${cluster.itemCount ?? 'multiple'} items within ${cluster.windowStart ?? 'unknown'}–${cluster.windowEnd ?? 'unknown'}`,
-      description: `Rapid bulk activity within a short window is the primary signal of an automated attack. Items: ${(cluster.items ?? []).join(', ')}`,
-    });
-  }
-
-  // Synthesis: correlate all five specialist results
-  log.phase('Synthesis', `Correlating findings for ${install.name}`);
-  let synthesis;
+  // Temporal cluster detection from filesystem mtimes (no LLM needed)
+  // If >3 plugin directories share creation times within a 10-minute window, flag it
   try {
-    synthesis = await ai.generateObject({
-      schema: synthesizerSpec.schema,
-      prompt: synthesizerSpec.buildPrompt({
-        installName: install.name,
-        environment: install.environment,
-        postCount: install.postCount,
-        siteCreatedAt: install.sshLastSyncAt ?? 'unknown',
-        lastSyncAt: install.sshLastSyncAt ?? 'unknown',
-        tier1Signals: tier1Signals.map(s => `[${s.severity.toUpperCase()}] ${s.id}: ${s.title}`).join('\n'),
-        enumeratorResult,
-        integrityResult,
-        patternResult,
-        databaseResult,
-        behavioralResult,
-      }),
-      schemaName: 'SynthesizerResult',
-      noTools: true,
+    const pluginDirData = await tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $dir = WP_PLUGIN_DIR;
+        $out = [];
+        foreach (glob("$dir/*", GLOB_ONLYDIR) ?: [] as $d) {
+          $mtime = @filemtime($d);
+          $out[] = ['name' => basename($d), 'mtime' => $mtime ?: 0];
+        }
+        echo json_encode($out);
+      `,
     });
-    log.warn(`[Tier 2 Synthesis] ${install.name}: ${synthesis.verdict} — ${synthesis.attackSummary.slice(0, 120)}...`);
-  } catch (err) {
-    log.warn(`[Tier 2 Synthesis] LLM call failed for ${install.name}: ${err.message} — defaulting to escalate`);
-    synthesis = { verdict: 'active-compromise', attackSummary: '(synthesis unavailable)', entryPoint: 'unknown', temporalNarrative: '', attackerItems: [], legitimateItems: [], blindSpots: ['Synthesis failed'], remediationSteps: [] };
-  }
+    const dirs = JSON.parse(String(pluginDirData).match(/\[[\s\S]*\]/)?.[0] || '[]');
+    if (dirs.length > 3) {
+      const sorted = dirs.filter(d => d.mtime > 0).sort((a, b) => a.mtime - b.mtime);
+      for (let i = 0; i < sorted.length - 2; i++) {
+        const windowEnd = sorted[i].mtime + 600; // 10 minutes
+        const cluster = sorted.filter(d => d.mtime >= sorted[i].mtime && d.mtime <= windowEnd);
+        if (cluster.length >= 3) {
+          const names = cluster.map(d => d.name).join(', ');
+          log.finding({
+            id: 'TC-01', severity: 'critical', site: install.name,
+            title: `Temporal cluster: ${cluster.length} plugins installed within 10 minutes`,
+            description: `Plugins installed within a 10-minute window: ${names}. Rapid bulk installation is not consistent with normal site management — this is the primary signal of an automated attack.`,
+          });
+          fsSignals.push({
+            id: 'TC-01', severity: 'critical', category: 'active-compromise',
+            installName: install.name,
+            title: `Temporal cluster: ${cluster.length} plugins installed within 10 minutes`,
+            detail: `Plugins: ${names}`,
+          });
+          break;
+        }
+      }
+    }
+  } catch {}
 
-  // Build RemediationPlan from synthesizer output
-  if (synthesis.remediationSteps.length === 0) {
-    log.warn(`[Tier 2] No remediation steps in synthesis — falling back to checklist builder`);
-    const plan = await tier3Remediate(install, synthesis.attackSummary, tier1Signals.concat(fsSignals), sandboxName, tools, log);
-    return plan;
-  }
-
-  log.phase('Tier 3', `Preparing remediation plan for ${install.name}`);
-  const plan = await tier3Remediate(install, synthesis.attackSummary, tier1Signals.concat(fsSignals), sandboxName, tools, log);
-  if (plan) {
-    // Enrich plan with synthesizer's attacker items and blind spots
-    plan.summary = synthesis.attackSummary;
-    plan.entryPoint = synthesis.entryPoint;
-    plan.blindSpots = synthesis.blindSpots;
-    plan.attackerItems = synthesis.attackerItems;
-  }
+  // LLM synthesis — improved prompt with explicit temporal cluster instruction
+  const plan = await llmSynthesis(install, tier1Signals, fsSignals, tools, ai, log, sandboxName);
 
   // Sandbox intentionally kept alive — the user will execute or dismiss via Sentinel Review UI.
-  // Deletion is handled by the nexus:sentinel:execute IPC handler after execution completes.
   return plan;
 }
 
