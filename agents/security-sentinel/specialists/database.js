@@ -35,7 +35,7 @@ const schema = {
     nonStandardTableContent: {
       type: 'array',
       description: 'Content found in non-standard database tables',
-      items: { type: 'object', properties: { table: { type: 'string' }, rowCount: { type: 'number' }, sample: { type: 'string' } }, required: ['table'] },
+      items: { type: 'object', properties: { table: { type: 'string' }, rowCount: { type: 'integer' }, sample: { type: 'string' } }, required: ['table'] },
     },
     samplingNote: { type: 'string', description: 'What was sampled and what was skipped due to size' },
   },

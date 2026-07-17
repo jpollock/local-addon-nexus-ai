@@ -14,7 +14,7 @@ const schema = {
         properties: {
           name: { type: 'string' },
           createdAt: { type: 'string', description: 'ISO timestamp or null if unknown' },
-          fileCount: { type: 'number' },
+          fileCount: { type: 'integer' },
         },
         required: ['name', 'createdAt', 'fileCount'],
       },

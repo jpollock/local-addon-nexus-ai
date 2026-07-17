@@ -8,7 +8,7 @@ const schema = {
       description: 'Whether the site returns different content to Googlebot vs normal browsers',
     },
     cloakingDetails: { type: 'string' },
-    loginPageStatus: { type: 'number', description: 'HTTP status of /wp-login.php' },
+    loginPageStatus: { type: 'integer', description: 'HTTP status of /wp-login.php' },
     xmlrpcEnabled: { type: 'boolean' },
     userEnumerationEnabled: { type: 'boolean', description: 'Whether /wp-json/wp/v2/users returns user data' },
     redirectsDetected: {

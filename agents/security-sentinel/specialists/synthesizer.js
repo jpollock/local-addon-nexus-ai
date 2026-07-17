@@ -41,10 +41,10 @@ const schema = {
       items: {
         type: 'object',
         properties: {
-          priority: { type: 'number' },
+          priority: { type: 'integer' },
           label: { type: 'string' },
           command: { type: 'string', description: 'Exact WP-CLI or shell command, or empty if manual' },
-          tier: { type: 'number', enum: [1, 2, 3] },
+          tier: { type: "string", enum: ["1", "2", "3"] },
           requiresApproval: { type: 'boolean' },
         },
         required: ['priority', 'label', 'tier', 'requiresApproval'],
