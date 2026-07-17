@@ -262,7 +262,7 @@ export class AIGatewayRoutes {
     }
 
     this.recordAndRespond(req, res, siteId, model, actualProvider, openAIResponse,
-      promptTokens, completionTokens, responseId, costUsd, Date.now() - startTime);
+      promptTokens, completionTokens, responseId, costUsd, Date.now() - startTime, !!openAIRequest.stream);
   }
 
   /**
@@ -461,6 +461,7 @@ export class AIGatewayRoutes {
     responseId: string,
     costUsd: number,
     durationMs: number,
+    stream = false,
   ): void {
     const callerPlugin   = req.headers['x-wp-caller-plugin'] as string | undefined;
     const callerTheme    = req.headers['x-wp-caller-theme'] as string | undefined;
@@ -504,8 +505,27 @@ export class AIGatewayRoutes {
     this.storeUsageRecord(usageRecord);
     if (this.onUsageRecorded) this.onUsageRecorded(usageRecord);
 
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(openAIResponse));
+    if (stream) {
+      // Client requested streaming — send as SSE so the local-gateway provider can parse it
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
+      const chunk = {
+        id: openAIResponse.id,
+        object: 'chat.completion.chunk',
+        created: openAIResponse.created,
+        model: openAIResponse.model,
+        choices: (openAIResponse.choices ?? []).map((c: any) => ({
+          index: c.index ?? 0,
+          delta: c.message ?? {},
+          finish_reason: c.finish_reason ?? 'stop',
+        })),
+      };
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } else {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(openAIResponse));
+    }
   }
 
   private readBody(req: http.IncomingMessage): Promise<string> {

@@ -57,6 +57,10 @@ export class LocalGatewayProvider implements AIProvider {
       body.tools = tools.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
     }
 
+    if (config.forceTool) {
+      body.tool_choice = { type: 'function', function: { name: config.forceTool } };
+    }
+
     let response: Response;
     try {
       response = await fetch(endpoint, {

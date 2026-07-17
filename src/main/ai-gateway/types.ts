@@ -17,13 +17,15 @@ export interface SiteToken {
  * This is what WordPress sends to the gateway
  */
 export interface OpenAIChatCompletionRequest {
-  model: string; // "claude-haiku-4-5-20251001"
+  model: string;
   messages: OpenAIChatMessage[];
   temperature?: number;
   max_tokens?: number;
   top_p?: number;
   stop?: string[];
   stream?: boolean;
+  tools?: Array<{ type: string; function: { name: string; description?: string; parameters?: Record<string, unknown> } }>;
+  tool_choice?: { type: string; function?: { name: string } } | string;
 }
 
 export interface OpenAIChatMessage {

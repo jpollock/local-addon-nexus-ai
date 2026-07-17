@@ -105,11 +105,12 @@ export class AgentAIClient implements AIClient {
     if (opts.noTools) {
       const systemMsg = system ?? 'Analyze the provided data and call the __output__ tool with your structured findings.';
       const messages: ChatMessage[] = [{ role: 'user', content: `${systemMsg}\n\n${prompt}` }];
-      // Use direct provider (bypasses local-gateway which doesn't translate tool_choice/tool_config)
-      const targetProvider = this.directProvider ?? this.provider;
-      const forcedConfig = { ...(this.directConfig ?? this.config), forceTool: '__output__' };
+      // Route through normal provider (gateway or direct) with forceTool so gateway translates
+      // to tool_config (Google) or tool_choice (Anthropic). Do NOT bypass gateway — the actual
+      // API key lives there when useLocalGateway=true.
+      const forcedConfig = { ...this.config, forceTool: '__output__' };
       const signal = new AbortController().signal;
-      const response = await collectStream(targetProvider.streamChat(messages, [outputTool], forcedConfig, signal));
+      const response = await collectStream(this.provider.streamChat(messages, [outputTool], forcedConfig, signal));
       const outputCall = response.toolCalls.find(c => c.name === '__output__');
       if (outputCall) {
         const raw = outputCall.arguments;

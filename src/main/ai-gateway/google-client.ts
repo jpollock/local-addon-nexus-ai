@@ -54,6 +54,27 @@ export async function callGoogleAPI(
     geminiBody.generationConfig = { ...geminiBody.generationConfig, temperature: request.temperature };
   }
 
+  // Translate OpenAI tools → Gemini functionDeclarations
+  if (request.tools?.length) {
+    geminiBody.tools = [{
+      functionDeclarations: request.tools.map(t => ({
+        name: t.function.name,
+        description: t.function.description ?? '',
+        parameters: t.function.parameters ?? { type: 'object', properties: {} },
+      })),
+    }];
+  }
+
+  // Translate OpenAI tool_choice → Gemini tool_config
+  if (request.tool_choice && typeof request.tool_choice === 'object' && request.tool_choice.function?.name) {
+    geminiBody.tool_config = {
+      function_calling_config: {
+        mode: 'ANY',
+        allowed_function_names: [request.tool_choice.function.name],
+      },
+    };
+  }
+
   const body = JSON.stringify(geminiBody);
   const model = request.model;
   const path = `/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -95,7 +116,9 @@ export async function callGoogleAPI(
         try {
           const geminiResponse = JSON.parse(responseBody);
           const candidate = geminiResponse.candidates?.[0];
-          const text = candidate?.content?.parts?.map((p: any) => p.text ?? '').join('') ?? '';
+          const parts = candidate?.content?.parts ?? [];
+          const text = parts.map((p: any) => p.text ?? '').join('');
+          const functionCallPart = parts.find((p: any) => p.functionCall);
           const usage = geminiResponse.usageMetadata ?? {};
           const promptTokens = usage.promptTokenCount ?? 0;
           const completionTokens = usage.candidatesTokenCount ?? 0;
@@ -112,7 +135,10 @@ export async function callGoogleAPI(
             model,
             choices: [{
               index: 0,
-              message: { role: 'assistant', content: text },
+              message: functionCallPart ? {
+                role: 'assistant' as const,
+                content: JSON.stringify({ tool_calls: [{ id: `call_${Date.now()}`, type: 'function', function: { name: functionCallPart.functionCall.name, arguments: JSON.stringify(functionCallPart.functionCall.args ?? {}) } }] }),
+              } : { role: 'assistant' as const, content: text },
               finish_reason: 'stop',
             }],
             usage: {
