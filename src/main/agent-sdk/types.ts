@@ -140,6 +140,11 @@ export interface RemediationPlan {
   verified: boolean;
   verdict: 'ready' | 'blocked';
   summary?: string;
+  entryPoint?: string;
+  blindSpots?: string[];
+  attackerItems?: Array<{
+    type: string; name: string; confidence: string; reasoning: string; action: string;
+  }>;
   steps: RemediationStep[];
 }
 
