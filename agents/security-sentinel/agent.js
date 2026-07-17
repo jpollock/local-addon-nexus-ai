@@ -384,6 +384,28 @@ function runAbsoluteChecks(install) {
     });
   }
 
+  // ABS-07: Low-entropy plugin directory names (random-looking strings — e.g. "Kz2", "a1b2")
+  // Heuristic: slug stripped of hyphens is ≤6 chars, all alphanumeric, no dictionary words
+  const COMMON_WORDS_RE = /^(admin|login|cache|image|video|theme|block|post|page|user|form|mail|test|demo|core|base|grid|list|menu|nav|panel|api|cron|hook|feed|link|auth|view|data|file|code|lang)$/i;
+  const lowEntropyPlugins = plugins.filter(p => {
+    const slug = (p.slug || '').replace(/-/g, '');
+    if (slug.length > 6) return false;                       // too long to be random
+    if (!/^[a-zA-Z0-9]+$/.test(slug)) return false;          // must be alphanumeric only
+    if (COMMON_WORDS_RE.test(slug)) return false;             // real English words are fine
+    if (/^[A-Z][a-z]+$/.test(slug)) return false;            // proper capitalized word is fine
+    return true;
+  });
+  if (lowEntropyPlugins.length > 0) {
+    signals.push({
+      id: 'ABS-07', severity: 'high', category: 'active-compromise',
+      installName: install.name,
+      title: `Low-entropy plugin name(s) — likely attacker-created: ${lowEntropyPlugins.map(p => p.slug).join(', ')}`,
+      detail: 'Plugin directory names that are short random strings (e.g. "Kz2", "a1b") are not legitimate plugin names. Attackers use these to hide tools.',
+      fix: 'Inspect the contents of each directory. Delete if not a recognized legitimate plugin.',
+      evidence: lowEntropyPlugins.map(p => `${p.slug} (active: ${p.is_active === '1' ? 'yes' : 'no'})`),
+    });
+  }
+
   return signals;
 }
 const KNOWN_SECURITY_PLUGINS = new Set([
@@ -999,6 +1021,84 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         title: `PHP file(s) found in uploads/: ${phpUploads.map(f => f.split('/').pop()).join(', ')}`,
         detail: `PHP files in uploads/ can be executed by visiting their URL directly: ${phpUploads.join(', ')}`,
         fix: 'Delete all PHP files from uploads/. Add .htaccess rule to deny PHP execution in uploads.',
+      });
+    }
+  } catch {}
+
+  // ABS-06: Suspicious internal filenames within plugins
+  // Files named check_file.php, shell.php, cmd.php, c99.php, r57.php, etc. signal attacker tools
+  // regardless of whether they use obfuscation
+  const suspiciousFileResult = await tools.invoke('wp_eval', {
+    site: sandboxName, skip_plugins: true, skip_themes: true,
+    code: `
+      $dir = WP_PLUGIN_DIR;
+      $suspicious = [
+        'check_file.php', 'shell.php', 'cmd.php', 'c99.php', 'r57.php', 'php.php',
+        'eval.php', 'exec.php', 'bypass.php', 'b374k.php', 'wso.php',
+        'FilesMan.php', 'b374.php', 'indoxploit.php',
+      ];
+      $found = [];
+      if (!is_dir($dir)) { echo json_encode($found); exit; }
+      foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $f) {
+        if (in_array(strtolower($f->getFilename()), array_map('strtolower', $suspicious))) {
+          $found[] = [
+            'path' => str_replace(ABSPATH, '', $f->getPathname()),
+            'size' => $f->getSize(),
+            'mtime' => date('Y-m-d H:i:s', $f->getMTime()),
+          ];
+        }
+      }
+      echo json_encode($found);
+    `,
+  });
+  try {
+    const suspiciousFiles = JSON.parse(extractResult(suspiciousFileResult) || '[]');
+    if (suspiciousFiles.length > 0) {
+      fsSignals.push({
+        id: 'ABS-06', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `Suspicious internal filenames in plugins: ${suspiciousFiles.map(f => f.path.split('/').pop()).join(', ')}`,
+        detail: 'Files with names matching known attacker tool patterns were found inside plugin directories.',
+        fix: 'Inspect each file. Delete if not part of a legitimate plugin.',
+        evidence: suspiciousFiles.map(f => `${f.path} (${f.size} bytes, modified ${f.mtime})`),
+      });
+    }
+  } catch {}
+
+  // ABS-08: Anti-forensics tools — PHP that recursively modifies file timestamps
+  // The touch() + scandir/glob/RecursiveIterator pattern is specific to timestamp-backdating tools
+  const antiForensicsResult = await tools.invoke('wp_eval', {
+    site: sandboxName, skip_plugins: true, skip_themes: true,
+    code: `
+      $dir = WP_PLUGIN_DIR;
+      $found = [];
+      if (!is_dir($dir)) { echo json_encode($found); exit; }
+      foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $f) {
+        if ($f->getExtension() !== 'php') continue;
+        $content = @file_get_contents($f->getPathname());
+        if (!$content) continue;
+        // touch() + scandir/glob/RecursiveIterator in same file = timestamp manipulation
+        if (preg_match('/touch\\s*\\(/', $content) &&
+            preg_match('/scandir|glob|RecursiveIterator/', $content)) {
+          $found[] = [
+            'path' => str_replace(ABSPATH, '', $f->getPathname()),
+            'snippet' => substr($content, 0, 200),
+          ];
+        }
+      }
+      echo json_encode($found);
+    `,
+  });
+  try {
+    const antiForensics = JSON.parse(extractResult(antiForensicsResult) || '[]');
+    if (antiForensics.length > 0) {
+      fsSignals.push({
+        id: 'ABS-08', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `Anti-forensics tool detected: timestamp manipulation code in ${antiForensics.length} file(s)`,
+        detail: 'PHP code using touch() to recursively modify file timestamps was found. This is used by attackers to hide when files were planted.',
+        fix: 'Delete the containing plugin/directory. The attacker used this to backdate all planted files, so timestamp-based analysis of the site is unreliable.',
+        evidence: antiForensics.map(f => f.path),
       });
     }
   } catch {}
