@@ -694,31 +694,71 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
   // Safe fallback shape for all behavioral response objects
   const emptyResponse = { status: 0, headers: {}, bodyPreview: '' };
 
+  // Compact formatters — key insight from testing: small prompts work, large fail
+  // Each specialist gets only the data it needs in the most compact form
+  const fmtPluginDirs = pluginDirs
+    .map(d => `${d.name}  ${d.mtime ?? 'unknown'}  (${d.fileCount ?? '?'} files)`)
+    .join('\n') || '(none)';
+
+  const suspectExts = ['php','sh','cgi','pl','py','rb','exe','elf'];
+  const fmtUnexpected = recentFiles
+    .filter(f => suspectExts.includes(f.ext) || (f.path || '').includes('mu-plugin'))
+    .slice(0, 30)
+    .map(f => `${f.path}  ${f.mtime ?? ''}`)
+    .join('\n') || '(none)';
+
+  const fmtRecent = recentFiles
+    .slice(0, 60)
+    .map(f => `${f.path}  ${f.mtime ?? ''}`)
+    .join('\n') || '(none)';
+
+  const fmtHtaccess = Object.entries(htaccess)
+    .map(([p, c]) => `--- ${p} ---\n${String(c).slice(0, 400)}`)
+    .join('\n') || '(none)';
+
+  const fmtObfuscation = (() => {
+    try {
+      const m = scanResult.matches || [];
+      if (!m.length) return `(none — ${scanResult.scanned ?? 0} files scanned clean)`;
+      return m.map(x => `${x.file}  pattern: ${x.pattern}\n  snippet: ${(x.snippet||'').slice(0,80)}`).join('\n');
+    } catch { return '(scan error)'; }
+  })();
+
+  const fmtPosts = posts.slice(0, 15)
+    .map(p => `[${p.post_status}] ${p.post_type}: ${p.post_title}`)
+    .join('\n') || '(none)';
+
+  const fmtOptions = (dbData.critical || [])
+    .map(o => `${o.option_name}: ${String(o.option_value).slice(0, 100)}`)
+    .join('\n') || '(none)';
+
+  const fmtAutoload = (dbData.autoloaded || []).slice(0, 50).join('\n') || '(none)';
+
   return {
     // For enumerator
-    pluginDirectoriesRaw:   JSON.stringify(pluginDirs, null, 2),
-    unexpectedFilesRaw:     JSON.stringify(recentFiles.filter(f => !['php','js','css','html','txt','md','json','png','jpg','gif','woff','woff2','svg','mo','po'].includes(f.ext)), null, 2),
+    pluginDirectoriesRaw:   fmtPluginDirs,
+    unexpectedFilesRaw:     fmtUnexpected,
     htaccessPathsRaw:       Object.keys(htaccess).join('\n') || '(none found)',
     nonStandardTablesRaw:   (dbData.nonStandardTables || []).join('\n') || '(none)',
-    autoloadedOptionsRaw:   (dbData.autoloaded || []).join('\n'),
+    autoloadedOptionsRaw:   fmtAutoload,
 
     // For integrity
-    coreChecksums:          coreChecks,
+    coreChecksums:          String(coreChecks).slice(0, 1000),
     pluginChecksums:        '(not collected — mark all plugins as unverifiable)',
     configPhpMtime:         '(captured via filesystem scan above)',
 
     // For pattern
-    patternScanOutput:      JSON.stringify(scanResult, null, 2),
-    htaccessContents:       JSON.stringify(htaccess, null, 2),
-    recentlyModifiedFiles:  JSON.stringify(recentFiles, null, 2),
+    patternScanOutput:      fmtObfuscation,
+    htaccessContents:       fmtHtaccess,
+    recentlyModifiedFiles:  fmtRecent,
 
     // For database
-    postsContent:           JSON.stringify(posts.slice(0, 50), null, 2),
-    autoloadedOptions:      JSON.stringify(dbData.autoloaded, null, 2),
-    criticalOptions:        JSON.stringify(dbData.critical, null, 2),
+    postsContent:           fmtPosts,
+    autoloadedOptions:      fmtAutoload,
+    criticalOptions:        fmtOptions,
     adminUsermeta:          '(not collected)',
     recentComments:         '(not collected)',
-    nonStandardTableData:   JSON.stringify(dbData.nonStandardTables, null, 2),
+    nonStandardTableData:   (dbData.nonStandardTables || []).join(', ') || '(none)',
 
     // For behavioral — always present with safe fallbacks
     standardResponse:       behavioral.standard       ?? emptyResponse,
