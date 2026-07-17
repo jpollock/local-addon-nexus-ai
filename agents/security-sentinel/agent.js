@@ -53,8 +53,9 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName) {
   const installs = [];
 
   for (const site of rows) {
-    // Handle unsynced installs — trigger a fresh sync first
-    if (!site.ssh_last_sync_at) {
+    // Handle unsynced WPE installs — trigger a fresh sync first
+    // Local sites don't have SSH so skip the deep refresh
+    if (!site.ssh_last_sync_at && site.source !== 'local') {
       try {
         await tools.invoke('wpe_site_deep_refresh', { install_name: site.name });
       } catch (err) {
