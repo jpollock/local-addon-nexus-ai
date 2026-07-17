@@ -1432,25 +1432,35 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     }
   } catch {}
 
-  // CHK-01: WP core file integrity
+  // CHK-01: WP core file integrity via wordpress.org checksums API (no nested wp-cli)
   log.info(`[Tier 2] Running core integrity checks...`);
   try {
     const coreCheckResult = await tools.invoke('wp_eval', {
       site: sandboxName, skip_plugins: true, skip_themes: true,
       code: `
-        $output = shell_exec('wp --skip-plugins --skip-themes core verify-checksums 2>&1');
-        if ($output === null) {
-          echo json_encode(['status' => 'unavailable', 'failures' => [], 'raw' => '']);
-        } else {
-          $lines = explode("\\n", trim($output));
-          $failures = array_filter($lines, fn($l) => strpos($l, 'Error:') !== false || strpos($l, 'Warning:') !== false);
-          $ok = strpos($output, 'WordPress installation verifies against checksums') !== false;
-          echo json_encode([
-            'status' => $ok ? 'passed' : (count($failures) > 0 ? 'failed' : 'unknown'),
-            'failures' => array_values($failures),
-            'raw' => substr($output, 0, 500),
-          ]);
+        global $wp_version;
+        $locale = get_locale();
+        $url = "https://api.wordpress.org/core/checksums/1.0/?version={$wp_version}&locale={$locale}";
+        $response = wp_remote_get($url, ['timeout' => 20]);
+        if (is_wp_error($response)) {
+          echo json_encode(['status' => 'unavailable', 'failures' => []]);
+          exit;
         }
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+        $checksums = $data['checksums'] ?? [];
+        $failures = [];
+        $abspath = ABSPATH;
+        foreach ($checksums as $file => $expected_md5) {
+          $full_path = $abspath . $file;
+          if (!file_exists($full_path)) continue;
+          if (md5_file($full_path) !== $expected_md5) {
+            $failures[] = "Error: File doesn't verify against checksum: {$file}";
+          }
+        }
+        echo json_encode([
+          'status' => count($failures) > 0 ? 'failed' : 'passed',
+          'failures' => $failures,
+        ]);
       `,
     });
     const coreCheck = JSON.parse(extractResult(coreCheckResult) || '{"status":"unavailable","failures":[]}');
@@ -1469,21 +1479,38 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     log.warn(`[Tier 2] CHK-01 failed: ${err.message}`);
   }
 
-  // CHK-02: Plugin integrity for wordpress.org plugins
+  // CHK-02: Active plugin integrity via downloads.wordpress.org checksums API (no nested wp-cli)
   log.info(`[Tier 2] Running plugin integrity checks...`);
   try {
     const pluginCheckResult = await tools.invoke('wp_eval', {
       site: sandboxName, skip_plugins: true, skip_themes: true,
       code: `
-        $output = shell_exec('wp --skip-plugins --skip-themes plugin verify-checksums --all 2>&1');
-        if ($output === null) { echo json_encode(['status'=>'unavailable','failures':[]]); exit; }
-        $lines = explode("\\n", trim($output));
+        $active = get_option('active_plugins', []);
         $failures = [];
         $unverifiable = [];
-        foreach ($lines as $l) {
-          if (strpos($l, 'Error:') !== false) $failures[] = $l;
-          if (strpos($l, 'This plugin version was not found') !== false ||
-              strpos($l, 'could not be found') !== false) $unverifiable[] = $l;
+        foreach (array_slice($active, 0, 30) as $plugin_file) {
+          $slug = explode('/', $plugin_file)[0];
+          $data = get_plugins("/{$slug}");
+          $version = !empty($data) ? array_values($data)[0]['Version'] ?? '' : '';
+          if (!$version) { $unverifiable[] = $slug; continue; }
+          $url = "https://downloads.wordpress.org/plugin-checksums/{$slug}/{$version}.json";
+          $resp = wp_remote_get($url, ['timeout' => 10]);
+          if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) {
+            $unverifiable[] = "{$slug} ({$version})";
+            continue;
+          }
+          $checksums = json_decode(wp_remote_retrieve_body($resp), true);
+          $files = $checksums['files'] ?? [];
+          $plugin_dir = WP_PLUGIN_DIR . '/' . $slug . '/';
+          foreach ($files as $file => $hashes) {
+            $expected = $hashes['md5'] ?? null;
+            if (!$expected) continue;
+            $full_path = $plugin_dir . $file;
+            if (!file_exists($full_path)) continue;
+            if (md5_file($full_path) !== $expected) {
+              $failures[] = "Error: {$slug}/{$file} doesn't verify against checksum";
+            }
+          }
         }
         echo json_encode([
           'status' => count($failures) > 0 ? 'failed' : 'passed',
