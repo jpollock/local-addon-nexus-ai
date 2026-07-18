@@ -59,6 +59,47 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
   const rows = parseSqlResult(sitesResult, warnDrop('sites'));
   const installs = [];
 
+  // For WPE installs: resolve portal account owner emails to use as protectedEmails.
+  // These come from OUTSIDE the compromised site (the WPE portal), so they can't be
+  // overwritten by an attacker who has compromised WordPress.
+  const wpeOwnerEmailsByAccount = {};
+  const hasWpeInstalls = rows.some(r => r.source === 'wpe');
+  if (hasWpeInstalls) {
+    try {
+      const accountsResult = await tools.invoke('wpe_get_accounts', {});
+      let accounts = [];
+      if (Array.isArray(accountsResult)) {
+        accounts = accountsResult;
+      } else if (typeof accountsResult === 'string') {
+        try {
+          accounts = JSON.parse(accountsResult);
+        } catch {
+          accounts = [];
+        }
+      }
+      for (const acct of accounts) {
+        if (!acct.id) continue;
+        try {
+          const usersResult = await tools.invoke('wpe_get_account_users', { account_id: acct.id });
+          let users = [];
+          if (Array.isArray(usersResult)) {
+            users = usersResult;
+          } else if (typeof usersResult === 'string') {
+            try {
+              users = JSON.parse(usersResult);
+            } catch {
+              users = [];
+            }
+          }
+          const ownerEmails = users
+            .filter(u => u.roles === 'o' && u.email)
+            .map(u => u.email.toLowerCase());
+          if (ownerEmails.length > 0) wpeOwnerEmailsByAccount[acct.id] = ownerEmails;
+        } catch { /* account may not be accessible */ }
+      }
+    } catch { /* WPE not authenticated — fall back to admin_email */ }
+  }
+
   for (const site of rows) {
     // Handle unsynced WPE installs — trigger a fresh sync first
     // Local sites don't have SSH so skip the deep refresh
@@ -88,10 +129,19 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
       settings:      site.settings_json ? JSON.parse(site.settings_json) : {},
       wpVersion:     site.wp_version,
       phpVersion:    site.php_version,
-      // protectedEmails: sourced from graph.db admin_email (synced at WPE-sync time, not
-      // read live from the compromised site). TODO: supplement with WPE portal account owner
-      // email via wpe_get_account_users for production installs when available.
-      protectedEmails: site.admin_email ? [site.admin_email] : [],
+      // For WPE installs: use portal account owner email (outside attacker reach).
+      // For local installs: use graph.db admin_email (synced before scan, not live).
+      // wpeOwnerEmailsByAccount is keyed by account ID — look up via settings_json if available.
+      protectedEmails: (() => {
+        if (site.source === 'wpe') {
+          const settings = site.settings_json ? JSON.parse(site.settings_json) : {};
+          const accountId = settings.account_id || null;
+          const portalEmails = accountId ? (wpeOwnerEmailsByAccount[accountId] || []) : [];
+          // If we found portal owner emails, use them; otherwise fall back to admin_email
+          if (portalEmails.length > 0) return portalEmails;
+        }
+        return site.admin_email ? [site.admin_email.toLowerCase()] : [];
+      })(),
       plugins:       parseSqlResult(pluginsResult, warnDrop(`plugins@${site.name}`)),
       adminUsers:    parseSqlResult(usersResult, warnDrop(`users@${site.name}`)).filter(u => {
         try { return JSON.parse(u.roles || '[]').includes('administrator'); } catch { return false; }
@@ -312,7 +362,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators },
+  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────

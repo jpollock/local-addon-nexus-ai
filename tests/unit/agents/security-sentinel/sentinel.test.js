@@ -66,6 +66,49 @@ describe('security-sentinel', () => {
     expect(agent._test).toBeTruthy();
   });
 
+  describe('collectFleetData protectedEmails', () => {
+    it('populates protectedEmails from WPE portal owner for WPE installs', async () => {
+      const { collectFleetData } = agent._test;
+      // fleet_sql returns one WPE install; wpe_get_accounts and wpe_get_account_users follow
+      const tools = {
+        invoke: jest.fn().mockImplementation(async (name, args) => {
+          if (name === 'fleet_sql' && (args.query || '').includes('FROM sites')) {
+            // settings_json contains {"account_id":"acct1"} to match the account in wpe_get_accounts
+            return '| id | name | source | environment | ssh_last_sync_at | post_count | user_count | settings_json | wp_version | php_version | admin_email |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| s1 | mysite | wpe | production | 123 | 10 | 1 | {"account_id":"acct1"} | 6.5 | 8.2 | wp@mysite.com |';
+          }
+          if (name === 'fleet_sql') return ''; // plugins/users queries
+          if (name === 'wpe_get_accounts') return JSON.stringify([{ id: 'acct1', name: 'My Account' }]);
+          if (name === 'wpe_get_account_users') return JSON.stringify([
+            { email: 'owner@company.com', roles: 'o' },
+            { email: 'billing@company.com', roles: 'b' },
+          ]);
+          return '[]';
+        }),
+      };
+      const log = { info: jest.fn(), warn: jest.fn() };
+      const installs = await collectFleetData(tools, null, null, log);
+      expect(installs[0].protectedEmails).toContain('owner@company.com');
+      expect(installs[0].protectedEmails).not.toContain('billing@company.com');
+    });
+
+    it('falls back to admin_email for local installs (no WPE API call)', async () => {
+      const { collectFleetData } = agent._test;
+      const tools = {
+        invoke: jest.fn().mockImplementation(async (name, args) => {
+          if (name === 'fleet_sql' && (args.query || '').includes('FROM sites')) {
+            return '| id | name | source | environment | ssh_last_sync_at | post_count | user_count | settings_json | wp_version | php_version | admin_email |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| s2 | localsite | local | NULL | NULL | 5 | 1 | {} | 6.5 | 8.2 | admin@local.com |';
+          }
+          if (name === 'fleet_sql') return '';
+          return '[]';
+        }),
+      };
+      const log = { info: jest.fn(), warn: jest.fn() };
+      const installs = await collectFleetData(tools, null, null, log);
+      expect(installs[0].protectedEmails).toContain('admin@local.com');
+      expect(tools.invoke).not.toHaveBeenCalledWith('wpe_get_accounts', expect.anything());
+    });
+  });
+
   describe('runAbsoluteChecks', () => {
     const { runAbsoluteChecks } = require('../../../../agents/security-sentinel/agent')._test;
 

@@ -13,6 +13,8 @@ triggers:
 
 tools:
   - fleet_sql
+  - wpe_get_accounts
+  - wpe_get_account_users
   - wpe_site_deep_refresh
   - wp_user_list
   - wp_plugin_list
