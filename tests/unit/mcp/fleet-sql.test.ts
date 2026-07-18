@@ -113,4 +113,67 @@ describe('fleet_sql MCP tool', () => {
     expect(result.isError).toBe(true);
     expect(getText(result)).toContain('not available');
   });
+
+  describe('parameterization', () => {
+    it('passes params to prepared statement when provided', async () => {
+      let capturedSql = '';
+      let capturedArgs: unknown[] = [];
+      const services = {
+        graphService: {
+          getDb: () => ({
+            prepare: (sql: string) => {
+              capturedSql = sql;
+              return { all: (...args: unknown[]) => { capturedArgs = args; return [{ name: 'test' }]; } };
+            },
+          }),
+        },
+      };
+
+      await fleetSqlHandler.execute(
+        { query: "SELECT name FROM sites WHERE id = ?", params: ['abc-123'] },
+        services as any
+      );
+
+      expect(capturedSql).toBe("SELECT name FROM sites WHERE id = ?");
+      expect(capturedArgs).toEqual(['abc-123']);
+    });
+
+    it('works without params (backward compatible)', async () => {
+      let capturedArgs: unknown[] = [];
+      const services = {
+        graphService: {
+          getDb: () => ({
+            prepare: (sql: string) => ({
+              all: (...args: unknown[]) => { capturedArgs = args; return [{ name: 'test' }]; },
+            }),
+          }),
+        },
+      };
+
+      await fleetSqlHandler.execute(
+        { query: "SELECT name FROM sites" },
+        services as any
+      );
+
+      expect(capturedArgs).toEqual([]);
+    });
+
+    it('rejects non-array params', async () => {
+      const services = {
+        graphService: {
+          getDb: () => ({
+            prepare: (sql: string) => ({
+              all: (...args: unknown[]) => [{ name: 'test' }],
+            }),
+          }),
+        },
+      };
+
+      const result = await fleetSqlHandler.execute(
+        { query: "SELECT name FROM sites WHERE id = ?", params: 'not-an-array' as any },
+        services as any
+      );
+      expect(result.isError).toBe(true);
+    });
+  });
 });

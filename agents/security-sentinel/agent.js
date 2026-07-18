@@ -112,10 +112,12 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
     }
 
     const pluginsResult = await tools.invoke('fleet_sql', {
-      query: `SELECT slug, name, version, is_active FROM plugins WHERE site_id = '${site.id}'`,
+      query: `SELECT slug, name, version, is_active FROM plugins WHERE site_id = ?`,
+      params: [site.id],
     });
     const usersResult = await tools.invoke('fleet_sql', {
-      query: `SELECT username, email, roles, created_at FROM users WHERE site_id = '${site.id}'`,
+      query: `SELECT username, email, roles, created_at FROM users WHERE site_id = ?`,
+      params: [site.id],
     });
 
     installs.push({

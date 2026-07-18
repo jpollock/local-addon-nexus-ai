@@ -56,6 +56,11 @@ export const fleetSqlHandler: McpToolHandler = {
           type: 'string',
           description: 'A SELECT SQL statement. No semicolons. No DML or DDL.',
         },
+        params: {
+          type: 'array',
+          description: 'Optional bind parameters for ? placeholders in the query. Values are bound in order. Use this instead of string interpolation to prevent delimiter injection.',
+          items: {},
+        },
       },
       required: ['query'],
     },
@@ -80,8 +85,14 @@ export const fleetSqlHandler: McpToolHandler = {
       return error('Query contains disallowed keywords. Only SELECT statements are permitted.');
     }
 
+    const params = args.params as unknown[] | undefined;
+    if (params !== undefined && !Array.isArray(params)) {
+      return error('params must be an array when provided.');
+    }
+
     try {
-      const rows = db.prepare(query).all() as Record<string, unknown>[];
+      const stmt = db.prepare(query);
+      const rows = (params ? stmt.all(...params) : stmt.all()) as Record<string, unknown>[];
 
       if (rows.length === 0) {
         return ok(`No rows returned.\n\nQuery: \`${query}\``);
