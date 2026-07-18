@@ -1079,4 +1079,60 @@ describe('security-sentinel', () => {
       expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Network indicator scan failed'));
     });
   });
+
+  describe('runRootFileAnalysis', () => {
+    const makeFs03 = (evidence) => ({
+      id: 'FS-03', severity: 'critical', category: 'active-compromise',
+      installName: 'test', title: 'test', detail: '', fix: '', evidence,
+    });
+
+    it('classifies a webshell and appends analysis to FS-03 evidence', async () => {
+      const { runRootFileAnalysis } = agent._test;
+      const signal = makeFs03(['goods.php (unknown PHP in web root)']);
+      const content = '<?php eval($_POST["cmd"]); ?>';
+      const mockResult = JSON.stringify({
+        'goods.php': { content, size: content.length, category: 'webshell', iocs: [] },
+      });
+      const tools = { invoke: jest.fn().mockResolvedValue(mockResult) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runRootFileAnalysis([signal], 'sandbox-abc', tools, log);
+
+      expect(signal.evidence.some(e => e.includes('webshell'))).toBe(true);
+      expect(signal.evidence.some(e => e.includes('goods.php'))).toBe(true);
+      expect(signal.evidence.some(e => e.includes('eval($_POST'))).toBe(true);
+    });
+
+    it('no-ops when no FS-03 signal present', async () => {
+      const { runRootFileAnalysis } = agent._test;
+      const tools = { invoke: jest.fn() };
+      const log = { info: jest.fn(), warn: jest.fn() };
+      await runRootFileAnalysis([], 'sandbox-abc', tools, log);
+      expect(tools.invoke).not.toHaveBeenCalled();
+    });
+
+    it('decodes a base64/gzinflate obfuscated payload', async () => {
+      const { runRootFileAnalysis } = agent._test;
+      const signal = makeFs03(['shop.php (unknown PHP in web root)']);
+      const decoded = '<?php system($_GET["c"]); ?>';
+      const mockResult = JSON.stringify({
+        'shop.php': { content: '<?php eval(base64_decode("xyz")); ?>', size: 40, category: 'obfuscated-dropper', iocs: [], decodedPayload: decoded },
+      });
+      const tools = { invoke: jest.fn().mockResolvedValue(mockResult) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runRootFileAnalysis([signal], 'sandbox-abc', tools, log);
+      expect(signal.evidence.some(e => e.includes('obfuscated-dropper'))).toBe(true);
+      expect(signal.evidence.some(e => e.includes('system($_GET'))).toBe(true);
+    });
+
+    it('does not throw when tools.invoke rejects', async () => {
+      const { runRootFileAnalysis } = agent._test;
+      const signal = makeFs03(['goods.php (unknown PHP in web root)']);
+      const tools = { invoke: jest.fn().mockRejectedValue(new Error('fail')) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+      await expect(runRootFileAnalysis([signal], 'sandbox-abc', tools, log)).resolves.toBeUndefined();
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Root file analysis failed'));
+    });
+  });
 });

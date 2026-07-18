@@ -312,7 +312,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -914,6 +914,93 @@ async function runContentExamination(fsSignals, sandboxName, tools, log) {
     log.info(`[Tier 2] Content examination: ${Object.keys(parsed).length} file(s) read`);
   } catch (err) {
     log.warn(`[Tier 2] Content examination failed: ${err.message}`);
+  }
+}
+
+async function runRootFileAnalysis(fsSignals, sandboxName, tools, log) {
+  const fs03 = fsSignals.find(s => s.id === 'FS-03');
+  if (!fs03 || !fs03.evidence || fs03.evidence.length === 0) return;
+
+  const rootFiles = fs03.evidence
+    .map(e => e.split(' ')[0])
+    .filter(p => p && p.endsWith('.php') && !p.includes('/') && !p.startsWith('  '));
+  if (rootFiles.length === 0) return;
+
+  const pathsJson = JSON.stringify(rootFiles);
+  try {
+    const result = await tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $files = ${pathsJson};
+        $out = [];
+        foreach ($files as $f) {
+          $full = ABSPATH . $f;
+          if (!file_exists($full)) continue;
+          $raw = @file_get_contents($full) ?: '';
+          $size = strlen($raw);
+
+          // Attempt one-level decode for obfuscated files
+          $decoded = null;
+          preg_match_all('/base64_decode\\s*\\(\\s*[\'"]([A-Za-z0-9+\\/=]{20,})[\'"]/', $raw, $m);
+          foreach ($m[1] as $b64) {
+            $d = @base64_decode($b64);
+            if ($d !== false && strlen($d) > 10) {
+              $ungz = @gzinflate($d);
+              $decoded = substr($ungz ?: $d, 0, 500);
+              break;
+            }
+          }
+
+          // Classify attack category
+          $category = 'unknown-php';
+          if (preg_match('/eval\\s*\\(\\s*(\\$_POST|\\$_REQUEST|\\$_GET|\\$_COOKIE)/', $raw) ||
+              preg_match('/(system|exec|passthru|shell_exec)\\s*\\(\\s*(\\$_POST|\\$_GET|\\$_REQUEST)/', $raw)) {
+            $category = 'webshell';
+          } elseif (preg_match('/\\$_FILES|move_uploaded_file/', $raw)) {
+            $category = 'file-uploader';
+          } elseif (preg_match('/eval\\s*\\(\\s*(base64_decode|gzinflate|str_rot13|goto)/', $raw) ||
+                    preg_match('/goto\\s+[a-zA-Z_]/', $raw)) {
+            $category = 'obfuscated-dropper';
+          } elseif (preg_match('/casino|gambling|slots|poker|bet\b|wagering/i', $raw)) {
+            $category = 'seo-spam-injector';
+          } elseif (preg_match('/\\bmail\\s*\\(|header\\s*\\(\\s*[\'"]Location:/i', $raw)) {
+            $category = 'mailer';
+          }
+
+          // Extract IOCs: IPs and external URLs
+          preg_match_all('/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/', $raw, $ips);
+          preg_match_all('/https?:\\/\\/[^\\s\'"<>]+/', $raw, $urls);
+
+          $out[$f] = [
+            'content' => substr($raw, 0, 1000),
+            'size' => $size,
+            'category' => $category,
+            'iocs' => array_values(array_unique(array_merge($ips[0], $urls[0]))),
+            'decodedPayload' => $decoded,
+          ];
+        }
+        echo json_encode($out);
+      `,
+    });
+
+    const parsed = JSON.parse(typeof result === 'string' ? result : JSON.stringify(result) || '{}');
+
+    for (const [file, info] of Object.entries(parsed)) {
+      if (!info) continue;
+      fs03.evidence.push(`  → ${file} [${info.category}] (${info.size} bytes)`);
+      if (info.decodedPayload) {
+        fs03.evidence.push(`  → decoded: ${info.decodedPayload.replace(/\s+/g, ' ').slice(0, 300)}`);
+      }
+      if (info.content && !info.decodedPayload) {
+        fs03.evidence.push(`  → content: ${info.content.replace(/\s+/g, ' ').slice(0, 300)}`);
+      }
+      if (info.iocs && info.iocs.length > 0) {
+        fs03.evidence.push(`  → IOCs: ${info.iocs.slice(0, 5).join(', ')}`);
+      }
+    }
+    log.info(`[Tier 2] Root file analysis: ${Object.keys(parsed).length} file(s) classified`);
+  } catch (err) {
+    log.warn(`[Tier 2] Root file analysis failed: ${err.message}`);
   }
 }
 
@@ -1979,6 +2066,8 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   log.info(`[Tier 2] Examining suspicious file content...`);
   await runContentExamination(fsSignals, sandboxName, tools, log);
+
+  await runRootFileAnalysis(fsSignals, sandboxName, tools, log);
 
   log.info(`[Tier 2] Decoding obfuscated payloads...`);
   await runObfuscationDecoder(fsSignals, sandboxName, tools, log);
