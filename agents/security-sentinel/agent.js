@@ -292,7 +292,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runObfuscationDecoder, runCoreDiff, runElfStrings },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -1066,6 +1066,81 @@ async function runElfStrings(fsSignals, sandboxName, tools, log) {
   }
 }
 
+const TRUSTED_DOMAINS = ['wordpress.org', 'wp.com', 'w.org', 'gravatar.com',
+  'jquery.com', 'googleapis.com', 'gstatic.com', 'bootstrapcdn.com'];
+
+async function runNetworkIndicators(fsSignals, installName, sandboxName, tools, log) {
+  const phpPaths = [];
+  for (const sig of fsSignals) {
+    if (!['FS-01', 'FS-02', 'FS-03', 'ABS-09'].includes(sig.id)) continue;
+    for (const ev of (sig.evidence || [])) {
+      const p = ev.split(' ')[0];
+      if (p && p.endsWith('.php') && !p.startsWith('  ')) phpPaths.push(p);
+    }
+  }
+  if (phpPaths.length === 0) return;
+
+  const uniquePaths = [...new Set(phpPaths)].slice(0, 20);
+  const pathsJson = JSON.stringify(uniquePaths);
+  const trustedJson = JSON.stringify(TRUSTED_DOMAINS);
+
+  try {
+    const result = await tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $paths = ${pathsJson};
+        $trusted = ${trustedJson};
+        $all_ips = []; $all_urls = [];
+        foreach ($paths as $rel) {
+          if (strpos($rel, 'wp-content/') === 0) {
+            $full = WP_CONTENT_DIR . substr($rel, strlen('wp-content'));
+          } else {
+            $full = ABSPATH . $rel;
+          }
+          if (!file_exists($full)) continue;
+          $content = @file_get_contents($full, false, null, 0, 100000);
+          preg_match_all('/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/', $content, $m);
+          $all_ips = array_merge($all_ips, $m[0]);
+          preg_match_all('/https?:\\/\\/[a-zA-Z0-9._\\-\\/\\?&=%#]+/', $content, $m);
+          $all_urls = array_merge($all_urls, $m[0]);
+        }
+        $filtered_ips = array_values(array_unique(array_filter($all_ips, fn($ip) =>
+          !in_array($ip, ['127.0.0.1', '0.0.0.0', '255.255.255.255'])
+        )));
+        $filtered_urls = array_values(array_unique(array_filter($all_urls, function($u) use ($trusted) {
+          foreach ($trusted as $d) { if (strpos($u, $d) !== false) return false; }
+          return true;
+        })));
+        echo json_encode(['ips' => $filtered_ips, 'urls' => array_slice($filtered_urls, 0, 20)]);
+      `,
+    });
+
+    const parsed = JSON.parse(extractResult(result) || '{}');
+    const ips = parsed.ips || [];
+    const urls = parsed.urls || [];
+
+    if (ips.length === 0 && urls.length === 0) return;
+
+    const evidence = [
+      ...ips.map(ip => `IP: ${ip}`),
+      ...urls.map(url => `URL: ${url}`),
+    ];
+
+    fsSignals.push({
+      id: 'FS-07', severity: 'critical', category: 'active-compromise',
+      installName,
+      title: `Hardcoded network indicators in suspicious PHP: ${ips.length} IP(s), ${urls.length} URL(s)`,
+      detail: 'Suspicious PHP files contain hardcoded network indicators — likely C2 addresses, exfiltration endpoints, or attacker infrastructure.',
+      fix: 'Investigate each indicator. Block at network/firewall level. Check server access logs for requests to these addresses.',
+      evidence,
+    });
+
+    log.info(`[Tier 2] Network indicators: ${ips.length} IP(s), ${urls.length} URL(s) found`);
+  } catch (err) {
+    log.warn(`[Tier 2] Network indicator scan failed: ${err.message}`);
+  }
+}
+
 async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000) {
   // DEV MODE: cooldown disabled for iteration speed
   // TODO: re-enable before production by uncommenting below
@@ -1802,6 +1877,9 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   log.info(`[Tier 2] Analyzing ELF binary strings...`);
   await runElfStrings(fsSignals, sandboxName, tools, log);
+
+  log.info(`[Tier 2] Scanning for hardcoded network indicators...`);
+  await runNetworkIndicators(fsSignals, install.name, sandboxName, tools, log);
 
   // Collect raw data for all specialists in parallel
   log.phase('Data collection', `Gathering filesystem, DB and behavioral data for ${install.name}`);

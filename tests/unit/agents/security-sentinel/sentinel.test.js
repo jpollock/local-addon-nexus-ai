@@ -1031,4 +1031,53 @@ describe('security-sentinel', () => {
       expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('ELF strings failed'));
     });
   });
+
+  describe('runNetworkIndicators', () => {
+    const makeSignal = (id, evidence) => ({
+      id, severity: 'critical', category: 'active-compromise',
+      installName: 'test', title: 'test', detail: '', fix: '', evidence,
+    });
+
+    it('creates FS-07 signal when IPs and URLs found', async () => {
+      const { runNetworkIndicators } = agent._test;
+      const signals = [makeSignal('FS-03', ['goods.php (unknown PHP in web root)'])];
+      const mockResult = JSON.stringify({
+        ips: ['185.220.101.5', '45.33.32.156'],
+        urls: ['http://evil.com/payload.php', 'https://c2.attacker.net/gate.php'],
+      });
+      const tools = { invoke: jest.fn().mockResolvedValue(mockResult) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runNetworkIndicators(signals, 'test-site', 'sandbox-abc', tools, log);
+
+      const fs07 = signals.find(s => s.id === 'FS-07');
+      expect(fs07).toBeDefined();
+      expect(fs07.severity).toBe('critical');
+      expect(fs07.evidence.some(e => e.includes('185.220.101.5'))).toBe(true);
+      expect(fs07.evidence.some(e => e.includes('evil.com'))).toBe(true);
+    });
+
+    it('does not create FS-07 when no indicators found', async () => {
+      const { runNetworkIndicators } = agent._test;
+      const signals = [makeSignal('FS-03', ['goods.php (unknown PHP in web root)'])];
+      const mockResult = JSON.stringify({ ips: [], urls: [] });
+      const tools = { invoke: jest.fn().mockResolvedValue(mockResult) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runNetworkIndicators(signals, 'test-site', 'sandbox-abc', tools, log);
+
+      expect(signals.find(s => s.id === 'FS-07')).toBeUndefined();
+    });
+
+    it('does not throw when tools.invoke rejects', async () => {
+      const { runNetworkIndicators } = agent._test;
+      const signals = [makeSignal('FS-03', ['goods.php (unknown PHP in web root)'])];
+      const tools = { invoke: jest.fn().mockRejectedValue(new Error('fail')) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await expect(runNetworkIndicators(signals, 'test-site', 'sandbox-abc', tools, log))
+        .resolves.toBeUndefined();
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Network indicator scan failed'));
+    });
+  });
 });
