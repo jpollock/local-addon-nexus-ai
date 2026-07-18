@@ -878,4 +878,50 @@ describe('security-sentinel', () => {
       expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Content examination failed'));
     });
   });
+
+  describe('runObfuscationDecoder', () => {
+    it('decodes base64 payloads from FS-02 evidence and appends to evidence', async () => {
+      const { runObfuscationDecoder } = agent._test;
+      const encodedPayload = Buffer.from('<?php system($_GET["cmd"]); ?>').toString('base64');
+      const signal = {
+        id: 'FS-02', severity: 'critical', category: 'active-compromise',
+        installName: 'test', title: 'test', detail: '', fix: '',
+        evidence: [`wp-content/plugins/noted/bad.php — pattern: /base64_decode/`],
+      };
+      const mockResult = JSON.stringify({
+        'wp-content/plugins/noted/bad.php': [`<?php system($_GET["cmd"]); ?>`],
+      });
+      const tools = { invoke: jest.fn().mockResolvedValue(mockResult) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runObfuscationDecoder([signal], 'sandbox-abc', tools, log);
+
+      expect(signal.evidence.some(e => e.includes('decoded payload'))).toBe(true);
+      expect(signal.evidence.some(e => e.includes('system'))).toBe(true);
+    });
+
+    it('no-ops when no FS-02 signal present', async () => {
+      const { runObfuscationDecoder } = agent._test;
+      const tools = { invoke: jest.fn() };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runObfuscationDecoder([], 'sandbox-abc', tools, log);
+      expect(tools.invoke).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when tools.invoke rejects', async () => {
+      const { runObfuscationDecoder } = agent._test;
+      const signal = {
+        id: 'FS-02', severity: 'critical', category: 'active-compromise',
+        installName: 'test', title: 'test', detail: '', fix: '',
+        evidence: ['some/file.php — pattern: /base64_decode/'],
+      };
+      const tools = { invoke: jest.fn().mockRejectedValue(new Error('fail')) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await expect(runObfuscationDecoder([signal], 'sandbox-abc', tools, log))
+        .resolves.toBeUndefined();
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Obfuscation decoder failed'));
+    });
+  });
 });

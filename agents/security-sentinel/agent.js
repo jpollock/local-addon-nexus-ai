@@ -292,7 +292,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runObfuscationDecoder },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -892,6 +892,60 @@ async function runContentExamination(fsSignals, sandboxName, tools, log) {
     log.info(`[Tier 2] Content examination: ${Object.keys(parsed).length} file(s) read`);
   } catch (err) {
     log.warn(`[Tier 2] Content examination failed: ${err.message}`);
+  }
+}
+
+async function runObfuscationDecoder(fsSignals, sandboxName, tools, log) {
+  const fs02 = fsSignals.find(s => s.id === 'FS-02');
+  if (!fs02) return;
+
+  const filesToDecode = (fs02.evidence || [])
+    .map(e => e.split(' ')[0])
+    .filter(p => p && p.includes('.php') && !p.startsWith('  '))
+    .slice(0, 3);
+  if (filesToDecode.length === 0) return;
+
+  const pathsJson = JSON.stringify(filesToDecode);
+  try {
+    const result = await tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $paths = ${pathsJson};
+        $out = [];
+        foreach ($paths as $rel) {
+          if (strpos($rel, 'wp-content/') === 0) {
+            $full = WP_CONTENT_DIR . substr($rel, strlen('wp-content'));
+          } else {
+            $full = ABSPATH . $rel;
+          }
+          if (!file_exists($full)) continue;
+          $content = @file_get_contents($full, false, null, 0, 20000);
+          preg_match_all('/base64_decode\\s*\\(\\s*[\'"]([A-Za-z0-9+\\/=]{20,})[\'"]/', $content, $matches);
+          $decoded = [];
+          foreach ($matches[1] as $b64) {
+            $d = @base64_decode($b64);
+            if ($d === false || strlen($d) < 10) continue;
+            $ungz = @gzinflate($d);
+            $payload = substr(preg_replace('/\\s+/', ' ', $ungz ?: $d), 0, 300);
+            if (strlen($payload) > 10) $decoded[] = $payload;
+          }
+          if (!empty($decoded)) $out[$rel] = $decoded;
+        }
+        echo json_encode($out);
+      `,
+    });
+
+    const parsed = JSON.parse(extractResult(result) || '{}');
+    for (const [path, payloads] of Object.entries(parsed)) {
+      for (const payload of payloads) {
+        fs02.evidence.push(`  → decoded payload in ${path.split('/').pop()}: ${payload}`);
+      }
+    }
+    if (Object.keys(parsed).length > 0) {
+      log.info(`[Tier 2] Obfuscation decoder: ${Object.keys(parsed).length} file(s) decoded`);
+    }
+  } catch (err) {
+    log.warn(`[Tier 2] Obfuscation decoder failed: ${err.message}`);
   }
 }
 
@@ -1622,6 +1676,9 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   log.info(`[Tier 2] Examining suspicious file content...`);
   await runContentExamination(fsSignals, sandboxName, tools, log);
+
+  log.info(`[Tier 2] Decoding obfuscated payloads...`);
+  await runObfuscationDecoder(fsSignals, sandboxName, tools, log);
 
   // Collect raw data for all specialists in parallel
   log.phase('Data collection', `Gathering filesystem, DB and behavioral data for ${install.name}`);
