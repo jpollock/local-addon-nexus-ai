@@ -101,32 +101,6 @@ export class GoogleProvider implements AIProvider {
       ...(toolConfig ? { tool_config: toolConfig } : {}),
     });
 
-    // LOG: write exact request to file for debugging
-    try {
-      const _logFs = require('fs');
-      const _logOs = require('os');
-      const _logPath = require('path').join(_logOs.homedir(), 'Desktop', 'nexus-api-calls.jsonl');
-      const _entry = JSON.stringify({
-        timestamp: Date.now(),
-        provider: 'google',
-        model: config.model,
-        forceTool: config.forceTool ?? null,
-        toolCount: tools.length,
-        schemaName: null,
-        apiKeyPrefix: config.apiKey ? config.apiKey.slice(0, 8) + '...' : 'EMPTY',
-        apiKeyLen: config.apiKey?.length ?? 0,
-        baseUrl: config.baseUrl ?? '(direct)',
-        requestBodyLen: body.length,
-        requestBody: body,
-        status: null,
-        responseBody: null,
-        responseBodyLen: 0,
-        durationMs: 0,
-        error: null,
-      });
-      _logFs.appendFileSync(_logPath, _entry + '\n');
-    } catch {}
-
     const _startMs = Date.now();
 
     try {
@@ -183,19 +157,6 @@ export class GoogleProvider implements AIProvider {
         yield { type: 'done', stopReason: 'end_turn' };
         return;
       }
-      // LOG: update the last log entry with error info
-      try {
-        const _logFs = require('fs');
-        const _logOs = require('os');
-        const _logPath = require('path').join(_logOs.homedir(), 'Desktop', 'nexus-api-calls.jsonl');
-        const _raw = _logFs.readFileSync(_logPath, 'utf8').trimEnd();
-        const _lines = _raw.split('\n');
-        const _last = JSON.parse(_lines[_lines.length - 1]);
-        _last.error = (err as Error).message;
-        _last.durationMs = Date.now() - _startMs;
-        _lines[_lines.length - 1] = JSON.stringify(_last);
-        _logFs.writeFileSync(_logPath, _lines.join('\n') + '\n');
-      } catch {}
       yield { type: 'error', message: `Gemini error: ${(err as Error).message}` };
     }
   }
