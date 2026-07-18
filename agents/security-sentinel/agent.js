@@ -1066,8 +1066,16 @@ async function runElfStrings(fsSignals, sandboxName, tools, log) {
   }
 }
 
-const TRUSTED_DOMAINS = ['wordpress.org', 'wp.com', 'w.org', 'gravatar.com',
-  'jquery.com', 'googleapis.com', 'gstatic.com', 'bootstrapcdn.com'];
+const TRUSTED_DOMAINS = [
+  'wordpress.org', 'wp.com', 'w.org', 'gravatar.com',
+  'jquery.com', 'googleapis.com', 'gstatic.com', 'bootstrapcdn.com',
+  'github.com', 'github.io', 'githubusercontent.com', 'gitlab.com',
+  'php.net', 'php.org', 'phpunit.de', 'phar.phpunit.de',
+  'packagist.org', 'getcomposer.org',
+  'elrte.org', 'studio-42.github', 'artifex.com',
+  'filemanagerpro.io', 'webdesi9.com', 'wpexpertsio.com',
+  'softaculous.com', 'ninjateam.org',
+];
 
 async function runNetworkIndicators(fsSignals, installName, sandboxName, tools, log) {
   const phpPaths = [];
@@ -1104,9 +1112,24 @@ async function runNetworkIndicators(fsSignals, installName, sandboxName, tools, 
           preg_match_all('/https?:\\/\\/[a-zA-Z0-9._\\-\\/\\?&=%#]+/', $content, $m);
           $all_urls = array_merge($all_urls, $m[0]);
         }
-        $filtered_ips = array_values(array_unique(array_filter($all_ips, fn($ip) =>
-          !in_array($ip, ['127.0.0.1', '0.0.0.0', '255.255.255.255'])
-        )));
+        $filtered_ips = array_values(array_unique(array_filter($all_ips, function($ip) {
+          $long = ip2long($ip);
+          if ($long === false) return false;
+          // Filter RFC-1918 private ranges, loopback, link-local, broadcast
+          $private = [
+            [ip2long('10.0.0.0'), ip2long('10.255.255.255')],
+            [ip2long('172.16.0.0'), ip2long('172.31.255.255')],
+            [ip2long('192.168.0.0'), ip2long('192.168.255.255')],
+            [ip2long('127.0.0.0'), ip2long('127.255.255.255')],
+            [ip2long('169.254.0.0'), ip2long('169.254.255.255')],
+            [ip2long('0.0.0.0'), ip2long('0.255.255.255')],
+            [ip2long('255.0.0.0'), ip2long('255.255.255.255')],
+          ];
+          foreach ($private as [$lo, $hi]) {
+            if ($long >= $lo && $long <= $hi) return false;
+          }
+          return true;
+        })));
         $filtered_urls = array_values(array_unique(array_filter($all_urls, function($u) use ($trusted) {
           foreach ($trusted as $d) { if (strpos($u, $d) !== false) return false; }
           return true;
@@ -1964,13 +1987,11 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     synthesis = { verdict: 'active-compromise', attackSummary: '(synthesis unavailable)', entryPoint: 'unknown', temporalNarrative: '', attackerItems: [], legitimateItems: [], blindSpots: ['Synthesis failed'], remediationSteps: [] };
   }
 
-  // Build RemediationPlan from synthesizer output
-  if (synthesis.remediationSteps.length === 0) {
-    log.warn(`[Tier 2] No remediation steps in synthesis — falling back to checklist builder`);
-    const plan = await tier3Remediate(install, synthesis.attackSummary, tier1Signals.concat(fsSignals), sandboxName, tools, log);
-    return plan;
-  }
-
+  // Remediation is always produced by the deterministic checklist builder
+  // (tier3Remediate → buildRemediationChecklist). The synthesizer's
+  // remediationSteps are advisory context for the human, not the executed plan,
+  // so we do NOT branch on them here — doing so previously dropped the
+  // synthesizer enrichment whenever the LLM happened to return zero steps.
   log.phase('Tier 3', `Preparing remediation plan for ${install.name}`);
   const plan = await tier3Remediate(install, synthesis.attackSummary, tier1Signals.concat(fsSignals), sandboxName, tools, log);
   if (plan) {
@@ -1979,6 +2000,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     plan.entryPoint = synthesis.entryPoint;
     plan.blindSpots = synthesis.blindSpots;
     plan.attackerItems = synthesis.attackerItems;
+    plan.synthesizerSteps = synthesis.remediationSteps; // advisory, surfaced in UI
   }
 
   // Sandbox intentionally kept alive — the user will execute or dismiss via Sentinel Review UI.
@@ -2076,6 +2098,39 @@ const ATTACKER_PLUGIN_SLUGS = [
   'noted', 'woocommerce-conversion-tracking', 'wp-file-manager',
 ];
 
+// Authoritative map: signal ID → the checklist step number that remediates it.
+// This is the SINGLE source of truth for "does a signal have a covering step?".
+// Verdict coverage is derived from this map intersected with the steps that were
+// actually built AND passed — never from a hand-maintained parallel list.
+// A critical signal with no entry here (or whose covering step is absent/failed)
+// forces NOT SAFE TO PUSH.
+const SIGNAL_REMEDIATION_STEP = {
+  'FS-01': 1,
+  'ABS-01': 2, 'ABS-02': 2, 'ABS-03': 2, 'REL-03': 2, 'LLM-USER-01': 2,
+  'ABS-04': 3, 'ABS-05': 3, 'REL-01': 3, 'ABS-08': 3,
+  'FS-04': '4b',
+  'CHK-01': '5a',
+  'FS-03': '5b',
+  'ABS-09': '5c',
+  'DB-01': '5d',
+  'FS-06': '5e',
+  'FS-05': '5f',
+  'DB-02': '5g',
+  // Signals with NO remediation step below are intentionally uncovered and will
+  // block the push until a step is added or a human clears them:
+  //   FS-02 (obfuscated code — needs inspection, no safe auto-remove)
+  //   FS-07 (network indicators — investigative, no file action)
+  //   DB-03 (serialized usermeta — needs inspection)
+  //   FS-MISMATCH (hidden admin — remediated indirectly via step 2/3, but the
+  //                hiding hook must be confirmed gone by a human)
+};
+
+// Attach to the test surface now that the const is initialized (avoids the
+// temporal-dead-zone error that would occur if module.exports referenced it
+// eagerly — object-literal const values, unlike function declarations, are not
+// hoisted).
+module.exports._test.SIGNAL_REMEDIATION_STEP = SIGNAL_REMEDIATION_STEP;
+
 function buildRemediationChecklist(install, allSignals, sandboxName) {
   const checklist = [];
   const knownListJson = JSON.stringify(KNOWN_MU_PLUGINS);
@@ -2151,7 +2206,75 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
     expectedEmpty: true,
   });
 
-  // Step 5a: Restore tampered core files — only if CHK-01 fired
+  // Step 4b: Remove PHP files from uploads/ — only if FS-04 fired.
+  // Step 4 above only *verifies* uploads are clean; without this, a real FS-04
+  // hit would fail verification forever with nothing ever deleting the files.
+  if (allSignals.some(s => s.id === 'FS-04')) {
+    checklist.push({
+      step: '4b',
+      action: 'Remove PHP files from uploads/',
+      executableCommand: 'find wp-content/uploads -name "*.php" -delete',
+      toolName: 'wp_eval',
+      toolArgs: {
+        site: sandboxName, skip_plugins: true, skip_themes: true,
+        code: `$d = wp_upload_dir()['basedir']; $removed = []; if (is_dir($d)) { foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($d, FilesystemIterator::SKIP_DOTS)) as $f) { if ($f->getExtension() === 'php') { $p = $f->getPathname(); if (@unlink($p)) $removed[] = $p; } } } $remaining = []; if (is_dir($d)) { foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($d, FilesystemIterator::SKIP_DOTS)) as $f) { if ($f->getExtension() === 'php') $remaining[] = $f->getPathname(); } } echo json_encode($remaining);`,
+      },
+      expectedEmpty: true,
+    });
+  }
+
+  // Step 5f: Neutralize malicious .htaccess rules — only if FS-05 fired.
+  // Rewrites each flagged .htaccess to strip PHP-execution and external-redirect
+  // rules. Conservative: only removes lines matching the malicious patterns,
+  // leaving legitimate rules intact.
+  const fs05Signal = allSignals.find(s => s.id === 'FS-05');
+  if (fs05Signal && fs05Signal.evidence && fs05Signal.evidence.length > 0) {
+    const htaccessPaths = fs05Signal.evidence
+      .map(e => e.split(':')[0].trim())
+      .filter(p => p && p.endsWith('.htaccess'));
+    if (htaccessPaths.length > 0) {
+      const pathsJson = JSON.stringify(htaccessPaths);
+      checklist.push({
+        step: '5f',
+        action: `Neutralize malicious .htaccess rules: ${htaccessPaths.length} file(s)`,
+        executableCommand: null,
+        toolName: 'wp_eval',
+        toolArgs: {
+          site: sandboxName, skip_plugins: true, skip_themes: true,
+          code: `$paths = ${pathsJson}; $host = $_SERVER['HTTP_HOST'] ?? 'localhost'; $badLine = ['/auto_prepend_file/i','/auto_append_file/i','/AddType\\\\s+application\\\\/x-httpd-php/i','/SetHandler\\\\s+application\\\\/x-httpd-php/i','/RewriteRule.*https?:\\\\/\\\\//i']; $still = []; foreach ($paths as $rel) { $full = ABSPATH . ltrim($rel, '/'); if (!file_exists($full)) continue; $lines = explode(\"\\n\", @file_get_contents($full)); $kept = []; foreach ($lines as $ln) { $bad = false; foreach ($badLine as $p) { if (preg_match($p, $ln)) { $bad = true; break; } } if (!$bad) $kept[] = $ln; } @file_put_contents($full, implode(\"\\n\", $kept)); $after = @file_get_contents($full); foreach ($badLine as $p) { if (preg_match($p, $after)) { $still[] = $rel; break; } } } echo json_encode(array_values(array_unique($still)));`,
+        },
+        expectedEmpty: true,
+      });
+    }
+  }
+
+  // Step 5g: Clear code-bearing autoloaded options — only if DB-02 fired.
+  // DB-02 flags autoloaded options containing eval/exec/script that run on every
+  // page load. Emptying the option value neutralizes the payload; the option row
+  // is preserved so plugins expecting it don't fatal.
+  const db02Signal = allSignals.find(s => s.id === 'DB-02');
+  if (db02Signal && db02Signal.evidence && db02Signal.evidence.length > 0) {
+    const optionNames = db02Signal.evidence
+      .map(e => e.split(':')[0].trim())
+      .filter(Boolean);
+    if (optionNames.length > 0) {
+      const namesJson = JSON.stringify(optionNames);
+      checklist.push({
+        step: '5g',
+        action: `Clear malicious autoloaded option(s): ${optionNames.join(', ')}`,
+        executableCommand: null,
+        toolName: 'wp_eval',
+        toolArgs: {
+          site: sandboxName,
+          code: `global $wpdb; $names = ${namesJson}; $patterns = ['/eval\\\\s*\\\\(/i','/base64_decode/i','/<script/i','/exec\\\\s*\\\\(/i','/system\\\\s*\\\\(/i']; $still = []; foreach ($names as $n) { $wpdb->update($wpdb->options, ['option_value' => ''], ['option_name' => $n]); $v = $wpdb->get_var($wpdb->prepare(\"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s\", $n)); foreach ($patterns as $p) { if ($v !== null && preg_match($p, $v)) { $still[] = $n; break; } } } wp_cache_flush(); echo json_encode(array_values(array_unique($still)));`,
+        },
+        expectedEmpty: true,
+      });
+    }
+  }
+
+  // Step 5a: Restore tampered core files — download fresh from wordpress.org SVN
+  // and replace each failing file, then re-verify checksums.
   if (allSignals.some(s => s.id === 'CHK-01')) {
     checklist.push({
       step: '5a',
@@ -2165,10 +2288,34 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
           $locale = get_locale();
           $url = "https://api.wordpress.org/core/checksums/1.0/?version={$wp_version}&locale={$locale}";
           $response = wp_remote_get($url, ['timeout' => 20]);
-          if (is_wp_error($response)) { echo json_encode(['restored' => [], 'failed' => [], 'error' => 'Could not fetch checksums']); exit; }
+          if (is_wp_error($response)) { echo json_encode(['still_failing' => [], 'error' => 'Could not fetch checksums']); exit; }
           $data = json_decode(wp_remote_retrieve_body($response), true);
           $checksums = $data['checksums'] ?? [];
           $abspath = ABSPATH;
+
+          // Pass 1: find tampered files and download fresh copies from SVN
+          $restored = []; $restore_failed = [];
+          foreach ($checksums as $file => $expected_md5) {
+            if (strpos($file, 'wp-content/') === 0) continue;
+            $full_path = $abspath . $file;
+            if (!file_exists($full_path)) continue;
+            if (md5_file($full_path) === $expected_md5) continue;
+            // File is tampered — fetch fresh from wordpress.org SVN
+            $svn_url = "https://core.svn.wordpress.org/tags/{$wp_version}/{$file}";
+            $fresh = wp_remote_get($svn_url, ['timeout' => 15]);
+            if (is_wp_error($fresh) || wp_remote_retrieve_response_code($fresh) !== 200) {
+              $restore_failed[] = $file;
+              continue;
+            }
+            $content = wp_remote_retrieve_body($fresh);
+            if (@file_put_contents($full_path, $content) !== false) {
+              $restored[] = $file;
+            } else {
+              $restore_failed[] = $file;
+            }
+          }
+
+          // Pass 2: verify — any file still failing after restore is a hard failure
           $still_failing = [];
           foreach ($checksums as $file => $expected_md5) {
             if (strpos($file, 'wp-content/') === 0) continue;
@@ -2178,7 +2325,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
               $still_failing[] = $file;
             }
           }
-          echo json_encode(['still_failing' => $still_failing]);
+          echo json_encode(['restored' => $restored, 'restore_failed' => $restore_failed, 'still_failing' => $still_failing]);
         `,
       },
       expectedEmpty: false,
@@ -2501,18 +2648,25 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
   const checklist = buildRemediationChecklist(install, allSignals, sandboxName);
   const results   = await executeChecklist(checklist, install, sandboxName, tools, log, reportPath);
 
-  // Verdict — BLOCKED if any step failed OR if critical signals have no remediation step
-  const failCount  = results.filter(r => !r.passed).length;
-  // Signal IDs that have corresponding checklist steps
-  const coveredByChecklist = new Set([
-    ...(allSignals.some(s => s.id === 'FS-01') ? ['FS-01'] : []),
-    ...(allSignals.some(s => ['ABS-03', 'ABS-01', 'ABS-02', 'REL-03', 'LLM-USER-01'].includes(s.id)) ? ['ABS-03', 'ABS-01', 'ABS-02', 'REL-03', 'LLM-USER-01'] : []),
-    'ABS-04', 'ABS-05', 'REL-01',  // always in step 3
-    'FS-03', 'ABS-09', 'DB-01', 'FS-06', 'CHK-01', 'FS-07',  // new steps (conditional)
-  ]);
-  const uncoveredCritical = allSignals.filter(s =>
-    s.severity === 'critical' && !coveredByChecklist.has(s.id)
+  // Verdict — BLOCKED if any step failed OR if any critical signal is not
+  // genuinely remediated. Coverage is DERIVED, not hand-maintained:
+  // a signal is covered only if its mapped step (a) was actually built into this
+  // checklist and (b) passed verification. This prevents the verdict from ever
+  // reporting READY-TO-PUSH while a critical finding sits un-remediated.
+  const failCount = results.filter(r => !r.passed).length;
+
+  // Which step numbers were built, and which of those passed.
+  const passedSteps = new Set(
+    results.filter(r => r.passed).map(r => r.step)
   );
+
+  const uncoveredCritical = allSignals.filter(s => {
+    if (s.severity !== 'critical') return false;
+    const step = SIGNAL_REMEDIATION_STEP[s.id];
+    if (step === undefined) return true;        // no remediation step exists → uncovered
+    return !passedSteps.has(step);              // step exists but didn't pass → uncovered
+  });
+
   const isBlocked = failCount > 0 || uncoveredCritical.length > 0;
   const verdictStr = isBlocked
     ? `**NOT SAFE TO PUSH** — ${failCount} step(s) failed${uncoveredCritical.length > 0 ? `, ${uncoveredCritical.length} critical finding(s) not remediated (${uncoveredCritical.map(s => s.id).join(', ')})` : ''}.`
@@ -2540,20 +2694,24 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
     verificationOutput: results[i]?.detail ?? '',
   }));
 
-  const allPassed = steps.every(s => s.verificationResult !== 'failed');
+  // A plan is safe ONLY when no step failed AND every critical signal is covered
+  // by a step that passed. Previously this used only step-pass state (allPassed),
+  // so a site with an un-remediated critical could return verdict:'ready'.
+  const safeToPush = !isBlocked;
 
   log.action({
     label: `Remediation prepared in sandbox: ${sandboxName}`,
     site: install.name,
-    result: allPassed ? 'ok' : 'failed',
+    result: safeToPush ? 'ok' : 'failed',
   });
 
   // Note: actual local_wpe_push requires human confirmation — never auto-pushed
   return {
     site: install.name,
     sandbox: sandboxName,
-    verified: allPassed,
-    verdict: allPassed ? 'ready' : 'blocked',
+    verified: safeToPush,
+    verdict: safeToPush ? 'ready' : 'blocked',
+    uncoveredCritical: uncoveredCritical.map(s => s.id),
     summary: synthesis,
     steps,
     reportPath,
