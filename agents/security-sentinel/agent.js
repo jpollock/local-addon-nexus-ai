@@ -1451,6 +1451,8 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         $failures = [];
         $abspath = ABSPATH;
         foreach ($checksums as $file => $expected_md5) {
+          // Skip wp-content/ — themes/plugins are user territory, not core
+          if (strpos($file, 'wp-content/') === 0) continue;
           $full_path = $abspath . $file;
           if (!file_exists($full_path)) continue;
           if (md5_file($full_path) !== $expected_md5) {
@@ -1810,9 +1812,128 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
     expectedEmpty: true,
   });
 
-  // Step 5: WP core verify-checksums — deferred to manual verification
-  // shell_exec('wp core verify-checksums') inside wp_eval doesn't work (WP-CLI not on PHP's PATH).
-  // This step is recorded in the report as deferred; run it manually via SSH on the sandbox.
+  // Step 5a: Restore tampered core files — only if CHK-01 fired
+  if (allSignals.some(s => s.id === 'CHK-01')) {
+    checklist.push({
+      step: '5a',
+      action: 'Restore tampered WordPress core files',
+      executableCommand: 'wp core download --skip-content --force',
+      toolName: 'wp_eval',
+      toolArgs: {
+        site: sandboxName, skip_plugins: true, skip_themes: true,
+        code: `
+          global $wp_version;
+          $locale = get_locale();
+          $url = "https://api.wordpress.org/core/checksums/1.0/?version={$wp_version}&locale={$locale}";
+          $response = wp_remote_get($url, ['timeout' => 20]);
+          if (is_wp_error($response)) { echo json_encode(['restored' => [], 'failed' => [], 'error' => 'Could not fetch checksums']); exit; }
+          $data = json_decode(wp_remote_retrieve_body($response), true);
+          $checksums = $data['checksums'] ?? [];
+          $abspath = ABSPATH;
+          $still_failing = [];
+          foreach ($checksums as $file => $expected_md5) {
+            if (strpos($file, 'wp-content/') === 0) continue;
+            $full_path = $abspath . $file;
+            if (!file_exists($full_path)) continue;
+            if (md5_file($full_path) !== $expected_md5) {
+              $still_failing[] = $file;
+            }
+          }
+          echo json_encode(['still_failing' => $still_failing]);
+        `,
+      },
+      expectedEmpty: false,
+      verifyKey: 'still_failing',
+    });
+  }
+
+  // Step 5b: Remove web root PHP files — only if FS-03 fired
+  const fs03Signal = allSignals.find(s => s.id === 'FS-03');
+  if (fs03Signal && fs03Signal.evidence && fs03Signal.evidence.length > 0) {
+    const rootPhpFiles = fs03Signal.evidence
+      .map(e => e.split(' ')[0])
+      .filter(f => f && f.endsWith('.php') && !f.includes('/'));
+    if (rootPhpFiles.length > 0) {
+      const filesJson = JSON.stringify(rootPhpFiles);
+      checklist.push({
+        step: '5b',
+        action: `Remove suspicious web root PHP files: ${rootPhpFiles.join(', ')}`,
+        executableCommand: `rm ${rootPhpFiles.map(f => `${f}`).join(' ')}`,
+        toolName: 'wp_eval',
+        toolArgs: {
+          site: sandboxName, skip_plugins: true, skip_themes: true,
+          code: `$files = ${filesJson}; $removed = []; $failed = []; foreach ($files as $f) { $path = ABSPATH . $f; if (file_exists($path)) { @unlink($path) ? $removed[] = $f : $failed[] = $f; } } $remaining = array_values(array_filter($files, fn($f) => file_exists(ABSPATH . $f))); echo json_encode($remaining);`,
+        },
+        expectedEmpty: true,
+      });
+    }
+  }
+
+  // Step 5c: Remove injected check_file.php and other suspicious internal files — only if ABS-09 fired
+  const abs09Signal = allSignals.find(s => s.id === 'ABS-09');
+  if (abs09Signal && abs09Signal.evidence && abs09Signal.evidence.length > 0) {
+    const injectedPaths = abs09Signal.evidence
+      .map(e => e.split(' ')[0])
+      .filter(f => f && f.startsWith('wp-content/'));
+    if (injectedPaths.length > 0) {
+      const pathsJson = JSON.stringify(injectedPaths);
+      checklist.push({
+        step: '5c',
+        action: `Remove injected files in plugins: ${injectedPaths.length} file(s)`,
+        executableCommand: null,
+        toolName: 'wp_eval',
+        toolArgs: {
+          site: sandboxName, skip_plugins: true, skip_themes: true,
+          code: `$paths = ${pathsJson}; $abspath = ABSPATH; foreach ($paths as $rel) { $full = $abspath . $rel; if (file_exists($full)) @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists($abspath . $rel))); echo json_encode($remaining);`,
+        },
+        expectedEmpty: true,
+      });
+    }
+  }
+
+  // Step 5d: Delete spam posts — only if DB-01 fired
+  const db01Signal = allSignals.find(s => s.id === 'DB-01');
+  if (db01Signal && db01Signal.evidence && db01Signal.evidence.length > 0) {
+    const spamIds = db01Signal.evidence
+      .map(e => { const m = e.match(/ID:(\d+)/); return m ? m[1] : null; })
+      .filter(Boolean);
+    if (spamIds.length > 0) {
+      const idsJson = JSON.stringify(spamIds.map(Number));
+      checklist.push({
+        step: '5d',
+        action: `Delete ${spamIds.length} spam post(s)`,
+        executableCommand: `wp post delete ${spamIds.join(' ')} --force`,
+        toolName: 'wp_eval',
+        toolArgs: {
+          site: sandboxName,
+          code: `$ids = ${idsJson}; foreach ($ids as $id) { wp_delete_post($id, true); } $remaining = array_values(array_filter($ids, fn($id) => get_post($id) !== null)); echo json_encode($remaining);`,
+        },
+        expectedEmpty: true,
+      });
+    }
+  }
+
+  // Step 5e: Remove ELF binaries — only if FS-06 fired
+  const fs06Signal = allSignals.find(s => s.id === 'FS-06');
+  if (fs06Signal && fs06Signal.evidence && fs06Signal.evidence.length > 0) {
+    const elfPaths = fs06Signal.evidence
+      .map(e => e.split(' ')[0])
+      .filter(f => f && f.startsWith('wp-content/'));
+    if (elfPaths.length > 0) {
+      const pathsJson = JSON.stringify(elfPaths);
+      checklist.push({
+        step: '5e',
+        action: `Remove ${elfPaths.length} ELF binaries from wp-content`,
+        executableCommand: null,
+        toolName: 'wp_eval',
+        toolArgs: {
+          site: sandboxName, skip_plugins: true, skip_themes: true,
+          code: `$paths = ${pathsJson}; $abspath = ABSPATH; foreach ($paths as $rel) { $full = $abspath . $rel; if (file_exists($full)) @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists($abspath . $rel))); echo json_encode($remaining);`,
+        },
+        expectedEmpty: true,
+      });
+    }
+  }
 
   // Step 6: Shuffle authentication salts
   checklist.push({
@@ -1897,7 +2018,14 @@ async function executeChecklist(checklist, install, sandboxName, tools, log, rep
       let stepPassed = false;
       let detail = '';
 
-      if (item.verifyContains) {
+      if (item.verifyKey) {
+        // verifyKey: parse JSON and check that result[verifyKey] is an empty array
+        let parsed;
+        try { parsed = JSON.parse(resultStr); } catch { parsed = {}; }
+        const arr = parsed[item.verifyKey] ?? [];
+        stepPassed = Array.isArray(arr) && arr.length === 0;
+        detail = stepPassed ? `${item.verifyKey}: none remaining` : `${item.verifyKey}: ${JSON.stringify(arr).slice(0, 150)}`;
+      } else if (item.verifyContains) {
         stepPassed = resultStr.includes(item.verifyContains);
         detail = stepPassed ? resultStr.trim().slice(0, 80) : `expected "${item.verifyContains}", got: ${resultStr.trim().slice(0, 80)}`;
       } else if (item.expectedEmpty) {
@@ -1990,6 +2118,9 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
   ].filter(Boolean).join('\n\n');
 
   const blindSpots = [
+    allSignals.some(s => s.id === 'ABS-08')
+      ? '- **File timestamps are unreliable as forensic evidence**: anti-forensics timestamp manipulation was detected (ABS-08) — temporal cluster analysis may be compromised'
+      : null,
     '- **Runtime-assembled payloads**: code that fetches and assembles its payload at request time leaves no local trace',
     '- **Time-triggered or IP-conditional code**: only fires under specific conditions invisible to static analysis',
     '- **Upstream compromised plugins**: if a plugin was backdoored before installation, its checksum matches the backdoored version',
@@ -2031,11 +2162,22 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
   const checklist = buildRemediationChecklist(install, allSignals, sandboxName);
   const results   = await executeChecklist(checklist, install, sandboxName, tools, log, reportPath);
 
-  // Verdict
+  // Verdict — BLOCKED if any step failed OR if critical signals have no remediation step
   const failCount  = results.filter(r => !r.passed).length;
-  const verdictStr = failCount === 0
-    ? `**READY TO PUSH** — all ${results.length} steps passed verification.`
-    : `**NOT SAFE TO PUSH** — ${failCount} step(s) failed.`;
+  // Signal IDs that have corresponding checklist steps
+  const coveredByChecklist = new Set([
+    ...(allSignals.some(s => s.id === 'FS-01') ? ['FS-01'] : []),
+    ...(allSignals.some(s => ['ABS-03', 'ABS-01', 'ABS-02', 'REL-03', 'LLM-USER-01'].includes(s.id)) ? ['ABS-03', 'ABS-01', 'ABS-02', 'REL-03', 'LLM-USER-01'] : []),
+    'ABS-04', 'ABS-05', 'REL-01',  // always in step 3
+    'FS-03', 'ABS-09', 'DB-01', 'FS-06', 'CHK-01',  // new steps (conditional)
+  ]);
+  const uncoveredCritical = allSignals.filter(s =>
+    s.severity === 'critical' && !coveredByChecklist.has(s.id)
+  );
+  const isBlocked = failCount > 0 || uncoveredCritical.length > 0;
+  const verdictStr = isBlocked
+    ? `**NOT SAFE TO PUSH** — ${failCount} step(s) failed${uncoveredCritical.length > 0 ? `, ${uncoveredCritical.length} critical finding(s) not remediated (${uncoveredCritical.map(s => s.id).join(', ')})` : ''}.`
+    : `**READY TO PUSH** — all ${results.length} steps passed verification.`;
 
   const verdictSection = [
     '',
