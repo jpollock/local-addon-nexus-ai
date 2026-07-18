@@ -11,11 +11,18 @@ export class NexusToolProvider implements ToolProvider {
   private registry: ToolRegistry;
   private services: NexusServices;
   private allowedTools: Set<string> | undefined;
+  /** Site IDs this provider may target with wp_eval. Empty = any site allowed (MCP mode). */
+  private sandboxSiteIds: Set<string> = new Set();
 
   constructor(registry: ToolRegistry, services: NexusServices, tools: string[] | undefined) {
     this.registry = registry;
     this.services = services;
     this.allowedTools = tools !== undefined ? new Set(tools) : undefined;
+  }
+
+  /** Register a sandbox site ID so wp_eval may target it. Agent calls this once after sandbox creation. */
+  registerSandbox(siteId: string): void {
+    this.sandboxSiteIds.add(siteId);
   }
 
   getProviderToolDefinitions(): ProviderToolDefinition[] {
@@ -33,6 +40,15 @@ export class NexusToolProvider implements ToolProvider {
     // Enforce tool scope: if allowedTools is defined, only those tools are permitted
     if (this.allowedTools && !this.allowedTools.has(name)) {
       throw new Error(`Tool "${name}" is not declared in this agent's tools list`);
+    }
+
+    // Enforce wp_eval site scope: when running as an agent, restrict wp_eval to registered
+    // sandbox sites to prevent prompt-injected code from targeting unrelated local sites.
+    if (name === 'wp_eval' && this.allowedTools && this.sandboxSiteIds.size > 0) {
+      const targetSite = args.site as string | undefined;
+      if (targetSite && !this.sandboxSiteIds.has(targetSite)) {
+        throw new Error(`wp_eval: site "${targetSite}" is not in this agent's registered sandbox scope`);
+      }
     }
 
     // Audit: agents bypass McpSafetyWrapper, so we log tool calls here instead.

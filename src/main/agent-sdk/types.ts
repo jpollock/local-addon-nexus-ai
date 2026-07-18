@@ -33,6 +33,8 @@ export interface NexusEvent {
 
 export interface ToolProvider {
   invoke(name: string, args: Record<string, unknown>): Promise<unknown>;
+  /** Register a sandbox site ID so wp_eval may target it. Call once after sandbox creation. */
+  registerSandbox?(siteId: string): void;
 }
 
 export interface AgentStateHandle {

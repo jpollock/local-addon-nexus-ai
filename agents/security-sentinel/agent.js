@@ -1263,7 +1263,50 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     if (!pullDone) { log.warn(`[Tier 2] Pull timed out for ${install.name}`); return null; }
   }
 
-  log.info(`[Tier 2] Sandbox ready. Running filesystem checks...`);
+  log.info(`[Tier 2] Sandbox ready. Hardening PHP environment...`);
+  // Register sandbox with the tool provider so wp_eval site-scope enforcement allows it.
+  // This is a no-op when running outside the agent runtime (unit tests, etc.).
+  if (typeof tools.registerSandbox === 'function') tools.registerSandbox(sandboxName);
+
+  // Harden sandbox PHP: disable raw socket functions in php.ini + block WordPress HTTP layer.
+  // This prevents any backdoor code that runs during wp_eval from making outbound connections.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs');
+    const phpIniResult = await tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `echo php_ini_loaded_file();`,
+    });
+    const phpIniPath = typeof phpIniResult === 'string' ? phpIniResult.trim() : '';
+    if (phpIniPath && fs.existsSync(phpIniPath)) {
+      const DISABLE = '\n; Nexus AI Sentinel sandbox isolation\ndisable_functions = fsockopen,pfsockopen,curl_exec,curl_multi_exec,exec,shell_exec,system,passthru,proc_open,popen\n';
+      fs.appendFileSync(phpIniPath, DISABLE);
+      await tools.invoke('local_restart_site', { site: sandboxName });
+      log.info(`[Tier 2] Sandbox PHP hardened: raw socket functions disabled`);
+    }
+  } catch (err) {
+    log.warn(`[Tier 2] PHP disable_functions failed: ${err.message} — continuing without it`);
+  }
+
+  // Block WordPress HTTP layer (defence-in-depth alongside disable_functions)
+  try {
+    await tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $config = ABSPATH . 'wp-config.php';
+        $c = @file_get_contents($config);
+        if ($c && strpos($c, 'WP_HTTP_BLOCK_EXTERNAL') === false) {
+          $inject = "<?php\\ndefine('WP_HTTP_BLOCK_EXTERNAL', true);\\ndefine('WP_ACCESSIBLE_HOSTS', 'api.wordpress.org,core.svn.wordpress.org,downloads.wordpress.org');\\n";
+          @file_put_contents($config, str_replace('<?php', $inject, $c, 1));
+        }
+        echo defined('WP_HTTP_BLOCK_EXTERNAL') ? 'blocked' : 'open';
+      `,
+    });
+  } catch (err) {
+    log.warn(`[Tier 2] WP_HTTP_BLOCK_EXTERNAL failed: ${err.message}`);
+  }
+
+  log.info(`[Tier 2] Running filesystem checks...`);
 
   // Filesystem checks via wp_eval (runs inside Local sandbox, not live site)
   const fsSignals = [];

@@ -20,6 +20,7 @@ tools:
   - local_create_site
   - local_clone_site
   - local_start_site
+  - local_restart_site
   - local_wpe_pull
   - local_operation_status
   - wp_eval
