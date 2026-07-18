@@ -2508,7 +2508,7 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
     ...(allSignals.some(s => s.id === 'FS-01') ? ['FS-01'] : []),
     ...(allSignals.some(s => ['ABS-03', 'ABS-01', 'ABS-02', 'REL-03', 'LLM-USER-01'].includes(s.id)) ? ['ABS-03', 'ABS-01', 'ABS-02', 'REL-03', 'LLM-USER-01'] : []),
     'ABS-04', 'ABS-05', 'REL-01',  // always in step 3
-    'FS-03', 'ABS-09', 'DB-01', 'FS-06', 'CHK-01',  // new steps (conditional)
+    'FS-03', 'ABS-09', 'DB-01', 'FS-06', 'CHK-01', 'FS-07',  // new steps (conditional)
   ]);
   const uncoveredCritical = allSignals.filter(s =>
     s.severity === 'critical' && !coveredByChecklist.has(s.id)
