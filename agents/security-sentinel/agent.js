@@ -47,7 +47,7 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
     query: `
       SELECT s.id, s.name, s.source, s.environment, s.ssh_last_sync_at,
              s.post_count, s.user_count, s.settings_json,
-             s.wp_version, s.php_version, s.admin_email
+             s.wp_version, s.php_version, s.admin_email, s.account_id
       FROM sites s
       WHERE (s.source = 'wpe' OR s.source = 'local')
         AND s.name NOT LIKE 'sentinel-%'
@@ -59,46 +59,10 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
   const rows = parseSqlResult(sitesResult, warnDrop('sites'));
   const installs = [];
 
-  // For WPE installs: resolve portal account owner emails to use as protectedEmails.
-  // These come from OUTSIDE the compromised site (the WPE portal), so they can't be
-  // overwritten by an attacker who has compromised WordPress.
-  const wpeOwnerEmailsByAccount = {};
-  const hasWpeInstalls = rows.some(r => r.source === 'wpe');
-  if (hasWpeInstalls) {
-    try {
-      const accountsResult = await tools.invoke('wpe_get_accounts', {});
-      let accounts = [];
-      if (Array.isArray(accountsResult)) {
-        accounts = accountsResult;
-      } else if (typeof accountsResult === 'string') {
-        try {
-          accounts = JSON.parse(accountsResult);
-        } catch {
-          accounts = [];
-        }
-      }
-      for (const acct of accounts) {
-        if (!acct.id) continue;
-        try {
-          const usersResult = await tools.invoke('wpe_get_account_users', { account_id: acct.id });
-          let users = [];
-          if (Array.isArray(usersResult)) {
-            users = usersResult;
-          } else if (typeof usersResult === 'string') {
-            try {
-              users = JSON.parse(usersResult);
-            } catch {
-              users = [];
-            }
-          }
-          const ownerEmails = users
-            .filter(u => u.roles === 'o' && u.email)
-            .map(u => u.email.toLowerCase());
-          if (ownerEmails.length > 0) wpeOwnerEmailsByAccount[acct.id] = ownerEmails;
-        } catch { /* account may not be accessible */ }
-      }
-    } catch { /* WPE not authenticated — fall back to admin_email */ }
-  }
+  // protectedEmails sourced from graph.db admin_email (synced by WPE sync, not read live from
+  // the compromised site). Per-account portal owner lookup (wpe_get_account_users) was deferred
+  // because those MCP tools return markdown text, not JSON — s.account_id is now in the SELECT
+  // for when a proper structured lookup is available.
 
   for (const site of rows) {
     // Handle unsynced WPE installs — trigger a fresh sync first
@@ -131,19 +95,7 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
       settings:      site.settings_json ? JSON.parse(site.settings_json) : {},
       wpVersion:     site.wp_version,
       phpVersion:    site.php_version,
-      // For WPE installs: use portal account owner email (outside attacker reach).
-      // For local installs: use graph.db admin_email (synced before scan, not live).
-      // wpeOwnerEmailsByAccount is keyed by account ID — look up via settings_json if available.
-      protectedEmails: (() => {
-        if (site.source === 'wpe') {
-          const settings = site.settings_json ? JSON.parse(site.settings_json) : {};
-          const accountId = settings.account_id || null;
-          const portalEmails = accountId ? (wpeOwnerEmailsByAccount[accountId] || []) : [];
-          // If we found portal owner emails, use them; otherwise fall back to admin_email
-          if (portalEmails.length > 0) return portalEmails;
-        }
-        return site.admin_email ? [site.admin_email.toLowerCase()] : [];
-      })(),
+      protectedEmails: site.admin_email ? [site.admin_email.toLowerCase()] : [],
       plugins:       parseSqlResult(pluginsResult, warnDrop(`plugins@${site.name}`)),
       adminUsers:    parseSqlResult(usersResult, warnDrop(`users@${site.name}`)).filter(u => {
         try { return JSON.parse(u.roles || '[]').includes('administrator'); } catch { return false; }
@@ -1035,7 +987,7 @@ async function runRootFileAnalysis(fsSignals, sandboxName, tools, log) {
       `,
     });
 
-    const parsed = JSON.parse(typeof result === 'string' ? result : JSON.stringify(result) || '{}');
+    const parsed = JSON.parse(extractResult(result) || '{}');
 
     for (const [file, info] of Object.entries(parsed)) {
       if (!info) continue;

@@ -59,7 +59,7 @@ export const fleetSqlHandler: McpToolHandler = {
         params: {
           type: 'array',
           description: 'Optional bind parameters for ? placeholders in the query. Values are bound in order. Use this instead of string interpolation to prevent delimiter injection.',
-          items: {},
+          items: { oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'null' }] },
         },
       },
       required: ['query'],
