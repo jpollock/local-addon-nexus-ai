@@ -677,6 +677,7 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
     // Database: wp_posts content sample
     tools.invoke('wp_eval', {
       site: sandboxName,
+      skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
       code: `
         global $wpdb;
         $posts = $wpdb->get_results("SELECT ID, post_title, LEFT(post_content, 500) AS content_preview, post_status, post_type FROM {$wpdb->posts} LIMIT 200", ARRAY_A);
@@ -687,6 +688,7 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
     // Database: autoloaded options + critical options
     tools.invoke('wp_eval', {
       site: sandboxName,
+      skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
       code: `
         global $wpdb;
         $auto = $wpdb->get_col("SELECT option_name FROM {$wpdb->options} WHERE autoload='yes'");
@@ -1614,7 +1616,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   // DB-01: wp_posts content scan — injected scripts, hidden spam content
   const postsContentResult = await tools.invoke('wp_eval', {
-    site: sandboxName,
+    site: sandboxName, skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
     code: `
       global $wpdb;
       $posts = $wpdb->get_results(
@@ -1667,7 +1669,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   // DB-02: wp_options scan for injected code in autoloaded options
   const optionsScanResult = await tools.invoke('wp_eval', {
-    site: sandboxName,
+    site: sandboxName, skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
     code: `
       global $wpdb;
       $options = $wpdb->get_results(
@@ -1703,7 +1705,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   // DB-03: wp_usermeta — serialized PHP objects with callable methods
   const usermetaResult = await tools.invoke('wp_eval', {
-    site: sandboxName,
+    site: sandboxName, skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
     code: `
       global $wpdb;
       $admins = $wpdb->get_col(
@@ -1745,7 +1747,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   // DB-04: wp_comments — SEO spam injection
   const commentsResult = await tools.invoke('wp_eval', {
-    site: sandboxName,
+    site: sandboxName, skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
     code: `
       global $wpdb;
       $count = (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->comments}");
@@ -2061,7 +2063,7 @@ Classify the situation and decide if the remediation plan should be applied to p
 
 // ─── Admin account confidence scoring ────────────────────────────────────────
 // Returns 0-100+ confidence score that an account is attacker-created.
-// > 95: auto-delete  |  50-95: demote to subscriber  |  < 50: flag for review
+// > 95: login-disabled (reversible)  |  50-95: demote to subscriber  |  < 50: flag for review
 function scoreAdminAccount(user, _allAdminUsers, attackTimestamp) {
   let score = 0;
   const username = user.username || '';
@@ -2157,17 +2159,20 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
   }
 
   // Step 2: Confidence-scored admin account remediation — only if admin-related signals fired
-  // > 95 → auto-delete | 50-95 → demote to subscriber + REVIEW REQUIRED | < 50 → flag only
-  // Always deletes application passwords for score >= 50
+  // > 95 → DISABLE LOGIN (reversible) | 50-95 → demote to subscriber + REVIEW | < 50 → flag
+  // Does NOT delete: deletion is irreversible and destroys the forensic record. A high-scoring
+  // account is locked across every auth path (password, role, session, app passwords) but left
+  // in place for human review. Every action is reversible before the push.
   if (allSignals.some(s => ['REL-03', 'ABS-03', 'LLM-USER-01', 'ABS-01', 'ABS-02'].includes(s.id))) {
     checklist.push({
       step: 2,
-      action: 'Confidence-scored admin account remediation',
+      action: 'Disable login on attacker-scored admin accounts (reversible)',
       executableCommand: null,
+      requiresApproval: true,
       toolName: 'wp_eval',
       toolArgs: {
         site: sandboxName,
-        code: `global $wpdb; $admins = $wpdb->get_results("SELECT u.ID, u.user_login, u.user_email, u.user_registered FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'", ARRAY_A); $scoreAdmin = function($username, $email, $registered, $attackTimestamp) { $score = 0; if (preg_match('/^[a-z]{6,10}$/', $username) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $username)) $score += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $username)) $score += 60; if (!$email || substr($email, -12) === '@example.com') $score += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($username))) $score += 20; if ($registered && $attackTimestamp) { $diffMin = abs(strtotime($registered) - strtotime($attackTimestamp)) / 60; if ($diffMin <= 10) $score += 30; } return $score; }; $attackTimestamp = null; foreach ($admins as $u) { $ps = 0; if (preg_match('/^[a-z]{6,10}$/', $u['user_login']) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $u['user_login'])) $ps += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $u['user_login'])) $ps += 60; if (!$u['user_email'] || substr($u['user_email'], -12) === '@example.com') $ps += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($u['user_login']))) $ps += 20; if ($ps > 80) { $attackTimestamp = $u['user_registered']; break; } } $autoDeleted = []; $demoted = []; $appKeysDeleted = []; $flagged = []; $protected = array_values(array_filter([get_option('admin_email')])); // site's registered admin — never demote/delete foreach ($admins as $u) { $score = $scoreAdmin($u['user_login'], $u['user_email'], $u['user_registered'], $attackTimestamp); if (in_array($u['user_email'], $protected) || $score < 30) continue; if ($score >= 50) { $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID'], 'meta_key' => '_application_passwords']); $appKeysDeleted[] = $u['user_login']; } if ($score > 95) { $wpdb->delete($wpdb->users, ['ID' => $u['ID']]); $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID']]); $autoDeleted[] = ['username' => $u['user_login'], 'score' => $score]; } elseif ($score >= 50) { wp_update_user(['ID' => $u['ID'], 'role' => 'subscriber']); $demoted[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'REVIEW REQUIRED']; } else { $flagged[] = ['username' => $u['user_login'], 'score' => $score]; } } echo json_encode(['auto_deleted' => $autoDeleted, 'demoted' => $demoted, 'app_keys_deleted' => $appKeysDeleted, 'flagged' => $flagged]);`,
+        code: `global $wpdb; $admins = $wpdb->get_results("SELECT u.ID, u.user_login, u.user_email, u.user_registered FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'", ARRAY_A); $scoreAdmin = function($username, $email, $registered, $attackTimestamp) { $score = 0; if (preg_match('/^[a-z]{6,10}$/', $username) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $username)) $score += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $username)) $score += 60; if (!$email || substr($email, -12) === '@example.com') $score += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($username))) $score += 20; if ($registered && $attackTimestamp) { $diffMin = abs(strtotime($registered) - strtotime($attackTimestamp)) / 60; if ($diffMin <= 10) $score += 30; } return $score; }; $attackTimestamp = null; foreach ($admins as $u) { $ps = 0; if (preg_match('/^[a-z]{6,10}$/', $u['user_login']) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $u['user_login'])) $ps += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $u['user_login'])) $ps += 60; if (!$u['user_email'] || substr($u['user_email'], -12) === '@example.com') $ps += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($u['user_login']))) $ps += 20; if ($ps > 80) { $attackTimestamp = $u['user_registered']; break; } } $loginDisabled = []; $demoted = []; $appKeysDeleted = []; $flagged = []; $protected = array_values(array_filter([get_option('admin_email')])); // site's registered admin — never touch foreach ($admins as $u) { $score = $scoreAdmin($u['user_login'], $u['user_email'], $u['user_registered'], $attackTimestamp); if (in_array($u['user_email'], $protected) || $score < 30) continue; if ($score >= 50) { $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID'], 'meta_key' => '_application_passwords']); $appKeysDeleted[] = $u['user_login']; } if ($score > 95) { wp_set_password(wp_generate_password(64, true, true), $u['ID']); $wpuser = new WP_User($u['ID']); $wpuser->set_role(''); delete_user_meta($u['ID'], 'session_tokens'); $loginDisabled[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'LOGIN DISABLED — reversible; approve before push']; } elseif ($score >= 50) { wp_update_user(['ID' => $u['ID'], 'role' => 'subscriber']); delete_user_meta($u['ID'], 'session_tokens'); $demoted[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'REVIEW REQUIRED']; } else { $flagged[] = ['username' => $u['user_login'], 'score' => $score]; } } echo json_encode(['login_disabled' => $loginDisabled, 'demoted' => $demoted, 'app_keys_deleted' => $appKeysDeleted, 'flagged' => $flagged]);`,
       },
       expectedEmpty: false,
     });
