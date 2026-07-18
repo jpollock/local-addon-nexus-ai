@@ -97,15 +97,19 @@ function parseSqlResult(result) {
   const lines = result.split('\n').filter(l => l.startsWith('|') && !l.startsWith('| ---'));
   if (lines.length < 2) return [];
   const headers = lines[0].split('|').map(h => h.trim()).filter(Boolean);
-  return lines.slice(1).map(line => {
-    // Use slice(1,-1) not filter(Boolean) — preserves NULL columns (empty cells)
-    // filter(Boolean) removes empty strings for NULL cols, shifting all values left
+  const out = [];
+  for (const line of lines.slice(1)) {
     const parts = line.split('|');
     const vals = parts.slice(1, parts.length - 1).map(v => v.trim());
+    // Skip malformed rows — column count mismatch means a pipe char in a value
+    // shifted all subsequent values left, producing garbage. Silently dropping
+    // the row is safer than propagating misaligned data.
+    if (vals.length !== headers.length) continue;
     const obj = {};
     headers.forEach((h, i) => { obj[h] = vals[i] || null; });
-    return obj;
-  });
+    out.push(obj);
+  }
+  return out;
 }
 
 // ─── Scope determination ──────────────────────────────────────────────────────
@@ -2163,18 +2167,22 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
       toolName: 'wp_eval',
       toolArgs: {
         site: sandboxName,
-        code: `global $wpdb; $admins = $wpdb->get_results("SELECT u.ID, u.user_login, u.user_email, u.user_registered FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'", ARRAY_A); $scoreAdmin = function($username, $email, $registered, $attackTimestamp) { $score = 0; if (preg_match('/^[a-z]{6,10}$/', $username) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $username)) $score += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $username)) $score += 60; if (!$email || substr($email, -12) === '@example.com') $score += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($username))) $score += 20; if ($registered && $attackTimestamp) { $diffMin = abs(strtotime($registered) - strtotime($attackTimestamp)) / 60; if ($diffMin <= 10) $score += 30; } return $score; }; $attackTimestamp = null; foreach ($admins as $u) { $ps = 0; if (preg_match('/^[a-z]{6,10}$/', $u['user_login']) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $u['user_login'])) $ps += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $u['user_login'])) $ps += 60; if (!$u['user_email'] || substr($u['user_email'], -12) === '@example.com') $ps += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($u['user_login']))) $ps += 20; if ($ps > 80) { $attackTimestamp = $u['user_registered']; break; } } $autoDeleted = []; $demoted = []; $appKeysDeleted = []; $flagged = []; $protected = ['jeremy.pollock@wpengine.com']; foreach ($admins as $u) { $score = $scoreAdmin($u['user_login'], $u['user_email'], $u['user_registered'], $attackTimestamp); if (in_array($u['user_email'], $protected) || $score < 30) continue; if ($score >= 50) { $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID'], 'meta_key' => '_application_passwords']); $appKeysDeleted[] = $u['user_login']; } if ($score > 95) { $wpdb->delete($wpdb->users, ['ID' => $u['ID']]); $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID']]); $autoDeleted[] = ['username' => $u['user_login'], 'score' => $score]; } elseif ($score >= 50) { wp_update_user(['ID' => $u['ID'], 'role' => 'subscriber']); $demoted[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'REVIEW REQUIRED']; } else { $flagged[] = ['username' => $u['user_login'], 'score' => $score]; } } echo json_encode(['auto_deleted' => $autoDeleted, 'demoted' => $demoted, 'app_keys_deleted' => $appKeysDeleted, 'flagged' => $flagged]);`,
+        code: `global $wpdb; $admins = $wpdb->get_results("SELECT u.ID, u.user_login, u.user_email, u.user_registered FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'", ARRAY_A); $scoreAdmin = function($username, $email, $registered, $attackTimestamp) { $score = 0; if (preg_match('/^[a-z]{6,10}$/', $username) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $username)) $score += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $username)) $score += 60; if (!$email || substr($email, -12) === '@example.com') $score += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($username))) $score += 20; if ($registered && $attackTimestamp) { $diffMin = abs(strtotime($registered) - strtotime($attackTimestamp)) / 60; if ($diffMin <= 10) $score += 30; } return $score; }; $attackTimestamp = null; foreach ($admins as $u) { $ps = 0; if (preg_match('/^[a-z]{6,10}$/', $u['user_login']) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $u['user_login'])) $ps += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $u['user_login'])) $ps += 60; if (!$u['user_email'] || substr($u['user_email'], -12) === '@example.com') $ps += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($u['user_login']))) $ps += 20; if ($ps > 80) { $attackTimestamp = $u['user_registered']; break; } } $autoDeleted = []; $demoted = []; $appKeysDeleted = []; $flagged = []; $protected = array_values(array_filter([get_option('admin_email')])); // site's registered admin — never demote/delete foreach ($admins as $u) { $score = $scoreAdmin($u['user_login'], $u['user_email'], $u['user_registered'], $attackTimestamp); if (in_array($u['user_email'], $protected) || $score < 30) continue; if ($score >= 50) { $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID'], 'meta_key' => '_application_passwords']); $appKeysDeleted[] = $u['user_login']; } if ($score > 95) { $wpdb->delete($wpdb->users, ['ID' => $u['ID']]); $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID']]); $autoDeleted[] = ['username' => $u['user_login'], 'score' => $score]; } elseif ($score >= 50) { wp_update_user(['ID' => $u['ID'], 'role' => 'subscriber']); $demoted[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'REVIEW REQUIRED']; } else { $flagged[] = ['username' => $u['user_login'], 'score' => $score]; } } echo json_encode(['auto_deleted' => $autoDeleted, 'demoted' => $demoted, 'app_keys_deleted' => $appKeysDeleted, 'flagged' => $flagged]);`,
       },
       expectedEmpty: false,
     });
   }
 
   // Step 3: Remove all attacker plugins (hardcoded list + signals-derived slugs)
+  // Sanitize signal-derived slugs to [a-z0-9-] — valid plugin slugs never contain
+  // other characters, and anything that does is attacker-controlled data that
+  // must not reach a filesystem path operation unsanitized.
+  const VALID_SLUG_RE = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
   const signalSlugs = allSignals
     .filter(s => ['ABS-04', 'ABS-05', 'REL-01'].includes(s.id))
     .flatMap(s => {
       const m = s.title.match(/plugin[^:]*:\s*(.+)/i);
-      return m ? m[1].split(',').map(p => p.trim()) : [];
+      return m ? m[1].split(',').map(p => p.trim()).filter(p => VALID_SLUG_RE.test(p)) : [];
     });
   const allSlugs = [...new Set([...ATTACKER_PLUGIN_SLUGS, ...signalSlugs])];
   const slugsJson = JSON.stringify(allSlugs);
@@ -2348,7 +2356,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
         toolName: 'wp_eval',
         toolArgs: {
           site: sandboxName, skip_plugins: true, skip_themes: true,
-          code: `$files = ${filesJson}; $removed = []; $failed = []; foreach ($files as $f) { $path = ABSPATH . $f; if (file_exists($path)) { @unlink($path) ? $removed[] = $f : $failed[] = $f; } } $remaining = array_values(array_filter($files, fn($f) => file_exists(ABSPATH . $f))); echo json_encode($remaining);`,
+          code: `$files = ${filesJson}; $abspath = rtrim(ABSPATH, '/'); $removed = []; $failed = []; foreach ($files as $f) { $path = $abspath . '/' . basename($f); $real = realpath($path); if ($real === false || strpos($real, $abspath . '/') !== 0) continue; if (file_exists($real)) { @unlink($real) ? $removed[] = $f : $failed[] = $f; } } $remaining = array_values(array_filter($files, fn($f) => file_exists($abspath . '/' . basename($f)))); echo json_encode($remaining);`,
         },
         expectedEmpty: true,
       });
@@ -2370,7 +2378,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
         toolName: 'wp_eval',
         toolArgs: {
           site: sandboxName, skip_plugins: true, skip_themes: true,
-          code: `$paths = ${pathsJson}; $abspath = ABSPATH; foreach ($paths as $rel) { $full = $abspath . $rel; if (file_exists($full)) @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists($abspath . $rel))); echo json_encode($remaining);`,
+          code: `$paths = ${pathsJson}; $base = rtrim(WP_CONTENT_DIR, '/'); foreach ($paths as $rel) { $full = realpath(ABSPATH . $rel); if ($full === false || strpos($full, $base . '/') !== 0) continue; @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists(ABSPATH . $rel))); echo json_encode($remaining);`,
         },
         expectedEmpty: true,
       });
@@ -2414,7 +2422,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
         toolName: 'wp_eval',
         toolArgs: {
           site: sandboxName, skip_plugins: true, skip_themes: true,
-          code: `$paths = ${pathsJson}; $abspath = ABSPATH; foreach ($paths as $rel) { $full = $abspath . $rel; if (file_exists($full)) @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists($abspath . $rel))); echo json_encode($remaining);`,
+          code: `$paths = ${pathsJson}; $base = rtrim(WP_CONTENT_DIR, '/'); foreach ($paths as $rel) { $full = realpath(ABSPATH . $rel); if ($full === false || strpos($full, $base . '/') !== 0) continue; @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists(ABSPATH . $rel))); echo json_encode($remaining);`,
         },
         expectedEmpty: true,
       });
