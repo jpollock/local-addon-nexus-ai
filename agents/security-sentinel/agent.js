@@ -292,7 +292,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runObfuscationDecoder },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runObfuscationDecoder, runCoreDiff },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -946,6 +946,62 @@ async function runObfuscationDecoder(fsSignals, sandboxName, tools, log) {
     }
   } catch (err) {
     log.warn(`[Tier 2] Obfuscation decoder failed: ${err.message}`);
+  }
+}
+
+async function runCoreDiff(fsSignals, sandboxName, tools, log) {
+  const chk01 = fsSignals.find(s => s.id === 'CHK-01');
+  if (!chk01) return;
+
+  const coreFiles = (chk01.evidence || [])
+    .map(e => e.replace(/^Error: File doesn't verify against checksum:\s*/, '').trim())
+    .filter(f => !f.startsWith('wp-content/') && f.endsWith('.php') && f.length < 60)
+    .slice(0, 3);
+
+  const filesJson = JSON.stringify(coreFiles);
+  try {
+    const result = await tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        global $wp_version;
+        $files = ${filesJson};
+        $out = [];
+        foreach ($files as $rel) {
+          $full = ABSPATH . $rel;
+          if (!file_exists($full)) continue;
+          $url = "https://core.svn.wordpress.org/tags/{$wp_version}/{$rel}";
+          $resp = wp_remote_get($url, ['timeout' => 15]);
+          if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) {
+            $out[$rel] = ['svn_error' => 'could not fetch original'];
+            continue;
+          }
+          $original = wp_remote_retrieve_body($resp);
+          $local = @file_get_contents($full);
+          if ($local === $original) { $out[$rel] = ['injected' => []]; continue; }
+          $orig_lines = explode("\\n", $original);
+          $local_lines = explode("\\n", $local);
+          $added = array_values(array_diff($local_lines, $orig_lines));
+          $out[$rel] = ['injected' => array_slice($added, 0, 10)];
+        }
+        echo json_encode($out);
+      `,
+    });
+
+    const parsed = JSON.parse(extractResult(result) || '{}');
+    for (const [file, data] of Object.entries(parsed)) {
+      if (data.svn_error) {
+        chk01.evidence.push(`  → ${file}: ${data.svn_error}`);
+      } else if (data.injected && data.injected.length > 0) {
+        chk01.evidence.push(`  → ${file} injected lines: ${data.injected.map(l => l.trim()).filter(Boolean).slice(0, 5).join(' | ').slice(0, 300)}`);
+      } else if (data.injected && data.injected.length === 0) {
+        chk01.evidence.push(`  → ${file}: no line-level diff detected (binary or encoding difference)`);
+      }
+    }
+    if (Object.keys(parsed).length > 0) {
+      log.info(`[Tier 2] Core diff: ${Object.keys(parsed).length} file(s) compared`);
+    }
+  } catch (err) {
+    log.warn(`[Tier 2] Core diff failed: ${err.message}`);
   }
 }
 
@@ -1679,6 +1735,9 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   log.info(`[Tier 2] Decoding obfuscated payloads...`);
   await runObfuscationDecoder(fsSignals, sandboxName, tools, log);
+
+  log.info(`[Tier 2] Comparing core files to SVN originals...`);
+  await runCoreDiff(fsSignals, sandboxName, tools, log);
 
   // Collect raw data for all specialists in parallel
   log.phase('Data collection', `Gathering filesystem, DB and behavioral data for ${install.name}`);

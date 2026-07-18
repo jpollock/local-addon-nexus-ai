@@ -924,4 +924,64 @@ describe('security-sentinel', () => {
       expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Obfuscation decoder failed'));
     });
   });
+
+  describe('runCoreDiff', () => {
+    it('appends injected lines to CHK-01 evidence', async () => {
+      const { runCoreDiff } = agent._test;
+      const signal = {
+        id: 'CHK-01', severity: 'critical', category: 'active-compromise',
+        installName: 'test', title: 'test', detail: '', fix: '',
+        evidence: ["Error: File doesn't verify against checksum: wp-blog-header.php"],
+      };
+      const mockResult = JSON.stringify({
+        'wp-blog-header.php': { injected: ["<?php eval(base64_decode('INJECTED')); ?>"] },
+      });
+      const tools = { invoke: jest.fn().mockResolvedValue(mockResult) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runCoreDiff([signal], 'sandbox-abc', tools, log);
+
+      expect(signal.evidence.some(e => e.includes('injected lines'))).toBe(true);
+      expect(signal.evidence.some(e => e.includes('INJECTED'))).toBe(true);
+    });
+
+    it('no-ops when no CHK-01 signal present', async () => {
+      const { runCoreDiff } = agent._test;
+      const tools = { invoke: jest.fn() };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runCoreDiff([], 'sandbox-abc', tools, log);
+      expect(tools.invoke).not.toHaveBeenCalled();
+    });
+
+    it('skips wp-content files', async () => {
+      const { runCoreDiff } = agent._test;
+      const signal = {
+        id: 'CHK-01', severity: 'critical', category: 'active-compromise',
+        installName: 'test', title: 'test', detail: '', fix: '',
+        evidence: ["Error: File doesn't verify against checksum: wp-content/themes/t/style.css"],
+      };
+      const tools = { invoke: jest.fn().mockResolvedValue('{}') };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runCoreDiff([signal], 'sandbox-abc', tools, log);
+      // tools.invoke called but with empty files array → PHP returns {}
+      const call = tools.invoke.mock.calls[0];
+      expect(call[1].code).toContain('[]'); // empty $files
+    });
+
+    it('does not throw when tools.invoke rejects', async () => {
+      const { runCoreDiff } = agent._test;
+      const signal = {
+        id: 'CHK-01', severity: 'critical', category: 'active-compromise',
+        installName: 'test', title: 'test', detail: '', fix: '',
+        evidence: ["Error: File doesn't verify against checksum: index.php"],
+      };
+      const tools = { invoke: jest.fn().mockRejectedValue(new Error('fail')) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await expect(runCoreDiff([signal], 'sandbox-abc', tools, log)).resolves.toBeUndefined();
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Core diff failed'));
+    });
+  });
 });
