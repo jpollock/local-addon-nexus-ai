@@ -984,4 +984,51 @@ describe('security-sentinel', () => {
       expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Core diff failed'));
     });
   });
+
+  describe('runElfStrings', () => {
+    it('appends strings indicators to FS-06 evidence', async () => {
+      const { runElfStrings } = agent._test;
+      const signal = {
+        id: 'FS-06', severity: 'critical', category: 'active-compromise',
+        installName: 'test', title: 'test', detail: '', fix: '',
+        evidence: ['wp-content/plugins/noted/vendor/top_referrals (2512.2 KB)'],
+      };
+      const mockResult = JSON.stringify({
+        md5: 'abc123def456',
+        indicators: ['http://evil.com/c2', '/bin/sh', 'connect'],
+        analyzed: 'top_referrals',
+      });
+      const tools = { invoke: jest.fn().mockResolvedValue(mockResult) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runElfStrings([signal], 'sandbox-abc', tools, log);
+
+      expect(signal.evidence.some(e => e.includes('strings analysis'))).toBe(true);
+      expect(signal.evidence.some(e => e.includes('evil.com'))).toBe(true);
+      expect(signal.evidence.some(e => e.includes('/bin/sh'))).toBe(true);
+    });
+
+    it('no-ops when no FS-06 signal present', async () => {
+      const { runElfStrings } = agent._test;
+      const tools = { invoke: jest.fn() };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runElfStrings([], 'sandbox-abc', tools, log);
+      expect(tools.invoke).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when tools.invoke rejects', async () => {
+      const { runElfStrings } = agent._test;
+      const signal = {
+        id: 'FS-06', severity: 'critical', category: 'active-compromise',
+        installName: 'test', title: 'test', detail: '', fix: '',
+        evidence: ['wp-content/plugins/noted/vendor/top_referrals (2512.2 KB)'],
+      };
+      const tools = { invoke: jest.fn().mockRejectedValue(new Error('fail')) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await expect(runElfStrings([signal], 'sandbox-abc', tools, log)).resolves.toBeUndefined();
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('ELF strings failed'));
+    });
+  });
 });

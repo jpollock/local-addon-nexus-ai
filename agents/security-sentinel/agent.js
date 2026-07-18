@@ -292,7 +292,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runObfuscationDecoder, runCoreDiff },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runObfuscationDecoder, runCoreDiff, runElfStrings },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -1002,6 +1002,67 @@ async function runCoreDiff(fsSignals, sandboxName, tools, log) {
     }
   } catch (err) {
     log.warn(`[Tier 2] Core diff failed: ${err.message}`);
+  }
+}
+
+async function runElfStrings(fsSignals, sandboxName, tools, log) {
+  const fs06 = fsSignals.find(s => s.id === 'FS-06');
+  if (!fs06 || !fs06.evidence || fs06.evidence.length === 0) return;
+
+  const firstElf = fs06.evidence
+    .map(e => e.split(' ')[0])
+    .find(p => p && p.startsWith('wp-content/') && !p.startsWith('  '));
+  if (!firstElf) return;
+
+  const elfJson = JSON.stringify(firstElf);
+  try {
+    const result = await tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $rel = ${elfJson};
+        $full = WP_CONTENT_DIR . substr($rel, strlen('wp-content'));
+        if (!file_exists($full)) { echo json_encode(['error' => 'not found']); exit; }
+        $md5 = md5_file($full);
+        $output = shell_exec('strings ' . escapeshellarg($full) . ' 2>/dev/null');
+        if ($output === null) { echo json_encode(['error' => 'strings not available', 'md5' => $md5]); exit; }
+        $patterns = [
+          '/https?:\\/\\//', '/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/',
+          '/\\/bin\\/(sh|bash|dash)/', '/curl|wget|\\bnc\\b|ncat|netcat/',
+          '/root|passwd|shadow/', '/chmod|chown|setuid/',
+          '/\\/proc\\//', '/connect|socket|bind|listen/',
+          '/cmd|command|shell|backdoor|reverse/',
+        ];
+        $interesting = [];
+        foreach (explode("\\n", $output) as $line) {
+          $line = trim($line);
+          if (strlen($line) < 4 || strlen($line) > 200) continue;
+          foreach ($patterns as $pat) {
+            if (@preg_match($pat, $line)) { $interesting[] = $line; break; }
+          }
+        }
+        echo json_encode([
+          'md5' => $md5,
+          'indicators' => array_values(array_unique(array_slice($interesting, 0, 30))),
+          'analyzed' => basename($rel),
+        ]);
+      `,
+    });
+
+    const parsed = JSON.parse(extractResult(result) || '{}');
+    if (parsed.error) {
+      fs06.evidence.push(`  → strings analysis unavailable: ${parsed.error}`);
+      return;
+    }
+    if (parsed.indicators && parsed.indicators.length > 0) {
+      const elfCount = fs06.evidence.filter(e => e.startsWith('wp-content/')).length;
+      fs06.evidence.push(`  → strings analysis of ${parsed.analyzed} (MD5: ${parsed.md5}, ~${elfCount} total ELF files assumed identical):`);
+      for (const ind of parsed.indicators.slice(0, 15)) {
+        fs06.evidence.push(`    ${ind}`);
+      }
+    }
+    log.info(`[Tier 2] ELF strings: ${parsed.indicators?.length ?? 0} indicator(s) from ${parsed.analyzed}`);
+  } catch (err) {
+    log.warn(`[Tier 2] ELF strings failed: ${err.message}`);
   }
 }
 
@@ -1738,6 +1799,9 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   log.info(`[Tier 2] Comparing core files to SVN originals...`);
   await runCoreDiff(fsSignals, sandboxName, tools, log);
+
+  log.info(`[Tier 2] Analyzing ELF binary strings...`);
+  await runElfStrings(fsSignals, sandboxName, tools, log);
 
   // Collect raw data for all specialists in parallel
   log.phase('Data collection', `Gathering filesystem, DB and behavioral data for ${install.name}`);
