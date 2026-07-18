@@ -292,7 +292,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData },
+  _test: { parseSqlResult, getScanScope, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination },
 };
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -815,6 +815,84 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
     usersApiBody:           behavioral.usersApi?.bodyPreview ?? '',
     randomPostStatuses:     '(not collected)',
   };
+}
+
+async function runContentExamination(fsSignals, sandboxName, tools, log) {
+  const DANGEROUS_FNS = ['eval', 'system', 'exec', 'passthru', 'shell_exec',
+    'base64_decode', 'gzinflate', 'str_rot13', 'create_function', 'assert',
+    'preg_replace', 'move_uploaded_file', 'curl_exec'];
+
+  const toExamine = [];
+  for (const signal of fsSignals) {
+    if (!['FS-01', 'FS-03', 'ABS-09'].includes(signal.id)) continue;
+    for (const ev of (signal.evidence || [])) {
+      const p = ev.split(' ')[0];
+      if (p && p.endsWith('.php') && !p.startsWith('  ')) {
+        toExamine.push({ path: p, signal });
+      }
+    }
+  }
+  if (toExamine.length === 0) return;
+
+  const paths = [...new Set(toExamine.map(f => f.path))].slice(0, 10);
+  const pathsJson = JSON.stringify(paths);
+  const fnsJson = JSON.stringify(DANGEROUS_FNS);
+
+  try {
+    const result = await tools.invoke('wp_eval', {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `
+        $paths = ${pathsJson};
+        $dangerous = ${fnsJson};
+        $out = [];
+        foreach ($paths as $rel) {
+          if (strpos($rel, 'wp-content/') === 0) {
+            $full = WP_CONTENT_DIR . substr($rel, strlen('wp-content'));
+          } else {
+            $full = ABSPATH . $rel;
+          }
+          if (!file_exists($full)) { $out[$rel] = ['error' => 'not found']; continue; }
+          $content = @file_get_contents($full, false, null, 0, 3000);
+          $found_fns = [];
+          foreach ($dangerous as $fn) {
+            if (stripos($content, $fn) !== false) $found_fns[] = $fn;
+          }
+          preg_match_all('/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/', $content, $ips);
+          preg_match_all('/https?:\\/\\/[^\\s\'"<>]+/', $content, $urls);
+          $out[$rel] = [
+            'preview' => substr(preg_replace('/\\s+/', ' ', $content), 0, 200),
+            'functions' => $found_fns,
+            'ips' => array_values(array_unique($ips[0])),
+            'urls' => array_values(array_unique($urls[0])),
+            'md5' => md5($content),
+            'size' => filesize($full),
+          ];
+        }
+        echo json_encode($out);
+      `,
+    });
+
+    const parsed = JSON.parse(extractResult(result) || '{}');
+
+    for (const { path, signal } of toExamine) {
+      const info = parsed[path];
+      if (!info || info.error) continue;
+      if (info.functions.length > 0) {
+        signal.evidence.push(`  → dangerous functions: ${info.functions.join(', ')}`);
+      }
+      if (info.ips.length > 0) {
+        signal.evidence.push(`  → hardcoded IPs: ${info.ips.join(', ')}`);
+      }
+      if (info.urls.length > 0) {
+        signal.evidence.push(`  → external URLs: ${info.urls.slice(0, 3).join(', ')}`);
+      }
+      signal.evidence.push(`  → preview: ${info.preview}`);
+    }
+
+    log.info(`[Tier 2] Content examination: ${Object.keys(parsed).length} file(s) read`);
+  } catch (err) {
+    log.warn(`[Tier 2] Content examination failed: ${err.message}`);
+  }
 }
 
 async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000) {
@@ -1541,6 +1619,9 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
   }
 
   log.info(`[Tier 2] Database scan complete: ${fsSignals.length} total finding(s) (FS + DB + CHK)`);
+
+  log.info(`[Tier 2] Examining suspicious file content...`);
+  await runContentExamination(fsSignals, sandboxName, tools, log);
 
   // Collect raw data for all specialists in parallel
   log.phase('Data collection', `Gathering filesystem, DB and behavioral data for ${install.name}`);

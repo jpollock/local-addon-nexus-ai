@@ -825,4 +825,57 @@ describe('security-sentinel', () => {
       expect(step7.verifyContains).toBe('true');
     });
   });
+
+  describe('runContentExamination', () => {
+    const makeSignal = (id, evidence) => ({
+      id, severity: 'critical', category: 'active-compromise',
+      installName: 'test-site', title: 'test', detail: '', fix: '', evidence,
+    });
+
+    it('enriches FS-03 evidence with dangerous functions found', async () => {
+      const { runContentExamination } = agent._test;
+      const signal = makeSignal('FS-03', ['goods.php (unknown PHP in web root)']);
+      const mockResult = JSON.stringify({
+        'goods.php': {
+          preview: '<?php eval(base64_decode("abc")); system($_GET["cmd"]);',
+          functions: ['eval', 'base64_decode', 'system'],
+          ips: ['1.2.3.4'],
+          urls: ['http://evil.com/payload'],
+          md5: 'abc123',
+          size: 52,
+        },
+      });
+      const tools = { invoke: jest.fn().mockResolvedValue(mockResult) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runContentExamination([signal], 'sandbox-abc', tools, log);
+
+      expect(signal.evidence.some(e => e.includes('eval'))).toBe(true);
+      expect(signal.evidence.some(e => e.includes('1.2.3.4'))).toBe(true);
+      expect(signal.evidence.some(e => e.includes('evil.com'))).toBe(true);
+      expect(signal.evidence.some(e => e.includes('preview'))).toBe(true);
+    });
+
+    it('skips signals that are not FS-01/FS-03/ABS-09', async () => {
+      const { runContentExamination } = agent._test;
+      const signal = makeSignal('FS-02', ['some/file.php — pattern: /eval/']);
+      const tools = { invoke: jest.fn() };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await runContentExamination([signal], 'sandbox-abc', tools, log);
+
+      expect(tools.invoke).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when tools.invoke rejects', async () => {
+      const { runContentExamination } = agent._test;
+      const signal = makeSignal('FS-03', ['goods.php (unknown PHP in web root)']);
+      const tools = { invoke: jest.fn().mockRejectedValue(new Error('wp_eval failed')) };
+      const log = { info: jest.fn(), warn: jest.fn() };
+
+      await expect(runContentExamination([signal], 'sandbox-abc', tools, log))
+        .resolves.toBeUndefined();
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Content examination failed'));
+    });
+  });
 });
