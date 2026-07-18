@@ -27,7 +27,14 @@ function extractResult(result) {
 
 // ─── Fleet data collection ────────────────────────────────────────────────────
 
-async function collectFleetData(tools, scopeInstallId, scopeInstallName) {
+async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
+  // Warn (don't silently drop) when a fleet_sql row can't be parsed — a "|" in an
+  // attacker-controlled value would otherwise make a malicious row vanish unseen.
+  const warnDrop = (context) => (line, want, got) => {
+    if (log && typeof log.warn === 'function') {
+      log.warn(`[fleet_sql] dropped unparseable ${context} row (expected ${want} cols, got ${got}): ${String(line).slice(0, 120)}`);
+    }
+  };
   // Get all WPE installs (or just the one that triggered the event)
   let siteFilter = '';
   if (scopeInstallId) {
@@ -40,7 +47,7 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName) {
     query: `
       SELECT s.id, s.name, s.source, s.environment, s.ssh_last_sync_at,
              s.post_count, s.user_count, s.settings_json,
-             s.wp_version, s.php_version
+             s.wp_version, s.php_version, s.admin_email
       FROM sites s
       WHERE (s.source = 'wpe' OR s.source = 'local')
         AND s.name NOT LIKE 'sentinel-%'
@@ -49,7 +56,7 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName) {
     `,
   });
 
-  const rows = parseSqlResult(sitesResult);
+  const rows = parseSqlResult(sitesResult, warnDrop('sites'));
   const installs = [];
 
   for (const site of rows) {
@@ -81,8 +88,12 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName) {
       settings:      site.settings_json ? JSON.parse(site.settings_json) : {},
       wpVersion:     site.wp_version,
       phpVersion:    site.php_version,
-      plugins:       parseSqlResult(pluginsResult),
-      adminUsers:    parseSqlResult(usersResult).filter(u => {
+      // protectedEmails: sourced from graph.db admin_email (synced at WPE-sync time, not
+      // read live from the compromised site). TODO: supplement with WPE portal account owner
+      // email via wpe_get_account_users for production installs when available.
+      protectedEmails: site.admin_email ? [site.admin_email] : [],
+      plugins:       parseSqlResult(pluginsResult, warnDrop(`plugins@${site.name}`)),
+      adminUsers:    parseSqlResult(usersResult, warnDrop(`users@${site.name}`)).filter(u => {
         try { return JSON.parse(u.roles || '[]').includes('administrator'); } catch { return false; }
       }),
     });
@@ -92,7 +103,7 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName) {
 }
 
 // Parses the markdown table output from fleet_sql into an array of objects
-function parseSqlResult(result) {
+function parseSqlResult(result, onDrop) {
   if (!result || typeof result !== 'string') return [];
   const lines = result.split('\n').filter(l => l.startsWith('|') && !l.startsWith('| ---'));
   if (lines.length < 2) return [];
@@ -101,10 +112,15 @@ function parseSqlResult(result) {
   for (const line of lines.slice(1)) {
     const parts = line.split('|');
     const vals = parts.slice(1, parts.length - 1).map(v => v.trim());
-    // Skip malformed rows — column count mismatch means a pipe char in a value
-    // shifted all subsequent values left, producing garbage. Silently dropping
-    // the row is safer than propagating misaligned data.
-    if (vals.length !== headers.length) continue;
+    // Column-count mismatch means a pipe char in a value shifted the columns.
+    // Propagating that garbage is unsafe, but SILENTLY dropping it is dangerous in
+    // a security scanner: a malicious plugin whose name contains "|" would vanish
+    // from the scan and never fire a signal. So we drop the row (correctness) but
+    // surface it via onDrop (visibility) — a human sees "N rows unparsed", not nothing.
+    if (vals.length !== headers.length) {
+      if (typeof onDrop === 'function') onDrop(line, headers.length, vals.length);
+      continue;
+    }
     const obj = {};
     headers.forEach((h, i) => { obj[h] = vals[i] || null; });
     out.push(obj);
@@ -209,7 +225,7 @@ module.exports = {
     log.info('security-sentinel: calling collectFleetData...');
     let installs;
     try {
-      installs = await collectFleetData(tools, scope.installId, scope.installName);
+      installs = await collectFleetData(tools, scope.installId, scope.installName, log);
     } catch (err) {
       log.error(`security-sentinel: collectFleetData threw: ${err.message}\n${err.stack}`);
       return { verdict: 'error', findings: [], sites: {} };
@@ -1072,16 +1088,31 @@ async function runElfStrings(fsSignals, sandboxName, tools, log) {
   }
 }
 
-const TRUSTED_DOMAINS = [
+// Infrastructure domains — WordPress core, CDNs, package registries. Safe to
+// trust even inside an already-flagged file, because legitimate-but-flagged code
+// legitimately references these.
+const TRUSTED_INFRA_DOMAINS = [
   'wordpress.org', 'wp.com', 'w.org', 'gravatar.com',
   'jquery.com', 'googleapis.com', 'gstatic.com', 'bootstrapcdn.com',
   'github.com', 'github.io', 'githubusercontent.com', 'gitlab.com',
   'php.net', 'php.org', 'phpunit.de', 'phar.phpunit.de',
-  'packagist.org', 'getcomposer.org',
-  'elrte.org', 'studio-42.github', 'artifex.com',
+  'packagist.org', 'getcomposer.org', 'artifex.com',
+];
+
+// Plugin-vendor domains. Deliberately NOT trusted inside runNetworkIndicators:
+// that function only scans files ALREADY flagged as suspicious (FS-01/02/03/ABS-09),
+// and several of these are file-manager vendors — the exact category ABS-04 treats
+// as high-risk. A flagged file phoning its vendor is precisely the call we want to
+// surface, so these are kept out of the network-indicator trust set. Retained here
+// only for reference / potential use by non-security contexts.
+const PLUGIN_VENDOR_DOMAINS = [
+  'elrte.org', 'studio-42.github',
   'filemanagerpro.io', 'webdesi9.com', 'wpexpertsio.com',
   'softaculous.com', 'ninjateam.org',
 ];
+
+// Back-compat alias — some call sites may still reference the old name.
+const TRUSTED_DOMAINS = TRUSTED_INFRA_DOMAINS;
 
 async function runNetworkIndicators(fsSignals, installName, sandboxName, tools, log) {
   const phpPaths = [];
@@ -1096,7 +1127,7 @@ async function runNetworkIndicators(fsSignals, installName, sandboxName, tools, 
 
   const uniquePaths = [...new Set(phpPaths)].slice(0, 20);
   const pathsJson = JSON.stringify(uniquePaths);
-  const trustedJson = JSON.stringify(TRUSTED_DOMAINS);
+  const trustedJson = JSON.stringify(TRUSTED_INFRA_DOMAINS);
 
   try {
     const result = await tools.invoke('wp_eval', {
@@ -1137,7 +1168,15 @@ async function runNetworkIndicators(fsSignals, installName, sandboxName, tools, 
           return true;
         })));
         $filtered_urls = array_values(array_unique(array_filter($all_urls, function($u) use ($trusted) {
-          foreach ($trusted as $d) { if (strpos($u, $d) !== false) return false; }
+          // Host-suffix match, not substring: parse the host once, then trust only
+          // if it EQUALS a trusted domain or ends with "." + domain. Blocks the
+          // bypass where "evil-filemanagerpro.io.attacker.com" matched "filemanagerpro.io".
+          $host = strtolower((string) parse_url($u, PHP_URL_HOST));
+          if ($host === '') return true; // couldn't parse a host → keep it (surface it)
+          foreach ($trusted as $d) {
+            $d = strtolower($d);
+            if ($host === $d || substr($host, -(strlen($d) + 1)) === '.' . $d) return false;
+          }
           return true;
         })));
         echo json_encode(['ips' => $filtered_ips, 'urls' => array_slice($filtered_urls, 0, 20)]);
@@ -2180,7 +2219,17 @@ const SIGNAL_REMEDIATION_STEP = {
 // hoisted).
 module.exports._test.SIGNAL_REMEDIATION_STEP = SIGNAL_REMEDIATION_STEP;
 
-function buildRemediationChecklist(install, allSignals, sandboxName) {
+function buildRemediationChecklist(install, allSignals, sandboxName, options = {}) {
+  // Protected admin accounts must be pinned to a value that comes from OUTSIDE the
+  // scanned site — the WPE portal account owner / agent config — never from the
+  // site's own wp_options (admin_email is attacker-writable once a site is
+  // compromised, so trusting it lets an attacker mark their own account
+  // un-disableable). Resolved on the JS side and injected as a literal; the PHP
+  // never reads it from the database.
+  const protectedEmails = Array.isArray(options.protectedEmails)
+    ? options.protectedEmails.filter(e => typeof e === 'string' && e.includes('@')).map(e => e.toLowerCase())
+    : [];
+  const protectedJson = JSON.stringify(protectedEmails);
   const checklist = [];
   const knownListJson = JSON.stringify(KNOWN_MU_PLUGINS);
 
@@ -2215,7 +2264,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName) {
       toolName: 'wp_eval',
       toolArgs: {
         site: sandboxName,
-        code: `global $wpdb; $admins = $wpdb->get_results("SELECT u.ID, u.user_login, u.user_email, u.user_registered FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'", ARRAY_A); $scoreAdmin = function($username, $email, $registered, $attackTimestamp) { $score = 0; if (preg_match('/^[a-z]{6,10}$/', $username) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $username)) $score += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $username)) $score += 60; if (!$email || substr($email, -12) === '@example.com') $score += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($username))) $score += 20; if ($registered && $attackTimestamp) { $diffMin = abs(strtotime($registered) - strtotime($attackTimestamp)) / 60; if ($diffMin <= 10) $score += 30; } return $score; }; $attackTimestamp = null; foreach ($admins as $u) { $ps = 0; if (preg_match('/^[a-z]{6,10}$/', $u['user_login']) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $u['user_login'])) $ps += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $u['user_login'])) $ps += 60; if (!$u['user_email'] || substr($u['user_email'], -12) === '@example.com') $ps += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($u['user_login']))) $ps += 20; if ($ps > 80) { $attackTimestamp = $u['user_registered']; break; } } $loginDisabled = []; $demoted = []; $appKeysDeleted = []; $flagged = []; $protected = array_values(array_filter([get_option('admin_email')])); // site's registered admin — never touch foreach ($admins as $u) { $score = $scoreAdmin($u['user_login'], $u['user_email'], $u['user_registered'], $attackTimestamp); if (in_array($u['user_email'], $protected) || $score < 30) continue; if ($score >= 50) { $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID'], 'meta_key' => '_application_passwords']); $appKeysDeleted[] = $u['user_login']; } if ($score > 95) { wp_set_password(wp_generate_password(64, true, true), $u['ID']); $wpuser = new WP_User($u['ID']); $wpuser->set_role(''); delete_user_meta($u['ID'], 'session_tokens'); $loginDisabled[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'LOGIN DISABLED — reversible; approve before push']; } elseif ($score >= 50) { wp_update_user(['ID' => $u['ID'], 'role' => 'subscriber']); delete_user_meta($u['ID'], 'session_tokens'); $demoted[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'REVIEW REQUIRED']; } else { $flagged[] = ['username' => $u['user_login'], 'score' => $score]; } } echo json_encode(['login_disabled' => $loginDisabled, 'demoted' => $demoted, 'app_keys_deleted' => $appKeysDeleted, 'flagged' => $flagged]);`,
+        code: `global $wpdb; $admins = $wpdb->get_results("SELECT u.ID, u.user_login, u.user_email, u.user_registered FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'", ARRAY_A); $scoreAdmin = function($username, $email, $registered, $attackTimestamp) { $score = 0; if (preg_match('/^[a-z]{6,10}$/', $username) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $username)) $score += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $username)) $score += 60; if (!$email || substr($email, -12) === '@example.com') $score += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($username))) $score += 20; if ($registered && $attackTimestamp) { $diffMin = abs(strtotime($registered) - strtotime($attackTimestamp)) / 60; if ($diffMin <= 10) $score += 30; } return $score; }; $attackTimestamp = null; foreach ($admins as $u) { $ps = 0; if (preg_match('/^[a-z]{6,10}$/', $u['user_login']) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $u['user_login'])) $ps += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $u['user_login'])) $ps += 60; if (!$u['user_email'] || substr($u['user_email'], -12) === '@example.com') $ps += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($u['user_login']))) $ps += 20; if ($ps > 80) { $attackTimestamp = $u['user_registered']; break; } } $loginDisabled = []; $demoted = []; $appKeysDeleted = []; $flagged = []; $protected = array_map('strtolower', ${protectedJson}); /* allowlist injected from agent config — NOT read from the scanned site's DB */ foreach ($admins as $u) { $score = $scoreAdmin($u['user_login'], $u['user_email'], $u['user_registered'], $attackTimestamp); if (in_array(strtolower((string) $u['user_email']), $protected, true) || $score < 30) continue; if ($score >= 50) { $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID'], 'meta_key' => '_application_passwords']); $appKeysDeleted[] = $u['user_login']; } if ($score > 95) { wp_set_password(wp_generate_password(64, true, true), $u['ID']); $wpuser = new WP_User($u['ID']); $wpuser->set_role(''); delete_user_meta($u['ID'], 'session_tokens'); $loginDisabled[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'LOGIN DISABLED — reversible; approve before push']; } elseif ($score >= 50) { wp_update_user(['ID' => $u['ID'], 'role' => 'subscriber']); delete_user_meta($u['ID'], 'session_tokens'); $demoted[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'REVIEW REQUIRED']; } else { $flagged[] = ['username' => $u['user_login'], 'score' => $score]; } } echo json_encode(['login_disabled' => $loginDisabled, 'demoted' => $demoted, 'app_keys_deleted' => $appKeysDeleted, 'flagged' => $flagged]);`,
       },
       expectedEmpty: false,
     });
@@ -2701,7 +2750,13 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
   }
 
   // Build and execute the checklist
-  const checklist = buildRemediationChecklist(install, allSignals, sandboxName);
+  // protectedEmails should be populated from the WPE portal account owner / agent
+  // config on the `install` object — sourced outside the scanned site. Falls back
+  // to an empty list (protect nothing by email; the score threshold + the human
+  // approval gate on this step still apply).
+  const checklist = buildRemediationChecklist(install, allSignals, sandboxName, {
+    protectedEmails: Array.isArray(install.protectedEmails) ? install.protectedEmails : [],
+  });
   const results   = await executeChecklist(checklist, install, sandboxName, tools, log, reportPath);
 
   // Verdict — BLOCKED if any step failed OR if any critical signal is not
