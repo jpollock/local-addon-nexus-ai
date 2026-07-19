@@ -4453,9 +4453,29 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     }
   });
 
-  // Agent settings cache — synced from renderer via AGENT_SETTINGS_UPDATE
+  // Agent settings cache — synced from renderer via AGENT_SETTINGS_UPDATE.
+  // Pre-populated from disk at startup so the scheduler/event bridge never defaults
+  // to permissive before the renderer finishes loading and sends the initial sync.
   const agentSettingsCache: Map<string, { enabled: boolean; scheduleEnabled: boolean; eventsEnabled: boolean }> =
     (deps as any).__agentSettingsCache ?? ((deps as any).__agentSettingsCache = new Map());
+
+  const _fs = require('fs') as typeof import('fs');
+  const _os = require('os') as typeof import('os');
+  const _path = require('path') as typeof import('path');
+  const _agentSettingsFile = _path.join(_os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agent-settings.json');
+
+  // Load persisted settings into cache before any scheduler fires
+  try {
+    const _raw = _fs.readFileSync(_agentSettingsFile, 'utf8');
+    const _saved = JSON.parse(_raw) as Record<string, any>;
+    for (const [agentId, s] of Object.entries(_saved)) {
+      agentSettingsCache.set(agentId, {
+        enabled:         s.enabled         ?? true,
+        scheduleEnabled: s.scheduleEnabled ?? true,
+        eventsEnabled:   s.eventsEnabled   ?? true,
+      });
+    }
+  } catch { /* file absent on first run — permissive defaults are correct */ }
 
   safeHandle(IPC_CHANNELS.AGENT_SETTINGS_UPDATE, (_event, settings: Record<string, any>) => {
     for (const [agentId, s] of Object.entries(settings ?? {})) {
@@ -4465,6 +4485,12 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         eventsEnabled:   s.eventsEnabled   ?? true,
       });
     }
+    // Persist to disk so next startup respects user's saved toggle state
+    try {
+      const _snapshot: Record<string, any> = {};
+      for (const [id, v] of agentSettingsCache.entries()) _snapshot[id] = v;
+      _fs.writeFileSync(_agentSettingsFile, JSON.stringify(_snapshot, null, 2));
+    } catch { /* non-fatal */ }
     return { ok: true };
   });
 
