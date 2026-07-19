@@ -216,7 +216,7 @@ module.exports = {
   ],
   tools: [
     'fleet_sql', 'wpe_site_deep_refresh', 'wp_user_list',
-    'local_create_site', 'local_clone_site', 'local_start_site',
+    'local_create_site', 'local_clone_site', 'local_start_site', 'local_restart_site',
     'local_wpe_pull', 'local_wpe_push',
     'local_operation_status', 'compare_sites', 'wp_plugin_list', 'wp_eval',
   ],
@@ -1425,13 +1425,16 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
       code: `
         $config = ABSPATH . 'wp-config.php';
         $c = @file_get_contents($config);
-        if ($c && strpos($c, 'WP_HTTP_BLOCK_EXTERNAL') === false) {
-          $defines = "\ndefine('WP_HTTP_BLOCK_EXTERNAL', true);\ndefine('WP_ACCESSIBLE_HOSTS', 'api.wordpress.org,core.svn.wordpress.org,downloads.wordpress.org');\n";
-          // preg_replace with limit 1 — handles <?php with or without trailing space/newline
-          $patched = preg_replace('/<\\?php/', '<?php' . $defines, $c, 1);
-          if ($patched !== null) @file_put_contents($config, $patched);
+        if ($c !== false && strpos($c, 'WP_HTTP_BLOCK_EXTERNAL') === false) {
+          $nl = strpos($c, "\n");
+          $defines = "\ndefine('WP_HTTP_BLOCK_EXTERNAL', true);\ndefine('WP_ACCESSIBLE_HOSTS', 'api.wordpress.org,core.svn.wordpress.org,downloads.wordpress.org');";
+          // Insert defines after the first line (the opening <?php tag)
+          $patched = $nl !== false
+            ? substr($c, 0, $nl) . $defines . substr($c, $nl)
+            : $c . $defines;
+          @file_put_contents($config, $patched);
         }
-        echo defined('WP_HTTP_BLOCK_EXTERNAL') ? 'blocked' : 'open';
+        echo 'done';
       `,
     });
   } catch (err) {
