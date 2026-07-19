@@ -2302,10 +2302,13 @@ const SIGNAL_REMEDIATION_STEP = {
   'FS-06': '5e',
   'FS-05': '5f',
   'DB-02': '5g',
+  // FS-02 (obfuscated code) → Step 8 (final re-scan). The obfuscated files live
+  // inside the attacker plugins removed by Step 3; Step 8 verifies they are gone.
+  // If Step 8 passes, FS-02 is remediated — no separate file-by-file removal needed.
+  'FS-02': 8,
   // Signals with NO remediation step below are intentionally uncovered and will
   // block the push until a step is added or a human clears them:
-  //   FS-02 (obfuscated code — needs inspection, no safe auto-remove)
-  //   FS-07 (network indicators — investigative, no file action)
+  //   FS-07 (network indicators — investigative, URLs need human review)
   //   DB-03 (serialized usermeta — needs inspection)
   //   FS-MISMATCH (hidden admin — remediated indirectly via step 2/3, but the
   //                hiding hook must be confirmed gone by a human)
