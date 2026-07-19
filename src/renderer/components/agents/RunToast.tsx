@@ -104,7 +104,7 @@ export class RunToast extends React.Component<ToastProps, ToastState> {
         React.createElement('button', {
           onClick: onViewReport,
           style: { background: 'none', border: 'none', color: accentColor, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', flexShrink: 0, padding: '0 4px' },
-        }, 'View report'),
+        }, 'View log'),
         React.createElement('button', {
           onClick: () => runStore.dismissRun(),
           style: { background: 'none', border: 'none', color: 'var(--ag-text-muted)', fontSize: 14, cursor: 'pointer', padding: 0 },
