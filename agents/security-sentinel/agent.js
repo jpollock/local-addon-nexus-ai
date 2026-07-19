@@ -1426,8 +1426,10 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         $config = ABSPATH . 'wp-config.php';
         $c = @file_get_contents($config);
         if ($c && strpos($c, 'WP_HTTP_BLOCK_EXTERNAL') === false) {
-          $inject = "<?php\\ndefine('WP_HTTP_BLOCK_EXTERNAL', true);\\ndefine('WP_ACCESSIBLE_HOSTS', 'api.wordpress.org,core.svn.wordpress.org,downloads.wordpress.org');\\n";
-          @file_put_contents($config, str_replace('<?php', $inject, $c, 1));
+          $defines = "\ndefine('WP_HTTP_BLOCK_EXTERNAL', true);\ndefine('WP_ACCESSIBLE_HOSTS', 'api.wordpress.org,core.svn.wordpress.org,downloads.wordpress.org');\n";
+          // preg_replace with limit 1 — handles <?php with or without trailing space/newline
+          $patched = preg_replace('/<\\?php/', '<?php' . $defines, $c, 1);
+          if ($patched !== null) @file_put_contents($config, $patched);
         }
         echo defined('WP_HTTP_BLOCK_EXTERNAL') ? 'blocked' : 'open';
       `,
