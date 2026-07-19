@@ -871,30 +871,37 @@ async function runContentExamination(fsSignals, sandboxName, tools, log) {
         $paths = ${pathsJson};
         $dangerous = ${fnsJson};
         $out = [];
-        foreach ($paths as $rel) {
-          if (strpos($rel, 'wp-content/') === 0) {
-            $full = WP_CONTENT_DIR . substr($rel, strlen('wp-content'));
-          } else {
-            $full = ABSPATH . $rel;
+        try {
+          foreach ($paths as $rel) {
+            if (strpos($rel, 'wp-content/') === 0) {
+              $full = WP_CONTENT_DIR . substr($rel, strlen('wp-content'));
+            } else {
+              $full = ABSPATH . $rel;
+            }
+            if (!file_exists($full)) { $out[$rel] = ['error' => 'not found']; continue; }
+            $content = @file_get_contents($full, false, null, 0, 3000);
+            // PHP 8: file_get_contents returns false on failure; passing false to
+            // string functions throws TypeError — guard here instead.
+            if ($content === false) { $out[$rel] = ['error' => 'unreadable']; continue; }
+            $found_fns = [];
+            foreach ($dangerous as $fn) {
+              if (stripos($content, $fn) !== false) $found_fns[] = $fn;
+            }
+            preg_match_all('/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/', $content, $ips);
+            preg_match_all('/https?:\\/\\/[^\\s\'"<>]+/', $content, $urls);
+            // Sanitize to valid UTF-8 so json_encode never returns false
+            $safe = mb_convert_encoding(substr(preg_replace('/\\s+/', ' ', $content), 0, 200), 'UTF-8', 'UTF-8');
+            $out[$rel] = [
+              'preview' => $safe,
+              'functions' => $found_fns,
+              'ips' => array_values(array_unique($ips[0])),
+              'urls' => array_values(array_unique($urls[0])),
+              'md5' => md5($content),
+              'size' => filesize($full),
+            ];
           }
-          if (!file_exists($full)) { $out[$rel] = ['error' => 'not found']; continue; }
-          $content = @file_get_contents($full, false, null, 0, 3000);
-          $found_fns = [];
-          foreach ($dangerous as $fn) {
-            if (stripos($content, $fn) !== false) $found_fns[] = $fn;
-          }
-          preg_match_all('/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/', $content, $ips);
-          preg_match_all('/https?:\\/\\/[^\\s\'"<>]+/', $content, $urls);
-          $out[$rel] = [
-            'preview' => substr(preg_replace('/\\s+/', ' ', $content), 0, 200),
-            'functions' => $found_fns,
-            'ips' => array_values(array_unique($ips[0])),
-            'urls' => array_values(array_unique($urls[0])),
-            'md5' => md5($content),
-            'size' => filesize($full),
-          ];
-        }
-        echo json_encode($out);
+        } catch (\\Throwable $e) { $out['__error'] = $e->getMessage(); }
+        echo json_encode($out, JSON_PARTIAL_OUTPUT_ON_ERROR);
       `,
     });
 
@@ -937,53 +944,56 @@ async function runRootFileAnalysis(fsSignals, sandboxName, tools, log) {
       code: `
         $files = ${pathsJson};
         $out = [];
-        foreach ($files as $f) {
-          $full = ABSPATH . $f;
-          if (!file_exists($full)) continue;
-          $raw = @file_get_contents($full) ?: '';
-          $size = strlen($raw);
+        try {
+          foreach ($files as $f) {
+            $full = ABSPATH . $f;
+            if (!file_exists($full)) continue;
+            $raw = @file_get_contents($full);
+            if ($raw === false) continue;
+            $size = strlen($raw);
 
-          // Attempt one-level decode for obfuscated files
-          $decoded = null;
-          preg_match_all('/base64_decode\\s*\\(\\s*[\'"]([A-Za-z0-9+\\/=]{20,})[\'"]/', $raw, $m);
-          foreach ($m[1] as $b64) {
-            $d = @base64_decode($b64);
-            if ($d !== false && strlen($d) > 10) {
-              $ungz = @gzinflate($d);
-              $decoded = substr($ungz ?: $d, 0, 500);
-              break;
+            // Attempt one-level decode for obfuscated files
+            $decoded = null;
+            preg_match_all('/base64_decode\\s*\\(\\s*[\'"]([A-Za-z0-9+\\/=]{20,})[\'"]/', $raw, $m);
+            foreach ($m[1] as $b64) {
+              $d = @base64_decode($b64);
+              if ($d !== false && strlen($d) > 10) {
+                $ungz = @gzinflate($d);
+                $decoded = substr($ungz ?: $d, 0, 500);
+                break;
+              }
             }
+
+            // Classify attack category
+            $category = 'unknown-php';
+            if (preg_match('/eval\\s*\\(\\s*(\\$_POST|\\$_REQUEST|\\$_GET|\\$_COOKIE)/', $raw) ||
+                preg_match('/(system|exec|passthru|shell_exec)\\s*\\(\\s*(\\$_POST|\\$_GET|\\$_REQUEST)/', $raw)) {
+              $category = 'webshell';
+            } elseif (preg_match('/\\$_FILES|move_uploaded_file/', $raw)) {
+              $category = 'file-uploader';
+            } elseif (preg_match('/eval\\s*\\(\\s*(base64_decode|gzinflate|str_rot13|goto)/', $raw) ||
+                      preg_match('/goto\\s+[a-zA-Z_]/', $raw)) {
+              $category = 'obfuscated-dropper';
+            } elseif (preg_match('/casino|gambling|slots|poker|\\bbet\\b|wagering/i', $raw)) {
+              $category = 'seo-spam-injector';
+            } elseif (preg_match('/\\bmail\\s*\\(|header\\s*\\(\\s*[\'"]Location:/i', $raw)) {
+              $category = 'mailer';
+            }
+
+            // Extract IOCs: IPs and external URLs
+            preg_match_all('/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/', $raw, $ips);
+            preg_match_all('/https?:\\/\\/[^\\s\'"<>]+/', $raw, $urls);
+
+            $out[$f] = [
+              'content' => mb_convert_encoding(substr($raw, 0, 1000), 'UTF-8', 'UTF-8'),
+              'size' => $size,
+              'category' => $category,
+              'iocs' => array_values(array_unique(array_merge($ips[0], $urls[0]))),
+              'decodedPayload' => $decoded,
+            ];
           }
-
-          // Classify attack category
-          $category = 'unknown-php';
-          if (preg_match('/eval\\s*\\(\\s*(\\$_POST|\\$_REQUEST|\\$_GET|\\$_COOKIE)/', $raw) ||
-              preg_match('/(system|exec|passthru|shell_exec)\\s*\\(\\s*(\\$_POST|\\$_GET|\\$_REQUEST)/', $raw)) {
-            $category = 'webshell';
-          } elseif (preg_match('/\\$_FILES|move_uploaded_file/', $raw)) {
-            $category = 'file-uploader';
-          } elseif (preg_match('/eval\\s*\\(\\s*(base64_decode|gzinflate|str_rot13|goto)/', $raw) ||
-                    preg_match('/goto\\s+[a-zA-Z_]/', $raw)) {
-            $category = 'obfuscated-dropper';
-          } elseif (preg_match('/casino|gambling|slots|poker|bet\b|wagering/i', $raw)) {
-            $category = 'seo-spam-injector';
-          } elseif (preg_match('/\\bmail\\s*\\(|header\\s*\\(\\s*[\'"]Location:/i', $raw)) {
-            $category = 'mailer';
-          }
-
-          // Extract IOCs: IPs and external URLs
-          preg_match_all('/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/', $raw, $ips);
-          preg_match_all('/https?:\\/\\/[^\\s\'"<>]+/', $raw, $urls);
-
-          $out[$f] = [
-            'content' => substr($raw, 0, 1000),
-            'size' => $size,
-            'category' => $category,
-            'iocs' => array_values(array_unique(array_merge($ips[0], $urls[0]))),
-            'decodedPayload' => $decoded,
-          ];
-        }
-        echo json_encode($out);
+        } catch (\\Throwable $e) { $out['__error'] = $e->getMessage(); }
+        echo json_encode($out, JSON_PARTIAL_OUTPUT_ON_ERROR);
       `,
     });
 
@@ -1033,6 +1043,7 @@ async function runObfuscationDecoder(fsSignals, sandboxName, tools, log) {
           }
           if (!file_exists($full)) continue;
           $content = @file_get_contents($full, false, null, 0, 20000);
+          if ($content === false) continue;
           preg_match_all('/base64_decode\\s*\\(\\s*[\'"]([A-Za-z0-9+\\/=]{20,})[\'"]/', $content, $matches);
           $decoded = [];
           foreach ($matches[1] as $b64) {
@@ -1040,11 +1051,11 @@ async function runObfuscationDecoder(fsSignals, sandboxName, tools, log) {
             if ($d === false || strlen($d) < 10) continue;
             $ungz = @gzinflate($d);
             $payload = substr(preg_replace('/\\s+/', ' ', $ungz ?: $d), 0, 300);
-            if (strlen($payload) > 10) $decoded[] = $payload;
+            if (strlen($payload) > 10) $decoded[] = mb_convert_encoding($payload, 'UTF-8', 'UTF-8');
           }
           if (!empty($decoded)) $out[$rel] = $decoded;
         }
-        echo json_encode($out);
+        echo json_encode($out, JSON_PARTIAL_OUTPUT_ON_ERROR);
       `,
     });
 
