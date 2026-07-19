@@ -27,9 +27,9 @@ const EVENT_CATALOG: Record<string, Array<{ id: string; label: string; descripti
 };
 
 const AUTONOMY_OPTIONS = [
-  { value: 'suggest', label: 'Suggest only',     desc: 'The agent surfaces findings but takes no action — you do everything.' },
-  { value: 'ask',     label: 'Act, but ask first', desc: 'The agent investigates autonomously and prepares a plan, but waits for your approval before touching production.' },
-  { value: 'auto',    label: 'Fully autonomous',  desc: 'The agent detects, investigates, remediates, and verifies without asking. Use with caution.' },
+  { value: 'suggest', label: 'Suggest only',     desc: 'The agent surfaces findings but takes no action — no sandbox is created, no files are touched.' },
+  { value: 'ask',     label: 'Act, then ask',    desc: 'The agent scans for threats but stops before executing any remediation. You review the plan and approve before anything is deleted or modified — even in the sandbox.' },
+  { value: 'auto',    label: 'Fully autonomous', desc: 'The agent detects, clones a sandbox, runs full remediation, and verifies — then waits for your approval before pushing to production. Use with caution.' },
 ];
 
 class ToggleSwitch extends React.Component<{ checked: boolean; onChange: (v: boolean) => void }> {

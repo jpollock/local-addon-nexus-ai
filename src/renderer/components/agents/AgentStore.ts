@@ -111,7 +111,16 @@ class AgentStore {
   setIpcSyncer(fn: (settings: Record<string, AgentSettings>) => void): void {
     this.ipcSyncer = fn;
     // Send current settings immediately on registration
-    fn(this.state.agentSettings);
+    fn(this.buildSyncPayload());
+  }
+
+  /** Merge agentSettings with autonomyById so the main process gets a single unified view. */
+  private buildSyncPayload(): Record<string, AgentSettings> {
+    const merged: Record<string, AgentSettings> = { ...this.state.agentSettings };
+    for (const [id, autonomy] of Object.entries(this.state.autonomyById)) {
+      merged[id] = { ...(merged[id] ?? { enabled: true, scheduleEnabled: true, eventsEnabled: true }), autonomy } as any;
+    }
+    return merged;
   }
 
   getState(): AgentState { return this.state; }
@@ -119,7 +128,7 @@ class AgentStore {
   setState(patch: Partial<AgentState>): void {
     this.state = { ...this.state, ...patch };
     if ('agentSettings' in patch || 'autonomyById' in patch || 'activityEvents' in patch) savePersisted(this.state);
-    if ('agentSettings' in patch && this.ipcSyncer) this.ipcSyncer(this.state.agentSettings);
+    if (('agentSettings' in patch || 'autonomyById' in patch) && this.ipcSyncer) this.ipcSyncer(this.buildSyncPayload());
     this.listeners.forEach(fn => fn());
   }
 

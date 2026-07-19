@@ -31,6 +31,8 @@ export interface NexusEvent {
   createdAt: number;         // unix ms
 }
 
+export type AgentAutonomy = 'suggest' | 'ask' | 'auto';
+
 export interface ToolProvider {
   invoke(name: string, args: Record<string, unknown>): Promise<unknown>;
   /** Register a sandbox site ID so wp_eval may target it. Call once after sandbox creation. */
@@ -85,6 +87,8 @@ export interface AgentContext {
   state: AgentStateHandle;
   ai: AIClient;
   log: AgentLogger;
+  /** User's autonomy preference for this agent. 'ask' = wait before executing; 'auto' = execute freely; 'suggest' = report only. */
+  autonomy: AgentAutonomy;
 }
 
 export interface AgentDefinition {

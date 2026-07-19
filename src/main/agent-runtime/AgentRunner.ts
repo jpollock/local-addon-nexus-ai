@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createLogger } from '../logging/Logger';
+import { getAgentAutonomy } from '../ipc-handlers';
 import type { AgentDefinition, NexusEvent, AgentResult, AgentContext, AgentLogger, Finding, AgentAction } from '../agent-sdk/types';
 import type { AgentStateStore } from './AgentStateStore';
 import { NexusToolProvider } from './NexusToolProvider';
@@ -144,6 +145,7 @@ export class AgentRunner {
       state: this.stateStore.buildHandle(agentName),
       ai: aiClient,
       log: agentLog,
+      autonomy: getAgentAutonomy(agentName),
     };
 
     let status: AgentResult['status'] = 'success';

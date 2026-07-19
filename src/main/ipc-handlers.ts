@@ -255,6 +255,11 @@ export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabl
   return cache?.get(agentId)?.[key] ?? true; // default true (permissive before settings sync)
 }
 
+export function getAgentAutonomy(agentId: string): 'suggest' | 'ask' | 'auto' {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  return cache?.get(agentId)?.autonomy ?? 'ask'; // default ask (safest before settings sync)
+}
+
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   _agentSettingsDepsRef = deps;
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() CALLED - starting execution');
@@ -4456,7 +4461,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   // Agent settings cache — synced from renderer via AGENT_SETTINGS_UPDATE.
   // Pre-populated from disk at startup so the scheduler/event bridge never defaults
   // to permissive before the renderer finishes loading and sends the initial sync.
-  const agentSettingsCache: Map<string, { enabled: boolean; scheduleEnabled: boolean; eventsEnabled: boolean }> =
+  const agentSettingsCache: Map<string, { enabled: boolean; scheduleEnabled: boolean; eventsEnabled: boolean; autonomy: 'suggest' | 'ask' | 'auto' }> =
     (deps as any).__agentSettingsCache ?? ((deps as any).__agentSettingsCache = new Map());
 
   const _fs = require('fs') as typeof import('fs');
@@ -4473,6 +4478,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         enabled:         s.enabled         ?? true,
         scheduleEnabled: s.scheduleEnabled ?? true,
         eventsEnabled:   s.eventsEnabled   ?? true,
+        autonomy:        s.autonomy        ?? 'ask',
       });
     }
   } catch { /* file absent on first run — permissive defaults are correct */ }
@@ -4483,6 +4489,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         enabled:         s.enabled         ?? true,
         scheduleEnabled: s.scheduleEnabled ?? true,
         eventsEnabled:   s.eventsEnabled   ?? true,
+        autonomy:        s.autonomy        ?? 'ask',
       });
     }
     // Persist to disk so next startup respects user's saved toggle state
