@@ -21,20 +21,34 @@ export class RunDrawer extends React.Component<DrawerProps, DrawerState> {
   private unsub!: () => void;
   private ticker: ReturnType<typeof setInterval> | null = null;
   private logRef = React.createRef<HTMLDivElement>();
+  /** True when the user has scrolled up — pauses auto-scroll until they return to bottom */
+  private userScrolledUp = false;
 
   componentDidMount() {
-    const update = () => this.setState({ run: runStore.getState().currentRun, elapsed: runStore.getElapsed() });
+    const update = () => {
+      const prev = runStore.getState().currentRun;
+      this.setState({ run: prev, elapsed: runStore.getElapsed() });
+      // New run started — reset scroll lock so log starts at bottom
+      if (prev && prev !== this.state.run) this.userScrolledUp = false;
+    };
     runStore.subscribe(update);
     this.unsub = update;
     this.ticker = setInterval(() => this.setState({ elapsed: runStore.getElapsed() }), 1000);
   }
 
   componentDidUpdate() {
-    // Auto-scroll log to newest
-    if (this.logRef.current) {
+    // Only auto-scroll when user is already at (or near) the bottom
+    if (this.logRef.current && !this.userScrolledUp) {
       this.logRef.current.scrollTop = this.logRef.current.scrollHeight;
     }
   }
+
+  private handleLogScroll = () => {
+    const el = this.logRef.current;
+    if (!el) return;
+    // Within 80px of bottom → resume auto-scroll; further up → pause it
+    this.userScrolledUp = el.scrollTop + el.clientHeight < el.scrollHeight - 80;
+  };
 
   componentWillUnmount() {
     runStore.unsubscribe(this.unsub);
@@ -137,6 +151,7 @@ export class RunDrawer extends React.Component<DrawerProps, DrawerState> {
         // Live log console
         React.createElement('div', {
           ref: this.logRef,
+          onScroll: this.handleLogScroll,
           style: {
             flex: 1, overflowY: 'auto' as const, background: '#0d0f13',
             padding: '12px 16px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5,
