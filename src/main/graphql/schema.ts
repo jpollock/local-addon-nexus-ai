@@ -2037,5 +2037,6 @@ export const typeDefs = gql`
     description: String!
     executionMode: String!
     permissionTier: Int!
+    inputSchema: String!
   }
 `;

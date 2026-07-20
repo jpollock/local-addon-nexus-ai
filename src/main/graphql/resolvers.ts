@@ -5191,6 +5191,7 @@ export function createResolvers(context: ResolverContext) {
               description: t.description,
               executionMode: t.executionMode,
               permissionTier: t.permissionTier,
+              inputSchema: JSON.stringify(t.inputSchema),
             })),
           }));
         } catch (err: any) {
@@ -5211,6 +5212,7 @@ export function createResolvers(context: ResolverContext) {
         // Security: tier-3 tools cannot be invoked via GraphQL — the GraphQL path
         // has no confirmation token flow (that only exists in MCP).
         const registered = reg.get(agentName, toolName);
+        if (!registered) return { success: false, error: `Tool ${agentName}/${toolName} not found`, report: null };
         if (registered && registered.permissionTier >= 3) {
           return {
             success: false,
