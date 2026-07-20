@@ -976,13 +976,13 @@ async function runRootFileAnalysis(fsSignals, sandboxName, tools, log) {
               $category = 'obfuscated-dropper';
             } elseif (preg_match('/casino|gambling|slots|poker|\\bbet\\b|wagering/i', $raw)) {
               $category = 'seo-spam-injector';
-            } elseif (preg_match('/\\bmail\\s*\\(|header\\s*\\(\\s*[\'"]Location:/i', $raw)) {
+            } elseif (preg_match('/\\bmail\\s*\\(|header\\s*\\(\\s*[\\x27"]Location:/i', $raw)) {
               $category = 'mailer';
             }
 
             // Extract IOCs: IPs and external URLs
             preg_match_all('/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/', $raw, $ips);
-            preg_match_all('/https?:\\/\\/[^\\s\'"<>]+/', $raw, $urls);
+            preg_match_all('/https?:\\/\\/[^\\s\\x27"<>]+/', $raw, $urls);
 
             $out[$f] = [
               'content' => mb_convert_encoding(substr($raw, 0, 1000), 'UTF-8', 'UTF-8'),
