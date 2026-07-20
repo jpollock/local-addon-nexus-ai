@@ -217,7 +217,7 @@ const REPORTS_BASE = _path.join(
 const contributedTools = {
   /** Trigger a targeted security scan for a specific site on demand. */
   scan: {
-    description: 'Trigger a Nexus Security Sentinel scan for a specific site. Returns when the scan completes.',
+    description: 'Run the Security Sentinel on a specific site — detects malware, backdoor plugins, obfuscated code, tampered core files, spam injection, ELF binaries, and C2 indicators. Use this (not scan_database_health) when security investigation is needed.',
     inputSchema: {
       type: 'object',
       properties: {

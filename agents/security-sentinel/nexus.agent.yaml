@@ -29,7 +29,7 @@ tools:
 contributes:
   tools:
     - name: scan
-      description: Trigger a targeted security scan for a specific site on demand
+      description: "Run the Security Sentinel on a specific site — detects malware, backdoor plugins, obfuscated code, tampered core files, spam injection, ELF binaries, and C2 indicators. Use this (not scan_database_health) when security investigation is needed."
       executionMode: function
       inputSchema:
         type: object
