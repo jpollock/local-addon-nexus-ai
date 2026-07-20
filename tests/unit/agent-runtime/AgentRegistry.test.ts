@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { AgentRegistry } from '../../../src/main/agent-runtime/AgentRegistry';
+import { ContributedToolRegistry } from '../../../src/main/agent-runtime/ContributedToolRegistry';
 
 function makeTempAgentsDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-agents-test-'));
@@ -74,5 +75,100 @@ describe('AgentRegistry', () => {
     await registry.load();
     expect(registry.list()).toHaveLength(1);
     expect(registry.list()[0].name).toBe('test-agent');
+  });
+});
+
+describe('AgentRegistry — contributed tools', () => {
+  it('registers contributes.tools from manifest via scan()', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-reg-'));
+    const agentDir = path.join(dir, 'my-agent');
+    fs.mkdirSync(agentDir);
+    fs.writeFileSync(path.join(agentDir, 'nexus.agent.yaml'), `
+name: my-agent
+version: 1.0.0
+contributes:
+  tools:
+    - name: ping
+      description: Ping
+      inputSchema:
+        type: object
+`);
+    const reg = new ContributedToolRegistry();
+    const registry = new AgentRegistry(dir, reg);
+    registry.scan();
+    const tool = reg.get('my-agent', 'ping');
+    expect(tool?.toolName).toBe('ping');
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  it('rejects agent name with double underscore', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-reg-'));
+    const agentDir = path.join(dir, 'my__agent');
+    fs.mkdirSync(agentDir);
+    fs.writeFileSync(path.join(agentDir, 'nexus.agent.yaml'), `name: my__agent\nversion: 1.0.0\n`);
+    const reg = new ContributedToolRegistry();
+    const registry = new AgentRegistry(dir, reg);
+    registry.scan();
+    expect(reg.list()).toHaveLength(0);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  it('calls dispatcher.clearCache() when tools are registered', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-reg-'));
+    const agentDir = path.join(dir, 'my-agent');
+    fs.mkdirSync(agentDir);
+    fs.writeFileSync(path.join(agentDir, 'nexus.agent.yaml'), `
+name: my-agent
+version: 1.0.0
+contributes:
+  tools:
+    - name: check
+      description: Check something
+      inputSchema:
+        type: object
+`);
+    const reg = new ContributedToolRegistry();
+    const cleared: string[] = [];
+    const dispatcher = { clearCache: (name: string) => cleared.push(name) };
+    const registry = new AgentRegistry(dir, reg, dispatcher);
+    registry.scan();
+    expect(cleared).toContain('my-agent');
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  it('skips manifest with missing name field', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-reg-'));
+    const agentDir = path.join(dir, 'no-name-agent');
+    fs.mkdirSync(agentDir);
+    fs.writeFileSync(path.join(agentDir, 'nexus.agent.yaml'), `version: 1.0.0\n`);
+    const reg = new ContributedToolRegistry();
+    const registry = new AgentRegistry(dir, reg);
+    registry.scan();
+    expect(reg.list()).toHaveLength(0);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  it('uses permissions.tier when registering tools', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-reg-'));
+    const agentDir = path.join(dir, 'sec-agent');
+    fs.mkdirSync(agentDir);
+    fs.writeFileSync(path.join(agentDir, 'nexus.agent.yaml'), `
+name: sec-agent
+version: 1.0.0
+permissions:
+  tier: 3
+contributes:
+  tools:
+    - name: delete-stuff
+      description: Dangerous
+      inputSchema:
+        type: object
+`);
+    const reg = new ContributedToolRegistry();
+    const registry = new AgentRegistry(dir, reg);
+    registry.scan();
+    const tool = reg.get('sec-agent', 'delete-stuff');
+    expect(tool?.permissionTier).toBe(3);
+    fs.rmSync(dir, { recursive: true });
   });
 });
