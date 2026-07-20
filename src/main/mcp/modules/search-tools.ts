@@ -11,6 +11,7 @@
 
 import { McpToolHandler, McpToolResult, NexusServices } from '../types';
 import type { ToolRegistry } from '../tool-registry';
+import type { ContributedToolRegistry } from '../../agent-runtime/ContributedToolRegistry';
 
 // ---------------------------------------------------------------------------
 // Scoring
@@ -45,7 +46,10 @@ function score(query: string, name: string, description: string): number {
 // Tool handler factory — needs registry reference at registration time
 // ---------------------------------------------------------------------------
 
-export function createSearchToolsHandler(registry: ToolRegistry): McpToolHandler {
+export function createSearchToolsHandler(
+  registry: ToolRegistry,
+  getContributedRegistry?: () => ContributedToolRegistry | undefined,
+): McpToolHandler {
   return {
     definition: {
       name: 'search_tools',
@@ -81,8 +85,16 @@ export function createSearchToolsHandler(registry: ToolRegistry): McpToolHandler
 
       const limit = Math.min(Math.max(1, (args.limit as number) ?? 8), 20);
 
-      // Score all registered tools
-      const tools = registry.list({ localServices: null } as any);
+      // Score all registered tools — built-in + contributed
+      const builtinTools = registry.list({ localServices: null } as any);
+      const contributedDefs = getContributedRegistry?.()?.toMcpDefinitions() ?? [];
+      const contributedTools = contributedDefs.map(t => ({
+        name: t.name,
+        description: t.description,
+        inputSchema: {},
+        isAvailable: () => true,
+      }));
+      const tools = [...builtinTools, ...contributedTools];
       const scored = tools
         .map((t) => ({
           name: t.name,

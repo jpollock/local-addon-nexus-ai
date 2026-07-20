@@ -338,8 +338,10 @@ export default function main(context: any): void {
   registry.register(getGatewayUsageHandler);
   registerTelemetryControlTools(registry);
   registerNexusSettingsTools(registry);
-  // search_tools registered last so it can search all other tools
-  registry.register(createSearchToolsHandler(registry));
+  // search_tools registered last so it can search all other tools.
+  // Pass a late-bound getter for ContributedToolRegistry so contributed tools
+  // are searchable even though the registry is populated after startup wiring.
+  registry.register(createSearchToolsHandler(registry, () => (nexusServices as any).contributedRegistry));
   if (process.env.NEXUS_E2E_MODE === '1') {
     registerTestTools(registry);
     localLogger.info('[NexusAI] Test tools registered (NEXUS_E2E_MODE=1)');
