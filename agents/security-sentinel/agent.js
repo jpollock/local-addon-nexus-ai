@@ -1423,7 +1423,20 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
       const DISABLE = '\n; Nexus AI Sentinel sandbox isolation\ndisable_functions = fsockopen,pfsockopen,curl_exec,curl_multi_exec,exec,shell_exec,system,passthru,proc_open,popen\n';
       fs.appendFileSync(phpIniPath, DISABLE);
       await tools.invoke('local_restart_site', { site: sandboxName });
-      log.info(`[Tier 2] Sandbox PHP hardened: raw socket functions disabled`);
+      // Wait for PHP-FPM and MySQL to fully restart before running more wp_eval calls.
+      // local_restart_site returns before services are ready — poll until wp_eval succeeds.
+      let ready = false;
+      for (let i = 0; i < 15 && !ready; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const probe = await tools.invoke('wp_eval', {
+            site: sandboxName, skip_plugins: true, skip_themes: true,
+            code: `echo 'ok';`,
+          });
+          if (typeof probe === 'string' && probe.includes('ok')) ready = true;
+        } catch { /* still restarting */ }
+      }
+      log.info(`[Tier 2] Sandbox PHP hardened: raw socket functions disabled (ready: ${ready})`);
     }
   } catch (err) {
     log.warn(`[Tier 2] PHP disable_functions failed: ${err.message} — continuing without it`);
