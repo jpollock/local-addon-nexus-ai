@@ -58,10 +58,12 @@ import { TrackerStore } from './smart-search/TrackerStore';
 import { OpportunisticScheduler } from './scheduler/OpportunisticScheduler';
 import type { StartupStatus } from '../common/types';
 import { AgentStateStore } from './agent-runtime/AgentStateStore';
-import { AgentRegistry } from './agent-runtime/AgentRegistry';
+import { AgentRegistry, AGENTS_DIR } from './agent-runtime/AgentRegistry';
 import { AgentRunner } from './agent-runtime/AgentRunner';
 import { AgentScheduler } from './agent-runtime/AgentScheduler';
 import { DaemonManager } from './agent-runtime/DaemonManager';
+import { ContributedToolRegistry } from './agent-runtime/ContributedToolRegistry';
+import { AgentDispatcher } from './agent-runtime/AgentDispatcher';
 import { AgentEventBus } from './agent-event-bus/AgentEventBus';
 import { registerLocalLifecycleBridge } from './agent-event-bus/bridges/local-lifecycle-bridge';
 import { createWpEventsBridgeHandler } from './agent-event-bus/bridges/wp-events-bridge';
@@ -464,18 +466,34 @@ export default function main(context: any): void {
       }
 
       // Agent Platform initialization — requires GraphDB (same connection as SmartSearch)
+      // contributedRegistry and dispatcher are hoisted so McpServer can consume them
+      // even when agentDb is unavailable (they'll simply be empty/unused).
+      let contributedRegistry: ContributedToolRegistry | undefined;
+      let dispatcher: AgentDispatcher | undefined;
+
       const agentDb = graphService.getDb();
       if (agentDb) {
         const agentEventBus = new AgentEventBus(agentDb);
         agentEventBus.pruneOldEvents(30); // prune events older than 30 days on startup
 
         const agentStateStore = new AgentStateStore(agentDb);
-        const agentRegistry = new AgentRegistry();
 
         const resolvedAgentProvider = getAIProvider(
           registryStorage,
           registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null,
         );
+
+        contributedRegistry = new ContributedToolRegistry();
+        dispatcher = new AgentDispatcher(
+          contributedRegistry,
+          registry,
+          nexusServices as any,
+          AGENTS_DIR,
+          resolvedAgentProvider,
+          agentStateStore,
+        );
+        const agentRegistry = new AgentRegistry(AGENTS_DIR, contributedRegistry, dispatcher);
+
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
         const agentRunner = new AgentRunner(agentStateStore, registry, nexusServices as any, resolvedAgentProvider);
         agentScheduler = new AgentScheduler(agentRunner);
@@ -630,6 +648,8 @@ export default function main(context: any): void {
         registryStorage,
         existingToken: previousConnectionInfo?.authToken,
         preferredPort: previousConnectionInfo?.port,
+        contributedRegistry,
+        dispatcher,
       });
       const connectionInfo = await mcpServer.start();
       saveConnectionInfo(connectionInfo);
