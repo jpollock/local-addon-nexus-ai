@@ -175,4 +175,10 @@ export interface NexusServices {
   /** Agent reload function — reloads agents from disk. */
   agentReload?: () => Promise<void>;
 
+  /** Contributed tool registry — tracks tools registered by installed agents. */
+  contributedRegistry?: import('../agent-runtime/ContributedToolRegistry').ContributedToolRegistry;
+
+  /** Agent dispatcher — routes contributed tool calls to the appropriate agent handler. */
+  dispatcher?: import('../agent-runtime/AgentDispatcher').AgentDispatcher;
+
 }

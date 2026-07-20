@@ -828,5 +828,195 @@ agentCommand
     console.log(`  Open Local → Nexus AI → Agents → Security Sentinel → Review → Execute`);
   });
 
+// ---------------------------------------------------------------------------
+// nexus agent tools — contributed tools sub-commands
+// ---------------------------------------------------------------------------
+// These commands work with tools that installed agents contribute via
+// nexus.agent.yaml contributes.tools (the Agent SDK contributed-tools surface).
+// They are separate from `nexus agent list` (lists agent platform agents) and
+// `nexus agent run` (runs a full agent).
+
+const LIST_CONTRIBUTED_TOOLS_QUERY = /* GraphQL */ `
+  query {
+    nexusListAgentTools {
+      agentName
+      tools {
+        toolName
+        description
+        executionMode
+        permissionTier
+      }
+    }
+  }
+`;
+
+const INVOKE_CONTRIBUTED_TOOL_MUTATION = /* GraphQL */ `
+  mutation nexusInvokeAgentTool($agentName: String!, $toolName: String!, $args: String) {
+    nexusInvokeAgentTool(agentName: $agentName, toolName: $toolName, args: $args) {
+      success
+      error
+      report
+    }
+  }
+`;
+
+function parseArgList(argList: string[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const item of argList) {
+    const eqIdx = item.indexOf('=');
+    if (eqIdx === -1) {
+      result[item] = true;
+    } else {
+      result[item.slice(0, eqIdx)] = item.slice(eqIdx + 1);
+    }
+  }
+  return result;
+}
+
+const agentToolsCommand = new Command('tools').description(
+  'List and invoke tools contributed by installed agents (Agent SDK contributed-tools surface)',
+);
+
+agentToolsCommand
+  .command('list [name]')
+  .description('List contributed tools. Pass an agent name to filter to that agent.')
+  .action(async (name?: string) => {
+    try {
+      const data = await defaultGql<{
+        nexusListAgentTools: Array<{
+          agentName: string;
+          tools: Array<{
+            toolName: string;
+            description: string;
+            executionMode: string;
+            permissionTier: number;
+          }>;
+        }>;
+      }>(LIST_CONTRIBUTED_TOOLS_QUERY);
+
+      const groups = data?.nexusListAgentTools ?? [];
+      const filtered = name ? groups.filter((g) => g.agentName === name) : groups;
+
+      if (filtered.length === 0) {
+        console.log(name ? `No contributed tools from agent '${name}'.` : 'No contributed tools registered.');
+        return;
+      }
+
+      for (const group of filtered) {
+        console.log(`\n  ${group.agentName}`);
+        for (const tool of group.tools) {
+          const tier = tool.permissionTier >= 3 ? ' [tier-3]' : '';
+          console.log(`    ${tool.toolName.padEnd(28)} ${tool.description}  [${tool.executionMode}]${tier}`);
+        }
+      }
+      console.log();
+    } catch (error: any) {
+      console.error(`\n❌ Failed to list contributed tools: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+agentToolsCommand
+  .command('invoke <agentName> <toolName>')
+  .description('Invoke a contributed tool (tier-3 tools must be invoked via MCP)')
+  .option(
+    '--arg <keyvalue>',
+    'Argument in key=value format (repeatable)',
+    (val: string, prev: string[]) => [...prev, val],
+    [] as string[],
+  )
+  .action(async (agentName: string, toolName: string, options: { arg: string[] }) => {
+    try {
+      const args = parseArgList(options.arg);
+      const data = await defaultGql<{
+        nexusInvokeAgentTool: { success: boolean; error: string | null; report: string | null };
+      }>(INVOKE_CONTRIBUTED_TOOL_MUTATION, {
+        agentName,
+        toolName,
+        args: JSON.stringify(args),
+      });
+
+      const result = data?.nexusInvokeAgentTool;
+      if (!result) {
+        console.error('No response from server');
+        process.exit(1);
+      }
+      if (!result.success) {
+        console.error(result.error ?? 'Unknown error');
+        process.exit(1);
+      }
+      if (result.report) console.log(result.report);
+    } catch (error: any) {
+      console.error(`\n❌ Failed to invoke tool: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+agentToolsCommand
+  .command('build [agentPath]')
+  .description('Generate the contributes section of nexus.agent.yaml from agent.js')
+  .option('--check', 'Exit non-zero if the manifest is out of date (for CI)')
+  .action(async (agentPath: string | undefined, options: { check?: boolean }) => {
+    const fsMod = await import('fs');
+    const pathMod = await import('path');
+    const yaml = await import('js-yaml');
+    const { zodToJsonSchema } = await import('zod-to-json-schema');
+
+    const resolvedPath = pathMod.resolve(agentPath ?? '.');
+    const agentJsPath = pathMod.join(resolvedPath, 'agent.js');
+    const manifestPath = pathMod.join(resolvedPath, 'nexus.agent.yaml');
+
+    if (!fsMod.existsSync(agentJsPath)) {
+      console.error(`agent.js not found at ${agentJsPath}`);
+      process.exit(1);
+    }
+    if (!fsMod.existsSync(manifestPath)) {
+      console.error(`nexus.agent.yaml not found at ${manifestPath}`);
+      process.exit(1);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require(agentJsPath) as {
+      default?: {
+        contributes?: {
+          tools?: Record<
+            string,
+            { description: string; schema?: unknown; executionMode?: string }
+          >;
+        };
+      };
+    };
+    const def = mod.default ?? (mod as unknown as typeof mod.default);
+    const contributedTools = def?.contributes?.tools ?? {};
+    const toolEntries = Object.entries(contributedTools).map(([toolName, tool]) => ({
+      name: toolName,
+      description: tool.description,
+      executionMode: tool.executionMode ?? 'function',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      inputSchema: tool.schema ? zodToJsonSchema(tool.schema as any, { target: 'openApi3' }) : {},
+    }));
+
+    const raw = fsMod.readFileSync(manifestPath, 'utf8');
+    const manifest = yaml.load(raw) as Record<string, unknown>;
+    manifest.contributes = { tools: toolEntries };
+
+    const generated = `# AUTO-GENERATED by nexus agent tools build — do not edit this section manually\n${yaml.dump(manifest)}`;
+
+    if (options.check) {
+      const existingRaw = fsMod.readFileSync(manifestPath, 'utf8');
+      if (existingRaw.trim() !== generated.trim()) {
+        console.error('nexus.agent.yaml contributes section is out of date. Run: nexus agent tools build');
+        process.exit(1);
+      }
+      console.log('nexus.agent.yaml is up to date.');
+      return;
+    }
+
+    fsMod.writeFileSync(manifestPath, generated, 'utf8');
+    console.log(`Updated ${manifestPath} with ${toolEntries.length} contributed tool(s).`);
+  });
+
+agentCommand.addCommand(agentToolsCommand);
+
 export { agentCommand };
 export default agentCommand;

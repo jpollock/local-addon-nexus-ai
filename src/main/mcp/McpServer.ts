@@ -34,6 +34,10 @@ export interface McpServerOptions {
   preferredPort?: number;
   /** Override port for testing */
   port?: number;
+  /** Registry of agent-contributed tools (exposed via tools/list as agent__<name>__<tool>) */
+  contributedRegistry?: import('../agent-runtime/ContributedToolRegistry').ContributedToolRegistry;
+  /** Dispatcher for routing agent__* tool calls to the right agent handler */
+  dispatcher?: import('../agent-runtime/AgentDispatcher').AgentDispatcher;
 }
 
 /**
@@ -56,6 +60,8 @@ export class McpServer {
 
   private preferredPort?: number;
   private registryStorage?: RegistryStorage;
+  private contributedRegistry?: import('../agent-runtime/ContributedToolRegistry').ContributedToolRegistry;
+  private dispatcher?: import('../agent-runtime/AgentDispatcher').AgentDispatcher;
 
   constructor(options: McpServerOptions) {
     this.auth = new McpAuth(options.existingToken);
@@ -66,6 +72,8 @@ export class McpServer {
     this.registryStorage = options.registryStorage;
     if (options.port) this.port = options.port;
     this.preferredPort = options.preferredPort;
+    this.contributedRegistry = options.contributedRegistry;
+    this.dispatcher = options.dispatcher;
   }
 
   async start(): Promise<ConnectionInfo> {
@@ -278,15 +286,61 @@ export class McpServer {
 
       // --- Tools ---
 
-      case 'tools/list':
-        return this.jsonRpcResult(id, {
-          tools: this.registry.list(this.services),
-        });
+      case 'tools/list': {
+        const builtinTools = this.registry.list(this.services);
+        const contributedTools = this.contributedRegistry?.toMcpDefinitions() ?? [];
+        return this.jsonRpcResult(id, { tools: [...builtinTools, ...contributedTools] });
+      }
 
       case 'tools/call': {
         const toolName = (params as any)?.name as string;
         const toolArgs = ((params as any)?.arguments ?? {}) as Record<string, unknown>;
-        // Use safety wrapper for MCP calls (Tier 3 confirmation tokens, audit logging)
+
+        // Route agent-contributed tools through the dispatcher
+        if (toolName.startsWith('agent__') && this.contributedRegistry && this.dispatcher) {
+          const registered = this.contributedRegistry.getByMcpName(toolName);
+          if (registered) {
+            // Tier-3 gate: agent tools with permissionTier >= 3 require a confirmation token
+            if (registered.permissionTier >= 3) {
+              const token = toolArgs._confirmationToken as string | undefined;
+              if (!token) {
+                const confirmationToken = this.safetyWrapper.confirmationManager.generate(toolName, toolArgs);
+                return this.jsonRpcResult(id, {
+                  content: [{
+                    type: 'text',
+                    text: JSON.stringify({
+                      requiresConfirmation: true,
+                      tier: 3,
+                      action: `Execute agent tool ${toolName}`,
+                      warning: 'This action may not be reversible.',
+                      howToConfirm: `To proceed, call ${toolName} again with the same arguments plus _confirmationToken set to the value below.`,
+                      confirmationToken,
+                    }, null, 2),
+                  }],
+                });
+              }
+              const validationParams = { ...toolArgs };
+              delete validationParams._confirmationToken;
+              const validationError = this.safetyWrapper.confirmationManager.validate(token, toolName, validationParams);
+              if (validationError) {
+                return this.jsonRpcResult(id, {
+                  content: [{ type: 'text', text: validationError }],
+                  isError: true,
+                });
+              }
+            }
+
+            // Strip confirmation token before dispatching
+            const dispatchArgs = { ...toolArgs };
+            delete dispatchArgs._confirmationToken;
+
+            const { agentName, toolName: agentToolName } = registered;
+            const result = await this.dispatcher.dispatch(agentName, agentToolName, dispatchArgs);
+            return this.jsonRpcResult(id, result);
+          }
+        }
+
+        // Use safety wrapper for built-in MCP calls (Tier 3 confirmation tokens, audit logging)
         const result = await this.safetyWrapper.callWithSafety(toolName, toolArgs, this.services);
         return this.jsonRpcResult(id, result);
       }

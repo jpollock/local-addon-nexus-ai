@@ -142,6 +142,10 @@ export interface NexusServices {
   agentEventBus?: import('../agent-event-bus/AgentEventBus').AgentEventBus;
   agentStateStore?: import('../agent-runtime/AgentStateStore').AgentStateStore;
   agentReload?: () => Promise<void>;
+  /** Contributed tool registry — tracks tools registered by installed agents */
+  contributedRegistry?: import('../agent-runtime/ContributedToolRegistry').ContributedToolRegistry;
+  /** Agent dispatcher — routes contributed tool calls to agent handlers */
+  dispatcher?: import('../agent-runtime/AgentDispatcher').AgentDispatcher;
   gatewayUrl?: string;
   gatewayAuthToken?: string;
 }

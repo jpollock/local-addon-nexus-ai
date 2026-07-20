@@ -1,10 +1,24 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as yaml from 'js-yaml';
 import { createLogger } from '../logging/Logger';
 import type { AgentDefinition } from '../agent-sdk/types';
+import type { ContributedToolRegistry, ContributedManifestEntry } from './ContributedToolRegistry';
 
 const logger = createLogger('AgentRegistry');
+
+// Same regex as AgentDispatcher — bans double-underscore so MCP name 'agent__<name>__<tool>' splits cleanly
+const VALID_AGENT_NAME = /^[a-z0-9](?:[a-z0-9]|_(?!_)|-)*[a-z0-9]$|^[a-z0-9]$/;
+
+type AgentManifestWithContributes = {
+  name: string;
+  version?: string;
+  contributes?: {
+    tools?: ContributedManifestEntry[];
+  };
+  permissions?: { tier?: number };
+};
 
 export const AGENTS_DIR = path.join(
   os.homedir(),
@@ -44,8 +58,64 @@ export class AgentRegistry {
   private agents = new Map<string, AgentDefinition>();
   private agentsDir: string;
 
-  constructor(agentsDir: string = AGENTS_DIR) {
+  constructor(
+    agentsDir: string = AGENTS_DIR,
+    private readonly contributedRegistry?: ContributedToolRegistry,
+    private readonly dispatcher?: { clearCache(name: string): void },
+  ) {
     this.agentsDir = agentsDir;
+  }
+
+  /**
+   * Synchronously scan all agent directories for `nexus.agent.yaml` manifests
+   * and register any `contributes.tools` into the ContributedToolRegistry.
+   * Agents without a manifest are silently skipped.
+   * Does NOT load agent code — use load() for that.
+   */
+  scan(): void {
+    if (!fs.existsSync(this.agentsDir)) return;
+
+    const entries = fs.readdirSync(this.agentsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === 'node_modules') continue;
+      this.loadManifest(path.join(this.agentsDir, entry.name));
+    }
+  }
+
+  private loadManifest(agentDir: string): void {
+    if (!this.contributedRegistry) return;
+
+    const manifestPath = path.join(agentDir, 'nexus.agent.yaml');
+    if (!fs.existsSync(manifestPath)) return;
+
+    let manifest: AgentManifestWithContributes;
+    try {
+      manifest = yaml.load(fs.readFileSync(manifestPath, 'utf-8')) as AgentManifestWithContributes;
+    } catch (err: any) {
+      logger.warn(`AgentRegistry: failed to parse manifest at ${manifestPath}: ${err.message}`);
+      return;
+    }
+
+    if (!manifest?.name) {
+      logger.warn(`AgentRegistry: manifest at ${manifestPath} is missing required "name" field`);
+      return;
+    }
+
+    if (!VALID_AGENT_NAME.test(manifest.name)) {
+      logger.warn(`AgentRegistry: manifest name "${manifest.name}" is invalid — skipping (double underscore and uppercase are not allowed)`);
+      return;
+    }
+
+    const tools = manifest.contributes?.tools;
+    if (!tools?.length) return;
+
+    this.contributedRegistry.unregisterAgent(manifest.name);
+    const tier = manifest.permissions?.tier ?? 1;
+    for (const tool of tools) {
+      this.contributedRegistry.register(manifest.name, tool, tier);
+    }
+    this.dispatcher?.clearCache(manifest.name);
+    logger.info(`AgentRegistry: registered ${tools.length} contributed tool(s) for "${manifest.name}"`);
   }
 
   async load(): Promise<void> {
@@ -106,6 +176,8 @@ export class AgentRegistry {
       }
       this.agents.set(def.name, def);
       logger.info(`AgentRegistry: registered "${def.name}" v${def.version}`);
+      // Also load contributed tools from YAML manifest if present
+      this.loadManifest(agentDir);
     } catch (err: any) {
       logger.error(`AgentRegistry: failed to load agent at ${agentDir}: ${err.message}`);
     }
@@ -146,6 +218,7 @@ export class AgentRegistry {
             this.agents.delete(agentName);
             onUnload(agentName);
           }
+          this.contributedRegistry?.unregisterAgent(agentName);
           return;
         }
 
