@@ -128,12 +128,14 @@ export class McpServer {
   }
 
   getConnectionInfo(): ConnectionInfo {
+    const builtinNames = this.registry.allToolNames();
+    const contributedNames = this.contributedRegistry?.toMcpDefinitions().map(t => t.name) ?? [];
     return {
       url: `http://127.0.0.1:${this.port}`,
       authToken: this.auth.getToken(),
       port: this.port,
       version: '0.1.0',
-      tools: this.registry.allToolNames(),
+      tools: [...builtinNames, ...contributedNames],
       // __dirname is lib/ in production, so bin/mcp-stdio.js is one level up
       stdioPath: path.resolve(__dirname, '..', 'bin', 'mcp-stdio.js'),
     };
