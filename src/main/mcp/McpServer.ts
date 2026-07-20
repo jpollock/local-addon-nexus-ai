@@ -334,9 +334,7 @@ export class McpServer {
             const dispatchArgs = { ...toolArgs };
             delete dispatchArgs._confirmationToken;
 
-            const parts = toolName.split('__');
-            const agentName = parts[1];
-            const agentToolName = parts[2];
+            const { agentName, toolName: agentToolName } = registered;
             const result = await this.dispatcher.dispatch(agentName, agentToolName, dispatchArgs);
             return this.jsonRpcResult(id, result);
           }
