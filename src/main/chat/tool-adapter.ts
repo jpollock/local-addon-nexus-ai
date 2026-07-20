@@ -5,6 +5,7 @@ import type { ProviderToolDefinition } from './providers/types';
 /**
  * Convert ToolRegistry definitions to provider-agnostic tool definitions.
  * Strips _confirmationToken from schemas — chat UI handles tier 3 approval separately.
+ * Also includes contributed agent tools from ContributedToolRegistry when present.
  */
 export function adaptToolsForChat(
   registry: ToolRegistry,
@@ -12,7 +13,19 @@ export function adaptToolsForChat(
 ): ProviderToolDefinition[] {
   const mcpTools: McpToolDefinition[] = registry.list(services);
 
-  return mcpTools.map((tool) => {
+  // Append contributed agent tools (agent__<name>__<tool>) from ContributedToolRegistry
+  const contributedDefs = (services as any).contributedRegistry?.toMcpDefinitions() ?? [];
+  const allTools: McpToolDefinition[] = [
+    ...mcpTools,
+    ...contributedDefs.map((t: { name: string; description: string; inputSchema?: Record<string, unknown> }) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: t.inputSchema ?? { type: 'object', properties: {} },
+      isAvailable: () => true,
+    })),
+  ];
+
+  return allTools.map((tool) => {
     // Deep-clone the schema to avoid mutating the original
     const parameters = JSON.parse(JSON.stringify(tool.inputSchema));
 

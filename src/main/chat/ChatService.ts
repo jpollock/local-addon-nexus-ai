@@ -261,6 +261,31 @@ export class ChatService {
     session: ChatSession,
     toolCall: ToolCallRequest,
   ): Promise<{ text: string; isError?: boolean }> {
+    // Contributed agent tools (agent__<agentName>__<toolName>) bypass the built-in
+    // registry and route directly through AgentDispatcher.
+    if (toolCall.name.startsWith('agent__')) {
+      const dispatcher = (this.services as any).dispatcher;
+      const contributedRegistry = (this.services as any).contributedRegistry;
+      if (dispatcher && contributedRegistry) {
+        const registered = contributedRegistry.getByMcpName(toolCall.name);
+        if (registered) {
+          this.emit(sessionId(session), {
+            type: 'tool_call_executing', id: toolCall.id, name: toolCall.name,
+          });
+          const result = await dispatcher.dispatch(
+            registered.agentName, registered.toolName, toolCall.arguments ?? {},
+          );
+          const text = result.content.map((c: { text: string }) => c.text).join('\n');
+          this.emit(sessionId(session), {
+            type: 'tool_call_result', id: toolCall.id, name: toolCall.name,
+            result: text, isError: result.isError,
+          });
+          return { text, isError: result.isError };
+        }
+      }
+      return { text: `Agent tool ${toolCall.name} not found or dispatcher unavailable.`, isError: true };
+    }
+
     const safety = getToolSafety(toolCall.name);
 
     // Tier 3: requires UI approval
