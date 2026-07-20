@@ -99,6 +99,7 @@ export interface AgentDefinition {
   tools?: string[];           // declared tool names; undefined/empty = no tool access
   model?: string;             // default: inherits from Nexus settings
   timeoutMs?: number;         // default: 300_000 (5 min)
+  contributes?: AgentContributes;  // contributed tools for function/daemon dispatch
   run: (ctx: AgentContext) => Promise<Partial<AgentResult> | void>;
   onError?: (err: Error, ctx: AgentContext) => Promise<void>;
 }
@@ -165,3 +166,23 @@ export interface AgentAction {
 
 export type Unsubscribe = () => void;
 export type EventHandler = (event: NexusEvent) => void | Promise<void>;
+
+// ─── Contributed-tool types (SDK v2) ─────────────────────────────────────────
+
+export type ExecutionMode = 'function' | 'run' | 'daemon';
+
+export type AgentToolResult = {
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+};
+
+export type ContributedToolDefinition<TArgs = unknown> = {
+  description: string;
+  inputSchema?: Record<string, unknown>;
+  executionMode?: ExecutionMode;
+  handler: (args: TArgs, ctx: AgentContext) => Promise<AgentToolResult>;
+};
+
+export type AgentContributes = {
+  tools?: Record<string, ContributedToolDefinition>;
+};
