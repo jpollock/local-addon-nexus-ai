@@ -4607,5 +4607,93 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     }
   });
 
+  // Sentinel ask-mode: execute the remediation checklist on the sandbox after user approval
+  safeHandle('nexus:sentinel:execute-sandbox', async (
+    _event: any,
+    { sandboxName, installName, signals }: {
+      sandboxName: string;
+      installName: string;
+      signals: Array<{ id: string; severity: string; category: string; installName: string;
+                       title: string; detail: string; fix: string; evidence: string[] }>;
+    }
+  ) => {
+    try {
+      // Resolve sandbox site name → site ID (wpCliRun requires a UUID, not a name)
+      const allSites = siteData.getSites() as Record<string, any>;
+      const sandboxEntry = Object.entries(allSites).find(([, s]) => s.name === sandboxName);
+      if (!sandboxEntry) {
+        throw new Error(`Sandbox site not found: ${sandboxName}`);
+      }
+      const sandboxSiteId = sandboxEntry[0];
+
+      // Load agent.js to access buildRemediationChecklist and executeChecklist
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const sentinelAgent = require(
+        require('path').join(require('os').homedir(),
+          'Library', 'Application Support', 'Local', 'nexus-ai',
+          'agents', 'security-sentinel', 'agent.js')
+      );
+      const { buildRemediationChecklist, executeChecklist } = sentinelAgent._test;
+
+      // Build a minimal install object from the installName
+      const install = { name: installName, environment: null, postCount: 0 };
+
+      // Build tools wrapper using localServicesBridge (same path as wp_eval MCP handler)
+      const tools = {
+        invoke: async (toolName: string, args: Record<string, unknown>) => {
+          if (toolName === 'wp_eval') {
+            const code = args.code as string;
+            const result = await localServicesBridge.wpCliRun(
+              sandboxSiteId,
+              ['eval', code],
+              {
+                skipPlugins: !!(args.skip_plugins),
+                skipThemes: !!(args.skip_themes),
+                timeoutMs: 30_000,
+              }
+            );
+            if (!result.success) throw new Error('Eval failed: ' + result.stdout);
+            return result.stdout?.trim() || '';
+          }
+          throw new Error(`Tool "${toolName}" not available in sandbox execution context`);
+        },
+      };
+
+      const log = {
+        info: (msg: string) => localLogger.info(msg),
+        warn: (msg: string) => localLogger.warn(msg),
+        error: (msg: string) => localLogger.error(msg),
+        phase: (name: string, desc?: string) => localLogger.info(`[phase] ${name}${desc ? ': ' + desc : ''}`),
+        action: (a: any) => localLogger.info(`[action] ${a.label}`),
+      };
+
+      // Report path
+      const reportPath = require('path').join(
+        require('os').homedir(),
+        'Library', 'Application Support', 'Local', 'nexus-ai',
+        'agents', 'security-sentinel', 'reports', installName,
+        `${new Date().toISOString().slice(0, 10)}T${new Date().toISOString().slice(11, 16).replace(':', '-')}-sandbox.md`
+      );
+      require('fs').mkdirSync(require('path').dirname(reportPath), { recursive: true });
+
+      const checklist = buildRemediationChecklist(install, signals, sandboxName);
+      const results = await executeChecklist(checklist, install, sandboxName, tools, log, reportPath);
+      const steps = checklist.map((item: any, i: number) => ({
+        id: `step-${item.step ?? i + 1}`,
+        label: item.action,
+        command: item.executableCommand ?? '',
+        tier: 3,
+        requiresApproval: item.requiresApproval ?? false,
+        verificationResult: results[i]?.passed ? 'ok' : 'failed',
+        verificationOutput: results[i]?.detail ?? '',
+      }));
+
+      return { success: steps.every((s: any) => s.verificationResult !== 'failed'), steps, reportPath };
+    } catch (err: any) {
+      localLogger.error('[nexus:sentinel:execute-sandbox] Failed:', err.message);
+      return { success: false, steps: [], reportPath: '' };
+    }
+  });
+
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
 }
