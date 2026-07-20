@@ -4572,16 +4572,30 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       } catch {}
 
       const outcomes = parseRunOutcomes(logContent, siteNames);
-      broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
-        runId,
-        agentId,
-        siteNames,
-        doneCount: outcomes.doneCount,
-        failedCount: outcomes.failedCount,
-        findingsSites: outcomes.findingsSites,
-        findings: (lastRunResult as any)?.findings,
-        plan:     (lastRunResult as any)?.plan,
-      });
+      try {
+        broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
+          runId,
+          agentId,
+          siteNames,
+          doneCount: outcomes.doneCount,
+          failedCount: outcomes.failedCount,
+          findingsSites: outcomes.findingsSites,
+          findings: (lastRunResult as any)?.findings,
+          plan:     (lastRunResult as any)?.plan,
+        });
+      } catch (broadcastErr: any) {
+        // Full payload failed to serialize (e.g. enriched plan evidence too large).
+        // Send a minimal payload so the UI at least exits the 'running' state.
+        console.error('[AGENT_RUN_NOW] broadcast failed, sending minimal completion:', broadcastErr?.message);
+        try {
+          broadcast(IPC_CHANNELS.AGENT_RUN_COMPLETE, {
+            runId, agentId, siteNames,
+            doneCount: outcomes.doneCount,
+            failedCount: outcomes.failedCount,
+            findingsSites: outcomes.findingsSites,
+          });
+        } catch {}
+      }
     })();
 
     return { runId };
