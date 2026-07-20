@@ -33,6 +33,17 @@ export interface AdminAccount {
 
 export type AccountDecision = 'delete' | 'keep' | null;
 
+export interface SentinelSignal {
+  id: string;
+  severity: string;
+  category: string;
+  installName: string;
+  title: string;
+  detail: string;
+  fix: string;
+  evidence: string[];
+}
+
 export interface SentinelCase {
   site: string;
   host: string;           // site + '.wpengine.com'
@@ -45,4 +56,6 @@ export interface SentinelCase {
   findings: Finding[];
   steps: RemediationStep[];
   accounts: AdminAccount[];
+  pendingApproval?: boolean;
+  signals?: SentinelSignal[];
 }

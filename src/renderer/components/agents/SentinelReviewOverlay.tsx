@@ -18,6 +18,8 @@ interface OverlayState {
   expandedStep: number | null;
   decisions: AccountDecisionMap;
   showSignalIds: boolean;
+  executing: boolean;
+  executionDone: boolean;
 }
 
 const SEV_COLORS: Record<string, string> = {
@@ -37,6 +39,8 @@ export class SentinelReviewOverlay extends React.Component<OverlayProps, Overlay
     expandedStep: null,
     decisions: {},
     showSignalIds: false,
+    executing: false,
+    executionDone: false,
   };
 
   private getAccountDecision(accountId: string) {
@@ -170,8 +174,61 @@ export class SentinelReviewOverlay extends React.Component<OverlayProps, Overlay
     );
   }
 
+  private handleExecuteSandbox = async () => {
+    const { sentinelCase } = this.props;
+    this.setState({ executing: true });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { ipcRenderer } = require('electron');
+      const result = await ipcRenderer.invoke('nexus:sentinel:execute-sandbox', {
+        sandboxName: sentinelCase.sandbox?.id ?? '',
+        installName: sentinelCase.site,
+        signals: sentinelCase.signals ?? [],
+      });
+      if (result?.steps?.length) {
+        sentinelCase.steps = result.steps;
+        sentinelCase.reportPath = result.reportPath ?? '';
+      }
+      this.setState({ executing: false, executionDone: true });
+    } catch {
+      this.setState({ executing: false, executionDone: true });
+    }
+  };
+
   private renderVerdict() {
-    const { verdict, failedSteps } = this.props.sentinelCase;
+    const { verdict, failedSteps, pendingApproval } = this.props.sentinelCase;
+    const { executing, executionDone } = this.state;
+
+    if (pendingApproval && !executionDone) {
+      return React.createElement('div', {
+        style: {
+          background: 'rgba(245,181,68,0.08)', border: '1px solid rgba(245,181,68,0.3)',
+          borderRadius: 12, padding: '20px 24px', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', gap: 16, margin: '0 0 24px',
+        },
+      },
+        React.createElement('div', null,
+          React.createElement('div', {
+            style: { fontSize: 15, fontWeight: 600, color: '#f5b544', marginBottom: 4 },
+          }, '⏸ Awaiting approval — nothing has been modified'),
+          React.createElement('div', {
+            style: { fontSize: 12.5, color: 'var(--ag-text-muted)' },
+          }, 'Review the proposed remediation steps above, then approve to execute in sandbox.'),
+        ),
+        React.createElement('button', {
+          onClick: this.handleExecuteSandbox,
+          disabled: executing,
+          style: {
+            background: executing ? 'var(--ag-bg-elevated)' : '#f5b544',
+            color: executing ? 'var(--ag-text-muted)' : '#0d0f13',
+            border: 'none', borderRadius: 8, padding: '10px 20px',
+            fontSize: 13, fontWeight: 600, cursor: executing ? 'not-allowed' : 'pointer',
+            flexShrink: 0,
+          },
+        }, executing ? 'Executing…' : 'Execute remediation in sandbox'),
+      );
+    }
+
     const ready = verdict === 'ready';
     return React.createElement('div', {
       style: {
