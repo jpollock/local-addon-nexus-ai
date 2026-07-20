@@ -67,9 +67,18 @@ describe('Batch 1 — remediation coverage', () => {
     });
 
     it('a critical signal with no step blocks the push', async () => {
-      const r = await tier3Remediate(install, 's', [{ id: 'FS-02', severity: 'critical', title: 'obfuscated' }], 'sbx', passingTools(), log);
+      // Use DB-03 (intentionally uncovered — serialized usermeta, needs human inspection)
+      const r = await tier3Remediate(install, 's', [{ id: 'DB-03', severity: 'critical', title: 'usermeta' }], 'sbx', passingTools(), log);
       expect(r.verdict).toBe('blocked');
-      expect(r.uncoveredCritical).toContain('FS-02');
+      expect(r.uncoveredCritical).toContain('DB-03');
+    });
+
+    it('FS-02 is covered by Step 8 (final re-scan verifies obfuscated files are gone)', async () => {
+      // FS-02 was previously uncovered; mapped to Step 8 so verdict can reach ready
+      // when the final re-scan confirms obfuscated code was removed by Step 3.
+      expect(SIGNAL_REMEDIATION_STEP['FS-02']).toBe(8);
+      const r = await tier3Remediate(install, 's', [{ id: 'FS-02', severity: 'critical', title: 'obfuscated' }], 'sbx', passingTools(), log);
+      expect(r.verdict).toBe('ready');
     });
 
     it('FS-07 alone blocks the push', async () => {
