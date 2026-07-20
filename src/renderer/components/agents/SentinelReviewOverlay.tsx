@@ -230,6 +230,16 @@ export class SentinelReviewOverlay extends React.Component<OverlayProps, Overlay
     }
 
     const ready = verdict === 'ready';
+    const uncovered = this.props.sentinelCase.uncoveredCritical ?? [];
+    // Build a clear reason: distinguish "steps failed" from "signals need review"
+    const blockedParts: string[] = [];
+    if (failedSteps > 0) blockedParts.push(`${failedSteps} step(s) failed`);
+    if (uncovered.length > 0) blockedParts.push(`${uncovered.join(', ')} require${uncovered.length === 1 ? 's' : ''} review`);
+    const blockedReason = blockedParts.join('; ') || 'requires review before push';
+    const blockedDetail = failedSteps > 0
+      ? 'Fix the failed steps before executing on production.'
+      : `These findings need human review — open the report for details.`;
+
     return React.createElement('div', {
       style: {
         margin: '0 0 24px', padding: '16px 22px', borderRadius: 12,
@@ -241,12 +251,12 @@ export class SentinelReviewOverlay extends React.Component<OverlayProps, Overlay
       React.createElement('span', { style: { fontSize: 20, color: ready ? 'var(--ag-green)' : 'var(--ag-red)' } }, ready ? '✓' : '!'),
       React.createElement('div', { style: { flex: 1 } },
         React.createElement('div', { style: { fontSize: 15, fontWeight: 700, color: ready ? 'var(--ag-green)' : 'var(--ag-red)' } },
-          ready ? 'READY TO PUSH' : `NOT SAFE TO PUSH — ${failedSteps} step(s) failed`,
+          ready ? 'READY TO PUSH' : `NOT SAFE TO PUSH — ${blockedReason}`,
         ),
         React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)', marginTop: 2 } },
           ready
             ? `All ${this.props.sentinelCase.steps.filter(s => s.ok).length} remediation steps passed verification on the sandbox.`
-            : 'Fix the failed steps before executing on production.',
+            : blockedDetail,
         ),
       ),
       React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-muted)', textAlign: 'right' } },

@@ -53,6 +53,7 @@ export interface SentinelCase {
   sandbox: { id: string; url: string };
   verdict: 'ready' | 'blocked';
   failedSteps: number;
+  uncoveredCritical?: string[];  // signal IDs that block the push (no remediation step)
   findings: Finding[];
   steps: RemediationStep[];
   accounts: AdminAccount[];

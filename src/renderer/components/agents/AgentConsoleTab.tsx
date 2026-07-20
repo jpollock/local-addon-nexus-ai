@@ -93,6 +93,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
         accounts: [],
         pendingApproval: (eventPlan as any)?.pendingApproval ?? false,
         signals: (eventPlan as any)?.signals ?? eventFindings ?? [],
+        uncoveredCritical: (eventPlan as any)?.uncoveredCritical ?? [],
       };
       this.setState({ activeSentinelCase: sc });
       return;
