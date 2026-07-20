@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as yaml from 'js-yaml';
 import { createLogger } from '../logging/Logger';
 import type { AgentDefinition } from '../agent-sdk/types';
-import type { ContributedToolRegistry } from './ContributedToolRegistry';
+import type { ContributedToolRegistry, ContributedManifestEntry } from './ContributedToolRegistry';
 
 const logger = createLogger('AgentRegistry');
 
@@ -15,12 +15,7 @@ type AgentManifestWithContributes = {
   name: string;
   version?: string;
   contributes?: {
-    tools?: Array<{
-      name: string;
-      description: string;
-      executionMode?: string;
-      inputSchema: Record<string, unknown>;
-    }>;
+    tools?: ContributedManifestEntry[];
   };
   permissions?: { tier?: number };
 };
@@ -117,7 +112,7 @@ export class AgentRegistry {
     this.contributedRegistry.unregisterAgent(manifest.name);
     const tier = manifest.permissions?.tier ?? 1;
     for (const tool of tools) {
-      this.contributedRegistry.register(manifest.name, tool as any, tier);
+      this.contributedRegistry.register(manifest.name, tool, tier);
     }
     this.dispatcher?.clearCache(manifest.name);
     logger.info(`AgentRegistry: registered ${tools.length} contributed tool(s) for "${manifest.name}"`);
@@ -223,6 +218,7 @@ export class AgentRegistry {
             this.agents.delete(agentName);
             onUnload(agentName);
           }
+          this.contributedRegistry?.unregisterAgent(agentName);
           return;
         }
 
