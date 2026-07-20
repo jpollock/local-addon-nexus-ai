@@ -7,6 +7,8 @@
  */
 
 import type { ToolRegistry } from '../mcp/tool-registry';
+import type { ContributedToolRegistry } from '../agent-runtime/ContributedToolRegistry';
+import type { AgentDispatcher } from '../agent-runtime/AgentDispatcher';
 import * as ollamaClient from '../helpers/ollama-client';
 import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
 import {
@@ -5171,6 +5173,59 @@ export function createResolvers(context: ResolverContext) {
           await services.agentReload();
         }
         return true;
+      },
+
+      // ======================================================================
+      // Agent SDK — Contributed Tools
+      // ======================================================================
+
+      nexusListAgentTools: async () => {
+        const reg = services.contributedRegistry;
+        if (!reg) return [];
+        try {
+          const grouped = reg.toolsByAgent();
+          return Array.from(grouped.entries()).map(([agentName, tools]) => ({
+            agentName,
+            tools: tools.map(t => ({
+              toolName: t.toolName,
+              description: t.description,
+              executionMode: t.executionMode,
+              permissionTier: t.permissionTier,
+            })),
+          }));
+        } catch (err: any) {
+          console.error('[nexusListAgentTools] error:', err?.message);
+          return [];
+        }
+      },
+
+      nexusInvokeAgentTool: async (
+        _parent: ResolverParent,
+        { agentName, toolName, args }: { agentName: string; toolName: string; args?: string },
+      ) => {
+        const disp = services.dispatcher;
+        const reg = services.contributedRegistry;
+        if (!disp || !reg) {
+          return { success: false, error: 'Agent dispatcher not available', report: null };
+        }
+        // Security: tier-3 tools cannot be invoked via GraphQL — the GraphQL path
+        // has no confirmation token flow (that only exists in MCP).
+        const registered = reg.get(agentName, toolName);
+        if (registered && registered.permissionTier >= 3) {
+          return {
+            success: false,
+            error: 'Tier-3 tools cannot be invoked via GraphQL — use the MCP interface with confirmation token flow.',
+            report: null,
+          };
+        }
+        try {
+          const parsedArgs: unknown = args ? JSON.parse(args) : {};
+          const result = await disp.dispatch(agentName, toolName, parsedArgs);
+          const text = result.content[0]?.text ?? '';
+          return { success: !result.isError, error: result.isError ? text : null, report: text };
+        } catch (err: any) {
+          return { success: false, error: err.message, report: null };
+        }
       },
     },
 

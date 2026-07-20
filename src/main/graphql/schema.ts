@@ -989,6 +989,23 @@ export const typeDefs = gql`
 
     "Fleet-wide plugin audit"
     nexusAuditPlugins: NexusAuditPluginsResult!
+
+    # Agent SDK — Contributed Tools
+    "List all tools contributed by registered agents, grouped by agent"
+    nexusListAgentTools: [NexusAgentToolGroup!]!
+
+    """
+    Invoke a tool contributed by a registered agent.
+
+    Returns NexusTwinReportResult (success, error, report) — the same shape used
+    by nexusSiteStatus and nexusSiteRefresh — because it already carries all three
+    fields we need: a boolean outcome, an optional error string, and an optional
+    free-text report field for the tool's output.  No new type is required.
+
+    Tier-3 tools are blocked at the GraphQL layer and must be invoked via the MCP
+    interface (which supports the confirmation token flow).
+    """
+    nexusInvokeAgentTool(agentName: String!, toolName: String!, args: String): NexusTwinReportResult!
   }
 
   # ============================================================================
@@ -2004,5 +2021,21 @@ export const typeDefs = gql`
     error: String
     "Duration in milliseconds"
     durationMs: Int!
+  }
+
+  # ============================================================================
+  # Agent SDK — Contributed Tools Types
+  # ============================================================================
+
+  type NexusAgentToolGroup {
+    agentName: String!
+    tools: [NexusAgentToolEntry!]!
+  }
+
+  type NexusAgentToolEntry {
+    toolName: String!
+    description: String!
+    executionMode: String!
+    permissionTier: Int!
   }
 `;

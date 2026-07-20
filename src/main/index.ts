@@ -593,6 +593,8 @@ export default function main(context: any): void {
         nexusServices.agentEventBus = agentEventBus;
         nexusServices.agentStateStore = agentStateStore;
         nexusServices.agentReload = agentReload;
+        nexusServices.contributedRegistry = contributedRegistry;
+        nexusServices.dispatcher = dispatcher;
 
         localLogger.info(`[NexusAI] Agent platform initialized: ${agentRegistry.list().length} agent(s) loaded`);
       } else {
