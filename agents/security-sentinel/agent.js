@@ -201,6 +201,96 @@ function runFleetCorrelation(allResults, suspiciousSlugsFound) {
 
 // ─── Agent definition ─────────────────────────────────────────────────────────
 
+// ─── Contributed tools ────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _fs = require('fs');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _path = require('path');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _os = require('os');
+
+const REPORTS_BASE = _path.join(
+  _os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai',
+  'agents', 'security-sentinel', 'reports',
+);
+
+const contributedTools = {
+  /** Trigger a targeted security scan for a specific site on demand. */
+  scan: {
+    description: 'Trigger a Nexus Security Sentinel scan for a specific site. Returns when the scan completes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: { type: 'string', description: 'Site name or install ID to scan (e.g. "theawfulpm-test" or a WPE install name)' },
+      },
+      required: ['site'],
+    },
+    executionMode: 'function',
+    handler: async ({ site }, ctx) => {
+      const scopedEvent = {
+        namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
+        siteId: site, payload: { installName: site }, createdAt: Date.now(),
+      };
+      try {
+        await module.exports.run({ event: scopedEvent, tools: ctx.tools, ai: ctx.ai, log: ctx.log, state: ctx.state, autonomy: ctx.autonomy });
+        return { content: [{ type: 'text', text: `Scan complete for ${site}. Check the Agents tab or use the get-report tool to see findings.` }] };
+      } catch (err) {
+        return { content: [{ type: 'text', text: `Scan failed: ${err.message}` }], isError: true };
+      }
+    },
+  },
+
+  /** Return the content of the latest forensic report for a site. */
+  'get-report': {
+    description: 'Return the latest Sentinel forensic report for a site as markdown text.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        site: { type: 'string', description: 'Site name (e.g. "theawfulpm-test")' },
+      },
+      required: ['site'],
+    },
+    executionMode: 'function',
+    handler: async ({ site }) => {
+      const dir = _path.join(REPORTS_BASE, site);
+      if (!_fs.existsSync(dir)) {
+        return { content: [{ type: 'text', text: `No reports found for site "${site}". Run a scan first.` }] };
+      }
+      const files = _fs.readdirSync(dir).filter(f => f.endsWith('.md')).sort();
+      if (files.length === 0) {
+        return { content: [{ type: 'text', text: `No reports found for site "${site}". Run a scan first.` }] };
+      }
+      const latest = files.at(-1);
+      const content = _fs.readFileSync(_path.join(dir, latest), 'utf8');
+      return { content: [{ type: 'text', text: content }] };
+    },
+  },
+
+  /** List all available sentinel reports across all sites. */
+  'list-reports': {
+    description: 'List all available Sentinel reports grouped by site, newest first.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+    executionMode: 'function',
+    handler: async () => {
+      if (!_fs.existsSync(REPORTS_BASE)) {
+        return { content: [{ type: 'text', text: 'No reports directory found. Run a scan first.' }] };
+      }
+      const sites = _fs.readdirSync(REPORTS_BASE).filter(f =>
+        _fs.statSync(_path.join(REPORTS_BASE, f)).isDirectory()
+      );
+      if (sites.length === 0) {
+        return { content: [{ type: 'text', text: 'No reports found. Run a scan first.' }] };
+      }
+      const lines = sites.flatMap(site => {
+        const dir = _path.join(REPORTS_BASE, site);
+        const files = _fs.readdirSync(dir).filter(f => f.endsWith('.md')).sort().reverse();
+        return files.slice(0, 3).map(f => `- **${site}** → ${f}`);
+      });
+      return { content: [{ type: 'text', text: `## Sentinel Reports\n\n${lines.join('\n')}` }] };
+    },
+  },
+};
+
 module.exports = {
   name: 'security-sentinel',
   version: '1.0.0',
@@ -220,6 +310,7 @@ module.exports = {
     'local_wpe_pull', 'local_wpe_push',
     'local_operation_status', 'compare_sites', 'wp_plugin_list', 'wp_eval',
   ],
+  contributes: { tools: contributedTools },
 
   async run({ event, tools, ai, log, state, autonomy }) {
     const scope = getScanScope(event);

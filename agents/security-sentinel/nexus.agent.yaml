@@ -26,6 +26,36 @@ tools:
   - wp_eval
   - local_wpe_push
 
+contributes:
+  tools:
+    - name: scan
+      description: Trigger a targeted security scan for a specific site on demand
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          site:
+            type: string
+            description: Site name or install ID to scan
+        required: [site]
+    - name: get-report
+      description: Return the latest Sentinel forensic report for a site as markdown
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          site:
+            type: string
+            description: Site name (e.g. "theawfulpm-test")
+        required: [site]
+    - name: list-reports
+      description: List all available Sentinel reports grouped by site, newest first
+      executionMode: function
+      inputSchema:
+        type: object
+        properties: {}
+        required: []
+
 permissions:
   tier: 3
   scope: fleet
