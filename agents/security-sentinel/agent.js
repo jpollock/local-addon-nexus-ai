@@ -221,7 +221,7 @@ module.exports = {
     'local_operation_status', 'compare_sites', 'wp_plugin_list', 'wp_eval',
   ],
 
-  async run({ event, tools, ai, log, state }) {
+  async run({ event, tools, ai, log, state, autonomy }) {
     const scope = getScanScope(event);
     const scopeLabel = scope.installId || scope.installName || 'fleet-wide';
     log.info(`security-sentinel: starting sweep for ${scopeLabel}`);
@@ -283,7 +283,7 @@ module.exports = {
           description: s.detail, site: install.name,
           category: s.category,
         }));
-        const plan = await tier2Investigate(install, signals, tools, ai, log, state);
+        const plan = await tier2Investigate(install, signals, tools, ai, log, state, 20000, autonomy);
         if (plan) latestPlan = plan;
       } else {
         log.siteStatus(install.name, 'findings');
@@ -1311,7 +1311,7 @@ async function runNetworkIndicators(fsSignals, installName, sandboxName, tools, 
   }
 }
 
-async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000) {
+async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000, autonomy = 'auto') {
   // DEV MODE: cooldown disabled for iteration speed
   // TODO: re-enable before production by uncommenting below
   // if (state.isCoolingDown(`tier2:${install.id}`, 24 * 60 * 60 * 1000)) {
@@ -2189,6 +2189,37 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
   // remediationSteps are advisory context for the human, not the executed plan,
   // so we do NOT branch on them here — doing so previously dropped the
   // synthesizer enrichment whenever the LLM happened to return zero steps.
+
+  if (autonomy === 'ask') {
+    // Ask mode: build the checklist but don't execute it. Return a pending plan
+    // so the user can review and approve before anything is deleted or modified.
+    log.phase('Tier 3', `Plan ready — awaiting approval before execution (${install.name})`);
+    const checklist = buildRemediationChecklist(install, tier1Signals.concat(fsSignals), sandboxName);
+    return {
+      site: install.name,
+      sandbox: sandboxName,
+      verified: false,
+      verdict: 'pending',
+      pendingApproval: true,
+      checklist,
+      signals: tier1Signals.concat(fsSignals),
+      summary: synthesis.attackSummary,
+      entryPoint: synthesis.entryPoint,
+      blindSpots: synthesis.blindSpots,
+      attackerItems: synthesis.attackerItems,
+      steps: checklist.map((item, i) => ({
+        id: `step-${item.step ?? i + 1}`,
+        label: item.action,
+        command: item.executableCommand ?? '',
+        tier: 3,
+        requiresApproval: item.requiresApproval ?? false,
+        verificationResult: 'pending',
+        verificationOutput: '',
+      })),
+      reportPath: '',
+    };
+  }
+
   log.phase('Tier 3', `Preparing remediation plan for ${install.name}`);
   const plan = await tier3Remediate(install, synthesis.attackSummary, tier1Signals.concat(fsSignals), sandboxName, tools, log);
   if (plan) {

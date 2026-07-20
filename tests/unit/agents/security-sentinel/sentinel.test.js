@@ -1173,4 +1173,88 @@ describe('security-sentinel', () => {
       expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Root file analysis failed'));
     });
   });
+
+  describe('ask-mode autonomy', () => {
+    it('does not execute checklist when autonomy is ask', async () => {
+      const { tier2Investigate } = agent._test;
+      const installObj = { id: 's1', name: 'testsite', source: 'local', environment: null,
+        postCount: 5, userCount: 1, wpVersion: '6.5', phpVersion: '8.2', plugins: [],
+        adminUsers: [], settings: {}, protectedEmails: [], sshLastSyncAt: null };
+
+      let checklistExecuted = false;
+      const tools = {
+        invoke: jest.fn().mockImplementation(async (name, args) => {
+          if (name === 'local_start_site') return 'ok';
+          if (name === 'local_clone_site') return '{}';
+          if (name === 'local_operation_status') return JSON.stringify({ site_status: 'running', message: 'ok' });
+          if (name === 'wp_eval') {
+            // Mark if executeChecklist runs (it calls wp_eval with shuffle-salts)
+            if ((args.code || '').includes('shuffle-salts')) checklistExecuted = true;
+            return '[]';
+          }
+          return '{}';
+        }),
+        registerSandbox: jest.fn(),
+      };
+      const log = { info: jest.fn(), warn: jest.fn(), error: jest.fn(),
+        phase: jest.fn(), finding: jest.fn(), action: jest.fn(), siteStatus: jest.fn() };
+      const state = { get: jest.fn(), set: jest.fn(), delete: jest.fn(), scratch: {},
+        isCoolingDown: jest.fn().mockReturnValue(false), setCooldown: jest.fn() };
+      const ai = { run: jest.fn(), generateObject: jest.fn().mockResolvedValue({
+        verdict: 'active-compromise', attackSummary: 'test', entryPoint: 'unknown',
+        temporalNarrative: '', attackerItems: [], legitimateItems: [],
+        blindSpots: [], remediationSteps: [],
+      }) };
+
+      const signals = [{ id: 'ABS-05', severity: 'critical', category: 'active-compromise',
+        installName: 'testsite', title: 'Known backdoor', detail: '', fix: '', evidence: [] }];
+
+      const plan = await tier2Investigate(installObj, signals, tools, ai, log, state, 0, 'ask');
+
+      expect(checklistExecuted).toBe(false);
+      expect(plan).not.toBeNull();
+      expect(plan.pendingApproval).toBe(true);
+      expect(Array.isArray(plan.checklist)).toBe(true);
+      expect(plan.checklist.length).toBeGreaterThan(0);
+    });
+
+    it('executes checklist normally when autonomy is auto', async () => {
+      const { tier2Investigate } = agent._test;
+      const installObj = { id: 's1', name: 'testsite', source: 'local', environment: null,
+        postCount: 5, userCount: 1, wpVersion: '6.5', phpVersion: '8.2', plugins: [],
+        adminUsers: [], settings: {}, protectedEmails: [], sshLastSyncAt: null };
+
+      let checklistExecuted = false;
+      const tools = {
+        invoke: jest.fn().mockImplementation(async (name, args) => {
+          if (name === 'local_start_site') return 'ok';
+          if (name === 'local_clone_site') return '{}';
+          if (name === 'local_operation_status') return JSON.stringify({ site_status: 'running', message: 'ok' });
+          if (name === 'wp_eval') {
+            if ((args.code || '').includes('shuffle-salts')) checklistExecuted = true;
+            return '[]';
+          }
+          return '{}';
+        }),
+        registerSandbox: jest.fn(),
+      };
+      const log = { info: jest.fn(), warn: jest.fn(), error: jest.fn(),
+        phase: jest.fn(), finding: jest.fn(), action: jest.fn(), siteStatus: jest.fn() };
+      const state = { get: jest.fn(), set: jest.fn(), delete: jest.fn(), scratch: {},
+        isCoolingDown: jest.fn().mockReturnValue(false), setCooldown: jest.fn() };
+      const ai = { run: jest.fn(), generateObject: jest.fn().mockResolvedValue({
+        verdict: 'active-compromise', attackSummary: 'test', entryPoint: 'unknown',
+        temporalNarrative: '', attackerItems: [], legitimateItems: [],
+        blindSpots: [], remediationSteps: [],
+      }) };
+
+      const signals = [{ id: 'ABS-05', severity: 'critical', category: 'active-compromise',
+        installName: 'testsite', title: 'Known backdoor', detail: '', fix: '', evidence: [] }];
+
+      const plan = await tier2Investigate(installObj, signals, tools, ai, log, state, 0, 'auto');
+
+      expect(checklistExecuted).toBe(true);
+      expect(plan?.pendingApproval).toBeFalsy();
+    });
+  });
 });
