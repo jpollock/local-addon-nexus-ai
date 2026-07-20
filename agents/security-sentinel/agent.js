@@ -2967,7 +2967,9 @@ async function tier3Remediate(install, synthesis, allSignals, sandboxName, tools
   const safeToPush = !isBlocked;
 
   log.action({
-    label: `Remediation prepared in sandbox: ${sandboxName}`,
+    label: safeToPush
+      ? `Remediation complete — sandbox ready for push: ${sandboxName}`
+      : `Remediation complete — review required before push (${uncoveredCritical.length > 0 ? uncoveredCritical.map(s => s.id).join(', ') + ' need review' : `${failCount} step(s) failed`})`,
     site: install.name,
     result: safeToPush ? 'ok' : 'failed',
   });

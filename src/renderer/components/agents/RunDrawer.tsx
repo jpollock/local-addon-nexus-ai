@@ -176,10 +176,15 @@ export class RunDrawer extends React.Component<DrawerProps, DrawerState> {
           style: { padding: '14px 22px', borderTop: '1px solid var(--ag-border-subtle)', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 },
         },
           React.createElement('button', {
-            onClick: () => {
+            onClick: async () => {
               const r = runStore.getState().currentRun;
               if (r) {
-                this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.AGENT_RUN_CANCEL, { runId: r.runId });
+                try {
+                  await this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.AGENT_RUN_CANCEL, { runId: r.runId });
+                } catch {}
+                // Force-dismiss locally after a short delay — handles the case where
+                // the agent already completed but AGENT_RUN_COMPLETE was never received.
+                setTimeout(() => runStore.dismissRun(), 800);
               }
             },
             style: { padding: '9px 20px', background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border)', borderRadius: 8, fontSize: 13, color: 'var(--ag-red)', cursor: 'pointer' },
