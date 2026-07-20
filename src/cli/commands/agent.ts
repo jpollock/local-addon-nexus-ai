@@ -836,8 +836,8 @@ agentCommand
 // They are separate from `nexus agent list` (lists agent platform agents) and
 // `nexus agent run` (runs a full agent).
 
-const LIST_CONTRIBUTED_TOOLS_MUTATION = /* GraphQL */ `
-  mutation {
+const LIST_CONTRIBUTED_TOOLS_QUERY = /* GraphQL */ `
+  query {
     nexusListAgentTools {
       agentName
       tools {
@@ -892,7 +892,7 @@ agentToolsCommand
             permissionTier: number;
           }>;
         }>;
-      }>(LIST_CONTRIBUTED_TOOLS_MUTATION);
+      }>(LIST_CONTRIBUTED_TOOLS_QUERY);
 
       const groups = data?.nexusListAgentTools ?? [];
       const filtered = name ? groups.filter((g) => g.agentName === name) : groups;

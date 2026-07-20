@@ -140,6 +140,13 @@ export class AgentDispatcher {
       const def = this.loadModule(registered.agentName);
       const { ctx } = buildAgentContext({
         agent: def,
+        event: {
+          namespace: 'nexus',
+          type: 'tool-call',
+          key: 'nexus:tool-call',
+          payload: args && typeof args === 'object' ? (args as Record<string, unknown>) : {},
+          createdAt: Date.now(),
+        },
         toolRegistry: this.toolRegistry,
         services: this.services,
         stateStore: this.stateStore,
@@ -155,8 +162,23 @@ export class AgentDispatcher {
           'logs',
         ),
       });
-      await def.run(ctx);
-      return { content: [{ type: 'text', text: 'Run complete' }] };
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(
+          () => reject(new Error(`Agent run() timed out after ${HANDLER_TIMEOUT_MS}ms`)),
+          HANDLER_TIMEOUT_MS,
+        );
+      });
+      const runResult = await Promise.race([
+        (async () => {
+          const r = await def.run(ctx);
+          clearTimeout(timeoutHandle);
+          return r;
+        })(),
+        timeoutPromise,
+      ]);
+      const text = runResult?.findings ? JSON.stringify(runResult) : 'Run complete';
+      return { content: [{ type: 'text', text }] };
     } catch (err: any) {
       return {
         content: [{ type: 'text', text: `Run error: ${err?.message ?? String(err)}` }],

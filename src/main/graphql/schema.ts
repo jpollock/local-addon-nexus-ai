@@ -990,10 +990,6 @@ export const typeDefs = gql`
     "Fleet-wide plugin audit"
     nexusAuditPlugins: NexusAuditPluginsResult!
 
-    # Agent SDK — Contributed Tools
-    "List all tools contributed by registered agents, grouped by agent"
-    nexusListAgentTools: [NexusAgentToolGroup!]!
-
     """
     Invoke a tool contributed by a registered agent.
 
@@ -1959,6 +1955,9 @@ export const typeDefs = gql`
 
     "List agents with last-run status"
     agentStatus: [AgentStatus!]!
+
+    "List all tools contributed by registered agents, grouped by agent"
+    nexusListAgentTools: [NexusAgentToolGroup!]!
   }
 
   type AgentInfo {

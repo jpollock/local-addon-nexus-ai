@@ -5179,27 +5179,6 @@ export function createResolvers(context: ResolverContext) {
       // Agent SDK — Contributed Tools
       // ======================================================================
 
-      nexusListAgentTools: async () => {
-        const reg = services.contributedRegistry;
-        if (!reg) return [];
-        try {
-          const grouped = reg.toolsByAgent();
-          return Array.from(grouped.entries()).map(([agentName, tools]) => ({
-            agentName,
-            tools: tools.map(t => ({
-              toolName: t.toolName,
-              description: t.description,
-              executionMode: t.executionMode,
-              permissionTier: t.permissionTier,
-              inputSchema: JSON.stringify(t.inputSchema),
-            })),
-          }));
-        } catch (err: any) {
-          console.error('[nexusListAgentTools] error:', err?.message);
-          return [];
-        }
-      },
-
       nexusInvokeAgentTool: async (
         _parent: ResolverParent,
         { agentName, toolName, args }: { agentName: string; toolName: string; args?: string },
@@ -5291,6 +5270,27 @@ export function createResolvers(context: ResolverContext) {
             lastRunError: last?.error ?? null,
           };
         });
+      },
+
+      nexusListAgentTools: async () => {
+        const reg = services.contributedRegistry;
+        if (!reg) return [];
+        try {
+          const grouped = reg.toolsByAgent();
+          return Array.from(grouped.entries()).map(([agentName, tools]) => ({
+            agentName,
+            tools: tools.map(t => ({
+              toolName: t.toolName,
+              description: t.description,
+              executionMode: t.executionMode,
+              permissionTier: t.permissionTier,
+              inputSchema: JSON.stringify(t.inputSchema),
+            })),
+          }));
+        } catch (err: any) {
+          console.error('[nexusListAgentTools] error:', err?.message);
+          return [];
+        }
       },
     },
   };
