@@ -888,7 +888,7 @@ async function runContentExamination(fsSignals, sandboxName, tools, log) {
               if (stripos($content, $fn) !== false) $found_fns[] = $fn;
             }
             preg_match_all('/\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b/', $content, $ips);
-            preg_match_all('/https?:\\/\\/[^\\s\'"<>]+/', $content, $urls);
+            preg_match_all('/https?:\\/\\/[^\\s\\x27"<>]+/', $content, $urls);
             // Sanitize to valid UTF-8 so json_encode never returns false
             $safe = mb_convert_encoding(substr(preg_replace('/\\s+/', ' ', $content), 0, 200), 'UTF-8', 'UTF-8');
             $out[$rel] = [
@@ -954,7 +954,7 @@ async function runRootFileAnalysis(fsSignals, sandboxName, tools, log) {
 
             // Attempt one-level decode for obfuscated files
             $decoded = null;
-            preg_match_all('/base64_decode\\s*\\(\\s*[\'"]([A-Za-z0-9+\\/=]{20,})[\'"]/', $raw, $m);
+            preg_match_all('/base64_decode\\s*\\(\\s*[\\x27"]([A-Za-z0-9+\\/=]{20,})[\\x27"]/',$raw, $m);
             foreach ($m[1] as $b64) {
               $d = @base64_decode($b64);
               if ($d !== false && strlen($d) > 10) {
@@ -1044,7 +1044,7 @@ async function runObfuscationDecoder(fsSignals, sandboxName, tools, log) {
           if (!file_exists($full)) continue;
           $content = @file_get_contents($full, false, null, 0, 20000);
           if ($content === false) continue;
-          preg_match_all('/base64_decode\\s*\\(\\s*[\'"]([A-Za-z0-9+\\/=]{20,})[\'"]/', $content, $matches);
+          preg_match_all('/base64_decode\\s*\\(\\s*[\\x27"]([A-Za-z0-9+\\/=]{20,})[\\x27"]/',$content, $matches);
           $decoded = [];
           foreach ($matches[1] as $b64) {
             $d = @base64_decode($b64);
