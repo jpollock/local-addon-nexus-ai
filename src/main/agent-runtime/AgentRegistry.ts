@@ -110,9 +110,12 @@ export class AgentRegistry {
     if (!tools?.length) return;
 
     this.contributedRegistry.unregisterAgent(manifest.name);
-    const tier = manifest.permissions?.tier ?? 1;
+    const agentTier = manifest.permissions?.tier ?? 1;
     for (const tool of tools) {
-      this.contributedRegistry.register(manifest.name, tool, tier);
+      // Per-tool permissionTier overrides the agent-level tier (useful for read-only tools
+      // on agents that default to tier-3, like the security-sentinel).
+      const toolTier = (tool as any).permissionTier ?? agentTier;
+      this.contributedRegistry.register(manifest.name, tool, toolTier);
     }
     this.dispatcher?.clearCache(manifest.name);
     logger.info(`AgentRegistry: registered ${tools.length} contributed tool(s) for "${manifest.name}"`);

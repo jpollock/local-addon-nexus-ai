@@ -41,6 +41,7 @@ contributes:
     - name: get-report
       description: Return the latest Sentinel forensic report for a site as markdown
       executionMode: function
+      permissionTier: 1
       inputSchema:
         type: object
         properties:
@@ -51,6 +52,7 @@ contributes:
     - name: list-reports
       description: List all available Sentinel reports grouped by site, newest first
       executionMode: function
+      permissionTier: 1
       inputSchema:
         type: object
         properties: {}
