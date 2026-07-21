@@ -23,8 +23,12 @@ const GOOGLE_SCOPE_METADATA: ProviderConfig['scopeMetadata'] = {
 export class ProviderRegistry {
   get(id: string): ProviderConfig | null {
     if (id !== 'google') return null;
-    const clientId = process.env.NEXUS_GOOGLE_CLIENT_ID;
-    if (!clientId) return null;
+    // Desktop app client ID — not a secret (PKCE is the security model).
+    // Replace REPLACE_WITH_GOOGLE_CLIENT_ID with the real value from
+    // console.cloud.google.com → Credentials → OAuth client ID (Desktop app).
+    // Override with NEXUS_GOOGLE_CLIENT_ID env var in CI or dev.
+    const clientId = process.env.NEXUS_GOOGLE_CLIENT_ID ?? 'REPLACE_WITH_GOOGLE_CLIENT_ID';
+    if (clientId === 'REPLACE_WITH_GOOGLE_CLIENT_ID') return null;
     return {
       id: 'google',
       displayName: 'Google',
