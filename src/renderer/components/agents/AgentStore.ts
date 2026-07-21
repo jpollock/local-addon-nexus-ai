@@ -46,6 +46,7 @@ export interface ActivityEvent {
   children?: string[];
   plan?: RemediationPlan;       // structured remediation plan from AgentResult
   findings?: Finding[];         // structured findings from AgentResult
+  summary?: string;             // free-text Site Content Report from AgentResult.summary
 }
 
 export interface AgentSettings {

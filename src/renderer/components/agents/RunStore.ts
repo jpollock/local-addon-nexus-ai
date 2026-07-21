@@ -25,6 +25,7 @@ export interface Run {
   findingsSites: string[];
   siteStatus: Record<string, SiteRunStatus>;
   log: LogLine[];
+  summary?: string;
 }
 
 interface RunState {
@@ -92,7 +93,7 @@ class RunStore {
     this.startWatching(params.agentId, run.startedAt);
   }
 
-  completeRun(payload: { runId: string; doneCount: number; failedCount: number; findingsSites: string[]; cancelled?: boolean }): void {
+  completeRun(payload: { runId: string; doneCount: number; failedCount: number; findingsSites: string[]; cancelled?: boolean; summary?: string }): void {
     const run = this.state.currentRun;
     if (!run || run.runId !== payload.runId) return;
     this.flushLog(run.agentId);
@@ -108,6 +109,7 @@ class RunStore {
         doneCount: payload.doneCount,
         failedCount: payload.failedCount,
         findingsSites: payload.findingsSites,
+        summary: payload.summary,
       },
     });
   }

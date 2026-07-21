@@ -191,6 +191,18 @@ export class RunDrawer extends React.Component<DrawerProps, DrawerState> {
           }, 'Cancel run'),
         ),
 
+        // Summary report (AgentResult.summary) — shown when agent returns structured report text
+        isDone && run.summary && React.createElement('div', {
+          style: { margin: '0 14px 10px', padding: '12px 14px', background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-subtle)', borderRadius: 8, flexShrink: 0 },
+        },
+          React.createElement('div', {
+            style: { fontSize: 11.5, fontWeight: 600, color: 'var(--ag-text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' },
+          }, 'Site Content Report'),
+          React.createElement('pre', {
+            style: { margin: 0, fontSize: 11.5, lineHeight: 1.6, color: 'var(--ag-text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', maxHeight: 220, overflowY: 'auto' },
+          }, run.summary),
+        ),
+
         // Completion actions
         isDone && React.createElement('div', {
           style: { padding: '14px 22px', borderTop: '1px solid var(--ag-border-subtle)', display: 'flex', gap: 10, flexShrink: 0 },

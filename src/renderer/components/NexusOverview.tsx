@@ -534,7 +534,8 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
               ref: hasFindings ? payload.runId : undefined,
               siteName: payload.findingsSites?.[0] ?? (payload.siteNames?.[0] ?? undefined),
               plan: payload.plan,
-              findings: payload.findings },
+              findings: payload.findings,
+              summary: payload.summary },
             ...agentStore.getState().activityEvents,
           ],
         });
