@@ -66,6 +66,15 @@ export interface NexusState {
   settings: NexusSettings | null;
   wpeSyncProgress: WpeSyncProgress | null;
   localSyncProgress: LocalSyncProgress | null;
+  credentialConnectRequest?: {
+    provider: string;
+    agentId: string;
+    siteId: string;
+    scopes?: string[];
+    agentName?: string;
+    reason?: string;
+    scopeLabels?: Record<string, string>;
+  } | null;
 }
 
 // ---------------------------------------------------------------------------

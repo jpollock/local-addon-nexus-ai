@@ -10,6 +10,7 @@ import { IPC_CHANNELS, UI_COLORS, POLL_INTERVALS } from '../../common/constants'
 import { injectThemeVars } from '../utils/theme';
 import type { NexusSettings } from '../../common/types';
 import { nexusStore } from '../store/NexusStateManager';
+import type { NexusState } from '../store/NexusStateManager';
 import { EventStatsCards } from './EventStatsCards';
 import { EventTimeline } from './EventTimeline';
 import { StorageHealthPanel } from './StorageHealthPanel';
@@ -29,6 +30,7 @@ import { runStore } from './agents/RunStore';
 import { RunToast } from './agents/RunToast';
 import { RunPill } from './agents/RunPill';
 import { RunDrawer } from './agents/RunDrawer';
+import { CredentialConsentModal } from './credentials/CredentialConsentModal';
 // Local's native notification components
 let toast: any = null;
 try {
@@ -228,6 +230,7 @@ interface NexusOverviewState {
   dashboardPrompt: string | null;
   wpeBannerDismissed: boolean;
   wpeNotConnectedDismissed: boolean;
+  credentialRequest: NexusState['credentialConnectRequest'];
 }
 
 // -- Shared styles --
@@ -359,6 +362,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   private indexProgressHandler: ((_: any, data: any) => void) | null = null;
   private mounted = false;
   private unsub?: () => void;
+  private credentialRequestUnsub?: () => void;
   private runStartedHandler!: (...args: any[]) => void;
   private runCompleteHandler!: (...args: any[]) => void;
 
@@ -437,6 +441,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     dashboardPrompt: null,
     wpeBannerDismissed: false,
     wpeNotConnectedDismissed: false,
+    credentialRequest: null,
   };
 
   componentDidMount(): void {
@@ -468,6 +473,14 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
         this.stopWpeSyncProgressPolling();
         this.setState({ wpeSyncing: false, wpeSyncProgress: null });
       }
+    });
+
+    // Mirror credential consent requests from the main process so agents calling
+    // ctx.credentials.requestConnection() surface the CredentialConsentModal.
+    this.credentialRequestUnsub = nexusStore.subscribe(() => {
+      if (!this.mounted) return;
+      const req = nexusStore.get().credentialConnectRequest;
+      this.setState({ credentialRequest: req ?? null });
     });
 
     // Refresh indexEntries immediately when any site finishes indexing — don't
@@ -568,6 +581,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.AGENT_RUN_COMPLETE, this.runCompleteHandler);
     }
     this.unsub?.();
+    this.credentialRequestUnsub?.();
   }
 
   getLatestPlan(): { site: string; plan: any } | null {
@@ -2972,6 +2986,16 @@ renderTabBar(): React.ReactNode {
       }),
       React.createElement(RunPill, { onOpen: () => runStore.toggleDrawer() }),
       React.createElement(RunDrawer, { electron: this.props.electron }),
+      React.createElement(CredentialConsentModal, {
+        electron: this.props.electron,
+        request: this.state.credentialRequest
+          ? { ...this.state.credentialRequest, scopes: this.state.credentialRequest.scopes ?? [] }
+          : null,
+        onDismiss: () => {
+          nexusStore.update({ credentialConnectRequest: null });
+          this.setState({ credentialRequest: null });
+        },
+      }),
     );
   }
 }

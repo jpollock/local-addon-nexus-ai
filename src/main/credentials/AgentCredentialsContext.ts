@@ -49,7 +49,17 @@ export interface ICredentialManager {
    * Request a new connection or expanded scopes for a provider.
    * Prompts the user to authorize.
    */
-  requestConnectionForAgent(provider: string, agentId: string, siteId: string): Promise<void>;
+  requestConnectionForAgent(
+    provider: string,
+    agentId: string,
+    siteId: string,
+    meta?: {
+      scopes?: string[];
+      agentName?: string;
+      reason?: string;
+      scopeLabels?: Record<string, string>;
+    },
+  ): Promise<void>;
 }
 
 export interface AgentCredentialsContextOpts {
@@ -75,6 +85,8 @@ export class AgentCredentialsContext implements AgentCredentials {
    * If a provider is not in this map, the agent did not declare it.
    */
   private declaredScopes: Map<string, Set<string>>;
+  /** Full declarations keyed by provider — used to pass metadata to the consent UI. */
+  private declarations: Map<string, CredentialDeclaration>;
   private manager: ICredentialManager;
   private agentId: string;
   private siteId: string;
@@ -84,8 +96,10 @@ export class AgentCredentialsContext implements AgentCredentials {
     this.siteId = opts.siteId;
     this.manager = opts.manager;
     this.declaredScopes = new Map();
+    this.declarations = new Map();
     for (const decl of opts.manifestCredentials) {
       this.declaredScopes.set(decl.provider, new Set(decl.scopes));
+      this.declarations.set(decl.provider, decl);
     }
   }
 
@@ -125,6 +139,12 @@ export class AgentCredentialsContext implements AgentCredentials {
       throw new NotConnectedError(provider);
     }
 
-    return this.manager.requestConnectionForAgent(provider, this.agentId, this.siteId);
+    // Find the matching declaration so the consent UI can show scopes and reason
+    const decl = this.declarations.get(provider);
+    return this.manager.requestConnectionForAgent(provider, this.agentId, this.siteId, {
+      scopes: decl?.scopes ?? [],
+      agentName: this.agentId,
+      reason: decl?.reason,
+    });
   }
 }

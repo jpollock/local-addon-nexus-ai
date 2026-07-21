@@ -98,8 +98,18 @@ export class CredentialManager implements ICredentialManager {
     return 'connected';
   }
 
-  async requestConnectionForAgent(provider: string, agentId: string, siteId: string): Promise<void> {
-    this.emitNexusState({ credentialConnectRequest: { provider, agentId, siteId } });
+  async requestConnectionForAgent(
+    provider: string,
+    agentId: string,
+    siteId: string,
+    meta?: {
+      scopes?: string[];
+      agentName?: string;
+      reason?: string;
+      scopeLabels?: Record<string, string>;
+    },
+  ): Promise<void> {
+    this.emitNexusState({ credentialConnectRequest: { provider, agentId, siteId, ...meta } });
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
