@@ -337,6 +337,59 @@ export class SqliteVecStore implements IVectorStore {
     return row ?? null;
   }
 
+  async getAllDocuments(siteId: string): Promise<Array<{
+    id: string;
+    postId: number;
+    postType: string;
+    title: string;
+    content: string;
+    embedding: Float32Array;
+    metadata: string;
+  }>> {
+    const p = this.tablePrefix(siteId);
+
+    // Return [] if site hasn't been indexed yet
+    const tableExists = this.conn
+      .prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`)
+      .get(`${p}_docs`);
+    if (!tableExists) return [];
+
+    // Join _docs to _vec on rowid, one row per post (chunk_index = 0)
+    // chunk_index = 0 is the first (or only) chunk per post — representative embedding
+    const rows = this.conn
+      .prepare(`
+        SELECT d.id, d.post_id, d.post_type, d.title, d.content, d.metadata,
+               v.embedding
+        FROM "${p}_docs" d
+        JOIN "${p}_vec" v ON d.rowid = v.rowid
+        WHERE d.chunk_index = 0
+      `)
+      .all() as Array<{
+        id: string;
+        post_id: number;
+        post_type: string;
+        title: string;
+        content: string;
+        metadata: string;
+        embedding: Buffer;
+      }>;
+
+    return rows.map(row => ({
+      id: row.id,
+      postId: row.post_id,
+      postType: row.post_type,
+      title: row.title,
+      content: row.content,
+      metadata: row.metadata,
+      // sqlite-vec returns embedding as a raw Buffer (BLOB) — convert to Float32Array
+      embedding: new Float32Array(
+        row.embedding.buffer,
+        row.embedding.byteOffset,
+        row.embedding.byteLength / 4,
+      ),
+    }));
+  }
+
   async delete(siteId: string, documentIds: string[]): Promise<void> {
     const p = this.tablePrefix(siteId);
     const tableExists = this.conn.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(`${p}_docs`);

@@ -276,6 +276,115 @@ describe('searchAcrossSites', () => {
   });
 });
 
+describe('getAllDocuments', () => {
+  let store: SqliteVecStore;
+  let dbPath: string;
+
+  beforeEach(async () => {
+    dbPath = tmpDb();
+    store = new SqliteVecStore(dbPath);
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  });
+
+  it('returns [] when site has not been indexed', async () => {
+    const docs = await store.getAllDocuments('nonexistent-site');
+    expect(docs).toEqual([]);
+  });
+
+  it('returns one entry per post (chunk_index=0 only)', async () => {
+    // Upsert two chunks for the same post + one chunk for a second post
+    const embed384 = new Float32Array(384).fill(0.1);
+    await store.upsert('test-site', [
+      {
+        id: 'wp_test-site_1',
+        siteId: 'test-site',
+        title: 'Post One',
+        content: 'First chunk of post one',
+        postType: 'post',
+        postId: 1,
+        chunkIndex: 0,
+        metadata: JSON.stringify({ author: 'alice' }),
+        indexedAt: Date.now(),
+        vector: embed384,
+        post_date_gmt: '',
+        post_modified_gmt: '',
+        doc_url: '',
+      },
+      {
+        id: 'wp_test-site_1_chunk_1',
+        siteId: 'test-site',
+        title: 'Post One',
+        content: 'Second chunk of post one',
+        postType: 'post',
+        postId: 1,
+        chunkIndex: 1,
+        metadata: JSON.stringify({ author: 'alice' }),
+        indexedAt: Date.now(),
+        vector: embed384,
+        post_date_gmt: '',
+        post_modified_gmt: '',
+        doc_url: '',
+      },
+      {
+        id: 'wp_test-site_2',
+        siteId: 'test-site',
+        title: 'Post Two',
+        content: 'Only chunk of post two',
+        postType: 'page',
+        postId: 2,
+        chunkIndex: 0,
+        metadata: JSON.stringify({ author: 'bob' }),
+        indexedAt: Date.now(),
+        vector: new Float32Array(384).fill(0.5),
+        post_date_gmt: '',
+        post_modified_gmt: '',
+        doc_url: '',
+      },
+    ]);
+
+    const docs = await store.getAllDocuments('test-site');
+
+    expect(docs).toHaveLength(2);
+    expect(docs.map(d => d.postId).sort()).toEqual([1, 2]);
+    expect(docs.every(d => d.embedding instanceof Float32Array)).toBe(true);
+    expect(docs.every(d => d.embedding.length === 384)).toBe(true);
+  });
+
+  it('returns correct metadata fields', async () => {
+    const embed384 = new Float32Array(384).fill(0.2);
+    await store.upsert('meta-site', [{
+      id: 'wp_meta-site_5',
+      siteId: 'meta-site',
+      title: 'My Post',
+      content: 'Some content here',
+      postType: 'post',
+      postId: 5,
+      chunkIndex: 0,
+      metadata: JSON.stringify({ author: 'carol', categories: ['news'] }),
+      indexedAt: Date.now(),
+      vector: embed384,
+      post_date_gmt: '',
+      post_modified_gmt: '',
+      doc_url: '',
+    }]);
+
+    const docs = await store.getAllDocuments('meta-site');
+    expect(docs).toHaveLength(1);
+    const doc = docs[0];
+    expect(doc.id).toBe('wp_meta-site_5');
+    expect(doc.postId).toBe(5);
+    expect(doc.postType).toBe('post');
+    expect(doc.title).toBe('My Post');
+    expect(doc.content).toBe('Some content here');
+    expect(JSON.parse(doc.metadata)).toMatchObject({ author: 'carol' });
+  });
+});
+
 describe('CRUD — lookupById / delete / dropSite / dropAllTables / listSites / cleanupExcludedTypes', () => {
   let store: SqliteVecStore;
   let dbPath: string;

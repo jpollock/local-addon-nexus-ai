@@ -12,6 +12,22 @@ export interface IVectorStore {
     concurrency?: number,
   ): Promise<Map<string, SearchResult[]>>;
   lookupById(siteId: string, docId: string): Promise<{ id: string; content: string; title: string } | null>;
+  /**
+   * Returns all indexed documents for a site, one entry per post (chunk_index = 0).
+   * Includes embeddings for semantic clustering and analysis.
+   * Returns [] when the site has no index.
+   *
+   * Primary consumer: SEO Insights agent build_topic_map and find_overlap_candidates.
+   */
+  getAllDocuments(siteId: string): Promise<Array<{
+    id: string;
+    postId: number;
+    postType: string;
+    title: string;
+    content: string;
+    embedding: Float32Array;
+    metadata: string;
+  }>>;
   delete(siteId: string, documentIds: string[]): Promise<void>;
   dropSite(siteId: string): Promise<void>;
   dropAllTables(): Promise<number>;
