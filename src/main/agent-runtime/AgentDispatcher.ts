@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
 import type { McpToolResult } from '../mcp/types';
 import type { NexusServices } from '../mcp/types';
 import type { ToolRegistry } from '../mcp/tool-registry';
@@ -76,7 +77,11 @@ export class AgentDispatcher {
     if (!VALID_AGENT_NAME.test(agentName)) {
       throw new Error(`Invalid agent name: '${agentName}'`);
     }
-    const agentPath = path.join(this.agentsDir, agentName, 'agent.js');
+    // Prefer compiled .js; fall back to .ts via the ts-node registration
+    // that AgentRegistry already wired (Module._resolveFilename patch + ts-node register)
+    const jsPath = path.join(this.agentsDir, agentName, 'agent.js');
+    const tsPath = path.join(this.agentsDir, agentName, 'agent.ts');
+    const agentPath = fs.existsSync(jsPath) ? jsPath : tsPath;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require(agentPath) as { default?: AgentDefinition } | AgentDefinition;
     const def = (mod as { default?: AgentDefinition }).default ?? (mod as AgentDefinition);
