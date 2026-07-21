@@ -32,6 +32,7 @@ export const AGENTS_DIR = path.join(
 const SDK_PATH = path.resolve(__dirname, '..', 'agent-sdk', 'index.js');
 
 let tsNodeRegistered = false;
+let sdkAliasPatched = false;
 
 function ensureTsNodeRegistered(): void {
   if (tsNodeRegistered) return;
@@ -51,6 +52,30 @@ function ensureTsNodeRegistered(): void {
     });
   } catch (err: any) {
     logger.warn(`AgentRegistry: ts-node not available — .ts agents will fail to load: ${err.message}`);
+  }
+
+  // Patch Node's module resolver so '@nexus-ai/agent-sdk' resolves to the
+  // compiled SDK regardless of whether tsconfig-paths is installed.
+  // ts-node's compilerOptions.paths only affects type-checking, not runtime resolution.
+  if (!sdkAliasPatched) {
+    sdkAliasPatched = true;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const Module = require('module') as typeof import('module');
+      type ResolveFilename = (request: string, parent: unknown, isMain: boolean, options?: unknown) => string;
+      const orig = (Module as unknown as { _resolveFilename: ResolveFilename })._resolveFilename;
+      (Module as unknown as { _resolveFilename: ResolveFilename })._resolveFilename = function(
+        request: string,
+        parent: unknown,
+        isMain: boolean,
+        options?: unknown,
+      ): string {
+        if (request === '@nexus-ai/agent-sdk') return SDK_PATH;
+        return orig.call(this, request, parent, isMain, options);
+      };
+    } catch (err: any) {
+      logger.warn(`AgentRegistry: could not patch SDK module alias — TypeScript agents importing '@nexus-ai/agent-sdk' may fail: ${err.message}`);
+    }
   }
 }
 
