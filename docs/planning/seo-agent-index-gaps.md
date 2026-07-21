@@ -122,3 +122,33 @@ It **cannot** until Gap 1 is closed:
 - Build full corpus similarity matrix for overlap detection
 
 **M1 entry check:** Confirm Gap 1 is resolved (method exists, returns embeddings) before starting SEO agent implementation. Gap 2 is strongly recommended but not blocking M1 if the model is pinned explicitly in the agent manifest and validated against `IndexEntry.lastIndexed` as a proxy.
+
+---
+
+## SDK Friction Log (from seo-insights agent development)
+
+Captured 2026-07-20. These are gaps discovered building the first TypeScript agent that imports `@nexus-ai/agent-sdk`.
+
+### F6: `nexus agent validate` skips Phase 2 tool-name validation
+**File:** `src/cli/commands/agent.ts` — `handleAgentValidate`
+Phase 2 (tool name check against the live MCP registry) is not implemented — only Phase 1 (TypeScript) runs. Agent declared `nexus_list_sites`, `nexus_wp_cli`, `nexus_site_stats` which don't exist; validate passed without flagging them.
+**Fix:** Implement Phase 2: query `local_list_sites` equivalent for tool names and diff against `agent.tools[]`.
+
+### F7: `ctx.tools.invoke()` return type is undocumented in the SDK
+**File:** `src/main/agent-runtime/NexusToolProvider.ts`
+`invoke()` returns:
+- Parsed JSON when the tool's text output is valid JSON
+- Raw string when the text output is not JSON
+- Throws `Error` when `isError: true` (never returns an error result)
+
+This is NOT documented in `src/main/agent-sdk/types.ts`. `AgentToolProvider.invoke()` is typed as `Promise<unknown>`, leaving agent authors to discover the actual contract by reading the runtime source. A typed `invokeJson<T>()` / `invokeText()` pair, or a documented return type, would eliminate this.
+
+**Downstream consequence:** Tools that return markdown text (e.g. `get_index_status`, `local_list_sites`) are not usable as structured data sources. Agents that need structured results must either parse text heuristically (fragile) or use `wp_eval` with `json_encode()`.
+
+### F8: TypeScript agents importing `@nexus-ai/agent-sdk` fail to load at runtime
+**File:** `src/main/agent-runtime/AgentRegistry.ts`
+`ts-node`'s `compilerOptions.paths` option only affects TypeScript type-checking — it does not resolve modules at runtime. `require('@nexus-ai/agent-sdk')` fails with MODULE_NOT_FOUND unless `Module._resolveFilename` is patched. The patch was added in commit `089554d` but requires a Local restart to take effect.
+**Fix applied:** `Module._resolveFilename` patched in `ensureTsNodeRegistered()`. Pre-compiled `.js` agents (the existing pattern) are unaffected.
+
+### Additional SDK gap: tool return type needs SDK documentation
+`AgentToolProvider` in `types.ts` should document that `invoke()` unwraps `McpToolResult` and either throws (on error) or returns parsed JSON or raw string. A utility type or overload pattern would make this discoverable without reading the runtime source.
