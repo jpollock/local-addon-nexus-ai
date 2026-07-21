@@ -127,6 +127,8 @@ export class OAuthFlowRunner {
       redirect_uri: opts.redirectUri,
       grant_type: 'authorization_code',
       code_verifier: opts.verifier,
+      // Desktop/installed apps require client_secret in the token exchange
+      ...(opts.provider.clientSecret ? { client_secret: opts.provider.clientSecret } : {}),
     });
 
     const res = await fetch(opts.provider.tokenEndpoint, {
