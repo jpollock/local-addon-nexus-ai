@@ -12,7 +12,7 @@ export class CredentialTokenVault {
   private vault: KeyVault;
 
   constructor(storage: RegistryStorage) {
-    this.vault = new KeyVault(storage, STORAGE_KEYS.OAUTH_CONNECTIONS);
+    this.vault = new KeyVault(storage, STORAGE_KEYS.OAUTH_VAULT);
   }
 
   private key(connectionId: string, provider: string): string {

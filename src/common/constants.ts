@@ -276,6 +276,7 @@ export const STORAGE_KEYS = {
   WPE_INSTALL_CACHE: `${ADDON_PREFIX}_wpe_install_cache`, // WPE install names/IDs cached after CAPI sync
   OAUTH_CONNECTIONS: `${ADDON_PREFIX}_oauth_connections`,
   OAUTH_GRANTS: `${ADDON_PREFIX}_oauth_grants`,
+  OAUTH_VAULT: `${ADDON_PREFIX}_oauth_vault`,
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -9,18 +9,6 @@ function makeStorage() {
   return { get: (k: string) => store.get(k) ?? null, set: (k: string, v: any) => store.set(k, v) };
 }
 
-function makeConnection(id: string, status: Connection['status'] = 'active'): Connection {
-  return {
-    id,
-    provider: 'google',
-    accountLabel: 'user@example.com',
-    grantedScopes: [GSC_SCOPE],
-    status,
-    createdAt: new Date().toISOString(),
-    lastRefreshedAt: null,
-  };
-}
-
 function makeManager(overrides: Record<string, any> = {}) {
   const { safeStorage } = require('electron');
   safeStorage.isEncryptionAvailable.mockReturnValue(true);

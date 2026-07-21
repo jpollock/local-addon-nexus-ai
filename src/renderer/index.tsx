@@ -114,7 +114,7 @@ export default function renderer(context: any): void {
     }, {
       path: '/nexus-ai-connected-accounts',
       displayName: 'Connected Accounts',
-      sections: () => React.createElement(ConnectionsPanel, { electron }),
+      sections: (props: any) => React.createElement(ConnectionsPanel, { electron, ...props }),
     }];
   });
 
