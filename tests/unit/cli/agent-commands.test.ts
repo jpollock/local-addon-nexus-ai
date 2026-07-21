@@ -21,6 +21,7 @@ import {
   handleAgentCreate,
   handleAgentValidate,
   handleAgentInstall,
+  handleAgentToolsBuild,
   type GqlFn,
   type ExecSyncFn,
 } from '../../../src/cli/commands/agent';
@@ -1102,5 +1103,58 @@ describe('handleAgentCreate — manifest generation', () => {
     const manifest = yaml.load(raw) as Record<string, unknown>;
     const triggers = manifest.triggers as Array<Record<string, unknown>>;
     expect(triggers?.[0]?.type).toBe('cron');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// nexus agent tools build — handleAgentToolsBuild
+// ---------------------------------------------------------------------------
+
+describe('handleAgentToolsBuild — create manifest if missing', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-build-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('creates nexus.agent.yaml when missing', async () => {
+    // Write a minimal compiled agent.js with no contributes
+    const agentJs = `
+      module.exports = { default: {
+        name: 'auto-agent', version: '2.0.0', description: 'Auto created',
+        contributes: { tools: {} }
+      }};
+    `;
+    fs.writeFileSync(path.join(tmpDir, 'agent.js'), agentJs);
+    // No nexus.agent.yaml yet
+
+    await handleAgentToolsBuild(tmpDir);
+
+    expect(fs.existsSync(path.join(tmpDir, 'nexus.agent.yaml'))).toBe(true);
+    const raw = fs.readFileSync(path.join(tmpDir, 'nexus.agent.yaml'), 'utf8');
+    const manifest = yaml.load(raw) as Record<string, unknown>;
+    expect(manifest.name).toBe('auto-agent');
+    expect((manifest.permissions as Record<string, unknown>).tier).toBe(1);
+  });
+
+  it('updates existing manifest contributes section', async () => {
+    const agentJs = `
+      module.exports = { default: {
+        name: 'my-agent', version: '1.0.0',
+        contributes: { tools: { ping: { description: 'Ping', schema: null, executionMode: 'function', handler: async () => ({content:[{type:'text',text:'pong'}]}) } } }
+      }};
+    `;
+    fs.writeFileSync(path.join(tmpDir, 'agent.js'), agentJs);
+    fs.writeFileSync(path.join(tmpDir, 'nexus.agent.yaml'), 'name: my-agent\nversion: 1.0.0\n');
+
+    await handleAgentToolsBuild(tmpDir);
+
+    const raw = fs.readFileSync(path.join(tmpDir, 'nexus.agent.yaml'), 'utf8');
+    expect(raw).toContain('ping');
+    expect(raw).toContain('Ping');
   });
 });
