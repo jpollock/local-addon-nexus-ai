@@ -59,7 +59,7 @@ export interface AgentLogger {
   finding(finding: Finding): void;
   action(action: AgentAction): void;
   phase(name: string, description?: string): void;
-  siteStatus(site: string, status: 'running' | 'clean' | 'findings' | 'escalated' | 'error'): void;
+  siteStatus(site: string, status: 'running' | 'clean' | 'findings' | 'escalated' | 'error' | string): void;
 }
 
 export interface AIClient {
@@ -184,5 +184,6 @@ export type ContributedToolDefinition<TArgs = unknown> = {
 };
 
 export type AgentContributes = {
-  tools?: Record<string, ContributedToolDefinition>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tools?: Record<string, ContributedToolDefinition<any>>;
 };
