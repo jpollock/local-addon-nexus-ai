@@ -323,7 +323,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     async cloneSite(siteId: string, newName: string): Promise<{ id: string; name: string }> {
       const site = requireSite(siteId);
-      const cloned = await svc('cloneSite').cloneSite({ site, newSiteName: newName });
+      const cloned = await svc('cloneSite').cloneSite({ site, newSiteName: newName, suppressNavigation: true });
       return { id: cloned.id, name: cloned.name };
     },
 

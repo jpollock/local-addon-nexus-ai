@@ -567,8 +567,12 @@ export async function handleAgentCreate(
   console.log(`Created: ${path.join(agentDir, 'agent.ts')}`);
   console.log(`Created: ${path.join(agentDir, 'nexus.agent.yaml')}`);
   console.log('');
-  console.log(`Next: edit agent.ts, then run: nexus agent tools build ${name}`);
-  console.log(`      nexus agent run ${name}   (manually trigger)`);
+  if (mode !== 'run') {
+    console.log(`Next: edit agent.ts, then run: nexus agent tools build ${name}`);
+    console.log(`      nexus agent run ${name}   (manually trigger)`);
+  } else {
+    console.log(`Next: edit agent.ts, then run: nexus agent run ${name}`);
+  }
   console.log(`      Watch it reload automatically when you save the file.`);
 }
 

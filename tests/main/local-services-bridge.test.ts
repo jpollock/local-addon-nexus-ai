@@ -152,6 +152,7 @@ describe('LocalServicesBridge', () => {
       expect(container.cloneSite.cloneSite).toHaveBeenCalledWith({
         site: container.mockSite,
         newSiteName: 'Clone Name',
+        suppressNavigation: true,
       });
     });
   });
