@@ -14,9 +14,10 @@ export interface AgentCredentials {
   getToken(provider: string): Promise<AccessToken>;
 
   /**
-   * Get the status of a connection for a provider (active, revoked, or error).
+   * Get the agent-facing status of a connection for a provider.
+   * Returns 'connected', 'not_connected', or 'revoked'.
    */
-  getStatus(provider: string): Promise<'active' | 'revoked' | 'error'>;
+  getStatus(provider: string): Promise<'connected' | 'not_connected' | 'revoked'>;
 
   /**
    * Request a new connection for a provider. Prompts the user to authorize.
@@ -37,9 +38,10 @@ export interface ICredentialManager {
   getTokenForGrant(provider: string, agentId: string, siteId: string): Promise<AccessToken>;
 
   /**
-   * Get the status of a connection for a provider.
+   * Get the agent-facing status of a connection for a provider.
+   * Returns the agent-facing enum: 'connected', 'not_connected', or 'revoked'.
    */
-  getStatusForAgent(provider: string, agentId: string, siteId: string): Promise<'active' | 'revoked' | 'error'>;
+  getStatusForAgent(provider: string, agentId: string, siteId: string): Promise<'connected' | 'not_connected' | 'revoked'>;
 
   /**
    * Request a new connection or expanded scopes for a provider.
@@ -48,12 +50,19 @@ export interface ICredentialManager {
   requestConnectionForAgent(provider: string, agentId: string, siteId: string): Promise<void>;
 }
 
+export interface AgentCredentialsContextOpts {
+  agentId: string;
+  siteId: string;
+  manifestCredentials: CredentialDeclaration[];
+  manager: ICredentialManager;
+}
+
 /**
  * AgentCredentialsContext is a scope-filtering proxy that agents call.
  * It enforces that agents only receive tokens with scopes they declared in their manifest.
  *
  * Usage:
- *   const credentials = new AgentCredentialsContext(manager, agentManifest, agentId, siteId);
+ *   const credentials = new AgentCredentialsContext({ manager, manifestCredentials, agentId, siteId });
  *   const token = await credentials.getToken('google'); // throws if not in manifest
  *   const status = await credentials.getStatus('google');
  *   await credentials.requestConnection('google');
@@ -64,15 +73,16 @@ export class AgentCredentialsContext implements AgentCredentials {
    * If a provider is not in this map, the agent did not declare it.
    */
   private declaredScopes: Map<string, Set<string>>;
+  private manager: ICredentialManager;
+  private agentId: string;
+  private siteId: string;
 
-  constructor(
-    private manager: ICredentialManager,
-    credentials: CredentialDeclaration[],
-    private agentId: string,
-    private siteId: string,
-  ) {
+  constructor(opts: AgentCredentialsContextOpts) {
+    this.agentId = opts.agentId;
+    this.siteId = opts.siteId;
+    this.manager = opts.manager;
     this.declaredScopes = new Map();
-    for (const decl of credentials) {
+    for (const decl of opts.manifestCredentials) {
       this.declaredScopes.set(decl.provider, new Set(decl.scopes));
     }
   }
@@ -97,7 +107,7 @@ export class AgentCredentialsContext implements AgentCredentials {
     };
   }
 
-  async getStatus(provider: string): Promise<'active' | 'revoked' | 'error'> {
+  async getStatus(provider: string): Promise<'connected' | 'not_connected' | 'revoked'> {
     // Check that the provider is in the agent's manifest
     if (!this.declaredScopes.has(provider)) {
       throw new NotConnectedError(provider);

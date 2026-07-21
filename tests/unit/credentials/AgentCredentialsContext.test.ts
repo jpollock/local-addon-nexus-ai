@@ -35,7 +35,12 @@ describe('AgentCredentialsContext', () => {
           reason: 'Access Search Console data',
         },
       ];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
       await expect(ctx.getToken('github')).rejects.toThrow(NotConnectedError);
       expect(manager.getTokenForGrant).not.toHaveBeenCalled();
@@ -50,7 +55,12 @@ describe('AgentCredentialsContext', () => {
           reason: 'Access Search Console data',
         },
       ];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
       const fullToken = makeToken({
         scopes: [
@@ -80,7 +90,12 @@ describe('AgentCredentialsContext', () => {
           reason: 'Access both Search Console and Analytics',
         },
       ];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
       const token = makeToken();
       manager.getTokenForGrant.mockResolvedValue(token);
@@ -100,7 +115,12 @@ describe('AgentCredentialsContext', () => {
           reason: 'Other scope',
         },
       ];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
       const token = makeToken({
         scopes: [
@@ -124,7 +144,12 @@ describe('AgentCredentialsContext', () => {
           reason: 'Access Search Console',
         },
       ];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'my-agent', 'my-site');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'my-agent',
+        siteId: 'my-site',
+      });
 
       manager.getTokenForGrant.mockResolvedValue(makeToken());
 
@@ -142,13 +167,18 @@ describe('AgentCredentialsContext', () => {
     it('throws NotConnectedError if provider not in manifest', async () => {
       const manager = makeManager();
       const credentials: CredentialDeclaration[] = [];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
       await expect(ctx.getStatus('google')).rejects.toThrow(NotConnectedError);
       expect(manager.getStatusForAgent).not.toHaveBeenCalled();
     });
 
-    it('returns status from manager', async () => {
+    it('returns connected status from manager', async () => {
       const manager = makeManager();
       const credentials: CredentialDeclaration[] = [
         {
@@ -157,13 +187,18 @@ describe('AgentCredentialsContext', () => {
           reason: 'Access Search Console',
         },
       ];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
-      manager.getStatusForAgent.mockResolvedValue('active');
+      manager.getStatusForAgent.mockResolvedValue('connected');
 
       const result = await ctx.getStatus('google');
 
-      expect(result).toBe('active');
+      expect(result).toBe('connected');
       expect(manager.getStatusForAgent).toHaveBeenCalledWith('google', 'seo-agent', 'site-1');
     });
 
@@ -176,7 +211,12 @@ describe('AgentCredentialsContext', () => {
           reason: 'Access Search Console',
         },
       ];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
       manager.getStatusForAgent.mockResolvedValue('revoked');
 
@@ -185,7 +225,7 @@ describe('AgentCredentialsContext', () => {
       expect(result).toBe('revoked');
     });
 
-    it('returns error status', async () => {
+    it('returns not_connected status', async () => {
       const manager = makeManager();
       const credentials: CredentialDeclaration[] = [
         {
@@ -194,13 +234,18 @@ describe('AgentCredentialsContext', () => {
           reason: 'Access Search Console',
         },
       ];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
-      manager.getStatusForAgent.mockResolvedValue('error');
+      manager.getStatusForAgent.mockResolvedValue('not_connected');
 
       const result = await ctx.getStatus('google');
 
-      expect(result).toBe('error');
+      expect(result).toBe('not_connected');
     });
   });
 
@@ -208,7 +253,12 @@ describe('AgentCredentialsContext', () => {
     it('throws NotConnectedError if provider not in manifest', async () => {
       const manager = makeManager();
       const credentials: CredentialDeclaration[] = [];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
       await expect(ctx.requestConnection('google')).rejects.toThrow(NotConnectedError);
       expect(manager.requestConnectionForAgent).not.toHaveBeenCalled();
@@ -223,7 +273,12 @@ describe('AgentCredentialsContext', () => {
           reason: 'Access Search Console',
         },
       ];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
       manager.requestConnectionForAgent.mockResolvedValue(undefined);
 
@@ -247,7 +302,12 @@ describe('AgentCredentialsContext', () => {
           reason: 'Access Search Console',
         },
       ];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
       manager.getTokenForGrant.mockResolvedValue(makeToken());
 
@@ -265,7 +325,12 @@ describe('AgentCredentialsContext', () => {
           reason: 'Access Search Console',
         },
       ];
-      const ctx = new AgentCredentialsContext(manager, credentials, 'seo-agent', 'site-1');
+      const ctx = new AgentCredentialsContext({
+        manager,
+        manifestCredentials: credentials,
+        agentId: 'seo-agent',
+        siteId: 'site-1',
+      });
 
       await expect(ctx.getToken('github')).rejects.toThrow(NotConnectedError);
     });
