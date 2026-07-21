@@ -89,6 +89,8 @@ export interface AgentContext {
   log: AgentLogger;
   /** User's autonomy preference for this agent. 'ask' = wait before executing; 'auto' = execute freely; 'suggest' = report only. */
   autonomy: AgentAutonomy;
+  /** OAuth credential access for this agent+site. Never exposes refresh tokens or OAuth internals. */
+  credentials: AgentCredentials;
 }
 
 export interface AgentDefinition {
@@ -100,6 +102,8 @@ export interface AgentDefinition {
   model?: string;             // default: inherits from Nexus settings
   timeoutMs?: number;         // default: 300_000 (5 min)
   contributes?: AgentContributes;  // contributed tools for function/daemon dispatch
+  /** OAuth credential declarations. Agent developers list what they need; the runtime handles everything else. */
+  credentials?: import('../credentials/types').CredentialDeclaration[];
   run: (ctx: AgentContext) => Promise<Partial<AgentResult> | void>;
   onError?: (err: Error, ctx: AgentContext) => Promise<void>;
 }
@@ -166,6 +170,27 @@ export interface AgentAction {
 
 export type Unsubscribe = () => void;
 export type EventHandler = (event: NexusEvent) => void | Promise<void>;
+
+// ─── Credential types (re-exported for agent authors) ────────────────────────
+
+export type { CredentialDeclaration } from '../credentials/types';
+export type { AccessToken } from '../credentials/types';
+export {
+  NotConnectedError,
+  RevokedError,
+  ScopeInsufficientError,
+  SafeStorageUnavailableError,
+  TemporarilyUnavailableError,
+} from '../credentials/types';
+
+export interface AgentCredentials {
+  /** Get a fresh access token. Never opens UI. Rejects with typed error if not connected. */
+  getToken(provider: string): Promise<import('../credentials/types').AccessToken>;
+  /** Cheap status check for tier-gating logic. */
+  getStatus(provider: string): Promise<'connected' | 'not_connected' | 'revoked'>;
+  /** Ask the SDK to surface the connect flow to the user. Returns immediately. */
+  requestConnection(provider: string): Promise<void>;
+}
 
 // ─── Contributed-tool types (SDK v2) ─────────────────────────────────────────
 

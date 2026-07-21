@@ -148,6 +148,8 @@ export interface NexusServices {
   dispatcher?: import('../agent-runtime/AgentDispatcher').AgentDispatcher;
   gatewayUrl?: string;
   gatewayAuthToken?: string;
+  /** Credential manager for OAuth flows. Added in Task 9 — optional for backward compat. */
+  credentialManager?: import('../credentials/AgentCredentialsContext').ICredentialManager;
 }
 
 /**

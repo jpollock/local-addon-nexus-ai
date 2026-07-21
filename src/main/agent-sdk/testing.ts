@@ -122,6 +122,11 @@ export function mockContext(overrides: MockContextOverrides = {}): AgentContext 
     state: makeMockStateStore(),
     log: makeMockLogger(),
     autonomy: overrides.autonomy ?? 'auto',
+    credentials: {
+      getToken: async (provider: string) => { throw new (require('../credentials/types').NotConnectedError)(provider); },
+      getStatus: async () => 'not_connected' as const,
+      requestConnection: async () => {},
+    },
   }
 }
 

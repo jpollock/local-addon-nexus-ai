@@ -5,6 +5,8 @@ import { getAgentAutonomy } from '../ipc-handlers';
 import { NexusToolProvider } from './NexusToolProvider';
 import { AgentAIClient } from './AgentAIClient';
 import { getProvider } from '../chat/providers/index';
+import { AgentCredentialsContext } from '../credentials/AgentCredentialsContext';
+import { NotConnectedError } from '../credentials/types';
 import type { AgentDefinition, NexusEvent, AgentContext, AgentLogger, Finding, AgentAction } from '../agent-sdk/types';
 import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
@@ -64,6 +66,19 @@ export function buildAgentContext(deps: AgentContextDeps): {
         },
       };
 
+  const credentialManager = services.credentialManager;
+  const agentSiteId = event?.siteId ?? '';
+  const credentials = new AgentCredentialsContext({
+    agentId: agent.name,
+    siteId: agentSiteId,
+    manifestCredentials: agent.credentials ?? [],
+    manager: credentialManager ?? {
+      getTokenForGrant: async (provider: string) => { throw new NotConnectedError(provider); },
+      getStatusForAgent: async () => 'not_connected' as const,
+      requestConnectionForAgent: async () => {},
+    },
+  });
+
   try { fs.mkdirSync(logDir, { recursive: true }); } catch { /* ignore */ }
   const logFile = path.join(logDir, 'agent.log');
   const appLog = createLogger(`agent:${agentName}`);
@@ -113,6 +128,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
     ai: aiClient,
     log: agentLog,
     autonomy: getAgentAutonomy(agentName),
+    credentials,
   };
 
   return { ctx, agentLog, accFindings, accActions, accSites };
