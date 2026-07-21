@@ -65,6 +65,8 @@ import { DaemonManager } from './agent-runtime/DaemonManager';
 import { ContributedToolRegistry } from './agent-runtime/ContributedToolRegistry';
 import { AgentDispatcher } from './agent-runtime/AgentDispatcher';
 import { AgentEventBus } from './agent-event-bus/AgentEventBus';
+import { CredentialManager } from './credentials/CredentialManager';
+import type { CredentialEvent } from './credentials/types';
 import { registerLocalLifecycleBridge } from './agent-event-bus/bridges/local-lifecycle-bridge';
 import { createWpEventsBridgeHandler } from './agent-event-bus/bridges/wp-events-bridge';
 import { getAIProvider } from './ai/getAIProvider';
@@ -298,6 +300,20 @@ export default function main(context: any): void {
   const operationTracker = new OperationTracker();
   operationTracker.start();
 
+  // Credential manager — owns OAuth connection lifecycle, token refresh, PKCE flows
+  const credentialManager = new CredentialManager({
+    storage: registryStorage,
+    emitNexusState,
+    emitCredentialEvent: (event: CredentialEvent) => {
+      const windows = BrowserWindow.getAllWindows?.() ?? [];
+      for (const win of windows) {
+        if (!win.isDestroyed()) {
+          win.webContents.send(IPC_CHANNELS.CREDENTIAL_EVENT, event);
+        }
+      }
+    },
+  });
+
   const nexusServices: NexusServices = {
     vectorStore,
     embeddingService,
@@ -320,6 +336,7 @@ export default function main(context: any): void {
       indexRegistry,
       graphService,
     }),
+    credentialManager,
   };
 
   const registry = new ToolRegistry();

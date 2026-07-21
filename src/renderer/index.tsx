@@ -5,6 +5,7 @@ import { SiteNexusSection } from './components/SiteNexusSection';
 import { NexusSiteTab } from './components/NexusSiteTab';
 import { NexusSiteTabSummary } from './components/NexusSiteTabSummary';
 import { SidebarSearchPanel } from './components/SidebarSearchPanel';
+import { ConnectionsPanel } from './components/credentials/ConnectionsPanel';
 import { IPC_CHANNELS } from '../common/constants';
 import { nexusStore } from './store/NexusStateManager';
 import type { NexusState } from './store/NexusStateManager';
@@ -110,6 +111,10 @@ export default function renderer(context: any): void {
           }
         }
       },
+    }, {
+      path: '/nexus-ai-connected-accounts',
+      displayName: 'Connected Accounts',
+      sections: (props: any) => React.createElement(ConnectionsPanel, { electron, ...props }),
     }];
   });
 

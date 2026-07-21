@@ -6,6 +6,7 @@
  *
  * testTool()    — invoke a single contributed tool handler by name from a definition.
  */
+import { NotConnectedError } from '../credentials/types';
 import type {
   AgentDefinition,
   AgentContext,
@@ -122,6 +123,11 @@ export function mockContext(overrides: MockContextOverrides = {}): AgentContext 
     state: makeMockStateStore(),
     log: makeMockLogger(),
     autonomy: overrides.autonomy ?? 'auto',
+    credentials: {
+      getToken: async (provider: string) => { throw new NotConnectedError(provider); },
+      getStatus: async () => 'not_connected' as const,
+      requestConnection: async () => {},
+    },
   }
 }
 

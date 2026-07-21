@@ -4709,5 +4709,29 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     }
   });
 
+  // ── Credential Manager ────────────────────────────────────────────────────
+
+  safeHandle(IPC_CHANNELS.CREDENTIAL_STATUS, async () => {
+    const mgr = deps.nexusServices?.credentialManager;
+    if (!mgr) return { connections: [], grants: [] };
+    return { connections: mgr.listConnections() };
+  });
+
+  safeHandle(IPC_CHANNELS.CREDENTIAL_CONNECT, async (_event: any, args: { provider: string; agentId: string; siteId: string; scopes: string[] }) => {
+    const mgr = deps.nexusServices?.credentialManager;
+    if (!mgr) throw new Error('Credential manager not available');
+    await mgr.connect(args.provider, args.agentId, args.siteId, args.scopes);
+    return { ok: true };
+  });
+
+  safeHandle(IPC_CHANNELS.CREDENTIAL_DISCONNECT, async (_event: any, args: { connectionId: string }) => {
+    const mgr = deps.nexusServices?.credentialManager;
+    if (!mgr) throw new Error('Credential manager not available');
+    await mgr.disconnect(args.connectionId);
+    return { ok: true };
+  });
+
+  // Note: CREDENTIAL_EVENT is a push channel (main → renderer); no handler needed.
+
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
 }
