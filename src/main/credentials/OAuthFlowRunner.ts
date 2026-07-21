@@ -1,6 +1,5 @@
 import * as http from 'http';
 import * as crypto from 'crypto';
-import * as net from 'net';
 import { shell } from 'electron';
 import type { ProviderConfig } from './ProviderRegistry';
 import type { FlowResult } from './types';
@@ -19,17 +18,6 @@ function generateState(): string {
   return crypto.randomBytes(16).toString('hex');
 }
 
-async function getAvailablePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.listen(0, '127.0.0.1', () => {
-      const addr = srv.address() as net.AddressInfo;
-      srv.close(() => resolve(addr.port));
-    });
-    srv.on('error', reject);
-  });
-}
-
 export class OAuthFlowRunner {
   private cancelFn: (() => void) | null = null;
 
@@ -41,17 +29,16 @@ export class OAuthFlowRunner {
     const verifier = generateCodeVerifier();
     const challenge = generateCodeChallenge(verifier);
     const state = generateState();
-    const port = await getAvailablePort();
-    const redirectUri = `http://127.0.0.1:${port}/callback`;
 
     return new Promise<FlowResult>((resolve) => {
       let settled = false;
       let server: http.Server | null = null;
       let timer: ReturnType<typeof setTimeout> | null = null;
+      let redirectUri = '';
 
       const cleanup = () => {
         if (timer) { clearTimeout(timer); timer = null; }
-        if (server) { server.close(); server = null; }
+        if (server) { server.closeAllConnections?.(); server.close(); server = null; }
         this.cancelFn = null;
       };
 
@@ -68,7 +55,7 @@ export class OAuthFlowRunner {
       timer = setTimeout(() => settle({ outcome: 'cancelled' }), FLOW_TIMEOUT_MS);
 
       server = http.createServer((req, res) => {
-        const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);
+        const url = new URL(req.url ?? '/', redirectUri || 'http://127.0.0.1');
         if (url.pathname !== '/callback') {
           res.writeHead(404).end();
           return;
@@ -98,7 +85,10 @@ export class OAuthFlowRunner {
           .catch(() => settle({ outcome: 'cancelled' }));
       });
 
-      server.listen(port, '127.0.0.1', () => {
+      server.listen(0, '127.0.0.1', () => {
+        const { port } = server!.address() as import('net').AddressInfo;
+        redirectUri = `http://127.0.0.1:${port}/callback`;
+
         const params = new URLSearchParams({
           response_type: 'code',
           client_id: provider.clientId,
