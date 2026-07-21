@@ -152,3 +152,17 @@ This is NOT documented in `src/main/agent-sdk/types.ts`. `AgentToolProvider.invo
 
 ### Additional SDK gap: tool return type needs SDK documentation
 `AgentToolProvider` in `types.ts` should document that `invoke()` unwraps `McpToolResult` and either throws (on error) or returns parsed JSON or raw string. A utility type or overload pattern would make this discoverable without reading the runtime source.
+
+### F16: executionMode 'run' in contributed tools calls agent.run(), not the handler
+**Discovery:** `build_topic_map` and `classify_intent` both used `executionMode: 'run'`. When invoked, `AgentDispatcher.dispatchRun()` calls `def.run(ctx)` — the agent's scheduled run function — completely ignoring the contributed tool's handler. The k-means clustering and intent classification code never executed.
+
+**Fix:** Changed both tools to `executionMode: 'function'`. 
+
+**SDK gap:** The three execution modes for contributed tools are insufficiently documented:
+- `'function'` — calls the handler directly, 30s timeout ✅ correct for most tools
+- `'run'` — calls `agent.run()`, ignoring the handler ⚠️ only useful for tools that want to trigger the full scheduled run
+- `'daemon'` — not yet implemented, falls back to function
+
+`executionMode: 'run'` as currently implemented is not useful for contributed tools. Should be removed from the type or clearly documented as "triggers the agent's full scheduled run, not the handler."
+
+**Commit:** executionMode fixed in agent.ts
