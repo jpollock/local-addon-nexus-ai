@@ -18,6 +18,7 @@ import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as yaml from 'js-yaml';
 
 // ---------------------------------------------------------------------------
 // GraphQL transport (same pattern as wpe.ts)
@@ -410,6 +411,89 @@ export async function handleAgentInstall(
 // nexus agent create — scaffold a new agent
 // ---------------------------------------------------------------------------
 
+const MANIFEST_TEMPLATE = (name: string, withTriggers: boolean) => {
+  const doc: Record<string, unknown> = {
+    name,
+    version: '1.0.0',
+    description: 'Describe what this agent does',
+    permissions: { tier: 1 }, // raise to 2 (reversible writes) or 3 (production mutations) as needed
+    tools: [],
+  };
+  if (withTriggers) {
+    doc.triggers = [{ type: 'cron', expression: '0 2 * * *' }];
+  }
+  return (
+    '# nexus.agent.yaml — agent manifest\n' +
+    '# Run: nexus agent tools build  →  regenerates the contributes section from agent.ts\n\n' +
+    yaml.dump(doc)
+  );
+};
+
+const AGENT_TOOLS_TEMPLATE = (name: string) => `import { defineAgent } from '@nexus-ai/agent-sdk';
+import { z } from 'zod';
+
+export default defineAgent({
+  name: '${name}',
+  version: '1.0.0',
+  description: 'Describe what this agent does',
+  tools: [],
+
+  contributes: {
+    tools: {
+      my_tool: {
+        description: 'Describe what this tool does',
+        schema: z.object({
+          siteId: z.string().describe('Target site ID'),
+        }),
+        executionMode: 'function' as const,
+        handler: async (args, ctx) => {
+          ctx.log.info('my_tool: starting', { siteId: args.siteId });
+          // TODO: implement
+          return { content: [{ type: 'text' as const, text: 'done' }] };
+        },
+      },
+    },
+  },
+});
+`;
+
+const AGENT_BOTH_TEMPLATE = (name: string) => `import { defineAgent, cron } from '@nexus-ai/agent-sdk';
+import { z } from 'zod';
+
+export default defineAgent({
+  name: '${name}',
+  version: '1.0.0',
+  description: 'Describe what this agent does',
+  triggers: [cron('0 2 * * *')],
+  tools: ['nexus_list_sites'],
+
+  contributes: {
+    tools: {
+      my_tool: {
+        description: 'Describe what this tool does',
+        schema: z.object({
+          siteId: z.string().describe('Target site ID'),
+        }),
+        executionMode: 'function' as const,
+        handler: async (args, ctx) => {
+          ctx.log.info('my_tool: starting', { siteId: args.siteId });
+          // TODO: implement
+          return { content: [{ type: 'text' as const, text: 'done' }] };
+        },
+      },
+    },
+  },
+
+  async run({ tools, state, log }) {
+    log.info('${name}: starting scheduled run');
+    const sites = await tools.invoke('nexus_list_sites', {});
+    log.info(\`Found \${Array.isArray(sites) ? sites.length : 0} site(s)\`);
+    state.set('lastRunAt', Date.now());
+    log.info('${name}: done');
+  },
+});
+`;
+
 const AGENT_TEMPLATE = (name: string) => `import { defineAgent, cron } from '@nexus-ai/agent-sdk';
 
 export default defineAgent({
@@ -437,10 +521,15 @@ export default defineAgent({
 /**
  * Scaffold a new TypeScript agent directory under `<agentsDir>/<name>/`.
  *
- * @param name      - Agent slug (lowercase letters, numbers, hyphens only)
+ * @param name       - Agent slug (lowercase letters, numbers, hyphens only)
  * @param _agentsDir - Optional override for the agents root directory (used in tests only)
+ * @param mode       - Scaffold mode: 'run' (cron + run()), 'tools' (contributes.tools), 'both'
  */
-export async function handleAgentCreate(name: string, _agentsDir?: string): Promise<void> {
+export async function handleAgentCreate(
+  name: string,
+  _agentsDir?: string,
+  mode: 'run' | 'tools' | 'both' = 'run',
+): Promise<void> {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
     console.error(
       `Error: agent name must be lowercase letters, numbers, and hyphens (got: "${name}")`,
@@ -460,12 +549,23 @@ export async function handleAgentCreate(name: string, _agentsDir?: string): Prom
   }
 
   fs.mkdirSync(agentDir, { recursive: true });
-  const agentFile = path.join(agentDir, 'agent.ts');
-  fs.writeFileSync(agentFile, AGENT_TEMPLATE(name), 'utf-8');
 
-  console.log(`Created: ${agentFile}`);
-  console.log(`Run it:  nexus agent run ${name}`);
-  console.log(`Watch it reload automatically when you save the file.`);
+  const agentSrc =
+    mode === 'tools' ? AGENT_TOOLS_TEMPLATE(name) :
+    mode === 'both'  ? AGENT_BOTH_TEMPLATE(name) :
+                       AGENT_TEMPLATE(name);
+
+  const manifestSrc = MANIFEST_TEMPLATE(name, mode !== 'tools');
+
+  fs.writeFileSync(path.join(agentDir, 'agent.ts'), agentSrc, 'utf-8');
+  fs.writeFileSync(path.join(agentDir, 'nexus.agent.yaml'), manifestSrc, 'utf-8');
+
+  console.log(`Created: ${path.join(agentDir, 'agent.ts')}`);
+  console.log(`Created: ${path.join(agentDir, 'nexus.agent.yaml')}`);
+  console.log('');
+  console.log(`Next: edit agent.ts, then run: nexus agent tools build ${name}`);
+  console.log(`      nexus agent run ${name}   (manually trigger)`);
+  console.log(`      Watch it reload automatically when you save the file.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -767,8 +867,18 @@ agentCommand
 agentCommand
   .command('create <name>')
   .description('Scaffold a new TypeScript agent')
-  .action(async (name: string) => {
-    await handleAgentCreate(name);
+  .option(
+    '--mode <mode>',
+    'Scaffold mode: run (cron + run()), tools (contributes.tools), both (cron + run() + contributes.tools)',
+    'run',
+  )
+  .action(async (name: string, opts: { mode: string }) => {
+    const mode = opts.mode as 'run' | 'tools' | 'both';
+    if (!['run', 'tools', 'both'].includes(mode)) {
+      console.error(`Error: --mode must be run, tools, or both (got: "${opts.mode}")`);
+      process.exit(1);
+    }
+    await handleAgentCreate(name, undefined, mode);
   });
 
 agentCommand
@@ -959,7 +1069,6 @@ agentToolsCommand
   .action(async (agentPath: string | undefined, options: { check?: boolean }) => {
     const fsMod = await import('fs');
     const pathMod = await import('path');
-    const yaml = await import('js-yaml');
     const { zodToJsonSchema } = await import('zod-to-json-schema');
 
     const resolvedPath = pathMod.resolve(agentPath ?? '.');

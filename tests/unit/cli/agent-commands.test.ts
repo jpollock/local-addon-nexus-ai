@@ -10,6 +10,7 @@ import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 // os is used for os.tmpdir() in test setup
 import {
   handleAgentList,
@@ -1031,5 +1032,69 @@ describe('handleAgentInstall', () => {
     const joined = logLines.join('\n');
     expect(joined).toContain('@myorg/my-agent');
     expect(joined).toContain('2.0.0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleAgentCreate — manifest generation
+// ---------------------------------------------------------------------------
+
+describe('handleAgentCreate — manifest generation', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-create-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('default (run) mode creates agent.ts and nexus.agent.yaml', async () => {
+    await handleAgentCreate('my-agent', tmpDir);
+    const agentDir = path.join(tmpDir, 'my-agent');
+    expect(fs.existsSync(path.join(agentDir, 'agent.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(agentDir, 'nexus.agent.yaml'))).toBe(true);
+  });
+
+  it('default manifest has name, tier: 1, and cron trigger', async () => {
+    await handleAgentCreate('my-agent', tmpDir);
+    const raw = fs.readFileSync(path.join(tmpDir, 'my-agent', 'nexus.agent.yaml'), 'utf8');
+    const manifest = yaml.load(raw) as Record<string, unknown>;
+    expect(manifest.name).toBe('my-agent');
+    expect((manifest.permissions as Record<string, unknown>).tier).toBe(1);
+    const triggers = manifest.triggers as Array<Record<string, unknown>>;
+    expect(triggers).toHaveLength(1);
+    expect(triggers[0].type).toBe('cron');
+  });
+
+  it('tools mode agent.ts contains contributes.tools and no run()', async () => {
+    await handleAgentCreate('my-agent', tmpDir, 'tools');
+    const src = fs.readFileSync(path.join(tmpDir, 'my-agent', 'agent.ts'), 'utf8');
+    expect(src).toContain('contributes');
+    expect(src).toContain('executionMode');
+    expect(src).not.toContain('async run(');
+  });
+
+  it('tools mode manifest has no triggers', async () => {
+    await handleAgentCreate('my-agent', tmpDir, 'tools');
+    const raw = fs.readFileSync(path.join(tmpDir, 'my-agent', 'nexus.agent.yaml'), 'utf8');
+    const manifest = yaml.load(raw) as Record<string, unknown>;
+    expect(manifest.triggers == null || (manifest.triggers as unknown[]).length === 0).toBe(true);
+  });
+
+  it('both mode agent.ts contains run() and contributes.tools', async () => {
+    await handleAgentCreate('my-agent', tmpDir, 'both');
+    const src = fs.readFileSync(path.join(tmpDir, 'my-agent', 'agent.ts'), 'utf8');
+    expect(src).toContain('async run(');
+    expect(src).toContain('contributes');
+  });
+
+  it('both mode manifest has cron trigger', async () => {
+    await handleAgentCreate('my-agent', tmpDir, 'both');
+    const raw = fs.readFileSync(path.join(tmpDir, 'my-agent', 'nexus.agent.yaml'), 'utf8');
+    const manifest = yaml.load(raw) as Record<string, unknown>;
+    const triggers = manifest.triggers as Array<Record<string, unknown>>;
+    expect(triggers?.[0]?.type).toBe('cron');
   });
 });
