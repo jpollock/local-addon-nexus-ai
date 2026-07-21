@@ -1,6 +1,7 @@
 import { ToolRegistry } from '../../tool-registry';
 import { searchContentHandler } from './search-content';
 import { searchAcrossSitesHandler } from './search-across-sites';
+import { getAllDocumentsHandler } from './get-all-documents';
 
 /**
  * Content module — vector-based semantic search tools.
@@ -9,4 +10,5 @@ import { searchAcrossSitesHandler } from './search-across-sites';
 export function registerContentTools(registry: ToolRegistry): void {
   registry.register(searchContentHandler);
   registry.register(searchAcrossSitesHandler);
+  registry.register(getAllDocumentsHandler);
 }
