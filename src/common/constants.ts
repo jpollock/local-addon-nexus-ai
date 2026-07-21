@@ -215,6 +215,12 @@ export const IPC_CHANNELS = {
 
   // Ad-hoc SELECT query against graph DB (for KPI rendering from agent manifest)
   FLEET_SQL_QUERY: `${ADDON_PREFIX}:fleet-sql-query`,
+
+  // OAuth Credential Manager
+  CREDENTIAL_CONNECT: `${ADDON_PREFIX}:credential:connect`,
+  CREDENTIAL_DISCONNECT: `${ADDON_PREFIX}:credential:disconnect`,
+  CREDENTIAL_STATUS: `${ADDON_PREFIX}:credential:status`,
+  CREDENTIAL_EVENT: `${ADDON_PREFIX}:credential:event`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -268,6 +274,8 @@ export const STORAGE_KEYS = {
   SITE_AI_CONFIG: `${ADDON_PREFIX}_site_ai_config`, // Per-site AI provider configuration
   DB_SCAN_CACHE: `${ADDON_PREFIX}_db_scan_cache`,
   WPE_INSTALL_CACHE: `${ADDON_PREFIX}_wpe_install_cache`, // WPE install names/IDs cached after CAPI sync
+  OAUTH_CONNECTIONS: `${ADDON_PREFIX}_oauth_connections`,
+  OAUTH_GRANTS: `${ADDON_PREFIX}_oauth_grants`,
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -20,3 +20,7 @@ export const safeStorage = {
     return str;
   }),
 };
+
+export const shell = {
+  openExternal: jest.fn(() => Promise.resolve()),
+};
