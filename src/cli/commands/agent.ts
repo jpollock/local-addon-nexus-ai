@@ -1077,15 +1077,48 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
 
   const resolvedPath = pathMod.resolve(agentPath ?? '.');
   const agentJsPath = pathMod.join(resolvedPath, 'agent.js');
+  const agentTsPath = pathMod.join(resolvedPath, 'agent.ts');
   const manifestPath = pathMod.join(resolvedPath, 'nexus.agent.yaml');
 
-  if (!fsMod.existsSync(agentJsPath)) {
-    console.error(`agent.js not found at ${agentJsPath}`);
+  // Determine which file to load — prefer .js, fall back to .ts via ts-node
+  let agentModulePath: string;
+  if (fsMod.existsSync(agentJsPath)) {
+    agentModulePath = agentJsPath;
+  } else if (fsMod.existsSync(agentTsPath)) {
+    // Register ts-node using the same SDK alias as AgentRegistry
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const tsNode = require('ts-node') as typeof import('ts-node');
+      const sdkPath = pathMod.resolve(__dirname, '..', '..', 'main', 'agent-sdk', 'index.js');
+      tsNode.register({
+        transpileOnly: true,
+        compilerOptions: {
+          module: 'CommonJS',
+          target: 'ES2020',
+          strict: true,
+          esModuleInterop: true,
+          paths: { '@nexus-ai/agent-sdk': [sdkPath] },
+        },
+      });
+      // Patch module resolution for the SDK alias
+      const Module = require('module') as typeof import('module');
+      const origResolve = (Module as unknown as { _resolveFilename: (req: string, parent: unknown) => string })._resolveFilename;
+      (Module as unknown as { _resolveFilename: (req: string, parent: unknown) => string })._resolveFilename = function(request: string, parent: unknown) {
+        if (request === '@nexus-ai/agent-sdk') return sdkPath;
+        return origResolve.call(this, request, parent);
+      };
+    } catch {
+      console.error('ts-node is required to build from agent.ts — run: npm install -g ts-node');
+      process.exit(1);
+    }
+    agentModulePath = agentTsPath;
+  } else {
+    console.error(`No agent file found at ${agentJsPath} or ${agentTsPath}`);
     process.exit(1);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require(agentJsPath) as {
+  const mod = require(agentModulePath) as {
     default?: {
       name?: string;
       version?: string;
@@ -1093,7 +1126,7 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
       contributes?: {
         tools?: Record<
           string,
-          { description: string; schema?: unknown; executionMode?: string }
+          { description: string; schema?: unknown; inputSchema?: Record<string, unknown>; executionMode?: string }
         >;
       };
     };
@@ -1125,7 +1158,10 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
     description: tool.description,
     executionMode: tool.executionMode ?? 'function',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    inputSchema: tool.schema ? zodToJsonSchema(tool.schema as any, { target: 'openApi3' }) : {},
+    // Prefer Zod schema (auto-converts to JSON Schema); fall back to plain inputSchema if provided
+    inputSchema: tool.schema
+      ? zodToJsonSchema(tool.schema as any, { target: 'openApi3' })
+      : (tool.inputSchema ?? {}),
   }));
 
   const raw = fsMod.readFileSync(manifestPath, 'utf8');
