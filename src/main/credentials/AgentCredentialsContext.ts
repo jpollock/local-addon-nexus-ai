@@ -34,8 +34,10 @@ export interface ICredentialManager {
    * Get an access token for a provider, applying any automatic token refresh.
    * Does NOT filter scopes — raw token from vault.
    * Throws NotConnectedError if no grant exists for the agent on this site.
+   * @param manifestScopes - Optional scopes from the agent manifest; used to validate
+   *                         the connection covers the required scopes.
    */
-  getTokenForGrant(provider: string, agentId: string, siteId: string): Promise<AccessToken>;
+  getTokenForGrant(provider: string, agentId: string, siteId: string, manifestScopes?: string[]): Promise<AccessToken>;
 
   /**
    * Get the agent-facing status of a connection for a provider.
@@ -93,11 +95,12 @@ export class AgentCredentialsContext implements AgentCredentials {
       throw new NotConnectedError(provider);
     }
 
-    // Get the raw token from the manager
-    const token = await this.manager.getTokenForGrant(provider, this.agentId, this.siteId);
+    // Get the raw token from the manager, passing manifest scopes for validation
+    const declared = this.declaredScopes.get(provider)!;
+    const manifestScopes = Array.from(declared);
+    const token = await this.manager.getTokenForGrant(provider, this.agentId, this.siteId, manifestScopes);
 
     // Filter to only declared scopes
-    const declared = this.declaredScopes.get(provider)!;
     const filteredScopes = token.scopes.filter(scope => declared.has(scope));
 
     return {

@@ -75,7 +75,7 @@ describe('AgentCredentialsContext', () => {
       expect(result.token).toBe('access-token-123');
       expect(result.expiresAt).toBe(fullToken.expiresAt);
       expect(result.scopes).toEqual(['https://www.googleapis.com/auth/webmasters.readonly']);
-      expect(manager.getTokenForGrant).toHaveBeenCalledWith('google', 'seo-agent', 'site-1');
+      expect(manager.getTokenForGrant).toHaveBeenCalledWith('google', 'seo-agent', 'site-1', ['https://www.googleapis.com/auth/webmasters.readonly']);
     });
 
     it('preserves token and expiresAt unchanged', async () => {
@@ -159,6 +159,7 @@ describe('AgentCredentialsContext', () => {
         'google',
         'my-agent',
         'my-site',
+        ['https://www.googleapis.com/auth/webmasters.readonly'],
       );
     });
   });
@@ -313,7 +314,7 @@ describe('AgentCredentialsContext', () => {
 
       await ctx.getToken('google');
 
-      expect(manager.getTokenForGrant).toHaveBeenCalledWith('google', 'seo-agent', 'site-1');
+      expect(manager.getTokenForGrant).toHaveBeenCalledWith('google', 'seo-agent', 'site-1', ['https://www.googleapis.com/auth/webmasters.readonly']);
     });
 
     it('throws for non-declared provider even with multiple declarations', async () => {
