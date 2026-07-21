@@ -91,12 +91,6 @@ export const IPC_CHANNELS = {
   SYNC_ALL_CREDENTIALS: `${ADDON_PREFIX}:credentials:sync-all`,
   GET_CREDENTIAL_SYNC_STATUS: `${ADDON_PREFIX}:credentials:sync-status`,
 
-  // OAuth Credential Manager
-  CREDENTIAL_CONNECT: `${ADDON_PREFIX}:credentials:connect`,
-  CREDENTIAL_DISCONNECT: `${ADDON_PREFIX}:credentials:disconnect`,
-  CREDENTIAL_STATUS: `${ADDON_PREFIX}:credentials:status`,
-  CREDENTIAL_EVENT: `${ADDON_PREFIX}:credentials:event`,
-
   // AI Status (Sprint 4)
   GET_AI_STATUS: `${ADDON_PREFIX}:ai:get-status`,
   GET_AI_PROXY_INFO: `${ADDON_PREFIX}:ai:proxy-info`,
