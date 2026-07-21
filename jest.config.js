@@ -1,13 +1,5 @@
 module.exports = {
   preset: 'ts-jest',
-  globals: {
-    'ts-jest': {
-      // Allow type errors to surface as warnings rather than hard failures so
-      // pre-existing TS2559 errors in agent-commands.test.ts do not prevent the
-      // entire suite from running. Type safety is enforced by `npm run build`.
-      diagnostics: { warnOnly: true },
-    },
-  },
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   moduleNameMapper: {

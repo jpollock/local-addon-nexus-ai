@@ -416,16 +416,20 @@ const MANIFEST_TEMPLATE = (name: string, withTriggers: boolean) => {
     name,
     version: '1.0.0',
     description: 'Describe what this agent does',
-    permissions: { tier: 1 }, // raise to 2 (reversible writes) or 3 (production mutations) as needed
+    permissions: { tier: 1 },
     tools: [],
   };
   if (withTriggers) {
     doc.triggers = [{ type: 'cron', expression: '0 2 * * *' }];
   }
+  const dumped = yaml.dump(doc).replace(
+    'tier: 1\n',
+    'tier: 1  # raise to 2 (reversible writes) or 3 (production mutations) as needed\n',
+  );
   return (
     '# nexus.agent.yaml — agent manifest\n' +
     '# Run: nexus agent tools build  →  regenerates the contributes section from agent.ts\n\n' +
-    yaml.dump(doc)
+    dumped
   );
 };
 
