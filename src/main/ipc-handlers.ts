@@ -4732,6 +4732,40 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     return { ok: true };
   });
 
+  // ── API Key Credentials ────────────────────────────────────────────────────
+
+  safeHandle(IPC_CHANNELS.CREDENTIAL_API_KEY_STATUS, async (_event: any, args?: { provider?: string }) => {
+    const mgr = deps.nexusServices?.credentialManager;
+    if (!mgr) return { connections: [] };
+    return { connections: mgr.listApiKeyConnections(args?.provider) };
+  });
+
+  safeHandle(IPC_CHANNELS.CREDENTIAL_API_KEY_SET, async (
+    _event: any,
+    args: { provider: string; fields: { accessKeyId: string; secretAccessKey: string }; label?: string },
+  ) => {
+    const mgr = deps.nexusServices?.credentialManager;
+    if (!mgr) return { ok: false, error: 'Credential manager not available', code: 'Unavailable' };
+
+    // Validate before persisting
+    const { validateAwsCredentials } = await import('./credentials/stsValidation');
+    const result = await validateAwsCredentials(args.fields);
+    if (!result.valid) {
+      return { ok: false, error: result.message, code: result.code };
+    }
+
+    const label = args.label ?? result.arn;
+    const connectionId = await mgr.setApiKey(args.provider, args.fields, label);
+    return { ok: true, connectionId, label };
+  });
+
+  safeHandle(IPC_CHANNELS.CREDENTIAL_API_KEY_CLEAR, async (_event: any, args: { connectionId: string }) => {
+    const mgr = deps.nexusServices?.credentialManager;
+    if (!mgr) throw new Error('Credential manager not available');
+    mgr.clearApiKey(args.connectionId);
+    return { ok: true };
+  });
+
   // Note: CREDENTIAL_EVENT is a push channel (main → renderer); no handler needed.
 
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
