@@ -44,3 +44,18 @@ describe('set_log_processing', () => {
     expect(getEnabledSites(db)).toContain('mysite');
   });
 });
+
+describe('sync_access_logs', () => {
+  it('is registered as a tool with executionMode run', () => {
+    const tool = agent.contributes?.tools?.sync_access_logs;
+    expect(tool).toBeDefined();
+    expect(tool?.executionMode).toBe('run');
+  });
+
+  it('returns error when no log source is bound', async () => {
+    const ctx = mockContext();
+    initSchema(ctx.db.open('logs'));
+    const result = await testTool(agent, 'sync_access_logs', { siteId: 'unbound-site' }, ctx);
+    expect(result.content[0].text).toMatch(/connect_log_source/);
+  });
+});

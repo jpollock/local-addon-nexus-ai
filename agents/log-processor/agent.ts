@@ -42,13 +42,95 @@ async function getAwsCreds(ctx: AgentContext): Promise<AwsCreds | { error: strin
   return { accessKeyId: secret.accessKeyId, secretAccessKey: secret.secretAccessKey };
 }
 
-// Defined in Task 5
 async function runSync(
   db: AgentDatabase, siteId: string,
   from: string | undefined, to: string | undefined,
   budgetMB: number, ctx: AgentContext,
 ): Promise<string> {
-  return `⚠ sync not yet implemented for ${siteId}`;
+  const src = getSource(db, siteId);
+  if (!src) return `⚠ No log source bound to "${siteId}". Run connect_log_source first.`;
+
+  const creds = await getAwsCreds(ctx);
+  if ('error' in creds) return `⚠ ${creds.error}`;
+
+  const toDay = to ?? addDays(utcToday(), -1);
+  const fromDay = from ?? addDays(toDay, -(DEFAULT_SYNC_DAYS - 1));
+  const budgetBytes = Math.max(16, Math.min(budgetMB, 4096)) * 1048576;
+
+  const ledger = getLedger(db, siteId);
+  const wantedDates = fileDatesForRange(fromDay, toDay).filter(d => !ledger[d]);
+  if (wantedDates.length === 0) {
+    return `✓ Up to date — all file-dates for ${fromDay} → ${toDay} already processed (${Object.keys(ledger).length} dates in ledger).`;
+  }
+
+  type Planned = { date: string; files: { key: string; size: number }[]; bytes: number };
+  const plan: Planned[] = [];
+  let planned = 0;
+
+  for (const date of wantedDates) {
+    let files: { key: string; size: number }[];
+    try {
+      const all = await s3ListAll(creds, src.region, src.bucket, src.prefix + date.replace(/-/g, ''));
+      files = all.filter(o => /apachestyle/i.test(o.key));
+    } catch (e: unknown) {
+      return `⚠ S3 listing failed at ${date}: ${(e as Error).message}`;
+    }
+    const bytes = files.reduce((s, f) => s + f.size, 0);
+    if (files.length === 0) { plan.push({ date, files, bytes: 0 }); continue; }
+    if (planned + bytes > budgetBytes && plan.some(p => p.files.length > 0)) break;
+    if (bytes > budgetBytes) ctx.log.warn(`${date} alone is ${fmtMB(bytes)} — over budget, processing anyway`);
+    plan.push({ date, files, bytes });
+    planned += bytes;
+  }
+
+  const deferred = wantedDates.length - plan.length;
+  ctx.log.info(`Plan: ${plan.length} file-dates, ${fmtMB(planned)} compressed, ${deferred} deferred`);
+
+  const touched = new Map<string, ReturnType<typeof emptyAggregate>>();
+  let totalSkipped = 0;
+
+  for (const p of plan) {
+    let fileSkipped = 0;
+    for (const f of p.files) {
+      ctx.log.info(`Streaming ${f.key} (${fmtMB(f.size)})`);
+      try {
+        for await (const line of s3StreamLines(creds, src.region, src.bucket, f.key)) {
+          if (!line.trim()) continue;
+          const parsed = parseLogLine(line);
+          if (!parsed) { fileSkipped++; continue; }
+          let agg = touched.get(parsed.day);
+          if (!agg) {
+            const existing = getAggregate(db, siteId, parsed.day);
+            agg = existing ? { ...existing } : emptyAggregate(siteId, parsed.day);
+            enableIpTracking(agg);
+            touched.set(parsed.day, agg);
+          }
+          foldLine(agg, parsed, classifyLine(parsed));
+        }
+      } catch (e: unknown) {
+        ctx.log.error(`Stream error for ${f.key}: ${(e as Error).message} — date ${p.date} left un-ledgered for retry`);
+        continue;
+      }
+    }
+    totalSkipped += fileSkipped;
+
+    for (const [, agg] of touched) {
+      const final = finalizeAggregate({ ...agg });
+      final.skippedLines = (final.skippedLines ?? 0) + fileSkipped;
+      saveAggregate(db, final);
+    }
+    markLedger(db, {
+      site: siteId, file_date: p.date,
+      files: p.files.length, bytes: p.bytes,
+      lines: Array.from(touched.values()).reduce((s, a) => s + a.requests, 0),
+      processed_at: Date.now(),
+    });
+  }
+
+  evict(db, siteId, 180);
+
+  const totalRequests = Array.from(touched.values()).reduce((s, a) => s + a.requests, 0);
+  return `✓ ${siteId}: ${plan.length} file-dates, ~${totalRequests.toLocaleString()} requests, ${totalSkipped} lines skipped${deferred > 0 ? `, ${deferred} dates deferred` : ''}.`;
 }
 
 export default defineAgent({
@@ -118,6 +200,26 @@ export default defineAgent({
           if (!getSource(db, args.siteId)) return ok(`⚠ No log source for "${args.siteId}". Run connect_log_source first.`);
           setEnabled(db, args.siteId, args.enabled);
           return ok(`✓ Log processing ${args.enabled ? 'enabled' : 'disabled'} for ${args.siteId}.`);
+        },
+      },
+
+      sync_access_logs: {
+        description: 'Ingest access-log days from S3: streams each file (constant memory — raw bytes never persist), classifies traffic, folds into per-day aggregates. Ledgered and budgeted; large backfills resume across runs.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            siteId: { type: 'string' },
+            from: { type: 'string', description: 'First day (YYYY-MM-DD). Default: 28 days ago.' },
+            to: { type: 'string', description: 'Last day (YYYY-MM-DD). Default: yesterday (UTC).' },
+            budgetMB: { type: 'number', default: 512 },
+          },
+          required: ['siteId'],
+        },
+        executionMode: 'run' as const,
+        handler: async (args: { siteId: string; from?: string; to?: string; budgetMB?: number }, ctx: AgentContext): Promise<AgentToolResult> => {
+          ctx.log.phase('sync_access_logs', args.siteId);
+          const db = openDb(ctx);
+          return ok(await runSync(db, args.siteId, args.from, args.to, args.budgetMB ?? DEFAULT_SYNC_BUDGET_MB, ctx));
         },
       },
 
