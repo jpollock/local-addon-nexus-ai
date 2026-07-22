@@ -332,8 +332,12 @@ export default defineAgent({
                 matchCount++;
                 byDay[parsed.day] = (byDay[parsed.day] ?? 0) + 1;
                 byStatus[String(parsed.status)] = (byStatus[String(parsed.status)] ?? 0) + 1;
-                if (Object.keys(byPath).length < 20) byPath[parsed.path] = (byPath[parsed.path] ?? 0) + 1;
-                if (Object.keys(byIp).length < 20) byIp[parsed.ip] = (byIp[parsed.ip] ?? 0) + 1;
+                if (parsed.path in byPath || Object.keys(byPath).length < 20) {
+                  byPath[parsed.path] = (byPath[parsed.path] ?? 0) + 1;
+                }
+                if (parsed.ip in byIp || Object.keys(byIp).length < 20) {
+                  byIp[parsed.ip] = (byIp[parsed.ip] ?? 0) + 1;
+                }
                 if (sample.length < SAMPLE_CAP) sample.push(line);
               }
             } catch (e: unknown) {
