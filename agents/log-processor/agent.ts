@@ -88,6 +88,7 @@ async function runSync(
 
   const touched = new Map<string, ReturnType<typeof emptyAggregate>>();
   let totalSkipped = 0;
+  let totalRequests = 0;
 
   for (const p of plan) {
     let fileSkipped = 0;
@@ -129,12 +130,11 @@ async function runSync(
         processed_at: Date.now(),
       });
     }
+    totalRequests += Array.from(touched.values()).reduce((s, a) => s + a.requests, 0);
     touched.clear();
   }
 
   evict(db, siteId, 180);
-
-  const totalRequests = Array.from(touched.values()).reduce((s, a) => s + a.requests, 0);
   return `✓ ${siteId}: ${plan.length} file-dates, ~${totalRequests.toLocaleString()} requests, ${totalSkipped} lines skipped${deferred > 0 ? `, ${deferred} dates deferred` : ''}.`;
 }
 
