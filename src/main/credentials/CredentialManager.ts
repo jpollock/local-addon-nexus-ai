@@ -2,9 +2,10 @@ import * as crypto from 'crypto';
 import { ProviderRegistry } from './ProviderRegistry';
 import { CredentialTokenVault } from './CredentialTokenVault';
 import { ConnectionStore } from './ConnectionStore';
+import { ApiKeyConnectionStore } from './ApiKeyConnectionStore';
 import { OAuthFlowRunner } from './OAuthFlowRunner';
 import type { ICredentialManager } from './AgentCredentialsContext';
-import type { Connection, Grant, AccessToken, CredentialEvent } from './types';
+import type { Connection, Grant, AccessToken, CredentialEvent, ApiKeyConnection } from './types';
 import {
   NotConnectedError,
   RevokedError,
@@ -35,6 +36,7 @@ export class CredentialManager implements ICredentialManager {
   private providerRegistry: ProviderRegistry;
   private vault: CredentialTokenVault;
   private store: ConnectionStore;
+  private apiKeyStore: ApiKeyConnectionStore;
   private emitNexusState: (patch: Record<string, unknown>) => void;
   private emitCredentialEvent: (event: CredentialEvent) => void;
   private flowRunnerFactory: () => OAuthFlowRunner;
@@ -50,6 +52,7 @@ export class CredentialManager implements ICredentialManager {
     this.providerRegistry = new ProviderRegistry();
     this.vault = new CredentialTokenVault(deps.storage);
     this.store = new ConnectionStore(deps.storage);
+    this.apiKeyStore = new ApiKeyConnectionStore(deps.storage);
     this.emitNexusState = deps.emitNexusState;
     this.emitCredentialEvent = deps.emitCredentialEvent;
     this.flowRunnerFactory = deps.flowRunnerFactory ?? (() => new OAuthFlowRunner());
@@ -167,6 +170,53 @@ export class CredentialManager implements ICredentialManager {
     this.tokenCache.delete(connectionId);
     this.store.deleteGrantsForConnection(connectionId);
     this.store.deleteConnection(connectionId);
+    this.emitCredentialEvent({ type: 'credential:revoked', provider: conn.provider });
+  }
+
+  // ── API Key Credentials ────────────────────────────────────────────────────
+
+  async setApiKey(
+    provider: string,
+    fields: { accessKeyId: string; secretAccessKey: string },
+    label: string,
+  ): Promise<string> {
+    const connectionId = crypto.randomUUID();
+    this.vault.storeApiKey(connectionId, provider, fields);
+    this.apiKeyStore.save({
+      id: connectionId,
+      provider,
+      label,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+    });
+    this.emitCredentialEvent({ type: 'credential:connected', provider });
+    return connectionId;
+  }
+
+  listApiKeyConnections(provider?: string): ApiKeyConnection[] {
+    return this.apiKeyStore.list(provider);
+  }
+
+  async getSecretForAgent(provider: string, _agentId: string): Promise<Record<string, string>> {
+    const active = this.apiKeyStore.list(provider).find(c => c.status === 'active');
+    if (!active) throw new NotConnectedError(provider);
+    const fields = this.vault.retrieveApiKey(active.id, provider);
+    if (!fields) throw new NotConnectedError(provider);
+    return fields;
+  }
+
+  markApiKeyRevoked(provider: string): void {
+    const active = this.apiKeyStore.list(provider).find(c => c.status === 'active');
+    if (!active) return;
+    this.apiKeyStore.markRevoked(active.id);
+    this.emitCredentialEvent({ type: 'credential:revoked', provider });
+  }
+
+  clearApiKey(connectionId: string): void {
+    const conn = this.apiKeyStore.get(connectionId);
+    if (!conn) return;
+    this.vault.deleteApiKey(connectionId, conn.provider);
+    this.apiKeyStore.delete(connectionId);
     this.emitCredentialEvent({ type: 'credential:revoked', provider: conn.provider });
   }
 

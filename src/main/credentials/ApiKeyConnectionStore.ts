@@ -33,4 +33,9 @@ export class ApiKeyConnectionStore {
     if (!conn) return;
     this.save({ ...conn, status: 'revoked' });
   }
+
+  delete(id: string): void {
+    const conns = this.read().filter(c => c.id !== id);
+    this.write(conns);
+  }
 }
