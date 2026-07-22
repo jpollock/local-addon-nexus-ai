@@ -1,6 +1,6 @@
 import { mockContext, testTool } from '../../../../src/main/agent-sdk/testing';
 import {
-  initSchema, upsertSource, getSource, getEnabledSites, saveAggregate,
+  initSchema, upsertSource, getSource, getEnabledSites, saveAggregate, markLedger,
 } from '../../../../agents/log-processor/db';
 import { emptyAggregate } from '../../../../agents/log-processor/access-logs';
 import type { AgentDefinition } from '../../../../src/main/agent-sdk/types';
@@ -132,5 +132,73 @@ describe('fetch_log_window', () => {
     upsertSource(db, { site: 'mysite', provider: 's3', bucket: 'b', region: 'us-east-1', prefix: '', enabled: 0 });
     const result = await testTool(agent, 'fetch_log_window', { siteId: 'mysite', from: '2024-01-01', to: '2024-01-01', confirm: false }, ctx);
     expect(result.content[0].text).toMatch(/AWS/);
+  });
+});
+
+describe('log_storage_status', () => {
+  it('is registered as a tool with executionMode function', () => {
+    const tool = agent.contributes?.tools?.log_storage_status;
+    expect(tool).toBeDefined();
+    expect(tool?.executionMode).toBe('function');
+  });
+
+  it('returns no-sites message when db is empty', async () => {
+    const ctx = mockContext();
+    initSchema(ctx.db.open('logs'));
+    const result = await testTool(agent, 'log_storage_status', {}, ctx);
+    expect(result.content[0].text).toMatch(/No sites connected/);
+    expect(result.content[0].text).toMatch(/connect_log_source/);
+  });
+
+  it('returns storage stats when sites are connected', async () => {
+    const ctx = mockContext();
+    const db = ctx.db.open('logs');
+    initSchema(db);
+    upsertSource(db, { site: 'site1', provider: 's3', bucket: 'b1', region: 'us-east-1', prefix: '', enabled: 1 });
+    saveAggregate(db, emptyAggregate('site1', '2024-01-01'));
+    markLedger(db, { site: 'site1', file_date: '2024-01-01', files: 1, bytes: 100, lines: 50, processed_at: Date.now() });
+    const result = await testTool(agent, 'log_storage_status', {}, ctx);
+    const text = result.content[0].text;
+    expect(text).toMatch(/Log storage:/);
+    expect(text).toMatch(/site1/);
+    expect(text).toMatch(/1 agg days/);
+    expect(text).toMatch(/1 ledgered file-dates/);
+    expect(text).toMatch(/enabled \(cron\)/);
+    expect(text).toMatch(/Fleet total:/);
+  });
+});
+
+describe('evict_log_data', () => {
+  it('is registered as a tool with executionMode function', () => {
+    const tool = agent.contributes?.tools?.evict_log_data;
+    expect(tool).toBeDefined();
+    expect(tool?.executionMode).toBe('function');
+  });
+
+  it('returns confirmation text on eviction', async () => {
+    const ctx = mockContext();
+    const db = ctx.db.open('logs');
+    initSchema(db);
+    upsertSource(db, { site: 'site1', provider: 's3', bucket: 'b1', region: 'us-east-1', prefix: '', enabled: 0 });
+    // Save an old aggregate (more than 180 days ago)
+    const oldDay = '2023-01-01';
+    saveAggregate(db, emptyAggregate('site1', oldDay));
+    const result = await testTool(agent, 'evict_log_data', { olderThanDays: 180 }, ctx);
+    const text = result.content[0].text;
+    expect(text).toMatch(/✓ Evicted \d+ aggregate day\(s\)/);
+    expect(text).toMatch(/fleet-wide/);
+    expect(text).toMatch(/older than 180 days/);
+  });
+
+  it('returns confirmation with site-specific scope when siteId provided', async () => {
+    const ctx = mockContext();
+    const db = ctx.db.open('logs');
+    initSchema(db);
+    upsertSource(db, { site: 'site1', provider: 's3', bucket: 'b1', region: 'us-east-1', prefix: '', enabled: 0 });
+    const oldDay = '2023-01-01';
+    saveAggregate(db, emptyAggregate('site1', oldDay));
+    const result = await testTool(agent, 'evict_log_data', { siteId: 'site1', olderThanDays: 180 }, ctx);
+    const text = result.content[0].text;
+    expect(text).toMatch(/for site1/);
   });
 });

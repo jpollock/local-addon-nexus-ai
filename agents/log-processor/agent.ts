@@ -355,6 +355,40 @@ export default defineAgent({
         },
       },
 
+      log_storage_status: {
+        description: 'Report the local disk footprint: per-site aggregate days, ledger coverage, enabled status, approximate KB. Raw logs are never stored locally.',
+        inputSchema: { type: 'object', properties: {} },
+        executionMode: 'function' as const,
+        handler: async (_args: Record<never, never>, ctx: AgentContext): Promise<AgentToolResult> => {
+          const db = openDb(ctx);
+          const stats = storageStats(db);
+          if (stats.length === 0) return ok('No sites connected. Run connect_log_source to bind an S3 log source.');
+          const lines = stats.map(s =>
+            `  ${s.site}: ${s.aggregateDays} agg days, ${s.ledgerDays} ledgered file-dates, ~${(s.approxBytes / 1024).toFixed(1)}KB — ${s.enabled ? 'enabled (cron)' : 'disabled'}`,
+          ).join('\n');
+          const totalKB = (stats.reduce((s, r) => s + r.approxBytes, 0) / 1024).toFixed(1);
+          return ok(`Log storage:\n${lines}\n\nFleet total: ~${totalKB}KB`);
+        },
+      },
+
+      evict_log_data: {
+        description: 'Delete local log-derived data older than N days. Removes from aggregates and ledger. Never touches sources or the S3 bucket.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            siteId: { type: 'string', description: 'Limit to this site. Omit for fleet-wide.' },
+            olderThanDays: { type: 'number', description: 'Default: 180.' },
+          },
+        },
+        executionMode: 'function' as const,
+        handler: async (args: { siteId?: string; olderThanDays?: number }, ctx: AgentContext): Promise<AgentToolResult> => {
+          const db = openDb(ctx);
+          const deleted = evict(db, args.siteId, args.olderThanDays ?? 180);
+          const scope = args.siteId ? `for ${args.siteId}` : 'fleet-wide';
+          return ok(`✓ Evicted ${deleted} aggregate day(s) ${scope} (older than ${args.olderThanDays ?? 180} days).`);
+        },
+      },
+
     },
   },
 
