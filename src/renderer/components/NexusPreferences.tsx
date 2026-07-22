@@ -951,12 +951,15 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   handleAwsDisconnect = async (): Promise<void> => {
     const { awsConnectionId } = this.state;
     if (!awsConnectionId) return;
-    const ipc = this.props.electron.ipcRenderer;
-    await ipc.invoke(IPC_CHANNELS.CREDENTIAL_API_KEY_CLEAR, { connectionId: awsConnectionId });
-    this.setState({
-      awsConnected: false, awsRevoked: false, awsLabel: '', awsConnectionId: '',
-      awsSaved: false, awsError: '', awsShowReenter: false,
-    });
+    try {
+      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.CREDENTIAL_API_KEY_CLEAR, { connectionId: awsConnectionId });
+      this.setState({
+        awsConnected: false, awsRevoked: false, awsLabel: '', awsConnectionId: '',
+        awsSaved: false, awsError: '', awsShowReenter: false,
+      });
+    } catch {
+      this.setState({ awsError: 'Failed to disconnect — try again.' });
+    }
   }
 
   toggleSection = (sectionId: string): void => {
@@ -1239,7 +1242,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       : awsRevoked ? '#ef4444' : 'var(--nxai-status-neutral, #9ca3af)';
     const statusLabel = awsConnected ? 'Connected' : awsRevoked ? 'Keys no longer valid' : 'Not connected';
 
-    const showForm = !awsConnected || awsShowReenter;
+    const showForm = (!awsConnected && !awsRevoked) || awsShowReenter;
 
     return React.createElement('div', null,
       React.createElement('div', { style: descStyle },
