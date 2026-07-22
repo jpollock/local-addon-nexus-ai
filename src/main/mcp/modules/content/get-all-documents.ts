@@ -29,6 +29,11 @@ export const getAllDocumentsHandler: McpToolHandler = {
           description: 'Include raw embeddings in response (default: false — metadata only)',
           default: false,
         },
+        full_content: {
+          type: 'boolean',
+          description: 'Return full chunk text instead of 200-char preview. Use for link-graph analysis. Ignored when include_embeddings is true.',
+          default: false,
+        },
       },
       required: ['site'],
     },
@@ -40,6 +45,7 @@ export const getAllDocumentsHandler: McpToolHandler = {
     if (!site) return error(`Site "${args.site}" not found`);
 
     const includeEmbeddings = (args.include_embeddings as boolean | undefined) ?? false;
+    const fullContent = (args.full_content as boolean | undefined) ?? false;
 
     const docs = await services.vectorStore.getAllDocuments(site.id);
 
@@ -60,7 +66,9 @@ export const getAllDocumentsHandler: McpToolHandler = {
         postId: doc.postId,
         postType: doc.postType,
         title: doc.title,
-        content: doc.content.slice(0, 200),
+        // full_content=true: return full chunk text for link-graph analysis (no maxBuffer risk)
+        // full_content=false: 200-char preview sufficient for display
+        content: fullContent ? doc.content : doc.content.slice(0, 200),
         metadata: doc.metadata,
       };
       if (includeEmbeddings) {
