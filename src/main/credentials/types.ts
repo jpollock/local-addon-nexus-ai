@@ -25,12 +25,24 @@ export interface AccessToken {
 
 // ─── Credential declaration (goes in AgentDefinition.credentials) ─────────────
 
-export interface CredentialDeclaration {
+/** OAuth credential declaration (e.g. Google) */
+export interface OAuthCredentialDeclaration {
   provider: 'google';
+  type?: 'oauth';
   scopes: string[];
   optional?: boolean;
   reason: string;              // shown verbatim in consent prompt
 }
+
+/** API-key credential declaration (e.g. AWS access key + secret) */
+export interface ApiKeyCredentialDeclaration {
+  provider: string;
+  type: 'api_key';
+  optional?: boolean;
+  reason: string;
+}
+
+export type CredentialDeclaration = OAuthCredentialDeclaration | ApiKeyCredentialDeclaration;
 
 // ─── OAuth flow result ────────────────────────────────────────────────────────
 

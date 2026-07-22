@@ -98,7 +98,7 @@ export class AgentCredentialsContext implements AgentCredentials {
     this.declaredScopes = new Map();
     this.declarations = new Map();
     for (const decl of opts.manifestCredentials) {
-      this.declaredScopes.set(decl.provider, new Set(decl.scopes));
+      this.declaredScopes.set(decl.provider, new Set('scopes' in decl ? decl.scopes : []));
       this.declarations.set(decl.provider, decl);
     }
   }
@@ -142,7 +142,7 @@ export class AgentCredentialsContext implements AgentCredentials {
     // Find the matching declaration so the consent UI can show scopes and reason
     const decl = this.declarations.get(provider);
     return this.manager.requestConnectionForAgent(provider, this.agentId, this.siteId, {
-      scopes: decl?.scopes ?? [],
+      scopes: (decl && 'scopes' in decl) ? decl.scopes : [],
       agentName: this.agentId,
       reason: decl?.reason,
     });
