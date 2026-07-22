@@ -91,6 +91,7 @@ async function runSync(
 
   for (const p of plan) {
     let fileSkipped = 0;
+    let streamErrored = false;
     for (const f of p.files) {
       ctx.log.info(`Streaming ${f.key} (${fmtMB(f.size)})`);
       try {
@@ -109,6 +110,7 @@ async function runSync(
         }
       } catch (e: unknown) {
         ctx.log.error(`Stream error for ${f.key}: ${(e as Error).message} — date ${p.date} left un-ledgered for retry`);
+        streamErrored = true;
         continue;
       }
     }
@@ -119,12 +121,15 @@ async function runSync(
       final.skippedLines = (final.skippedLines ?? 0) + fileSkipped;
       saveAggregate(db, final);
     }
-    markLedger(db, {
-      site: siteId, file_date: p.date,
-      files: p.files.length, bytes: p.bytes,
-      lines: Array.from(touched.values()).reduce((s, a) => s + a.requests, 0),
-      processed_at: Date.now(),
-    });
+    if (!streamErrored) {
+      markLedger(db, {
+        site: siteId, file_date: p.date,
+        files: p.files.length, bytes: p.bytes,
+        lines: Array.from(touched.values()).reduce((s, a) => s + a.requests, 0),
+        processed_at: Date.now(),
+      });
+    }
+    touched.clear();
   }
 
   evict(db, siteId, 180);
