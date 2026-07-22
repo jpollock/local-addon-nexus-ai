@@ -1,0 +1,131 @@
+name: log-processor
+version: 1.0.0
+description: >-
+  Access log ingestion and read contract. Streams WPE Apache-style logs from S3,
+  folds into daily aggregates (constant memory), and serves seo-insights and
+  security-sentinel via contributed tools.
+permissions:
+  tier: 1
+credentials:
+  - provider: aws
+    type: api_key
+    optional: true
+    reason: Reads WP Engine access logs from your S3 bucket
+triggers:
+  - type: cron
+    expression: '0 3 * * *'
+contributes:
+  tools:
+    - name: connect_log_source
+      description: >-
+        Bind an S3 log location to a WPE install. Validates by listing the prefix.
+        Does not enable the site for cron — call set_log_processing to do that.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+            description: WPE install name
+          bucket:
+            type: string
+          region:
+            type: string
+            default: us-east-1
+          prefix:
+            type: string
+            default: ''
+        required: [siteId, bucket]
+    - name: set_log_processing
+      description: >-
+        Enable or disable scheduled log processing for a WPE install.
+        Enabled sites are picked up by the nightly cron.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+          enabled:
+            type: boolean
+        required: [siteId, enabled]
+    - name: sync_access_logs
+      description: >-
+        Ingest access-log days from S3. Streams each file (constant memory),
+        classifies traffic, folds into per-day aggregates. Ledgered and budgeted.
+      executionMode: run
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+          from:
+            type: string
+          to:
+            type: string
+          budgetMB:
+            type: number
+            default: 512
+        required: [siteId]
+    - name: get_log_aggregates
+      description: >-
+        Return daily aggregate objects for a site and date range. Offline read —
+        no S3 calls. Returns present days plus missing days with the sync command.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+          from:
+            type: string
+          to:
+            type: string
+        required: [siteId, from, to]
+    - name: fetch_log_window
+      description: >-
+        Forensic raw-log query. Two-phase: without confirm returns cost estimate;
+        confirm=true streams and filters. Nothing persists.
+      executionMode: run
+      permissionTier: 2
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+          from:
+            type: string
+          to:
+            type: string
+          ip:
+            type: string
+          pathContains:
+            type: string
+          uaContains:
+            type: string
+          status:
+            type: number
+          confirm:
+            type: boolean
+            default: false
+        required: [siteId, from, to]
+    - name: log_storage_status
+      description: >-
+        Report local disk footprint: per-site aggregate days, ledger coverage,
+        enabled status, approximate KB.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties: {}
+    - name: evict_log_data
+      description: >-
+        Delete local log-derived data older than N days. Never touches sources
+        or the S3 bucket.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+          olderThanDays:
+            type: number
