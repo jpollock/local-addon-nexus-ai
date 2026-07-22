@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS aggregates (
 `;
 
 export function initSchema(db: AgentDatabase): void {
+  db.pragma('journal_mode = WAL');
   db.exec(SCHEMA);
 }
 
@@ -72,7 +73,7 @@ export function upsertSource(db: AgentDatabase, s: Omit<LogSource, 'created_at'>
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(site) DO UPDATE SET
       provider = excluded.provider, bucket = excluded.bucket,
-      region = excluded.region, prefix = excluded.prefix
+      region = excluded.region, prefix = excluded.prefix, enabled = excluded.enabled
   `).run(s.site, s.provider, s.bucket, s.region, s.prefix, s.enabled, Date.now());
 }
 
