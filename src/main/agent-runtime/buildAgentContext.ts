@@ -128,6 +128,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   const db: AgentDbHandle = dbManager
     ? { open: (name: string) => dbManager.open(agentName, name) }
     : (() => {
+        appLog.warn(`Agent "${agentName}": no dbManager provided — ctx.db.open() will use ephemeral in-memory databases. Data will not persist between runs.`);
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const BetterSqlite3 = require('better-sqlite3') as typeof import('better-sqlite3');
         const memDbs = new Map<string, AgentDatabase>();

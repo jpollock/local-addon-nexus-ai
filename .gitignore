@@ -25,3 +25,4 @@ STRATEGIC_ANALYSIS.md
 .ai.api.keys.env
 docs/superpowers/
 *.env.local
+dev-reload.sh
