@@ -3,10 +3,19 @@ import { agentStore, AgentSettings } from './AgentStore';
 
 interface SettingsProps {
   agentId: string;
+  electron?: any;
+}
+
+interface GoogleConnection {
+  id: string;
+  accountLabel: string;
+  status: string;
 }
 
 interface SettingsState {
   settings: AgentSettings;
+  googleConnection: GoogleConnection | null;
+  connectingGoogle: boolean;
 }
 
 const CADENCE_OPTIONS = [
@@ -46,18 +55,74 @@ class ToggleSwitch extends React.Component<{ checked: boolean; onChange: (v: boo
   }
 }
 
+// Agents that declare Google credentials — drives whether the Connections card shows
+const AGENTS_WITH_GOOGLE_CREDENTIALS = new Set(['seo-insights']);
+const GSC_SCOPES = ['https://www.googleapis.com/auth/webmasters.readonly'];
+
 export class AgentWorkspaceSettings extends React.Component<SettingsProps, SettingsState> {
-  state: SettingsState = { settings: agentStore.getOrInitSettings(this.props.agentId) };
+  state: SettingsState = {
+    settings: agentStore.getOrInitSettings(this.props.agentId),
+    googleConnection: null,
+    connectingGoogle: false,
+  };
   private unsubscribe!: () => void;
+  private credEventHandler?: (...args: any[]) => void;
 
   componentDidMount() {
     const update = () => this.setState({ settings: agentStore.getOrInitSettings(this.props.agentId) });
     agentStore.subscribe(update);
     this.unsubscribe = () => agentStore.unsubscribe(update);
+
+    // Load Google connection status if this agent uses Google credentials
+    if (AGENTS_WITH_GOOGLE_CREDENTIALS.has(this.props.agentId)) {
+      this.loadGoogleStatus();
+      // React to credential changes pushed from main
+      const IPC_CHANNELS = (window as any).__nexusIpcChannels;
+      const credEventChannel = 'nexus-ai:credential:event';
+      this.credEventHandler = () => this.loadGoogleStatus();
+      this.props.electron?.ipcRenderer?.on(credEventChannel, this.credEventHandler);
+    }
   }
 
   componentWillUnmount() {
     this.unsubscribe();
+    if (this.credEventHandler) {
+      this.props.electron?.ipcRenderer?.removeListener('nexus-ai:credential:event', this.credEventHandler);
+    }
+  }
+
+  private async loadGoogleStatus() {
+    try {
+      const result = await this.props.electron?.ipcRenderer?.invoke('nexus-ai:credential:status');
+      const connections: GoogleConnection[] = result?.connections ?? [];
+      const google = connections.find((c: any) => c.provider === 'google' && c.status !== 'revoked') ?? null;
+      this.setState({ googleConnection: google });
+    } catch { /* Local not running */ }
+  }
+
+  private async connectGoogle() {
+    this.setState({ connectingGoogle: true });
+    try {
+      await this.props.electron?.ipcRenderer?.invoke('nexus-ai:credential:connect', {
+        provider: 'google',
+        agentId: this.props.agentId,
+        siteId: '',
+        scopes: GSC_SCOPES,
+      });
+    } catch { /* handled by credential event */ } finally {
+      this.setState({ connectingGoogle: false });
+    }
+  }
+
+  private async disconnectGoogle() {
+    const { googleConnection } = this.state;
+    if (!googleConnection) return;
+    try {
+      await this.props.electron?.ipcRenderer?.invoke('nexus-ai:credential:disconnect', {
+        connectionId: googleConnection.id,
+      });
+      this.setState({ googleConnection: null });
+    } catch { /* ignore */ }
   }
 
   private updateSettings(patch: Partial<AgentSettings>) {
@@ -96,6 +161,49 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
         transition: 'opacity 0.15s',
       },
     }, children);
+  }
+
+  private renderConnectionsCard() {
+    const { googleConnection, connectingGoogle } = this.state;
+    const isConnected = !!googleConnection;
+    return this.renderCard(
+      React.createElement('div', null,
+        // Header
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 } },
+          React.createElement('div', null,
+            React.createElement('div', { style: { fontSize: 13.5, fontWeight: 600, color: 'var(--ag-text-primary)' } }, 'Connected Accounts'),
+            React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)', marginTop: 3 } },
+              'Connect Google Search Console to unlock demand analysis (T1)',
+            ),
+          ),
+        ),
+        // Google row
+        React.createElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 8, background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-subtle)' },
+        },
+          // Google icon placeholder
+          React.createElement('div', {
+            style: { width: 28, height: 28, borderRadius: 6, background: isConnected ? 'rgba(66,133,244,0.12)' : 'var(--ag-bg-card)', border: '1px solid var(--ag-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 },
+          }, 'G'),
+          React.createElement('div', { style: { flex: 1 } },
+            React.createElement('div', { style: { fontSize: 13, fontWeight: 500, color: 'var(--ag-text-primary)' } }, 'Google Search Console'),
+            React.createElement('div', { style: { fontSize: 12, color: isConnected ? 'var(--ag-green)' : 'var(--ag-text-muted)', marginTop: 2 } },
+              isConnected ? `Connected · ${googleConnection!.accountLabel}` : 'Not connected',
+            ),
+          ),
+          isConnected
+            ? React.createElement('button', {
+                onClick: () => this.disconnectGoogle(),
+                style: { padding: '6px 14px', background: 'transparent', border: '1px solid var(--ag-border)', borderRadius: 6, fontSize: 12, color: 'var(--ag-text-muted)', cursor: 'pointer' },
+              }, 'Disconnect')
+            : React.createElement('button', {
+                onClick: () => this.connectGoogle(),
+                disabled: connectingGoogle,
+                style: { padding: '6px 14px', background: 'var(--ag-teal)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, color: '#0d1117', cursor: connectingGoogle ? 'wait' : 'pointer', opacity: connectingGoogle ? 0.7 : 1 },
+              }, connectingGoogle ? 'Connecting…' : 'Connect Google'),
+        ),
+      ),
+    );
   }
 
   render() {
@@ -241,6 +349,8 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
         ),
         !settings.enabled,
       ),
+      // Connections card — only for agents that declare Google credentials
+      AGENTS_WITH_GOOGLE_CREDENTIALS.has(agentId) && this.renderConnectionsCard(),
     );
   }
 }

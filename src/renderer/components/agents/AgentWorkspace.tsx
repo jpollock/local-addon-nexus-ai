@@ -315,7 +315,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         onReviewEvent,
         // Scoped to this agent in future — for now shows all
       }),
-      activeTab === 'settings'  && React.createElement(AgentWorkspaceSettings, { agentId }),
+      activeTab === 'settings'  && React.createElement(AgentWorkspaceSettings, { agentId, electron: this.props.electron }),
 
       // Run now site-selection modal
       showRunModal && settings.enabled && React.createElement(AgentRunModal, {
