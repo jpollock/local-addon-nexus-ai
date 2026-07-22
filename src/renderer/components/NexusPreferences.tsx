@@ -69,6 +69,18 @@ interface NexusPreferencesState {
   accessExpanded: boolean;
   excludedExpanded: boolean;
   addingException: { op: string; installName: string; environment: string; allowing: boolean } | null;
+  // AWS S3 credentials
+  awsConnected: boolean;
+  awsRevoked: boolean;
+  awsLabel: string;
+  awsConnectionId: string;
+  awsKeyIdInput: string;
+  awsSecretInput: string;
+  awsSecretVisible: boolean;
+  awsSaving: boolean;
+  awsError: string;
+  awsSaved: boolean;
+  awsShowReenter: boolean;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -200,6 +212,17 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     accessExpanded: true,
     excludedExpanded: false,
     addingException: null,
+    awsConnected: false,
+    awsRevoked: false,
+    awsLabel: '',
+    awsConnectionId: '',
+    awsKeyIdInput: '',
+    awsSecretInput: '',
+    awsSecretVisible: false,
+    awsSaving: false,
+    awsError: '',
+    awsSaved: false,
+    awsShowReenter: false,
   };
 
   componentDidMount(): void {
@@ -215,7 +238,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   fetchData = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
     try {
-      const [settings, sites, providers, keyStatus, wpeCredsStatus, wpeAccounts, wpeInstalls] = await Promise.all([
+      const [settings, sites, providers, keyStatus, wpeCredsStatus, wpeAccounts, wpeInstalls, awsStatus] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_SETTINGS),
         ipc.invoke(IPC_CHANNELS.GET_SITES),
         ipc.invoke(IPC_CHANNELS.GET_PROVIDERS),
@@ -223,8 +246,12 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         ipc.invoke(IPC_CHANNELS.WPE_GET_API_CREDENTIALS_STATUS),
         ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
         ipc.invoke(IPC_CHANNELS.GET_WPE_INSTALLS_CACHE).catch(() => []),
+        ipc.invoke(IPC_CHANNELS.CREDENTIAL_API_KEY_STATUS, { provider: 'aws' }).catch(() => null),
       ]);
       if (!this.mounted) return;
+      const awsStatusTyped = awsStatus as { connections: Array<{ id: string; label: string; status: string }> } | null;
+      const activeAws = awsStatusTyped?.connections?.find((c: any) => c.status === 'active');
+      const revokedAws = awsStatusTyped?.connections?.find((c: any) => c.status === 'revoked');
       this.setState({
         settings: settings ?? { autoIndex: true, excludedSiteIds: [] },
         sites: sites ?? [],
@@ -235,6 +262,10 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         wpeCredentialsConfigured: wpeCredsStatus?.configured ?? false,
         wpeUsername: wpeCredsStatus?.username ?? '',
         wpeUsernameInput: wpeCredsStatus?.username ?? '',
+        awsConnected: !!activeAws,
+        awsRevoked: !activeAws && !!revokedAws,
+        awsLabel: activeAws?.label ?? revokedAws?.label ?? '',
+        awsConnectionId: activeAws?.id ?? revokedAws?.id ?? '',
         loading: false,
       }, () => {
         // Load models and stored key for the current provider
@@ -868,6 +899,66 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     }
   };
 
+  // -----------------------------------------------------------------------
+  // AWS S3 Credentials Handlers
+  // -----------------------------------------------------------------------
+
+  handleAwsKeyIdChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    this.setState({ awsKeyIdInput: e.target.value, awsError: '', awsSaved: false });
+  }
+
+  handleAwsSecretChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    this.setState({ awsSecretInput: e.target.value, awsError: '', awsSaved: false });
+  }
+
+  handleAwsToggleSecret = (): void => {
+    this.setState(s => ({ awsSecretVisible: !s.awsSecretVisible }));
+  }
+
+  handleAwsSave = async (): Promise<void> => {
+    const { awsKeyIdInput, awsSecretInput } = this.state;
+    if (!awsKeyIdInput.trim() || !awsSecretInput.trim()) return;
+    this.setState({ awsSaving: true, awsError: '' });
+    try {
+      const ipc = this.props.electron.ipcRenderer;
+      const result = await ipc.invoke(IPC_CHANNELS.CREDENTIAL_API_KEY_SET, {
+        provider: 'aws',
+        fields: { accessKeyId: awsKeyIdInput.trim(), secretAccessKey: awsSecretInput.trim() },
+      }) as { ok: boolean; connectionId?: string; label?: string; error?: string; code?: string };
+
+      if (result.ok) {
+        this.setState({
+          awsSaving: false, awsSaved: true, awsConnected: true, awsRevoked: false,
+          awsConnectionId: result.connectionId!, awsLabel: result.label!,
+          awsKeyIdInput: '', awsSecretInput: '', awsShowReenter: false,
+        });
+      } else {
+        const errorMap: Record<string, string> = {
+          InvalidAccessKeyId: 'Access Key ID not recognised — check it was copied correctly.',
+          SignatureDoesNotMatch: 'Secret Access Key is incorrect — re-copy from AWS.',
+          NetworkError: 'Could not reach AWS — check your internet connection.',
+        };
+        this.setState({
+          awsSaving: false,
+          awsError: errorMap[result.code!] ?? result.error ?? 'Validation failed.',
+        });
+      }
+    } catch {
+      this.setState({ awsSaving: false, awsError: 'An unexpected error occurred.' });
+    }
+  }
+
+  handleAwsDisconnect = async (): Promise<void> => {
+    const { awsConnectionId } = this.state;
+    if (!awsConnectionId) return;
+    const ipc = this.props.electron.ipcRenderer;
+    await ipc.invoke(IPC_CHANNELS.CREDENTIAL_API_KEY_CLEAR, { connectionId: awsConnectionId });
+    this.setState({
+      awsConnected: false, awsRevoked: false, awsLabel: '', awsConnectionId: '',
+      awsSaved: false, awsError: '', awsShowReenter: false,
+    });
+  }
+
   toggleSection = (sectionId: string): void => {
     this.setState((prev) => {
       const next = new Set(prev.expandedSections);
@@ -1133,6 +1224,126 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
   }
 
 
+  // -----------------------------------------------------------------------
+  // AWS S3 Credentials Section Render
+  // -----------------------------------------------------------------------
+
+  renderAwsCredsSection(): React.ReactNode {
+    const {
+      awsConnected, awsRevoked, awsLabel, awsKeyIdInput, awsSecretInput,
+      awsSecretVisible, awsSaving, awsError, awsSaved, awsShowReenter,
+    } = this.state;
+
+    const statusColor = awsConnected
+      ? UI_COLORS.STATUS_RUNNING
+      : awsRevoked ? '#ef4444' : 'var(--nxai-status-neutral, #9ca3af)';
+    const statusLabel = awsConnected ? 'Connected' : awsRevoked ? 'Keys no longer valid' : 'Not connected';
+
+    const showForm = !awsConnected || awsShowReenter;
+
+    return React.createElement('div', null,
+      React.createElement('div', { style: descStyle },
+        'Store a read-only AWS access key for the IAM user that can list and read your WP Engine log bucket. Keys are encrypted in your OS keychain — never stored in plaintext or shared with WP Engine.',
+      ),
+
+      // Status indicator
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' } },
+        React.createElement('span', { style: dotStyle(statusColor) }),
+        React.createElement('span', { style: { fontSize: '13px', color: statusColor, fontWeight: 500 } }, statusLabel),
+        awsConnected && awsLabel ? React.createElement('span', {
+          style: { fontSize: '12px', opacity: 0.6, marginLeft: '4px', fontFamily: 'monospace' },
+        }, awsLabel) : null,
+      ),
+
+      // Revoked warning
+      awsRevoked && !awsShowReenter
+        ? React.createElement('div', {
+            style: { fontSize: '12px', color: '#ef4444', marginBottom: '12px', lineHeight: 1.4 },
+          },
+          'AWS returned an authorization error during the last log sync. Your keys may have been rotated or deleted. Re-enter credentials to reconnect.',
+        ) : null,
+
+      // Form (shown when not connected, or when re-entering)
+      showForm ? React.createElement('div', null,
+        // Access Key ID
+        React.createElement('div', { style: rowStyle },
+          React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '140px' } }, 'Access Key ID'),
+          React.createElement('input', {
+            type: 'text',
+            value: awsKeyIdInput,
+            onChange: this.handleAwsKeyIdChange,
+            placeholder: 'AKIA…',
+            className: 'nexus-password-input',
+            style: { ...inputStyle, flex: 1, maxWidth: '350px', fontFamily: 'monospace' },
+          }),
+        ),
+        // Secret Access Key
+        React.createElement('div', { style: { ...rowStyle, marginBottom: '8px' } },
+          React.createElement('span', { style: { fontSize: '13px', fontWeight: 500, minWidth: '140px' } }, 'Secret Access Key'),
+          React.createElement('div', { style: { display: 'flex', gap: '6px', flex: 1, maxWidth: '350px' } },
+            React.createElement('input', {
+              type: awsSecretVisible ? 'text' : 'password',
+              value: awsSecretInput,
+              onChange: this.handleAwsSecretChange,
+              placeholder: '••••••••',
+              className: 'nexus-password-input',
+              style: { ...inputStyle, flex: 1, fontFamily: 'monospace' },
+            }),
+            React.createElement('button', {
+              style: { ...btnSmallStyle, minWidth: '48px' },
+              onClick: this.handleAwsToggleSecret,
+            }, awsSecretVisible ? 'Hide' : 'Show'),
+          ),
+        ),
+        // Error
+        awsError ? React.createElement('div', {
+          style: { fontSize: '12px', color: '#ef4444', marginBottom: '8px' },
+        }, awsError) : null,
+        // Action buttons
+        React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' } },
+          React.createElement('button', {
+            style: {
+              ...btnSmallStyle,
+              ...(awsKeyIdInput.trim() && awsSecretInput.trim() && !awsSaved
+                ? { backgroundColor: UI_COLORS.WPE_BRAND, color: '#fff', border: 'none' } : {}),
+            },
+            onClick: this.handleAwsSave,
+            disabled: !awsKeyIdInput.trim() || !awsSecretInput.trim() || awsSaving || awsSaved,
+          }, awsSaving ? 'Checking…' : awsSaved ? 'Connected' : 'Save'),
+          awsShowReenter ? React.createElement('button', {
+            style: btnSmallStyle,
+            onClick: () => this.setState({ awsShowReenter: false, awsKeyIdInput: '', awsSecretInput: '', awsError: '' }),
+          }, 'Cancel') : null,
+        ),
+      ) : null,
+
+      // Connected state actions
+      awsConnected && !awsShowReenter
+        ? React.createElement('div', { style: { display: 'flex', gap: '8px', marginBottom: '12px' } },
+            React.createElement('button', {
+              style: btnSmallStyle,
+              onClick: () => this.setState({ awsShowReenter: true }),
+            }, 'Re-enter credentials'),
+            React.createElement('button', {
+              style: btnSmallStyle,
+              onClick: this.handleAwsDisconnect,
+            }, 'Disconnect'),
+          ) : null,
+      awsRevoked && !awsShowReenter
+        ? React.createElement('button', {
+            style: { ...btnSmallStyle, marginBottom: '12px' },
+            onClick: () => this.setState({ awsShowReenter: true, awsError: '' }),
+          }, 'Re-enter credentials') : null,
+
+      // Disconnect note
+      React.createElement('div', {
+        style: { fontSize: '12px', opacity: 0.6, marginTop: '4px', lineHeight: 1.4 },
+      },
+        'Disconnecting removes Nexus\'s access to your S3 bucket. Already-computed log summaries are kept — raw logs are never stored locally.',
+      ),
+    );
+  }
+
   render(): React.ReactNode {
     const { settings, loading, expandedSections } = this.state;
 
@@ -1187,6 +1398,16 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
         : null,
     );
 
+    // Section 4: AWS S3 Credentials
+    const section4 = React.createElement('div', { style: sectionStyle },
+      this.renderSectionHeader('aws-creds', 'AWS S3 Credentials'),
+      expandedSections.has('aws-creds')
+        ? React.createElement('div', null,
+            this.renderAwsCredsSection(),
+          )
+        : null,
+    );
+
     // Note: Auto-Indexing, Sync Schedule, and WPE Access & Permissions have
     // moved to the Nexus AI Settings tab for a cleaner separation of concerns.
 
@@ -1197,6 +1418,7 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
       section1,
       section2,
       section3,
+      section4,
     );
   }
 }

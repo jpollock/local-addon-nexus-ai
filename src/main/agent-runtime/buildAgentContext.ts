@@ -79,6 +79,8 @@ export function buildAgentContext(deps: AgentContextDeps): {
       getTokenForGrant: async (provider: string) => { throw new NotConnectedError(provider); },
       getStatusForAgent: async () => 'not_connected' as const,
       requestConnectionForAgent: async () => {},
+      getSecretForAgent: async (provider: string) => { throw new Error(`No credential manager — cannot get secret for ${provider}`); },
+      markApiKeyRevoked: (_provider: string) => {},
     },
   });
 

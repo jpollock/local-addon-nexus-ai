@@ -289,6 +289,7 @@ describe('AgentCredentialsContext', () => {
         'google',
         'seo-agent',
         'site-1',
+        { scopes: ['https://www.googleapis.com/auth/webmasters.readonly'], agentName: 'seo-agent', reason: 'Access Search Console' },
       );
     });
   });
