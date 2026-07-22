@@ -110,7 +110,12 @@ async function runSync(
           foldLine(agg, parsed, classifyLine(parsed));
         }
       } catch (e: unknown) {
-        ctx.log.error(`Stream error for ${f.key}: ${(e as Error).message} — date ${p.date} left un-ledgered for retry`);
+        const msg = (e as Error).message;
+        ctx.log.error(`Stream error for ${f.key}: ${msg} — date ${p.date} left un-ledgered for retry`);
+        if (msg.includes('InvalidAccessKeyId') || msg.includes('SignatureDoesNotMatch')) {
+          ctx.credentials.revokeCredential?.('aws').catch(() => {});
+          return `⚠ AWS credentials are no longer valid. Re-enter them in Preferences → Connected accounts → AWS S3.`;
+        }
         streamErrored = true;
         continue;
       }
@@ -184,7 +189,12 @@ export default defineAgent({
               `\n\nNext: enable with set_log_processing siteId="${args.siteId}" enabled=true`,
             );
           } catch (e: unknown) {
-            return ok(`⚠ Could not list s3://${args.bucket}/${prefix}: ${(e as Error).message}`);
+            const msg = (e as Error).message;
+            if (msg.includes('InvalidAccessKeyId') || msg.includes('SignatureDoesNotMatch')) {
+              ctx.credentials.revokeCredential?.('aws').catch(() => {});
+              return ok(`⚠ AWS credentials are no longer valid. Re-enter them in Preferences → Connected accounts → AWS S3.`);
+            }
+            return ok(`⚠ Could not list s3://${args.bucket}/${prefix}: ${msg}`);
           }
         },
       },
