@@ -293,6 +293,51 @@ describe('AgentCredentialsContext', () => {
     });
   });
 
+  describe('getSecret', () => {
+    function makeApiKeyContext(providerDeclared: boolean) {
+      const mockManager = {
+        getTokenForGrant: jest.fn(),
+        getStatusForAgent: jest.fn(),
+        requestConnectionForAgent: jest.fn(),
+        getSecretForAgent: jest.fn().mockResolvedValue({ accessKeyId: 'AKIA123', secretAccessKey: 'secret' }),
+        markApiKeyRevoked: jest.fn(),
+      };
+      const declarations = providerDeclared
+        ? [{ provider: 'aws', type: 'api_key' as const, optional: true, reason: 'test' }]
+        : [];
+      const ctx = new AgentCredentialsContext({
+        agentId: 'log-processor',
+        siteId: '',
+        manifestCredentials: declarations,
+        manager: mockManager as any,
+      });
+      return { ctx, mockManager };
+    }
+
+    it('returns fields when provider is declared', async () => {
+      const { ctx } = makeApiKeyContext(true);
+      const fields = await ctx.getSecret('aws');
+      expect(fields.accessKeyId).toBe('AKIA123');
+    });
+
+    it('throws NotConnectedError when provider not declared in manifest', async () => {
+      const { ctx } = makeApiKeyContext(false);
+      await expect(ctx.getSecret('aws')).rejects.toThrow(NotConnectedError);
+    });
+
+    it('revokeCredential calls markApiKeyRevoked for declared provider', async () => {
+      const { ctx, mockManager } = makeApiKeyContext(true);
+      await ctx.revokeCredential('aws');
+      expect(mockManager.markApiKeyRevoked).toHaveBeenCalledWith('aws');
+    });
+
+    it('revokeCredential silently ignores undeclared providers', async () => {
+      const { ctx, mockManager } = makeApiKeyContext(false);
+      await expect(ctx.revokeCredential('aws')).resolves.toBeUndefined();
+      expect(mockManager.markApiKeyRevoked).not.toHaveBeenCalled();
+    });
+  });
+
   describe('multiple credentials', () => {
     it('supports multiple declared providers', async () => {
       const manager = makeManager();

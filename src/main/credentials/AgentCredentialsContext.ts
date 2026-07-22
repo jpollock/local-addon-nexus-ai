@@ -23,6 +23,18 @@ export interface AgentCredentials {
    * Request a new connection for a provider. Prompts the user to authorize.
    */
   requestConnection(provider: string): Promise<void>;
+
+  /**
+   * Get raw key/value fields for an api_key credential declared in the manifest.
+   * Throws NotConnectedError if the provider was not declared as api_key type.
+   */
+  getSecret?(provider: string): Promise<Record<string, string>>;
+
+  /**
+   * Signal to the platform that stored credentials for this provider are invalid.
+   * Marks the connection revoked in the credential store. Best-effort; never throws.
+   */
+  revokeCredential?(provider: string): Promise<void>;
 }
 
 /**
@@ -60,6 +72,18 @@ export interface ICredentialManager {
       scopeLabels?: Record<string, string>;
     },
   ): Promise<void>;
+
+  /**
+   * Get raw key/value fields for an api_key credential.
+   * Returns all stored fields (e.g. accessKeyId + secretAccessKey for AWS).
+   */
+  getSecretForAgent(provider: string, agentId: string): Promise<Record<string, string>>;
+
+  /**
+   * Mark an api_key connection as revoked in the credential store.
+   * Used when the agent detects that its credentials are invalid.
+   */
+  markApiKeyRevoked(provider: string): void;
 }
 
 export interface AgentCredentialsContextOpts {
@@ -87,6 +111,8 @@ export class AgentCredentialsContext implements AgentCredentials {
   private declaredScopes: Map<string, Set<string>>;
   /** Full declarations keyed by provider — used to pass metadata to the consent UI. */
   private declarations: Map<string, CredentialDeclaration>;
+  /** Set of providers declared as api_key type — gates getSecret() access. */
+  private declaredApiKeyProviders: Set<string>;
   private manager: ICredentialManager;
   private agentId: string;
   private siteId: string;
@@ -97,9 +123,13 @@ export class AgentCredentialsContext implements AgentCredentials {
     this.manager = opts.manager;
     this.declaredScopes = new Map();
     this.declarations = new Map();
+    this.declaredApiKeyProviders = new Set();
     for (const decl of opts.manifestCredentials) {
       this.declaredScopes.set(decl.provider, new Set('scopes' in decl ? decl.scopes : []));
       this.declarations.set(decl.provider, decl);
+      if ('type' in decl && decl.type === 'api_key') {
+        this.declaredApiKeyProviders.add(decl.provider);
+      }
     }
   }
 
@@ -146,5 +176,22 @@ export class AgentCredentialsContext implements AgentCredentials {
       agentName: this.agentId,
       reason: decl?.reason,
     });
+  }
+
+  async getSecret(provider: string): Promise<Record<string, string>> {
+    // Access gate: only callable by agents that declared this provider as api_key
+    if (!this.declaredApiKeyProviders.has(provider)) {
+      throw new NotConnectedError(provider);
+    }
+    return this.manager.getSecretForAgent(provider, this.agentId);
+  }
+
+  async revokeCredential(provider: string): Promise<void> {
+    // Best-effort: never throws
+    try {
+      if (this.declaredApiKeyProviders.has(provider)) {
+        this.manager.markApiKeyRevoked(provider);
+      }
+    } catch { /* best-effort */ }
   }
 }

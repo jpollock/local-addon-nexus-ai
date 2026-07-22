@@ -196,6 +196,9 @@ export interface AgentCredentials {
   requestConnection(provider: string): Promise<void>;
   /** api_key credential extension — feature-detected at runtime. Not all credential backends implement this. */
   getSecret?(provider: string): Promise<Record<string, string>>;
+  /** Signal to the platform that stored credentials for this provider are invalid.
+   *  Marks the connection revoked in the credential store. Best-effort; never throws. */
+  revokeCredential?(provider: string): Promise<void>;
 }
 
 export interface AgentStatement {
