@@ -466,7 +466,7 @@ export function foldLine(agg: DayAggregate, l: LogLine, c: Classified): void {
     if (/^\/wp-json\//i.test(l.path) && !/^\/wp-json\/wp\/v2\/users/i.test(l.path) && l.status === 200) {
       bump(agg.attack.enumeration.restRouteBypass, l.path.split('/').slice(0, 5).join('/'), 10);
     }
-    if (PROBE_PATH.test(l.path) && Object.keys(agg.attack.probes).length < 50) {
+    if (PROBE_PATH.test(l.path) && !AUTH_PATH.test(l.path) && Object.keys(agg.attack.probes).length < 50) {
       if (!agg.attack.probes[l.path]) agg.attack.probes[l.path] = { hits: 0, statuses: {} };
       agg.attack.probes[l.path].hits++;
       bump(agg.attack.probes[l.path].statuses, String(l.status), 10);
