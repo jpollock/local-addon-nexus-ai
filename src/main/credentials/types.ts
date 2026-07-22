@@ -17,6 +17,14 @@ export interface Grant {
   scopes: string[];            // ⊆ connection.grantedScopes
 }
 
+export interface ApiKeyConnection {
+  id: string;
+  provider: string;
+  label: string;
+  status: 'active' | 'revoked';
+  createdAt: string;
+}
+
 export interface AccessToken {
   token: string;
   expiresAt: string;           // ISO timestamp

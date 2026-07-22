@@ -221,6 +221,11 @@ export const IPC_CHANNELS = {
   CREDENTIAL_DISCONNECT: `${ADDON_PREFIX}:credential:disconnect`,
   CREDENTIAL_STATUS: `${ADDON_PREFIX}:credential:status`,
   CREDENTIAL_EVENT: `${ADDON_PREFIX}:credential:event`,
+
+  // API-Key Credential Manager
+  CREDENTIAL_API_KEY_SET:    `${ADDON_PREFIX}:credential:api-key:set`,
+  CREDENTIAL_API_KEY_STATUS: `${ADDON_PREFIX}:credential:api-key:status`,
+  CREDENTIAL_API_KEY_CLEAR:  `${ADDON_PREFIX}:credential:api-key:clear`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -277,6 +282,7 @@ export const STORAGE_KEYS = {
   OAUTH_CONNECTIONS: `${ADDON_PREFIX}_oauth_connections`,
   OAUTH_GRANTS: `${ADDON_PREFIX}_oauth_grants`,
   OAUTH_VAULT: `${ADDON_PREFIX}_oauth_vault`,
+  API_KEY_CONNECTIONS: `${ADDON_PREFIX}_api_key_connections`,
 } as const;
 
 // ---------------------------------------------------------------------------

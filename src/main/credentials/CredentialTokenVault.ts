@@ -37,4 +37,23 @@ export class CredentialTokenVault {
   delete(connectionId: string, provider: string): void {
     this.vault.deleteKey(this.key(connectionId, provider));
   }
+
+  private apiKeyKey(connectionId: string, provider: string): string {
+    return `api_key:${provider}:${connectionId}:fields`;
+  }
+
+  storeApiKey(connectionId: string, provider: string, fields: Record<string, string>): void {
+    this.assertEncryptionAvailable();
+    this.vault.setKey(this.apiKeyKey(connectionId, provider), JSON.stringify(fields));
+  }
+
+  retrieveApiKey(connectionId: string, provider: string): Record<string, string> | null {
+    const raw = this.vault.getKey(this.apiKeyKey(connectionId, provider));
+    if (!raw) return null;
+    try { return JSON.parse(raw) as Record<string, string>; } catch { return null; }
+  }
+
+  deleteApiKey(connectionId: string, provider: string): void {
+    this.vault.deleteKey(this.apiKeyKey(connectionId, provider));
+  }
 }
