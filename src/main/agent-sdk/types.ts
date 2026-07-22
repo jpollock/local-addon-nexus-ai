@@ -230,6 +230,8 @@ export type ContributedToolDefinition<TArgs = unknown> = {
   description: string;
   inputSchema?: Record<string, unknown>;
   executionMode?: ExecutionMode;
+  /** Tier 2 = modifying (requires user acknowledgement); Tier 3 = destructive (requires confirmation token). Default: 1. */
+  permissionTier?: 1 | 2 | 3;
   handler: (args: TArgs, ctx: AgentContext) => Promise<AgentToolResult>;
 };
 

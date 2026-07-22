@@ -228,6 +228,129 @@ export default defineAgent({
         },
       },
 
+      get_log_aggregates: {
+        description: 'Return daily aggregate objects for a site and date range. Offline read — no S3 calls. Returns present days plus an explicit list of missing days with the exact sync command.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            siteId: { type: 'string' },
+            from: { type: 'string', description: 'First day (YYYY-MM-DD)' },
+            to: { type: 'string', description: 'Last day (YYYY-MM-DD)' },
+          },
+          required: ['siteId', 'from', 'to'],
+        },
+        executionMode: 'function' as const,
+        handler: async (args: { siteId: string; from: string; to: string }, ctx: AgentContext): Promise<AgentToolResult> => {
+          const db = openDb(ctx);
+          const rows = getAggregatesInRange(db, args.siteId, args.from, args.to);
+          const present = new Set(rows.map(r => r.day));
+          const missing: string[] = [];
+          for (let d = args.from; d <= args.to; d = addDays(d, 1)) {
+            if (!present.has(d)) missing.push(d);
+          }
+          const result: Record<string, unknown> = {
+            siteId: args.siteId, from: args.from, to: args.to,
+            taxonomyVersion: TAXONOMY_VERSION,
+            aggregates: Object.fromEntries(rows.map(r => [r.day, r.agg])),
+          };
+          if (missing.length > 0) {
+            result.missingDays = missing;
+            result.missingDaysNote = `${missing.length} day(s) not ingested. To fill: sync_access_logs siteId="${args.siteId}" from="${missing[0]}" to="${missing[missing.length - 1]}"`;
+          }
+          return ok(JSON.stringify(result, null, 2));
+        },
+      },
+
+      fetch_log_window: {
+        description: 'Forensic raw-log query over a bounded window. Two-phase: without confirm returns the cost estimate; confirm=true streams and filters. Nothing persists.',
+        permissionTier: 2,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            siteId: { type: 'string' },
+            from: { type: 'string' },
+            to: { type: 'string' },
+            ip: { type: 'string', description: 'Filter: exact client IP' },
+            pathContains: { type: 'string' },
+            uaContains: { type: 'string' },
+            status: { type: 'number' },
+            confirm: { type: 'boolean', default: false },
+          },
+          required: ['siteId', 'from', 'to'],
+        },
+        executionMode: 'run' as const,
+        handler: async (
+          args: { siteId: string; from: string; to: string; ip?: string; pathContains?: string; uaContains?: string; status?: number; confirm?: boolean },
+          ctx: AgentContext,
+        ): Promise<AgentToolResult> => {
+          ctx.log.phase('fetch_log_window', args.confirm ? 'execute' : 'estimate');
+          const db = openDb(ctx);
+          const src = getSource(db, args.siteId);
+          if (!src) return ok(`⚠ No log source for "${args.siteId}".`);
+          const creds = await getAwsCreds(ctx);
+          if ('error' in creds) return ok(`⚠ ${creds.error}`);
+
+          const allFiles: { key: string; size: number }[] = [];
+          for (const date of fileDatesForRange(args.from, args.to)) {
+            const files = await s3ListAll(creds, src.region, src.bucket, src.prefix + date.replace(/-/g, ''));
+            allFiles.push(...files.filter(o => /apachestyle/i.test(o.key)));
+          }
+
+          const totalCompressed = allFiles.reduce((s, f) => s + f.size, 0);
+          const estMinutes = Math.ceil(totalCompressed * GZ_EXPANSION / (50 * 1048576));
+
+          if (!args.confirm) {
+            return ok(JSON.stringify({
+              estimate: true,
+              files: allFiles.length,
+              compressedMB: +(totalCompressed / 1048576).toFixed(1),
+              estimatedRawMB: +(totalCompressed * GZ_EXPANSION / 1048576).toFixed(0),
+              estimatedMinutes: estMinutes,
+              filter: { ip: args.ip, pathContains: args.pathContains, uaContains: args.uaContains, status: args.status },
+              note: 'Call with confirm=true to execute. Nothing will be persisted.',
+            }, null, 2));
+          }
+
+          const SAMPLE_CAP = 100;
+          const sample: string[] = [];
+          let matchCount = 0;
+          const byDay: Record<string, number> = {};
+          const byStatus: Record<string, number> = {};
+          const byPath: Record<string, number> = {};
+          const byIp: Record<string, number> = {};
+
+          for (const f of allFiles) {
+            try {
+              for await (const line of s3StreamLines(creds, src.region, src.bucket, f.key)) {
+                if (!line.trim()) continue;
+                const parsed = parseLogLine(line);
+                if (!parsed) continue;
+                if (args.ip && parsed.ip !== args.ip) continue;
+                if (args.pathContains && !parsed.path.includes(args.pathContains)) continue;
+                if (args.uaContains && !parsed.ua.includes(args.uaContains)) continue;
+                if (args.status !== undefined && parsed.status !== args.status) continue;
+                matchCount++;
+                byDay[parsed.day] = (byDay[parsed.day] ?? 0) + 1;
+                byStatus[String(parsed.status)] = (byStatus[String(parsed.status)] ?? 0) + 1;
+                if (Object.keys(byPath).length < 20) byPath[parsed.path] = (byPath[parsed.path] ?? 0) + 1;
+                if (Object.keys(byIp).length < 20) byIp[parsed.ip] = (byIp[parsed.ip] ?? 0) + 1;
+                if (sample.length < SAMPLE_CAP) sample.push(line);
+              }
+            } catch (e: unknown) {
+              ctx.log.warn(`Stream error for ${f.key}: ${(e as Error).message}`);
+            }
+          }
+
+          return ok(JSON.stringify({
+            siteId: args.siteId, from: args.from, to: args.to,
+            filter: { ip: args.ip, pathContains: args.pathContains, uaContains: args.uaContains, status: args.status },
+            matches: matchCount, byDay, byStatus, byPath, byIp,
+            sample: sample.slice(0, SAMPLE_CAP),
+            note: 'Ephemeral — nothing persisted.',
+          }, null, 2));
+        },
+      },
+
     },
   },
 
