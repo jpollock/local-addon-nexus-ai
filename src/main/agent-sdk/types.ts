@@ -119,6 +119,8 @@ export interface AgentResult {
   findings?: Finding[];
   plan?: RemediationPlan;
   sites?: Record<string, { status: string; findings: Finding[]; plan?: RemediationPlan }>;
+  /** Free-text report from the agent — rendered in RunDrawer completion section. */
+  summary?: string;
 }
 
 // ─── Domain output types ──────────────────────────────────────────────────────

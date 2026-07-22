@@ -115,6 +115,7 @@ export class AgentRunner {
       if (rv.findings) result.findings = rv.findings;
       if (rv.plan)     result.plan     = rv.plan;
       if (rv.sites)    result.sites    = rv.sites;
+      if (rv.summary)  result.summary  = rv.summary;
     }
 
     this.stateStore.recordRun(result);

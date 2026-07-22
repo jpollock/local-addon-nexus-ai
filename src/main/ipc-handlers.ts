@@ -4582,6 +4582,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
           findingsSites: outcomes.findingsSites,
           findings: (lastRunResult as any)?.findings,
           plan:     (lastRunResult as any)?.plan,
+          summary:  (lastRunResult as any)?.summary,
         });
       } catch (broadcastErr: any) {
         // Full payload failed to serialize (e.g. enriched plan evidence too large).
