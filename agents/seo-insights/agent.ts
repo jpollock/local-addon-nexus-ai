@@ -22,6 +22,44 @@ type OverlapArgs            = { siteId: string; threshold?: number };
 type RefreshWpeArgs         = { installName: string };
 type PullToLocalArgs        = { installName: string; localSiteName: string; includeDatabase?: boolean };
 
+// ---------------------------------------------------------------------------
+// Log-analysis types — mirrors DayAggregate from log-processor/access-logs.ts
+// (inlined here so seo-insights never imports from log-processor modules)
+// ---------------------------------------------------------------------------
+type BotAgg = { hits: number; statuses: Record<string, number>; topPaths: Record<string, number> };
+type DayAggregate = {
+  v: 1;
+  taxonomyVersion: string;
+  site: string;
+  day: string;
+  skippedLines: number;
+  requests: number;
+  byClass: Record<string, number>;
+  byStatus: Record<string, number>;
+  aiTraining: Record<string, BotAgg>;
+  aiRetrieval: Record<string, BotAgg>;
+  searchBots: Record<string, BotAgg>;
+  referrals: { search: Record<string, number>; ai: Record<string, number>; other: number; internal: number; spoofed: number };
+  notFound: { scanner: number; contentLike: Record<string, number> };
+  attack: {
+    requests: number;
+    authAttack: Record<string, { loginPosts: Record<string, number>; xmlrpcPosts: Record<string, number> }>;
+    enumeration: { userRestApi: Record<string, number>; authorScan: Record<string, number>; restRouteBypass: Record<string, number> };
+    probes: Record<string, { hits: number; statuses: Record<string, number> }>;
+    ipCardinality: { distinct: number; histogram: { '1': number; '2-5': number; '6-20': number; '21+': number } };
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Date helpers — inlined (NOT imported from log-processor modules)
+// ---------------------------------------------------------------------------
+function addDays(day: string, n: number): string {
+  const d = new Date(day + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function utcToday(): string { return new Date().toISOString().slice(0, 10); }
+
 function ok(text: string) {
   return { content: [{ type: 'text' as const, text }] };
 }
@@ -1182,6 +1220,280 @@ echo json_encode(array_map(function($p){
           });
 
           return ok(lines);
+        },
+      },
+
+      // ------------------------------------------------------------------
+      // analyze_ai_crawl_health — log-backed AI bot traffic analysis
+      // ------------------------------------------------------------------
+      analyze_ai_crawl_health: {
+        description: 'Analyze AI crawler traffic (training and retrieval bots) from access log aggregates. Requires log-processor to have ingested logs for this site.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            siteId: { type: 'string', description: 'Site ID to analyze' },
+            days: { type: 'number', default: 30, description: 'Number of days to analyze (default 30)' },
+          },
+          required: ['siteId'],
+        },
+        executionMode: 'function' as const,
+        handler: async (args: { siteId: string; days?: number }, ctx) => {
+          ctx.log.phase('analyze_ai_crawl_health');
+          const days = args.days ?? 30;
+          const to = addDays(utcToday(), -1);
+          const from = addDays(to, -(days - 1));
+
+          let aggregates: DayAggregate[];
+          let missingNote = '';
+          try {
+            const raw = await ctx.tools.invoke('get_log_aggregates', { siteId: args.siteId, from, to }) as { content: Array<{ text: string }> };
+            const parsed = JSON.parse(raw.content[0].text) as {
+              aggregates: Record<string, unknown>;
+              missingDaysNote?: string;
+            };
+            aggregates = Object.values(parsed.aggregates) as DayAggregate[];
+            missingNote = parsed.missingDaysNote ?? '';
+          } catch (e: unknown) {
+            return ok(`⚠ Could not fetch log aggregates for "${args.siteId}": ${(e as Error).message}\n\nRun sync_access_logs first via the log-processor agent.`);
+          }
+
+          if (aggregates.length === 0) {
+            return ok(`⚠ No log data available for "${args.siteId}" in range ${from}–${to}.\n\nRun sync_access_logs via the log-processor agent to ingest logs.`);
+          }
+
+          // Aggregate AI bot stats across all days
+          const trainingTotals: Record<string, { hits: number; paths: number }> = {};
+          const retrievalTotals: Record<string, { hits: number; paths: number }> = {};
+          let totalRequests = 0;
+
+          for (const agg of aggregates) {
+            totalRequests += agg.requests;
+            for (const [bot, data] of Object.entries(agg.aiTraining)) {
+              if (!trainingTotals[bot]) trainingTotals[bot] = { hits: 0, paths: 0 };
+              trainingTotals[bot].hits += data.hits;
+              trainingTotals[bot].paths += Object.keys(data.topPaths).length;
+            }
+            for (const [bot, data] of Object.entries(agg.aiRetrieval)) {
+              if (!retrievalTotals[bot]) retrievalTotals[bot] = { hits: 0, paths: 0 };
+              retrievalTotals[bot].hits += data.hits;
+              retrievalTotals[bot].paths += Object.keys(data.topPaths).length;
+            }
+          }
+
+          const trainingEntries = Object.entries(trainingTotals).sort((a, b) => b[1].hits - a[1].hits);
+          const retrievalEntries = Object.entries(retrievalTotals).sort((a, b) => b[1].hits - a[1].hits);
+
+          const totalAiTraining = trainingEntries.reduce((s, [, v]) => s + v.hits, 0);
+          const totalAiRetrieval = retrievalEntries.reduce((s, [, v]) => s + v.hits, 0);
+          const aiPct = totalRequests > 0 ? ((totalAiTraining + totalAiRetrieval) / totalRequests * 100).toFixed(1) : '0';
+
+          const lines = [
+            `# AI Crawl Health: ${args.siteId}`,
+            `Period: ${from} → ${to} (${aggregates.length} days) | Total requests: ${totalRequests.toLocaleString()}`,
+            `AI traffic: ${(totalAiTraining + totalAiRetrieval).toLocaleString()} requests (${aiPct}% of total)`,
+            '',
+            `## AI Training Bots (${totalAiTraining.toLocaleString()} hits)`,
+            trainingEntries.length > 0
+              ? trainingEntries.slice(0, 10).map(([bot, v]) => `  ${v.hits.toLocaleString()} hits — ${bot}`).join('\n')
+              : '  None detected',
+            '',
+            `## AI Retrieval Bots (${totalAiRetrieval.toLocaleString()} hits)`,
+            retrievalEntries.length > 0
+              ? retrievalEntries.slice(0, 10).map(([bot, v]) => `  ${v.hits.toLocaleString()} hits — ${bot}`).join('\n')
+              : '  None detected',
+          ];
+
+          if (missingNote) lines.push('', `⚠ ${missingNote}`);
+
+          if (totalAiTraining + totalAiRetrieval > 0) {
+            ctx.log.finding({
+              id: 'ai-crawl-detected',
+              severity: 'info',
+              title: `${(totalAiTraining + totalAiRetrieval).toLocaleString()} AI bot requests in ${days} days`,
+              description: `Training: ${totalAiTraining.toLocaleString()}, Retrieval: ${totalAiRetrieval.toLocaleString()}`,
+            });
+          }
+
+          return ok(lines.join('\n'));
+        },
+      },
+
+      // ------------------------------------------------------------------
+      // analyze_404_demand — log-backed demand gap detection via 404s
+      // ------------------------------------------------------------------
+      analyze_404_demand: {
+        description: 'Analyze 404 errors that look like real content requests (demand signals). Uses access log aggregates from log-processor. High-volume content-like 404s indicate topics the audience wants.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            siteId: { type: 'string', description: 'Site ID to analyze' },
+            days: { type: 'number', default: 30, description: 'Number of days to analyze (default 30)' },
+            minHits: { type: 'number', default: 5, description: 'Minimum hits to surface a 404 path' },
+          },
+          required: ['siteId'],
+        },
+        executionMode: 'function' as const,
+        handler: async (args: { siteId: string; days?: number; minHits?: number }, ctx) => {
+          ctx.log.phase('analyze_404_demand');
+          const days = args.days ?? 30;
+          const minHits = args.minHits ?? 5;
+          const to = addDays(utcToday(), -1);
+          const from = addDays(to, -(days - 1));
+
+          let aggregates: DayAggregate[];
+          let missingNote = '';
+          try {
+            const raw = await ctx.tools.invoke('get_log_aggregates', { siteId: args.siteId, from, to }) as { content: Array<{ text: string }> };
+            const parsed = JSON.parse(raw.content[0].text) as {
+              aggregates: Record<string, unknown>;
+              missingDaysNote?: string;
+            };
+            aggregates = Object.values(parsed.aggregates) as DayAggregate[];
+            missingNote = parsed.missingDaysNote ?? '';
+          } catch (e: unknown) {
+            return ok(`⚠ Could not fetch log aggregates for "${args.siteId}": ${(e as Error).message}\n\nRun sync_access_logs first via the log-processor agent.`);
+          }
+
+          if (aggregates.length === 0) {
+            return ok(`⚠ No log data available for "${args.siteId}" in range ${from}–${to}.\n\nRun sync_access_logs via the log-processor agent to ingest logs.`);
+          }
+
+          // Aggregate content-like 404s across days
+          const contentLike: Record<string, number> = {};
+          let scannerTotal = 0;
+
+          for (const agg of aggregates) {
+            scannerTotal += agg.notFound.scanner;
+            for (const [path, count] of Object.entries(agg.notFound.contentLike)) {
+              contentLike[path] = (contentLike[path] ?? 0) + count;
+            }
+          }
+
+          const demandSignals = Object.entries(contentLike)
+            .filter(([, hits]) => hits >= minHits)
+            .sort((a, b) => b[1] - a[1]);
+
+          const lines = [
+            `# 404 Demand Analysis: ${args.siteId}`,
+            `Period: ${from} → ${to} (${aggregates.length} days)`,
+            `Scanner 404s: ${scannerTotal.toLocaleString()} | Content-like 404s: ${Object.values(contentLike).reduce((s, v) => s + v, 0).toLocaleString()}`,
+            '',
+            `## Top Demand Signals (≥${minHits} hits, ${demandSignals.length} paths)`,
+            demandSignals.length > 0
+              ? demandSignals.slice(0, 20).map(([path, hits]) => `  ${hits.toLocaleString()} hits — ${path}`).join('\n')
+              : '  No significant demand signals detected',
+          ];
+
+          if (missingNote) lines.push('', `⚠ ${missingNote}`);
+
+          if (demandSignals.length > 0) {
+            ctx.log.finding({
+              id: '404-demand-signals',
+              severity: demandSignals.length > 10 ? 'medium' : 'low',
+              title: `${demandSignals.length} content-demand 404 paths (≥${minHits} hits each)`,
+              description: demandSignals.slice(0, 3).map(([p]) => p).join(', '),
+            });
+          }
+
+          return ok(lines.join('\n'));
+        },
+      },
+
+      // ------------------------------------------------------------------
+      // analyze_referral_sources — log-backed traffic composition analysis
+      // ------------------------------------------------------------------
+      analyze_referral_sources: {
+        description: 'Analyze traffic referral sources from access log aggregates: search engines, AI referrers, direct, and other. Uses log-processor data.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            siteId: { type: 'string', description: 'Site ID to analyze' },
+            days: { type: 'number', default: 30, description: 'Number of days to analyze (default 30)' },
+          },
+          required: ['siteId'],
+        },
+        executionMode: 'function' as const,
+        handler: async (args: { siteId: string; days?: number }, ctx) => {
+          ctx.log.phase('analyze_referral_sources');
+          const days = args.days ?? 30;
+          const to = addDays(utcToday(), -1);
+          const from = addDays(to, -(days - 1));
+
+          let aggregates: DayAggregate[];
+          let missingNote = '';
+          try {
+            const raw = await ctx.tools.invoke('get_log_aggregates', { siteId: args.siteId, from, to }) as { content: Array<{ text: string }> };
+            const parsed = JSON.parse(raw.content[0].text) as {
+              aggregates: Record<string, unknown>;
+              missingDaysNote?: string;
+            };
+            aggregates = Object.values(parsed.aggregates) as DayAggregate[];
+            missingNote = parsed.missingDaysNote ?? '';
+          } catch (e: unknown) {
+            return ok(`⚠ Could not fetch log aggregates for "${args.siteId}": ${(e as Error).message}\n\nRun sync_access_logs first via the log-processor agent.`);
+          }
+
+          if (aggregates.length === 0) {
+            return ok(`⚠ No log data available for "${args.siteId}" in range ${from}–${to}.\n\nRun sync_access_logs via the log-processor agent to ingest logs.`);
+          }
+
+          // Aggregate referral sources across days
+          const searchTotals: Record<string, number> = {};
+          const aiTotals: Record<string, number> = {};
+          let otherTotal = 0;
+          let internalTotal = 0;
+          let spoofedTotal = 0;
+
+          for (const agg of aggregates) {
+            for (const [src, count] of Object.entries(agg.referrals.search)) {
+              searchTotals[src] = (searchTotals[src] ?? 0) + count;
+            }
+            for (const [src, count] of Object.entries(agg.referrals.ai)) {
+              aiTotals[src] = (aiTotals[src] ?? 0) + count;
+            }
+            otherTotal += agg.referrals.other;
+            internalTotal += agg.referrals.internal;
+            spoofedTotal += agg.referrals.spoofed;
+          }
+
+          const searchTotal = Object.values(searchTotals).reduce((s, v) => s + v, 0);
+          const aiTotal = Object.values(aiTotals).reduce((s, v) => s + v, 0);
+          const grandTotal = searchTotal + aiTotal + otherTotal + internalTotal + spoofedTotal;
+
+          const pct = (n: number) => grandTotal > 0 ? `${(n / grandTotal * 100).toFixed(1)}%` : '0%';
+
+          const searchEntries = Object.entries(searchTotals).sort((a, b) => b[1] - a[1]);
+          const aiEntries = Object.entries(aiTotals).sort((a, b) => b[1] - a[1]);
+
+          const lines = [
+            `# Referral Sources: ${args.siteId}`,
+            `Period: ${from} → ${to} (${aggregates.length} days) | Total referrals: ${grandTotal.toLocaleString()}`,
+            '',
+            `## Search Traffic: ${searchTotal.toLocaleString()} (${pct(searchTotal)})`,
+            searchEntries.length > 0
+              ? searchEntries.slice(0, 10).map(([src, hits]) => `  ${hits.toLocaleString()} — ${src}`).join('\n')
+              : '  None detected',
+            '',
+            `## AI Referrals: ${aiTotal.toLocaleString()} (${pct(aiTotal)})`,
+            aiEntries.length > 0
+              ? aiEntries.slice(0, 10).map(([src, hits]) => `  ${hits.toLocaleString()} — ${src}`).join('\n')
+              : '  None detected',
+            '',
+            `## Other: ${otherTotal.toLocaleString()} (${pct(otherTotal)}) | Internal: ${internalTotal.toLocaleString()} (${pct(internalTotal)}) | Spoofed: ${spoofedTotal.toLocaleString()}`,
+          ];
+
+          if (missingNote) lines.push('', `⚠ ${missingNote}`);
+
+          if (aiTotal > 0) {
+            ctx.log.finding({
+              id: 'ai-referral-traffic',
+              severity: 'info',
+              title: `${aiTotal.toLocaleString()} AI referral visits (${pct(aiTotal)} of tracked referrals)`,
+              description: aiEntries.slice(0, 3).map(([s]) => s).join(', '),
+            });
+          }
+
+          return ok(lines.join('\n'));
         },
       },
     },

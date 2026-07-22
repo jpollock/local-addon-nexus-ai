@@ -217,3 +217,59 @@ contributes:
             type: number
             default: 20
             description: Flag pages that lost ≥this % of clicks or impressions
+    - name: analyze_ai_crawl_health
+      description: >-
+        Analyze AI crawler traffic (training and retrieval bots) from access log
+        aggregates. Requires log-processor to have ingested logs for this site.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+            description: Site ID to analyze
+          days:
+            type: number
+            default: 30
+            description: Number of days to analyze (default 30)
+        required:
+          - siteId
+    - name: analyze_404_demand
+      description: >-
+        Analyze 404 errors that look like real content requests (demand
+        signals). Uses access log aggregates from log-processor. High-volume
+        content-like 404s indicate topics the audience wants.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+            description: Site ID to analyze
+          days:
+            type: number
+            default: 30
+            description: Number of days to analyze (default 30)
+          minHits:
+            type: number
+            default: 5
+            description: Minimum hits to surface a 404 path
+        required:
+          - siteId
+    - name: analyze_referral_sources
+      description: >-
+        Analyze traffic referral sources from access log aggregates: search
+        engines, AI referrers, direct, and other. Uses log-processor data.
+      executionMode: function
+      inputSchema:
+        type: object
+        properties:
+          siteId:
+            type: string
+            description: Site ID to analyze
+          days:
+            type: number
+            default: 30
+            description: Number of days to analyze (default 30)
+        required:
+          - siteId
