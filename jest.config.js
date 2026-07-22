@@ -2,12 +2,17 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.test.json' }],
+  },
   moduleNameMapper: {
     '^@getflywheel/local/main$': '<rootDir>/tests/__mocks__/local-main.ts',
     '^@getflywheel/local-components$': '<rootDir>/tests/__mocks__/local-components.ts',
     '^electron$': '<rootDir>/tests/__mocks__/electron.ts',
     // p-limit v6+ is ESM-only; map to a CJS shim for Jest's CommonJS environment
     '^p-limit$': '<rootDir>/tests/__mocks__/p-limit.js',
+    // Agent SDK — resolved from src at test time; at runtime the platform provides this via Node require paths
+    '^@nexus-ai/agent-sdk$': '<rootDir>/src/main/agent-sdk/index.ts',
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   sandboxInjectedGlobals: ['Float32Array', 'BigInt64Array', 'Uint8Array', 'ArrayBuffer'],
