@@ -145,6 +145,7 @@ export function mockContext(overrides: MockContextOverrides = {}): AgentContext 
       getToken: async (provider: string) => { throw new NotConnectedError(provider); },
       getStatus: async () => 'not_connected' as const,
       requestConnection: async () => {},
+      // getSecret intentionally absent — tests that exercise the connected path must provide a mock
     },
     db: makeMockDbHandle(),
   }

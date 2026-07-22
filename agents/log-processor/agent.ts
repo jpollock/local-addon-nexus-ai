@@ -32,11 +32,10 @@ async function getAwsCreds(ctx: AgentContext): Promise<AwsCreds | { error: strin
     await ctx.credentials.requestConnection('aws').catch(() => {});
     return { error: 'AWS not connected. Add the AWS connection in the Nexus UI, then retry.' };
   }
-  const creds = ctx.credentials as unknown as { getSecret?: (p: string) => Promise<Record<string, string>> };
-  if (typeof creds.getSecret !== 'function') {
+  if (typeof ctx.credentials.getSecret !== 'function') {
     return { error: 'credentials.getSecret() not available — api_key credential provider extension required.' };
   }
-  const secret = await creds.getSecret('aws');
+  const secret = await ctx.credentials.getSecret('aws');
   if (!secret?.accessKeyId || !secret?.secretAccessKey) {
     return { error: 'AWS connection is missing accessKeyId/secretAccessKey fields.' };
   }

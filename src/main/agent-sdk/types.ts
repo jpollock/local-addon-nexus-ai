@@ -194,6 +194,8 @@ export interface AgentCredentials {
   getStatus(provider: string): Promise<'connected' | 'not_connected' | 'revoked'>;
   /** Ask the SDK to surface the connect flow to the user. Returns immediately. */
   requestConnection(provider: string): Promise<void>;
+  /** api_key credential extension — feature-detected at runtime. Not all credential backends implement this. */
+  getSecret?(provider: string): Promise<Record<string, string>>;
 }
 
 export interface AgentStatement {
