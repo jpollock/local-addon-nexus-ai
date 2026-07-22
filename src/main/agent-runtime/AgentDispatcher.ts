@@ -8,6 +8,7 @@ import type { ContributedToolRegistry, RegisteredTool } from './ContributedToolR
 import type { AgentDefinition } from '../agent-sdk/types';
 import type { ResolvedAIProvider } from '../ai/getAIProvider';
 import type { AgentStateStore } from './AgentStateStore';
+import type { AgentDbManager } from './AgentDbManager';
 import { buildAgentContext } from './buildAgentContext';
 
 // Ban consecutive underscores so the __ MCP delimiter is unambiguous.
@@ -34,6 +35,7 @@ export class AgentDispatcher {
     private readonly agentsDir: string = DEFAULT_AGENTS_DIR,
     private readonly resolvedProvider: ResolvedAIProvider,
     private readonly stateStore: AgentStateStore,
+    private readonly dbManager?: AgentDbManager,
   ) {}
 
   clearCache(agentName: string): void {
@@ -115,6 +117,7 @@ export class AgentDispatcher {
           registered.agentName,
           'logs',
         ),
+        dbManager: this.dbManager,
       });
       let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -166,6 +169,7 @@ export class AgentDispatcher {
           registered.agentName,
           'logs',
         ),
+        dbManager: this.dbManager,
       });
       let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {

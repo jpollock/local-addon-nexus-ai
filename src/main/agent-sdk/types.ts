@@ -91,6 +91,8 @@ export interface AgentContext {
   autonomy: AgentAutonomy;
   /** OAuth credential access for this agent+site. Never exposes refresh tokens or OAuth internals. */
   credentials: AgentCredentials;
+  /** Platform-managed SQLite databases scoped to this agent. */
+  db: AgentDbHandle;
 }
 
 export interface AgentDefinition {
@@ -192,6 +194,25 @@ export interface AgentCredentials {
   getStatus(provider: string): Promise<'connected' | 'not_connected' | 'revoked'>;
   /** Ask the SDK to surface the connect flow to the user. Returns immediately. */
   requestConnection(provider: string): Promise<void>;
+}
+
+export interface AgentStatement {
+  run(...args: unknown[]): { changes: number };
+  get(...args: unknown[]): unknown;
+  all(...args: unknown[]): unknown[];
+}
+
+export interface AgentDatabase {
+  prepare(sql: string): AgentStatement;
+  exec(sql: string): void;
+  pragma(pragma: string): unknown;
+}
+
+export interface AgentDbHandle {
+  /** Open (or return cached) a SQLite database scoped to this agent.
+   *  Platform resolves path to <agentsDir>/<agentName>/<name>.sqlite.
+   *  Connection is cached — repeated calls return the same instance. */
+  open(name: string): AgentDatabase;
 }
 
 // ─── Contributed-tool types (SDK v2) ─────────────────────────────────────────

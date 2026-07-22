@@ -4,10 +4,11 @@ import { createLogger } from '../logging/Logger';
 import { getAgentAutonomy } from '../ipc-handlers';
 import { NexusToolProvider } from './NexusToolProvider';
 import { AgentAIClient } from './AgentAIClient';
+import { AgentDbManager } from './AgentDbManager';
 import { getProvider } from '../chat/providers/index';
 import { AgentCredentialsContext } from '../credentials/AgentCredentialsContext';
 import { NotConnectedError } from '../credentials/types';
-import type { AgentDefinition, NexusEvent, AgentContext, AgentLogger, Finding, AgentAction } from '../agent-sdk/types';
+import type { AgentDefinition, NexusEvent, AgentContext, AgentLogger, Finding, AgentAction, AgentDatabase, AgentDbHandle } from '../agent-sdk/types';
 import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
 import type { AgentStateStore } from './AgentStateStore';
@@ -21,6 +22,8 @@ export interface AgentContextDeps {
   stateStore: AgentStateStore;
   resolvedProvider: ResolvedAIProvider;
   logDir: string;
+  /** Platform-managed SQLite connection cache. Optional — falls back to per-call in-memory databases. */
+  dbManager?: AgentDbManager;
 }
 
 export function buildAgentContext(deps: AgentContextDeps): {
@@ -30,7 +33,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   accActions: AgentAction[];
   accSites: Record<string, { status: string; findings: Finding[] }>;
 } {
-  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir } = deps;
+  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager } = deps;
   const agentName = agent.name;
 
   const toolProvider = new NexusToolProvider(
@@ -120,6 +123,26 @@ export function buildAgentContext(deps: AgentContextDeps): {
     },
   };
 
+  // Build the db handle — either delegate to the platform manager (production) or
+  // an in-memory fallback (tests that construct buildAgentContext directly without a dbManager).
+  const db: AgentDbHandle = dbManager
+    ? { open: (name: string) => dbManager.open(agentName, name) }
+    : (() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const BetterSqlite3 = require('better-sqlite3') as typeof import('better-sqlite3');
+        const memDbs = new Map<string, AgentDatabase>();
+        return {
+          open(name: string): AgentDatabase {
+            if (!memDbs.has(name)) {
+              const db = new BetterSqlite3(':memory:');
+              db.pragma('journal_mode = WAL');
+              memDbs.set(name, db as unknown as AgentDatabase);
+            }
+            return memDbs.get(name)!;
+          },
+        };
+      })();
+
   const ctx: AgentContext = {
     trigger: agent.triggers[0],
     event,
@@ -129,6 +152,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
     log: agentLog,
     autonomy: getAgentAutonomy(agentName),
     credentials,
+    db,
   };
 
   return { ctx, agentLog, accFindings, accActions, accSites };

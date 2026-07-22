@@ -6,6 +6,7 @@ import type { AgentStateStore } from './AgentStateStore';
 import type { ResolvedAIProvider } from '../ai/getAIProvider';
 import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
+import type { AgentDbManager } from './AgentDbManager';
 import { buildAgentContext } from './buildAgentContext';
 
 const logger = createLogger('AgentRunner');
@@ -23,17 +24,20 @@ export class AgentRunner {
   private toolRegistry: ToolRegistry;
   private services: NexusServices;
   private resolvedProvider: ResolvedAIProvider;
+  private dbManager?: AgentDbManager;
 
   constructor(
     stateStore: AgentStateStore,
     toolRegistry: ToolRegistry,
     services: NexusServices,
     resolvedProvider: ResolvedAIProvider,
+    dbManager?: AgentDbManager,
   ) {
     this.stateStore = stateStore;
     this.toolRegistry = toolRegistry;
     this.services = services;
     this.resolvedProvider = resolvedProvider;
+    this.dbManager = dbManager;
   }
 
   /**
@@ -58,6 +62,7 @@ export class AgentRunner {
       stateStore: this.stateStore,
       resolvedProvider: this.resolvedProvider,
       logDir: path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents', agentName, 'logs'),
+      dbManager: this.dbManager,
     });
 
     let status: AgentResult['status'] = 'success';

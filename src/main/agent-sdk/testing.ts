@@ -7,6 +7,8 @@
  * testTool()    — invoke a single contributed tool handler by name from a definition.
  */
 import { NotConnectedError } from '../credentials/types';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const BetterSqlite3 = require('better-sqlite3') as typeof import('better-sqlite3');
 import type {
   AgentDefinition,
   AgentContext,
@@ -20,6 +22,8 @@ import type {
   Trigger,
   Finding,
   AgentAction,
+  AgentDbHandle,
+  AgentDatabase,
 } from './types'
 
 type ToolMocks = Record<string, (args: unknown) => Promise<unknown>>
@@ -107,6 +111,20 @@ function makeMockLogger(): AgentLogger {
 
 const DEFAULT_TRIGGER: Trigger = { type: 'cron', expression: '0 * * * *' }
 
+function makeMockDbHandle(): AgentDbHandle {
+  const dbs = new Map<string, InstanceType<typeof BetterSqlite3>>();
+  return {
+    open(name: string): AgentDatabase {
+      if (!dbs.has(name)) {
+        const db = new BetterSqlite3(':memory:');
+        db.pragma('journal_mode = WAL');
+        dbs.set(name, db);
+      }
+      return dbs.get(name)! as unknown as AgentDatabase;
+    },
+  };
+}
+
 /**
  * Build an AgentContext backed entirely by in-memory mocks.
  *
@@ -128,6 +146,7 @@ export function mockContext(overrides: MockContextOverrides = {}): AgentContext 
       getStatus: async () => 'not_connected' as const,
       requestConnection: async () => {},
     },
+    db: makeMockDbHandle(),
   }
 }
 

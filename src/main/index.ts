@@ -64,6 +64,7 @@ import { AgentScheduler } from './agent-runtime/AgentScheduler';
 import { DaemonManager } from './agent-runtime/DaemonManager';
 import { ContributedToolRegistry } from './agent-runtime/ContributedToolRegistry';
 import { AgentDispatcher } from './agent-runtime/AgentDispatcher';
+import { AgentDbManager } from './agent-runtime/AgentDbManager';
 import { AgentEventBus } from './agent-event-bus/AgentEventBus';
 import { CredentialManager } from './credentials/CredentialManager';
 import type { CredentialEvent } from './credentials/types';
@@ -503,6 +504,7 @@ export default function main(context: any): void {
         );
 
         contributedRegistry = new ContributedToolRegistry();
+        const agentDbManager = new AgentDbManager(AGENTS_DIR);
         dispatcher = new AgentDispatcher(
           contributedRegistry,
           registry,
@@ -510,11 +512,12 @@ export default function main(context: any): void {
           AGENTS_DIR,
           resolvedAgentProvider,
           agentStateStore,
+          agentDbManager,
         );
-        const agentRegistry = new AgentRegistry(AGENTS_DIR, contributedRegistry, dispatcher);
+        const agentRegistry = new AgentRegistry(AGENTS_DIR, contributedRegistry, dispatcher, agentDbManager);
 
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
-        const agentRunner = new AgentRunner(agentStateStore, registry, nexusServices as any, resolvedAgentProvider);
+        const agentRunner = new AgentRunner(agentStateStore, registry, nexusServices as any, resolvedAgentProvider, agentDbManager);
         agentScheduler = new AgentScheduler(agentRunner);
         daemonManager = new DaemonManager(agentEventBus);
 

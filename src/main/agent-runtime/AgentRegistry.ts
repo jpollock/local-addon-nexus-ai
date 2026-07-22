@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as yaml from 'js-yaml';
 import { createLogger } from '../logging/Logger';
+import { AgentDbManager } from './AgentDbManager';
 import type { AgentDefinition } from '../agent-sdk/types';
 import type { ContributedToolRegistry, ContributedManifestEntry } from './ContributedToolRegistry';
 
@@ -82,13 +83,16 @@ function ensureTsNodeRegistered(): void {
 export class AgentRegistry {
   private agents = new Map<string, AgentDefinition>();
   private agentsDir: string;
+  readonly dbManager: AgentDbManager;
 
   constructor(
     agentsDir: string = AGENTS_DIR,
     private readonly contributedRegistry?: ContributedToolRegistry,
     private readonly dispatcher?: { clearCache(name: string): void },
+    dbManager?: AgentDbManager,
   ) {
     this.agentsDir = agentsDir;
+    this.dbManager = dbManager ?? new AgentDbManager(agentsDir);
   }
 
   /**
@@ -247,6 +251,7 @@ export class AgentRegistry {
             onUnload(agentName);
           }
           this.contributedRegistry?.unregisterAgent(agentName);
+          this.dbManager.closeAgent(agentName);
           return;
         }
 
@@ -256,6 +261,9 @@ export class AgentRegistry {
           this.agents.delete(agentName);
           onUnload(agentName);
         }
+
+        // Close any open database connections for this agent so the next run gets fresh handles
+        this.dbManager.closeAgent(agentName);
 
         await this.loadAgent(agentDir);
 
