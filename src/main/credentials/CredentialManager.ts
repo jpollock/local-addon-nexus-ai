@@ -216,7 +216,7 @@ export class CredentialManager implements ICredentialManager {
     const conn = this.apiKeyStore.get(connectionId);
     if (!conn) return;
     this.vault.deleteApiKey(connectionId, conn.provider);
-    this.apiKeyStore.delete(connectionId);
+    this.apiKeyStore.markRevoked(connectionId);
     this.emitCredentialEvent({ type: 'credential:revoked', provider: conn.provider });
   }
 

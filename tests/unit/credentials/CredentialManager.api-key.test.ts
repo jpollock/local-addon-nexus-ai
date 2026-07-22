@@ -47,10 +47,12 @@ describe('CredentialManager api_key', () => {
     await expect(mgr.getSecretForAgent('aws', 'log-processor')).rejects.toThrow(NotConnectedError);
   });
 
-  it('clearApiKey removes the connection', async () => {
+  it('clearApiKey marks the connection revoked', async () => {
     const mgr = makeManager();
     const id = await mgr.setApiKey('aws', { accessKeyId: 'AKIA123', secretAccessKey: 'secret' }, 'arn');
     mgr.clearApiKey(id);
-    expect(mgr.listApiKeyConnections('aws')).toHaveLength(0);
+    const conns = mgr.listApiKeyConnections('aws');
+    expect(conns).toHaveLength(1);
+    expect(conns[0].status).toBe('revoked');
   });
 });
