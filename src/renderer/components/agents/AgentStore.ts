@@ -20,6 +20,18 @@ export interface AgentStatus {
   lastRunStatus: string | null;
   lastRunDurationMs: number | null;
   lastRunError: string | null;
+  supportsFullRun: boolean;
+}
+
+export interface AgentRunRecord {
+  id: string;
+  agentName: string;
+  startedAt: number;
+  finishedAt: number;
+  status: 'success' | 'error' | 'timeout';
+  error?: string;
+  summary?: string;
+  findingsCount: number;
 }
 
 export interface RemediationPlan {

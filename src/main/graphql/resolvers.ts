@@ -5268,8 +5268,15 @@ export function createResolvers(context: ResolverContext) {
             lastRunStatus: last ? last.status : null,
             lastRunDurationMs: last ? last.finishedAt - last.startedAt : null,
             lastRunError: last?.error ?? null,
+            supportsFullRun: (def as any).supportsFullRun ?? false,
           };
         });
+      },
+
+      agentRunHistory: (_: unknown, args: { agentName: string; limit?: number }): unknown[] => {
+        const store = services.agentStateStore;
+        if (!store) return [];
+        return store.getRunHistory(args.agentName, args.limit ?? 20);
       },
 
       nexusListAgentTools: async () => {

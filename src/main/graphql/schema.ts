@@ -1956,6 +1956,9 @@ export const typeDefs = gql`
     "List agents with last-run status"
     agentStatus: [AgentStatus!]!
 
+    "Run history for a specific agent, newest-first"
+    agentRunHistory(agentName: String!, limit: Int): [AgentRunRecord!]!
+
     "List all tools contributed by registered agents, grouped by agent"
     nexusListAgentTools: [NexusAgentToolGroup!]!
   }
@@ -1994,6 +1997,27 @@ export const typeDefs = gql`
     lastRunDurationMs: Float
     "Last run error message (if status = error)"
     lastRunError: String
+    "When true, the Run Now modal shows an Always do full run toggle"
+    supportsFullRun: Boolean
+  }
+
+  type AgentRunRecord {
+    "Unique run identifier"
+    id: ID!
+    "Agent name"
+    agentName: String!
+    "Unix ms timestamp of run start"
+    startedAt: Float!
+    "Unix ms timestamp of run completion"
+    finishedAt: Float!
+    "Run status: success | error | timeout"
+    status: String!
+    "Error message (null on success)"
+    error: String
+    "Summary text from agent result"
+    summary: String
+    "Number of findings returned"
+    findingsCount: Int!
   }
 
   # ============================================================================
