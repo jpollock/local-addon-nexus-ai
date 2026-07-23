@@ -230,7 +230,7 @@ export default defineAgent({
           },
           required: ['siteId'],
         },
-        executionMode: 'run' as const,
+        executionMode: 'function' as const,
         handler: async (args: { siteId: string; from?: string; to?: string; budgetMB?: number }, ctx: AgentContext): Promise<AgentToolResult> => {
           ctx.log.phase('sync_access_logs', args.siteId);
           const db = openDb(ctx);
@@ -288,7 +288,7 @@ export default defineAgent({
           },
           required: ['siteId', 'from', 'to'],
         },
-        executionMode: 'run' as const,
+        executionMode: 'function' as const,
         handler: async (
           args: { siteId: string; from: string; to: string; ip?: string; pathContains?: string; uaContains?: string; status?: number; confirm?: boolean },
           ctx: AgentContext,

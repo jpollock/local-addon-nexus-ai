@@ -23,7 +23,7 @@ const DEFAULT_AGENTS_DIR = path.join(
   'agents',
 );
 
-const HANDLER_TIMEOUT_MS = 30_000;
+const HANDLER_TIMEOUT_MS = 300_000; // 5 minutes — long-running tools (sync_access_logs, fetch_log_window) need more than 30s
 
 export class AgentDispatcher {
   private moduleCache = new Map<string, AgentDefinition>();

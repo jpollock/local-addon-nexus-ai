@@ -235,6 +235,9 @@ export class AgentRegistry {
       const segments = filename.split(path.sep);
       const agentName = segments[0];
       if (!agentName || agentName === 'node_modules') return;
+      // Only reload on source file changes — ignore log files, SQLite files, WAL/SHM files
+      const changedFile = segments[segments.length - 1] ?? '';
+      if (changedFile && !/\.(ts|js|yaml|yml)$/.test(changedFile)) return;
 
       if (debounceTimers.has(agentName)) {
         clearTimeout(debounceTimers.get(agentName)!);

@@ -93,12 +93,19 @@ export class CredentialManager implements ICredentialManager {
     agentId: string,
     siteId: string,
   ): Promise<'connected' | 'not_connected' | 'revoked'> {
+    // OAuth path
     const grant = this.findGrant(provider, agentId, siteId);
-    if (!grant) return 'not_connected';
-    const conn = this.store.getConnection(grant.connectionId);
-    if (!conn) return 'not_connected';
-    if (conn.status === 'revoked') return 'revoked';
-    return 'connected';
+    if (grant) {
+      const conn = this.store.getConnection(grant.connectionId);
+      if (!conn) return 'not_connected';
+      if (conn.status === 'revoked') return 'revoked';
+      return 'connected';
+    }
+    // api_key fallthrough — no OAuth grant, check ApiKeyConnectionStore
+    const apiKeyConns = this.apiKeyStore.list(provider);
+    if (apiKeyConns.some(c => c.status === 'active')) return 'connected';
+    if (apiKeyConns.some(c => c.status === 'revoked')) return 'revoked';
+    return 'not_connected';
   }
 
   async requestConnectionForAgent(
