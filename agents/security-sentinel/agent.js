@@ -310,6 +310,7 @@ module.exports = {
     'local_wpe_pull', 'local_wpe_push',
     'local_operation_status', 'compare_sites', 'wp_plugin_list', 'wp_eval',
     'get_log_aggregates', 'fetch_log_window',
+    'local_wpe_link',
   ],
   contributes: { tools: contributedTools },
 
@@ -354,9 +355,37 @@ module.exports = {
       signals.push(...runRelativeChecks(install, baseline));
 
       // Log-backed checks (LOG-AUTH, LOG-PROBE, LOG-ENUM, LOG-DIST)
+      // For local sites linked to WPE, resolve the WPE install name for log lookup.
+      let logSiteId = install.name;
+      if (install.source === 'local') {
+        try {
+          const linkResult = await tools.invoke('local_wpe_link', { site: install.name });
+          const linkText = typeof linkResult === 'string' ? linkResult : linkResult?.content?.[0]?.text ?? '';
+          const match = linkText.match(/\*\*\w+:\*\*\s+(\S+)/);
+          if (match?.[1]) {
+            let candidate = match[1];
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate);
+            if (isUuid) {
+              try {
+                const rows = await tools.invoke('fleet_sql', {
+                  query: `SELECT name FROM sites WHERE source = 'wpe' AND (remote_install_id = ? OR wpe_site_id = ?) LIMIT 1`,
+                  params: [candidate, candidate],
+                });
+                const text = typeof rows === 'string' ? rows : rows?.content?.[0]?.text ?? '';
+                const nameLine = text.split('\n').find(l => l.startsWith('|') && !l.includes('---') && !l.includes('name'));
+                const name = nameLine?.split('|')[1]?.trim();
+                if (name) candidate = name;
+              } catch { /* keep UUID */ }
+            }
+            logSiteId = candidate;
+            log.info(`security-sentinel: resolved log siteId for "${install.name}": ${logSiteId}`);
+          }
+        } catch { /* no WPE link — use install name */ }
+      }
+
       let attackSummary = null;
       try {
-        const logResult = await runLogChecks(install.name, tools, log);
+        const logResult = await runLogChecks(logSiteId, tools, log);
         signals.push(...logResult.signals);
         attackSummary = logResult.attackSummary;
       } catch (err) {
@@ -630,7 +659,26 @@ function runAbsoluteChecks(install) {
   // ABS-07: Low-entropy plugin directory names (random-looking strings — e.g. "Kz2", "a1b2")
   // Heuristic: slug stripped of hyphens is ≤6 chars, all alphanumeric, no dictionary words
   const COMMON_WORDS_RE = /^(admin|login|cache|image|video|theme|block|post|page|user|form|mail|test|demo|core|base|grid|list|menu|nav|panel|api|cron|hook|feed|link|auth|view|data|file|code|lang)$/i;
+  // Known-good short slugs from WordPress.org — add here when ABS-07 false-positives on legitimate plugins
+  const ABS07_ALLOWLIST = new Set([
+    'wp-2fa',      // WP 2FA (Melapress) — two-factor authentication
+    'leadin',      // HubSpot (formerly Leadin) — CRM/marketing
+    'jetpack',     // Jetpack by Automattic
+    'akismet',     // Akismet Anti-Spam
+    'ewwwio',      // EWWW Image Optimizer
+    'yoast',       // Yoast SEO (legacy slug)
+    'wc-aelia',    // Aelia WooCommerce extensions
+    'wp-ses',      // WP Offload SES
+    'w3tc',        // W3 Total Cache
+    'wprss',       // WP RSS Aggregator
+    'backwpup',    // BackWPup
+    'wpseo',       // Yoast SEO (alternate slug)
+    'sucuri',      // Sucuri Security
+    'cf7',         // Contact Form 7 (alias)
+    'wpforms',     // WPForms (exceeds 6 chars, but belt-and-suspenders)
+  ]);
   const lowEntropyPlugins = plugins.filter(p => {
+    if (ABS07_ALLOWLIST.has(p.slug)) return false;           // known-good short slug
     const slug = (p.slug || '').replace(/-/g, '');
     if (slug.length > 6) return false;                       // too long to be random
     if (!/^[a-zA-Z0-9]+$/.test(slug)) return false;          // must be alphanumeric only
