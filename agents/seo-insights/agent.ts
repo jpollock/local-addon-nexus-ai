@@ -1807,6 +1807,41 @@ echo json_encode(array_map(function($p){
         log.warn(`[LOG] getLogInsights failed: ${(err as Error).message}`);
       }
 
+      // Topical map via k-means on document embeddings
+      let topicSection = '';
+      try {
+        log.info(`[TOPICS] Clustering ${analysisSite!} documents into topic groups…`);
+        const rawDocs = await tools.invoke('get_all_site_documents', {
+          site: analysisSite!,
+          include_embeddings: true,
+        });
+        const parsedDocs = (typeof rawDocs === 'string' ? JSON.parse(rawDocs) : rawDocs) as {
+          documentCount: number;
+          documents: Array<{ postId: number; postType: string; title: string; embedding: string }>;
+        };
+        if (parsedDocs.documentCount > 0 && parsedDocs.documents?.length > 0) {
+          const docs = parsedDocs.documents.map(d => ({
+            ...d,
+            vec: new Float32Array(Buffer.from(d.embedding, 'base64').buffer),
+          }));
+          const k = Math.min(8, docs.length);
+          const clusters = kMeans(docs.map(d => d.vec), k);
+          const clusterLines = clusters
+            .map((memberIndices, i) => {
+              const members = memberIndices.map(idx => docs[idx]);
+              const label = members[0]?.title ?? `Topic ${i + 1}`;
+              const sample = members.slice(0, 4).map(m => m.title).join(', ');
+              return `  • **${label}** — ${members.length} posts (${sample}${members.length > 4 ? ` +${members.length - 4} more` : ''})`;
+            })
+            .filter(l => l);
+          topicSection = `\n## Topical Map (${k} clusters)\n\n${clusterLines.join('\n')}`;
+          log.info(`[TOPICS] Built topic map: ${k} clusters from ${parsedDocs.documentCount} documents`);
+        }
+      } catch (err: unknown) {
+        log.warn(`[TOPICS] Topic map skipped: ${(err as Error).message}`);
+        topicSection = '';
+      }
+
       const reportLines = [
         `# Site Content Report: ${siteName}`,
         ``,
@@ -1814,8 +1849,8 @@ echo json_encode(array_map(function($p){
         `**Orphaned (no inbound links):** ${orphans.length}${orphans.length > 0 ? ` — ${orphans.slice(0, 3).map(p => p.post_title).join(', ')}${orphans.length > 3 ? ` +${orphans.length - 3} more` : ''}` : ''}`,
         `**Stale (>365 days old):** ${stale.length}${stale.length > 0 ? ` — ${stale.slice(0, 3).map(p => p.post_title).join(', ')}${stale.length > 3 ? ` +${stale.length - 3} more` : ''}` : ''}`,
         createdSandbox ? `**Analyzed via sandbox:** ${analysisSite}` : '',
+        topicSection,
         ``,
-        `**Topical map:** Not available — platform dependency pending (IVectorStore.getAllDocuments)`,
         `**Next:** Connect Google Search Console to unlock demand-weighted gap analysis (T1)`,
         logSection ?? '',
       ].filter(Boolean).join('\n');
