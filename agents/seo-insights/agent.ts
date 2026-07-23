@@ -329,6 +329,38 @@ async function createAndPullSandbox(
 }
 
 // ---------------------------------------------------------------------------
+// waitForIndex — reindex + poll until ready
+// ---------------------------------------------------------------------------
+async function waitForIndex(
+  siteName: string,
+  tools: { invoke(name: string, args: unknown): Promise<unknown> },
+  log: { info(msg: string, meta?: Record<string, unknown>): void; warn(msg: string, meta?: Record<string, unknown>): void },
+  maxWaitMs = 90_000,
+): Promise<boolean> {
+  try {
+    await tools.invoke('reindex_site', { site: siteName });
+    log.info(`[SEO] Reindexing ${siteName}…`);
+  } catch (err: unknown) {
+    log.warn(`[SEO] reindex_site failed: ${(err as Error).message} — analysis may find 0 posts`);
+    return false;
+  }
+
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 5_000));
+    try {
+      const status = await tools.invoke('get_index_status', { site: siteName }) as string;
+      if (typeof status === 'string' && !status.includes('not been indexed') && !status.toLowerCase().includes('indexing')) {
+        log.info(`[SEO] Index ready for ${siteName}`);
+        return true;
+      }
+    } catch { /* keep polling */ }
+  }
+  log.warn(`[SEO] Index not ready after ${maxWaitMs / 1000}s — proceeding with available data`);
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // Embedding helpers — no external deps
 // ---------------------------------------------------------------------------
 
@@ -461,6 +493,7 @@ export default defineAgent({
     'get_all_site_documents',
     'wp_eval',
     'get_index_status',
+    'reindex_site',
     'fleet_sql',
     'wpe_site_deep_refresh',
     'local_create_site',
@@ -1663,6 +1696,11 @@ echo json_encode(array_map(function($p){
       analysisSite = sandbox;
       createdSandbox = true;
       state.set('lastSandbox', sandbox);
+
+      // Reindex the sandbox so get_all_site_documents returns posts
+      log.info(`[SEO] Starting sandbox site for indexing: ${analysisSite}`);
+      try { await tools.invoke('local_start_site', { site: analysisSite! }); } catch { /* may already be running */ }
+      await waitForIndex(analysisSite!, tools, log, 90_000);
     } else {
       // Local site — start it first (sentinel pattern), then analyze
       log.info(`Starting site for analysis: ${siteName}`);
