@@ -78,7 +78,10 @@ ${JSON.stringify(data.databaseResult, null, 2)}
 
 ## Behavioral findings
 ${JSON.stringify(data.behavioralResult, null, 2)}
-
+${data.logCorroboration ? `
+## Access log corroboration (30-day aggregate from log-processor)
+${data.logCorroboration}
+` : ''}
 SYNTHESIS RULES:
 1. CRITICAL from any specialist leads the report — do not bury it.
 2. Temporal cluster from the pattern scanner IS the attack session boundary. All items within the
@@ -87,9 +90,12 @@ SYNTHESIS RULES:
    becomes CONFIRMED. A file flagged by only one agent is PROBABLE.
 4. Always name the entry point — how did the attacker first get in? This is the most important
    question for preventing recurrence.
-5. Remediation steps must be ordered: stop active exfiltration first, then remove persistence,
+5. If access log data is present: use auth attack volume and IP cardinality to calibrate severity.
+   A brute-force campaign that succeeded (new admin account + high login volume) is more urgent
+   than a static signal alone. Corroborate — don't just repeat.
+6. Remediation steps must be ordered: stop active exfiltration first, then remove persistence,
    then close entry point, then verify clean.
-6. BLIND SPOTS — always include these unless the specialist explicitly covered them:
+7. BLIND SPOTS — always include these unless the specialist explicitly covered them:
    - Premium plugins (no checksums available from WordPress.org)
    - Runtime-assembled payloads (encrypted DB fragments assembled in memory at request time)
    - Time-triggered or IP-conditional code
