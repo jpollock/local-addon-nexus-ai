@@ -674,6 +674,7 @@ export default function main(context: any): void {
         preferredPort: previousConnectionInfo?.port,
         contributedRegistry,
         dispatcher,
+        isAgentEnabled: (agentName: string) => getAgentSetting(agentName, 'enabled') !== false,
       });
       const connectionInfo = await mcpServer.start();
       saveConnectionInfo(connectionInfo);

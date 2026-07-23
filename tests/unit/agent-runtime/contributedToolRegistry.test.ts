@@ -39,4 +39,31 @@ describe('ContributedToolRegistry', () => {
     const defs = reg.toMcpDefinitions();
     expect(defs[0].name).toBe('agent__acme__scan');
   });
+
+  describe('toMcpDefinitions — isEnabled filter', () => {
+    function makeRegistry() {
+      const r = new ContributedToolRegistry();
+      r.register('sentinel', { name: 'scan', description: 'Scan sites', inputSchema: { type: 'object', properties: {} } });
+      r.register('log-processor', { name: 'sync', description: 'Sync logs', inputSchema: { type: 'object', properties: {} } });
+      return r;
+    }
+
+    it('returns all tools when no filter provided', () => {
+      const r = makeRegistry();
+      expect(r.toMcpDefinitions()).toHaveLength(2);
+    });
+
+    it('filters out tools from disabled agents', () => {
+      const r = makeRegistry();
+      const isEnabled = (name: string) => name !== 'sentinel';
+      const defs = r.toMcpDefinitions(isEnabled);
+      expect(defs).toHaveLength(1);
+      expect(defs[0].name).toBe('agent__log-processor__sync');
+    });
+
+    it('returns empty when all agents disabled', () => {
+      const r = makeRegistry();
+      expect(r.toMcpDefinitions(() => false)).toHaveLength(0);
+    });
+  });
 });

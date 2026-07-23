@@ -38,6 +38,8 @@ export interface McpServerOptions {
   contributedRegistry?: import('../agent-runtime/ContributedToolRegistry').ContributedToolRegistry;
   /** Dispatcher for routing agent__* tool calls to the right agent handler */
   dispatcher?: import('../agent-runtime/AgentDispatcher').AgentDispatcher;
+  /** Predicate to filter agent tools — when absent all agents are included */
+  isAgentEnabled?: (agentName: string) => boolean;
 }
 
 /**
@@ -62,6 +64,7 @@ export class McpServer {
   private registryStorage?: RegistryStorage;
   private contributedRegistry?: import('../agent-runtime/ContributedToolRegistry').ContributedToolRegistry;
   private dispatcher?: import('../agent-runtime/AgentDispatcher').AgentDispatcher;
+  private isAgentEnabled?: (agentName: string) => boolean;
 
   constructor(options: McpServerOptions) {
     this.auth = new McpAuth(options.existingToken);
@@ -74,6 +77,7 @@ export class McpServer {
     this.preferredPort = options.preferredPort;
     this.contributedRegistry = options.contributedRegistry;
     this.dispatcher = options.dispatcher;
+    this.isAgentEnabled = options.isAgentEnabled;
   }
 
   async start(): Promise<ConnectionInfo> {
@@ -129,7 +133,7 @@ export class McpServer {
 
   getConnectionInfo(): ConnectionInfo {
     const builtinNames = this.registry.allToolNames();
-    const contributedNames = this.contributedRegistry?.toMcpDefinitions().map(t => t.name) ?? [];
+    const contributedNames = this.contributedRegistry?.toMcpDefinitions(this.isAgentEnabled).map(t => t.name) ?? [];
     return {
       url: `http://127.0.0.1:${this.port}`,
       authToken: this.auth.getToken(),
@@ -290,7 +294,7 @@ export class McpServer {
 
       case 'tools/list': {
         const builtinTools = this.registry.list(this.services);
-        const contributedTools = this.contributedRegistry?.toMcpDefinitions() ?? [];
+        const contributedTools = this.contributedRegistry?.toMcpDefinitions(this.isAgentEnabled) ?? [];
         return this.jsonRpcResult(id, { tools: [...builtinTools, ...contributedTools] });
       }
 

@@ -57,12 +57,14 @@ export class ContributedToolRegistry {
     return this.get(parts[1], parts[2]);
   }
 
-  toMcpDefinitions(): McpToolDefinition[] {
-    return this.list().map((tool) => ({
-      name: `agent__${tool.agentName}__${tool.toolName}`,
-      description: `${tool.description}\n\n[Provided by ${tool.agentName} agent]`,
-      inputSchema: { ...tool.inputSchema },
-    }));
+  toMcpDefinitions(isEnabled?: (agentName: string) => boolean): McpToolDefinition[] {
+    return this.list()
+      .filter(tool => !isEnabled || isEnabled(tool.agentName))
+      .map((tool) => ({
+        name: `agent__${tool.agentName}__${tool.toolName}`,
+        description: `${tool.description}\n\n[Provided by ${tool.agentName} agent]`,
+        inputSchema: { ...tool.inputSchema },
+      }));
   }
 
   toolsByAgent(): Map<string, RegisteredTool[]> {
