@@ -60,6 +60,116 @@ function addDays(day: string, n: number): string {
 }
 function utcToday(): string { return new Date().toISOString().slice(0, 10); }
 
+type ToolInvoker = { invoke(name: string, args: unknown): Promise<unknown> };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getLogInsights(siteId: string, tools: ToolInvoker, log: any): Promise<string | null> {
+  const today = utcToday();
+  const from = addDays(today, -30);
+
+  let rawResult: unknown;
+  try {
+    rawResult = await tools.invoke('get_log_aggregates', { siteId, from, to: today });
+  } catch {
+    log.info(`[LOG] get_log_aggregates unavailable for ${siteId} — skipping traffic intelligence`);
+    return null;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const text = (rawResult as any)?.content?.[0]?.text as string | undefined;
+  if (!text) return null;
+
+  let parsed: { aggregates?: Record<string, DayAggregate>; missingDays?: string[] };
+  try { parsed = JSON.parse(text); } catch { return null; }
+
+  const aggregates = Object.values(parsed.aggregates ?? {});
+  const coverage = aggregates.length;
+  if (coverage === 0) {
+    return `\n## Traffic Intelligence\n\nNo access log data for **${siteId}** — connect this site via the Log Processor agent for traffic insights.\n`;
+  }
+
+  const missingNote = parsed.missingDays?.length
+    ? ` *(based on ${coverage} of 30 days — ${parsed.missingDays.length} days not yet ingested)*`
+    : '';
+
+  // Fold 30-day totals
+  let totalRequests = 0;
+  let totalHuman = 0;
+  const aiTrainingTotals: Record<string, number> = {};
+  const aiRetrievalTotals: Record<string, number> = {};
+  const notFoundPaths: Record<string, number> = {};
+  let searchRef = 0, aiRef = 0, otherRef = 0, directRef = 0;
+  let totalAuthAttacks = 0;
+
+  for (const agg of aggregates) {
+    totalRequests += agg.requests ?? 0;
+    totalHuman    += agg.byClass?.human_plausible ?? 0;
+
+    for (const [bot, data] of Object.entries(agg.aiTraining ?? {})) {
+      aiTrainingTotals[bot] = (aiTrainingTotals[bot] ?? 0) + data.hits;
+    }
+    for (const [bot, data] of Object.entries(agg.aiRetrieval ?? {})) {
+      aiRetrievalTotals[bot] = (aiRetrievalTotals[bot] ?? 0) + data.hits;
+    }
+    for (const [path, hits] of Object.entries(agg.notFound?.contentLike ?? {})) {
+      notFoundPaths[path] = (notFoundPaths[path] ?? 0) + hits;
+    }
+    searchRef += Object.values(agg.referrals?.search ?? {}).reduce((s, n) => s + n, 0);
+    aiRef     += Object.values(agg.referrals?.ai    ?? {}).reduce((s, n) => s + n, 0);
+    otherRef  += (agg.referrals?.other    ?? 0) + (agg.referrals?.spoofed ?? 0);
+    directRef += agg.referrals?.internal  ?? 0;
+
+    for (const hourData of Object.values(agg.attack?.authAttack ?? {})) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      totalAuthAttacks += Object.values((hourData as any).loginPosts  ?? {}).reduce((s: number, n: unknown) => s + (n as number), 0);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      totalAuthAttacks += Object.values((hourData as any).xmlrpcPosts ?? {}).reduce((s: number, n: unknown) => s + (n as number), 0);
+    }
+  }
+
+  // Compute ratios
+  const humanPct   = totalRequests > 0 ? Math.round((totalHuman / totalRequests) * 100) : 0;
+  const totalRef   = searchRef + aiRef + otherRef + directRef;
+  const pct = (n: number) => totalRef > 0 ? `${Math.round((n / totalRef) * 100)}%` : '—';
+
+  // Top AI crawlers (training + retrieval combined, sorted by hits)
+  const allAiBots = { ...aiTrainingTotals };
+  for (const [bot, hits] of Object.entries(aiRetrievalTotals)) {
+    allAiBots[bot] = (allAiBots[bot] ?? 0) + hits;
+  }
+  const topAiBots = Object.entries(allAiBots).sort((a, b) => b[1] - a[1]).slice(0, 4);
+
+  // Top 404 demand paths
+  const top404 = Object.entries(notFoundPaths).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  const lines: string[] = [
+    ``,
+    `## Traffic Intelligence${missingNote}`,
+    ``,
+    `**Traffic quality:** ${humanPct}% of requests appear human${totalRequests > 0 ? ` (${totalRequests.toLocaleString()} total requests)` : ''}`,
+  ];
+
+  if (topAiBots.length > 0) {
+    lines.push(`**AI crawlers:** ${topAiBots.map(([b, h]) => `${b} (${h.toLocaleString()} hits)`).join(', ')}`);
+  } else {
+    lines.push(`**AI crawlers:** None detected in log data`);
+  }
+
+  if (top404.length > 0) {
+    lines.push(`**404 demand signals:** ${top404.map(([p, h]) => `\`${p}\` (${h} hits)`).join(', ')}`);
+  }
+
+  if (totalRef > 0) {
+    lines.push(`**Referral mix:** ${pct(searchRef)} search · ${pct(aiRef)} AI · ${pct(directRef)} direct · ${pct(otherRef)} other`);
+  }
+
+  if (totalAuthAttacks > 100) {
+    lines.push(`**⚠ Attack exposure:** ${totalAuthAttacks.toLocaleString()} auth probes in 30 days — consider running Security Sentinel on this site`);
+  }
+
+  return lines.join('\n');
+}
+
 function ok(text: string) {
   return { content: [{ type: 'text' as const, text }] };
 }
@@ -1620,6 +1730,14 @@ echo json_encode(array_map(function($p){
         });
       }
 
+      // Traffic Intelligence from log-processor (graceful skip if no data)
+      let logSection: string | null = null;
+      try {
+        logSection = await getLogInsights(siteName, tools, log);
+      } catch (err: unknown) {
+        log.warn(`[LOG] getLogInsights failed: ${(err as Error).message}`);
+      }
+
       const reportLines = [
         `# Site Content Report: ${siteName}`,
         ``,
@@ -1630,6 +1748,7 @@ echo json_encode(array_map(function($p){
         ``,
         `**Topical map:** Not available — platform dependency pending (IVectorStore.getAllDocuments)`,
         `**Next:** Connect Google Search Console to unlock demand-weighted gap analysis (T1)`,
+        logSection ?? '',
       ].filter(Boolean).join('\n');
 
       log.info(reportLines);
