@@ -13,7 +13,9 @@ import {
   TAXONOMY_VERSION,
 } from './access-logs';
 
-const ok = (text: string): AgentToolResult => ({ content: [{ type: 'text', text }] });
+const ok  = (text: string): AgentToolResult => ({ content: [{ type: 'text', text }] });
+const err = (text: string): AgentToolResult => ({ content: [{ type: 'text', text }], isError: true });
+const okOrErr = (text: string): AgentToolResult => text.startsWith('⚠') ? err(text) : ok(text);
 const DEFAULT_SYNC_DAYS = 28;
 const DEFAULT_SYNC_BUDGET_MB = 512;
 const GZ_EXPANSION = 11;
@@ -175,7 +177,7 @@ export default defineAgent({
           const region = args.region ?? 'us-east-1';
           const prefix = args.prefix ?? '';
           const creds = await getAwsCreds(ctx);
-          if ('error' in creds) return ok(`⚠ ${creds.error}`);
+          if ('error' in creds) return err(`⚠ ${creds.error}`);
           try {
             const objects = await s3ListAll(creds, region, args.bucket, prefix, 20);
             const db = openDb(ctx);
@@ -192,9 +194,9 @@ export default defineAgent({
             const msg = (e as Error).message;
             if (msg.includes('InvalidAccessKeyId') || msg.includes('SignatureDoesNotMatch')) {
               ctx.credentials.revokeCredential?.('aws').catch(() => {});
-              return ok(`⚠ AWS credentials are no longer valid. Re-enter them in Preferences → Connected accounts → AWS S3.`);
+              return err(`⚠ AWS credentials are no longer valid. Re-enter them in Preferences → Connected accounts → AWS S3.`);
             }
-            return ok(`⚠ Could not list s3://${args.bucket}/${prefix}: ${msg}`);
+            return err(`⚠ Could not list s3://${args.bucket}/${prefix}: ${msg}`);
           }
         },
       },
@@ -212,7 +214,7 @@ export default defineAgent({
         executionMode: 'function' as const,
         handler: async (args: { siteId: string; enabled: boolean }, ctx: AgentContext): Promise<AgentToolResult> => {
           const db = openDb(ctx);
-          if (!getSource(db, args.siteId)) return ok(`⚠ No log source for "${args.siteId}". Run connect_log_source first.`);
+          if (!getSource(db, args.siteId)) return err(`⚠ No log source for "${args.siteId}". Run connect_log_source first.`);
           setEnabled(db, args.siteId, args.enabled);
           return ok(`✓ Log processing ${args.enabled ? 'enabled' : 'disabled'} for ${args.siteId}.`);
         },
@@ -234,7 +236,7 @@ export default defineAgent({
         handler: async (args: { siteId: string; from?: string; to?: string; budgetMB?: number }, ctx: AgentContext): Promise<AgentToolResult> => {
           ctx.log.phase('sync_access_logs', args.siteId);
           const db = openDb(ctx);
-          return ok(await runSync(db, args.siteId, args.from, args.to, args.budgetMB ?? DEFAULT_SYNC_BUDGET_MB, ctx));
+          return okOrErr(await runSync(db, args.siteId, args.from, args.to, args.budgetMB ?? DEFAULT_SYNC_BUDGET_MB, ctx));
         },
       },
 
@@ -296,9 +298,9 @@ export default defineAgent({
           ctx.log.phase('fetch_log_window', args.confirm ? 'execute' : 'estimate');
           const db = openDb(ctx);
           const src = getSource(db, args.siteId);
-          if (!src) return ok(`⚠ No log source for "${args.siteId}".`);
+          if (!src) return err(`⚠ No log source for "${args.siteId}".`);
           const creds = await getAwsCreds(ctx);
-          if ('error' in creds) return ok(`⚠ ${creds.error}`);
+          if ('error' in creds) return err(`⚠ ${creds.error}`);
 
           const allFiles: { key: string; size: number }[] = [];
           for (const date of fileDatesForRange(args.from, args.to)) {
