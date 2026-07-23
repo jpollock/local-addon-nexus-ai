@@ -33,10 +33,27 @@ export const wpeLinkHandler: McpToolHandler = {
       return ok(`Site "${site.name}" is not linked to any WP Engine environment.`);
     }
 
+    // Resolve install UUID → install name via graph.db when installName is absent
+    const db = (services as any).graphService?.getDb?.();
+    const resolveInstallId = (uuid: string): string | null => {
+      if (!db || !uuid) return null;
+      try {
+        const row = db.prepare(
+          `SELECT name FROM sites WHERE source = 'wpe' AND remote_install_id = ? LIMIT 1`
+        ).get(uuid) as { name: string } | undefined;
+        return row?.name ?? null;
+      } catch { return null; }
+    };
+
     const lines = [`## WPE Link for "${site.name}"`];
     for (const [key, conn] of Object.entries(connections) as [string, any][]) {
-      const label = conn?.installName ?? conn?.remoteSiteId ?? conn?.name ?? JSON.stringify(conn);
-      lines.push(`- **${key}:** ${label}`);
+      const installName = conn?.installName
+        ?? resolveInstallId(conn?.installId)
+        ?? resolveInstallId(conn?.remoteSiteId)
+        ?? conn?.remoteSiteId
+        ?? conn?.name
+        ?? JSON.stringify(conn);
+      lines.push(`- **${key}:** ${installName}`);
     }
 
     return ok(lines.join('\n'));
