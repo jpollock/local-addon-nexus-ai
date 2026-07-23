@@ -127,6 +127,8 @@ export interface AgentResult {
   sites?: Record<string, { status: string; findings: Finding[]; plan?: RemediationPlan }>;
   /** Free-text report from the agent — rendered in RunDrawer completion section. */
   summary?: string;
+  /** Absolute path to this run's log file. Stored in agent_runs for the Log chip. */
+  logFile?: string;
 }
 
 // ─── Domain output types ──────────────────────────────────────────────────────

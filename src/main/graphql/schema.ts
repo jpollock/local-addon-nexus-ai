@@ -2018,6 +2018,8 @@ export const typeDefs = gql`
     summary: String
     "Number of findings returned"
     findingsCount: Int!
+    "Absolute path to this run's log file"
+    logFile: String
   }
 
   # ============================================================================

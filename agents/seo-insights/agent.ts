@@ -1753,7 +1753,6 @@ echo json_encode(array_map(function($p){
         logSection ?? '',
       ].filter(Boolean).join('\n');
 
-      log.info(reportLines);
       log.siteStatus(siteName, orphans.length + stale.length > 0 ? 'findings' : 'clean');
       state.set('lastReport', reportLines);
       // Return summary so RunDrawer renders the Site Content Report inline

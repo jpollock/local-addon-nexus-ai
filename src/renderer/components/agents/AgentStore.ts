@@ -32,6 +32,7 @@ export interface AgentRunRecord {
   error?: string;
   summary?: string;
   findingsCount: number;
+  logFile?: string;
 }
 
 export interface RemediationPlan {

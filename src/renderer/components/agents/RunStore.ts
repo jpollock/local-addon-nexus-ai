@@ -77,10 +77,13 @@ class RunStore {
   subscribe(fn: () => void): void   { this.listeners.add(fn); }
   unsubscribe(fn: () => void): void { this.listeners.delete(fn); }
 
-  startRun(params: { runId: string; agentId: string; agentName: string; siteNames: string[] }): void {
+  startRun(params: { runId: string; agentId: string; agentName: string; siteNames: string[]; logFile?: string }): void {
     this.logOffset = 0;
     const run: Run = {
-      ...params,
+      runId: params.runId,
+      agentId: params.agentId,
+      agentName: params.agentName,
+      siteNames: params.siteNames,
       phase: 'running',
       startedAt: Date.now(),
       doneCount: 0,
@@ -90,7 +93,7 @@ class RunStore {
       log: [],
     };
     this.setState({ currentRun: run });
-    this.startWatching(params.agentId, run.startedAt);
+    this.startWatching(params.agentId, run.startedAt, params.logFile);
   }
 
   completeRun(payload: { runId: string; doneCount: number; failedCount: number; findingsSites: string[]; cancelled?: boolean; summary?: string }): void {
@@ -134,8 +137,8 @@ class RunStore {
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  private startWatching(agentId: string, startedAt: number): void {
-    const logPath = path.join(
+  private startWatching(agentId: string, startedAt: number, logFile?: string): void {
+    const logPath = logFile ?? path.join(
       os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai',
       'agents', agentId, 'logs', 'agent.log',
     );

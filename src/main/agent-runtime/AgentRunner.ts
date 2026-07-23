@@ -49,7 +49,7 @@ export class AgentRunner {
     this.resolvedProvider = provider;
   }
 
-  async run(agent: AgentDefinition, event?: NexusEvent, options?: { fullRun?: boolean }): Promise<AgentResult> {
+  async run(agent: AgentDefinition, event?: NexusEvent, options?: { fullRun?: boolean; logFileName?: string }): Promise<AgentResult> {
     const startedAt = Date.now();
     const timeoutMs = agent.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const agentName = agent.name;
@@ -64,6 +64,7 @@ export class AgentRunner {
       logDir: path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents', agentName, 'logs'),
       dbManager: this.dbManager,
       fullRun: options?.fullRun ?? false,
+      logFileName: options?.logFileName,
     });
 
     let status: AgentResult['status'] = 'success';
@@ -122,6 +123,14 @@ export class AgentRunner {
       if (rv.plan)     result.plan     = rv.plan;
       if (rv.sites)    result.sites    = rv.sites;
       if (rv.summary)  result.summary  = rv.summary;
+    }
+
+    // Attach per-run log file path if one was requested
+    if (options?.logFileName) {
+      result.logFile = path.join(
+        os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai',
+        'agents', agentName, 'logs', options.logFileName,
+      );
     }
 
     this.stateStore.recordRun(result);

@@ -48,7 +48,7 @@ export class AgentRunList extends React.Component<AgentRunListProps, AgentRunLis
       const result = await rendererGql<{ agentRunHistory: AgentRunRecord[] }>(
         `query AgentRunHistory($agentName: String!) {
           agentRunHistory(agentName: $agentName, limit: 50) {
-            id agentName startedAt finishedAt status error summary findingsCount
+            id agentName startedAt finishedAt status error summary findingsCount logFile
           }
         }`,
         { agentName: agentId },
@@ -125,7 +125,7 @@ export class AgentRunList extends React.Component<AgentRunListProps, AgentRunLis
                 // Log chip — opens agent log file in system default app
                 React.createElement('span', {
                   title: 'Open log file',
-                  onClick: () => this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.AGENT_LOG_OPEN, { agentId: this.props.agentId }),
+                  onClick: () => this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.AGENT_LOG_OPEN, { agentId: this.props.agentId, logFile: run.logFile }),
                   style: {
                     fontSize: 11.5, fontWeight: 700, padding: '4px 11px', borderRadius: 7,
                     background: 'rgba(96,165,250,0.14)', color: '#7cb6ff', cursor: 'pointer',

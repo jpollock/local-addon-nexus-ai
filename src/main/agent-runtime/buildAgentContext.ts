@@ -26,6 +26,8 @@ export interface AgentContextDeps {
   dbManager?: AgentDbManager;
   /** True when the user explicitly requested a full (non-incremental) run from the Run Now modal. */
   fullRun?: boolean;
+  /** Per-run log filename (e.g. "run-1753276539000.log"). Defaults to "agent.log". */
+  logFileName?: string;
 }
 
 export function buildAgentContext(deps: AgentContextDeps): {
@@ -35,7 +37,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   accActions: AgentAction[];
   accSites: Record<string, { status: string; findings: Finding[] }>;
 } {
-  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun } = deps;
+  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName } = deps;
   const agentName = agent.name;
 
   const toolProvider = new NexusToolProvider(
@@ -87,7 +89,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   });
 
   try { fs.mkdirSync(logDir, { recursive: true }); } catch { /* ignore */ }
-  const logFile = path.join(logDir, 'agent.log');
+  const logFile = path.join(logDir, logFileName ?? 'agent.log');
   const appLog = createLogger(`agent:${agentName}`);
 
   function appendLog(level: string, msg: string): void {

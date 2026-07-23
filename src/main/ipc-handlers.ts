@@ -4503,6 +4503,13 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
   safeHandle(IPC_CHANNELS.AGENT_RUN_NOW, async (_event, { agentId, siteNames, fullRun }: { agentId: string; siteNames: string[]; fullRun?: boolean }) => {
     const runId = `run-${Date.now()}`;
+    const logFileName = `run-${Date.now()}.log`;
+    const logDir = require('path').join(
+      require('os').homedir(),
+      'Library', 'Application Support', 'Local', 'nexus-ai',
+      'agents', agentId, 'logs',
+    );
+    const logFilePath = require('path').join(logDir, logFileName);
     const agent = deps.nexusServices?.agentRegistry?.get(agentId);
 
     // Guard: refuse to run a disabled agent
@@ -4520,7 +4527,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       });
     };
 
-    broadcast(IPC_CHANNELS.AGENT_RUN_STARTED, { runId, agentId, agentName, siteNames });
+    broadcast(IPC_CHANNELS.AGENT_RUN_STARTED, { runId, agentId, agentName, siteNames, logFile: logFilePath });
 
     // Cancel support — register an AbortController keyed by runId
     const abortController = new AbortController();
@@ -4539,11 +4546,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
 
       // Log baseline for outcome parsing after run completes
       const _fs = require('fs') as typeof import('fs');
-      const logPath = require('path').join(
-        require('os').homedir(),
-        'Library', 'Application Support', 'Local', 'nexus-ai',
-        'agents', agentId, 'logs', 'agent.log',
-      );
+      const logPath = logFilePath;
       const lastSize = _fs.existsSync(logPath) ? _fs.statSync(logPath).size : 0;
 
       let lastRunResult: unknown;
@@ -4555,7 +4558,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
             namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
             siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
           };
-          lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false });
+          lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false, logFileName });
         }
       } catch (err: any) {
         if (!signal.aborted) {
@@ -4632,12 +4635,15 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   });
 
   // Open an agent's log file in the system default application
-  safeHandle(IPC_CHANNELS.AGENT_LOG_OPEN, (_event, { agentId }: { agentId: string }) => {
+  safeHandle(IPC_CHANNELS.AGENT_LOG_OPEN, (_event, { agentId, logFile: runLogFile }: { agentId: string; logFile?: string }) => {
     const _path = require('path') as typeof import('path');
     const _os   = require('os')   as typeof import('os');
     const { shell } = require('electron');
-    const logFile = _path.join(_os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents', agentId, 'logs', 'agent.log');
-    shell.openPath(logFile);
+    const target = runLogFile ?? _path.join(
+      _os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai',
+      'agents', agentId, 'logs', 'agent.log',
+    );
+    shell.openPath(target);
     return { ok: true };
   });
 
