@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { agentStore, AgentSettings } from './AgentStore';
+import { IPC_CHANNELS } from '../../../common/constants';
 
 interface SettingsProps {
   agentId: string;
@@ -16,6 +17,7 @@ interface SettingsState {
   settings: AgentSettings;
   googleConnection: GoogleConnection | null;
   connectingGoogle: boolean;
+  confirmRemove: boolean;
 }
 
 const CADENCE_OPTIONS = [
@@ -64,6 +66,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     settings: agentStore.getOrInitSettings(this.props.agentId),
     googleConnection: null,
     connectingGoogle: false,
+    confirmRemove: false,
   };
   private unsubscribe!: () => void;
   private credEventHandler?: (...args: any[]) => void;
@@ -351,6 +354,50 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
       ),
       // Connections card — only for agents that declare Google credentials
       AGENTS_WITH_GOOGLE_CREDENTIALS.has(agentId) && this.renderConnectionsCard(),
+
+      // Danger zone — remove agent
+      React.createElement('div', {
+        style: {
+          background: 'var(--ag-bg-card)', border: '1px solid rgba(242,102,110,0.3)',
+          borderRadius: 12, padding: '20px 22px', marginBottom: 12,
+        },
+      },
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
+          React.createElement('div', null,
+            React.createElement('div', { style: { fontSize: 13.5, fontWeight: 600, color: 'var(--ag-text-primary)' } }, 'Remove agent'),
+            React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)', marginTop: 3 } },
+              'Permanently deletes this agent and all its data from your machine.',
+            ),
+          ),
+          this.state.confirmRemove
+            ? React.createElement('div', { style: { display: 'flex', gap: 8 } },
+                React.createElement('button', {
+                  onClick: async () => {
+                    await this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.AGENT_REMOVE, { agentId });
+                    this.setState({ confirmRemove: false });
+                  },
+                  style: {
+                    background: '#f2666e', color: '#fff', border: 'none', borderRadius: 8,
+                    padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  },
+                }, 'Yes, remove'),
+                React.createElement('button', {
+                  onClick: () => this.setState({ confirmRemove: false }),
+                  style: {
+                    background: 'none', border: '1px solid var(--ag-border)', borderRadius: 8,
+                    padding: '8px 14px', fontSize: 13, color: 'var(--ag-text-muted)', cursor: 'pointer',
+                  },
+                }, 'Cancel'),
+              )
+            : React.createElement('button', {
+                onClick: () => this.setState({ confirmRemove: true }),
+                style: {
+                  background: 'none', border: '1px solid rgba(242,102,110,0.5)', borderRadius: 8,
+                  padding: '8px 16px', fontSize: 13, fontWeight: 600, color: '#f2666e', cursor: 'pointer',
+                },
+              }, 'Remove…'),
+        ),
+      ),
     );
   }
 }

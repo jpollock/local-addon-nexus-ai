@@ -485,6 +485,7 @@ export class GraphService {
       created_at: row.created_at,
       updated_at: row.updated_at,
       source: row.source ?? 'local',
+      environment: (row.environment as 'production' | 'staging' | 'development') ?? undefined,
       remote_install_id: row.remote_install_id,
       remote_domain: row.remote_domain,
       account_id: row.account_id,

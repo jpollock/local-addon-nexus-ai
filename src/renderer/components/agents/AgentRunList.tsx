@@ -1,12 +1,14 @@
 import * as React from 'react';
 import { AgentRunRecord } from './AgentStore';
 import { rendererGql } from '../../utils/rendererGql';
+import { IPC_CHANNELS } from '../../../common/constants';
 
 // ─── Props / State ────────────────────────────────────────────────────────────
 
 interface AgentRunListProps {
   agentId: string;
   onSwitchToApprovals: () => void;
+  electron?: any;
 }
 
 interface AgentRunListState {
@@ -120,12 +122,13 @@ export class AgentRunList extends React.Component<AgentRunListProps, AgentRunLis
 
               // Artifact chips
               React.createElement('div', { style: { display: 'flex', gap: 8, flexShrink: 0 } },
-                // Log chip (always present)
+                // Log chip — opens agent log file in system default app
                 React.createElement('span', {
-                  title: 'View log',
+                  title: 'Open log file',
+                  onClick: () => this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.AGENT_LOG_OPEN, { agentId: this.props.agentId }),
                   style: {
                     fontSize: 11.5, fontWeight: 700, padding: '4px 11px', borderRadius: 7,
-                    background: 'rgba(96,165,250,0.14)', color: '#7cb6ff', cursor: 'default',
+                    background: 'rgba(96,165,250,0.14)', color: '#7cb6ff', cursor: 'pointer',
                   },
                 }, 'Log'),
 

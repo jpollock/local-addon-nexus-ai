@@ -4608,6 +4608,39 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     return { runId };
   });
 
+  // Remove an agent — deletes its directory and unloads from registry
+  safeHandle(IPC_CHANNELS.AGENT_REMOVE, async (_event, { agentId }: { agentId: string }) => {
+    const _path = require('path') as typeof import('path');
+    const _fs   = require('fs')   as typeof import('fs');
+    const _os   = require('os')   as typeof import('os');
+    const agentDir = _path.join(_os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents', agentId);
+    try {
+      if (_fs.existsSync(agentDir)) {
+        _fs.rmSync(agentDir, { recursive: true, force: true });
+      }
+      // AgentRegistry will detect the removed directory via fs.watch and unload automatically.
+      // Force an immediate unload if the registry is available.
+      const registry = deps.nexusServices?.agentRegistry as any;
+      if (registry) {
+        registry.agents?.delete(agentId);
+        registry.contributedRegistry?.unregisterAgent(agentId);
+      }
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // Open an agent's log file in the system default application
+  safeHandle(IPC_CHANNELS.AGENT_LOG_OPEN, (_event, { agentId }: { agentId: string }) => {
+    const _path = require('path') as typeof import('path');
+    const _os   = require('os')   as typeof import('os');
+    const { shell } = require('electron');
+    const logFile = _path.join(_os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents', agentId, 'logs', 'agent.log');
+    shell.openPath(logFile);
+    return { ok: true };
+  });
+
   // Cancel an in-progress agent run
   safeHandle(IPC_CHANNELS.AGENT_RUN_CANCEL, (_event, { runId }: { runId: string }) => {
     const runAbortMap: Map<string, AbortController> = (deps as any).__runAbortMap;

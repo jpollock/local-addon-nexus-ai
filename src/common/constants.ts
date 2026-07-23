@@ -212,6 +212,8 @@ export const IPC_CHANNELS = {
   AGENT_RUN_STARTED:    `${ADDON_PREFIX}:agent:run-started`,
   AGENT_RUN_COMPLETE:   `${ADDON_PREFIX}:agent:run-complete`,
   AGENT_SETTINGS_UPDATE:`${ADDON_PREFIX}:agent:settings-update`,
+  AGENT_REMOVE:         `${ADDON_PREFIX}:agent:remove`,
+  AGENT_LOG_OPEN:       `${ADDON_PREFIX}:agent:log-open`,
 
   // Ad-hoc SELECT query against graph DB (for KPI rendering from agent manifest)
   FLEET_SQL_QUERY: `${ADDON_PREFIX}:fleet-sql-query`,

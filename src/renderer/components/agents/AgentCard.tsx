@@ -127,10 +127,10 @@ export class AgentCard extends React.Component<AgentCardProps, AgentCardState> {
           ),
         ),
 
-        // Last run time
-        React.createElement('div', { style: { fontSize: 11, color: 'var(--ag-text-muted)' } },
-          `Last run ${formatLastRun(status.lastRunAt)}`,
-        ),
+        // Last run time — italicised when agent is disabled to signal it's historical
+        React.createElement('div', {
+          style: { fontSize: 11, color: 'var(--ag-text-muted)', fontStyle: isDisabled ? 'italic' : 'normal' },
+        }, isDisabled && status.lastRunAt ? `Last run ${formatLastRun(status.lastRunAt)} (disabled)` : `Last run ${formatLastRun(status.lastRunAt)}`),
       ),
     );
   }

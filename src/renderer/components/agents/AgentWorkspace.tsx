@@ -246,6 +246,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
       activeTab === 'activity' && React.createElement(AgentRunList, {
         agentId,
         onSwitchToApprovals: () => this.setState({ activeTab: 'approvals' }),
+        electron: this.props.electron,
       }),
       activeTab === 'settings'  && React.createElement(AgentWorkspaceSettings, { agentId, electron: this.props.electron }),
 
