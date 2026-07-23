@@ -352,6 +352,16 @@ module.exports = {
       const baseline = loadBaseline(install.id, state);
       signals.push(...runRelativeChecks(install, baseline));
 
+      // Log-backed checks (LOG-AUTH, LOG-PROBE, LOG-ENUM, LOG-DIST)
+      let attackSummary = null;
+      try {
+        const logResult = await runLogChecks(install.name, tools, log);
+        signals.push(...logResult.signals);
+        attackSummary = logResult.attackSummary;
+      } catch (err) {
+        log.warn(`security-sentinel: log checks failed for ${install.name}: ${err.message} (skipping)`);
+      }
+
       allInstallResults.push({ install, signals });
 
       const criticalCount = signals.filter(s => s.severity === 'critical').length;
@@ -374,7 +384,7 @@ module.exports = {
           description: s.detail, site: install.name,
           category: s.category,
         }));
-        const plan = await tier2Investigate(install, signals, tools, ai, log, state, 20000, autonomy);
+        const plan = await tier2Investigate(install, signals, tools, ai, log, state, 20000, autonomy, attackSummary);
         if (plan) latestPlan = plan;
       } else {
         log.siteStatus(install.name, 'findings');
@@ -407,8 +417,125 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators },
+  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators },
 };
+
+// ─── Log-backed checks (LOG-AUTH, LOG-PROBE, LOG-ENUM, LOG-DIST) ────────────
+
+async function runLogChecks(siteId, tools, log) {
+  const today = new Date().toISOString().slice(0, 10);
+  const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
+  let rawResult;
+  try {
+    rawResult = await tools.invoke('get_log_aggregates', { siteId, from, to: today });
+  } catch (err) {
+    log.info(`[LOG] get_log_aggregates unavailable for ${siteId}: ${err.message} — skipping log checks`);
+    return { signals: [], attackSummary: null };
+  }
+
+  const text = rawResult?.content?.[0]?.text;
+  if (!text) return { signals: [], attackSummary: null };
+
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { return { signals: [], attackSummary: null }; }
+
+  const aggregates = Object.values(parsed?.aggregates ?? {});
+  if (aggregates.length === 0) {
+    log.info(`[LOG] No log data for ${siteId} — skipping log checks`);
+    return { signals: [], attackSummary: null };
+  }
+
+  // Fold 30-day totals
+  let totalLoginPosts = 0;
+  let totalXmlrpcPosts = 0;
+  const probePathCounts = {};
+  let userRestApiHits = 0;
+  let authorScanHits = 0;
+  let distinctIps = 0;
+
+  for (const agg of aggregates) {
+    for (const hourData of Object.values(agg.attack?.authAttack ?? {})) {
+      totalLoginPosts  += Object.values(hourData.loginPosts  ?? {}).reduce((s, n) => s + n, 0);
+      totalXmlrpcPosts += Object.values(hourData.xmlrpcPosts ?? {}).reduce((s, n) => s + n, 0);
+    }
+    for (const [path, data] of Object.entries(agg.attack?.probes ?? {})) {
+      probePathCounts[path] = (probePathCounts[path] ?? 0) + (data.hits ?? 0);
+    }
+    userRestApiHits += Object.values(agg.attack?.enumeration?.userRestApi ?? {}).reduce((s, n) => s + n, 0);
+    authorScanHits  += Object.values(agg.attack?.enumeration?.authorScan  ?? {}).reduce((s, n) => s + n, 0);
+    distinctIps = Math.max(distinctIps, agg.attack?.ipCardinality?.distinct ?? 0);
+  }
+
+  const totalAuthAttacks = totalLoginPosts + totalXmlrpcPosts;
+  const topProbes = Object.entries(probePathCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const highProbes = topProbes.filter(([, hits]) => hits > 50);
+  const totalEnum  = userRestApiHits + authorScanHits;
+
+  const signals = [];
+
+  // LOG-AUTH: >100 total auth POSTs in 30 days
+  if (totalAuthAttacks > 100) {
+    signals.push({
+      id: 'LOG-AUTH', severity: 'high', category: 'active-compromise',
+      title: `Active brute-force: ${totalAuthAttacks.toLocaleString()} auth probes in 30 days (${totalLoginPosts} login, ${totalXmlrpcPosts} xmlrpc)`,
+    });
+  }
+
+  // LOG-PROBE: any single path >50 hits
+  if (highProbes.length > 0) {
+    signals.push({
+      id: 'LOG-PROBE', severity: 'medium', category: 'pre-breach',
+      title: `Reconnaissance probes: ${highProbes.map(([p, h]) => `${p} (${h})`).join(', ')}`,
+    });
+  }
+
+  // LOG-ENUM: >20 enumeration hits
+  if (totalEnum > 20) {
+    signals.push({
+      id: 'LOG-ENUM', severity: 'medium', category: 'pre-breach',
+      title: `User enumeration: ${userRestApiHits} REST API hits, ${authorScanHits} author scans`,
+    });
+  }
+
+  // LOG-DIST: >50 distinct attacker IPs
+  if (distinctIps > 50) {
+    signals.push({
+      id: 'LOG-DIST', severity: 'high', category: 'active-compromise',
+      title: `Distributed attack campaign: ${distinctIps} distinct attacker IPs observed`,
+    });
+  }
+
+  // Hardcoded L2 escalation — LOG-AUTH critical (>500) or LOG-DIST critical (>200)
+  if (totalAuthAttacks > 500 || distinctIps > 200) {
+    const dominantPath = totalLoginPosts >= totalXmlrpcPosts ? '/wp-login.php' : '/xmlrpc.php';
+    const pathFilter   = totalAuthAttacks > 500 ? { pathContains: dominantPath } : {};
+    try {
+      await tools.invoke('fetch_log_window', { siteId, from, to: today, ...pathFilter, confirm: true });
+      log.info(`[LOG] Forensic fetch_log_window completed for ${siteId} (critical threshold exceeded)`);
+    } catch (err) {
+      log.warn(`[LOG] fetch_log_window escalation failed for ${siteId}: ${err.message}`);
+    }
+  }
+
+  // Build attack summary string for the Tier 2 synthesizer
+  const summaryLines = [
+    `Log corroboration (last 30 days, ${aggregates.length}/${aggregates.length} days):`,
+    totalAuthAttacks > 0
+      ? `- Auth attacks: ${totalLoginPosts} login POSTs, ${totalXmlrpcPosts} xmlrpc POSTs`
+      : null,
+    topProbes.length > 0
+      ? `- Top probe paths: ${topProbes.map(([p, h]) => `${p} (${h} hits)`).join(', ')}`
+      : null,
+    totalEnum > 0
+      ? `- Enumeration: user REST API (${userRestApiHits} hits), author scan (${authorScanHits} hits)`
+      : null,
+    `- Distinct attacker IPs (peak day): ${distinctIps}`,
+  ].filter(Boolean);
+
+  const attackSummary = signals.length > 0 ? summaryLines.join('\n') : null;
+  return { signals, attackSummary };
+}
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
 
@@ -1402,7 +1529,7 @@ async function runNetworkIndicators(fsSignals, installName, sandboxName, tools, 
   }
 }
 
-async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000, autonomy = 'auto') {
+async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000, autonomy = 'auto', attackSummary = null) {
   // DEV MODE: cooldown disabled for iteration speed
   // TODO: re-enable before production by uncommenting below
   // if (state.isCoolingDown(`tier2:${install.id}`, 24 * 60 * 60 * 1000)) {
@@ -2278,6 +2405,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         patternResult,
         databaseResult,
         behavioralResult,
+        logCorroboration: attackSummary,
       }),
       schemaName: 'SynthesizerResult',
       noTools: true,
