@@ -227,8 +227,8 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
             ),
             React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)' } },
               settings.enabled
-                ? 'Running via its configured triggers below. Toggle off to stop all scheduled, event, and ad-hoc runs.'
-                : 'Agent will not run on any trigger until re-enabled.',
+                ? 'Running via its configured triggers below. Toggle off to stop all scheduled, event, and ad-hoc runs — and to revoke MCP/CLI tool access.'
+                : 'Agent will not run on any trigger, and its tools are unavailable via MCP/CLI until re-enabled.',
             ),
           ),
           React.createElement('button', {

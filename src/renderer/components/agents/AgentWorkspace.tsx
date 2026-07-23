@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { agentStore, AgentStatus } from './AgentStore';
 import { AgentWorkspaceSettings } from './AgentWorkspaceSettings';
-import { FleetActivityLedger } from './FleetActivityLedger';
+import { AgentRunList } from './AgentRunList';
 import { AgentRunModal } from './AgentRunModal';
 import { IPC_CHANNELS } from '../../../common/constants';
 
@@ -243,9 +243,9 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
       this.renderHeader(),
       this.renderTabBar(),
       activeTab === 'approvals' && this.renderApprovalsTab(),
-      activeTab === 'activity'  && React.createElement(FleetActivityLedger, {
-        onReviewEvent,
-        // Scoped to this agent in future — for now shows all
+      activeTab === 'activity' && React.createElement(AgentRunList, {
+        agentId,
+        onSwitchToApprovals: () => this.setState({ activeTab: 'approvals' }),
       }),
       activeTab === 'settings'  && React.createElement(AgentWorkspaceSettings, { agentId, electron: this.props.electron }),
 

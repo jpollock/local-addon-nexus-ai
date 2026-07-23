@@ -1,13 +1,9 @@
 import * as React from 'react';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import { IPC_CHANNELS } from '../../../common/constants';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SiteEnv = 'production' | 'staging' | 'development' | 'local';
-type SiteStatus = 'active-threat' | 'needs-review' | null;
 
 interface SiteForRun {
   id: string;
@@ -15,7 +11,6 @@ interface SiteForRun {
   displayName: string;
   account: string;
   environment: SiteEnv;
-  status: SiteStatus;
 }
 
 interface ModalProps {
@@ -34,35 +29,17 @@ interface ModalState {
   searchText: string;
   accountFilter: string;   // 'all' | 'wpe' | 'local' | account name
   loading: boolean;
+  includeProd: boolean;
+  fullRun: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getSentinelStatus(siteName: string): SiteStatus {
-  const reportsDir = path.join(
-    os.homedir(), 'Library', 'Application Support', 'Local',
-    'nexus-ai', 'agents', 'security-sentinel', 'reports', siteName,
-  );
-  try {
-    const files = fs.readdirSync(reportsDir).filter(f => f.endsWith('.md')).sort().reverse();
-    if (!files.length) return null;
-    const content = fs.readFileSync(path.join(reportsDir, files[0]), 'utf-8');
-    if (content.includes('NOT SAFE TO PUSH') || content.includes('CRITICAL')) return 'active-threat';
-    if (content.includes('READY TO PUSH') || content.includes('[HIGH]')) return 'needs-review';
-    return null;
-  } catch { return null; }
-}
 
 const ENV_COLORS: Record<SiteEnv, { bg: string; color: string; label: string }> = {
   production:  { bg: 'rgba(244,104,95,0.16)',  color: '#f4685f', label: 'PROD' },
   staging:     { bg: 'rgba(245,181,68,0.16)',  color: '#f5b544', label: 'STAGING' },
   development: { bg: 'rgba(123,140,255,0.16)', color: '#7b8cff', label: 'DEV' },
   local:       { bg: 'rgba(53,208,197,0.16)',  color: '#35d0c5', label: 'LOCAL' },
-};
-
-const STATUS_STYLES: Record<NonNullable<SiteStatus>, { bg: string; color: string; label: string }> = {
-  'active-threat':  { bg: 'rgba(244,104,95,0.14)',  color: '#f4685f', label: 'Active threat' },
-  'needs-review':   { bg: 'rgba(245,181,68,0.14)',  color: '#f5b544', label: 'Needs review' },
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -75,6 +52,8 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
     accountFilter: 'all',
     loading: true,
     isRunning: false,
+    includeProd: false,
+    fullRun: false,
   };
 
   async componentDidMount() {
@@ -94,7 +73,7 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
         const name: string = s.name || '';
         const env = (s.environment || 'production') as SiteEnv;
         if (!name) continue;
-        sites.push({ id: s.id || name, name, displayName: name, account: s.account_id || 'WP Engine', environment: env, status: getSentinelStatus(name) });
+        sites.push({ id: s.id || name, name, displayName: name, account: s.account_id || 'WP Engine', environment: env });
       }
     } catch {}
 
@@ -104,11 +83,12 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
       for (const s of (localSites || [])) {
         const name: string = s.name || '';
         if (!name || name.startsWith('sentinel-')) continue; // skip sentinel sandboxes
-        sites.push({ id: s.id || name, name, displayName: name, account: 'Local sites', environment: 'local', status: getSentinelStatus(name) });
+        sites.push({ id: s.id || name, name, displayName: name, account: 'Local sites', environment: 'local' });
       }
     } catch {}
 
-    const selected = new Set(sites.map(s => s.id));
+    // C1: Default selection — non-production only
+    const selected = new Set(sites.filter(s => s.environment !== 'production').map(s => s.id));
     this.setState({ sites, selected, loading: false });
   }
 
@@ -146,10 +126,6 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
     });
   }
 
-  private selectAll() {
-    this.setState(s => ({ selected: new Set(this.getFiltered().map(site => site.id)) }));
-  }
-
   private clearAll() {
     this.setState({ selected: new Set() });
   }
@@ -161,12 +137,12 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
     const filtered = this.getFiltered();
     const toRun = filtered.filter(s => this.state.selected.has(s.id)).map(s => s.name);
 
-    // Fire run-now IPC — returns { runId } immediately; main process fires
-    // AGENT_RUN_STARTED push which AgentConsoleTab feeds into RunStore.
+    // C3: Pass fullRun in IPC call
     try {
       await electron.ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUN_NOW, {
         agentId,
         siteNames: toRun,
+        fullRun: this.state.fullRun,
       });
     } catch (err) {
       console.warn('[AgentRunModal] run-now IPC failed:', err);
@@ -177,7 +153,7 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
 
   render() {
     const { agentName, onCancel } = this.props;
-    const { searchText, accountFilter, selected, loading } = this.state;
+    const { searchText, accountFilter, selected, loading, includeProd, fullRun } = this.state;
     const filtered = this.getFiltered();
     const selectedCount = filtered.filter(s => selected.has(s.id)).length;
     const accounts = this.getAccounts();
@@ -215,12 +191,31 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
             },
               React.createElement('span', { style: { fontSize: 18, color: 'var(--ag-teal)' } }, '▶'),
             ),
+            // C4: Updated subtitle + fullRun toggle
             React.createElement('div', { style: { flex: 1 } },
               React.createElement('div', { style: { fontSize: 18, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 3 } },
                 `Run ${agentName} now`,
               ),
               React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-text-secondary)' } },
-                'Runs against WP Engine and local sites. All are selected by default.',
+                'Non-production sites are selected by default.',
+              ),
+              // C4: "Always do full run" toggle — only when supportsFullRun
+              this.props.supportsFullRun && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 } },
+                React.createElement('div', {
+                  onClick: () => this.setState(s => ({ fullRun: !s.fullRun })),
+                  style: {
+                    width: 46, height: 26, borderRadius: 999, cursor: 'pointer', position: 'relative' as const,
+                    background: fullRun ? 'var(--ag-teal)' : '#2a323e', transition: 'background .15s',
+                  },
+                },
+                  React.createElement('div', {
+                    style: {
+                      position: 'absolute' as const, top: 3, left: fullRun ? 23 : 3,
+                      width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left .15s',
+                    },
+                  }),
+                ),
+                React.createElement('span', { style: { fontSize: 14, color: 'var(--ag-text-secondary)' } }, 'Always do full run'),
               ),
             ),
             React.createElement('button', {
@@ -229,8 +224,8 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
             }, '✕'),
           ),
 
-          // Search + action buttons
-          React.createElement('div', { style: { display: 'flex', gap: 10, marginBottom: 14 } },
+          // C4: Search + "Select non-prod" button (replaces Select all / Clear)
+          React.createElement('div', { style: { display: 'flex', gap: 10, marginBottom: 10 } },
             React.createElement('input', {
               type: 'text', placeholder: 'Search sites…',
               value: searchText,
@@ -241,17 +236,46 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
               },
             }),
             React.createElement('button', {
-              onClick: () => this.selectAll(),
+              onClick: () => {
+                const nonProd = this.state.sites.filter(s => s.environment !== 'production').map(s => s.id);
+                this.setState({ selected: new Set(nonProd), includeProd: false });
+              },
               style: { padding: '9px 16px', borderRadius: 9, border: '1px solid var(--ag-border)', background: 'var(--ag-bg-elevated)', color: 'var(--ag-text-secondary)', fontSize: 13, cursor: 'pointer' },
-            }, 'Select all'),
-            React.createElement('button', {
-              onClick: () => this.clearAll(),
-              style: { padding: '9px 16px', borderRadius: 9, border: '1px solid var(--ag-border)', background: 'var(--ag-bg-elevated)', color: 'var(--ag-text-secondary)', fontSize: 13, cursor: 'pointer' },
-            }, 'Clear'),
+            }, 'Select non-prod'),
           ),
 
-          // Filter chips
-          React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap' as const, gap: 8 } },
+          // C4: "Include production sites" checkbox row
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, marginBottom: 4 } },
+            React.createElement('div', {
+              onClick: () => {
+                const next = !this.state.includeProd;
+                this.setState(s => {
+                  const newSel = new Set(s.selected);
+                  s.sites.forEach(site => {
+                    if (site.environment === 'production') {
+                      if (next) newSel.add(site.id);
+                      else newSel.delete(site.id);
+                    }
+                  });
+                  return { includeProd: next, selected: newSel };
+                });
+              },
+              style: {
+                width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: `2px solid ${includeProd ? '#f2666e' : '#3a4452'}`,
+                background: includeProd ? '#f2666e' : 'transparent',
+                color: '#2a0f11', fontWeight: 800, fontSize: 13,
+              },
+            }, includeProd ? '✓' : ''),
+            React.createElement('span', { style: { fontSize: 14, color: includeProd ? 'var(--ag-text-primary)' : 'var(--ag-text-secondary)' } },
+              'Include production sites ',
+              React.createElement('span', { style: { fontSize: 12, color: '#f2666e', fontWeight: 700 } }, '— use with care'),
+            ),
+          ),
+
+          // Filter chips (below include-prod checkbox)
+          React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap' as const, gap: 8, marginTop: 14 } },
             ...accounts.map(a =>
               React.createElement('button', {
                 key: a.id, onClick: () => this.setState({ accountFilter: a.id }),
@@ -281,7 +305,6 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
                 ...filtered.map((site, i) => {
                   const isSelected = selected.has(site.id);
                   const envInfo = ENV_COLORS[site.environment];
-                  const statusInfo = site.status ? STATUS_STYLES[site.status] : null;
                   return React.createElement('div', {
                     key: site.id,
                     onClick: () => this.toggleSite(site.id),
@@ -303,11 +326,7 @@ export class AgentRunModal extends React.Component<ModalProps, ModalState> {
                       React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-muted)' } }, site.account),
                     ),
 
-                    // Status badge
-                    statusInfo && React.createElement('span', {
-                      style: { fontSize: 11.5, fontWeight: 600, padding: '3px 10px', borderRadius: 6, background: statusInfo.bg, color: statusInfo.color, flexShrink: 0 },
-                    }, statusInfo.label),
-
+                    // C4: No status badge — env pill only
                     // Env pill
                     React.createElement('span', {
                       style: { fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 5, background: envInfo.bg, color: envInfo.color, flexShrink: 0 },
