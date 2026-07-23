@@ -115,6 +115,7 @@ export interface Site {
   environment?: 'production' | 'staging' | 'development';
   remote_install_id?: string;
   remote_domain?: string;
+  wpe_site_id?: string;   // WPE site container UUID (parent of the install)
   post_count?: number;
   user_count?: number;
   last_post_at?: number;

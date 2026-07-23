@@ -46,6 +46,7 @@ export interface WPEInstallData {
   primary_domain: string;
   php_version?: string;
   account_id?: string;
+  wpe_site_id?: string;   // WPE site container UUID (installation.site.id from CAPI)
 }
 
 export interface WPESyncServiceOptions {
@@ -180,6 +181,7 @@ export class WPESyncService {
         primary_domain: (i.primary_domain ?? i.primaryDomain) || `${i.name}.wpengine.com`,
         php_version: i.php_version ?? i.phpVersion ?? undefined,
         account_id: i.account?.id ?? undefined,
+        wpe_site_id: i.site?.id ?? undefined,   // WPE site container UUID
       }));
 
       // Apply operation permissions filter — wpcli on production excluded by default
@@ -389,6 +391,7 @@ export class WPESyncService {
       environment: (install.environment as 'production' | 'staging' | 'development') ?? 'production',
       remote_install_id: install.install_id,
       remote_domain: install.primary_domain,
+      wpe_site_id: install.wpe_site_id,
     };
 
     await this.graphService.upsertSite(site);

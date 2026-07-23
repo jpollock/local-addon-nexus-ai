@@ -35,7 +35,7 @@ export const wpeLinkHandler: McpToolHandler = {
 
     // Resolve install UUID → install name via graph.db when installName is absent
     const db = (services as any).graphService?.getDb?.();
-    const resolveInstallId = (uuid: string): string | null => {
+    const resolveByInstallId = (uuid: string): string | null => {
       if (!db || !uuid) return null;
       try {
         const row = db.prepare(
@@ -45,11 +45,22 @@ export const wpeLinkHandler: McpToolHandler = {
       } catch { return null; }
     };
 
+    const resolveBySiteId = (uuid: string): string | null => {
+      if (!db || !uuid) return null;
+      try {
+        const row = db.prepare(
+          `SELECT name FROM sites WHERE source = 'wpe' AND wpe_site_id = ? LIMIT 1`
+        ).get(uuid) as { name: string } | undefined;
+        return row?.name ?? null;
+      } catch { return null; }
+    };
+
     const lines = [`## WPE Link for "${site.name}"`];
     for (const [key, conn] of Object.entries(connections) as [string, any][]) {
       const installName = conn?.installName
-        ?? resolveInstallId(conn?.installId)
-        ?? resolveInstallId(conn?.remoteSiteId)
+        ?? resolveByInstallId(conn?.installId)
+        ?? resolveBySiteId(conn?.remoteSiteId)
+        ?? resolveByInstallId(conn?.remoteSiteId)
         ?? conn?.remoteSiteId
         ?? conn?.name
         ?? JSON.stringify(conn);

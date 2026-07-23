@@ -247,6 +247,7 @@ export class GraphService {
       ['ssh_last_sync_at',    'INTEGER'],
       ['settings_json',       'TEXT'],
       ['environment',         'TEXT'],
+      ['wpe_site_id',         'TEXT'],
     ] as [string, string][]) {
       if (!this.hasColumn('sites', col)) {
         this.db.transaction(() => {
@@ -333,8 +334,8 @@ export class GraphService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(`
-      INSERT INTO sites (id, name, domain, wp_version, php_version, account_id, last_sync_at, is_active, created_at, updated_at, source, environment, remote_install_id, remote_domain)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sites (id, name, domain, wp_version, php_version, account_id, last_sync_at, is_active, created_at, updated_at, source, environment, remote_install_id, remote_domain, wpe_site_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         domain = excluded.domain,
@@ -347,7 +348,8 @@ export class GraphService {
         source = excluded.source,
         environment = COALESCE(excluded.environment, environment),
         remote_install_id = excluded.remote_install_id,
-        remote_domain = excluded.remote_domain
+        remote_domain = excluded.remote_domain,
+        wpe_site_id = COALESCE(excluded.wpe_site_id, wpe_site_id)
     `);
 
     stmt.run(
@@ -364,7 +366,8 @@ export class GraphService {
       site.source ?? 'local',
       site.environment ?? null,
       site.remote_install_id ?? null,
-      site.remote_domain ?? null
+      site.remote_domain ?? null,
+      (site as any).wpe_site_id ?? null
     );
   }
 
@@ -487,6 +490,7 @@ export class GraphService {
       source: row.source ?? 'local',
       environment: (row.environment as 'production' | 'staging' | 'development') ?? undefined,
       remote_install_id: row.remote_install_id,
+      wpe_site_id: row.wpe_site_id ?? undefined,
       remote_domain: row.remote_domain,
       account_id: row.account_id,
       post_count: (row as any).post_count ?? undefined,
