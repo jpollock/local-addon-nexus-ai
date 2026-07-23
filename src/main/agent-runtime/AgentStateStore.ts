@@ -11,6 +11,7 @@ export interface AgentRunRow {
   summary?: string;
   findingsCount: number;
   logFile?: string;
+  reportFile?: string;
 }
 
 const SCHEMA = `
@@ -44,6 +45,7 @@ export class AgentStateStore {
     try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN summary TEXT`); } catch {}
     try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN findings_count INTEGER DEFAULT 0`); } catch {}
     try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN log_file TEXT`); } catch {}
+    try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN report_file TEXT`); } catch {}
   }
 
   get<T>(agentName: string, key: string): T | undefined {
@@ -97,8 +99,8 @@ export class AgentStateStore {
   recordRun(result: AgentResult): void {
     const findingsCount = result.findings?.length ?? 0;
     this.db
-      .prepare('INSERT INTO agent_runs (agent_name, started_at, finished_at, status, error, summary, findings_count, log_file) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(result.agentName, result.startedAt, result.finishedAt, result.status, result.error ?? null, result.summary ?? null, findingsCount, result.logFile ?? null);
+      .prepare('INSERT INTO agent_runs (agent_name, started_at, finished_at, status, error, summary, findings_count, log_file, report_file) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(result.agentName, result.startedAt, result.finishedAt, result.status, result.error ?? null, result.summary ?? null, findingsCount, result.logFile ?? null, result.reportFile ?? null);
 
     this.db.prepare(`
       DELETE FROM agent_runs
@@ -128,7 +130,8 @@ export class AgentStateStore {
       .prepare('SELECT * FROM agent_runs WHERE agent_name = ? ORDER BY id DESC LIMIT ?')
       .all(agentName, limit) as Array<{
         id: number; agent_name: string; started_at: number; finished_at: number;
-        status: string; error: string | null; summary: string | null; findings_count: number; log_file: string | null;
+        status: string; error: string | null; summary: string | null; findings_count: number;
+        log_file: string | null; report_file: string | null;
       }>;
     return rows.map(r => ({
       id: r.id,
@@ -140,6 +143,7 @@ export class AgentStateStore {
       summary: r.summary ?? undefined,
       findingsCount: r.findings_count ?? 0,
       logFile: r.log_file ?? undefined,
+      reportFile: r.report_file ?? undefined,
     }));
   }
 }

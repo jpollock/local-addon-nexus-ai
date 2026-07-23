@@ -125,12 +125,23 @@ export class AgentRunner {
       if (rv.summary)  result.summary  = rv.summary;
     }
 
-    // Attach per-run log file path if one was requested
+    // Attach per-run log file path and write report file if summary exists
     if (options?.logFileName) {
-      result.logFile = path.join(
+      const logsDir = path.join(
         os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai',
-        'agents', agentName, 'logs', options.logFileName,
+        'agents', agentName, 'logs',
       );
+      result.logFile = path.join(logsDir, options.logFileName);
+
+      if (result.summary) {
+        const reportFileName = options.logFileName.replace(/\.log$/, '-report.md');
+        const reportFilePath = path.join(logsDir, reportFileName);
+        try {
+          const fs = await import('fs');
+          fs.writeFileSync(reportFilePath, result.summary, 'utf-8');
+          result.reportFile = reportFilePath;
+        } catch { /* non-fatal — report still accessible via DB summary */ }
+      }
     }
 
     this.stateStore.recordRun(result);

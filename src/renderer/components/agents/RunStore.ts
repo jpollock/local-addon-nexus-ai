@@ -26,6 +26,7 @@ export interface Run {
   siteStatus: Record<string, SiteRunStatus>;
   log: LogLine[];
   summary?: string;
+  logFile?: string;   // absolute path to this run's log file
 }
 
 interface RunState {
@@ -91,6 +92,7 @@ class RunStore {
       findingsSites: [],
       siteStatus: {},
       log: [],
+      logFile: params.logFile,
     };
     this.setState({ currentRun: run });
     this.startWatching(params.agentId, run.startedAt, params.logFile);
@@ -220,12 +222,12 @@ class RunStore {
   }
 
   private flushLog(agentId: string): void {
-    const logPath = path.join(
+    const run = this.state.currentRun;
+    if (!run) return;
+    const logPath = run.logFile ?? path.join(
       os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai',
       'agents', agentId, 'logs', 'agent.log',
     );
-    const run = this.state.currentRun;
-    if (!run) return;
     try {
       const stat = fs.statSync(logPath);
       if (stat.size < this.logOffset) this.logOffset = 0;

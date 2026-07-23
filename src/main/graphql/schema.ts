@@ -2020,6 +2020,8 @@ export const typeDefs = gql`
     findingsCount: Int!
     "Absolute path to this run's log file"
     logFile: String
+    "Absolute path to this run's report file (summary written to disk)"
+    reportFile: String
   }
 
   # ============================================================================

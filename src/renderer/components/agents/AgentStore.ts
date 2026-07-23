@@ -33,6 +33,7 @@ export interface AgentRunRecord {
   summary?: string;
   findingsCount: number;
   logFile?: string;
+  reportFile?: string;
 }
 
 export interface RemediationPlan {

@@ -129,6 +129,8 @@ export interface AgentResult {
   summary?: string;
   /** Absolute path to this run's log file. Stored in agent_runs for the Log chip. */
   logFile?: string;
+  /** Absolute path to this run's report file (AgentResult.summary written to disk). */
+  reportFile?: string;
 }
 
 // ─── Domain output types ──────────────────────────────────────────────────────
