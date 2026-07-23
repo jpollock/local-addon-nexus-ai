@@ -22,6 +22,7 @@ interface ModalProps {
   agentName: string;       // e.g. "Security Sentinel"
   agentId: string;         // e.g. "security-sentinel"
   electron: any;           // Electron IPC — same pattern as NexusOverview
+  supportsFullRun: boolean;
   onCancel: () => void;
   onRun: (siteNames: string[]) => void;
 }

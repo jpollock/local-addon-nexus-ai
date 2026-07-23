@@ -5,14 +5,7 @@ import { FleetActivityLedger } from './FleetActivityLedger';
 import { AgentRunModal } from './AgentRunModal';
 import { IPC_CHANNELS } from '../../../common/constants';
 
-type WorkspaceTab = 'overview' | 'approvals' | 'activity' | 'settings';
-
-interface KpiState {
-  label: string;
-  value: string | null;
-  color: string;
-  loading: boolean;
-}
+type WorkspaceTab = 'settings' | 'approvals' | 'activity';
 
 interface WorkspaceProps {
   agentId: string;
@@ -26,8 +19,6 @@ interface WorkspaceState {
   status: AgentStatus | null;
   running: boolean;
   showRunModal: boolean;
-  kpis: KpiState[];
-  kpisLoaded: boolean;
 }
 
 const ACCENTS: Record<string, string> = {
@@ -38,20 +29,12 @@ const ACCENTS: Record<string, string> = {
   'cost-watch': '#e07acc',
 };
 
-const KPIS: Record<string, Array<{ label: string; valKey: keyof AgentStatus; color?: string }>> = {
-  'security-sentinel': [
-    { label: 'Sites monitored', valKey: 'name', color: 'var(--ag-text-primary)' }, // placeholder
-  ],
-};
-
 export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceState> {
   state: WorkspaceState = {
-    activeTab: 'overview',
+    activeTab: 'settings',
     status: null,
     running: false,
     showRunModal: false,
-    kpis: [],
-    kpisLoaded: false,
   };
   private unsub!: () => void;
 
@@ -64,36 +47,6 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     agentStore.subscribe(update);
     this.unsub = update;
     update();
-    this.loadKpis();
-  }
-
-  private async loadKpis() {
-    const { agentId } = this.props;
-    const status = agentStore.getState().statuses.find(s =>
-      s.name.toLowerCase().replace(/\s+/g, '-') === agentId
-    );
-    const kpiDefs = (status as any)?.kpis ?? [];
-    if (kpiDefs.length === 0) return;
-
-    this.setState({ kpisLoaded: false });
-    const colorMap: Record<string, string> = {
-      red: 'var(--ag-red)',
-      green: 'var(--ag-green)',
-      amber: 'var(--ag-amber)',
-      default: 'var(--ag-text-primary)',
-    };
-    const kpis: KpiState[] = await Promise.all(kpiDefs.map(async (kpi: any) => {
-      try {
-        const res = await this.props.electron.ipcRenderer.invoke(
-          IPC_CHANNELS.FLEET_SQL_QUERY, { query: kpi.query }
-        );
-        const value = res?.rows?.[0] ? String(Object.values(res.rows[0])[0]) : '—';
-        return { label: kpi.label, value, color: colorMap[kpi.color ?? 'default'] ?? colorMap.default, loading: false };
-      } catch {
-        return { label: kpi.label, value: '—', color: 'var(--ag-text-muted)', loading: false };
-      }
-    }));
-    this.setState({ kpis, kpisLoaded: true });
   }
 
   componentWillUnmount() {
@@ -101,13 +54,41 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
   }
 
   private renderHeader() {
-    const { status, running } = this.state;
     const { agentId, onBack } = this.props;
-    const accent = ACCENTS[agentId] || '#9aa1ac';
-    const derivedStatus = agentStore.getAgentDerivedStatus(agentId);
+    const { status, running } = this.state;
     const settings = agentStore.getOrInitSettings(agentId);
-    const pillLabel = derivedStatus === 'action' ? 'Needs review' : derivedStatus === 'disabled' ? 'Disabled' : 'Healthy';
-    const pillClass = derivedStatus === 'action' ? 'ag-pill--review' : derivedStatus === 'disabled' ? 'ag-pill--disabled' : 'ag-pill--healthy';
+    const autonomyById = agentStore.getState().autonomyById;
+    const autonomy = autonomyById[agentId] ?? 'suggest';
+    const pendingCount = agentStore.getState().activityEvents.filter(
+      e => e.agentId === agentId && e.status === 'review'
+    ).length;
+    const isDisabled = !settings.enabled;
+
+    // Derived trigger summary from actual config
+    const triggerParts: string[] = [];
+    if (settings.scheduleEnabled && settings.cadence) {
+      const CADENCE_LABELS: Record<string, string> = {
+        '*/15 * * * *': 'Runs every 15 minutes',
+        '0 * * * *': 'Runs hourly',
+        '0 */6 * * *': 'Runs every 6 hours',
+        '0 0 * * *': 'Runs daily',
+        '0 0 * * 0': 'Runs weekly',
+      };
+      triggerParts.push(CADENCE_LABELS[settings.cadence] ?? 'Runs on schedule');
+    }
+    if (settings.eventsEnabled) triggerParts.push('responds to events');
+    triggerParts.push('ad-hoc');
+    const triggerSummary = isDisabled
+      ? 'Disabled — no triggers active'
+      : (triggerParts.length === 1 ? 'Runs on demand only • ad-hoc' : triggerParts.join(' • '));
+
+    const autonomyLine: Record<string, string> = {
+      suggest: 'Investigates on its own • surfaces findings, takes no action',
+      ask:     'Investigates on its own • you approve any change before it runs',
+      auto:    'Fully autonomous • remediates in sandbox, then waits for production approval',
+    };
+    const accent = ACCENTS[agentId] || '#9aa1ac';
+    const displayName = status?.name ?? agentId.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
     return React.createElement('div', null,
       // Back link
@@ -119,49 +100,57 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         },
       }, '‹ All agents'),
 
-      // Agent header
-      React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 } },
+      React.createElement('div', {
+        style: { display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 24 },
+      },
+        // Avatar
         React.createElement('div', {
           style: {
-            width: 52, height: 52, borderRadius: 14, flexShrink: 0,
-            background: accent + '22', color: accent,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 21, fontWeight: 700,
+            width: 64, height: 64, borderRadius: 16, flexShrink: 0,
+            background: accent + '22', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', color: accent, fontSize: 26, fontWeight: 800,
           },
-        }, agentId[0]?.toUpperCase() || 'A'),
+        }, (displayName[0] ?? 'A').toUpperCase()),
 
-        React.createElement('div', { style: { flex: 1 } },
-          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 } },
-            React.createElement('span', { style: { fontSize: 21, fontWeight: 600, color: 'var(--ag-text-primary)' } },
-              (status?.name || agentId).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-            ),
-            React.createElement('span', { className: `ag-pill ${pillClass}` }, pillLabel),
+        // Name + pills + summary lines
+        React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+          // Name row with pills
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' as const, marginBottom: 12 } },
+            React.createElement('span', { style: { fontSize: 28, fontWeight: 800, letterSpacing: '-0.01em' } }, displayName),
+            // Lifecycle pill
+            React.createElement('span', {
+              className: `ag-pill ${isDisabled ? 'ag-pill--disabled' : 'ag-pill--healthy'}`,
+            }, isDisabled ? 'Disabled' : 'Enabled'),
+            // Workload pill (only when active + pending)
+            !isDisabled && pendingCount > 0 && React.createElement('span', {
+              className: 'ag-pill ag-pill--review',
+            }, `${pendingCount} need review`),
           ),
-          React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 6 } },
-            '🛡️',
-            React.createElement('span', null, settings.enabled ? 'Investigates on its own • you approve anything on production' : 'Agent disabled'),
+          // Autonomy line
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6, color: 'var(--ag-text-secondary)', fontSize: 15 } },
+            React.createElement('span', { style: { color: '#f0b52e' } }, '⚑'),
+            autonomyLine[autonomy] ?? autonomyLine.suggest,
           ),
-          React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-muted)', display: 'flex', alignItems: 'center', gap: 6 } },
-            '⏱',
-            React.createElement('span', null, 'Runs every 15 minutes • responds to events • ad-hoc'),
+          // Trigger summary
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 9, color: 'var(--ag-text-muted)', fontSize: 15 } },
+            React.createElement('span', null, '◔'),
+            triggerSummary,
           ),
         ),
 
         // Run now button
         React.createElement('button', {
           onClick: () => this.setState({ showRunModal: true }),
-          disabled: running || !settings.enabled,
+          disabled: running || isDisabled,
           style: {
-            background: running || !settings.enabled ? 'var(--ag-bg-elevated)' : 'var(--ag-teal)',
-            color: running || !settings.enabled ? 'var(--ag-text-faint)' : 'var(--ag-on-teal)',
-            border: 'none', borderRadius: 8, padding: '8px 18px',
-            fontSize: 13, fontWeight: 600,
-            cursor: running || !settings.enabled ? 'not-allowed' : 'pointer',
-            display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+            display: 'inline-flex', alignItems: 'center', gap: 9,
+            background: running || isDisabled ? 'var(--ag-bg-elevated)' : 'var(--ag-teal)',
+            color: running || isDisabled ? 'var(--ag-text-muted)' : 'var(--ag-on-teal)',
+            fontWeight: 700, fontSize: 15, border: 'none', borderRadius: 10,
+            padding: '12px 22px', cursor: running || isDisabled ? 'not-allowed' : 'pointer', flexShrink: 0,
           },
         }, running ? '⟳ Running…' : '▶ Run now'),
       ),
-
     );
   }
 
@@ -173,10 +162,9 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     ).length;
 
     const tabs: Array<{ id: WorkspaceTab; label: string; badge?: number }> = [
-      { id: 'overview',  label: 'Overview' },
+      { id: 'settings',  label: 'Settings' },
       { id: 'approvals', label: 'Approvals', badge: pendingCount > 0 ? pendingCount : undefined },
       { id: 'activity',  label: 'Activity' },
-      { id: 'settings',  label: 'Settings' },
     ];
 
     return React.createElement('div', {
@@ -188,7 +176,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
           onClick: () => this.setState({ activeTab: tab.id }),
           style: {
             background: 'none', border: 'none', padding: '0 0 12px', marginRight: 28,
-            fontSize: 14, fontWeight: activeTab === tab.id ? 500 : 400,
+            fontSize: 14, fontWeight: activeTab === tab.id ? 700 : 500,
             color: activeTab === tab.id ? 'var(--ag-text-primary)' : 'var(--ag-text-muted)',
             borderBottom: activeTab === tab.id ? '2px solid var(--ag-teal)' : '2px solid transparent',
             cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
@@ -196,65 +184,10 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         },
           tab.label,
           tab.badge && React.createElement('span', {
-            className: 'ag-pill ag-pill--review',
-            style: { fontSize: 10, padding: '1px 7px' },
+            style: { background: '#f0b52e', color: '#3a2a00', fontSize: 11, fontWeight: 800, padding: '1px 8px', borderRadius: 999 },
           }, tab.badge),
         ),
       ),
-    );
-  }
-
-  private renderOverviewTab() {
-    const { agentId } = this.props;
-    const { kpis, kpisLoaded } = this.state;
-    const pendingCount = agentStore.getState().activityEvents.filter(
-      e => e.agentId === agentId && e.status === 'review'
-    ).length;
-
-    return React.createElement('div', null,
-      // KPI grid — rendered only when loaded and non-empty
-      kpisLoaded && kpis.length > 0 && React.createElement('div', {
-        style: {
-          display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min(kpis.length, 4)}, 1fr)`,
-          gap: 12,
-          marginBottom: 24,
-        },
-      },
-        ...kpis.map(kpi => React.createElement('div', {
-          key: kpi.label,
-          style: {
-            background: 'var(--ag-bg-card)',
-            border: '1px solid var(--ag-border)',
-            borderRadius: 12,
-            padding: '16px 18px',
-          },
-        },
-          React.createElement('div', {
-            style: {
-              fontSize: 11.5,
-              color: 'var(--ag-text-secondary)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: 6,
-            },
-          }, kpi.label),
-          React.createElement('div', {
-            style: { fontSize: 32, fontWeight: 600, color: kpi.color },
-          }, kpi.value ?? '—'),
-        )),
-      ),
-
-      // Needs review section
-      React.createElement('div', {
-        style: { fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ag-text-muted)', marginBottom: 12 },
-      }, 'Needs your review'),
-      pendingCount > 0
-        ? React.createElement('button', {
-            onClick: () => this.setState({ activeTab: 'approvals' }),
-            style: { background: 'none', border: 'none', color: 'var(--ag-amber)', fontSize: 13, cursor: 'pointer', padding: 0, textDecoration: 'underline' },
-          }, `${pendingCount} item${pendingCount !== 1 ? 's' : ''} need${pendingCount === 1 ? 's' : ''} review — go to Approvals`)
-        : React.createElement('div', { style: { color: 'var(--ag-text-secondary)', fontSize: 13 } }, 'No pending approvals.'),
     );
   }
 
@@ -309,7 +242,6 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     return React.createElement('div', { style: { padding: '24px 40px' } },
       this.renderHeader(),
       this.renderTabBar(),
-      activeTab === 'overview'  && this.renderOverviewTab(),
       activeTab === 'approvals' && this.renderApprovalsTab(),
       activeTab === 'activity'  && React.createElement(FleetActivityLedger, {
         onReviewEvent,
@@ -322,6 +254,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         agentName: this.state.status?.name || agentId,
         agentId,
         electron: this.props.electron,
+        supportsFullRun: this.state.status?.supportsFullRun ?? false,
         onCancel: () => this.setState({ showRunModal: false }),
         onRun: (_siteNames: string[]) => {
           // AgentRunModal.handleRun() already invoked AGENT_RUN_NOW via IPC.
