@@ -306,6 +306,15 @@ export class McpServer {
         if (toolName.startsWith('agent__') && this.contributedRegistry && this.dispatcher) {
           const registered = this.contributedRegistry.getByMcpName(toolName);
           if (registered) {
+            // Guard: refuse to call tools from disabled agents
+            if (this.isAgentEnabled && !this.isAgentEnabled(registered.agentName)) {
+              return {
+                jsonrpc: '2.0',
+                id,
+                error: { code: -32601, message: `Tool ${toolName} is not available (agent disabled)` },
+              };
+            }
+
             // Tier-3 gate: agent tools with permissionTier >= 3 require a confirmation token
             if (registered.permissionTier >= 3) {
               const token = toolArgs._confirmationToken as string | undefined;
