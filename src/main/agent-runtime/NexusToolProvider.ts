@@ -60,6 +60,35 @@ export class NexusToolProvider implements ToolProvider {
     // Audit log the invocation (mirrors McpSafetyWrapper.auditLog for the agent path)
     const duration_ms = Date.now() - startTime;
     if (result.isError) {
+      // Built-in registry didn't find the tool — try contributed tool routing.
+      // Agents can call contributed tools from other agents (e.g. get_log_aggregates from
+      // log-processor) by declaring them in their tools[] list. The dispatcher builds a
+      // full agent context for the contributing agent and executes the handler.
+      const contributed = this.services.contributedRegistry?.list().find(t => t.toolName === name);
+      if (contributed && this.services.dispatcher) {
+        const dispatchResult = await this.services.dispatcher.dispatch(
+          contributed.agentName, contributed.toolName, args,
+        );
+        const dispatchDuration = Date.now() - startTime;
+        if (dispatchResult.isError) {
+          const errText = dispatchResult.content.find((c: any) => c.type === 'text')?.text ?? 'Dispatch error';
+          this.services.auditLogger?.log({
+            timestamp: new Date().toISOString(), toolName: `${contributed.agentName}/${name}`,
+            tier: contributed.permissionTier as 1 | 2 | 3, params: args,
+            confirmed: null, result: 'error', error: errText, duration_ms: dispatchDuration,
+          });
+          throw new Error(errText);
+        }
+        this.services.auditLogger?.log({
+          timestamp: new Date().toISOString(), toolName: `${contributed.agentName}/${name}`,
+          tier: contributed.permissionTier as 1 | 2 | 3, params: args,
+          confirmed: null, result: 'success', error: undefined, duration_ms: dispatchDuration,
+        });
+        const dispatchText = dispatchResult.content.find((c: any) => c.type === 'text')?.text;
+        if (!dispatchText) return undefined;
+        try { return JSON.parse(dispatchText); } catch { return dispatchText; }
+      }
+
       const errorText = result.content.find((c: any) => c.type === 'text')?.text ?? 'Tool error';
       this.services.auditLogger?.log({
         timestamp: new Date().toISOString(),

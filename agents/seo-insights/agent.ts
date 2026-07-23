@@ -468,6 +468,8 @@ export default defineAgent({
     'local_start_site',
     'local_clone_site',
     'local_operation_status',
+    'get_log_aggregates',
+    'fetch_log_window',
   ],
 
   contributes: {
