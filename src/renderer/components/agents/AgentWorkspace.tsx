@@ -4,8 +4,17 @@ import { AgentWorkspaceSettings } from './AgentWorkspaceSettings';
 import { AgentRunList } from './AgentRunList';
 import { AgentRunModal } from './AgentRunModal';
 import { IPC_CHANNELS } from '../../../common/constants';
+import { rendererGql } from '../../utils/rendererGql';
 
-type WorkspaceTab = 'settings' | 'approvals' | 'activity';
+type WorkspaceTab = 'settings' | 'approvals' | 'activity' | 'tools';
+
+interface AgentToolEntry {
+  toolName: string;
+  description: string;
+  executionMode: string;
+  permissionTier: number;
+  inputSchema: string;
+}
 
 interface WorkspaceProps {
   agentId: string;
@@ -19,6 +28,8 @@ interface WorkspaceState {
   status: AgentStatus | null;
   running: boolean;
   showRunModal: boolean;
+  tools: AgentToolEntry[] | null;   // null = not yet fetched
+  toolsLoading: boolean;
 }
 
 const ACCENTS: Record<string, string> = {
@@ -35,6 +46,8 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     status: null,
     running: false,
     showRunModal: false,
+    tools: null,
+    toolsLoading: false,
   };
   private unsub!: () => void;
 
@@ -51,6 +64,83 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
 
   componentWillUnmount() {
     agentStore.unsubscribe(this.unsub);
+  }
+
+  private async loadTools() {
+    if (this.state.tools !== null || this.state.toolsLoading) return;
+    this.setState({ toolsLoading: true });
+    try {
+      const result = await rendererGql<{ nexusListAgentTools: Array<{ agentName: string; tools: AgentToolEntry[] }> }>(
+        `{ nexusListAgentTools { agentName tools { toolName description executionMode permissionTier inputSchema } } }`
+      );
+      const group = result.nexusListAgentTools.find(g => g.agentName === this.props.agentId);
+      this.setState({ tools: group?.tools ?? [], toolsLoading: false });
+    } catch {
+      this.setState({ tools: [], toolsLoading: false });
+    }
+  }
+
+  private renderToolsTab() {
+    const { agentId } = this.props;
+    const { tools, toolsLoading } = this.state;
+
+    if (toolsLoading) {
+      return React.createElement('div', { style: { color: 'var(--ag-text-muted)', padding: '40px 0', textAlign: 'center' as const } }, 'Loading tools…');
+    }
+
+    if (!tools || tools.length === 0) {
+      return React.createElement('div', { style: { color: 'var(--ag-text-muted)', padding: '40px 0', textAlign: 'center' as const } },
+        'This agent has no contributed MCP/CLI tools.'
+      );
+    }
+
+    const tierLabel = (tier: number) => tier >= 3 ? 'T3 · Destructive' : tier === 2 ? 'T2 · Modifying' : 'T1 · Read-only';
+    const tierColor = (tier: number) => tier >= 3 ? '#f2666e' : tier === 2 ? '#f0b52e' : '#4ade9b';
+
+    return React.createElement('div', null,
+      React.createElement('div', { style: { color: 'var(--ag-text-muted)', fontSize: 13, marginBottom: 18 } },
+        `${tools.length} tool${tools.length !== 1 ? 's' : ''} contributed by this agent — accessible via MCP and the nexus CLI.`
+      ),
+      ...tools.map(tool => {
+        const mcpName = `agent__${agentId}__${tool.toolName}`;
+        return React.createElement('div', {
+          key: tool.toolName,
+          style: {
+            background: 'var(--ag-bg-card)', border: '1px solid var(--ag-border)',
+            borderRadius: 12, padding: '16px 20px', marginBottom: 10,
+          },
+        },
+          // Header row: tool name + tier badge + mode badge
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' as const } },
+            React.createElement('span', { style: { fontSize: 14, fontWeight: 700, color: 'var(--ag-text-primary)' } },
+              tool.toolName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+            ),
+            React.createElement('span', {
+              style: {
+                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 5,
+                background: `${tierColor(tool.permissionTier)}22`, color: tierColor(tool.permissionTier),
+              },
+            }, tierLabel(tool.permissionTier)),
+            React.createElement('span', {
+              style: {
+                fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5,
+                background: 'var(--ag-bg-inset)', color: 'var(--ag-text-muted)',
+              },
+            }, tool.executionMode),
+          ),
+          // Description
+          React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-text-secondary)', marginBottom: 10 } }, tool.description),
+          // MCP name
+          React.createElement('div', {
+            style: {
+              fontFamily: 'monospace', fontSize: 12, color: 'var(--ag-teal)',
+              background: 'var(--ag-bg-inset)', padding: '6px 10px', borderRadius: 6,
+              userSelect: 'all' as const,
+            },
+          }, mcpName),
+        );
+      }),
+    );
   }
 
   private renderHeader() {
@@ -165,6 +255,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
       { id: 'settings',  label: 'Settings' },
       { id: 'approvals', label: 'Approvals', badge: pendingCount > 0 ? pendingCount : undefined },
       { id: 'activity',  label: 'Activity' },
+      { id: 'tools',     label: 'Tools' },
     ];
 
     return React.createElement('div', {
@@ -173,7 +264,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
       ...tabs.map(tab =>
         React.createElement('button', {
           key: tab.id,
-          onClick: () => this.setState({ activeTab: tab.id }),
+          onClick: () => { this.setState({ activeTab: tab.id }); if (tab.id === 'tools') this.loadTools(); },
           style: {
             background: 'none', border: 'none', padding: '0 0 12px', marginRight: 28,
             fontSize: 14, fontWeight: activeTab === tab.id ? 700 : 500,
@@ -249,6 +340,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         electron: this.props.electron,
       }),
       activeTab === 'settings'  && React.createElement(AgentWorkspaceSettings, { agentId, electron: this.props.electron }),
+      activeTab === 'tools'     && this.renderToolsTab(),
 
       // Run now site-selection modal
       showRunModal && settings.enabled && React.createElement(AgentRunModal, {
