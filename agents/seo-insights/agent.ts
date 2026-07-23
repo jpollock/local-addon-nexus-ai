@@ -1778,10 +1778,22 @@ echo json_encode(array_map(function($p){
       if (!isWpe) {
         try {
           const linkResult = await tools.invoke('local_wpe_link', { site: siteName }) as string;
-          // Response: "## WPE Link for ...\n- **wpe:** nitropack3"
+          // Response: "## WPE Link for ...\n- **wpe:** <installName or UUID>"
           const match = typeof linkResult === 'string' && linkResult.match(/\*\*\w+:\*\*\s+(\S+)/);
           if (match?.[1]) {
-            logSiteId = match[1];
+            let candidate = match[1];
+            // If we got a UUID instead of an install name, resolve it via graph.db
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate);
+            if (isUuid) {
+              try {
+                const rows = parseFleetSqlRows(await tools.invoke('fleet_sql', {
+                  query: `SELECT name FROM sites WHERE source = 'wpe' AND remote_install_id = ? LIMIT 1`,
+                  params: [candidate],
+                }) as string);
+                if (rows[0]?.name) candidate = rows[0].name;
+              } catch { /* keep UUID */ }
+            }
+            logSiteId = candidate;
             log.info(`[LOG] Resolved linked WPE install for "${siteName}": ${logSiteId}`);
           }
         } catch { /* no link — use local site name, log data will likely be absent */ }
