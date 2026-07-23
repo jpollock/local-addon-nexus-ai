@@ -18,7 +18,7 @@ interface AgentRunListState {
 
 function formatTime(ms: number): string {
   const d = new Date(ms);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 function formatDay(ms: number): string {
