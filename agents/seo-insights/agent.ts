@@ -503,6 +503,7 @@ export default defineAgent({
     'local_operation_status',
     'get_log_aggregates',
     'fetch_log_window',
+    'local_wpe_link',
   ],
 
   contributes: {
@@ -1770,10 +1771,26 @@ echo json_encode(array_map(function($p){
         });
       }
 
+      // Resolve log siteId — always the WPE install name.
+      // For WPE sites: siteName IS the install name.
+      // For local sites linked to WPE: resolve the linked install name via local_wpe_link.
+      let logSiteId = siteName;
+      if (!isWpe) {
+        try {
+          const linkResult = await tools.invoke('local_wpe_link', { site: siteName }) as string;
+          // Response: "## WPE Link for ...\n- **wpe:** nitropack3"
+          const match = typeof linkResult === 'string' && linkResult.match(/\*\*\w+:\*\*\s+(\S+)/);
+          if (match?.[1]) {
+            logSiteId = match[1];
+            log.info(`[LOG] Resolved linked WPE install for "${siteName}": ${logSiteId}`);
+          }
+        } catch { /* no link — use local site name, log data will likely be absent */ }
+      }
+
       // Traffic Intelligence from log-processor (graceful skip if no data)
       let logSection: string | null = null;
       try {
-        logSection = await getLogInsights(siteName, tools, log);
+        logSection = await getLogInsights(logSiteId, tools, log);
       } catch (err: unknown) {
         log.warn(`[LOG] getLogInsights failed: ${(err as Error).message}`);
       }
