@@ -1,6 +1,17 @@
 import type Database from 'better-sqlite3';
 import type { AgentStateHandle, AgentResult } from '../agent-sdk/types';
 
+export interface AgentRunRow {
+  id: number;
+  agentName: string;
+  startedAt: number;
+  finishedAt: number;
+  status: 'success' | 'error' | 'timeout';
+  error?: string;
+  summary?: string;
+  findingsCount: number;
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS agent_state (
   agent_name  TEXT    NOT NULL,
@@ -16,7 +27,9 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   started_at  INTEGER NOT NULL,
   finished_at INTEGER NOT NULL,
   status      TEXT    NOT NULL,
-  error       TEXT
+  error       TEXT,
+  summary     TEXT,
+  findings_count INTEGER DEFAULT 0
 );
 `;
 
@@ -26,6 +39,9 @@ export class AgentStateStore {
   constructor(db: Database.Database) {
     this.db = db;
     this.db.exec(SCHEMA);
+    // Migrations: add columns introduced after initial schema
+    try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN summary TEXT`); } catch {}
+    try { this.db.exec(`ALTER TABLE agent_runs ADD COLUMN findings_count INTEGER DEFAULT 0`); } catch {}
   }
 
   get<T>(agentName: string, key: string): T | undefined {
@@ -77,9 +93,10 @@ export class AgentStateStore {
   }
 
   recordRun(result: AgentResult): void {
+    const findingsCount = result.findings?.length ?? 0;
     this.db
-      .prepare('INSERT INTO agent_runs (agent_name, started_at, finished_at, status, error) VALUES (?, ?, ?, ?, ?)')
-      .run(result.agentName, result.startedAt, result.finishedAt, result.status, result.error ?? null);
+      .prepare('INSERT INTO agent_runs (agent_name, started_at, finished_at, status, error, summary, findings_count) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(result.agentName, result.startedAt, result.finishedAt, result.status, result.error ?? null, result.summary ?? null, findingsCount);
 
     this.db.prepare(`
       DELETE FROM agent_runs
@@ -102,5 +119,24 @@ export class AgentStateStore {
       status: row.status as AgentResult['status'],
       error: row.error ?? undefined,
     };
+  }
+
+  getRunHistory(agentName: string, limit = 20): AgentRunRow[] {
+    const rows = this.db
+      .prepare('SELECT * FROM agent_runs WHERE agent_name = ? ORDER BY id DESC LIMIT ?')
+      .all(agentName, limit) as Array<{
+        id: number; agent_name: string; started_at: number; finished_at: number;
+        status: string; error: string | null; summary: string | null; findings_count: number;
+      }>;
+    return rows.map(r => ({
+      id: r.id,
+      agentName: r.agent_name,
+      startedAt: r.started_at,
+      finishedAt: r.finished_at,
+      status: r.status as 'success' | 'error' | 'timeout',
+      error: r.error ?? undefined,
+      summary: r.summary ?? undefined,
+      findingsCount: r.findings_count ?? 0,
+    }));
   }
 }
