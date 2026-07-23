@@ -4501,9 +4501,15 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     return { ok: true };
   });
 
-  safeHandle(IPC_CHANNELS.AGENT_RUN_NOW, async (_event, { agentId, siteNames }: { agentId: string; siteNames: string[] }) => {
+  safeHandle(IPC_CHANNELS.AGENT_RUN_NOW, async (_event, { agentId, siteNames, fullRun }: { agentId: string; siteNames: string[]; fullRun?: boolean }) => {
     const runId = `run-${Date.now()}`;
     const agent = deps.nexusServices?.agentRegistry?.get(agentId);
+
+    // Guard: refuse to run a disabled agent
+    if (getAgentSetting(agentId, 'enabled') === false) {
+      return { error: 'agent-disabled', message: `Agent ${agentId} is disabled` };
+    }
+
     const agentName = agent?.name || agentId;
 
     // Broadcast run-started to all renderer windows immediately
@@ -4549,7 +4555,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
             namespace: 'wpe', type: 'sync.completed', key: 'wpe:sync.completed',
             siteId: siteName, payload: { installName: siteName }, createdAt: Date.now(),
           };
-          lastRunResult = await runner.run(agent, scopedEvent);
+          lastRunResult = await runner.run(agent, scopedEvent, { fullRun: fullRun ?? false });
         }
       } catch (err: any) {
         if (!signal.aborted) {

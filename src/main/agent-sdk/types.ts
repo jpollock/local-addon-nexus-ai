@@ -93,6 +93,8 @@ export interface AgentContext {
   credentials: AgentCredentials;
   /** Platform-managed SQLite databases scoped to this agent. */
   db: AgentDbHandle;
+  /** True when the user explicitly requested a full (non-incremental) run from the Run Now modal. */
+  fullRun: boolean;
 }
 
 export interface AgentDefinition {
@@ -108,6 +110,8 @@ export interface AgentDefinition {
   credentials?: import('../credentials/types').CredentialDeclaration[];
   run: (ctx: AgentContext) => Promise<Partial<AgentResult> | void>;
   onError?: (err: Error, ctx: AgentContext) => Promise<void>;
+  /** When true, the Run Now modal shows an "Always do full run" toggle. */
+  supportsFullRun?: boolean;
 }
 
 export interface AgentResult {

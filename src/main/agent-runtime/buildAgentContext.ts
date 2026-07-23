@@ -24,6 +24,8 @@ export interface AgentContextDeps {
   logDir: string;
   /** Platform-managed SQLite connection cache. Optional — falls back to per-call in-memory databases. */
   dbManager?: AgentDbManager;
+  /** True when the user explicitly requested a full (non-incremental) run from the Run Now modal. */
+  fullRun?: boolean;
 }
 
 export function buildAgentContext(deps: AgentContextDeps): {
@@ -33,7 +35,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   accActions: AgentAction[];
   accSites: Record<string, { status: string; findings: Finding[] }>;
 } {
-  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager } = deps;
+  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun } = deps;
   const agentName = agent.name;
 
   const toolProvider = new NexusToolProvider(
@@ -156,6 +158,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
     autonomy: getAgentAutonomy(agentName),
     credentials,
     db,
+    fullRun: fullRun ?? false,
   };
 
   return { ctx, agentLog, accFindings, accActions, accSites };

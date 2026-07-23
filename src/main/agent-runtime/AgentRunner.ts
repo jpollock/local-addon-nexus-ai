@@ -49,7 +49,7 @@ export class AgentRunner {
     this.resolvedProvider = provider;
   }
 
-  async run(agent: AgentDefinition, event?: NexusEvent): Promise<AgentResult> {
+  async run(agent: AgentDefinition, event?: NexusEvent, options?: { fullRun?: boolean }): Promise<AgentResult> {
     const startedAt = Date.now();
     const timeoutMs = agent.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const agentName = agent.name;
@@ -63,6 +63,7 @@ export class AgentRunner {
       resolvedProvider: this.resolvedProvider,
       logDir: path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agents', agentName, 'logs'),
       dbManager: this.dbManager,
+      fullRun: options?.fullRun ?? false,
     });
 
     let status: AgentResult['status'] = 'success';

@@ -37,6 +37,8 @@ type MockContextOverrides = {
   autonomy?: AgentAutonomy
   /** Trigger to use (default: a synthetic cron trigger). */
   trigger?: Trigger
+  /** Whether this is a full (non-incremental) run (default: false). */
+  fullRun?: boolean
 }
 
 function makeMockToolProvider(mocks: ToolMocks = {}): ToolProvider {
@@ -148,6 +150,7 @@ export function mockContext(overrides: MockContextOverrides = {}): AgentContext 
       // getSecret intentionally absent — tests that exercise the connected path must provide a mock
     },
     db: makeMockDbHandle(),
+    fullRun: overrides.fullRun ?? false,
   }
 }
 
