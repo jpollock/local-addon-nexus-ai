@@ -166,3 +166,80 @@ This is NOT documented in `src/main/agent-sdk/types.ts`. `AgentToolProvider.invo
 `executionMode: 'run'` as currently implemented is not useful for contributed tools. Should be removed from the type or clearly documented as "triggers the agent's full scheduled run, not the handler."
 
 **Commit:** executionMode fixed in agent.ts
+
+---
+
+## Complete SDK Friction Log — seo-insights development (2026-07-20 to 2026-07-22)
+
+### F1: `schema` field doesn't exist on `ContributedToolDefinition`
+The worktree scaffold used `schema: ZodSchema<TArgs>` but the rebase dropped Zod. Fixed by using plain TypeScript type annotations on handler args and `inputSchema: Record<string, unknown>` for JSON Schema. **Decision:** no Zod dependency in the SDK runtime.
+
+### F2: `args: unknown` in all contributed tool handlers
+`AgentContributes.tools` was typed as `Record<string, ContributedToolDefinition>` which erased `TArgs` to `unknown`. Fixed by changing to `Record<string, ContributedToolDefinition<any>>`. Handlers now receive typed args via explicit TypeScript annotations.
+
+### F3: `siteStatus()` enum too narrow
+Only accepted `'running' | 'clean' | 'findings' | 'escalated' | 'error'`. Fixed by widening to `| string` in `AgentLogger` interface.
+
+### F4: `nexus agent tools build` required `agent.js`, not `agent.ts`
+Build command loaded `agent.js` only. Fixed: falls back to ts-node loading of `agent.ts`. Same issue existed in `AgentDispatcher.loadModule()` — fixed separately (F12).
+
+### F5: Generated manifest had `inputSchema: {}`
+Build command read `tool.schema` (Zod) but agents use `tool.inputSchema` (plain JSON Schema). Fixed: build command checks `tool.inputSchema` as fallback.
+
+### F6: `nexus agent validate` skips Phase 2 tool-name validation
+**Already documented above.**
+
+### F7: `ctx.tools.invoke()` return type is undocumented
+**Already documented above.** Extended finding: tool outputs vary widely — `get_index_status` returns markdown string, `wp_eval` returns parsed JSON object when PHP echos valid JSON, `local_list_sites` returns markdown with different format for running vs halted sites. The pattern `typeof raw === 'string' ? raw : JSON.stringify(raw)` is required defensively everywhere.
+
+### F8: TypeScript agents fail to load — `@nexus-ai/agent-sdk` alias not resolved
+**Already documented above.**
+
+### F9: Site selector passes WPE install names; agent must follow sentinel's `event.payload.installName` pattern
+Agent was iterating all sites instead of reading the selected site from `ctx.event.payload.installName`. Fixed by adopting the sentinel pattern. `wpe:sync.completed` fires for both UI site selector AND all background WPE syncs — the 6-hour cooldown (now removed for testing) prevents re-analyzing the same site.
+
+### F10: `get_index_status` only resolves Local sites; WPE sites need `fleet_sql` lookup
+`resolveSite()` only searches Local's site registry. Fixed by resolving WPE sites via `fleet_sql` first, then routing to the appropriate analysis path.
+
+### F11: `String(obj)` on parsed JSON result returns `[object Object]`
+`local_operation_status` returns a parsed JS object (NexusToolProvider auto-parses JSON). Using `String(result)` produced `[object Object]`, breaking the pull poll status detection. Fixed by using `typeof raw === 'string' ? raw : JSON.stringify(raw)` and accessing `.status` field directly.
+
+### F12: `AgentDispatcher.loadModule()` only loaded `.js`, not `.ts`
+Fixed: falls back to `agent.ts` via the ts-node registration that `AgentRegistry` already sets up. Required `fs.existsSync(jsPath)` check.
+
+### F13: Compiled SDK types in `lib/` lagged `src/` changes
+`AgentContext.credentials` and `AgentDefinition.credentials` were in source but not in the distributed bundle until `npm run build` ran. Agent authors hitting type errors from stale `lib/`.
+
+### F14: `scopes` type mismatch between `NexusState` (optional) and `CredentialConsentModal` (required)
+Fixed by coercing `scopes ?? []` at the render callsite in `NexusOverview.tsx`.
+
+### F15: `CredentialDeclaration` has no `scopeLabels` field
+The spec mentioned passing scope labels to the consent UI. The type doesn't define it — omitted from the enrichment call.
+
+### F16: `executionMode: 'run'` in contributed tools calls `agent.run()`, not the handler
+**Already documented above.**
+
+### F17: GSC API returns 0 rows with no diagnostic
+`detect_cannibalization` returned "0 query+page pairs analyzed" with no indication of whether the property has no traffic or the API call failed silently. Needs a raw impression count in the output so users can distinguish "no cannibalization" from "no data."
+
+### F18: `wp_eval` stdout maxBuffer exceeded on large sites
+`analyzeContent()` fetched full `post_content` for 1000 posts in one `wp_eval` call. Fixed by routing through `get_all_site_documents(full_content: true)` which reads from the sqlite-vec index — no PHP execution, no buffer limit, works on any corpus size.
+
+---
+
+## Status summary
+
+| Finding | Fixed | Remaining work |
+|---------|-------|----------------|
+| F1–F5 | ✅ | — |
+| F6 | ⚠️ | Implement Phase 2 of `nexus agent validate` |
+| F7 | ⚠️ | Document `invoke()` contract in SDK types.ts |
+| F8 | ✅ | — |
+| F9–F12 | ✅ | — |
+| F13 | ⚠️ | SDK rebuild step awareness for agent authors |
+| F14–F15 | ✅ / minor | — |
+| F16 | ✅ | Remove `'run'` from `ExecutionMode` or document it clearly |
+| F17 | ⚠️ | Add raw row count to `detect_cannibalization` output |
+| F18 | ✅ | — |
+| Gap 1 | ✅ | — |
+| Gap 2 | ⚠️ | Add model/version fields to `IndexEntry` |
