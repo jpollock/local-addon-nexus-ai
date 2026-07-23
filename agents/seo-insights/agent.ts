@@ -62,6 +62,19 @@ function utcToday(): string { return new Date().toISOString().slice(0, 10); }
 
 type ToolInvoker = { invoke(name: string, args: unknown): Promise<unknown> };
 
+/** Parse get_log_aggregates result regardless of whether NexusToolProvider auto-parsed it. */
+function parseLogAggregates(raw: unknown): { aggregates: Record<string, DayAggregate>; missingDaysNote?: string } | null {
+  if (!raw) return null;
+  // Already parsed by NexusToolProvider
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = raw as any;
+  if (r && typeof r === 'object' && ('aggregates' in r || 'siteId' in r)) return r;
+  // Wrapped in MCP content envelope
+  const text = typeof r === 'string' ? r : r?.content?.[0]?.text as string | undefined;
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getLogInsights(siteId: string, tools: ToolInvoker, log: any): Promise<string | null> {
   const today = utcToday();
@@ -75,12 +88,18 @@ async function getLogInsights(siteId: string, tools: ToolInvoker, log: any): Pro
     return null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const text = (rawResult as any)?.content?.[0]?.text as string | undefined;
-  if (!text) return null;
-
+  // NexusToolProvider auto-parses JSON responses — rawResult may be the parsed object
+  // directly, or wrapped in { content: [{ text: '...' }] } (F7-SDK)
   let parsed: { aggregates?: Record<string, DayAggregate>; missingDays?: string[] };
-  try { parsed = JSON.parse(text); } catch { return null; }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = rawResult as any;
+  if (raw && typeof raw === 'object' && ('aggregates' in raw || 'siteId' in raw)) {
+    parsed = raw;
+  } else {
+    const text = typeof raw === 'string' ? raw : raw?.content?.[0]?.text as string | undefined;
+    if (!text) return null;
+    try { parsed = JSON.parse(text); } catch { return null; }
+  }
 
   const aggregates = Object.values(parsed.aggregates ?? {});
   const coverage = aggregates.length;
@@ -1392,12 +1411,10 @@ echo json_encode(array_map(function($p){
           let aggregates: DayAggregate[];
           let missingNote = '';
           try {
-            const raw = await ctx.tools.invoke('get_log_aggregates', { siteId: args.siteId, from, to }) as { content: Array<{ text: string }> };
-            const parsed = JSON.parse(raw.content[0].text) as {
-              aggregates: Record<string, unknown>;
-              missingDaysNote?: string;
-            };
-            aggregates = Object.values(parsed.aggregates) as DayAggregate[];
+            const raw = await ctx.tools.invoke('get_log_aggregates', { siteId: args.siteId, from, to });
+            const parsed = parseLogAggregates(raw);
+            if (!parsed) throw new Error('empty or unparseable response');
+            aggregates = Object.values(parsed.aggregates ?? {}) as DayAggregate[];
             missingNote = parsed.missingDaysNote ?? '';
           } catch (e: unknown) {
             return ok(`⚠ Could not fetch log aggregates for "${args.siteId}": ${(e as Error).message}\n\nRun sync_access_logs first via the log-processor agent.`);
@@ -1489,12 +1506,10 @@ echo json_encode(array_map(function($p){
           let aggregates: DayAggregate[];
           let missingNote = '';
           try {
-            const raw = await ctx.tools.invoke('get_log_aggregates', { siteId: args.siteId, from, to }) as { content: Array<{ text: string }> };
-            const parsed = JSON.parse(raw.content[0].text) as {
-              aggregates: Record<string, unknown>;
-              missingDaysNote?: string;
-            };
-            aggregates = Object.values(parsed.aggregates) as DayAggregate[];
+            const raw = await ctx.tools.invoke('get_log_aggregates', { siteId: args.siteId, from, to });
+            const parsed = parseLogAggregates(raw);
+            if (!parsed) throw new Error('empty or unparseable response');
+            aggregates = Object.values(parsed.aggregates ?? {}) as DayAggregate[];
             missingNote = parsed.missingDaysNote ?? '';
           } catch (e: unknown) {
             return ok(`⚠ Could not fetch log aggregates for "${args.siteId}": ${(e as Error).message}\n\nRun sync_access_logs first via the log-processor agent.`);
@@ -1568,12 +1583,10 @@ echo json_encode(array_map(function($p){
           let aggregates: DayAggregate[];
           let missingNote = '';
           try {
-            const raw = await ctx.tools.invoke('get_log_aggregates', { siteId: args.siteId, from, to }) as { content: Array<{ text: string }> };
-            const parsed = JSON.parse(raw.content[0].text) as {
-              aggregates: Record<string, unknown>;
-              missingDaysNote?: string;
-            };
-            aggregates = Object.values(parsed.aggregates) as DayAggregate[];
+            const raw = await ctx.tools.invoke('get_log_aggregates', { siteId: args.siteId, from, to });
+            const parsed = parseLogAggregates(raw);
+            if (!parsed) throw new Error('empty or unparseable response');
+            aggregates = Object.values(parsed.aggregates ?? {}) as DayAggregate[];
             missingNote = parsed.missingDaysNote ?? '';
           } catch (e: unknown) {
             return ok(`⚠ Could not fetch log aggregates for "${args.siteId}": ${(e as Error).message}\n\nRun sync_access_logs first via the log-processor agent.`);
