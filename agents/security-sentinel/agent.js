@@ -309,6 +309,7 @@ module.exports = {
     'local_create_site', 'local_clone_site', 'local_start_site', 'local_restart_site',
     'local_wpe_pull', 'local_wpe_push',
     'local_operation_status', 'compare_sites', 'wp_plugin_list', 'wp_eval',
+    'get_log_aggregates', 'fetch_log_window',
   ],
   contributes: { tools: contributedTools },
 
