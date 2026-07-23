@@ -464,11 +464,18 @@ async function runLogChecks(siteId, tools, log) {
     return { signals: [], attackSummary: null };
   }
 
-  const text = rawResult?.content?.[0]?.text;
-  if (!text) return { signals: [], attackSummary: null };
-
+  // NexusToolProvider auto-parses JSON — rawResult may already be the parsed object
   let parsed;
-  try { parsed = JSON.parse(text); } catch { return { signals: [], attackSummary: null }; }
+  if (rawResult && typeof rawResult === 'object' && ('aggregates' in rawResult || 'siteId' in rawResult)) {
+    parsed = rawResult;
+  } else {
+    const text = typeof rawResult === 'string' ? rawResult : rawResult?.content?.[0]?.text;
+    if (!text) {
+      log.info(`[LOG] get_log_aggregates returned empty response for ${siteId} — skipping log checks`);
+      return { signals: [], attackSummary: null };
+    }
+    try { parsed = JSON.parse(text); } catch { return { signals: [], attackSummary: null }; }
+  }
 
   const aggregates = Object.values(parsed?.aggregates ?? {});
   if (aggregates.length === 0) {
@@ -501,6 +508,8 @@ async function runLogChecks(siteId, tools, log) {
   const topProbes = Object.entries(probePathCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const highProbes = topProbes.filter(([, hits]) => hits > 50);
   const totalEnum  = userRestApiHits + authorScanHits;
+
+  log.info(`[LOG] ${siteId}: ${aggregates.length} days — auth=${totalAuthAttacks} probes=${topProbes.length} enum=${totalEnum} distinctIps=${distinctIps}`);
 
   const signals = [];
 
