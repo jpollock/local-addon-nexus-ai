@@ -520,7 +520,7 @@ async function runLogChecks(siteId, tools, log) {
 
   // Build attack summary string for the Tier 2 synthesizer
   const summaryLines = [
-    `Log corroboration (last 30 days, ${aggregates.length}/${aggregates.length} days):`,
+    `Log corroboration (last 30 days, ${aggregates.length} of 30 days available):`,
     totalAuthAttacks > 0
       ? `- Auth attacks: ${totalLoginPosts} login POSTs, ${totalXmlrpcPosts} xmlrpc POSTs`
       : null,
