@@ -49,10 +49,10 @@ export class AgentCard extends React.Component<AgentCardProps, AgentCardState> {
     const settings = agentStore.getOrInitSettings(agentId);
     const cadenceLabel = CADENCE_LABELS[settings.cadence] || 'Custom schedule';
 
-    const pillLabel = derivedStatus === 'action' ? 'Needs review'
-      : derivedStatus === 'disabled' ? 'Disabled' : 'Healthy';
-    const pillClass = derivedStatus === 'action' ? 'ag-pill--review'
-      : derivedStatus === 'disabled' ? 'ag-pill--disabled' : 'ag-pill--healthy';
+    const isDisabled = derivedStatus === 'disabled';
+    const pendingCount = agentStore.getState().activityEvents.filter(
+      e => e.agentId === agentId && e.status === 'review'
+    ).length;
 
     return React.createElement('div', {
       onClick: onSelect,
@@ -83,12 +83,20 @@ export class AgentCard extends React.Component<AgentCardProps, AgentCardState> {
         // Name + tagline
         React.createElement('div', { style: { flex: 1, minWidth: 0 } },
           React.createElement('div', {
-            style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 },
+            style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' as const },
           },
             React.createElement('span', {
               style: { fontSize: 15.5, fontWeight: 600, color: 'var(--ag-text-primary)', flex: 1 },
             }, status.name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())),
-            React.createElement('span', { className: `ag-pill ${pillClass}` }, pillLabel),
+            // Lifecycle pill
+            React.createElement('span', {
+              className: `ag-pill ${isDisabled ? 'ag-pill--disabled' : 'ag-pill--healthy'}`,
+            }, isDisabled ? 'Disabled' : 'Enabled'),
+            // Workload pill — only when there are pending items
+            !isDisabled && pendingCount > 0 && React.createElement('span', {
+              className: 'ag-pill ag-pill--review',
+              style: { fontSize: 11, padding: '2px 8px' },
+            }, `${pendingCount} need review`),
           ),
           React.createElement('p', {
             style: { fontSize: 12.5, color: 'var(--ag-text-secondary)', margin: 0 },
