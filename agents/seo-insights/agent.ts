@@ -2,7 +2,9 @@ import { defineAgent, cron, on } from '@nexus-ai/agent-sdk';
 
 // Buffer is a Node.js global — not in lib.es2020 typings but always present at agent runtime.
 // eslint-disable-next-line no-var
-declare var Buffer: { from(str: string, encoding: string): { buffer: ArrayBufferLike } };
+declare var Buffer: {
+  from(str: string, encoding: string): { buffer: ArrayBufferLike; byteOffset: number; byteLength: number };
+};
 
 // ---------------------------------------------------------------------------
 // NexusToolProvider.invoke() contract (F7-SDK: undocumented in types.ts):
@@ -61,6 +63,29 @@ function addDays(day: string, n: number): string {
 function utcToday(): string { return new Date().toISOString().slice(0, 10); }
 
 type ToolInvoker = { invoke(name: string, args: unknown): Promise<unknown> };
+
+// ---------------------------------------------------------------------------
+// State keys — per-site / per-property. Agent-global keys meant that on a fleet,
+// binding site B's GSC property silently redirected site A's demand analysis.
+// ---------------------------------------------------------------------------
+// Tunables
+const ANALYSIS_COOLDOWN_MS = 6 * 3600 * 1000;   // per-site; blocks background wpe:sync spam
+const CRON_MAX_SITES = 5;                        // sites per scheduled run
+const TOPIC_CLUSTERS = 10;                       // default k for the report's topical map
+
+const gscPropertyKey = (siteId: string) => `gscProperty:${siteId}`;
+const intentCacheKey = (property: string) => `intentCache:${property}`;
+const inventoryKey   = (siteId: string) => `inventory:${siteId}`;
+const cooldownKeyFor = (siteId: string) => `analyzed:${siteId}`;
+
+/** Soft check that a GSC property plausibly belongs to a site — warn, never block. */
+function propertySiteMismatch(property: string, siteId: string): boolean {
+  const host = property.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+  const hostLabel = (host.split('.')[0] ?? '').toLowerCase();
+  if (!hostLabel) return false;
+  const site = siteId.toLowerCase();
+  return !site.includes(hostLabel) && !hostLabel.includes(site.replace(/[^a-z0-9]+/g, ''));
+}
 
 /** Parse get_log_aggregates result regardless of whether NexusToolProvider auto-parsed it. */
 function parseLogAggregates(raw: unknown): { aggregates: Record<string, DayAggregate>; missingDaysNote?: string } | null {
@@ -222,95 +247,82 @@ async function analyzeContent(
   siteId: string,
   tools: { invoke(name: string, args: unknown): Promise<unknown> },
   staleThresholdDays = 365,
-): Promise<{ posts: PostRecord[]; orphans: PostRecord[]; stale: PostRecord[] }> {
+  warn?: (m: string) => void,
+): Promise<{ posts: PostRecord[]; orphans: PostRecord[]; stale: PostRecord[]; docs: AggDoc[]; truncated: AggDoc[] }> {
   // Use the Nexus content index instead of wp_eval to avoid stdout maxBuffer issues on large sites.
-  // The index stores chunked content (≤500 words per chunk) — no PHP execution, no size limit.
+  // The index stores chunked content (<=500 words per chunk) — no PHP execution, no size limit.
   const rawResult = await tools.invoke('get_all_site_documents', {
     site: siteId,
     include_embeddings: false,
     full_content: true,  // need full chunk text for internal link detection
   });
-  const parsed = (typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult) as {
-    documentCount: number;
-    documents: IndexedDoc[];
-  };
+  const parsed = parseSiteDocuments(rawResult);
 
-  if (!parsed.documentCount || !parsed.documents?.length) {
-    return { posts: [], orphans: [], stale: [] };
+  if (!parsed.documentCount || !parsed.documents.length) {
+    return { posts: [], orphans: [], stale: [], docs: [], truncated: [] };
   }
 
-  // Derive slug from doc.id: format is "wp_{siteId}_{postId}" or "wp_{siteId}_{postId}_chunk_{n}"
-  const extractSlug = (doc: IndexedDoc): string => {
-    // Use title as slug approximation — actual slug not stored in index metadata
-    // Falls back to generating from title
-    try {
-      const meta = JSON.parse(doc.metadata) as Record<string, unknown>;
-      return (meta.slug as string) ?? doc.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    } catch {
-      return doc.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    }
-  };
+  // P0: chunks -> documents. Without this every count below is per-chunk.
+  const docs = aggregateDocuments(parsed.documents, warn);
 
-  // Build PostRecord-compatible objects from indexed docs
-  const posts: PostRecord[] = parsed.documents.map(doc => {
-    let modifiedDate = '';
-    try {
-      const meta = JSON.parse(doc.metadata) as Record<string, unknown>;
-      modifiedDate = (meta.date as string) ?? '';
-    } catch { /* use empty */ }
-    return {
-      ID: doc.postId,
-      post_title: doc.title,
-      post_name: extractSlug(doc),
-      post_date: modifiedDate,
-      post_modified: modifiedDate,
-      post_type: doc.postType,
-      post_content: doc.content,  // first chunk — enough for link detection
-    };
-  });
+  const posts: PostRecord[] = docs.map(d => ({
+    ID: d.postId,
+    post_title: d.title,
+    post_name: d.slug,
+    post_date: d.indexDate,
+    post_modified: d.indexDate,
+    post_type: d.postType,
+    post_content: d.content,
+  }));
 
-  // Build inbound link counts from indexed content
+  const inbound = buildInboundCounts(docs);
+  const orphanDocs = docs.filter(d => (inbound.get(d.postId) ?? 0) === 0);
+  const orphanIds = new Set(orphanDocs.map(d => d.postId));
+  const orphans = posts.filter(p => orphanIds.has(p.ID));
+
+  // Stale detection: index dates are often empty (Gap 2) — only flag when a date exists.
   const staleMs = staleThresholdDays * 86400 * 1000;
   const now = Date.now();
-  const inbound = new Map<string, number>();
-  for (const p of posts) inbound.set(p.post_name, 0);
-  for (const p of posts) {
-    for (const other of posts) {
-      if (other.ID === p.ID) continue;
-      if ((p.post_content ?? '').includes(`/${other.post_name}`)) {
-        inbound.set(other.post_name, (inbound.get(other.post_name) ?? 0) + 1);
-      }
-    }
-  }
-
-  const orphans = posts.filter(p => (inbound.get(p.post_name) ?? 0) === 0);
-  // Stale detection: index dates are often empty (Gap 2) — only flag when date is available
   const stale = posts.filter(p => {
     if (!p.post_modified) return false;
     const ms = new Date(p.post_modified).getTime();
     return ms > 0 && now - ms > staleMs;
   });
-  return { posts, orphans, stale };
+
+  return { posts, orphans, stale, docs, truncated: docs.filter(d => d.possiblyTruncated) };
 }
 
 // ---------------------------------------------------------------------------
 // Sandbox setup for WPE sites (sentinel pattern)
 // ---------------------------------------------------------------------------
 
+/** Stable sandbox name per install — reused across runs.
+ *  Timestamped names minted a new sandbox (holding a full production database
+ *  pull) on every run, and nothing ever deletes them: local_delete_site is
+ *  tier 3. Daily cron x fleet = unbounded disk growth of customer data. */
+function sandboxNameFor(siteName: string): string {
+  return `seo-${siteName.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')}`;
+}
+
 async function createAndPullSandbox(
   siteName: string,
   tools: { invoke(name: string, args: unknown): Promise<unknown> },
   log: { info(msg: string, meta?: Record<string, unknown>): void; warn(msg: string, meta?: Record<string, unknown>): void; error(msg: string, meta?: Record<string, unknown>): void },
 ): Promise<string | null> {
-  const sandboxName = `seo-${siteName}-${Date.now()}`;
-  log.info(`Creating sandbox: ${sandboxName}`);
+  const sandboxName = sandboxNameFor(siteName);
+  log.info(`Preparing sandbox: ${sandboxName}`);
 
   try {
     await tools.invoke('local_create_site', { name: sandboxName });
     log.info(`Sandbox created`);
   } catch (e: unknown) {
-    log.warn(`Could not create sandbox: ${(e as Error).message}`);
-    return null;
+    const msg = (e as Error).message;
+    if (/exist/i.test(msg)) {
+      log.info(`Reusing existing sandbox: ${sandboxName}`);
+    } else {
+      log.warn(`Could not create sandbox: ${msg}`);
+      return null;
+    }
   }
 
   try {
@@ -385,6 +397,237 @@ async function waitForIndex(
 }
 
 // ---------------------------------------------------------------------------
+// Embedding decode — P0.
+// Buffer.from(base64) for payloads <4KB is allocated inside Node's shared 8KB
+// pool at a NONZERO byteOffset. A 384d float32 embedding is 1,536 bytes, so it
+// is essentially always pooled. `new Float32Array(buf.buffer)` therefore reads
+// the whole pool from offset 0 — neighbouring allocations, not the embedding
+// (observed: 2048 floats of garbage instead of 384 real ones).
+// Always slice by byteOffset/byteLength; copy when the offset isn't 4-aligned.
+// ---------------------------------------------------------------------------
+
+export const EXPECTED_EMBEDDING_DIM = 384;   // all-MiniLM-L6-v2-quantized
+
+function decodeEmbedding(b64: string): Float32Array {
+  const buf = Buffer.from(b64, 'base64');
+  if (buf.byteOffset % 4 === 0) {
+    return new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.byteLength / 4));
+  }
+  const copy = new ArrayBuffer(buf.byteLength);
+  new Uint8Array(copy).set(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength));
+  return new Float32Array(copy);
+}
+
+/** Decode + dimension guard. A wrong-length vector is self-evidently a decode
+ *  fault; fail loudly rather than silently clustering noise. */
+function decodeEmbeddingChecked(b64: string, label: string, warn?: (m: string) => void): Float32Array | null {
+  if (!b64) return null;
+  const v = decodeEmbedding(b64);
+  if (v.length !== EXPECTED_EMBEDDING_DIM) {
+    warn?.(`[SEO] Embedding for ${label} decoded to ${v.length} dims (expected ${EXPECTED_EMBEDDING_DIM}) — skipping`);
+    return null;
+  }
+  return v;
+}
+
+// ---------------------------------------------------------------------------
+// Chunk -> document aggregation — P0.
+// The index stores <=500-word CHUNKS with ids "wp_{site}_{postId}" or
+// "wp_{site}_{postId}_chunk_{n}". Every analysis here operates on DOCUMENTS:
+// group by postId, mean-pool chunk vectors, concatenate chunk text in order.
+// Without this: overlap flags chunk-2-vs-chunk-3 of the same post at ~99%,
+// clusters are weighted by post length, and "posts analyzed" counts chunks.
+// ---------------------------------------------------------------------------
+
+type RawIndexDoc = {
+  id: string; postId: number; postType: string; title: string;
+  content?: string; metadata?: string; embedding?: string;
+};
+
+type AggDoc = {
+  postId: number;
+  postType: string;
+  title: string;
+  slug: string;
+  indexDate: string;
+  content: string;
+  chunkCount: number;
+  possiblyTruncated: boolean;   // single unchunked doc w/ substantial content = webhook-path artifact
+  vec: Float32Array | null;     // mean-pooled document vector
+};
+
+const CONTENT_CAP = 12_000;     // chars retained per document for link detection
+
+function chunkOrdinal(id: string): number {
+  const m = /_chunk_(\d+)$/.exec(id ?? '');
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function metaField(doc: RawIndexDoc, field: string): string {
+  try {
+    const meta = JSON.parse(doc.metadata ?? '') as Record<string, unknown>;
+    const v = meta[field];
+    return typeof v === 'string' ? v : '';
+  } catch { return ''; }
+}
+
+function aggregateDocuments(documents: RawIndexDoc[], warn?: (m: string) => void): AggDoc[] {
+  const byPost = new Map<number, RawIndexDoc[]>();
+  for (const d of documents ?? []) {
+    if (d == null || typeof d.postId !== 'number') continue;
+    const arr = byPost.get(d.postId);
+    if (arr) arr.push(d); else byPost.set(d.postId, [d]);
+  }
+
+  const out: AggDoc[] = [];
+  for (const [postId, chunks] of byPost) {
+    chunks.sort((a, b) => chunkOrdinal(a.id) - chunkOrdinal(b.id));
+    const first = chunks[0];
+
+    // Mean-pool chunk vectors into one document vector.
+    let vec: Float32Array | null = null;
+    const decoded: Float32Array[] = [];
+    for (const c of chunks) {
+      if (!c.embedding) continue;
+      const v = decodeEmbeddingChecked(c.embedding, `post ${postId} chunk ${chunkOrdinal(c.id)}`, warn);
+      if (v) decoded.push(v);
+    }
+    if (decoded.length > 0) {
+      const dim = decoded[0].length;
+      vec = new Float32Array(dim);
+      for (const v of decoded) for (let i = 0; i < dim; i++) vec[i] += v[i] / decoded.length;
+    }
+
+    let content = '';
+    for (const c of chunks) {
+      if (!c.content) continue;
+      if (content.length >= CONTENT_CAP) break;
+      content += (content ? '\n' : '') + c.content;
+    }
+    content = content.slice(0, CONTENT_CAP);
+
+    // Webhook-incremental indexing writes a single unchunked ~256-token doc.
+    // Lower-fidelity vector -> excluded from similarity scoring.
+    const possiblyTruncated =
+      chunks.length === 1 && !/_chunk_\d+$/.test(first.id ?? '') && (first.content?.length ?? 0) >= 1000;
+
+    out.push({
+      postId,
+      postType: first.postType,
+      title: first.title,
+      slug: metaField(first, 'slug') || slugify(first.title ?? ''),
+      indexDate: metaField(first, 'date'),
+      content,
+      chunkCount: chunks.length,
+      possiblyTruncated,
+      vec,
+    });
+  }
+  return out;
+}
+
+/** Normalize get_all_site_documents output (SDK may hand back parsed JSON or a string). */
+function parseSiteDocuments(raw: unknown): { documentCount: number; documents: RawIndexDoc[] } {
+  const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as
+    { documentCount?: number; documents?: RawIndexDoc[] } | null;
+  return { documentCount: parsed?.documentCount ?? 0, documents: parsed?.documents ?? [] };
+}
+
+// ---------------------------------------------------------------------------
+// Internal link detection — boundary-aware so /local doesn't match /local-labs,
+// and single-pass per document (was O(n^2) String.includes over full text).
+// ---------------------------------------------------------------------------
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Count inbound internal links per postId in one pass per document. */
+function buildInboundCounts(docs: AggDoc[]): Map<number, number> {
+  const inbound = new Map<number, number>();
+  for (const d of docs) inbound.set(d.postId, 0);
+
+  const bySlug = new Map<string, number>();
+  for (const d of docs) if (d.slug && !bySlug.has(d.slug)) bySlug.set(d.slug, d.postId);
+  const slugs = Array.from(bySlug.keys()).filter(Boolean);
+  if (slugs.length === 0) return inbound;
+
+  // One alternation, longest-first so /local-labs wins over /local.
+  slugs.sort((a, b) => b.length - a.length);
+  const rx = new RegExp(`/(${slugs.map(escapeRegex).join('|')})(?=[/"'?#\\s)>]|$)`, 'gi');
+
+  for (const d of docs) {
+    if (!d.content) continue;
+    const seen = new Set<number>();
+    rx.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = rx.exec(d.content)) !== null) {
+      const target = bySlug.get(m[1].toLowerCase());
+      if (target === undefined || target === d.postId) continue;
+      seen.add(target);   // count each (source -> target) pair once
+    }
+    for (const t of seen) inbound.set(t, (inbound.get(t) ?? 0) + 1);
+  }
+  return inbound;
+}
+
+// ---------------------------------------------------------------------------
+// Cluster labelling — TF-IDF over member documents, so a label describes what
+// DISTINGUISHES the cluster rather than what the whole site is about.
+// ---------------------------------------------------------------------------
+
+const STOPWORDS = new Set([
+  'the','a','an','and','or','but','if','then','else','for','of','to','in','on','at','by','with','from','as',
+  'is','are','was','were','be','been','being','it','its','this','that','these','those','you','your','we','our',
+  'they','their','he','she','his','her','i','my','me','us','them','what','which','who','whom','how','why','when',
+  'where','all','any','both','each','more','most','other','some','such','not','no','nor','only','own','same',
+  'so','than','too','very','can','will','just','about','into','over','after','before','between','out','up',
+  'down','off','above','below','again','once','here','there','have','has','had','do','does','did','get','got',
+  'like','also','use','using','used','one','two','new','make','made','way','via','part','post','page',
+]);
+
+function tokenize(s: string): string[] {
+  return (s.toLowerCase().match(/[a-z][a-z0-9]{2,}/g) ?? []).filter(t => !STOPWORDS.has(t));
+}
+
+function tfidfLabels(clusters: AggDoc[][], topN = 3): string[] {
+  const docTerms = clusters.flat().map(d => new Set(tokenize(`${d.title} ${d.content.slice(0, 800)}`)));
+  const N = docTerms.length || 1;
+  const df = new Map<string, number>();
+  for (const terms of docTerms) for (const t of terms) df.set(t, (df.get(t) ?? 0) + 1);
+
+  return clusters.map(members => {
+    const tf = new Map<string, number>();
+    for (const d of members) {
+      // Title double-weighted — it's the most topical text on the document.
+      for (const t of tokenize(`${d.title} ${d.title} ${d.content.slice(0, 800)}`)) {
+        tf.set(t, (tf.get(t) ?? 0) + 1);
+      }
+    }
+    const scored = Array.from(tf.entries())
+      .map(([t, f]) => [t, f * Math.log(N / (df.get(t) ?? 1))] as const)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, topN)
+      .map(([t]) => t);
+    return scored.length > 0 ? scored.join(' · ') : (members[0]?.title ?? 'topic');
+  });
+}
+
+/** Mean member<->centroid cosine — logged for k calibration during dogfood. */
+function clusterCohesion(members: Float32Array[]): number {
+  if (members.length === 0) return 0;
+  const dim = members[0].length;
+  const centroid = new Float32Array(dim);
+  for (const v of members) for (let d = 0; d < dim; d++) centroid[d] += v[d] / members.length;
+  const sims = members.map(v => cosineSim(v, centroid));
+  return sims.reduce((s, x) => s + x, 0) / sims.length;
+}
+
+// ---------------------------------------------------------------------------
 // Embedding helpers — no external deps
 // ---------------------------------------------------------------------------
 
@@ -432,6 +675,61 @@ function kMeans(vecs: Float32Array[], k: number, maxIter = 20): number[][] {
   );
 }
 
+/** Keyword fallback when the model is unavailable. Always tagged in output —
+ *  mixing heuristic and model classifications without labelling them makes the
+ *  totals unreadable. */
+function heuristicIntent(q: string): 'informational' | 'navigational' | 'transactional' | 'commercial' {
+  if (/\b(buy|shop|price|pricing|cheap|order|purchase|trial|subscribe|coupon|discount)\b/i.test(q)) return 'transactional';
+  if (/\b(best|vs|versus|review|reviews|compare|comparison|top|alternative|alternatives)\b/i.test(q)) return 'commercial';
+  if (/\b(how|what|why|when|where|guide|tutorial|fix|error|example|examples)\b/i.test(q)) return 'informational';
+  return 'navigational';
+}
+
+// ---------------------------------------------------------------------------
+// Topic map — shared by build_topic_map and run()
+// ---------------------------------------------------------------------------
+
+type TopicMap = {
+  docCount: number;
+  k: number;
+  clusters: Array<{ label: string; count: number; titles: string[]; postIds: number[]; cohesion: number }>;
+};
+
+async function buildTopicMapForSite(
+  siteId: string,
+  tools: { invoke(name: string, args: unknown): Promise<unknown> },
+  targetClusters: number,
+  warn?: (m: string) => void,
+): Promise<TopicMap | null> {
+  const parsed = parseSiteDocuments(await tools.invoke('get_all_site_documents', {
+    site: siteId,
+    include_embeddings: true,
+    full_content: true,     // chunk text feeds TF-IDF labels
+  }));
+  if (!parsed.documentCount || !parsed.documents.length) return null;
+
+  // P0: cluster DOCUMENTS (mean-pooled chunks), not raw chunks.
+  const docs = aggregateDocuments(parsed.documents, warn).filter(d => d.vec !== null);
+  if (docs.length < 2) return null;
+
+  const k = Math.max(1, Math.min(targetClusters, docs.length));
+  const assignments = kMeans(docs.map(d => d.vec!), k);
+  const clusterDocs = assignments.map(idxs => idxs.map(i => docs[i])).filter(m => m.length > 0);
+  const labels = tfidfLabels(clusterDocs);
+
+  const clusters = clusterDocs
+    .map((members, i) => ({
+      label: labels[i],
+      count: members.length,
+      titles: members.slice(0, 5).map(m => m.title),
+      postIds: members.map(m => m.postId),
+      cohesion: Math.round(clusterCohesion(members.map(m => m.vec!)) * 1000) / 1000,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  return { docCount: docs.length, k, clusters };
+}
+
 // ---------------------------------------------------------------------------
 // GSC API helpers
 // ---------------------------------------------------------------------------
@@ -473,10 +771,14 @@ async function listGscSites(token: string): Promise<string[]> {
   return (data.siteEntry ?? []).map(e => e.siteUrl);
 }
 
-// 28-day date range helpers
+// GSC finalizes data on a ~2-day lag; the trailing days are partial and would
+// make the current window look artificially low against the prior one.
+const GSC_LAG_DAYS = 2;
+
+// 28-day date range helpers (all windows end GSC_LAG_DAYS ago)
 function dateRange(daysAgo: number, windowDays = 28): { startDate: string; endDate: string } {
-  const end = new Date(Date.now() - daysAgo * 86400_000);
-  const start = new Date(Date.now() - (daysAgo + windowDays) * 86400_000);
+  const end = new Date(Date.now() - (daysAgo + GSC_LAG_DAYS) * 86400_000);
+  const start = new Date(Date.now() - (daysAgo + GSC_LAG_DAYS + windowDays) * 86400_000);
   return {
     startDate: start.toISOString().slice(0, 10),
     endDate: end.toISOString().slice(0, 10),
@@ -489,7 +791,7 @@ function dateRange(daysAgo: number, windowDays = 28): { startDate: string; endDa
 
 export default defineAgent({
   name: 'seo-insights',
-  version: '0.3.0',
+  version: '0.5.0',
   description: 'Content strategy agent — topical map, gap analysis, and overlap detection from your WordPress install',
 
   timeoutMs: 20 * 60 * 1000,   // 20 min — WPE pull + analysis can take 10+ min (same as sentinel)
@@ -658,8 +960,16 @@ export default defineAgent({
         executionMode: 'function' as const,
         handler: async (args: InventoryContentArgs, ctx) => {
           ctx.log.phase('inventory_content');
-          const postTypes = args.postTypes ?? ['post', 'page'];
-          const limit = args.limit ?? 500;
+          // SECURITY: both values are interpolated into PHP executed by wp_eval.
+          // postTypes goes through JSON.stringify; limit must be coerced to a
+          // bounded integer — an input schema is not a security boundary.
+          const rawTypes = Array.isArray(args.postTypes) ? args.postTypes : ['post', 'page'];
+          const postTypes = rawTypes
+            .filter((t): t is string => typeof t === 'string')
+            .map(t => t.replace(/[^A-Za-z0-9_-]/g, ''))
+            .filter(Boolean);
+          if (postTypes.length === 0) postTypes.push('post', 'page');
+          const limit = Math.min(Math.max(Math.floor(Number(args.limit) || 500), 1), 5000);
 
           let posts: PostRecord[];
           try {
@@ -761,53 +1071,27 @@ echo json_encode(array_map(function($p){
           ctx.log.phase('build_topic_map');
           const targetClusters = args.clusters ?? 10;
 
-          // NexusToolProvider auto-parses JSON — result is already an object, not a string (F7)
-          const rawResult = await ctx.tools.invoke('get_all_site_documents', {
-            site: args.siteId,
-            include_embeddings: true,
-          });
-          const parsed = (typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult) as {
-            documentCount: number;
-            documents: Array<{ id: string; postId: number; postType: string; title: string; embedding: string }>;
-          };
-
-          if (parsed.documentCount === 0) {
-            return ok(`⚠ No indexed documents found for "${args.siteId}". Start the site in Local to trigger indexing.`);
+          const map = await buildTopicMapForSite(
+            args.siteId, ctx.tools, targetClusters, (m) => ctx.log.warn(m),
+          );
+          if (!map) {
+            return ok(`⚠ Not enough indexed documents with embeddings for "${args.siteId}". Start the site in Local and let indexing finish, then retry.`);
           }
 
-          ctx.log.info(`Clustering ${parsed.documentCount} documents into ~${targetClusters} topics`);
-
-          const docs = parsed.documents.map(doc => ({
-            ...doc,
-            vec: new Float32Array(Buffer.from(doc.embedding, 'base64').buffer),
-          }));
-
-          const k = Math.min(targetClusters, docs.length);
-          const clusterAssignments = kMeans(docs.map(d => d.vec), k);
-
-          const clusterLabels = clusterAssignments.map((memberIndices, i) => {
-            const members = memberIndices.map(idx => docs[idx]);
-            const titles = members.map(m => m.title);
-            return {
-              clusterId: i + 1,
-              label: titles[0] ?? `Topic ${i + 1}`,
-              postCount: members.length,
-              posts: titles.slice(0, 5),
-              postIds: members.map(m => m.postId),
-            };
-          });
+          ctx.log.info(`Topic map built: ${map.k} clusters from ${map.docCount} documents`);
+          // Cohesion is logged (not shown) so k can be calibrated from real corpora.
+          ctx.log.info(`Cluster cohesion: ${map.clusters.map(c => c.cohesion).join(', ')}`);
 
           const report = [
             `# Topic Map: ${args.siteId}`,
-            `${parsed.documentCount} posts grouped into ${k} topic clusters`,
+            `${map.docCount} posts grouped into ${map.k} topic clusters`,
             '',
-            ...clusterLabels.map(c =>
-              `## Cluster ${c.clusterId}: ${c.label} (${c.postCount} posts)\n` +
-              c.posts.map(t => `  • ${t}`).join('\n'),
+            ...map.clusters.map((c, i) =>
+              `## Cluster ${i + 1}: ${c.label} (${c.count} posts, cohesion ${c.cohesion})\n` +
+              c.titles.map(t => `  • ${t}`).join('\n'),
             ),
           ].join('\n');
 
-          ctx.log.info(`Topic map built: ${k} clusters from ${parsed.documentCount} documents`);
           return ok(report);
         },
       },
@@ -830,31 +1114,44 @@ echo json_encode(array_map(function($p){
           ctx.log.phase('find_overlap_candidates');
           const threshold = args.threshold ?? 0.85;
 
-          // NexusToolProvider auto-parses JSON — result is already an object (F7)
-          const rawResult = await ctx.tools.invoke('get_all_site_documents', {
+          const parsed = parseSiteDocuments(await ctx.tools.invoke('get_all_site_documents', {
             site: args.siteId,
             include_embeddings: true,
-          });
-          const parsed = (typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult) as {
-            documentCount: number;
-            documents: Array<{ postId: number; title: string; embedding: string }>;
-          };
-
-          if (parsed.documentCount < 2) {
+          }));
+          if (!parsed.documentCount) {
             return ok('Need at least 2 indexed posts to find overlap candidates.');
           }
 
-          const docs = parsed.documents.map(d => ({
-            ...d,
-            vec: new Float32Array(Buffer.from(d.embedding, 'base64').buffer),
-          }));
+          // P0: aggregate chunks into documents first. Comparing raw chunks
+          // flags chunk-2 vs chunk-3 of the SAME post at ~99% and floods the list.
+          const all = aggregateDocuments(parsed.documents, (m) => ctx.log.warn(m));
+          // Webhook-truncated entries have lower-fidelity vectors — excluding
+          // them here is the agreed mitigation (check_index_health reports count).
+          const excluded = all.filter(d => d.possiblyTruncated).length;
+          const docs = all.filter(d => d.vec !== null && !d.possiblyTruncated);
 
-          const pairs: Array<{ a: string; b: string; similarity: number }> = [];
-          for (let i = 0; i < docs.length; i++) {
-            for (let j = i + 1; j < docs.length; j++) {
-              const sim = cosineSim(docs[i].vec, docs[j].vec);
+          if (docs.length < 2) {
+            return ok(`Need at least 2 indexed posts with embeddings to find overlap candidates.${excluded > 0 ? ` (${excluded} degraded entries excluded — reindex to restore.)` : ''}`);
+          }
+
+          // O(n^2) pair scan — bounded so a very large corpus can't hang the run.
+          const MAX_PAIR_DOCS = 1500;
+          const scanDocs = docs.length > MAX_PAIR_DOCS ? docs.slice(0, MAX_PAIR_DOCS) : docs;
+          if (docs.length > MAX_PAIR_DOCS) {
+            ctx.log.warn(`[SEO] ${docs.length} documents exceeds the ${MAX_PAIR_DOCS}-document pair-scan cap — comparing the first ${MAX_PAIR_DOCS}`);
+          }
+
+          const pairs: Array<{ a: string; b: string; aId: number; bId: number; similarity: number }> = [];
+          for (let i = 0; i < scanDocs.length; i++) {
+            for (let j = i + 1; j < scanDocs.length; j++) {
+              if (scanDocs[i].postId === scanDocs[j].postId) continue;   // belt and braces
+              const sim = cosineSim(scanDocs[i].vec!, scanDocs[j].vec!);
               if (sim >= threshold) {
-                pairs.push({ a: docs[i].title, b: docs[j].title, similarity: sim });
+                pairs.push({
+                  a: scanDocs[i].title, b: scanDocs[j].title,
+                  aId: scanDocs[i].postId, bId: scanDocs[j].postId,
+                  similarity: sim,
+                });
               }
             }
           }
@@ -863,13 +1160,13 @@ echo json_encode(array_map(function($p){
 
           const lines = [
             `# Overlap Candidates: ${args.siteId}`,
-            `Threshold: ${threshold} | Found: ${pairs.length} pairs`,
+            `Threshold: ${threshold} | Found: ${pairs.length} pairs (from ${scanDocs.length} documents${excluded > 0 ? `, ${excluded} degraded entries excluded` : ''})`,
             '',
             '⚠ These are SEMANTIC candidates — two similar pages can rank for different queries.',
             '  Connect Search Console (T1) to confirm which pairs are actual cannibalization.',
             '',
             ...pairs.slice(0, 20).map(p =>
-              `  ${(p.similarity * 100).toFixed(1)}% similar: "${p.a}" ↔ "${p.b}"`,
+              `  ${(p.similarity * 100).toFixed(1)}% similar: "${p.a}" (#${p.aId}) ↔ "${p.b}" (#${p.bId})`,
             ),
             pairs.length > 20 ? `  … and ${pairs.length - 20} more pairs` : '',
           ].filter(l => l !== '').join('\n');
@@ -895,6 +1192,10 @@ echo json_encode(array_map(function($p){
         inputSchema: {
           type: 'object',
           properties: {
+            siteId: {
+              type: 'string',
+              description: 'Site this property belongs to (Local site name or WPE install name). Property bindings are per-site.',
+            },
             propertyUrl: {
               type: 'string',
               description: 'Your Search Console property URL (e.g. "https://example.com/" or "sc-domain:example.com"). Leave empty to list available properties.',
@@ -902,8 +1203,12 @@ echo json_encode(array_map(function($p){
           },
         },
         executionMode: 'function' as const,
-        handler: async (args: { propertyUrl?: string }, ctx) => {
+        handler: async (args: { siteId?: string; propertyUrl?: string }, ctx) => {
           ctx.log.phase('connect_gsc');
+          const siteId = args.siteId;
+          if (!siteId) {
+            return ok('⚠ connect_gsc needs a siteId — Search Console properties are bound per site so one site\'s property can\'t redirect another\'s analysis.\n\nRun: connect_gsc siteId="<site>" [propertyUrl="<url>"]');
+          }
 
           // Check connection status
           const status = await ctx.credentials.getStatus('google');
@@ -948,13 +1253,13 @@ echo json_encode(array_map(function($p){
                 ...sites.map(s => `  • ${s}`),
               ].join('\n'));
             }
-            ctx.state.set('gscProperty', match);
+            ctx.state.set(gscPropertyKey(siteId), match);
             ctx.log.info(`GSC property set: ${match}`);
             return ok(`✓ Connected to Search Console property: ${match}\n\nT1 tools are now active:\n  • detect_cannibalization\n  • find_demand_gaps\n  • classify_intent\n  • detect_decay`);
           }
 
           // No propertyUrl — show available properties and ask user to specify
-          const existing = ctx.state.get<string>('gscProperty');
+          const existing = ctx.state.get<string>(gscPropertyKey(siteId));
           return ok([
             existing ? `Current property: ${existing}` : 'No property selected yet.',
             '',
@@ -983,7 +1288,7 @@ echo json_encode(array_map(function($p){
         handler: async (args: { siteId: string; minImpressions?: number }, ctx) => {
           ctx.log.phase('detect_cannibalization');
 
-          const gscProperty = ctx.state.get<string>('gscProperty');
+          const gscProperty = ctx.state.get<string>(gscPropertyKey(args.siteId));
           if (!gscProperty) return ok('⚠ Run connect_gsc first to select a Search Console property.');
 
           const minImpressions = args.minImpressions ?? 10;
@@ -1086,7 +1391,7 @@ echo json_encode(array_map(function($p){
         handler: async (args: { siteId: string; minImpressions?: number; strikeZoneMin?: number; strikeZoneMax?: number }, ctx) => {
           ctx.log.phase('find_demand_gaps');
 
-          const gscProperty = ctx.state.get<string>('gscProperty');
+          const gscProperty = ctx.state.get<string>(gscPropertyKey(args.siteId));
           if (!gscProperty) return ok('⚠ Run connect_gsc first to select a Search Console property.');
 
           const minImp = args.minImpressions ?? 50;
@@ -1119,51 +1424,71 @@ echo json_encode(array_map(function($p){
           // Batch: take top 50 by impressions to limit API calls
           const top = significant.sort((a, b) => b.impressions - a.impressions).slice(0, 50);
 
-          const gaps: Array<{ query: string; impressions: number; position: number; hasContent: boolean }> = [];
+          // PERF: these were 50 sequential index lookups (~10s of pure latency in a
+          // function-mode tool). Bounded concurrency cuts wall time by ~the pool
+          // size without hammering the index.
+          const CONCURRENCY = 6;
+          const gaps: Array<{ query: string; impressions: number; position: number; hasContent: boolean }> =
+            new Array(top.length);
 
-          for (const row of top) {
-            const query = row.keys[0];
-            let hasContent = false;
-            try {
-              const searchResult = await ctx.tools.invoke('search_site_content', {
-                site: args.siteId,
-                query,
-                limit: 1,
-                min_score: 0.5,
-              }) as string;
-              // search_site_content returns text — check if it found anything
-              hasContent = !searchResult.includes('No results') && !searchResult.includes('0 results');
-            } catch { /* assume no content */ }
+          let cursor = 0;
+          const probeWorker = async () => {
+            for (;;) {
+              const idx = cursor++;
+              if (idx >= top.length) return;
+              const row = top[idx];
+              const query = row.keys[0];
+              let hasContent = false;
+              try {
+                const searchResult = await ctx.tools.invoke('search_site_content', {
+                  site: args.siteId, query, limit: 1, min_score: 0.5,
+                });
+                const text = typeof searchResult === 'string' ? searchResult : JSON.stringify(searchResult ?? '');
+                hasContent = !!text && !text.includes('No results') && !text.includes('0 results');
+              } catch { /* index unavailable for this query — treat as no strong match */ }
+              gaps[idx] = { query, impressions: row.impressions, position: row.position, hasContent };
+            }
+          };
+          await Promise.all(Array.from({ length: Math.min(CONCURRENCY, top.length) }, probeWorker));
 
-            gaps.push({ query, impressions: row.impressions, position: row.position, hasContent });
-          }
+          // Striking distance: a page ALREADY ranks here (that's what a position
+          // in a site-scoped GSC report means) — the play is to improve it, not
+          // to write something new. Filtering by !hasContent made this always empty.
+          const strikingDistance = gaps
+            .filter(g => g.position >= strikeMin && g.position <= strikeMax)
+            .sort((a, b) => b.impressions - a.impressions);
 
-          const trueGaps = gaps.filter(g => !g.hasContent);
-          const strikingDistance = gaps.filter(g =>
-            g.position >= strikeMin && g.position <= strikeMax && !g.hasContent
-          );
+          // Weak coverage: ranking beyond page 1 AND no strongly matching document,
+          // i.e. whatever currently ranks is probably tangential. Not "no content".
+          const weakCoverage = gaps
+            .filter(g => g.position > 10 && !g.hasContent)
+            .sort((a, b) => b.impressions - a.impressions);
 
           const lines = [
-            `# Demand Gaps: ${gscProperty}`,
-            `Period: ${startDate} → ${endDate} | Min impressions: ${minImp}`,
-            `Analyzed: ${top.length} top queries`,
+            `# Demand Coverage: ${gscProperty}`,
+            `Period: ${startDate} → ${endDate} | Min impressions: ${minImp} | Analyzed: top ${top.length} queries`,
             '',
-            `## Striking Distance (pos ${strikeMin}-${strikeMax}, no content): ${strikingDistance.length}`,
+            `## Striking Distance (ranking ${strikeMin}-${strikeMax} — improve the existing page): ${strikingDistance.length}`,
             strikingDistance.length > 0
-              ? strikingDistance.map(g => `  pos ${g.position.toFixed(1)} | ${g.impressions}imp — "${g.query}"`).join('\n')
-              : '  None found — you rank everything in this zone.',
+              ? strikingDistance.map(g =>
+                  `  pos ${g.position.toFixed(1)} | ${g.impressions}imp — "${g.query}"` +
+                  (g.hasContent ? '' : '  (⚠ no strong semantic match — the ranking page may be tangential)')
+                ).join('\n')
+              : '  Nothing in this zone right now.',
             '',
-            `## True Gaps (impressions, no content): ${trueGaps.length}`,
-            ...trueGaps.slice(0, 15).map(g => `  ${g.impressions}imp — "${g.query}"`),
-            trueGaps.length > 15 ? `  … and ${trueGaps.length - 15} more` : '',
+            `## Weak Coverage (ranking >10, no strongly matching content — write or expand): ${weakCoverage.length}`,
+            '  Note: every query here already has SOME ranking page — that is how it appears in Search Console.',
+            '  "Weak coverage" means semantic search found no strong match, so what ranks is likely off-topic.',
+            ...weakCoverage.slice(0, 15).map(g => `  pos ${g.position.toFixed(1)} | ${g.impressions}imp — "${g.query}"`),
+            weakCoverage.length > 15 ? `  … and ${weakCoverage.length - 15} more` : '',
           ].filter(Boolean).join('\n');
 
-          if (trueGaps.length > 0) {
+          if (weakCoverage.length > 0 || strikingDistance.length > 0) {
             ctx.log.finding({
               id: 'demand-gaps',
-              severity: trueGaps.length > 10 ? 'high' : 'medium',
-              title: `${trueGaps.length} queries with demand but no matching content`,
-              description: `${strikingDistance.length} in striking distance (pos ${strikeMin}-${strikeMax})`,
+              severity: weakCoverage.length > 10 ? 'high' : 'medium',
+              title: `${weakCoverage.length} weak-coverage queries, ${strikingDistance.length} in striking distance`,
+              description: `Striking distance = improve existing pages (pos ${strikeMin}-${strikeMax}); weak coverage = write or expand`,
             });
           }
 
@@ -1175,23 +1500,25 @@ echo json_encode(array_map(function($p){
       // classify_intent — T1: batch LLM intent classification, cached
       // ------------------------------------------------------------------
       classify_intent: {
-        description: 'Classify Search Console queries by intent: informational, navigational, transactional, commercial. Cached — subsequent calls use stored results.',
+        description: 'Classify Search Console queries by intent: informational, navigational, transactional, commercial. Cached per property — subsequent calls reuse stored results.',
         inputSchema: {
           type: 'object',
           properties: {
+            siteId: { type: 'string', description: 'Site whose bound GSC property to analyze (see connect_gsc)' },
             minImpressions: { type: 'number', default: 20, description: 'Only classify queries with this many impressions' },
             refresh: { type: 'boolean', default: false, description: 'Re-classify even if cached results exist' },
           },
+          required: ['siteId'],
         },
         executionMode: 'function' as const,
-        handler: async (args: { minImpressions?: number; refresh?: boolean }, ctx) => {
+        handler: async (args: { siteId: string; minImpressions?: number; refresh?: boolean }, ctx) => {
           ctx.log.phase('classify_intent');
 
-          const gscProperty = ctx.state.get<string>('gscProperty');
-          if (!gscProperty) return ok('⚠ Run connect_gsc first.');
+          const gscProperty = ctx.state.get<string>(gscPropertyKey(args.siteId));
+          if (!gscProperty) return ok(`⚠ No Search Console property bound to "${args.siteId}". Run: connect_gsc siteId="${args.siteId}"`);
 
           // Use cached results unless refresh requested
-          const cached = ctx.state.get<string>('intentClassification');
+          const cached = ctx.state.get<string>(intentCacheKey(gscProperty));
           if (cached && !args.refresh) {
             return ok(`# Intent Classification (cached)\n\n${cached}\n\nRun with refresh=true to re-classify.`);
           }
@@ -1221,17 +1548,47 @@ echo json_encode(array_map(function($p){
 
           ctx.log.info(`Classifying ${significant.length} queries...`);
 
+          // Site context grounds classification: "installation" means very
+          // different things on a hosting site vs. a home-improvement blog.
+          let siteContext = '';
+          try {
+            const map = await buildTopicMapForSite(args.siteId, ctx.tools, 6, () => {});
+            if (map && map.clusters.length > 0) {
+              siteContext = `This site's main topics are: ${map.clusters.slice(0, 6).map(c => c.label).join('; ')}.\n\n`;
+            }
+          } catch { /* topic map is optional context */ }
+
           // Batch classify using ctx.ai.generateObject — 20 queries per call
           const BATCH = 20;
-          const classified: Array<{ query: string; intent: string; impressions: number }> = [];
+          const classified: Array<{ query: string; intent: string; impressions: number; heuristic: boolean }> = [];
 
           for (let i = 0; i < significant.length; i += BATCH) {
             const batch = significant.slice(i, i + BATCH);
             const queries = batch.map(r => r.keys[0]);
 
             try {
-              const result = await ctx.ai.generateObject<{ classifications: Array<{ query: string; intent: 'informational' | 'navigational' | 'transactional' | 'commercial' }> }>({
-                prompt: `Classify each search query by intent. Return JSON with "classifications" array.\n\nQueries:\n${queries.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}`,
+              const result = await ctx.ai.generateObject<{ classifications: Array<{ index: number; intent: 'informational' | 'navigational' | 'transactional' | 'commercial' }> }>({
+                prompt:
+`You are classifying real Google Search queries that brought visitors to a website, so the site owner can see which kinds of intent their content serves.
+
+${siteContext}Classify each query into exactly one intent:
+
+- informational — wants to learn or understand something: how-tos, definitions, troubleshooting, "what is" questions.
+  e.g. "how to speed up wordpress", "what is a cdn", "php memory limit error"
+- commercial — comparing or evaluating options before choosing: "best", "vs", reviews, alternatives, price comparisons.
+  e.g. "best wordpress hosting", "wp rocket vs nitropack", "cheapest managed hosting"
+- transactional — ready to act now: buy, sign up, download, start a trial.
+  e.g. "buy nitropack license", "wp engine free trial", "download acf pro"
+- navigational — looking for a specific brand, product, site, or page by name, or trying to log in.
+  e.g. "wp engine login", "nitropack dashboard", "advanced custom fields docs"
+
+Rules:
+- Choose the single best fit. If a query could be commercial or informational, ask whether the person is comparing options (commercial) or learning (informational).
+- A brand name alone is navigational; a brand name plus a comparison word is commercial.
+- Return one entry per query, identified by its number. Do not skip, merge, reorder, or reword any query.
+
+Queries:
+${queries.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}`,
                 schema: {
                   type: 'object',
                   properties: {
@@ -1240,10 +1597,10 @@ echo json_encode(array_map(function($p){
                       items: {
                         type: 'object',
                         properties: {
-                          query: { type: 'string' },
+                          index: { type: 'number', description: 'The query number from the list above (1-based)' },
                           intent: { type: 'string', enum: ['informational', 'navigational', 'transactional', 'commercial'] },
                         },
-                        required: ['query', 'intent'],
+                        required: ['index', 'intent'],
                       },
                     },
                   },
@@ -1252,46 +1609,70 @@ echo json_encode(array_map(function($p){
                 noTools: true,
               });
 
-              for (const c of result.classifications) {
-                const row = batch.find(r => r.keys[0] === c.query);
-                classified.push({ query: c.query, intent: c.intent, impressions: row?.impressions ?? 0 });
+              // Keyed by INDEX, not by echoed query text: any paraphrase, trim,
+              // or re-casing by the model used to silently zero that query's
+              // impressions via the old batch.find(r => r.keys[0] === c.query).
+              const seen = new Set<number>();
+              for (const c of result.classifications ?? []) {
+                const i = Math.floor(Number(c.index)) - 1;
+                if (!Number.isFinite(i) || i < 0 || i >= batch.length || seen.has(i)) continue;
+                seen.add(i);
+                classified.push({
+                  query: batch[i].keys[0],
+                  intent: c.intent,
+                  impressions: batch[i].impressions,
+                  heuristic: false,
+                });
+              }
+              // Anything the model dropped falls back rather than vanishing.
+              for (let i = 0; i < batch.length; i++) {
+                if (seen.has(i)) continue;
+                classified.push({
+                  query: batch[i].keys[0],
+                  intent: heuristicIntent(batch[i].keys[0]),
+                  impressions: batch[i].impressions,
+                  heuristic: true,
+                });
               }
             } catch {
-              // Fall back to heuristic classification for this batch
-              for (const q of queries) {
-                const intent = /buy|shop|price|cheap|order|purchase/i.test(q) ? 'transactional'
-                  : /best|vs|review|compare|top/i.test(q) ? 'commercial'
-                  : /how|what|why|when|guide|tutorial/i.test(q) ? 'informational'
-                  : 'navigational';
-                const row = batch.find(r => r.keys[0] === q);
-                classified.push({ query: q, intent, impressions: row?.impressions ?? 0 });
+              // Fall back to keyword heuristics — tagged so the report can say
+              // which rows were not model-classified.
+              for (const row of batch) {
+                classified.push({
+                  query: row.keys[0],
+                  intent: heuristicIntent(row.keys[0]),
+                  impressions: row.impressions,
+                  heuristic: true,
+                });
               }
             }
           }
 
           // Summarize by intent
-          const byIntent = new Map<string, Array<{ query: string; impressions: number }>>();
+          const byIntent = new Map<string, Array<{ query: string; impressions: number; heuristic: boolean }>>();
           for (const c of classified) {
             if (!byIntent.has(c.intent)) byIntent.set(c.intent, []);
-            byIntent.get(c.intent)!.push({ query: c.query, impressions: c.impressions });
+            byIntent.get(c.intent)!.push({ query: c.query, impressions: c.impressions, heuristic: c.heuristic });
           }
+          const heuristicCount = classified.filter(c => c.heuristic).length;
 
           const lines = [
             `# Intent Classification: ${gscProperty}`,
-            `${classified.length} queries classified (min ${minImp} impressions)`,
+            `${classified.length} queries classified (min ${minImp} impressions)` +
+              (heuristicCount > 0 ? ` — ⚠ ${heuristicCount} via keyword heuristic (model unavailable), marked (h)` : ''),
             '',
             ...['informational', 'commercial', 'transactional', 'navigational'].map(intent => {
               const items = byIntent.get(intent) ?? [];
               const totalImp = items.reduce((s, i) => s + i.impressions, 0);
               return [
                 `## ${intent.charAt(0).toUpperCase() + intent.slice(1)}: ${items.length} queries (${totalImp.toLocaleString()} impressions)`,
-                ...items.slice(0, 5).map(i => `  ${i.impressions}imp — "${i.query}"`),
+                ...items.slice(0, 5).map(i => `  ${i.impressions}imp — "${i.query}"${i.heuristic ? ' (h)' : ''}`),
                 items.length > 5 ? `  … and ${items.length - 5} more` : '',
               ].filter(Boolean).join('\n');
             }),
           ].join('\n');
 
-          ctx.state.set('intentClassification', lines);
+          ctx.state.set(intentCacheKey(gscProperty), lines);
           return ok(lines);
         },
       },
@@ -1300,20 +1681,22 @@ echo json_encode(array_map(function($p){
       // detect_decay — T1: compare two 28-day windows
       // ------------------------------------------------------------------
       detect_decay: {
-        description: 'Detect pages with declining clicks or impressions over the past 28 days vs. the prior 28-day period.',
+        description: 'Detect pages with declining clicks or impressions over the past 28 complete days vs. the prior 28-day period. Windows end 2 days back because Search Console data is incomplete for recent days.',
         inputSchema: {
           type: 'object',
           properties: {
+            siteId: { type: 'string', description: 'Site whose bound GSC property to analyze (see connect_gsc)' },
             minImpressionsPrior: { type: 'number', default: 50, description: 'Minimum impressions in prior period to be considered' },
             declineThresholdPct: { type: 'number', default: 20, description: 'Flag pages that lost ≥this % of clicks or impressions' },
           },
+          required: ['siteId'],
         },
         executionMode: 'function' as const,
-        handler: async (args: { minImpressionsPrior?: number; declineThresholdPct?: number }, ctx) => {
+        handler: async (args: { siteId: string; minImpressionsPrior?: number; declineThresholdPct?: number }, ctx) => {
           ctx.log.phase('detect_decay');
 
-          const gscProperty = ctx.state.get<string>('gscProperty');
-          if (!gscProperty) return ok('⚠ Run connect_gsc first.');
+          const gscProperty = ctx.state.get<string>(gscPropertyKey(args.siteId));
+          if (!gscProperty) return ok(`⚠ No Search Console property bound to "${args.siteId}". Run: connect_gsc siteId="${args.siteId}"`);
 
           const minImp = args.minImpressionsPrior ?? 50;
           const threshold = (args.declineThresholdPct ?? 20) / 100;
@@ -1342,41 +1725,48 @@ echo json_encode(array_map(function($p){
           const currentByPage = new Map(currentRows.map(r => [r.keys[0], r]));
           const priorByPage = new Map(priorRows.map(r => [r.keys[0], r]));
 
-          const decayed: Array<{ page: string; priorClicks: number; currentClicks: number; priorImp: number; currentImp: number; clickDelta: number }> = [];
+          const decayed: Array<{ page: string; priorClicks: number; currentClicks: number; priorImp: number; currentImp: number; clickDelta: number; impDelta: number }> = [];
 
           for (const [page, priorRow] of priorByPage) {
             if (priorRow.impressions < minImp) continue;
             const currentRow = currentByPage.get(page);
             const currentClicks = currentRow?.clicks ?? 0;
+            const currentImp = currentRow?.impressions ?? 0;
             const clickDelta = priorRow.clicks > 0
               ? (currentClicks - priorRow.clicks) / priorRow.clicks
               : 0;
+            const impDelta = priorRow.impressions > 0
+              ? (currentImp - priorRow.impressions) / priorRow.impressions
+              : 0;
 
-            if (clickDelta <= -threshold) {
+            // The description promises clicks OR impressions — check both.
+            // Impression decay often leads click decay, so it's the earlier signal.
+            if (clickDelta <= -threshold || impDelta <= -threshold) {
               decayed.push({
                 page,
                 priorClicks: priorRow.clicks,
                 currentClicks,
                 priorImp: priorRow.impressions,
-                currentImp: currentRow?.impressions ?? 0,
+                currentImp,
                 clickDelta,
+                impDelta,
               });
             }
           }
 
-          decayed.sort((a, b) => a.clickDelta - b.clickDelta); // worst first
+          decayed.sort((a, b) => Math.min(a.clickDelta, a.impDelta) - Math.min(b.clickDelta, b.impDelta)); // worst first
 
           if (decayed.length === 0) {
-            return ok(`✓ No significant decay detected (≥${args.declineThresholdPct ?? 20}% click drop, min ${minImp} prior impressions)`);
+            return ok(`✓ No significant decay detected (≥${args.declineThresholdPct ?? 20}% click or impression drop, min ${minImp} prior impressions)`);
           }
 
           const lines = [
             `# Content Decay: ${gscProperty}`,
-            `${decayed.length} pages lost ≥${args.declineThresholdPct ?? 20}% of clicks`,
+            `${decayed.length} pages lost ≥${args.declineThresholdPct ?? 20}% of clicks or impressions`,
             `Comparing: ${prior.startDate}–${prior.endDate} → ${current.startDate}–${current.endDate}`,
             '',
             ...decayed.slice(0, 15).map(d => [
-              `  ${Math.round(d.clickDelta * 100)}% | ${d.priorClicks}→${d.currentClicks} clicks`,
+              `  clicks ${Math.round(d.clickDelta * 100)}% (${d.priorClicks}→${d.currentClicks}) | impressions ${Math.round(d.impDelta * 100)}% (${d.priorImp}→${d.currentImp})`,
               `  ${d.page}`,
             ].join('\n')),
             decayed.length > 15 ? `\n… and ${decayed.length - 15} more` : '',
@@ -1671,248 +2061,314 @@ echo json_encode(array_map(function($p){
   // while a site was already analyzed recently.
   // ---------------------------------------------------------------------------
   async run({ event, tools, state, log, credentials }) {
-    const targetSite = (event?.payload as Record<string, unknown> | undefined)
+    const payloadSite = (event?.payload as Record<string, unknown> | undefined)
       ?.installName as string | undefined;
 
-    if (!targetSite) {
-      log.info('seo-insights: no site selected — use UI site selector or: nexus agent run seo-insights --install <site>');
-      return;
-    }
-
-    // Cooldown removed for now — re-add when ready to prevent background WPE sync spam
-    const cooldownKey = `analyzed:${targetSite}`;
-
-    log.phase('Site Content Report', `Analyzing: ${targetSite}`);
-
-    // Resolve site: Local or WPE?
-    let site: SiteRow | null = null;
-    try {
-      const rows = parseFleetSqlRows(
-        await tools.invoke('fleet_sql', {
-          query: 'SELECT id, name, source, ssh_last_sync_at, post_count FROM sites WHERE name = ? LIMIT 1',
-          params: [targetSite],
-        })
-      );
-      site = rows[0] ?? null;
-    } catch { /* fleet_sql unavailable */ }
-
-    const isWpe = site?.source === 'wpe';
-    const siteName = site?.name ?? targetSite;
-    log.info(`Site resolved: ${siteName} (${isWpe ? 'WP Engine' : 'Local'})`);
-    log.siteStatus(siteName, 'running');
-
-    // Determine which site to analyze: sandbox for WPE, siteName for Local
-    let analysisSite: string | null = siteName;
-    let createdSandbox = false;
-
-    if (isWpe) {
-      const sandbox = await createAndPullSandbox(siteName, tools, log);
-      if (!sandbox) {
-        log.siteStatus(siteName, 'error');
-        log.warn(`Could not create sandbox for ${siteName} — skipping analysis`);
+    // -----------------------------------------------------------------------
+    // Target resolution. Previously an empty payload returned immediately,
+    // which meant the cron trigger could never do any work.
+    // -----------------------------------------------------------------------
+    let targets: string[] = [];
+    if (payloadSite) {
+      targets = [payloadSite];
+    } else {
+      // Cron path: a watchlist if the user set one, else the largest Local
+      // sites. WPE installs are excluded here — each needs a sandbox pull, and
+      // several of those will not fit in one run's time budget. They are
+      // analyzed via wpe:sync.completed or an explicit run instead.
+      const watchlistRaw = state.get<string>('watchlist');
+      if (watchlistRaw) {
+        try {
+          const parsedList = JSON.parse(watchlistRaw) as unknown;
+          if (Array.isArray(parsedList)) {
+            targets = parsedList.filter((s): s is string => typeof s === 'string').slice(0, CRON_MAX_SITES);
+          }
+        } catch { /* malformed watchlist — fall through to auto-selection */ }
+      }
+      if (targets.length === 0) {
+        try {
+          const rows = parseFleetSqlRows(await tools.invoke('fleet_sql', {
+            query: `SELECT id, name, source, ssh_last_sync_at, post_count FROM sites
+                    WHERE source != 'wpe' AND CAST(post_count AS INTEGER) > 0
+                    ORDER BY CAST(post_count AS INTEGER) DESC LIMIT ?`,
+            params: [CRON_MAX_SITES],
+          }));
+          targets = rows.map(r => r.name).filter(Boolean);
+        } catch { /* fleet_sql unavailable */ }
+      }
+      if (targets.length === 0) {
+        log.info('seo-insights: no target sites — set a "watchlist" state key, use the UI site selector, or run: nexus agent run seo-insights --install <site>');
         return;
       }
-      analysisSite = sandbox;
-      createdSandbox = true;
-      state.set('lastSandbox', sandbox);
+      log.info(`Scheduled run targets: ${targets.join(', ')}`);
+    }
 
-      // Reindex the sandbox so get_all_site_documents returns posts
-      log.info(`[SEO] Starting sandbox site for indexing: ${analysisSite}`);
-      try { await tools.invoke('local_start_site', { site: analysisSite! }); } catch { /* may already be running */ }
-      await waitForIndex(analysisSite!, tools, log, 90_000);
-    } else {
-      // Local site — start it first (sentinel pattern), then analyze
-      log.info(`Starting site for analysis: ${siteName}`);
-      try {
-        await tools.invoke('local_start_site', { site: siteName });
-        log.info(`Site started`);
-      } catch { /* already running or start not needed */ }
-      await new Promise(r => setTimeout(r, 5_000)); // let MySQL come up
+    const summaries: string[] = [];
 
-      // Check index health
+    for (const targetSite of targets) {
+      // Per-site cooldown: background wpe:sync.completed events fire for every
+      // site on a schedule, and cron may overlap an event-driven run.
+      const cdKey = cooldownKeyFor(targetSite);
+      const lastAnalyzed = state.get<number>(cdKey);
+      if (typeof lastAnalyzed === 'number' && Date.now() - lastAnalyzed < ANALYSIS_COOLDOWN_MS) {
+        const mins = Math.round((Date.now() - lastAnalyzed) / 60000);
+        log.info(`Skipping ${targetSite} — analyzed ${mins} min ago (cooldown ${ANALYSIS_COOLDOWN_MS / 3600000}h)`);
+        continue;
+      }
+
+      log.phase('Site Content Report', `Analyzing: ${targetSite}`);
+
+      // Resolve site: Local or WPE?
+      let site: SiteRow | null = null;
       try {
-        const indexText = await tools.invoke('get_index_status', { site: siteName }) as string;
-        if (indexText.includes('has not been indexed')) {
+        const rows = parseFleetSqlRows(
+          await tools.invoke('fleet_sql', {
+            query: 'SELECT id, name, source, ssh_last_sync_at, post_count FROM sites WHERE name = ? LIMIT 1',
+            params: [targetSite],
+          })
+        );
+        site = rows[0] ?? null;
+      } catch { /* fleet_sql unavailable */ }
+
+      const isWpe = site?.source === 'wpe';
+      const siteName = site?.name ?? targetSite;
+      log.info(`Site resolved: ${siteName} (${isWpe ? 'WP Engine' : 'Local'})`);
+      log.siteStatus(siteName, 'running');
+
+      // Determine which site to analyze: sandbox for WPE, siteName for Local
+      let analysisSite: string = siteName;
+      let createdSandbox = false;
+
+      if (isWpe) {
+        const sandbox = await createAndPullSandbox(siteName, tools, log);
+        if (!sandbox) {
+          log.siteStatus(siteName, 'error');
+          log.warn(`Could not prepare sandbox for ${siteName} — skipping analysis`);
+          // Still record the attempt so a failing site can't hot-loop.
+          state.set(cdKey, Date.now());
+          continue;
+        }
+        analysisSite = sandbox;
+        createdSandbox = true;
+        state.set('lastSandbox', sandbox);
+
+        // Reindex the sandbox so get_all_site_documents returns posts
+        log.info(`[SEO] Starting sandbox site for indexing: ${analysisSite}`);
+        try { await tools.invoke('local_start_site', { site: analysisSite }); } catch { /* may already be running */ }
+        await waitForIndex(analysisSite, tools, log, 90_000);
+      } else {
+        // Local site — start it first (sentinel pattern), then analyze
+        log.info(`Starting site for analysis: ${siteName}`);
+        try {
+          await tools.invoke('local_start_site', { site: siteName });
+          log.info(`Site started`);
+        } catch { /* already running or start not needed */ }
+        await new Promise(r => setTimeout(r, 5_000)); // let MySQL come up
+
+        // Check index health
+        try {
+          const indexText = await tools.invoke('get_index_status', { site: siteName }) as string;
+          if (typeof indexText === 'string' && indexText.includes('has not been indexed')) {
+            log.finding({
+              id: 'stale-index',
+              severity: 'medium',
+              title: `Index is stale or missing for "${siteName}"`,
+              description: 'Content map will be unavailable until the site is reindexed.',
+              site: siteName,
+            });
+          } else if (typeof indexText === 'string') {
+            log.info(`Index: ${indexText.split('\n').slice(0, 3).join(' | ')}`);
+          }
+        } catch { /* not yet indexed */ }
+      }
+
+      // ----------------------------------------------------------------
+      // Analysis. Everything below runs to completion — the old code
+      // returned from inside this try block, so the GSC section, cooldown
+      // and bookkeeping only ever executed when analysis THREW.
+      // ----------------------------------------------------------------
+      log.phase('Content Analysis', analysisSite);
+
+      let reportLines: string | null = null;
+
+      try {
+        const { posts, orphans, stale, docs, truncated } =
+          await analyzeContent(analysisSite, tools, 365, (m) => log.warn(m));
+
+        log.info(`Analyzed ${posts.length} published posts on "${analysisSite}" (${docs.reduce((s, d) => s + d.chunkCount, 0)} indexed chunks)`);
+
+        if (orphans.length > 0) {
           log.finding({
-            id: 'stale-index',
-            severity: 'medium',
-            title: `Index is stale or missing for "${siteName}"`,
-            description: 'Content map will be unavailable until the site is reindexed.',
+            id: 'orphaned-content',
+            severity: orphans.length > posts.length * 0.3 ? 'high' : 'medium',
+            title: `${orphans.length} of ${posts.length} posts have no inbound internal links`,
+            description: orphans.slice(0, 5).map(p => `/${p.post_name}`).join(', ') + (orphans.length > 5 ? ` + ${orphans.length - 5} more` : ''),
             site: siteName,
           });
-        } else {
-          log.info(`Index: ${indexText.split('\n').slice(0, 3).join(' | ')}`);
         }
-      } catch { /* not yet indexed */ }
-    }
 
-    // ----------------------------------------------------------------
-    // Run the actual analysis and produce the Site Content Report
-    // ----------------------------------------------------------------
-    log.phase('Content Analysis', analysisSite ?? siteName);
+        if (stale.length > 0) {
+          log.finding({
+            id: 'stale-content',
+            severity: 'low',
+            title: `${stale.length} posts not updated in over a year`,
+            description: stale.slice(0, 3).map(p => p.post_title).join(', ') + (stale.length > 3 ? ` + ${stale.length - 3} more` : ''),
+            site: siteName,
+          });
+        }
 
-    try {
-      const { posts, orphans, stale } = await analyzeContent(analysisSite!, tools, 365);
+        if (truncated.length > 0) {
+          log.finding({
+            id: 'degraded-index-entries',
+            severity: 'low',
+            title: `${truncated.length} index entries look truncated (webhook-indexed)`,
+            description: 'Excluded from overlap analysis — reindex the site to restore full fidelity.',
+            site: siteName,
+          });
+        }
 
-      log.info(`Analyzed ${posts.length} published posts on "${analysisSite}"`);
+        if (posts.length > 0 && posts.length < 10) {
+          log.finding({
+            id: 'thin-corpus',
+            severity: 'low',
+            title: `Small content corpus: only ${posts.length} published posts/pages`,
+            description: 'Topical map analysis works best with 20+ posts.',
+            site: siteName,
+          });
+        }
 
-      // Orphaned content finding
-      if (orphans.length > 0) {
-        log.finding({
-          id: 'orphaned-content',
-          severity: orphans.length > posts.length * 0.3 ? 'high' : 'medium',
-          title: `${orphans.length} of ${posts.length} posts have no inbound internal links`,
-          description: orphans.slice(0, 5).map(p => `/${p.post_name}`).join(', ') + (orphans.length > 5 ? ` + ${orphans.length - 5} more` : ''),
-          site: siteName,
-        });
-      }
-
-      // Stale content finding
-      if (stale.length > 0) {
-        log.finding({
-          id: 'stale-content',
-          severity: 'low',
-          title: `${stale.length} posts not updated in over a year`,
-          description: stale.slice(0, 3).map(p => p.post_title).join(', ') + (stale.length > 3 ? ` + ${stale.length - 3} more` : ''),
-          site: siteName,
-        });
-      }
-
-      // Corpus size finding
-      if (posts.length < 10) {
-        log.finding({
-          id: 'thin-corpus',
-          severity: 'low',
-          title: `Small content corpus: only ${posts.length} published posts/pages`,
-          description: 'Topical map analysis works best with 20+ posts.',
-          site: siteName,
-        });
-      }
-
-      // Resolve log siteId — always the WPE install name.
-      // For WPE sites: siteName IS the install name.
-      // For local sites linked to WPE: resolve the linked install name via local_wpe_link.
-      let logSiteId = siteName;
-      if (!isWpe) {
-        try {
-          const linkResult = await tools.invoke('local_wpe_link', { site: siteName }) as string;
-          // Response: "## WPE Link for ...\n- **wpe:** <installName or UUID>"
-          const match = typeof linkResult === 'string' && linkResult.match(/\*\*\w+:\*\*\s+(\S+)/);
-          if (match?.[1]) {
-            let candidate = match[1];
-            // If we got a UUID instead of an install name, resolve it via graph.db
-            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate);
-            if (isUuid) {
-              try {
-                const rows = parseFleetSqlRows(await tools.invoke('fleet_sql', {
-                  query: `SELECT name FROM sites WHERE source = 'wpe' AND remote_install_id = ? LIMIT 1`,
-                  params: [candidate],
-                }) as string);
-                if (rows[0]?.name) candidate = rows[0].name;
-              } catch { /* keep UUID */ }
+        // Resolve log siteId — always the WPE install name.
+        // For WPE sites: siteName IS the install name.
+        // For local sites linked to WPE: resolve via local_wpe_link.
+        let logSiteId = siteName;
+        if (!isWpe) {
+          try {
+            const linkResult = await tools.invoke('local_wpe_link', { site: siteName }) as string;
+            // Response: "## WPE Link for ...\n- **wpe:** <installName or UUID>"
+            const match = typeof linkResult === 'string' && linkResult.match(/\*\*\w+:\*\*\s+(\S+)/);
+            if (match?.[1]) {
+              let candidate = match[1];
+              const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate);
+              if (isUuid) {
+                try {
+                  const rows = parseFleetSqlRows(await tools.invoke('fleet_sql', {
+                    query: `SELECT name FROM sites WHERE source = 'wpe' AND remote_install_id = ? LIMIT 1`,
+                    params: [candidate],
+                  }));
+                  if (rows[0]?.name) candidate = rows[0].name;
+                } catch { /* keep UUID */ }
+              }
+              logSiteId = candidate;
+              log.info(`[LOG] Resolved linked WPE install for "${siteName}": ${logSiteId}`);
             }
-            logSiteId = candidate;
-            log.info(`[LOG] Resolved linked WPE install for "${siteName}": ${logSiteId}`);
-          }
-        } catch { /* no link — use local site name, log data will likely be absent */ }
-      }
-
-      // Traffic Intelligence from log-processor (graceful skip if no data)
-      let logSection: string | null = null;
-      try {
-        logSection = await getLogInsights(logSiteId, tools, log);
-      } catch (err: unknown) {
-        log.warn(`[LOG] getLogInsights failed: ${(err as Error).message}`);
-      }
-
-      // Topical map via k-means on document embeddings
-      let topicSection = '';
-      try {
-        log.info(`[TOPICS] Clustering ${analysisSite!} documents into topic groups…`);
-        const rawDocs = await tools.invoke('get_all_site_documents', {
-          site: analysisSite!,
-          include_embeddings: true,
-        });
-        const parsedDocs = (typeof rawDocs === 'string' ? JSON.parse(rawDocs) : rawDocs) as {
-          documentCount: number;
-          documents: Array<{ postId: number; postType: string; title: string; embedding: string }>;
-        };
-        if (parsedDocs.documentCount > 0 && parsedDocs.documents?.length > 0) {
-          const docs = parsedDocs.documents.map(d => ({
-            ...d,
-            vec: new Float32Array(Buffer.from(d.embedding, 'base64').buffer),
-          }));
-          const k = Math.min(8, docs.length);
-          const clusters = kMeans(docs.map(d => d.vec), k);
-          const clusterLines = clusters
-            .map((memberIndices, i) => {
-              const members = memberIndices.map(idx => docs[idx]);
-              const label = members[0]?.title ?? `Topic ${i + 1}`;
-              const sample = members.slice(0, 4).map(m => m.title).join(', ');
-              return `  • **${label}** — ${members.length} posts (${sample}${members.length > 4 ? ` +${members.length - 4} more` : ''})`;
-            })
-            .filter(l => l);
-          topicSection = `\n## Topical Map (${k} clusters)\n\n${clusterLines.join('\n')}`;
-          log.info(`[TOPICS] Built topic map: ${k} clusters from ${parsedDocs.documentCount} documents`);
+          } catch { /* no link — log data will likely be absent */ }
         }
-      } catch (err: unknown) {
-        log.warn(`[TOPICS] Topic map skipped: ${(err as Error).message}`);
-        topicSection = '';
+
+        // Traffic Intelligence from log-processor (graceful skip if no data)
+        let logSection: string | null = null;
+        try {
+          logSection = await getLogInsights(logSiteId, tools, log);
+        } catch (err: unknown) {
+          log.info(`[LOG] Traffic intelligence unavailable: ${(err as Error).message}`);
+        }
+
+        // Topical map — shared builder, chunk-aggregated
+        let topicSection = '';
+        try {
+          const map = await buildTopicMapForSite(analysisSite, tools, TOPIC_CLUSTERS, (m) => log.warn(m));
+          if (map) {
+            topicSection = [
+              ``,
+              `## Topical Map`,
+              `${map.docCount} posts in ${map.k} clusters`,
+              ...map.clusters.slice(0, 8).map((c, i) => `  ${i + 1}. ${c.label} — ${c.count} posts`),
+              map.clusters.length > 8 ? `  … ${map.clusters.length - 8} more — run build_topic_map for the full map` : '',
+            ].filter(Boolean).join('\n');
+          }
+        } catch (e: unknown) {
+          log.warn(`Topic map unavailable: ${(e as Error).message}`);
+        }
+
+        reportLines = [
+          `# Site Content Report: ${siteName}`,
+          ``,
+          `**Posts analyzed:** ${posts.length}`,
+          `**Orphaned (no inbound links):** ${orphans.length}${orphans.length > 0 ? ` — ${orphans.slice(0, 3).map(p => p.post_title).join(', ')}${orphans.length > 3 ? ` +${orphans.length - 3} more` : ''}` : ''}`,
+          `**Stale (>365 days old):** ${stale.length}${stale.length > 0 ? ` — ${stale.slice(0, 3).map(p => p.post_title).join(', ')}${stale.length > 3 ? ` +${stale.length - 3} more` : ''}` : ''}`,
+          truncated.length > 0 ? `**Degraded index entries:** ${truncated.length} (reindex to restore full fidelity)` : '',
+          createdSandbox ? `**Analyzed via sandbox:** ${analysisSite}` : '',
+          topicSection,
+          logSection ?? '',
+        ].filter(Boolean).join('\n');
+
+        log.siteStatus(siteName, orphans.length + stale.length > 0 ? 'findings' : 'clean');
+      } catch (e: unknown) {
+        const msg = (e as Error).message;
+        if (msg.includes('not running') || msg.includes('halted')) {
+          log.warn(`Site "${analysisSite}" is not running — start it in Local to run analysis`);
+          log.siteStatus(siteName, 'findings');
+        } else {
+          log.warn(`Analysis failed: ${msg}`);
+          log.siteStatus(siteName, 'error');
+        }
       }
 
-      const reportLines = [
-        `# Site Content Report: ${siteName}`,
-        ``,
-        `**Posts analyzed:** ${posts.length}`,
-        `**Orphaned (no inbound links):** ${orphans.length}${orphans.length > 0 ? ` — ${orphans.slice(0, 3).map(p => p.post_title).join(', ')}${orphans.length > 3 ? ` +${orphans.length - 3} more` : ''}` : ''}`,
-        `**Stale (>365 days old):** ${stale.length}${stale.length > 0 ? ` — ${stale.slice(0, 3).map(p => p.post_title).join(', ')}${stale.length > 3 ? ` +${stale.length - 3} more` : ''}` : ''}`,
-        createdSandbox ? `**Analyzed via sandbox:** ${analysisSite}` : '',
-        topicSection,
-        ``,
-        `**Next:** Connect Google Search Console to unlock demand-weighted gap analysis (T1)`,
-        logSection ?? '',
-      ].filter(Boolean).join('\n');
+      // ----------------------------------------------------------------
+      // T1 — GSC demand layer. Runs regardless of whether content analysis
+      // succeeded: demand data doesn't depend on the local index.
+      // ----------------------------------------------------------------
+      let gscLine = '';
+      try {
+        const gscStatus = await credentials.getStatus('google');
+        const gscProperty = state.get<string>(gscPropertyKey(siteName));
 
-      log.siteStatus(siteName, orphans.length + stale.length > 0 ? 'findings' : 'clean');
-      state.set('lastReport', reportLines);
-      // Return summary so RunDrawer renders the Site Content Report inline
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return { summary: reportLines } as any;
-    } catch (e: unknown) {
-      const msg = (e as Error).message;
-      if (msg.includes('not running') || msg.includes('halted')) {
-        log.warn(`Site "${analysisSite}" is not running — start it in Local to run analysis`);
-        log.siteStatus(siteName, 'findings');
+        if (gscStatus === 'connected' && gscProperty) {
+          log.phase('Demand Analysis (T1)', `GSC: ${gscProperty}`);
+          // Individual T1 tools are invoked interactively; a scheduled run only
+          // surfaces availability so runs stay inside the time budget.
+          log.finding({
+            id: 'gsc-connected',
+            severity: 'info',
+            title: 'Search Console connected — run detect_cannibalization and find_demand_gaps for demand analysis',
+            site: siteName,
+          });
+          gscLine = `**Search Console:** connected (${gscProperty}) — run detect_cannibalization / find_demand_gaps for the demand layer`;
+        } else if (gscStatus === 'connected') {
+          gscLine = `**Search Console:** account connected, but no property is bound to this site — run connect_gsc siteId="${siteName}"`;
+        } else if (gscStatus === 'revoked') {
+          gscLine = `**Search Console:** access was revoked — reconnect to restore demand analysis`;
+        } else {
+          log.info('Search Console not connected — T1 demand analysis unavailable. Run connect_gsc to activate.');
+          gscLine = `**Next:** Connect Google Search Console to unlock demand-weighted gap analysis (T1)`;
+        }
+      } catch (e: unknown) {
+        log.info(`Search Console status unavailable: ${(e as Error).message}`);
+      }
+
+      if (reportLines) {
+        reportLines = [reportLines, gscLine].filter(Boolean).join('\n');
+        state.set('lastReport', reportLines);
+        summaries.push(reportLines);
       } else {
-        log.warn(`Analysis failed: ${msg}`);
-        log.siteStatus(siteName, 'error');
+        summaries.push([
+          `# Site Content Report: ${siteName}`,
+          ``,
+          `⚠ Analysis did not complete — see the run log for details.`,
+          gscLine,
+        ].filter(Boolean).join('\n'));
       }
+
+      // Bookkeeping on EVERY outcome so failures can't hot-loop either.
+      state.set(cdKey, Date.now());
+      try { await state.setCooldown(cdKey); } catch { /* SDK cooldown optional */ }
+      state.set('lastRunAt', Date.now());
+      state.set('lastSite', siteName);
+      log.info(`seo-insights: run complete for "${siteName}"`);
     }
 
-    // T1 — GSC demand layer (optional; degrades gracefully when not connected)
-    const gscStatus = await credentials.getStatus('google');
-    const gscProperty = state.get<string>('gscProperty');
-
-    if (gscStatus === 'connected' && gscProperty) {
-      log.phase('Demand Analysis (T1)', `GSC: ${gscProperty}`);
-      log.info('Search Console connected — running T1 demand analysis');
-      // Individual T1 tools are invoked interactively; scheduled run surfaces a summary
-      // finding that T1 data is available, not the full analysis (avoid 10-min runs)
-      log.finding({
-        id: 'gsc-connected',
-        severity: 'info',
-        title: 'Search Console connected — run detect_cannibalization and find_demand_gaps for demand analysis',
-        site: siteName,
-      });
-    } else if (gscStatus === 'not_connected') {
-      log.info('Search Console not connected — T1 demand analysis unavailable. Run connect_gsc to activate.');
-    }
-
-    // Set 6-hour cooldown so background WPE syncs don't re-trigger analysis
-    await state.setCooldown(cooldownKey);
-
-    state.set('lastRunAt', Date.now());
-    state.set('lastSite', siteName);
-    log.info(`seo-insights: run complete for "${siteName}"`);
+    if (summaries.length === 0) return;
+    // Return summary so RunDrawer renders the Site Content Report inline
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { summary: summaries.join('\n\n---\n\n') } as any;
   },
 });
