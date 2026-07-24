@@ -1,15 +1,22 @@
 import React from 'react';
-import { marked } from 'marked';
+import { marked, Renderer } from 'marked';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { ActionCard } from './ActionCard';
 import type { ChatSession, ChatMessage } from '../../../common/types';
 
+const safeRenderer = new Renderer();
+// Suppress raw HTML passthrough — LLM output should never need raw HTML
+(safeRenderer as any).html = () => '';
+
 export function renderMarkdown(content: string): string {
-  const raw = marked.parse(content) as string;
-  // Strip script and iframe tags to prevent XSS
+  const raw = marked.parse(content, { renderer: safeRenderer }) as string;
   return raw
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '');
+    // Belt-and-suspenders: strip any event handlers and javascript: protocols
+    // that might slip through via markdown link/image syntax
+    .replace(/ on\w+="[^"]*"/gi, '')
+    .replace(/ on\w+='[^']*'/gi, '')
+    .replace(/href="javascript:[^"]*"/gi, 'href="#"')
+    .replace(/href='javascript:[^']*'/gi, "href='#'");
 }
 
 interface UIMessage {

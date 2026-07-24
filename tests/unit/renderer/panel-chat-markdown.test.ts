@@ -34,4 +34,20 @@ describe('renderMarkdown', () => {
     expect(html).toContain('<li>foo</li>');
     expect(html).toContain('<li>bar</li>');
   });
+
+  it('strips onerror attributes', () => {
+    const html = renderMarkdown('<img src=x onerror="alert(1)">');
+    expect(html).not.toContain('onerror');
+  });
+
+  it('neutralizes javascript: hrefs', () => {
+    const html = renderMarkdown('[click](javascript:alert(1))');
+    expect(html).not.toContain('javascript:');
+  });
+
+  it('strips raw HTML blocks', () => {
+    const html = renderMarkdown('<svg onload="evil()">test</svg>');
+    expect(html).not.toContain('onload');
+    expect(html).not.toContain('<svg');
+  });
 });
