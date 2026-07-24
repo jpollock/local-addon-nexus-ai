@@ -3,6 +3,7 @@ import { OpenAIProvider } from '../../src/main/chat/providers/openai';
 import { AnthropicProvider } from '../../src/main/chat/providers/anthropic';
 import { GoogleProvider } from '../../src/main/chat/providers/google';
 import { LocalGatewayProvider } from '../../src/main/chat/providers/local-gateway';
+import { PowerProvider } from '../../src/main/chat/providers/power';
 import { initializeProviders, getProvider, listProviders } from '../../src/main/chat/providers/index';
 
 // ---------------------------------------------------------------------------
@@ -14,9 +15,9 @@ describe('Provider Registry', () => {
     initializeProviders();
   });
 
-  test('initializes four user-facing providers (local-gateway excluded from list)', () => {
+  test('initializes five user-facing providers (local-gateway excluded from list)', () => {
     const providers = listProviders();
-    expect(providers.length).toBe(4);
+    expect(providers.length).toBe(5);
   });
 
   test('can retrieve each provider by id', () => {
@@ -24,6 +25,7 @@ describe('Provider Registry', () => {
     expect(getProvider('anthropic')).not.toBeNull();
     expect(getProvider('openai')).not.toBeNull();
     expect(getProvider('google')).not.toBeNull();
+    expect(getProvider('power')).not.toBeNull();
     expect(getProvider('local-gateway')).not.toBeNull(); // still in registry, just not in listProviders()
   });
 
@@ -39,6 +41,7 @@ describe('Provider Registry', () => {
     expect(byId['anthropic'].requiresApiKey).toBe(true);
     expect(byId['openai'].requiresApiKey).toBe(true);
     expect(byId['google'].requiresApiKey).toBe(true);
+    expect(byId['power'].requiresApiKey).toBe(true);
     // local-gateway is excluded from listProviders() — verify it's absent
     expect(byId['local-gateway']).toBeUndefined();
   });
@@ -161,6 +164,7 @@ describe('All providers implement AIProvider interface', () => {
     new AnthropicProvider(),
     new GoogleProvider(),
     new LocalGatewayProvider(),
+    new PowerProvider(),
   ];
 
   test.each(providers.map((p) => [p.id, p]))('%s has id string', (_id, provider: any) => {
