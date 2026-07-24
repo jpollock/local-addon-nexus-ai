@@ -147,6 +147,8 @@ export class GraphService {
   }
 
   async initialize(): Promise<void> {
+    if (this.db) return; // already initialized
+
     // Create directory if needed
     if (this.dbPath !== ':memory:') {
       const dir = path.dirname(this.dbPath);

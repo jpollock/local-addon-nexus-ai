@@ -311,6 +311,10 @@ export interface NexusSettings {
   wpeContentIndexAutoEnabled?: boolean;
   /** How often to run WPE content index in hours (default: 24h) */
   wpeContentIndexIntervalHours?: number;
+  /** Chat history retention policy: 7, 30, 90 days or null for forever. Default: null */
+  chatRetentionDays?: 7 | 30 | 90 | null;
+  /** Whether the docked AI chat panel is enabled. Default: true */
+  dockedPanelEnabled?: boolean;
 }
 
 export interface SiteAIConfig {
@@ -322,6 +326,30 @@ export interface SiteAIConfig {
   configuredAt: number;
   /** Whether Local AI Gateway was active when this site was configured */
   useLocalGateway?: boolean;
+}
+
+// ===== Chat Session Types =====
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  scopeLabel: string;        // "All sites · 5 local"
+  scopeSiteIds: string[];    // site IDs
+  createdAt: number;         // ms epoch
+  updatedAt: number;         // ms epoch
+  pinned: boolean;
+  actionCount: number;
+  expiresAt: number | null;  // null = pinned or Forever
+}
+
+export interface ChatMessage {
+  id: string;
+  sessionId: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  toolCalls?: unknown;       // JSON-serialised tool calls
+  segments?: unknown;        // JSON-serialised MessageSegment[]
+  timestamp: number;
 }
 
 // ===== Unified Search Types =====

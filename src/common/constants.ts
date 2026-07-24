@@ -138,6 +138,15 @@ export const IPC_CHANNELS = {
   AI_CONTEXT_GENERATE: `${ADDON_PREFIX}:ai-context:generate`,
   AI_CONTEXT_GET_STATUS: `${ADDON_PREFIX}:ai-context:get-status`,
 
+  // Docked Chat Panel (Tasks 1-21)
+  CHAT_SESSION_LIST: `${ADDON_PREFIX}:sessions:list`,
+  CHAT_SESSION_GET: `${ADDON_PREFIX}:sessions:get`,
+  CHAT_SESSION_SAVE: `${ADDON_PREFIX}:sessions:save`,
+  CHAT_SESSION_DELETE: `${ADDON_PREFIX}:sessions:delete`,
+  CHAT_SESSION_ACTION_RECORDED: `${ADDON_PREFIX}:sessions:action-recorded`,
+  ACTIVITY_FILTER: `${ADDON_PREFIX}:activity:filter`,
+  OPEN_CHAT_SESSION: `${ADDON_PREFIX}:open-session`,
+
   // WPE Site Sync (Phase 1)
   WPE_SYNC_ALL: `${ADDON_PREFIX}:wpe:sync-all`,
   WPE_SYNC_STOP: `${ADDON_PREFIX}:wpe:sync-stop`,
@@ -228,6 +237,9 @@ export const IPC_CHANNELS = {
   CREDENTIAL_API_KEY_SET:    `${ADDON_PREFIX}:credential:api-key:set`,
   CREDENTIAL_API_KEY_STATUS: `${ADDON_PREFIX}:credential:api-key:status`,
   CREDENTIAL_API_KEY_CLEAR:  `${ADDON_PREFIX}:credential:api-key:clear`,
+
+  // Telemetry (fire-and-forget from renderer → main)
+  TELEMETRY_TRACK: `${ADDON_PREFIX}:telemetry`,
 } as const;
 
 // ---------------------------------------------------------------------------

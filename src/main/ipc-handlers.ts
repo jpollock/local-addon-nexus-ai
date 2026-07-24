@@ -26,6 +26,14 @@ import type { GraphService } from './events/GraphService';
 import type { EventProcessor } from './events/EventProcessor';
 import { setupSiteForAI } from './mcp/modules/wp-connector/setup-ai';
 import { scanDatabase } from './mcp/modules/db-scanner/db-scanner';
+import {
+  createSessionTables,
+  listSessions,
+  getSession,
+  saveSession,
+  deleteSession,
+  pruneSessions,
+} from './ipc/chat-sessions';
 import { switchProviderForSite } from './mcp/modules/wp-connector/switch-provider';
 import { generateEventSummary } from './events/event-summary';
 import type { EventTimelineEntry, EventStats, StartupStatus } from '../common/types';
@@ -76,6 +84,7 @@ import {
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
+import { CloudflareTransmitter } from './telemetry/CloudflareTransmitter';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -95,6 +104,7 @@ const DEFAULT_SETTINGS: NexusSettings = {
   excludedSiteIds: [],
   wpeSyncAutoEnabled: false,    // opt-in: user must explicitly enable WPE sync
   wpeRefreshAutoEnabled: false, // opt-in: user must explicitly enable SSH refresh
+  chatRetentionDays: 30 as (7 | 30 | 90 | null),
 };
 
 export interface IpcHandlerDeps {
@@ -289,6 +299,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
 
   // Initialize audit logger for tracking remote operations
   const auditLogger = new AuditLogger(registryStorage);
+
+  // createSessionTables / pruneSessions are called in index.ts after graphService.initialize()
+  // because graphService.getDb() is null here (registerIpcHandlers runs before the async init).
 
   /**
    * Notify Local's main UI to refresh site groups after a mutation.
@@ -4812,6 +4825,60 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   });
 
   // Note: CREDENTIAL_EVENT is a push channel (main → renderer); no handler needed.
+
+  // =========================================================================
+  // Docked Chat Panel — Session persistence (Task 3)
+  // =========================================================================
+
+  safeHandle(IPC_CHANNELS.CHAT_SESSION_LIST, async () => {
+    const db = graphService.getDb();
+    return listSessions(db!);
+  });
+
+  safeHandle(IPC_CHANNELS.CHAT_SESSION_GET, async (_event: any, { sessionId }: { sessionId: string }) => {
+    const db = graphService.getDb();
+    localLogger.info('[NexusAI] CHAT_SESSION_GET — db:', db ? 'ready' : 'NULL', 'sessionId:', sessionId);
+    if (!db) return null;
+    const result = getSession(db, sessionId);
+    localLogger.info('[NexusAI] CHAT_SESSION_GET — result:', result ? `${result.messages?.length ?? 0} messages` : 'null');
+    return result;
+  });
+
+  safeHandle(IPC_CHANNELS.CHAT_SESSION_SAVE, async (_event: any, { session, messages }: { session: any; messages: any[] }) => {
+    const db = graphService.getDb();
+    localLogger.info('[NexusAI] CHAT_SESSION_SAVE — db:', db ? 'ready' : 'NULL', 'session:', session?.id, 'messages:', messages?.length);
+    if (!db) {
+      localLogger.error('[NexusAI] CHAT_SESSION_SAVE — db is null, cannot save');
+      return { success: false, error: 'db not ready' };
+    }
+    saveSession(db, session, messages);
+    localLogger.info('[NexusAI] CHAT_SESSION_SAVE — saved ok');
+    return { success: true };
+  });
+
+  safeHandle(IPC_CHANNELS.CHAT_SESSION_DELETE, async (_event: any, { sessionId }: { sessionId: string }) => {
+    const db = graphService.getDb();
+    deleteSession(db!, sessionId);
+  });
+
+  // Remove any listeners from a prior hot-reload before re-registering.
+  ipcMain.removeAllListeners(IPC_CHANNELS.ACTIVITY_FILTER);
+  ipcMain.on(IPC_CHANNELS.ACTIVITY_FILTER, (_event: any, _payload: { sessionId: string; sessionTitle: string }) => {
+    // Renderer handles opening the Activity tab — main process is a passthrough here.
+    // Future: emit to other windows if needed.
+  });
+
+  // Telemetry — fire-and-forget from renderer (ipcRenderer.send)
+  // Remove any listeners from a prior hot-reload before re-registering.
+  ipcMain.removeAllListeners(IPC_CHANNELS.TELEMETRY_TRACK);
+  ipcMain.on(IPC_CHANNELS.TELEMETRY_TRACK, (_event: any, { event, properties }: { event: string; properties?: Record<string, unknown> }) => {
+    try {
+      CloudflareTransmitter.recordEvent({
+        event_type: event,
+        ...(properties as any),
+      });
+    } catch { /* never block the renderer */ }
+  });
 
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
 }

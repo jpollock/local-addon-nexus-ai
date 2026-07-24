@@ -6,6 +6,7 @@ import { NexusSiteTab } from './components/NexusSiteTab';
 import { NexusSiteTabSummary } from './components/NexusSiteTabSummary';
 import { SidebarSearchPanel } from './components/SidebarSearchPanel';
 import { ConnectionsPanel } from './components/credentials/ConnectionsPanel';
+import { DockedPanelContainer } from './components/DockedPanel/DockedPanelContainer';
 import { IPC_CHANNELS } from '../common/constants';
 import { nexusStore } from './store/NexusStateManager';
 import type { NexusState } from './store/NexusStateManager';
@@ -105,10 +106,8 @@ export default function renderer(context: any): void {
         if (pendingSettings) {
           const result = await electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, pendingSettings);
           pendingSettings = null;
-          // Notify all site panels to refresh their AI config display
-          if (result?._providerChanged || result?._gatewayChanged) {
-            window.dispatchEvent(new CustomEvent('nexus-ai:settings-applied', { detail: result }));
-          }
+          // Notify all site panels and the docked panel gate to refresh
+          window.dispatchEvent(new CustomEvent('nexus-ai:settings-applied', { detail: result }));
         }
       },
     }, {
@@ -195,6 +194,46 @@ export default function renderer(context: any): void {
   // Use old React API (Local uses React 16, not 18)
   const ReactDOM = require('react-dom');
   ReactDOM.render(React.createElement(SidebarSearchContainer), container);
+
+  // Mount docked panel gate — reads dockedPanelEnabled from settings and conditionally
+  // renders DockedPanelContainer. Re-checks when settings are applied from Preferences.
+  class DockedPanelGate extends React.Component<any, { enabled: boolean | null }> {
+    state = { enabled: null as boolean | null };
+
+    async componentDidMount() {
+      const settings = await electron.ipcRenderer.invoke(IPC_CHANNELS.GET_SETTINGS);
+      this.setState({ enabled: settings?.dockedPanelEnabled !== false });
+      window.addEventListener('nexus-ai:settings-applied', this.onSettingsApplied);
+    }
+
+    componentWillUnmount() {
+      window.removeEventListener('nexus-ai:settings-applied', this.onSettingsApplied);
+    }
+
+    onSettingsApplied = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && typeof detail.dockedPanelEnabled === 'boolean') {
+        this.setState({ enabled: detail.dockedPanelEnabled });
+      } else if (detail) {
+        // Setting not present in event — re-fetch to be safe
+        electron.ipcRenderer.invoke(IPC_CHANNELS.GET_SETTINGS).then((s: any) => {
+          this.setState({ enabled: s?.dockedPanelEnabled !== false });
+        });
+      }
+    };
+
+    render() {
+      if (this.state.enabled === null) return null; // loading
+      if (!this.state.enabled) return null;
+      return React.createElement(DockedPanelContainer, { electron });
+    }
+  }
+
+  const dockedPanelRoot = document.createElement('div');
+  dockedPanelRoot.id = 'nexus-docked-panel';
+  dockedPanelRoot.style.cssText = 'pointer-events:none;position:fixed;inset:0;z-index:8999;';
+  document.body.appendChild(dockedPanelRoot);
+  ReactDOM.render(React.createElement(DockedPanelGate), dockedPanelRoot);
 
   // Inject search button into Local's sidebar toolbar
   const injectSearchButton = () => {

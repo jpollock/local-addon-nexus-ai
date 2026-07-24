@@ -37,6 +37,7 @@ import { registerIpcHandlers, getAgentSetting } from './ipc-handlers';
 import { initializeProviders } from './chat/providers/index';
 import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
+import { createSessionTables, pruneSessions } from './ipc/chat-sessions';
 import { GraphService } from './events/GraphService';
 import { EventProcessor } from './events/EventProcessor';
 import { HttpEventInterface } from './events/HttpEventInterface';
@@ -197,6 +198,23 @@ export default function main(context: any): void {
   const mysqlExtractor = new MySQLExtractor();
   const indexRegistry = new IndexRegistry(registryStorage);
   const graphService = new GraphService(graphDbPath, localLogger);
+
+  // Initialize GraphDB early — SQLite is lightweight and independent of LanceDB.
+  // This ensures session tables are ready before any chat IPC fires, even if the
+  // VectorStore/EmbeddingService chain fails or is still in progress.
+  (async () => {
+    try {
+      await graphService.initialize();
+      const db = graphService.getDb();
+      if (db) {
+        createSessionTables(db);
+        pruneSessions(db);
+      }
+      localLogger.info('[NexusAI] GraphService (early init) ready');
+    } catch (err) {
+      localLogger.error('[NexusAI] GraphService early init failed:', (err as Error).message);
+    }
+  })();
 
   // Checkpoint WAL on clean shutdown so committed writes survive a restart.
   // Also run a passive checkpoint every 5 minutes to keep WAL size bounded.
@@ -464,6 +482,9 @@ export default function main(context: any): void {
       // Wire SmartSearch stores + handler into the HTTP interface
       const graphDb = graphService.getDb();
       if (graphDb) {
+        createSessionTables(graphDb);
+        pruneSessions(graphDb);
+
         const synonymStore = new SynonymStore(graphDb);
         synonymStore.initialize();
         const semanticConfig = new SemanticConfig(graphDb);
