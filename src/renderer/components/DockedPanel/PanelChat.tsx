@@ -31,6 +31,7 @@ interface Props {
   selectedSiteIds: string[];
   onSessionCreated: (id: string) => void;
   onSessionSaved: (session: ChatSession, messages: ChatMessage[]) => void;
+  onStreamingStatusChange?: (status: string | null) => void;
 }
 
 interface State {
@@ -292,6 +293,8 @@ export class PanelChat extends React.Component<Props, State> {
     }
     if (this.offlineListener) window.removeEventListener('offline', this.offlineListener);
     if (this.onlineListener) window.removeEventListener('online', this.onlineListener);
+
+    this.props.onStreamingStatusChange?.(null);
   }
 
   componentDidUpdate(prevProps: Props) {
@@ -374,6 +377,7 @@ export class PanelChat extends React.Component<Props, State> {
         });
         return { messages: msgs };
       });
+      this.props.onStreamingStatusChange?.(`Running ${toolDisplayName(event.name)}…`);
     } else if (event.type === 'tool_call_approval_needed') {
       // Tier-3 destructive tool — upgrade whichever message owns this toolCall id
       this.setState((s) => ({
@@ -403,6 +407,7 @@ export class PanelChat extends React.Component<Props, State> {
           { id: makeId(), role: 'system' as const, content: `Error: ${event.message}` },
         ],
       }));
+      this.props.onStreamingStatusChange?.(null);
     } else if (event.type === 'done') {
       this.setState(
         (s) => ({
@@ -412,7 +417,10 @@ export class PanelChat extends React.Component<Props, State> {
             m.id === streamingId ? { ...m, streaming: false } : m,
           ),
         }),
-        () => this.persistSession(),
+        () => {
+          this.persistSession();
+          this.props.onStreamingStatusChange?.(null);
+        },
       );
     }
     this.scrollToBottom();
