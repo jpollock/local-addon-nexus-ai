@@ -3,6 +3,14 @@
 const agent = require('../../../../agents/security-sentinel/agent');
 const { parseSqlResult, getScanScope } = agent._test;
 
+// Decodes phpJson() payloads in PHP code strings back to plain JSON so test
+// assertions can check for slug/path substrings without knowing the base64.
+function decodePhpPayloads(code) {
+  return code.replace(/json_decode\(base64_decode\('([^']+)'\),\s*true\)/g, (_, b64) => {
+    return Buffer.from(b64, 'base64').toString('utf8');
+  });
+}
+
 // We'll add specific test blocks in each task
 describe('security-sentinel', () => {
   it('has correct name and version', () => {
@@ -175,15 +183,22 @@ describe('security-sentinel', () => {
   describe('llmUserAudit', () => {
     const { llmUserAudit } = require('../../../../agents/security-sentinel/agent')._test;
 
-    it('returns empty signals for clearly legitimate usernames', async () => {
-      const fakeAi = { run: jest.fn().mockResolvedValue('These usernames all appear legitimate.') };
+    it('returns empty signals when LLM returns suspicious=false', async () => {
+      const fakeAi = { generateObject: jest.fn().mockResolvedValue({ suspicious: false, accounts: [], summary: '' }) };
       const users = [{ username: 'jeremy', email: 'j@wpengine.com' }];
       const result = await llmUserAudit(users, fakeAi);
       expect(result.signals).toHaveLength(0);
     });
 
-    it('returns a critical signal when LLM flags synthetic usernames', async () => {
-      const fakeAi = { run: jest.fn().mockResolvedValue('SUSPICIOUS: admin_MT6ZqT appears programmatically generated; oxhuhafz is a random string.') };
+    it('returns a critical signal when LLM returns suspicious=true with flagged accounts', async () => {
+      const fakeAi = { generateObject: jest.fn().mockResolvedValue({
+        suspicious: true,
+        accounts: [
+          { username: 'admin_MT6ZqT', reason: 'programmatically generated suffix' },
+          { username: 'oxhuhafz', reason: 'random string pattern' },
+        ],
+        summary: 'Two accounts appear attacker-created',
+      }) };
       const users = [
         { username: 'admin_MT6ZqT', email: '' },
         { username: 'oxhuhafz', email: '' },
@@ -194,11 +209,21 @@ describe('security-sentinel', () => {
       expect(result.signals[0].id).toBe('LLM-USER-01');
     });
 
-    it('calls ai.run with the username list', async () => {
-      const fakeAi = { run: jest.fn().mockResolvedValue('Looks fine.') };
+    it('returns no signal when suspicious=true but accounts array is empty', async () => {
+      // Guards against malformed LLM response: suspicious flag set but no specific accounts
+      const fakeAi = { generateObject: jest.fn().mockResolvedValue({ suspicious: true, accounts: [], summary: '' }) };
+      const users = [{ username: 'testuser', email: 't@t.com' }];
+      const result = await llmUserAudit(users, fakeAi);
+      expect(result.signals).toHaveLength(0);
+    });
+
+    it('calls ai.generateObject with the username list in the prompt', async () => {
+      const fakeAi = { generateObject: jest.fn().mockResolvedValue({ suspicious: false, accounts: [], summary: '' }) };
       const users = [{ username: 'testuser', email: 't@t.com' }];
       await llmUserAudit(users, fakeAi);
-      expect(fakeAi.run).toHaveBeenCalledWith(expect.stringContaining('testuser'));
+      const call = fakeAi.generateObject.mock.calls[0][0];
+      expect(call.prompt).toContain('testuser');
+      expect(call.schema).toBeDefined();
     });
   });
 
@@ -677,9 +702,9 @@ describe('security-sentinel', () => {
 
       await tier3Remediate(install, 'CLASSIFICATION: active-compromise', [signal], 'sandbox-abc', tools, log);
 
-      // Step 3: plugin removal — code contains slug and rmdir/unlink (not quarantine)
+      // Step 3: plugin removal — decoded code contains slug and rmdir/unlink (not quarantine)
       const removeCall = tools.invoke.mock.calls.find(
-        c => c[0] === 'wp_eval' && c[1].code.includes('wp-compat') && c[1].code.includes('rmdir')
+        c => c[0] === 'wp_eval' && decodePhpPayloads(c[1].code).includes('wp-compat') && c[1].code.includes('rmdir')
       );
       expect(removeCall).toBeDefined();
       expect(removeCall[1].site).toBe('sandbox-abc');
@@ -694,7 +719,7 @@ describe('security-sentinel', () => {
       await tier3Remediate(install, 'CLASSIFICATION: misconfiguration', [signal], 'sandbox-abc', tools, log);
 
       const removeCall = tools.invoke.mock.calls.find(
-        c => c[0] === 'wp_eval' && c[1].code.includes('fileorganizer') && c[1].code.includes('rmdir')
+        c => c[0] === 'wp_eval' && decodePhpPayloads(c[1].code).includes('fileorganizer') && c[1].code.includes('rmdir')
       );
       expect(removeCall).toBeDefined();
     });
@@ -706,7 +731,7 @@ describe('security-sentinel', () => {
       await tier3Remediate(install, 'CLASSIFICATION: high-risk', [signal], 'sandbox-abc', tools, log);
 
       const removeCall = tools.invoke.mock.calls.find(
-        c => c[0] === 'wp_eval' && c[1].code.includes('fileorganizer') && c[1].code.includes('rmdir')
+        c => c[0] === 'wp_eval' && decodePhpPayloads(c[1].code).includes('fileorganizer') && c[1].code.includes('rmdir')
       );
       expect(removeCall).toBeDefined();
     });
@@ -821,15 +846,15 @@ describe('security-sentinel', () => {
     it('step 3 includes hardcoded attacker slugs', () => {
       const checklist = buildRemediationChecklist({}, [], 'sandbox');
       const step3 = checklist.find(s => s.step === 3);
-      expect(step3.toolArgs.code).toContain('wp-compat');
-      expect(step3.toolArgs.code).toContain('fileorganizer');
+      expect(decodePhpPayloads(step3.toolArgs.code)).toContain('wp-compat');
+      expect(decodePhpPayloads(step3.toolArgs.code)).toContain('fileorganizer');
     });
 
     it('step 3 adds signal-derived slugs to the removal list', () => {
       const signals = [{ id: 'ABS-05', severity: 'critical', title: 'Known backdoor plugin detected: evil-custom-slug' }];
       const checklist = buildRemediationChecklist({}, signals, 'sandbox');
       const step3 = checklist.find(s => s.step === 3);
-      expect(step3.toolArgs.code).toContain('evil-custom-slug');
+      expect(decodePhpPayloads(step3.toolArgs.code)).toContain('evil-custom-slug');
     });
 
     it('always includes steps 4, 6, 7, 8 (step 5 checksums deferred — not in checklist)', () => {

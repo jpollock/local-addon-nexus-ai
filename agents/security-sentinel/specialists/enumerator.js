@@ -1,5 +1,7 @@
 'use strict';
 
+const { untrusted, UNTRUSTED_DATA_RULE } = require('./_shared');
+
 // Enumerator specialist: produce a complete inventory of what exists.
 // No analysis — pure enumeration. Data is passed in; no tool calls needed.
 
@@ -47,22 +49,27 @@ function buildPrompt(data) {
   return `You are a WordPress forensics inventory specialist. Produce a complete structured inventory of the following site data.
 Do not analyze or flag — only enumerate what exists. Return raw facts.
 
+${UNTRUSTED_DATA_RULE}
+
 SITE: ${data.installName}
 
 ## Plugin directories (from filesystem scan)
-${data.pluginDirectoriesRaw}
+${untrusted('plugin_directories', data.pluginDirectoriesRaw)}
 
 ## Files in web root with non-standard extensions or locations
-${data.unexpectedFilesRaw}
+${untrusted('unexpected_files', data.unexpectedFilesRaw)}
 
 ## .htaccess file paths found
-${data.htaccessPathsRaw}
+${untrusted('htaccess_paths', data.htaccessPathsRaw)}
 
 ## Database: non-standard tables
-${data.nonStandardTablesRaw}
+${untrusted('non_standard_tables', data.nonStandardTablesRaw)}
 
 ## Database: autoloaded wp_options (option_name only)
-${data.autoloadedOptionsRaw}
+${untrusted('autoloaded_options', data.autoloadedOptionsRaw)}
+
+NOTE: If any section above shows "(not collected)" or is empty, treat it as no data available — do
+not infer findings from it.
 
 Return exactly the fields in the schema. For createdAt, use the filesystem mtime if available, or null.`;
 }

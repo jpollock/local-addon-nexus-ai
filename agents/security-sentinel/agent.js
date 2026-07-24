@@ -21,6 +21,20 @@ function extractResult(result) {
   return JSON.stringify(result);
 }
 
+// ─── PHP safe data injector ───────────────────────────────────────────────────
+// Raw JSON.stringify interpolated into double-quoted PHP strings re-exposes the
+// ${varname} interpolation vector — an attacker who can write files with names
+// like `$_GET['cmd']` gets code execution inside the wp_eval sandbox.
+// phpJson() emits `json_decode(base64_decode('...'), true)` which is safe because
+// base64 contains no PHP-interpolatable characters ($, {, `). Transport to WP-CLI
+// is identical to a raw JSON.stringify; the only thing that changes is the PHP
+// parser's interpretation of the payload. Use this for all values sourced from the
+// scanned site (file paths, option names, plugin slugs). Do NOT use for constants
+// defined in this file — JSON.stringify is fine for those.
+function phpJson(value) {
+  return `json_decode(base64_decode('${Buffer.from(JSON.stringify(value)).toString('base64')}'), true)`;
+}
+
 // ─── Signal schema ───────────────────────────────────────────────────────────
 // severity: 'critical' | 'high' | 'medium' | 'low'
 // category: 'active-compromise' | 'pre-breach' | 'misconfiguration'
@@ -489,7 +503,10 @@ async function runLogChecks(siteId, tools, log) {
   const probePathCounts = {};
   let userRestApiHits = 0;
   let authorScanHits = 0;
-  let distinctIps = 0;
+  // Peak single-day distinct attacker IPs — log-processor aggregates per-day cardinality,
+  // not a running unique set across all days, so we can only report the worst day.
+  // Thresholds (>50, >200) are calibrated to peak-day semantics, not 30-day cumulative.
+  let peakDayDistinctIps = 0;
 
   // Successful logins redirect (302/303) — exclude from attack counts
   const SUCCESSFUL_AUTH = new Set(['302', '303']);
@@ -507,7 +524,7 @@ async function runLogChecks(siteId, tools, log) {
     }
     userRestApiHits += Object.values(agg.attack?.enumeration?.userRestApi ?? {}).reduce((s, n) => s + n, 0);
     authorScanHits  += Object.values(agg.attack?.enumeration?.authorScan  ?? {}).reduce((s, n) => s + n, 0);
-    distinctIps = Math.max(distinctIps, agg.attack?.ipCardinality?.distinct ?? 0);
+    peakDayDistinctIps = Math.max(peakDayDistinctIps, agg.attack?.ipCardinality?.distinct ?? 0);
   }
 
   const totalAuthAttacks = totalLoginPosts + totalXmlrpcPosts;
@@ -515,7 +532,7 @@ async function runLogChecks(siteId, tools, log) {
   const highProbes = topProbes.filter(([, hits]) => hits > 50);
   const totalEnum  = userRestApiHits + authorScanHits;
 
-  log.info(`[LOG] ${siteId}: ${aggregates.length} days — auth=${totalAuthAttacks} probes=${topProbes.length} enum=${totalEnum} distinctIps=${distinctIps}`);
+  log.info(`[LOG] ${siteId}: ${aggregates.length} days — auth=${totalAuthAttacks} probes=${topProbes.length} enum=${totalEnum} peakDayDistinctIps=${peakDayDistinctIps}`);
 
   const signals = [];
 
@@ -544,15 +561,15 @@ async function runLogChecks(siteId, tools, log) {
   }
 
   // LOG-DIST: >50 distinct attacker IPs
-  if (distinctIps > 50) {
+  if (peakDayDistinctIps > 50) {
     signals.push({
       id: 'LOG-DIST', severity: 'high', category: 'active-compromise',
-      title: `Distributed attack campaign: ${distinctIps} distinct attacker IPs observed`,
+      title: `Distributed attack campaign: ${peakDayDistinctIps} distinct attacker IPs observed`,
     });
   }
 
   // Hardcoded L2 escalation — LOG-AUTH critical (>500) or LOG-DIST critical (>200)
-  if (totalAuthAttacks > 500 || distinctIps > 200) {
+  if (totalAuthAttacks > 500 || peakDayDistinctIps > 200) {
     const dominantPath = totalLoginPosts >= totalXmlrpcPosts ? '/wp-login.php' : '/xmlrpc.php';
     const pathFilter   = totalAuthAttacks > 500 ? { pathContains: dominantPath } : {};
     try {
@@ -575,7 +592,7 @@ async function runLogChecks(siteId, tools, log) {
     totalEnum > 0
       ? `- Enumeration: user REST API (${userRestApiHits} hits), author scan (${authorScanHits} hits)`
       : null,
-    `- Distinct attacker IPs (peak day): ${distinctIps}`,
+    `- Distinct attacker IPs (peak day): ${peakDayDistinctIps}`,
   ].filter(Boolean);
 
   const attackSummary = signals.length > 0 ? summaryLines.join('\n') : null;
@@ -775,7 +792,29 @@ async function llmUserAudit(adminUsers, ai) {
 
   const userList = adminUsers.map(u => `  - username: ${u.username}, email: ${u.email || '(none)'}`).join('\n');
 
-  const response = await ai.run(`You are a WordPress security analyst. Examine these administrator usernames and identify any that appear to be attacker-created accounts.
+  const schema = {
+    type: 'object',
+    properties: {
+      suspicious: { type: 'boolean', description: 'true if any accounts appear attacker-created' },
+      accounts: {
+        type: 'array',
+        description: 'Flagged accounts with reasoning',
+        items: {
+          type: 'object',
+          properties: {
+            username: { type: 'string' },
+            reason: { type: 'string' },
+          },
+          required: ['username', 'reason'],
+        },
+      },
+      summary: { type: 'string', description: 'One-sentence explanation of findings, or empty if clean' },
+    },
+    required: ['suspicious', 'accounts', 'summary'],
+  };
+
+  const result = await ai.generateObject({
+    prompt: `Examine these WordPress administrator accounts and identify any that appear to be attacker-created.
 
 Administrator accounts:
 ${userList}
@@ -786,13 +825,15 @@ Attacker-created accounts typically look like:
 - Misspellings of system words: adminbockup (backup), adminsysem (system)
 - Generic placeholders with no legitimate purpose
 
-If you find suspicious usernames, start your response with "SUSPICIOUS:" followed by the usernames and why.
-If all usernames appear legitimate, start with "CLEAN:".`);
+Set suspicious=true only if you find accounts matching these patterns. Legitimate usernames (real names, company names, clear roles) should not be flagged.`,
+    schema,
+    schemaName: 'UserAuditResult',
+    noTools: true,
+  });
 
-  const suspicious = response.startsWith('SUSPICIOUS:');
+  if (!result.suspicious || result.accounts.length === 0) return { signals: [] };
 
-  if (!suspicious) return { signals: [] };
-
+  const flagged = result.accounts.map(a => `${a.username}: ${a.reason}`).join('; ');
   return {
     signals: [{
       id: 'LLM-USER-01',
@@ -800,7 +841,7 @@ If all usernames appear legitimate, start with "CLEAN:".`);
       category: 'active-compromise',
       installName: adminUsers[0]?.installName ?? 'unknown',
       title: 'LLM identified synthetic/attacker-pattern administrator usernames',
-      detail: response.slice('SUSPICIOUS:'.length).trim(),
+      detail: result.summary ? `${result.summary} — ${flagged}` : flagged,
       fix: 'Delete each flagged administrator account after verifying it is not legitimate: wp user delete <id> --reassign=<legitimate-admin-id>',
     }],
   };
@@ -1122,6 +1163,27 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
     usersApiStatus:         behavioral.usersApi?.status  ?? 0,
     usersApiBody:           behavioral.usersApi?.bodyPreview ?? '',
     randomPostStatuses:     '(not collected)',
+
+    // Authoritative sampling figures derived from what was actually returned.
+    // The model cannot know the query LIMITs (they live here), so asking it to
+    // "state sampling limits" without supplying them invited invented numbers.
+    // When returned < limit the full table was examined — say so definitively.
+    samplingLimits: (() => {
+      const POSTS_LIMIT = 200;
+      const AUTOLOAD_LIMIT = 50;
+      const postsGot = (dbData.posts || []).length;
+      const autoloadGot = (dbData.autoloaded || []).length;
+      const line = (label, got, limit) => got >= limit
+        ? `- ${label}: ${got} rows returned (query limit ${limit}) — table may contain more; the remainder was NOT examined.`
+        : `- ${label}: ${got} rows returned (query limit ${limit}) — fewer than the limit, so the full set was examined.`;
+      return [
+        line('wp_posts', postsGot, POSTS_LIMIT),
+        line('wp_options (autoloaded)', autoloadGot, AUTOLOAD_LIMIT),
+        '- wp_usermeta: not collected in this run.',
+        '- wp_comments: not collected in this run.',
+        '- post_content truncated to the first 500 characters per row.',
+      ].join('\n');
+    })(),
   };
 }
 
@@ -1143,14 +1205,14 @@ async function runContentExamination(fsSignals, sandboxName, tools, log) {
   if (toExamine.length === 0) return;
 
   const paths = [...new Set(toExamine.map(f => f.path))].slice(0, 10);
-  const pathsJson = JSON.stringify(paths);
+  const pathsPhp = phpJson(paths);
   const fnsJson = JSON.stringify(DANGEROUS_FNS);
 
   try {
     const result = await tools.invoke('wp_eval', {
       site: sandboxName, skip_plugins: true, skip_themes: true,
       code: `
-        $paths = ${pathsJson};
+        $paths = ${pathsPhp};
         $dangerous = ${fnsJson};
         $out = [];
         try {
@@ -1219,12 +1281,12 @@ async function runRootFileAnalysis(fsSignals, sandboxName, tools, log) {
     .filter(p => p && p.endsWith('.php') && !p.includes('/') && !p.startsWith('  '));
   if (rootFiles.length === 0) return;
 
-  const pathsJson = JSON.stringify(rootFiles);
+  const rootFilesPhp = phpJson(rootFiles);
   try {
     const result = await tools.invoke('wp_eval', {
       site: sandboxName, skip_plugins: true, skip_themes: true,
       code: `
-        $files = ${pathsJson};
+        $files = ${rootFilesPhp};
         $out = [];
         try {
           foreach ($files as $f) {
@@ -1310,12 +1372,12 @@ async function runObfuscationDecoder(fsSignals, sandboxName, tools, log) {
     .slice(0, 3);
   if (filesToDecode.length === 0) return;
 
-  const pathsJson = JSON.stringify(filesToDecode);
+  const fileToDecodePhp = phpJson(filesToDecode);
   try {
     const result = await tools.invoke('wp_eval', {
       site: sandboxName, skip_plugins: true, skip_themes: true,
       code: `
-        $paths = ${pathsJson};
+        $paths = ${fileToDecodePhp};
         $out = [];
         foreach ($paths as $rel) {
           if (strpos($rel, 'wp-content/') === 0) {
@@ -1364,13 +1426,13 @@ async function runCoreDiff(fsSignals, sandboxName, tools, log) {
     .filter(f => !f.startsWith('wp-content/') && f.endsWith('.php') && f.length < 60)
     .slice(0, 3);
 
-  const filesJson = JSON.stringify(coreFiles);
+  const coreFilesPhp = phpJson(coreFiles);
   try {
     const result = await tools.invoke('wp_eval', {
       site: sandboxName, skip_plugins: true, skip_themes: true,
       code: `
         global $wp_version;
-        $files = ${filesJson};
+        $files = ${coreFilesPhp};
         $out = [];
         foreach ($files as $rel) {
           $full = ABSPATH . $rel;
@@ -1420,12 +1482,12 @@ async function runElfStrings(fsSignals, sandboxName, tools, log) {
     .find(p => p && p.startsWith('wp-content/') && !p.startsWith('  '));
   if (!firstElf) return;
 
-  const elfJson = JSON.stringify(firstElf);
+  const elfPhp = phpJson(firstElf);
   try {
     const result = await tools.invoke('wp_eval', {
       site: sandboxName, skip_plugins: true, skip_themes: true,
       code: `
-        $rel = ${elfJson};
+        $rel = ${elfPhp};
         $full = WP_CONTENT_DIR . substr($rel, strlen('wp-content'));
         if (!file_exists($full)) { echo json_encode(['error' => 'not found']); exit; }
         $md5 = md5_file($full);
@@ -1510,14 +1572,14 @@ async function runNetworkIndicators(fsSignals, installName, sandboxName, tools, 
   if (phpPaths.length === 0) return;
 
   const uniquePaths = [...new Set(phpPaths)].slice(0, 20);
-  const pathsJson = JSON.stringify(uniquePaths);
+  const uniquePathsPhp = phpJson(uniquePaths);
   const trustedJson = JSON.stringify(TRUSTED_INFRA_DOMAINS);
 
   try {
     const result = await tools.invoke('wp_eval', {
       site: sandboxName, skip_plugins: true, skip_themes: true,
       code: `
-        $paths = ${pathsJson};
+        $paths = ${uniquePathsPhp};
         $trusted = ${trustedJson};
         $all_ips = []; $all_urls = [];
         foreach ($paths as $rel) {
@@ -2721,7 +2783,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
       return m ? m[1].split(',').map(p => p.trim()).filter(p => VALID_SLUG_RE.test(p)) : [];
     });
   const allSlugs = [...new Set([...ATTACKER_PLUGIN_SLUGS, ...signalSlugs])];
-  const slugsJson = JSON.stringify(allSlugs);
+  const slugsPhp = phpJson(allSlugs);
 
   checklist.push({
     step: 3,
@@ -2730,7 +2792,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
     toolName: 'wp_eval',
     toolArgs: {
       site: sandboxName,
-      code: `$slugs = ${slugsJson}; foreach($slugs as $slug) { $dir = WP_PLUGIN_DIR . '/' . $slug; if (is_dir($dir)) { $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST); foreach($it as $f) { $f->isDir() ? @rmdir($f->getRealPath()) : @unlink($f->getRealPath()); } @rmdir($dir); } } $remaining = array_values(array_filter($slugs, function($s) { return is_dir(WP_PLUGIN_DIR . '/' . $s); })); echo json_encode($remaining);`,
+      code: `$slugs = ${slugsPhp}; foreach($slugs as $slug) { $dir = WP_PLUGIN_DIR . '/' . $slug; if (is_dir($dir)) { $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST); foreach($it as $f) { $f->isDir() ? @rmdir($f->getRealPath()) : @unlink($f->getRealPath()); } @rmdir($dir); } } $remaining = array_values(array_filter($slugs, function($s) { return is_dir(WP_PLUGIN_DIR . '/' . $s); })); echo json_encode($remaining);`,
     },
     expectedEmpty: true,
   });
@@ -2777,7 +2839,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
       .map(e => e.split(':')[0].trim())
       .filter(p => p && p.endsWith('.htaccess'));
     if (htaccessPaths.length > 0) {
-      const pathsJson = JSON.stringify(htaccessPaths);
+      const htaccessPhp = phpJson(htaccessPaths);
       checklist.push({
         step: '5f',
         action: `Neutralize malicious .htaccess rules: ${htaccessPaths.length} file(s)`,
@@ -2785,7 +2847,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
         toolName: 'wp_eval',
         toolArgs: {
           site: sandboxName, skip_plugins: true, skip_themes: true,
-          code: `$paths = ${pathsJson}; $host = $_SERVER['HTTP_HOST'] ?? 'localhost'; $badLine = ['/auto_prepend_file/i','/auto_append_file/i','/AddType\\\\s+application\\\\/x-httpd-php/i','/SetHandler\\\\s+application\\\\/x-httpd-php/i','/RewriteRule.*https?:\\\\/\\\\//i']; $still = []; foreach ($paths as $rel) { $full = ABSPATH . ltrim($rel, '/'); if (!file_exists($full)) continue; $lines = explode(\"\\n\", @file_get_contents($full)); $kept = []; foreach ($lines as $ln) { $bad = false; foreach ($badLine as $p) { if (preg_match($p, $ln)) { $bad = true; break; } } if (!$bad) $kept[] = $ln; } @file_put_contents($full, implode(\"\\n\", $kept)); $after = @file_get_contents($full); foreach ($badLine as $p) { if (preg_match($p, $after)) { $still[] = $rel; break; } } } echo json_encode(array_values(array_unique($still)));`,
+          code: `$paths = ${htaccessPhp}; $host = $_SERVER['HTTP_HOST'] ?? 'localhost'; $badLine = ['/auto_prepend_file/i','/auto_append_file/i','/AddType\\\\s+application\\\\/x-httpd-php/i','/SetHandler\\\\s+application\\\\/x-httpd-php/i','/RewriteRule.*https?:\\\\/\\\\//i']; $still = []; foreach ($paths as $rel) { $full = ABSPATH . ltrim($rel, '/'); if (!file_exists($full)) continue; $lines = explode(\"\\n\", @file_get_contents($full)); $kept = []; foreach ($lines as $ln) { $bad = false; foreach ($badLine as $p) { if (preg_match($p, $ln)) { $bad = true; break; } } if (!$bad) $kept[] = $ln; } @file_put_contents($full, implode(\"\\n\", $kept)); $after = @file_get_contents($full); foreach ($badLine as $p) { if (preg_match($p, $after)) { $still[] = $rel; break; } } } echo json_encode(array_values(array_unique($still)));`,
         },
         expectedEmpty: true,
       });
@@ -2802,7 +2864,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
       .map(e => e.split(':')[0].trim())
       .filter(Boolean);
     if (optionNames.length > 0) {
-      const namesJson = JSON.stringify(optionNames);
+      const namesPhp = phpJson(optionNames);
       checklist.push({
         step: '5g',
         action: `Clear malicious autoloaded option(s): ${optionNames.join(', ')}`,
@@ -2810,7 +2872,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
         toolName: 'wp_eval',
         toolArgs: {
           site: sandboxName,
-          code: `global $wpdb; $names = ${namesJson}; $patterns = ['/eval\\\\s*\\\\(/i','/base64_decode/i','/<script/i','/exec\\\\s*\\\\(/i','/system\\\\s*\\\\(/i']; $still = []; foreach ($names as $n) { $wpdb->update($wpdb->options, ['option_value' => ''], ['option_name' => $n]); $v = $wpdb->get_var($wpdb->prepare(\"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s\", $n)); foreach ($patterns as $p) { if ($v !== null && preg_match($p, $v)) { $still[] = $n; break; } } } wp_cache_flush(); echo json_encode(array_values(array_unique($still)));`,
+          code: `global $wpdb; $names = ${namesPhp}; $patterns = ['/eval\\\\s*\\\\(/i','/base64_decode/i','/<script/i','/exec\\\\s*\\\\(/i','/system\\\\s*\\\\(/i']; $still = []; foreach ($names as $n) { $wpdb->update($wpdb->options, ['option_value' => ''], ['option_name' => $n]); $v = $wpdb->get_var($wpdb->prepare(\"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s\", $n)); foreach ($patterns as $p) { if ($v !== null && preg_match($p, $v)) { $still[] = $n; break; } } } wp_cache_flush(); echo json_encode(array_values(array_unique($still)));`,
         },
         expectedEmpty: true,
       });
@@ -2884,7 +2946,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
       .map(e => e.split(' ')[0])
       .filter(f => f && f.endsWith('.php') && !f.includes('/'));
     if (rootPhpFiles.length > 0) {
-      const filesJson = JSON.stringify(rootPhpFiles);
+      const rootPhpFilesPhp = phpJson(rootPhpFiles);
       checklist.push({
         step: '5b',
         action: `Remove suspicious web root PHP files: ${rootPhpFiles.join(', ')}`,
@@ -2892,7 +2954,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
         toolName: 'wp_eval',
         toolArgs: {
           site: sandboxName, skip_plugins: true, skip_themes: true,
-          code: `$files = ${filesJson}; $abspath = rtrim(ABSPATH, '/'); $removed = []; $failed = []; foreach ($files as $f) { $path = $abspath . '/' . basename($f); $real = realpath($path); if ($real === false || strpos($real, $abspath . '/') !== 0) continue; if (file_exists($real)) { @unlink($real) ? $removed[] = $f : $failed[] = $f; } } $remaining = array_values(array_filter($files, fn($f) => file_exists($abspath . '/' . basename($f)))); echo json_encode($remaining);`,
+          code: `$files = ${rootPhpFilesPhp}; $abspath = rtrim(ABSPATH, '/'); $removed = []; $failed = []; foreach ($files as $f) { $path = $abspath . '/' . basename($f); $real = realpath($path); if ($real === false || strpos($real, $abspath . '/') !== 0) continue; if (file_exists($real)) { @unlink($real) ? $removed[] = $f : $failed[] = $f; } } $remaining = array_values(array_filter($files, fn($f) => file_exists($abspath . '/' . basename($f)))); echo json_encode($remaining);`,
         },
         expectedEmpty: true,
       });
@@ -2906,7 +2968,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
       .map(e => e.split(' ')[0])
       .filter(f => f && f.startsWith('wp-content/'));
     if (injectedPaths.length > 0) {
-      const pathsJson = JSON.stringify(injectedPaths);
+      const injectedPhp = phpJson(injectedPaths);
       checklist.push({
         step: '5c',
         action: `Remove injected files in plugins: ${injectedPaths.length} file(s)`,
@@ -2914,7 +2976,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
         toolName: 'wp_eval',
         toolArgs: {
           site: sandboxName, skip_plugins: true, skip_themes: true,
-          code: `$paths = ${pathsJson}; $base = rtrim(WP_CONTENT_DIR, '/'); foreach ($paths as $rel) { $full = realpath(ABSPATH . $rel); if ($full === false || strpos($full, $base . '/') !== 0) continue; @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists(ABSPATH . $rel))); echo json_encode($remaining);`,
+          code: `$paths = ${injectedPhp}; $base = rtrim(WP_CONTENT_DIR, '/'); foreach ($paths as $rel) { $full = realpath(ABSPATH . $rel); if ($full === false || strpos($full, $base . '/') !== 0) continue; @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists(ABSPATH . $rel))); echo json_encode($remaining);`,
         },
         expectedEmpty: true,
       });
@@ -2950,7 +3012,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
       .map(e => e.split(' ')[0])
       .filter(f => f && f.startsWith('wp-content/'));
     if (elfPaths.length > 0) {
-      const pathsJson = JSON.stringify(elfPaths);
+      const elfPathsPhp = phpJson(elfPaths);
       checklist.push({
         step: '5e',
         action: `Remove ${elfPaths.length} ELF binaries from wp-content`,
@@ -2958,7 +3020,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
         toolName: 'wp_eval',
         toolArgs: {
           site: sandboxName, skip_plugins: true, skip_themes: true,
-          code: `$paths = ${pathsJson}; $base = rtrim(WP_CONTENT_DIR, '/'); foreach ($paths as $rel) { $full = realpath(ABSPATH . $rel); if ($full === false || strpos($full, $base . '/') !== 0) continue; @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists(ABSPATH . $rel))); echo json_encode($remaining);`,
+          code: `$paths = ${elfPathsPhp}; $base = rtrim(WP_CONTENT_DIR, '/'); foreach ($paths as $rel) { $full = realpath(ABSPATH . $rel); if ($full === false || strpos($full, $base . '/') !== 0) continue; @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists(ABSPATH . $rel))); echo json_encode($remaining);`,
         },
         expectedEmpty: true,
       });
@@ -3017,6 +3079,9 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
   });
 
   // Step 8: Final clean re-scan (FS-01 + FS-02)
+  // Combines two checks: unexpected mu-plugin files (FS-01) + obfuscation patterns (FS-02).
+  // FS-02 scans plugins/, mu-plugins/, AND themes/ — Step 8 must cover all three or the
+  // coverage claim is unsound (e.g. eval(base64_decode()) in themes/functions.php survives).
   checklist.push({
     step: 8,
     action: 'Final re-scan (mu-plugins and obfuscation)',
@@ -3026,7 +3091,33 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
       site: sandboxName,
       skip_plugins: true,
       skip_themes: true,
-      code: `$mu = glob(WPMU_PLUGIN_DIR . '/*.php') ?: []; $known = ${knownListJson}; $unexpected = array_values(array_filter($mu, function($f) use ($known) { return !in_array(basename($f), $known); })); echo json_encode($unexpected);`,
+      code: `
+        $remaining = [];
+        // FS-01 check: unexpected files in mu-plugins
+        $mu = glob(WPMU_PLUGIN_DIR . '/*.php') ?: [];
+        $known = ${knownListJson};
+        foreach ($mu as $f) {
+          if (!in_array(basename($f), $known)) $remaining[] = 'mu-plugin:' . basename($f);
+        }
+        // FS-02 check: obfuscation patterns across plugins/, mu-plugins/, themes/
+        $dirs = [WP_CONTENT_DIR . '/plugins', WP_CONTENT_DIR . '/mu-plugins', WP_CONTENT_DIR . '/themes'];
+        $patterns = ['/eval\\s*\\(\\s*base64_decode/', '/eval\\s*\\(\\s*gzinflate\\s*\\(\\s*base64_decode/', '/eval\\s*\\(\\s*str_rot13/', '/assert\\s*\\(\\s*\\$/', '/create_function\\s*\\(/'];
+        foreach ($dirs as $dir) {
+          if (!is_dir($dir)) continue;
+          foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $file) {
+            if ($file->getExtension() !== 'php' || $file->getSize() > 5 * 1024 * 1024) continue;
+            $content = @file_get_contents($file->getPathname());
+            if ($content === false) continue;
+            foreach ($patterns as $p) {
+              if (@preg_match($p, $content)) {
+                $remaining[] = 'obf:' . str_replace(ABSPATH, '', $file->getPathname());
+                break;
+              }
+            }
+          }
+        }
+        echo json_encode(array_values($remaining));
+      `,
     },
     expectedEmpty: true,
   });

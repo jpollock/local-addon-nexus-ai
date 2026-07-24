@@ -1,5 +1,7 @@
 'use strict';
 
+const { untrusted, UNTRUSTED_DATA_RULE, SEVERITY_SCALE } = require('./_shared');
+
 const schema = {
   type: 'object',
   properties: {
@@ -35,16 +37,25 @@ const schema = {
 function buildPrompt(data) {
   return `You are a WordPress integrity verification specialist. Analyze the following checksum and modification data.
 
+${UNTRUSTED_DATA_RULE}
+
+${SEVERITY_SCALE}
+
 SITE: ${data.installName}
 
 ## WP core verify-checksums output
-${data.coreChecksums}
+${untrusted('core_checksums', data.coreChecksums)}
 
 ## Plugin checksum results (wp plugin verify-checksums per slug)
-${data.pluginChecksums}
+${untrusted('plugin_checksums', data.pluginChecksums)}
 
 ## wp-config.php modification time vs. expected (site created: ${data.siteCreatedAt})
-${data.configPhpMtime}
+${untrusted('config_mtime', data.configPhpMtime)}
+
+NOTE: If any section above shows "(not collected)" or is empty, treat it as no data available — do
+not infer findings from it. In particular, if plugin checksum data is "(not collected)", mark every
+plugin 'unverifiable' rather than reporting any as passed or failed; absence of data is not evidence
+of integrity, and it is not evidence of tampering either.
 
 Return the integrity status for core, each plugin, and wp-config.php.
 Mark plugins not on WordPress.org as 'unverifiable'. List every failed file.`;

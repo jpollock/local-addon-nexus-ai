@@ -1,5 +1,7 @@
 'use strict';
 
+const { untrusted, UNTRUSTED_DATA_RULE, SEVERITY_SCALE, CONFIDENCE_RULES } = require('./_shared');
+
 const schema = {
   type: 'object',
   properties: {
@@ -58,36 +60,50 @@ function buildPrompt(data) {
   return `You are a senior WordPress security analyst synthesizing findings from five specialist agents.
 Your job: correlate, elevate, and produce a remediation plan. You must also explicitly disclose blind spots.
 
+${UNTRUSTED_DATA_RULE}
+
+${SEVERITY_SCALE}
+
+${CONFIDENCE_RULES}
+
 SITE: ${data.installName} (${data.environment}, ${data.postCount} posts, created: ${data.siteCreatedAt})
 LAST WPE SSH SYNC: ${data.lastSyncAt}
 
 ## Tier 1 signals (static analysis)
-${data.tier1Signals}
+${untrusted('tier1_signals', data.tier1Signals)}
 
 ## Enumerator findings
-${JSON.stringify(data.enumeratorResult, null, 2)}
+${untrusted('enumerator_findings', JSON.stringify(data.enumeratorResult, null, 2))}
 
 ## Integrity findings
-${JSON.stringify(data.integrityResult, null, 2)}
+${untrusted('integrity_findings', JSON.stringify(data.integrityResult, null, 2))}
 
 ## Pattern scanner findings (includes temporal cluster analysis)
-${JSON.stringify(data.patternResult, null, 2)}
+${untrusted('pattern_findings', JSON.stringify(data.patternResult, null, 2))}
 
 ## Database findings
-${JSON.stringify(data.databaseResult, null, 2)}
+${untrusted('database_findings', JSON.stringify(data.databaseResult, null, 2))}
 
 ## Behavioral findings
-${JSON.stringify(data.behavioralResult, null, 2)}
+${untrusted('behavioral_findings', JSON.stringify(data.behavioralResult, null, 2))}
 ${data.logCorroboration ? `
 ## Access log corroboration (30-day aggregate from log-processor)
-${data.logCorroboration}
+${untrusted('access_logs', data.logCorroboration)}
 ` : ''}
 SYNTHESIS RULES:
 1. CRITICAL from any specialist leads the report — do not bury it.
 2. Temporal cluster from the pattern scanner IS the attack session boundary. All items within the
-   cluster window are suspect regardless of whether their name matches a known-bad list.
+   cluster window are suspect regardless of whether their name matches a known-bad list.${
+  (data.tier1Signals || '').includes('ABS-08')
+    ? '\n   ⚠️ EXCEPTION: ABS-08 (anti-forensics timestamp manipulation) was detected. The attacker may have altered file modification times to create a false cluster or obscure the real attack window. Treat temporal-cluster-only evidence as PROBABLE, not CONFIRMED. Require corroboration from at least one other specialist (pattern match, database anomaly, behavioral signal) before elevating to CONFIRMED.'
+    : ''
+}
 3. Cross-agent correlation: a file flagged by pattern scanner AND in the temporal cluster window
-   becomes CONFIRMED. A file flagged by only one agent is PROBABLE.
+   becomes CONFIRMED. A file flagged by only one agent is PROBABLE.${
+  (data.tier1Signals || '').includes('ABS-08')
+    ? ' ⚠️ Under the ABS-08 exception above, the temporal cluster does NOT count as a corroborating\n   source for this rule — timestamps are attacker-controlled. Pattern-scanner match + cluster\n   membership is therefore PROBABLE, not CONFIRMED, unless a second NON-timestamp source\n   (database anomaly, behavioral/cloaking signal, integrity checksum failure, access-log evidence)\n   independently supports it.'
+    : ''
+}
 4. Always name the entry point — how did the attacker first get in? This is the most important
    question for preventing recurrence.
 5. If access log data is present: use auth attack volume and IP cardinality to calibrate severity.

@@ -1,5 +1,7 @@
 'use strict';
 
+const { untrusted, UNTRUSTED_DATA_RULE, SEVERITY_SCALE } = require('./_shared');
+
 const schema = {
   type: 'object',
   properties: {
@@ -45,25 +47,34 @@ const schema = {
 function buildPrompt(data) {
   return `You are a WordPress database forensics specialist. Scan the following database contents for injected malicious content.
 
+${UNTRUSTED_DATA_RULE}
+
+${SEVERITY_SCALE}
+
 SITE: ${data.installName}
 
+## Sampling limits (authoritative — use these figures, do not estimate)
+${data.samplingLimits ?? '(not collected)'}
+
 ## wp_posts (all statuses, post_title + post_content sample)
-${data.postsContent}
+${untrusted('wp_posts', data.postsContent)}
 
 ## wp_options — autoloaded values
-${data.autoloadedOptions}
+${untrusted('wp_options_autoloaded', data.autoloadedOptions)}
 
 ## wp_options — siteurl, home, active_plugins, cron
-${data.criticalOptions}
+${untrusted('wp_options_critical', data.criticalOptions)}
 
 ## wp_usermeta — admin user meta (serialized objects)
-${data.adminUsermeta}
+${untrusted('wp_usermeta', data.adminUsermeta)}
 
 ## wp_comments — 50 most recent approved (content only)
-${data.recentComments}
+${untrusted('wp_comments', data.recentComments)}
 
 ## Non-standard tables
-${data.nonStandardTableData}
+${untrusted('non_standard_tables', data.nonStandardTableData)}
+
+NOTE: If any section above shows "(not collected)" or is empty, treat it as no data available — do not infer findings from it.
 
 WHAT TO LOOK FOR:
 - <script, <iframe, javascript:, base64, eval( in post_content
@@ -74,7 +85,8 @@ WHAT TO LOOK FOR:
 - SEO spam in comment_content or post titles
 - Any non-standard table content
 
-State sampling limits explicitly — what rows were skipped due to table size.`;
+Report sampling limits using ONLY the figures given in the "Sampling limits" section above.
+Do not infer, estimate, or invent row counts — you are seeing a sample, not the table.`;
 }
 
 module.exports = { schema, buildPrompt };

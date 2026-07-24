@@ -1,5 +1,7 @@
 'use strict';
 
+const { untrusted, UNTRUSTED_DATA_RULE, SEVERITY_SCALE } = require('./_shared');
+
 const schema = {
   type: 'object',
   properties: {
@@ -48,17 +50,21 @@ const schema = {
 function buildPrompt(data) {
   return `You are a WordPress malware pattern scanner. Analyze the following file scan results.
 
+${UNTRUSTED_DATA_RULE}
+
+${SEVERITY_SCALE}
+
 SITE: ${data.installName}
 COMPROMISE WINDOW ESTIMATE: ${data.compromiseWindowEstimate ?? 'unknown'}
 
 ## PHP files with potential malicious patterns (pre-scanned output)
-${data.patternScanOutput}
+${untrusted('pattern_scan_output', data.patternScanOutput)}
 
 ## All .htaccess file contents
-${data.htaccessContents}
+${untrusted('htaccess_contents', data.htaccessContents)}
 
 ## File modification times (files modified in last 30 days)
-${data.recentlyModifiedFiles}
+${untrusted('recent_mtimes', data.recentlyModifiedFiles)}
 
 RULES:
 - CRITICAL: eval( combined with base64_decode, gzinflate, str_rot13, or gzuncompress
@@ -69,6 +75,11 @@ RULES:
 - TEMPORAL CLUSTER: If more than 3 files share modification timestamps within a 10-minute window,
   flag the entire cluster — rapid bulk modification is not consistent with normal site management.
   This is the primary signal for detecting attacker-installed plugins when plugin names are unfamiliar.
+  Caveat: file timestamps are attacker-writable. Report the cluster as an observation; do not treat
+  it alone as proof of the attack window.
+
+NOTE: If any section above shows "(not collected)" or is empty, treat it as no data available — do
+not infer findings from it.
 
 Return every finding. For temporalCluster, identify the window even if individual files look benign.`;
 }
