@@ -126,6 +126,19 @@ Status ∈ {**Decided**, **Leaning**, **Open**}.
   `kb-sync`); Nexus adds value via search/agents, not by re-implementing indexing.
 - **Blocks.** Any Nexus KB feature; avoids double-indexing.
 
+### Q10 — If the Agent Platform stalls, does IW build a minimal Atlas deploy?  ·  **Open**
+- **Why it matters.** Journey 2's agent→Atlas delivery is owned by
+  [Agent Platform](../nexus-agent-platform/vision.md) Spec 03, which itself depends on Spec 01
+  (in progress) + Spec 02 (not started). If that stack slips, J2 has no delivery path even though
+  IW Phase 4 has produced everything Spec 03 needs.
+- **Options.** (A) Wait — J2 ships when the Agent Platform ships; IW never forks the runtime.
+  (B) IW builds a **Publisher-lite**: a minimal, standalone "deploy this one agent to Atlas" using
+  the Phase 4 contract, no SDK/Builder dependency, retired when Spec 03 lands.
+- **Leaning.** **(A) wait.** Forking the runtime creates two things that both claim to deploy agents —
+  exactly the overlap the hand-off exists to avoid. Revisit only if J2 becomes independently urgent.
+- **Blocks.** Nothing now — this is a contingency. Phase 4's deliverables (contract, secrets model,
+  Power provider module) are identical either way.
+
 ---
 
 ## Cross-references
