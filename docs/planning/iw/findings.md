@@ -106,7 +106,12 @@ a WordPress site to Power. Installed and exercised on the local `myloop` and `t2
 - `is_connected()` ⇔ `wpe_auth_registered` option set **and** `wpe_auth_client_id` present. ✅
 - Settings page slug `wpe-hub-settings`. ✅
 - **Not distributed on WordPress.org.** Self-updates via the WP Engine Product Info Service:
-  `https://wp-product-info.wpesvc.net/v1/plugins/wpe-hub`. ✅ → open question for Nexus install path.
+  `https://wp-product-info.wpesvc.net/v1/plugins/wpe-hub`. ✅ **PIS probed 2026-07-24** (unauthenticated):
+  returns a standard WP-update JSON with `download_link`/`package` → a **pre-signed S3 zip**
+  (`wpe-hub-0.14.0.zip`), **no license key or token required** to fetch (the signed URL self-authenticates
+  and is short-lived). Changelog shows the plugin moved from **GPLv2 → WP Engine EULA** (proprietary) at
+  v0.3.0. → Nexus should **install from PIS on demand** (`decisions.md` Q2 option B), not bundle-and-
+  redistribute a EULA'd zip.
 
 **Endpoints in play:**
 
@@ -129,10 +134,13 @@ picker + project picker). But steps 2–5 are plugin-internal and deterministic,
 (install/activate the plugin) and *after* (read `client_id`/`project_id`/token via `wpe_auth_*`) are
 fully scriptable from Nexus. See journey framing in [`journeys.md`](./journeys.md).
 
-**Account linkage** 🟡: the `wpe_auth_account_id` stored in `wp_options`
-(`b97e432b-…575099` on the test site) matches the **Billing Account** shown in the Power Console and
-is almost certainly the **CAPI account id** — meaning a site's Power project can be tied back to the
-customer's WPE account. Not yet proven end-to-end against CAPI.
+**Account linkage** ✅ (proven 2026-07-24): the `wpe_auth_account_id` stored in `wp_options`
+(`b97e432b-c10a-4f0a-9ce7-55cedd575099`, **identical on both `myloop` and `t2`**) is
+**byte-identical to CAPI account `w7579`** returned by `wpe_get_accounts`. So `wpe_auth_account_id`
+*is* a CAPI account id — no namespace translation — and a site's Power project can be tied back to
+the customer's WPE account, hence to the installs Nexus already tracks in graph.db. This is the
+bridge under the Journey 3 fleet overlay. (Corollary from the same read: `project_id` and
+`account_id` are shared across sites in a project; `client_id` is per-site.)
 
 **Non-WPE sites work** ✅: the local sites register fine and appear in the Power Console with
 **Platform: External**, active. This is what makes **Journey 1** (non-WPE customer) viable.
@@ -234,8 +242,10 @@ All three probes live in [`scripts/iw/`](../../../scripts/iw/):
 ## 7. Known unknowns (→ tracked in `decisions.md`)
 
 - ❓ **`mint_browser_session` / `wpbs_` tokens** — request shape and purpose.
-- ❓ **Hub Plugin distribution to Nexus users** — not on wp.org; bundle it, or install via PIS?
+- ~~❓ **Hub Plugin distribution to Nexus users**~~ → ✅ **RESOLVED 2026-07-24** — install via **PIS on
+  demand** (open, no-auth, pre-signed S3 zip); don't bundle (EULA + version drift). See §3, `decisions.md` Q2.
 - ❓ **Can Nexus orchestrate the OAuth handshake** (host the callback / drive the browser), or must
   the user complete it in the WP admin as today?
-- 🟡 **`wpe_auth_account_id` ⇔ CAPI account** — prove the link end-to-end.
+- ~~🟡 **`wpe_auth_account_id` ⇔ CAPI account**~~ → ✅ **RESOLVED 2026-07-24** — equals CAPI account
+  `w7579` (`b97e432b-…575099`) via `wpe_get_accounts`; see §3.
 - 🟡 **Atlas upload contract** for a Nexus agent build (entry point, runtime, env/secrets).

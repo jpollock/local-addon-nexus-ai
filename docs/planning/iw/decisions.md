@@ -54,16 +54,24 @@ Status ∈ {**Decided**, **Leaning**, **Open**}.
 - **Leaning.** **(C) defer**, capture when we touch chat embedding.
 - **Blocks.** Any embedded-chat feature.
 
-### Q2 — How does the Hub Plugin get onto a user's site?  ·  **Open**
+### Q2 — How does the Hub Plugin get onto a user's site?  ·  **Decided (✅ PIS probed 2026-07-24)**
 - **Why it matters.** It's **not on wp.org** (`findings.md` §3). Journeys 1 & 3 depend on Nexus
   being able to install it.
 - **Options.** (A) Nexus bundles the Hub Plugin zip and installs it (like the bundled provider
   plugins in `wp-plugins/`). (B) Nexus installs from the WPE Product Info Service
   (`wp-product-info.wpesvc.net/v1/plugins/wpe-hub`). (C) User installs it manually; Nexus only
   detects + drives connect.
-- **Leaning.** **(B)** if PIS install is permitted for non-WPE sites; else **(A)**. (A) risks
-  shipping a stale copy and version drift.
-- **Blocks.** J1/J3 connect flow; licensing/redistribution check for (A).
+- **Decision.** **(B) — install from PIS on demand.** The PIS endpoint returns a standard WP-update
+  JSON with `download_link`/`package` → a **pre-signed S3 zip** (`wpe-hub-0.14.0.zip`) needing **no
+  license key or auth** to fetch; it answered our **unauthenticated** request, so it's reachable for
+  **external (non-WPE) sites** too. Two facts kill (A): the signed URL is short-lived (a bundled copy
+  would drift from the live version), and the plugin is now under the **WP Engine EULA** (GPLv2 dropped
+  in v0.3.0) — redistributing a proprietary zip inside Nexus is a licensing question (B) sidesteps,
+  since the user's site pulls it straight from WPE's own channel. Keep **(C)** as the manual fallback
+  if PIS is ever unreachable.
+- **Residual.** Confirm the EULA permits install-on-behalf (almost certainly fine — WPE's own product,
+  onto the user's own site) and that Nexus fetches metadata → zip → install in one pass (signed-URL TTL).
+- **Blocks.** — (unblocks J1/J3 connect flow).
 
 ### Q3 — Can Nexus orchestrate (host/drive) the OAuth handshake?  ·  **Open**
 - **Why it matters.** The PKCE + account/project pickers are browser-bound (`findings.md` §3). How
@@ -75,13 +83,17 @@ Status ∈ {**Decided**, **Leaning**, **Open**}.
   rough.
 - **Blocks.** J1/J3 UX; depends on whether the OAuth client allows a localhost/redirect Nexus controls.
 
-### Q4 — Prove `wpe_auth_account_id` ⇔ CAPI account  ·  **Open (🟡 inferred)**
+### Q4 — Prove `wpe_auth_account_id` ⇔ CAPI account  ·  **Decided (✅ proven 2026-07-24)**
 - **Why it matters.** This is the bridge that lets Nexus correlate IW **projects** with the WPE
   **installs** it already tracks in graph.db — the backbone of Journey 3's fleet view.
 - **Options.** (A) Match the stored UUID against `wpe_get_accounts` / CAPI for the test account. (B)
   Ask IW/CAPI team to confirm the identifier is the same namespace.
-- **Leaning.** Do **(A)** — cheap to verify with existing `wpe_*` MCP tools.
-- **Blocks.** J3 fleet-wide IW status overlay.
+- **Decision.** **(A) — proven.** `wpe_auth_account_id` = `b97e432b-c10a-4f0a-9ce7-55cedd575099`
+  (identical on `myloop` and `t2`) is byte-identical to CAPI account **`w7579`** from
+  `wpe_get_accounts`. `wpe_auth_account_id` *is* a CAPI account id; no translation needed. Corollary:
+  `project_id`/`account_id` are project-scoped (shared across a project's sites), `client_id` is
+  per-site — confirming the three-id model in `concepts.md`. Evidence in `findings.md` §3.
+- **Unblocks.** J3 fleet-wide IW status overlay (correlate connected sites → account → tracked installs).
 
 ### Q5 — What's the Atlas upload contract for a Nexus agent build?  ·  **Open (🟡)**
 - **Why it matters.** J2's whole payoff. We know the shape (create app → env → upload zip, Basic
@@ -91,14 +103,24 @@ Status ∈ {**Decided**, **Leaning**, **Open**}.
 - **Leaning.** Unknown — needs an end-to-end spike deploying one real agent (e.g. seo-insights).
 - **Blocks.** J2 deploy; Q8.
 
-### Q6 — Where/how does Nexus store the Power `wpe_` key?  ·  **Open**
+### Q6 — Where/how does Nexus store the Power `wpe_` key?  ·  **Decided (✅ confirmed vs repo 2026-07-24)**
 - **Why it matters.** It's a long-lived, powerful credential (Full Access). Must follow existing
   Nexus credential hygiene.
 - **Options.** (A) Same secure storage as other provider API keys (Local's secret storage). (B)
   Per-site vs global scoping — one account key, or per-project keys.
-- **Leaning.** **(A)** storage; **global account key with per-project header** (the header carries
-  `project_id`, so one Full Access key can serve many projects). Confirm against tiering.
-- **Blocks.** D1 follow-through; any Power call from Nexus.
+- **Decision.** **(A) storage + one global account key.** Store in the **Electron KeyVault**
+  (OS-keychain-encrypted at rest) — the same `AI_PROVIDER_KEYS` path Anthropic/OpenAI/Google keys use
+  (`docs/architecture/credential-architecture.md`). It's a static key → use the **API-key** path
+  (`CredentialManager.setApiKey` / `getSecretForAgent`, `ApiKeyConnectionStore`), not the OAuth path.
+  **One Full-Access `wpe_` key, stored globally**; `project_id` is supplied per-request via the
+  `WPEngine-Project` header — empirically fine because **Q4** showed the account key spans every
+  project under the account. No per-site key storage.
+- **Invariant (carry into Phases 1/3).** The `wpe_` key **never leaves the Electron process**, exactly
+  like today's cloud keys. Layer-2 (Nexus inference) reads it in-process; Layer-1 (per-site WP
+  provider) **proxies through the Local Gateway** so the WP DB only ever holds the localhost token,
+  never the `wpe_` key. For agents on Atlas the key is a **deploy-time Atlas env secret** (→ Q8),
+  never bundled into the build.
+- **Blocks.** — (unblocks any Power call from Nexus; D1 follow-through).
 
 ### Q7 — What's the scope of "Power as a Nexus (Layer-2) provider"?  ·  **Open**
 - **Why it matters.** Journey 3's explicit ask. "Add Power as a provider" could mean chat only, or
