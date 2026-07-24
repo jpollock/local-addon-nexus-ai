@@ -11,6 +11,8 @@ module.exports = {
     '^electron$': '<rootDir>/tests/__mocks__/electron.ts',
     // p-limit v6+ is ESM-only; map to a CJS shim for Jest's CommonJS environment
     '^p-limit$': '<rootDir>/tests/__mocks__/p-limit.js',
+    // marked is ESM-only; map to its UMD (CJS-compatible) build for Jest
+    '^marked$': '<rootDir>/node_modules/marked/lib/marked.umd.js',
     // Agent SDK — resolved from src at test time; at runtime the platform provides this via Node require paths
     '^@nexus-ai/agent-sdk$': '<rootDir>/src/main/agent-sdk/index.ts',
   },
