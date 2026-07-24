@@ -6,7 +6,7 @@ import { AgentRunModal } from './AgentRunModal';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { rendererGql } from '../../utils/rendererGql';
 
-type WorkspaceTab = 'settings' | 'approvals' | 'activity' | 'tools';
+type WorkspaceTab = 'settings' | 'approvals' | 'activity' | 'tools' | 'docs';
 
 interface AgentToolEntry {
   toolName: string;
@@ -30,6 +30,106 @@ interface WorkspaceState {
   showRunModal: boolean;
   tools: AgentToolEntry[] | null;   // null = not yet fetched
   toolsLoading: boolean;
+  readme: string | null;            // null = not loaded, '' = no README exists
+  readmeLoading: boolean;
+}
+
+function renderMarkdown(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const lines = text.split('\n');
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (line.startsWith('```')) {
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) { codeLines.push(lines[i]); i++; }
+      nodes.push(React.createElement('pre', {
+        key: `code-${i}`,
+        style: { background: 'var(--ag-bg-inset)', borderRadius: 8, padding: '12px 16px', overflowX: 'auto' as const, margin: '12px 0', fontSize: 12.5 },
+      }, React.createElement('code', { style: { fontFamily: 'monospace', color: 'var(--ag-teal)' } }, codeLines.join('\n'))));
+      i++; continue;
+    }
+
+    // HR
+    if (/^---+$/.test(line.trim())) {
+      nodes.push(React.createElement('hr', { key: `hr-${i}`, style: { border: 'none', borderTop: '1px solid var(--ag-border)', margin: '24px 0' } }));
+      i++; continue;
+    }
+
+    // Headings
+    const h3 = line.match(/^### (.+)/); if (h3) { nodes.push(React.createElement('h3', { key: `h3-${i}`, style: { fontSize: 14, fontWeight: 700, color: 'var(--ag-text-primary)', margin: '20px 0 6px' } }, h3[1])); i++; continue; }
+    const h2 = line.match(/^## (.+)/);  if (h2) { nodes.push(React.createElement('h2', { key: `h2-${i}`, style: { fontSize: 16, fontWeight: 700, color: 'var(--ag-text-primary)', margin: '28px 0 8px', borderBottom: '1px solid var(--ag-border)', paddingBottom: 6 } }, h2[1])); i++; continue; }
+    const h1 = line.match(/^# (.+)/);   if (h1) { nodes.push(React.createElement('h1', { key: `h1-${i}`, style: { fontSize: 22, fontWeight: 800, color: 'var(--ag-text-primary)', margin: '0 0 20px' } }, h1[1])); i++; continue; }
+
+    // Table
+    if (line.startsWith('|')) {
+      const tableRows: string[][] = [];
+      while (i < lines.length && lines[i].startsWith('|')) {
+        if (!/^[\|\s\-:]+$/.test(lines[i])) {
+          tableRows.push(lines[i].split('|').slice(1, -1).map(c => c.trim()));
+        }
+        i++;
+      }
+      if (tableRows.length > 0) {
+        const [head, ...body] = tableRows;
+        nodes.push(React.createElement('table', { key: `tbl-${i}`, style: { width: '100%', borderCollapse: 'collapse' as const, margin: '12px 0', fontSize: 13 } },
+          React.createElement('thead', null, React.createElement('tr', null, ...(head ?? []).map((h, ci) =>
+            React.createElement('th', { key: ci, style: { textAlign: 'left' as const, padding: '6px 12px', borderBottom: '2px solid var(--ag-border)', color: 'var(--ag-text-primary)', fontWeight: 700, fontSize: 12.5 } }, h),
+          ))),
+          React.createElement('tbody', null, ...body.map((row, ri) =>
+            React.createElement('tr', { key: ri }, ...row.map((cell, ci) =>
+              React.createElement('td', { key: ci, style: { padding: '6px 12px', borderBottom: '1px solid var(--ag-border-subtle)', verticalAlign: 'top' as const } }, inlineMarkdown(cell)),
+            )),
+          )),
+        ));
+      }
+      continue;
+    }
+
+    // Bullet list
+    if (line.startsWith('- ') || line.startsWith('* ')) {
+      const items: string[] = [];
+      while (i < lines.length && (lines[i].startsWith('- ') || lines[i].startsWith('* '))) {
+        items.push(lines[i].slice(2));
+        i++;
+      }
+      nodes.push(React.createElement('ul', { key: `ul-${i}`, style: { margin: '8px 0 8px 20px', padding: 0 } },
+        ...items.map((item, idx) => React.createElement('li', { key: idx, style: { marginBottom: 4 } }, inlineMarkdown(item))),
+      ));
+      continue;
+    }
+
+    // Blockquote
+    if (line.startsWith('> ')) {
+      nodes.push(React.createElement('blockquote', { key: `bq-${i}`, style: { borderLeft: '3px solid var(--ag-teal)', paddingLeft: 14, margin: '12px 0', color: 'var(--ag-text-muted)', fontStyle: 'italic' } }, inlineMarkdown(line.slice(2))));
+      i++; continue;
+    }
+
+    // Empty line
+    if (!line.trim()) { nodes.push(React.createElement('div', { key: `br-${i}`, style: { height: 8 } })); i++; continue; }
+
+    // Paragraph
+    nodes.push(React.createElement('p', { key: `p-${i}`, style: { margin: '4px 0 8px' } }, inlineMarkdown(line)));
+    i++;
+  }
+
+  return nodes;
+}
+
+function inlineMarkdown(text: string): React.ReactNode {
+  // Handle **bold**, *italic*, and `code` inline
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/);
+  if (parts.length === 1) return text;
+  return React.createElement(React.Fragment, null, ...parts.map((p, i) => {
+    if (p.startsWith('**') && p.endsWith('**')) return React.createElement('strong', { key: i }, p.slice(2, -2));
+    if (p.startsWith('*') && p.endsWith('*')) return React.createElement('em', { key: i }, p.slice(1, -1));
+    if (p.startsWith('`') && p.endsWith('`')) return React.createElement('code', { key: i, style: { fontFamily: 'monospace', background: 'var(--ag-bg-inset)', padding: '1px 5px', borderRadius: 4, fontSize: 12.5, color: 'var(--ag-teal)' } }, p.slice(1, -1));
+    return p;
+  }));
 }
 
 const ACCENTS: Record<string, string> = {
@@ -48,6 +148,8 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
     showRunModal: false,
     tools: null,
     toolsLoading: false,
+    readme: null,
+    readmeLoading: false,
   };
   private unsub!: () => void;
 
@@ -64,6 +166,20 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
 
   componentWillUnmount() {
     agentStore.unsubscribe(this.unsub);
+  }
+
+  private async loadReadme() {
+    if (this.state.readme !== null || this.state.readmeLoading) return;
+    this.setState({ readmeLoading: true });
+    try {
+      const result = await rendererGql<{ agentReadme: string | null }>(
+        `query AgentReadme($agentName: String!) { agentReadme(agentName: $agentName) }`,
+        { agentName: this.props.agentId },
+      );
+      this.setState({ readme: result?.agentReadme ?? '', readmeLoading: false });
+    } catch {
+      this.setState({ readme: '', readmeLoading: false });
+    }
   }
 
   private async loadTools() {
@@ -141,6 +257,23 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
         );
       }),
     );
+  }
+
+  private renderDocsTab() {
+    const { readme, readmeLoading } = this.state;
+
+    if (readmeLoading) {
+      return React.createElement('div', { style: { color: 'var(--ag-text-muted)', padding: '40px 0', textAlign: 'center' as const } }, 'Loading…');
+    }
+    if (!readme) {
+      return React.createElement('div', { style: { color: 'var(--ag-text-muted)', padding: '40px 0', textAlign: 'center' as const } },
+        'No README.md found for this agent.',
+      );
+    }
+
+    return React.createElement('div', {
+      style: { maxWidth: 760, lineHeight: 1.7, fontSize: 14, color: 'var(--ag-text-secondary)' },
+    }, ...renderMarkdown(readme));
   }
 
   private renderHeader() {
@@ -256,6 +389,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
       { id: 'approvals', label: 'Approvals', badge: pendingCount > 0 ? pendingCount : undefined },
       { id: 'activity',  label: 'Activity' },
       { id: 'tools',     label: 'Tools' },
+      { id: 'docs',      label: 'Docs' },
     ];
 
     return React.createElement('div', {
@@ -264,7 +398,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
       ...tabs.map(tab =>
         React.createElement('button', {
           key: tab.id,
-          onClick: () => { this.setState({ activeTab: tab.id }); if (tab.id === 'tools') this.loadTools(); },
+          onClick: () => { this.setState({ activeTab: tab.id }); if (tab.id === 'tools') this.loadTools(); if (tab.id === 'docs') this.loadReadme(); },
           style: {
             background: 'none', border: 'none', padding: '0 0 12px', marginRight: 28,
             fontSize: 14, fontWeight: activeTab === tab.id ? 700 : 500,
@@ -341,6 +475,7 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
       }),
       activeTab === 'settings'  && React.createElement(AgentWorkspaceSettings, { agentId, electron: this.props.electron }),
       activeTab === 'tools'     && this.renderToolsTab(),
+      activeTab === 'docs'      && this.renderDocsTab(),
 
       // Run now site-selection modal
       showRunModal && settings.enabled && React.createElement(AgentRunModal, {
