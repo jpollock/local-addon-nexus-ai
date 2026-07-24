@@ -313,6 +313,8 @@ export interface NexusSettings {
   wpeContentIndexIntervalHours?: number;
   /** Chat history retention policy: 7, 30, 90 days or null for forever. Default: null */
   chatRetentionDays?: 7 | 30 | 90 | null;
+  /** Whether the docked AI chat panel is enabled. Default: true */
+  dockedPanelEnabled?: boolean;
 }
 
 export interface SiteAIConfig {

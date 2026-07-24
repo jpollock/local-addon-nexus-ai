@@ -340,6 +340,14 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     });
   };
 
+  handleDockedPanelToggle = (enabled: boolean): void => {
+    this.setState((prev) => {
+      const next = { ...prev.settings, dockedPanelEnabled: enabled };
+      this.notifyChange(next);
+      return { settings: next };
+    }, () => { this.saveNow(this.state.settings); });
+  };
+
   handleRetentionChange = (days: 7 | 30 | 90 | null): void => {
     this.setState((prev) => {
       const next = { ...prev.settings, chatRetentionDays: days };
@@ -1420,32 +1428,48 @@ export class NexusPreferences extends React.Component<NexusPreferencesProps, Nex
     );
 
     // Section 5: Chat History
+    const panelEnabled = settings.dockedPanelEnabled !== false;
     const section5 = React.createElement('div', { style: sectionStyle },
       this.renderSectionHeader('chat-history', 'Chat History'),
       expandedSections.has('chat-history')
         ? React.createElement('div', null,
-            React.createElement('div', { style: descStyle }, 'Choose how long chat session history is stored locally.'),
-            React.createElement(
-              'div',
-              { style: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 } },
-              React.createElement('label', { style: { color: '#868d98', fontSize: 12 } }, 'Keep chat history for'),
-              React.createElement(
-                'select',
-                {
-                  style: { background: '#23272f', border: '1px solid #2c313a', borderRadius: 4, color: '#e4e7ec', fontSize: 12, padding: '4px 8px' },
-                  value: String(settings.chatRetentionDays ?? 30),
-                  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
-                    const raw = e.target.value;
-                    const val = raw === 'null' ? null : Number(raw) as 7 | 30 | 90;
-                    this.handleRetentionChange(val);
-                  },
+            React.createElement('label', {
+              style: checkboxRowStyle,
+              title: 'Show the AI chat panel bubble in the bottom-right corner of Local.',
+            },
+              React.createElement('input', {
+                type: 'checkbox',
+                checked: panelEnabled,
+                onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                  this.handleDockedPanelToggle(e.target.checked);
                 },
-                React.createElement('option', { value: '7' }, '7 days'),
-                React.createElement('option', { value: '30' }, '30 days'),
-                React.createElement('option', { value: '90' }, '90 days'),
-                React.createElement('option', { value: 'null' }, 'Forever'),
-              ),
+                style: { width: '16px', height: '16px', cursor: 'pointer' },
+              }),
+              React.createElement('span', { style: { fontSize: '14px' } }, 'Enable AI Chat Panel'),
             ),
+            panelEnabled
+              ? React.createElement(
+                  'div',
+                  { style: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 } },
+                  React.createElement('label', { style: { color: '#868d98', fontSize: 12 } }, 'Keep chat history for'),
+                  React.createElement(
+                    'select',
+                    {
+                      style: { background: '#23272f', border: '1px solid #2c313a', borderRadius: 4, color: '#e4e7ec', fontSize: 12, padding: '4px 8px' },
+                      value: String(settings.chatRetentionDays ?? 30),
+                      onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+                        const raw = e.target.value;
+                        const val = raw === 'null' ? null : Number(raw) as 7 | 30 | 90;
+                        this.handleRetentionChange(val);
+                      },
+                    },
+                    React.createElement('option', { value: '7' }, '7 days'),
+                    React.createElement('option', { value: '30' }, '30 days'),
+                    React.createElement('option', { value: '90' }, '90 days'),
+                    React.createElement('option', { value: 'null' }, 'Forever'),
+                  ),
+                )
+              : null,
           )
         : null,
     );

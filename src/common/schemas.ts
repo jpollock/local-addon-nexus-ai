@@ -66,6 +66,7 @@ export const UpdateSettingsSchema = z.object({
   wpeContentIndexAutoEnabled: z.boolean().optional(),
   wpeContentIndexIntervalHours: z.number().int().min(1).max(168).optional(),
   chatRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).optional(),
+  dockedPanelEnabled: z.boolean().optional(),
 }).strict();
 
 export const PluginSlugSchema = z
