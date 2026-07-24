@@ -491,10 +491,16 @@ async function runLogChecks(siteId, tools, log) {
   let authorScanHits = 0;
   let distinctIps = 0;
 
+  // Successful logins redirect (302/303) — exclude from attack counts
+  const SUCCESSFUL_AUTH = new Set(['302', '303']);
   for (const agg of aggregates) {
     for (const hourData of Object.values(agg.attack?.authAttack ?? {})) {
-      totalLoginPosts  += Object.values(hourData.loginPosts  ?? {}).reduce((s, n) => s + n, 0);
-      totalXmlrpcPosts += Object.values(hourData.xmlrpcPosts ?? {}).reduce((s, n) => s + n, 0);
+      for (const [status, count] of Object.entries(hourData.loginPosts  ?? {})) {
+        if (!SUCCESSFUL_AUTH.has(status)) totalLoginPosts  += count;
+      }
+      for (const [status, count] of Object.entries(hourData.xmlrpcPosts ?? {})) {
+        if (!SUCCESSFUL_AUTH.has(status)) totalXmlrpcPosts += count;
+      }
     }
     for (const [path, data] of Object.entries(agg.attack?.probes ?? {})) {
       probePathCounts[path] = (probePathCounts[path] ?? 0) + (data.hits ?? 0);

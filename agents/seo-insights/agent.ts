@@ -139,10 +139,15 @@ async function getLogInsights(siteId: string, tools: ToolInvoker, log: any): Pro
     directRef += agg.referrals?.internal  ?? 0;
 
     for (const hourData of Object.values(agg.attack?.authAttack ?? {})) {
+      // Exclude 302/303 (successful auth redirects) — count only failed/rejected attempts
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      totalAuthAttacks += Object.values((hourData as any).loginPosts  ?? {}).reduce((s: number, n: unknown) => s + (n as number), 0);
+      for (const [status, count] of Object.entries((hourData as any).loginPosts  ?? {})) {
+        if (status !== '302' && status !== '303') totalAuthAttacks += count as number;
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      totalAuthAttacks += Object.values((hourData as any).xmlrpcPosts ?? {}).reduce((s: number, n: unknown) => s + (n as number), 0);
+      for (const [status, count] of Object.entries((hourData as any).xmlrpcPosts ?? {})) {
+        if (status !== '302' && status !== '303') totalAuthAttacks += count as number;
+      }
     }
   }
 
