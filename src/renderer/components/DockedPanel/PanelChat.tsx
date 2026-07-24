@@ -1,7 +1,16 @@
 import React from 'react';
+import { marked } from 'marked';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { ActionCard } from './ActionCard';
 import type { ChatSession, ChatMessage } from '../../../common/types';
+
+export function renderMarkdown(content: string): string {
+  const raw = marked.parse(content) as string;
+  // Strip script and iframe tags to prevent XSS
+  return raw
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '');
+}
 
 interface UIMessage {
   id: string;
@@ -70,7 +79,7 @@ const styles = {
     fontSize: 13,
     maxWidth: 580,
     wordBreak: 'break-word' as const,
-    whiteSpace: 'pre-wrap' as const,
+    // whiteSpace: 'pre-wrap' — removed; markdown renderer handles whitespace
   },
   systemLine: {
     alignSelf: 'center',
@@ -553,8 +562,6 @@ export class PanelChat extends React.Component<Props, State> {
       return React.createElement('div', { key: msg.id, style: styles.systemLine }, msg.content);
     }
 
-    const bubbleStyle = msg.role === 'user' ? styles.userBubble : styles.assistantBubble;
-
     const toolCards = (msg.toolCalls ?? [])
       .filter((tc) => tc.status === 'running' || tc.status === 'awaiting_approval')
       .map((tc) => {
@@ -587,16 +594,30 @@ export class PanelChat extends React.Component<Props, State> {
         });
       });
 
-    const bubbleContent = msg.content
-      ? msg.content
-      : msg.streaming
-      ? React.createElement('span', { style: { color: '#868d98', letterSpacing: '0.15em', opacity: 0.7 } }, '· · ·')
-      : '';
+    let bubbleElement: React.ReactNode;
+    if (msg.role === 'assistant') {
+      if (msg.streaming && !msg.content) {
+        bubbleElement = React.createElement(
+          'div',
+          { style: { ...styles.assistantBubble, whiteSpace: 'normal' as const } },
+          React.createElement('span', { style: { color: '#868d98', letterSpacing: '0.15em', opacity: 0.7 } }, '· · ·'),
+        );
+      } else {
+        bubbleElement = React.createElement('div', {
+          style: { ...styles.assistantBubble, whiteSpace: 'normal' as const },
+          className: 'nexus-md',
+          dangerouslySetInnerHTML: { __html: renderMarkdown(msg.content) },
+        });
+      }
+    } else {
+      // User bubble — plain text, no markdown
+      bubbleElement = React.createElement('div', { style: styles.userBubble }, msg.content);
+    }
 
     return React.createElement(
       'div',
       { key: msg.id },
-      React.createElement('div', { style: bubbleStyle }, bubbleContent),
+      bubbleElement,
       ...toolCards,
     );
   }
