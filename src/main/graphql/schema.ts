@@ -1953,6 +1953,9 @@ export const typeDefs = gql`
     "Return the last N log lines for an agent (empty array if never run)"
     agentLogs(name: String!, lines: Int): [String!]!
 
+    "README.md content for an agent. Returns null when no README exists."
+    agentReadme(agentName: String!): String
+
     "List agents with last-run status"
     agentStatus: [AgentStatus!]!
 

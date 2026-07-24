@@ -5252,6 +5252,21 @@ export function createResolvers(context: ResolverContext) {
         return allLines.slice(-(lines ?? 50));
       },
 
+      agentReadme: (_: unknown, { agentName }: { agentName: string }): string | null => {
+        const _path = require('path') as typeof import('path');
+        const _fs   = require('fs')   as typeof import('fs');
+        const _os   = require('os')   as typeof import('os');
+        const readmePath = _path.join(
+          _os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai',
+          'agents', agentName, 'README.md',
+        );
+        try {
+          return _fs.readFileSync(readmePath, 'utf-8');
+        } catch {
+          return null;
+        }
+      },
+
       agentStatus: (_: unknown, __: unknown, _ctx: unknown): AgentStatusType[] => {
         const registry = services.agentRegistry;
         const store = services.agentStateStore;
