@@ -32,7 +32,7 @@ function readState(): ContainerState {
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
-        open: Boolean(parsed.open),
+        open: false, // always start collapsed — never block Local on load
         size: parsed.size === 'full' ? 'full' : 'docked',
         activeSessionId: parsed.activeSessionId ?? null,
         showSessions: false,
