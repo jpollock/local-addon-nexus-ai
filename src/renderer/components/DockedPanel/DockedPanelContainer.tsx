@@ -1,5 +1,6 @@
 import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
+import { ContextSelector } from './ContextSelector';
 import { DockedPanel } from './DockedPanel';
 import { PanelChat } from './PanelChat';
 import { SessionsSidebar } from './SessionsSidebar';
@@ -16,6 +17,7 @@ interface ContainerState {
   activeSessionId: string | null;
   showSessions: boolean;
   sessionListVersion: number;
+  selectedSiteIds: string[];
 }
 
 const STORAGE_KEY = 'nexus-panel-state';
@@ -37,10 +39,11 @@ function readState(): ContainerState {
         activeSessionId: parsed.activeSessionId ?? null,
         showSessions: false,
         sessionListVersion: 0,
+        selectedSiteIds: [],
       };
     }
   } catch { /* ignore */ }
-  return { open: false, size: 'docked', activeSessionId: null, showSessions: false, sessionListVersion: 0 };
+  return { open: false, size: 'docked', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [] };
 }
 
 export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
@@ -131,15 +134,26 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   render() {
-    const { open, size, activeSessionId, showSessions, sessionListVersion } = this.state;
+    const { open, size, activeSessionId, showSessions, sessionListVersion, selectedSiteIds } = this.state;
 
     const panelContent = React.createElement(PanelChat, {
       electron: this.props.electron,
       sessionId: activeSessionId,
-      selectedSiteIds: [],
+      selectedSiteIds,
       onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
       onSessionSaved: () => this.setState((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
     });
+
+    const panelBody = React.createElement(
+      'div',
+      { style: { display: 'flex', flexDirection: 'column' as const, height: '100%', overflow: 'hidden' } },
+      React.createElement(ContextSelector, {
+        electron: this.props.electron,
+        selectedSiteIds,
+        onChange: (ids: string[]) => this.setState({ selectedSiteIds: ids }),
+      }),
+      panelContent,
+    );
 
     const sessionsSidebar = size === 'full' || showSessions
       ? React.createElement(SessionsSidebar, {
@@ -164,7 +178,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
         showSessions,
         onToggleSessions: () => this.setState((s) => ({ showSessions: !s.showSessions })),
       },
-      panelContent,
+      panelBody,
     );
   }
 }
