@@ -10,6 +10,7 @@ import type { ChatProviderConfig } from './providers/types';
 import { adaptToolsForChat } from './tool-adapter';
 import { buildFleetContext } from '../assistant/AssistantService';
 import { buildWordPressSystemPrompt } from '../assistant/wordpress-knowledge';
+import { getSession } from '../ipc/chat-sessions';
 
 // ---------------------------------------------------------------------------
 // Site Lifecycle — tools that require a running local site
@@ -118,16 +119,32 @@ export class ChatService {
 
     let session = this.sessions.get(sessionId);
     if (!session) {
-      session = {
-        id: sessionId,
-        messages: [],
-        abortController: new AbortController(),
-        pendingApprovals: new Map(),
-      };
+      const abortController = new AbortController();
+      const pendingApprovals = new Map<string, { resolve: (approved: boolean) => void; toolName: string; args: Record<string, unknown> }>();
 
-      // Build system prompt
-      const systemPrompt = await this.buildSystemPrompt(siteId);
-      session.messages.push({ role: 'system', content: systemPrompt });
+      // Attempt to restore persisted history so Claude remembers prior turns
+      const db = this.services.graphService?.getDb();
+      const persisted = db ? getSession(db, sessionId) : null;
+
+      if (persisted && persisted.messages.length > 0) {
+        // Reconstruct message array from persisted records
+        const history = persisted.messages
+          .filter((m: any) => !m.streaming)
+          .filter((m: any) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
+          .map((m: any) => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content }));
+
+        session = { id: sessionId, messages: history, abortController, pendingApprovals };
+      } else {
+        // Fresh session — build system prompt
+        const systemPrompt = await this.buildSystemPrompt(siteId);
+        session = {
+          id: sessionId,
+          messages: [{ role: 'system', content: systemPrompt }],
+          abortController,
+          pendingApprovals,
+        };
+      }
+
       this.sessions.set(sessionId, session);
     } else {
       // Reset abort controller for new turn
