@@ -11,12 +11,12 @@ describe('DockedPanelContainer localStorage persistence', () => {
     jest.resetModules();
   });
 
-  it('reads initial state from localStorage', () => {
+  it('reads size and activeSessionId from localStorage but always starts closed', () => {
     localStorage.setItem('nexus-panel-state', JSON.stringify({ open: true, size: 'full', activeSessionId: 'abc' }));
     // Import after setting localStorage so the constructor reads it
     const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
     const inst = new DockedPanelContainer({});
-    expect(inst.state.open).toBe(true);
+    expect(inst.state.open).toBe(false); // always collapsed on load — prevents blocking Local
     expect(inst.state.size).toBe('full');
     expect(inst.state.activeSessionId).toBe('abc');
   });
