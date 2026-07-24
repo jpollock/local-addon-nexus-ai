@@ -22,6 +22,7 @@ interface UIMessage {
     name: string;
     args: string;
     status: 'pending' | 'awaiting_approval' | 'running' | 'done' | 'error';
+    result?: string;
   }>;
 }
 
@@ -31,6 +32,7 @@ interface Props {
   selectedSiteIds: string[];
   onSessionCreated: (id: string) => void;
   onSessionSaved: (session: ChatSession, messages: ChatMessage[]) => void;
+  onStreamingStatusChange?: (status: string | null) => void;
 }
 
 interface State {
@@ -48,6 +50,7 @@ interface State {
   actionCount: number;
   // Mirrors chatRetentionDays setting; null means keep forever.
   retentionDays: number | null;
+  expandedTools: Set<string>;
 }
 
 const styles = {
@@ -234,6 +237,7 @@ export class PanelChat extends React.Component<Props, State> {
       offline: false,
       actionCount: 0,
       retentionDays: 30,
+      expandedTools: new Set<string>(),
     };
     this.handleInput = this.handleInput.bind(this);
     this.handleSend = this.handleSend.bind(this);
@@ -292,6 +296,8 @@ export class PanelChat extends React.Component<Props, State> {
     }
     if (this.offlineListener) window.removeEventListener('offline', this.offlineListener);
     if (this.onlineListener) window.removeEventListener('online', this.onlineListener);
+
+    this.props.onStreamingStatusChange?.(null);
   }
 
   componentDidUpdate(prevProps: Props) {
@@ -374,6 +380,7 @@ export class PanelChat extends React.Component<Props, State> {
         });
         return { messages: msgs };
       });
+      this.props.onStreamingStatusChange?.(`Running ${toolDisplayName(event.name)}…`);
     } else if (event.type === 'tool_call_approval_needed') {
       // Tier-3 destructive tool — upgrade whichever message owns this toolCall id
       this.setState((s) => ({
@@ -385,12 +392,14 @@ export class PanelChat extends React.Component<Props, State> {
         })),
       }));
     } else if (event.type === 'tool_call_result') {
-      // Tool finished — hide the indicator
+      // Tool finished — mark done and capture the result for expansion
       this.setState((s) => ({
         messages: s.messages.map((m) => ({
           ...m,
           toolCalls: (m.toolCalls ?? []).map((tc) =>
-            tc.id === event.id ? { ...tc, status: 'done' as const } : tc,
+            tc.id === event.id
+              ? { ...tc, status: 'done' as const, result: event.result ?? '' }
+              : tc,
           ),
         })),
       }));
@@ -403,6 +412,7 @@ export class PanelChat extends React.Component<Props, State> {
           { id: makeId(), role: 'system' as const, content: `Error: ${event.message}` },
         ],
       }));
+      this.props.onStreamingStatusChange?.(null);
     } else if (event.type === 'done') {
       this.setState(
         (s) => ({
@@ -412,7 +422,10 @@ export class PanelChat extends React.Component<Props, State> {
             m.id === streamingId ? { ...m, streaming: false } : m,
           ),
         }),
-        () => this.persistSession(),
+        () => {
+          this.persistSession();
+          this.props.onStreamingStatusChange?.(null);
+        },
       );
     }
     this.scrollToBottom();
@@ -562,8 +575,10 @@ export class PanelChat extends React.Component<Props, State> {
       return React.createElement('div', { key: msg.id, style: styles.systemLine }, msg.content);
     }
 
+    const { expandedTools } = this.state;
+
     const toolCards = (msg.toolCalls ?? [])
-      .filter((tc) => tc.status === 'running' || tc.status === 'awaiting_approval')
+      .filter((tc) => tc.status === 'running' || tc.status === 'awaiting_approval' || tc.status === 'done')
       .map((tc) => {
         if (tc.status === 'running') {
           return React.createElement(
@@ -580,19 +595,89 @@ export class PanelChat extends React.Component<Props, State> {
             React.createElement('span', { style: { opacity: 0.5 } }, '…'),
           );
         }
-        return React.createElement(ActionCard, {
-          key: tc.id,
-          title: toolDisplayName(tc.name),
-          effect: toolEffect(tc.name),
-          destructive: tc.name in TOOL_EFFECTS,
-          onConfirm: () => {
-            this.handleApprove(tc.id);
-            try { track(this.props.electron.ipcRenderer, 'nexus_panel_action_confirmed', { destructive: false }); } catch (_) {}
-            this.inputRef.current?.focus();
-          },
-          onCancel: () => { this.handleCancel(tc.id); this.inputRef.current?.focus(); },
-        });
-      });
+        if (tc.status === 'awaiting_approval') {
+          return React.createElement(ActionCard, {
+            key: tc.id,
+            title: toolDisplayName(tc.name),
+            effect: toolEffect(tc.name),
+            destructive: tc.name in TOOL_EFFECTS,
+            onConfirm: () => {
+              this.handleApprove(tc.id);
+              try { track(this.props.electron.ipcRenderer, 'nexus_panel_action_confirmed', { destructive: false }); } catch (_) {}
+              this.inputRef.current?.focus();
+            },
+            onCancel: () => { this.handleCancel(tc.id); this.inputRef.current?.focus(); },
+          });
+        }
+        // status === 'done'
+        if (tc.result === undefined) return null;
+        const isExpanded = expandedTools.has(tc.id);
+        const rawResult = tc.result ?? '';
+        let displayResult: string;
+        try {
+          const parsed = JSON.parse(rawResult);
+          displayResult = typeof parsed === 'object' && parsed !== null
+            ? JSON.stringify(parsed, null, 2)
+            : rawResult;
+        } catch {
+          displayResult = rawResult;
+        }
+        const truncated = displayResult.length > 2000
+          ? displayResult.slice(0, 2000) + '…'
+          : displayResult;
+
+        return React.createElement(
+          'div',
+          { key: tc.id },
+          React.createElement(
+            'div',
+            {
+              style: {
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '4px 0', color: '#868d98', fontSize: 12, cursor: 'pointer',
+                userSelect: 'none' as const,
+              },
+              onClick: () => {
+                this.setState((s) => {
+                  const next = new Set(s.expandedTools);
+                  next.has(tc.id) ? next.delete(tc.id) : next.add(tc.id);
+                  return { expandedTools: next };
+                });
+              },
+            },
+            React.createElement('span', { style: { color: '#22c55e', fontSize: 13 } }, '✓'),
+            React.createElement('span', null, toolDisplayName(tc.name)),
+            React.createElement(
+              'span',
+              { style: { fontSize: 10, opacity: 0.6, marginLeft: 2 } },
+              isExpanded ? '▾' : '▸',
+            ),
+          ),
+          isExpanded
+            ? React.createElement(
+                'div',
+                {
+                  style: {
+                    marginTop: 4,
+                    marginBottom: 4,
+                    borderLeft: '2px solid #29b6cf',
+                    paddingLeft: 10,
+                    fontSize: 12,
+                    color: '#c9d1d9',
+                    maxHeight: 300,
+                    overflowY: 'auto' as const,
+                    background: '#1a1e24',
+                    borderRadius: '0 4px 4px 0',
+                  },
+                },
+                React.createElement('pre', {
+                  style: { margin: 0, whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const },
+                }, truncated),
+              )
+            : null,
+        );
+      })
+      .filter(Boolean);
 
     let bubbleElement: React.ReactNode;
     if (msg.role === 'assistant') {

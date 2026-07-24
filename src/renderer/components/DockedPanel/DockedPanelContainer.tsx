@@ -18,6 +18,7 @@ interface ContainerState {
   showSessions: boolean;
   sessionListVersion: number;
   selectedSiteIds: string[];
+  streamingStatus: string | null;
 }
 
 const STORAGE_KEY = 'nexus-panel-state';
@@ -40,10 +41,11 @@ function readState(): ContainerState {
         showSessions: false,
         sessionListVersion: 0,
         selectedSiteIds: [],
+        streamingStatus: null,
       };
     }
   } catch { /* ignore */ }
-  return { open: false, size: 'docked', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [] };
+  return { open: false, size: 'docked', activeSessionId: null, showSessions: false, sessionListVersion: 0, selectedSiteIds: [], streamingStatus: null };
 }
 
 export class DockedPanelContainer extends React.Component<ContainerProps, ContainerState> {
@@ -142,6 +144,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       selectedSiteIds,
       onSessionCreated: (id: string) => this.setState({ activeSessionId: id }),
       onSessionSaved: () => this.setState((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
+      onStreamingStatusChange: (status: string | null) => this.setState({ streamingStatus: status }),
     });
 
     const panelBody = React.createElement(
@@ -177,6 +180,7 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
         sessionsSidebar,
         showSessions,
         onToggleSessions: () => this.setState((s) => ({ showSessions: !s.showSessions })),
+        streamingStatus: this.state.streamingStatus,
       },
       panelBody,
     );
