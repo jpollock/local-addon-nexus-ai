@@ -433,6 +433,56 @@ const MANIFEST_TEMPLATE = (name: string, withTriggers: boolean) => {
   );
 };
 
+const README_TEMPLATE = (name: string) => `# ${name}
+
+> One-sentence description of what this agent does.
+
+## How It Works
+
+Describe the agent's pipeline in 2–3 short paragraphs. Cover what triggers
+a run, what it checks (and in what order), and how it decides what to report
+or escalate. Focus on the mental model a user needs — not a code tour.
+
+## Data Sources
+
+| Source | Required | Notes |
+|--------|----------|-------|
+| Nexus graph.db (fleet_sql) | Yes | WPE installs + plugin/user inventory |
+| Log Processor aggregates | Optional | Needs connect_log_source configured |
+
+## Output
+
+- **Findings** — what surfaces in the Approvals tab and at what severity
+- **Report** — what the Report file contains (key sections, format)
+- **Log** — what each phase logs and at what verbosity
+- **State** — anything persisted between runs (baselines, cooldowns, cache)
+
+## Setup
+
+Step-by-step for first-time use. List prerequisites, credentials required,
+and any site-level configuration (e.g. connecting log sources, OAuth).
+
+## Tips & Tricks
+
+Write 3–5 practical tips: when to run on-demand vs scheduled, how to tune
+scope, what to check if results seem off, how to pair with other agents.
+
+## FAQ
+
+**Q: Why did a finding fire / not fire?**
+A: Explain the threshold or condition.
+
+**Q: How often should I run this?**
+A: Guidance on cadence.
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| Run completes instantly with no findings | No sites in scope | Check that sites are synced in Nexus |
+| Tool unavailable error | Missing prerequisite agent | Install and configure the required agent |
+`;
+
 const AGENT_TOOLS_TEMPLATE = (name: string) => `import { defineAgent } from '@nexus-ai/agent-sdk';
 import { z } from 'zod';
 
@@ -563,9 +613,11 @@ export async function handleAgentCreate(
 
   fs.writeFileSync(path.join(agentDir, 'agent.ts'), agentSrc, 'utf-8');
   fs.writeFileSync(path.join(agentDir, 'nexus.agent.yaml'), manifestSrc, 'utf-8');
+  fs.writeFileSync(path.join(agentDir, 'README.md'), README_TEMPLATE(name), 'utf-8');
 
   console.log(`Created: ${path.join(agentDir, 'agent.ts')}`);
   console.log(`Created: ${path.join(agentDir, 'nexus.agent.yaml')}`);
+  console.log(`Created: ${path.join(agentDir, 'README.md')}`);
   console.log('');
   if (mode !== 'run') {
     console.log(`Next: edit agent.ts, then run: nexus agent tools build ${name}`);
