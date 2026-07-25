@@ -19,7 +19,7 @@ const DEFAULT_MODELS: Record<string, string> = {
 };
 
 export interface ResolvedAIProvider {
-  /** Provider ID, e.g. 'anthropic' | 'openai' | 'google' | 'ollama' */
+  /** Provider ID (an AIProvider union value): 'anthropic' | 'openai' | 'google' | 'ollama' | 'local-gateway' | 'power' */
   provider: string;
   /** Model ID to use */
   model: string;
