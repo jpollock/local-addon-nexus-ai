@@ -238,6 +238,11 @@ export const IPC_CHANNELS = {
   CREDENTIAL_API_KEY_STATUS: `${ADDON_PREFIX}:credential:api-key:status`,
   CREDENTIAL_API_KEY_CLEAR:  `${ADDON_PREFIX}:credential:api-key:clear`,
 
+  // WPE Hub Integration (IW Phase 2)
+  IW_GET_STATUS:  `${ADDON_PREFIX}:iw:get-status`,
+  IW_CONNECT:     `${ADDON_PREFIX}:iw:connect`,
+  IW_DISCONNECT:  `${ADDON_PREFIX}:iw:disconnect`,
+
   // Telemetry (fire-and-forget from renderer → main)
   TELEMETRY_TRACK: `${ADDON_PREFIX}:telemetry`,
 } as const;
@@ -297,6 +302,7 @@ export const STORAGE_KEYS = {
   OAUTH_GRANTS: `${ADDON_PREFIX}_oauth_grants`,
   OAUTH_VAULT: `${ADDON_PREFIX}_oauth_vault`,
   API_KEY_CONNECTIONS: `${ADDON_PREFIX}_api_key_connections`,
+  IW_SITE_BINDINGS: `${ADDON_PREFIX}_iw_site_bindings`,
 } as const;
 
 // ---------------------------------------------------------------------------
