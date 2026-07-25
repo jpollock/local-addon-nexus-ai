@@ -73,15 +73,31 @@ Status ∈ {**Decided**, **Leaning**, **Open**}.
   onto the user's own site) and that Nexus fetches metadata → zip → install in one pass (signed-URL TTL).
 - **Blocks.** — (unblocks J1/J3 connect flow).
 
-### Q3 — Can Nexus orchestrate (host/drive) the OAuth handshake?  ·  **Open**
+### Q3 — Can Nexus orchestrate (host/drive) the OAuth handshake?  ·  **Decided (✅ proven 2026-07-25)**
 - **Why it matters.** The PKCE + account/project pickers are browser-bound (`findings.md` §3). How
   much of it Nexus can wrap determines how "one-click" connect feels.
 - **Options.** (A) Nexus opens the WP-admin Hub settings page and polls `is_connected()` after the
   user finishes (least invasive). (B) Nexus hosts the OAuth callback itself (localhost redirect) and
   drives the flow directly. (C) Fully manual.
-- **Leaning.** **(A)** for v1 — robust, no callback-hosting complexity; revisit (B) if the UX is too
-  rough.
-- **Blocks.** J1/J3 UX; depends on whether the OAuth client allows a localhost/redirect Nexus controls.
+- **Decision.** **(A) — confirmed viable, no callback hosting needed.** The Hub Plugin's
+  `callback_url()` returns the settings page URL itself (`admin.php?page=wpe-hub-settings`). oauth-ext
+  redirects the browser back to WP-admin after consent; the `handle_oauth_callback()` admin_init hook
+  on that page processes the `?code=…&state=…` params and writes the connection state. Nexus never
+  touches the OAuth callback.
+- **Nexus connect flow (v1):**
+  1. `shell.openExternal(siteUrl + '/wp-admin/admin.php?page=wpe-hub-settings')` — opens Hub settings
+     in the user's default browser.
+  2. Poll `wp_eval get_option('wpe_auth_registered') && get_option('wpe_auth_client_id')` every 2–3 s.
+  3. When both are truthy, read `wpe_auth_project_id` (immediate) and `wpe_auth_account_id` (lazy —
+     written on first token use; may need a follow-up poll).
+- **Key option names written at registration:** `wpe_auth_registered` (bool), `wpe_auth_client_id`,
+  `wpe_auth_project_id`. Written lazily: `wpe_auth_account_id` (from JWT claims, first token fetch).
+- **Copy detection:** `wpe_auth_copy_detected` is non-empty when the site was cloned and credentials
+  were cleared. Nexus must surface this as a "reconnect needed" state rather than treating the site as
+  connected.
+- **Admin page slug:** `wpe-hub-settings`. Full URL: `{siteUrl}/wp-admin/admin.php?page=wpe-hub-settings`.
+  On Local sites this resolves to `http://localhost:{port}/wp-admin/…`.
+- **Blocks.** — (unblocks J1/J3 connect flow; Phase 2 can now start).
 
 ### Q4 — Prove `wpe_auth_account_id` ⇔ CAPI account  ·  **Decided (✅ proven 2026-07-24)**
 - **Why it matters.** This is the bridge that lets Nexus correlate IW **projects** with the WPE
