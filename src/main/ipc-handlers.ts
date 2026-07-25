@@ -4939,7 +4939,12 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       }
 
       const siteUrl: string = site.url || `http://${site.domain}`;
-      const hubAdminUrl = `${siteUrl}/wp-admin/admin.php?page=wpe-hub-settings`;
+      // Use one-click admin auto-login if configured — appending localwp_auto_login
+      // tells Local's URL interceptor to log in as that admin before loading the page.
+      const autoLoginParam = site.oneClickAdminID
+        ? `&localwp_auto_login=${site.oneClickAdminID}`
+        : '';
+      const hubAdminUrl = `${siteUrl}/wp-admin/admin.php?page=wpe-hub-settings${autoLoginParam}`;
 
       const { shell } = await import('electron');
       shell.openExternal(hubAdminUrl);
