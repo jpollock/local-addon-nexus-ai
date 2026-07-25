@@ -249,18 +249,21 @@ export class ChatService {
             toolName: tc.name,
           });
 
-          // Increment action_count on session and notify renderer
-          try {
-            const db = this.services.graphService?.getDb();
-            if (db) {
-              db.prepare('UPDATE chat_sessions SET action_count = action_count + 1 WHERE id = ?').run(session.id);
-              const row = db.prepare('SELECT action_count FROM chat_sessions WHERE id = ?').get(session.id) as any;
-              this.sendToRenderer(IPC_CHANNELS.CHAT_SESSION_ACTION_RECORDED, session.id, {
-                sessionId: session.id,
-                actionCount: row?.action_count ?? 1,
-              });
-            }
-          } catch { /* non-fatal — badge will refresh on next save */ }
+          // Only count Tier 2/3 (state-changing) ops as actions — Tier 1 reads are invisible
+          const actionSafety = getToolSafety(tc.name);
+          if (actionSafety.tier >= 2) {
+            try {
+              const db = this.services.graphService?.getDb();
+              if (db) {
+                db.prepare('UPDATE chat_sessions SET action_count = action_count + 1 WHERE id = ?').run(session.id);
+                const row = db.prepare('SELECT action_count FROM chat_sessions WHERE id = ?').get(session.id) as any;
+                this.sendToRenderer(IPC_CHANNELS.CHAT_SESSION_ACTION_RECORDED, session.id, {
+                  sessionId: session.id,
+                  actionCount: row?.action_count ?? 1,
+                });
+              }
+            } catch { /* non-fatal — badge will refresh on next save */ }
+          }
         }
 
         // Continue loop — LLM will see tool results and respond

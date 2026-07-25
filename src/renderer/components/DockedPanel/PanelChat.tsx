@@ -65,6 +65,11 @@ const styles = {
   log: {
     flex: 1,
     overflowY: 'auto' as const,
+    padding: '0',
+  },
+  logInner: {
+    maxWidth: 720,
+    margin: '0 auto',
     padding: '12px 14px',
     display: 'flex',
     flexDirection: 'column' as const,
@@ -387,7 +392,7 @@ export class PanelChat extends React.Component<Props, State> {
         });
         return { messages: msgs };
       });
-      this.props.onStreamingStatusChange?.(`Running ${toolDisplayName(event.name)}…`);
+      this.props.onStreamingStatusChange?.('Working…');
     } else if (event.type === 'tool_call_approval_needed') {
       // Tier-3 destructive tool — upgrade whichever message owns this toolCall id
       this.setState((s) => ({
@@ -577,122 +582,118 @@ export class PanelChat extends React.Component<Props, State> {
     }));
   }
 
+  renderToolExpansion(rawResult: string, key: string): React.ReactNode {
+    let displayResult: string;
+    try {
+      const parsed = JSON.parse(rawResult);
+      displayResult = typeof parsed === 'object' && parsed !== null ? JSON.stringify(parsed, null, 2) : rawResult;
+    } catch { displayResult = rawResult; }
+    const truncated = displayResult.length > 2000 ? displayResult.slice(0, 2000) + '…' : displayResult;
+    return React.createElement(
+      'div',
+      {
+        key,
+        style: {
+          marginTop: 4, marginBottom: 4, borderLeft: '2px solid #29b6cf', paddingLeft: 10,
+          fontSize: 12, color: '#c9d1d9', maxHeight: 300, overflowY: 'auto' as const,
+          background: '#1a1e24', borderRadius: '0 4px 4px 0',
+        },
+      },
+      React.createElement('pre', { style: { margin: 0, whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const } }, truncated),
+    );
+  }
+
   renderMessage(msg: UIMessage) {
     if (msg.role === 'system') {
       return React.createElement('div', { key: msg.id, style: styles.systemLine }, msg.content);
     }
 
     const { expandedTools } = this.state;
+    const allCalls = msg.toolCalls ?? [];
 
-    const toolCards = (msg.toolCalls ?? [])
-      .filter((tc) => tc.status === 'running' || tc.status === 'awaiting_approval' || tc.status === 'done')
-      .map((tc) => {
-        if (tc.status === 'running') {
-          return React.createElement(
-            'div',
-            {
-              key: tc.id,
-              style: {
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 0', color: '#868d98', fontSize: 12,
-              },
-            },
-            React.createElement('span', { style: { color: '#5fd2e5', fontSize: 13 } }, '⚡'),
-            React.createElement('span', null, tc.name),
-            React.createElement('span', { style: { opacity: 0.5 } }, '…'),
-          );
-        }
-        if (tc.status === 'awaiting_approval') {
-          return React.createElement(ActionCard, {
-            key: tc.id,
-            title: toolDisplayName(tc.name),
-            effect: toolEffect(tc.name),
-            destructive: tc.name in TOOL_EFFECTS,
-            onConfirm: () => {
-              this.handleApprove(tc.id);
-              try { track(this.props.electron.ipcRenderer, 'nexus_panel_action_confirmed', { destructive: false }); } catch (_) {}
-              this.inputRef.current?.focus();
-            },
-            onCancel: () => { this.handleCancel(tc.id); this.inputRef.current?.focus(); },
-          });
-        }
-        // status === 'done'
-        if (tc.result === undefined) return null;
-        const isExpanded = expandedTools.has(tc.id);
-        const rawResult = tc.result ?? '';
-        let displayResult: string;
-        try {
-          const parsed = JSON.parse(rawResult);
-          displayResult = typeof parsed === 'object' && parsed !== null
-            ? JSON.stringify(parsed, null, 2)
-            : rawResult;
-        } catch {
-          displayResult = rawResult;
-        }
-        const truncated = displayResult.length > 2000
-          ? displayResult.slice(0, 2000) + '…'
-          : displayResult;
+    // Running chips — show one per active call (usually 0 or 1 at a time)
+    const runningChips = allCalls
+      .filter((tc) => tc.status === 'running')
+      .map((tc) => React.createElement(
+        'div',
+        { key: tc.id, style: { display: 'flex', alignItems: 'center', gap: 6, padding: '5px 0', color: '#868d98', fontSize: 12 } },
+        React.createElement('span', { style: { color: '#5fd2e5', fontSize: 13 } }, '⚡'),
+        React.createElement('span', null, toolDisplayName(tc.name)),
+        React.createElement('span', { style: { opacity: 0.5 } }, '…'),
+      ));
 
-        return React.createElement(
+    // Approval cards — render individually
+    const approvalCards = allCalls
+      .filter((tc) => tc.status === 'awaiting_approval')
+      .map((tc) => React.createElement(ActionCard, {
+        key: tc.id,
+        title: toolDisplayName(tc.name),
+        effect: toolEffect(tc.name),
+        destructive: tc.name in TOOL_EFFECTS,
+        onConfirm: () => {
+          this.handleApprove(tc.id);
+          try { track(this.props.electron.ipcRenderer, 'nexus_panel_action_confirmed', { destructive: false }); } catch (_) {}
+          this.inputRef.current?.focus();
+        },
+        onCancel: () => { this.handleCancel(tc.id); this.inputRef.current?.focus(); },
+      }));
+
+    // Done chips — group repeated calls to the same tool into one row
+    const doneCalls = allCalls.filter((tc) => tc.status === 'done' && tc.result !== undefined);
+    const doneGroups = new Map<string, typeof doneCalls>();
+    for (const tc of doneCalls) {
+      if (!doneGroups.has(tc.name)) doneGroups.set(tc.name, []);
+      doneGroups.get(tc.name)!.push(tc);
+    }
+    const doneChips = Array.from(doneGroups.entries()).map(([name, calls]) => {
+      const groupKey = `group-${msg.id}-${name}`;
+      const isExpanded = expandedTools.has(groupKey);
+      const label = calls.length > 1
+        ? `${toolDisplayName(name)} · ${calls.length}`
+        : toolDisplayName(name);
+      return React.createElement(
+        'div',
+        { key: groupKey },
+        React.createElement(
           'div',
-          { key: tc.id },
-          React.createElement(
-            'div',
-            {
-              style: {
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '4px 0', color: '#868d98', fontSize: 12, cursor: 'pointer',
-                userSelect: 'none' as const,
-              },
-              onClick: () => {
-                this.setState((s) => {
-                  const next = new Set(s.expandedTools);
-                  next.has(tc.id) ? next.delete(tc.id) : next.add(tc.id);
-                  return { expandedTools: next };
-                });
-              },
-            },
-            React.createElement('span', { style: { color: '#22c55e', fontSize: 13 } }, '✓'),
-            React.createElement('span', null, toolDisplayName(tc.name)),
-            React.createElement(
-              'span',
-              { style: { fontSize: 10, opacity: 0.6, marginLeft: 2 } },
-              isExpanded ? '▾' : '▸',
-            ),
-          ),
-          isExpanded
-            ? React.createElement(
-                'div',
-                {
-                  style: {
-                    marginTop: 4,
-                    marginBottom: 4,
-                    borderLeft: '2px solid #29b6cf',
-                    paddingLeft: 10,
-                    fontSize: 12,
-                    color: '#c9d1d9',
-                    maxHeight: 300,
-                    overflowY: 'auto' as const,
-                    background: '#1a1e24',
-                    borderRadius: '0 4px 4px 0',
-                  },
-                },
-                React.createElement('pre', {
-                  style: { margin: 0, whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const },
-                }, truncated),
-              )
-            : null,
-        );
-      })
-      .filter(Boolean);
+          {
+            style: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', color: '#868d98', fontSize: 12, cursor: 'pointer', userSelect: 'none' as const },
+            onClick: () => this.setState((s) => {
+              const next = new Set(s.expandedTools);
+              next.has(groupKey) ? next.delete(groupKey) : next.add(groupKey);
+              return { expandedTools: next };
+            }),
+          },
+          React.createElement('span', { style: { color: '#22c55e', fontSize: 13 } }, '✓'),
+          React.createElement('span', null, label),
+          React.createElement('span', { style: { fontSize: 10, opacity: 0.6, marginLeft: 2 } }, isExpanded ? '▾' : '▸'),
+        ),
+        isExpanded
+          ? React.createElement(
+              'div',
+              { style: { display: 'flex', flexDirection: 'column' as const, gap: 4, marginTop: 2 } },
+              ...calls.map((tc, i) => this.renderToolExpansion(tc.result ?? '', `${groupKey}-${i}`)),
+            )
+          : null,
+      );
+    });
+
+    const toolCards = [...runningChips, ...approvalCards, ...doneChips].filter(Boolean);
+
+    // Typing indicator: only show when streaming with no content AND no tool activity yet
+    const hasToolActivity = allCalls.length > 0;
 
     let bubbleElement: React.ReactNode;
     if (msg.role === 'assistant') {
-      if (msg.streaming && !msg.content) {
+      if (msg.streaming && !msg.content && !hasToolActivity) {
         bubbleElement = React.createElement(
           'div',
           { style: { ...styles.assistantBubble, whiteSpace: 'normal' as const } },
-          React.createElement('span', { style: { color: '#868d98', letterSpacing: '0.15em', opacity: 0.7 } }, '· · ·'),
+          React.createElement('span', { className: 'nexus-typing' },
+            React.createElement('span', null, '●'),
+            React.createElement('span', null, '●'),
+            React.createElement('span', null, '●'),
+          ),
         );
       } else {
         bubbleElement = React.createElement('div', {
@@ -726,15 +727,19 @@ export class PanelChat extends React.Component<Props, State> {
       React.createElement(
         'div',
         { ref: this.logRef, style: styles.log, 'aria-live': 'polite', 'data-nexus-chat': true },
-        messages.length === 0
-          ? React.createElement(
-              'div',
-              { style: { padding: '24px 14px', color: '#868d98', textAlign: 'center' as const, fontSize: 13 } },
-              React.createElement('div', { style: { color: '#29b6cf', fontSize: 18, marginBottom: 8 } }, 'Nexus'),
-              React.createElement('div', null, 'Ask anything about your WordPress sites.'),
-            )
-          : null,
-        messages.map((m) => this.renderMessage(m)),
+        React.createElement(
+          'div',
+          { style: styles.logInner },
+          messages.length === 0
+            ? React.createElement(
+                'div',
+                { style: { padding: '24px 0', color: '#868d98', textAlign: 'center' as const, fontSize: 13 } },
+                React.createElement('div', { style: { color: '#29b6cf', fontSize: 18, marginBottom: 8 } }, 'Nexus'),
+                React.createElement('div', null, 'Ask anything about your WordPress sites.'),
+              )
+            : null,
+          messages.map((m) => this.renderMessage(m)),
+        ),
       ),
       offline
         ? React.createElement(

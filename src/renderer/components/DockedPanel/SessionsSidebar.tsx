@@ -239,7 +239,7 @@ export class SessionsSidebar extends React.Component<Props, State> {
       ),
       React.createElement(
         'div',
-        { style: styles.list },
+        { style: styles.list, 'data-nexus-sessions': true },
         loading
           ? React.createElement('div', { style: styles.empty }, 'Loading…')
           : sorted.length === 0
