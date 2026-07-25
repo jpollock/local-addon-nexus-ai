@@ -725,7 +725,7 @@ export class PanelChat extends React.Component<Props, State> {
       { style: styles.root },
       React.createElement(
         'div',
-        { ref: this.logRef, style: styles.log, 'aria-live': 'polite' },
+        { ref: this.logRef, style: styles.log, 'aria-live': 'polite', 'data-nexus-chat': true },
         messages.length === 0
           ? React.createElement(
               'div',
