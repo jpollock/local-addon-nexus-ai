@@ -4939,12 +4939,12 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       }
 
       const siteUrl: string = site.url || `http://${site.domain}`;
-      // Use one-click admin auto-login if configured — appending localwp_auto_login
-      // tells Local's URL interceptor to log in as that admin before loading the page.
-      const autoLoginParam = site.oneClickAdminID
-        ? `&localwp_auto_login=${site.oneClickAdminID}`
-        : '';
-      const hubAdminUrl = `${siteUrl}/wp-admin/admin.php?page=wpe-hub-settings${autoLoginParam}`;
+      // Open Hub settings directly — WordPress handles auth naturally:
+      // - existing session → lands on Hub settings immediately
+      // - no session → wp-login.php?redirect_to=... → Hub settings after login
+      // localwp_auto_login cannot be used here: Local's bootstrap always redirects
+      // to user_admin_url() (dashboard) regardless of the originating URL.
+      const hubAdminUrl = `${siteUrl}/wp-admin/admin.php?page=wpe-hub-settings`;
 
       const { shell } = await import('electron');
       shell.openExternal(hubAdminUrl);
