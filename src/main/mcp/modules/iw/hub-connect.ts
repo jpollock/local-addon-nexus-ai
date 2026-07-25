@@ -29,7 +29,7 @@ export async function installHubPlugin(
     downloadUrl = meta.download_link ?? meta.package ?? '';
     if (!downloadUrl) throw new Error('PIS response missing download_link');
   } catch (err: any) {
-    return { ok: false, error: `Failed to fetch Hub Plugin from PIS: ${String(err.message)}` };
+    return { ok: false, error: `Failed to fetch Hub Plugin from PIS: ${err instanceof Error ? err.message : String(err)}` };
   }
 
   const result = await localServices.wpCliRun(siteId, ['plugin', 'install', downloadUrl, '--activate']);
@@ -78,11 +78,12 @@ export async function getConnectionStatus(
     const raw = JSON.parse((result.stdout ?? '').trim()) as Record<string, string>;
     const registered = Boolean(raw.registered);
     const clientId = raw.client_id || null;
-    const connected = registered && !!clientId;
+    const copyReset = Boolean(raw.copy_reset);
+    const connected = !copyReset && registered && !!clientId;
     return {
       hubInstalled: true,
       connected,
-      copyReset: Boolean(raw.copy_reset),
+      copyReset,
       clientId: connected ? clientId : null,
       projectId: raw.project_id || null,
       accountId: raw.account_id || null,

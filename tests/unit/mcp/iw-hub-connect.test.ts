@@ -80,6 +80,21 @@ describe('getConnectionStatus', () => {
     expect(status.connected).toBe(false);
   });
 
+  it('returns connected=false even if registered when copyReset is set', async () => {
+    mockServices.wpCliRun.mockResolvedValue({
+      stdout: JSON.stringify({
+        registered: '1', client_id: 'client_abc',
+        project_id: 'proj_xyz', account_id: 'acct_111',
+        copy_reset: 'Connection reset for security.',
+      }),
+      success: true,
+    });
+    const status = await getConnectionStatus('site_1', mockServices);
+    expect(status.copyReset).toBe(true);
+    expect(status.connected).toBe(false);
+    expect(status.clientId).toBeNull();
+  });
+
   it('returns hubInstalled=false when directory absent', async () => {
     mockFs.existsSync.mockReturnValue(false);
     const status = await getConnectionStatus('site_1', mockServices);
