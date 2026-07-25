@@ -62,6 +62,7 @@ interface NexusSiteTabState {
   iwStatus: IwConnectionStatus | null;
   iwConnecting: boolean;
   iwPollInterval: ReturnType<typeof setInterval> | null;
+  iwError: string | null;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -241,6 +242,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     iwStatus: null,
     iwConnecting: false,
     iwPollInterval: null,
+    iwError: null,
   };
 
   componentDidMount(): void {
@@ -955,15 +957,15 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
 
   handleIwConnect = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
-    this.setState({ iwConnecting: true });
+    this.setState({ iwConnecting: true, iwError: null });
     try {
       const connectResult = await ipc.invoke(IPC_CHANNELS.IW_CONNECT, this.props.site.id) as { ok: boolean; error?: string } | null;
       if (!connectResult?.ok) {
-        if (this.mounted) this.setState({ iwConnecting: false });
+        if (this.mounted) this.setState({ iwConnecting: false, iwError: connectResult?.error ?? 'Connect failed' });
         return;
       }
-    } catch {
-      if (this.mounted) this.setState({ iwConnecting: false });
+    } catch (err: any) {
+      if (this.mounted) this.setState({ iwConnecting: false, iwError: String(err?.message ?? err) });
       return;
     }
     if (!this.mounted) return;
@@ -994,7 +996,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
   };
 
   renderIwCard(): React.ReactNode {
-    const { iwStatus, iwConnecting } = this.state;
+    const { iwStatus, iwConnecting, iwError } = this.state;
     if (iwStatus === null) return null;
 
     const { hubInstalled, connected, copyReset, projectId } = iwStatus;
@@ -1042,6 +1044,9 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
           onClick: buttonDisabled ? undefined : buttonAction,
         }, buttonLabel),
       ),
+      iwError ? React.createElement('div', {
+        style: { marginTop: 6, fontSize: 11, color: UI_COLORS.STATUS_ERROR, lineHeight: 1.4 },
+      }, iwError) : null,
     );
   }
 

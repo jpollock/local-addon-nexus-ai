@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import type { IwConnectionStatus, IwSiteBinding } from '../../../../common/types';
 import { STORAGE_KEYS } from '../../../../common/constants';
@@ -14,13 +15,16 @@ export function detectHubPlugin(webRoot: string): boolean {
 
 /**
  * Install and activate the Hub Plugin from the WPE Product Info Service.
- * Fetches the pre-signed S3 zip URL from PIS and passes it to wp plugin install.
- * Site must be running.
+ *
+ * Downloads the zip in Node.js (bypasses WordPress's WP_HTTP_BLOCK_EXTERNAL
+ * restriction on production-cloned sites), saves it to a temp file, then
+ * installs from the local path via wp plugin install.
  */
 export async function installHubPlugin(
   siteId: string,
   localServices: LocalServicesBridge,
 ): Promise<{ ok: boolean; error?: string }> {
+  // Step 1: Fetch PIS metadata to get the signed download URL
   let downloadUrl: string;
   try {
     const res = await fetch(PIS_URL);
@@ -32,20 +36,38 @@ export async function installHubPlugin(
     return { ok: false, error: `Failed to fetch Hub Plugin from PIS: ${err instanceof Error ? err.message : String(err)}` };
   }
 
-  const result = await localServices.wpCliRun(siteId, ['plugin', 'install', downloadUrl, '--activate']);
-
-  if (!result.success || (result.exitCode != null && result.exitCode !== 0)) {
-    const stderr = result.stderr ?? '';
-    if (stderr.toLowerCase().includes('openssl')) {
-      return {
-        ok: false,
-        error: 'Hub Plugin requires the PHP OpenSSL extension. Enable it in your PHP configuration and try again.',
-      };
-    }
-    return { ok: false, error: stderr || 'Plugin install failed' };
+  // Step 2: Download the zip in Node.js — avoids WP_HTTP_BLOCK_EXTERNAL on
+  // production-cloned sites where WordPress itself can't make external requests.
+  const tmpZip = path.join(os.tmpdir(), 'wpe-hub-install.zip');
+  try {
+    const zipRes = await fetch(downloadUrl);
+    if (!zipRes.ok) throw new Error(`Download returned ${zipRes.status}`);
+    const buf = await zipRes.arrayBuffer();
+    fs.writeFileSync(tmpZip, Buffer.from(buf));
+  } catch (err: any) {
+    return { ok: false, error: `Failed to download Hub Plugin: ${err instanceof Error ? err.message : String(err)}` };
   }
 
-  return { ok: true };
+  // Step 3: Install from local path via WP-CLI
+  try {
+    const result = await localServices.wpCliRun(siteId, ['plugin', 'install', tmpZip, '--activate']);
+    const errText = result.stderr ?? result.stdout ?? '';
+
+    if (!result.success || (result.exitCode != null && result.exitCode !== 0)) {
+      if (errText.toLowerCase().includes('openssl')) {
+        return {
+          ok: false,
+          error: 'Hub Plugin requires the PHP OpenSSL extension. Enable it in your PHP configuration and try again.',
+        };
+      }
+      return { ok: false, error: errText || 'Plugin install failed' };
+    }
+
+    return { ok: true };
+  } finally {
+    // Clean up temp file regardless of outcome
+    try { fs.unlinkSync(tmpZip); } catch { /* best-effort */ }
+  }
 }
 
 // PHP snippet run via `wp eval` to read all relevant auth options in one call.
