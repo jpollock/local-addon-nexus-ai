@@ -279,15 +279,15 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
     const body = isFull
       ? React.createElement(
           'div',
-          { style: { display: 'flex', height: '100%' } },
+          { style: { display: 'flex', flex: 1, overflow: 'hidden' } },
           React.createElement(
             'div',
-            { style: { width: 264, flexShrink: 0, borderRight: '1px solid #2c313a' } },
+            { style: { width: 264, flexShrink: 0, borderRight: '1px solid #2c313a', overflow: 'hidden' } },
             sessionsSidebar ?? null,
           ),
           React.createElement(
             'div',
-            { style: { flex: 1, maxWidth: 720, margin: '0 auto', height: '100%', overflow: 'hidden' } },
+            { style: { flex: 1, maxWidth: 720, margin: '0 auto', overflow: 'hidden' } },
             children ?? null,
           ),
         )
