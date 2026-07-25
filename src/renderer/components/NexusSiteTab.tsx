@@ -8,7 +8,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
-import type { NexusSettings, AIProvider, SiteAIConfig, DbScanResult } from '../../common/types';
+import type { NexusSettings, AIProvider, SiteAIConfig, DbScanResult, IwConnectionStatus } from '../../common/types';
 import { AssistantPanel } from './AssistantPanel';
 
 export interface NexusSiteTabProps {
@@ -59,6 +59,9 @@ interface NexusSiteTabState {
   globalAIProvider: string | null;
   dbScan: DbScanResult | null;
   dbScanning: boolean;
+  iwStatus: IwConnectionStatus | null;
+  iwConnecting: boolean;
+  iwPollInterval: ReturnType<typeof setInterval> | null;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -235,6 +238,9 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     globalAIProvider: null,
     dbScan: null,
     dbScanning: false,
+    iwStatus: null,
+    iwConnecting: false,
+    iwPollInterval: null,
   };
 
   componentDidMount(): void {
@@ -274,6 +280,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     if (this._onIndexProgress) {
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.INDEX_PROGRESS, this._onIndexProgress);
     }
+    if (this.state.iwPollInterval) clearInterval(this.state.iwPollInterval);
   }
 
   fetchData = async (): Promise<void> => {
@@ -354,6 +361,10 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     } catch {
       // Non-fatal
     }
+
+    const iwStatusResult = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null);
+    if (!this.mounted) return;
+    this.setState({ iwStatus: (iwStatusResult as IwConnectionStatus | null) ?? null });
   };
 
   handleIndex = async (): Promise<void> => {
@@ -942,6 +953,98 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     );
   }
 
+  handleIwConnect = async (): Promise<void> => {
+    const ipc = this.props.electron.ipcRenderer;
+    this.setState({ iwConnecting: true });
+    try {
+      const connectResult = await ipc.invoke(IPC_CHANNELS.IW_CONNECT, this.props.site.id) as { ok: boolean; error?: string } | null;
+      if (!connectResult?.ok) {
+        if (this.mounted) this.setState({ iwConnecting: false });
+        return;
+      }
+    } catch {
+      if (this.mounted) this.setState({ iwConnecting: false });
+      return;
+    }
+    if (!this.mounted) return;
+    const started = Date.now();
+    const interval = setInterval(async () => {
+      if (!this.mounted) { clearInterval(interval); return; }
+      const status = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null) as IwConnectionStatus | null;
+      if (status?.connected || Date.now() - started > 180_000) {
+        clearInterval(interval);
+        this.setState({ iwStatus: status, iwConnecting: false, iwPollInterval: null });
+      } else if (status) {
+        this.setState({ iwStatus: status });
+      }
+    }, 2000);
+    this.setState({ iwPollInterval: interval });
+  };
+
+  handleIwDisconnect = async (): Promise<void> => {
+    const ipc = this.props.electron.ipcRenderer;
+    try {
+      await ipc.invoke(IPC_CHANNELS.IW_DISCONNECT, this.props.site.id);
+      const status = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null) as IwConnectionStatus | null;
+      if (!this.mounted) return;
+      this.setState({ iwStatus: status });
+    } catch {
+      // Best-effort
+    }
+  };
+
+  renderIwCard(): React.ReactNode {
+    const { iwStatus, iwConnecting } = this.state;
+    if (iwStatus === null) return null;
+
+    const { hubInstalled, connected, copyReset, projectId } = iwStatus;
+    const siteNotRunning = (this.props.site.status || this.props.siteStatus) !== 'running';
+
+    const dotColor = connected ? UI_COLORS.STATUS_RUNNING
+      : copyReset ? UI_COLORS.STATUS_ERROR
+      : 'var(--nxai-status-neutral, #9ca3af)';
+
+    const statusText = connected ? 'Connected'
+      : copyReset ? 'Reconnect needed'
+      : hubInstalled ? 'Not connected'
+      : 'Hub Plugin not installed';
+
+    const buttonLabel = siteNotRunning && !connected ? 'Start site to connect'
+      : iwConnecting ? 'Waiting for browser…'
+      : connected ? 'Disconnect'
+      : hubInstalled ? (copyReset ? 'Reconnect' : 'Connect')
+      : 'Enable & Connect';
+
+    const buttonDisabled = siteNotRunning && !connected || iwConnecting;
+    const buttonAction = connected ? this.handleIwDisconnect : this.handleIwConnect;
+    const buttonStyle: React.CSSProperties = {
+      fontSize: 11, padding: '3px 10px', borderRadius: 4, cursor: buttonDisabled ? 'default' : 'pointer',
+      opacity: buttonDisabled ? 0.5 : 1, fontFamily: 'inherit',
+      border: connected ? '1px solid var(--nxai-card-border, #30363d)' : 'none',
+      background: connected ? 'none' : UI_COLORS.WPE_BRAND,
+      color: connected ? 'inherit' : '#fff',
+    };
+
+    return React.createElement('div', { style: styles.cardFull },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 } },
+        React.createElement('span', { style: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: 'var(--nxai-card-sub, #6b7280)' } }, 'WP Engine Power'),
+      ),
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const } },
+        React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12 } },
+          React.createElement('span', { style: { width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block', flexShrink: 0 } }),
+          statusText,
+        ),
+        connected && projectId
+          ? React.createElement('span', { style: { fontSize: 11, fontFamily: 'monospace', opacity: 0.6 } }, projectId)
+          : null,
+        React.createElement('button', {
+          style: buttonStyle, disabled: buttonDisabled,
+          onClick: buttonDisabled ? undefined : buttonAction,
+        }, buttonLabel),
+      ),
+    );
+  }
+
   render(): React.ReactNode {
     const { loading, setupResult } = this.state;
 
@@ -970,6 +1073,8 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
         ),
         // Full-width: Database Health
         this.renderDatabaseHealthCard(),
+        // Full-width: WP Engine Power (IW connect)
+        this.renderIwCard(),
         // Full-width: Tools
         this.renderToolsCard(),
         // Result banner at bottom
