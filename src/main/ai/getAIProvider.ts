@@ -15,6 +15,7 @@ const DEFAULT_MODELS: Record<string, string> = {
   openai:    'gpt-4o-mini',
   google:    'gemini-1.5-flash',
   ollama:    'llama3.2',
+  power:     'anthropic/claude-haiku-4-5',
 };
 
 export interface ResolvedAIProvider {
