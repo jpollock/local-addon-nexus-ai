@@ -287,7 +287,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       if (!this.mounted) return;
       this.setState({ iwStatus: (iwStatusResult as IwConnectionStatus | null) ?? null });
     } catch {
-      // Non-fatal
+      // Non-fatal — .catch() above already converted rejection to null
     }
   };
 
@@ -535,7 +535,12 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     const { site, electron } = this.props;
     const ipc = electron.ipcRenderer;
     this.setState({ iwConnecting: true });
-    await ipc.invoke(IPC_CHANNELS.IW_CONNECT, site.id);
+    try {
+      await ipc.invoke(IPC_CHANNELS.IW_CONNECT, site.id);
+    } catch {
+      if (this.mounted) this.setState({ iwConnecting: false });
+      return;
+    }
 
     const started = Date.now();
     const interval = setInterval(async () => {
@@ -557,6 +562,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     const ipc = electron.ipcRenderer;
     await ipc.invoke(IPC_CHANNELS.IW_DISCONNECT, site.id);
     const status = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, site.id).catch(() => null) as IwConnectionStatus | null;
+    if (!this.mounted) return;
     this.setState({ iwStatus: status });
   };
 
