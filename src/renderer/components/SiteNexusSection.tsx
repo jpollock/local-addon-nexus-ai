@@ -536,11 +536,17 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     const ipc = electron.ipcRenderer;
     this.setState({ iwConnecting: true });
     try {
-      await ipc.invoke(IPC_CHANNELS.IW_CONNECT, site.id);
+      const connectResult = await ipc.invoke(IPC_CHANNELS.IW_CONNECT, site.id) as { ok: boolean; error?: string } | null;
+      if (!connectResult?.ok) {
+        if (this.mounted) this.setState({ iwConnecting: false });
+        return;
+      }
     } catch {
       if (this.mounted) this.setState({ iwConnecting: false });
       return;
     }
+
+    if (!this.mounted) return;
 
     const started = Date.now();
     const interval = setInterval(async () => {
@@ -656,6 +662,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     if (iwStatus === null) return null;
 
     const { hubInstalled, connected, copyReset, projectId } = iwStatus;
+    const siteNotRunning = this.props.site.status !== 'running';
 
     const dotColor = connected
       ? UI_COLORS.STATUS_RUNNING
@@ -690,10 +697,15 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
                 style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, border: '1px solid var(--nxai-card-border, #30363d)', background: 'none', color: 'inherit', cursor: 'pointer', fontFamily: 'inherit' },
                 onClick: this.handleIwDisconnect,
               }, 'Disconnect')
-            : React.createElement('button', {
-                style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, border: 'none', background: UI_COLORS.WPE_BRAND, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' },
-                onClick: this.handleIwConnect,
-              }, hubInstalled ? (copyReset ? 'Reconnect' : 'Connect') : 'Enable & Connect'),
+            : siteNotRunning
+              ? React.createElement('button', {
+                  style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, border: '1px solid var(--nxai-card-border, #30363d)', background: 'none', color: 'inherit', cursor: 'default', fontFamily: 'inherit', opacity: 0.5 },
+                  disabled: true,
+                }, 'Start site to connect')
+              : React.createElement('button', {
+                  style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, border: 'none', background: UI_COLORS.WPE_BRAND, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' },
+                  onClick: this.handleIwConnect,
+                }, hubInstalled ? (copyReset ? 'Reconnect' : 'Connect') : 'Enable & Connect'),
       ),
     );
   }
