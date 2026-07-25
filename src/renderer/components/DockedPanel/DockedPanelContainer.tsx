@@ -147,16 +147,8 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       onStreamingStatusChange: (status: string | null) => this.setState({ streamingStatus: status }),
     });
 
-    const panelBody = React.createElement(
-      'div',
-      { style: { display: 'flex', flexDirection: 'column' as const, height: '100%', overflow: 'hidden' } },
-      React.createElement(ContextSelector, {
-        electron: this.props.electron,
-        selectedSiteIds,
-        onChange: (ids: string[]) => this.setState({ selectedSiteIds: ids }),
-      }),
-      panelContent,
-    );
+    // ContextSelector hidden — site scope selection not yet exposed in UI
+    const panelBody = panelContent;
 
     const sessionsSidebar = size === 'full' || showSessions
       ? React.createElement(SessionsSidebar, {
