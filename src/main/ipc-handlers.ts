@@ -52,6 +52,14 @@ import { executeSentinelCommands } from './sentinel/SentinelExecutor';
 import type { AIContextData } from './ai-context/AIContextGenerator';
 import { AuditLogger, AUDITED_OPERATIONS } from './audit/AuditLogger';
 import {
+  detectHubPlugin,
+  installHubPlugin,
+  getConnectionStatus,
+  readIwBinding,
+  writeIwBinding,
+  clearIwBinding,
+} from './mcp/modules/iw/hub-connect';
+import {
   validateInput,
   SiteIdSchema,
   UpdateSettingsSchema,
@@ -4878,6 +4886,87 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         ...(properties as any),
       });
     } catch { /* never block the renderer */ }
+  });
+
+  // ─── Intelligent Web (IW) connect handlers ──────────────────────────────────
+
+  safeHandle(IPC_CHANNELS.IW_GET_STATUS, async (_event: any, siteId: string) => {
+    try {
+      const site = localServicesBridge.resolveSiteObject(siteId) as any;
+      const webRoot: string = site?.paths?.webRoot ?? '';
+      const hubInstalled = webRoot ? detectHubPlugin(webRoot) : false;
+
+      if (localServicesBridge.getSiteStatus(siteId) !== 'running') {
+        return { hubInstalled, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null };
+      }
+
+      const status = await getConnectionStatus(siteId, localServicesBridge);
+      const binding = readIwBinding(siteId, registryStorage);
+
+      // Opportunistically persist binding when connected externally (no Nexus connect flow)
+      if (status.connected && status.clientId && !binding) {
+        writeIwBinding({
+          siteId,
+          clientId: status.clientId,
+          projectId: status.projectId ?? '',
+          accountId: status.accountId ?? '',
+          connectedAt: Date.now(),
+        }, registryStorage);
+      }
+
+      // Update stored binding when lazy accountId arrives
+      if (status.connected && binding && !binding.accountId && status.accountId) {
+        writeIwBinding({ ...binding, accountId: status.accountId }, registryStorage);
+      }
+
+      return status;
+    } catch (err: any) {
+      localLogger.error('[NexusAI] IW_GET_STATUS error:', (err as Error).message);
+      return { hubInstalled: false, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.IW_CONNECT, async (_event: any, siteId: string) => {
+    try {
+      const site = localServicesBridge.resolveSiteObject(siteId) as any;
+      if (!site) return { ok: false, error: 'Site not found' };
+
+      const webRoot: string = site?.paths?.webRoot ?? '';
+      const hubInstalled = webRoot ? detectHubPlugin(webRoot) : false;
+      if (!hubInstalled) {
+        const installResult = await installHubPlugin(siteId, localServicesBridge);
+        if (!installResult.ok) return { ok: false, error: installResult.error };
+      }
+
+      const siteUrl: string = site.url || `http://${site.domain}`;
+      const hubAdminUrl = `${siteUrl}/wp-admin/admin.php?page=wpe-hub-settings`;
+
+      const { shell } = await import('electron');
+      shell.openExternal(hubAdminUrl);
+
+      return { ok: true, polling: true, hubAdminUrl };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] IW_CONNECT error:', (err as Error).message);
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.IW_DISCONNECT, async (_event: any, siteId: string) => {
+    try {
+      clearIwBinding(siteId, registryStorage);
+
+      if (localServicesBridge.getSiteStatus(siteId) === 'running') {
+        await localServicesBridge.wpCliRun(siteId, [
+          'eval',
+          `if (class_exists('WpeAuthCore')) { WpeAuthCore::clear_registration(); } delete_option('wpe_auth_copy_detected');`,
+        ]).catch(() => {});
+      }
+
+      return { ok: true };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] IW_DISCONNECT error:', (err as Error).message);
+      return { ok: false, error: (err as Error).message };
+    }
   });
 
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');
