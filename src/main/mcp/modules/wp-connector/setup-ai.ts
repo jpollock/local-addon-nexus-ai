@@ -185,6 +185,21 @@ export async function setupSiteForAI(
   const enableOllama = provider === 'ollama';
   const useLocalGateway = !!(settings.useLocalGateway) && provider !== 'ollama';
 
+  // Power path: verify Hub is connected before proceeding
+  if (provider === 'power') {
+    const { getConnectionStatus } = await import('../iw/hub-connect');
+    const iwStatus = await getConnectionStatus(siteId, localServices);
+    if (!iwStatus.connected) {
+      const msg = 'Hub Plugin is not connected to Power. Complete the Hub connect flow first.';
+      logger.error(`${tag} ${msg}`);
+      return {
+        success: false, aiPlugin: 'failed', connectorPlugin: 'failed',
+        providerPlugins: 'skipped', gatewayProvider: 'skipped', ollamaProvider: 'skipped',
+        aiFeatures: 'skipped', credentials: 'skipped', acfAbilities: 'skipped', message: msg,
+      };
+    }
+  }
+
   // Step 0: Check WordPress version (AI plugin requires WP 7.0+)
   let wpVersion: string | null;
   try {
@@ -498,7 +513,7 @@ export async function setupSiteForAI(
     const providerSlug = PROVIDER_PLUGIN_SLUGS[provider];
     // Only install remote provider plugins (anthropic, openai, google) — ollama and local-gateway
     // are handled by their own dedicated steps below
-    const isRemoteProvider = providerSlug && provider !== 'ollama' && provider !== 'local-gateway';
+    const isRemoteProvider = providerSlug && provider !== 'ollama' && provider !== 'local-gateway' && provider !== 'power';
 
     if (isRemoteProvider && aiPlugin !== 'failed') {
       // Check WP version — provider plugins only work on WP 7.0+
@@ -563,7 +578,7 @@ export async function setupSiteForAI(
   // Only installed when useLocalGateway is true — otherwise we install the direct provider plugin.
   let gatewayProvider: 'installed' | 'activated' | 'already_active' | 'skipped' | 'failed' = 'skipped';
 
-  if (useLocalGateway) {
+  if (useLocalGateway && provider !== 'power') {
     if (aiPlugin !== 'failed') {
       try {
         // Refresh plugin list
@@ -827,13 +842,36 @@ export async function setupSiteForAI(
     }
   }
 
+  // Step 3b: Approve 'wpengine' connector for the Power path.
+  // Hub's WP Engine connector must be approved in wpai_connector_approvals so that
+  // AI features can route through it without manual admin approval.
+  if (provider === 'power' && aiPlugin !== 'failed') {
+    try {
+      const approvalPhp = [
+        "$approvals = get_option('wpai_connector_approvals', array());",
+        "$callers = array('ai/ai.php', 'nexus-ai-connector/nexus-ai-connector.php', 'wpe-hub/wpe-hub.php');",
+        'foreach ($callers as $caller) {',
+        '  if (!isset($approvals[$caller])) { $approvals[$caller] = array(); }',
+        "  $approvals[$caller]['wpengine'] = true;",
+        '}',
+        "update_option('wpai_connector_approvals', $approvals, false);",
+        "echo 'ok';",
+      ].join(' ');
+      await localServices.wpCliRun(siteId, ['eval', approvalPhp]);
+      logger.info(`${tag} WP Engine connector approved on site ${siteId}`);
+    } catch (err) {
+      logger.error(`${tag} Connector approval failed: ${err}`);
+      // Non-fatal — user can approve manually in WP Admin
+    }
+  }
+
   // Step 4: Sync credentials — only sync the key for the chosen provider.
   // When useLocalGateway is true, the gateway MU plugin holds credentials — skip direct key sync.
   let credentials: SetupAIResult['credentials'] = 'skipped';
 
   const providerKey = getApiKey(registryStorage, provider);
   const entries: CredentialEntry[] = [];
-  if (!useLocalGateway && providerKey && PROVIDER_TO_WP_OPTION[provider]) {
+  if (!useLocalGateway && providerKey && PROVIDER_TO_WP_OPTION[provider] && provider !== 'power') {
     entries.push({
       provider,
       key: providerKey,
