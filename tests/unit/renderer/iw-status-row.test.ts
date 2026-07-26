@@ -6,6 +6,7 @@ describe('IW renderer contract', () => {
     const s: IwConnectionStatus = {
       hubInstalled: false, connected: false, copyReset: false,
       clientId: null, projectId: null, accountId: null,
+      wpEngineConnectorApproved: false,
     };
     expect(typeof s.hubInstalled).toBe('boolean');
     expect(typeof s.connected).toBe('boolean');

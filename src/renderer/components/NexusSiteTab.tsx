@@ -8,8 +8,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
-import type { NexusSettings, AIProvider, SiteAIConfig, DbScanResult, IwConnectionStatus } from '../../common/types';
-import { AssistantPanel } from './AssistantPanel';
+import type { NexusSettings, SiteAIConfig, DbScanResult, IwConnectionStatus } from '../../common/types';
 
 export interface NexusSiteTabProps {
   site: { id: string; name: string; path: string; status?: string };
@@ -110,13 +109,6 @@ const PROVIDER_LABELS: Record<string, string> = {
   ollama: 'Ollama (local)',
   'local-gateway': 'Local AI Gateway',
 };
-
-const ALL_PROVIDERS: Array<{ id: string; label: string }> = [
-  { id: 'anthropic', label: 'Anthropic (Claude)' },
-  { id: 'openai', label: 'OpenAI (GPT)' },
-  { id: 'google', label: 'Google (Gemini)' },
-  { id: 'ollama', label: 'Ollama (local)' },
-];
 
 // ---------------------------------------------------------------------------
 // Inline styles
@@ -413,49 +405,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     if (this.mounted) this.setState({ indexing: false });
   };
 
-  handleSetupAI = async (provider?: AIProvider): Promise<void> => {
-    this.setState({ settingUpAI: true, setupResult: null, showProviderPicker: false });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.SETUP_AI, this.props.site.id, provider,
-      );
-      if (!this.mounted) return;
-      this.setState({
-        settingUpAI: false,
-        setupResult: { success: result.success, message: result.message },
-      });
-      this.fetchData();
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ settingUpAI: false, setupResult: { success: false, message: 'Setup failed' } });
-    }
-  };
-
-  handleSwitchProvider = async (): Promise<void> => {
-    const { pickerProvider } = this.state;
-    if (!pickerProvider) return;
-    this.setState({ switchingProvider: true, setupResult: null, showProviderPicker: false });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.SWITCH_AI_PROVIDER, this.props.site.id, pickerProvider,
-      );
-      if (!this.mounted) return;
-      this.setState({
-        switchingProvider: false,
-        setupResult: {
-          success: result.success,
-          message: result.success
-            ? `Switched to ${pickerProvider}`
-            : (result.error ?? 'Switch failed'),
-        },
-      });
-      if (result.success) this.fetchData();
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ switchingProvider: false, setupResult: { success: false, message: 'Switch failed' } });
-    }
-  };
-
   handleSyncCredentials = async (): Promise<void> => {
     this.setState({ syncingCreds: true });
     try {
@@ -720,176 +669,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     );
   }
 
-  renderAIProviderCard(): React.ReactElement {
-    const {
-      aiStatus, siteAIConfig, wpVersion, settingUpAI, switchingProvider,
-      showProviderPicker, pickerProvider, useLocalGateway, globalAIProvider, syncingCreds,
-    } = this.state;
-
-    const isAIConfigured = !!siteAIConfig;
-    const canSetupAI = wpVersion === null || isWp7OrLater(wpVersion);
-    const gatewayActive = aiStatus?.gatewayProvider === 'active';
-    const gatewayPending = useLocalGateway && !gatewayActive && isAIConfigured;
-
-    const headerDotColor = isAIConfigured ? UI_COLORS.STATUS_RUNNING : '#888';
-
-    // Provider picker element
-    const providerPickerEl = showProviderPicker
-      ? React.createElement('span', { style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const, marginTop: 4 } },
-          React.createElement('select', {
-            value: pickerProvider,
-            onChange: (e: any) => this.setState({ pickerProvider: e.target.value }),
-            style: {
-              fontSize: 12,
-              padding: '2px 6px',
-              borderRadius: 4,
-              border: '1px solid rgba(128,128,128,0.3)',
-              backgroundColor: 'transparent',
-              color: 'inherit',
-              cursor: 'pointer',
-            },
-          },
-            React.createElement('option', { value: '' }, 'Pick provider...'),
-            ...ALL_PROVIDERS.map(p =>
-              React.createElement('option', { key: p.id, value: p.id }, p.label),
-            ),
-          ),
-          this.btn({
-            onClick: () => {
-              if (!pickerProvider) return;
-              if (isAIConfigured) {
-                this.handleSwitchProvider();
-              } else {
-                this.handleSetupAI(pickerProvider as AIProvider);
-              }
-            },
-            disabled: !pickerProvider || settingUpAI || switchingProvider,
-            children: isAIConfigured
-              ? (switchingProvider ? 'Switching...' : 'Switch')
-              : (settingUpAI ? 'Setting up...' : 'Go'),
-          }),
-          this.btn({
-            onClick: () => this.setState({ showProviderPicker: false, pickerProvider: '' }),
-            children: 'Cancel',
-          }),
-        )
-      : null;
-
-    // Provider row
-    let providerRow: React.ReactElement;
-    if (isAIConfigured) {
-      const providerDisplayName = PROVIDER_LABELS[siteAIConfig!.provider] ?? siteAIConfig!.provider;
-      const displayName = (useLocalGateway && siteAIConfig!.provider !== 'ollama')
-        ? `${providerDisplayName} via Gateway`
-        : providerDisplayName;
-
-      const changeEl = gatewayPending
-        ? React.createElement('span', { style: { fontSize: 11, opacity: 0.6 } },
-            `\u2192 will switch to ${PROVIDER_LABELS[globalAIProvider ?? ''] ?? globalAIProvider ?? 'global provider'} via Gateway`)
-        : (!useLocalGateway || siteAIConfig!.provider === 'ollama'
-          ? (!showProviderPicker
-              ? this.btn({
-                  onClick: () => this.setState({ showProviderPicker: true, pickerProvider: siteAIConfig!.provider as AIProvider }),
-                  disabled: switchingProvider,
-                  children: switchingProvider ? 'Switching...' : 'Change',
-                })
-              : null)
-          : React.createElement('span', { style: { fontSize: 11, opacity: 0.6 } }, 'Change in Preferences'));
-
-      providerRow = this.cardRow('Provider',
-        React.createElement('span', { style: dot(UI_COLORS.STATUS_RUNNING) }),
-        React.createElement('span', { style: { marginRight: 6 } }, displayName),
-        changeEl,
-        providerPickerEl,
-      );
-    } else {
-      const setupText = settingUpAI ? 'Setting up...'
-        : !canSetupAI ? 'Requires WP 7.0+'
-        : 'Setup AI';
-
-      providerRow = this.cardRow('Provider',
-        React.createElement('span', { style: dot('#888') }),
-        React.createElement('span', { style: { marginRight: 6 } }, 'Not configured'),
-        !showProviderPicker && !settingUpAI
-          ? this.btn({
-              onClick: canSetupAI
-                ? (useLocalGateway
-                    // Gateway enabled: skip provider picker — use global provider directly
-                    ? () => this.handleSetupAI()
-                    // Gateway disabled: show provider picker
-                    : () => this.setState({ showProviderPicker: true, pickerProvider: '' }))
-                : undefined,
-              disabled: !canSetupAI,
-              children: setupText,
-            })
-          : (settingUpAI ? React.createElement('span', { style: { fontSize: 11, opacity: 0.7 } }, 'Setting up...') : null),
-        // Only show provider picker when gateway is not active
-        !useLocalGateway ? providerPickerEl : null,
-      );
-    }
-
-    // Gateway row
-    const gatewayColor = gatewayActive ? UI_COLORS.STATUS_RUNNING
-      : gatewayPending ? UI_COLORS.STATUS_WARNING
-      : '#888';
-    const gatewayLabel = gatewayActive ? 'Active' : gatewayPending ? 'Pending' : 'Inactive';
-
-    const gatewayRow = React.createElement('div', null,
-      this.cardRow('Gateway',
-        React.createElement('span', { style: dot(gatewayColor) }),
-        React.createElement('span', { style: { marginRight: 6 } }, gatewayLabel),
-        gatewayPending && canSetupAI
-          ? this.btn({
-              onClick: settingUpAI ? undefined : () => this.handleSetupAI(),
-              disabled: settingUpAI || !canSetupAI,
-              children: settingUpAI ? 'Applying...' : 'Apply',
-            })
-          : (!gatewayActive && !useLocalGateway
-              ? React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } }, 'Configure in Preferences')
-              : null),
-      ),
-    );
-
-    // Credentials row — hidden when Local Gateway is active because the gateway
-    // plugin handles authentication internally; no WP DB credential sync needed.
-    const credsRow = isAIConfigured && aiStatus && !useLocalGateway
-      ? this.cardRow('Credentials',
-          React.createElement('span', { style: dot(aiStatus.credentialsSynced ? UI_COLORS.STATUS_RUNNING : '#888') }),
-          React.createElement('span', { style: { marginRight: 6 } },
-            aiStatus.credentialsSynced
-              ? `Synced (${PROVIDER_LABELS[siteAIConfig!.provider] ?? siteAIConfig!.provider})`
-              : 'Not synced',
-          ),
-          this.btn({
-            onClick: this.state.syncingCreds ? undefined : this.handleSyncCredentials,
-            disabled: syncingCreds,
-            children: syncingCreds ? 'Syncing...' : 'Sync Keys',
-          }),
-        )
-      : null;
-
-    // WP version row (show if we have it)
-    const wpRow = aiStatus && wpVersion !== null
-      ? this.cardRow('WordPress',
-          React.createElement('span', { style: dot(!isWp7OrLater(wpVersion) ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING) }),
-          React.createElement('span', { style: { marginRight: 6 } }, wpVersion),
-          !isWp7OrLater(wpVersion)
-            ? this.btn({
-                onClick: this.state.upgradingWp ? undefined : this.handleUpgradeWordPress,
-                disabled: this.state.upgradingWp,
-                children: this.state.upgradingWp ? 'Upgrading...' : 'Upgrade to WP 7.0',
-              })
-            : null,
-        )
-      : null;
-
-    return this.card('AI Provider', headerDotColor,
-      providerRow,
-      gatewayRow,
-      credsRow ?? React.createElement('div', null),
-      wpRow ?? React.createElement('div', null),
-    );
-  }
 
   renderDatabaseHealthCard(): React.ReactElement {
     const { dbScan, dbScanning } = this.state;
@@ -951,7 +730,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       aiStatus, iwStatus, wpAiPickerChoice, wpAiDirectProvider, wpAiSettingUp, wpAiSetupError,
     } = this.state;
 
-    const activeConnector = detectWpAiConnector(aiStatus, iwStatus);
+    const activeConnector = this.state.wpAiConnector;
     const workingConnector: 'power' | 'local-gateway' | 'direct' | null = activeConnector ?? wpAiPickerChoice;
 
     // Key status: which providers have a valid API key synced to this site
@@ -1024,7 +803,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
           }, label),
           React.createElement('div', {
             style: { fontSize: 11, color: '#6b7280', lineHeight: '1.4' },
-          }, autoNote && done ? autoNote : detail),
+          }, autoNote && (done || locked) ? autoNote : detail),
         ),
         !done && !locked && action
           ? React.createElement('button', {
@@ -1435,97 +1214,35 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     }
   };
 
-  handleIwSetupAI = async (): Promise<void> => {
-    this.setState({ iwAiSetupStatus: 'setting_up', iwAiSetupError: null });
+  handleWpAiSetup = async (provider: string): Promise<void> => {
+    const { site, electron } = this.props;
+    const ipc = electron.ipcRenderer;
+    this.setState({ wpAiSettingUp: true, wpAiSetupError: null });
     try {
-      const result = await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.SETUP_AI, this.props.site.id, 'power'
-      ) as { success: boolean; message: string } | null;
+      const result = await ipc.invoke(IPC_CHANNELS.SETUP_AI, site.id, provider) as { success: boolean; message: string } | null;
+      if (!this.mounted) return;
       if (result?.success) {
-        this.setState({ iwAiSetupStatus: 'done' });
-        // Re-fetch IW status to update the card
-        const status = await this.props.electron.ipcRenderer
-          .invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null);
-        if (this.mounted && status) this.setState({ iwStatus: status });
+        this.setState({ wpAiSettingUp: false, wpAiSetupError: null });
+        await this.fetchData();
       } else {
-        this.setState({ iwAiSetupStatus: 'failed', iwAiSetupError: result?.message ?? 'Setup failed' });
+        this.setState({ wpAiSettingUp: false, wpAiSetupError: result?.message ?? 'Setup failed' });
       }
     } catch (err: any) {
-      this.setState({ iwAiSetupStatus: 'failed', iwAiSetupError: String(err?.message ?? err) });
+      if (this.mounted) this.setState({ wpAiSettingUp: false, wpAiSetupError: String(err?.message ?? err) });
     }
   };
 
-  renderIwCard(): React.ReactNode {
-    const { iwStatus, iwConnecting, iwError, iwAiSetupStatus, iwAiSetupError } = this.state;
-    if (iwStatus === null) return null;
+  handleWpAiConnect = async (): Promise<void> => {
+    this.handleIwConnect();
+  };
 
-    const { hubInstalled, connected, copyReset, projectId } = iwStatus;
-    const siteNotRunning = (this.props.site.status || this.props.siteStatus) !== 'running';
+  handleWpAiDisconnect = async (): Promise<void> => {
+    this.handleIwDisconnect();
+  };
 
-    const dotColor = connected ? UI_COLORS.STATUS_RUNNING
-      : copyReset ? UI_COLORS.STATUS_ERROR
-      : 'var(--nxai-status-neutral, #9ca3af)';
-
-    const statusText = connected ? 'Connected'
-      : copyReset ? 'Reconnect needed'
-      : hubInstalled ? 'Not connected'
-      : 'Hub Plugin not installed';
-
-    const buttonLabel = siteNotRunning && !connected ? 'Start site to connect'
-      : iwConnecting ? 'Waiting for browser…'
-      : connected ? 'Disconnect'
-      : hubInstalled ? (copyReset ? 'Reconnect' : 'Connect')
-      : 'Enable & Connect';
-
-    const buttonDisabled = siteNotRunning && !connected || iwConnecting;
-    const buttonAction = connected ? this.handleIwDisconnect : this.handleIwConnect;
-    const buttonStyle: React.CSSProperties = {
-      fontSize: 11, padding: '3px 10px', borderRadius: 4, cursor: buttonDisabled ? 'default' : 'pointer',
-      opacity: buttonDisabled ? 0.5 : 1, fontFamily: 'inherit',
-      border: connected ? '1px solid var(--nxai-card-border, #30363d)' : 'none',
-      background: connected ? 'none' : UI_COLORS.WPE_BRAND,
-      color: connected ? 'inherit' : '#fff',
-    };
-
-    return React.createElement('div', { style: styles.cardFull },
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 } },
-        React.createElement('span', { style: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: 'var(--nxai-card-sub, #6b7280)' } }, 'WP Engine Power'),
-      ),
-      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const } },
-        React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12 } },
-          React.createElement('span', { style: { width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block', flexShrink: 0 } }),
-          statusText,
-        ),
-        connected && projectId
-          ? React.createElement('span', { style: { fontSize: 11, fontFamily: 'monospace', opacity: 0.6 } }, projectId)
-          : null,
-        React.createElement('button', {
-          style: buttonStyle, disabled: buttonDisabled,
-          onClick: buttonDisabled ? undefined : buttonAction,
-        }, buttonLabel),
-        // Show "Setup WP AI" when connected but WP Engine connector not yet approved
-        connected && iwStatus && !iwStatus.wpEngineConnectorApproved
-          ? React.createElement('button', {
-              style: {
-                fontSize: 11, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-                border: 'none', background: '#0ECAD4', color: '#fff', fontFamily: 'inherit',
-                opacity: iwAiSetupStatus === 'setting_up' ? 0.7 : 1,
-              },
-              disabled: iwAiSetupStatus === 'setting_up',
-              onClick: this.handleIwSetupAI,
-            }, iwAiSetupStatus === 'setting_up' ? 'Setting up…' : 'Setup WP AI')
-          : connected && iwStatus?.wpEngineConnectorApproved
-            ? React.createElement('span', { style: { fontSize: 11, color: UI_COLORS.STATUS_RUNNING } }, '✓ WP AI ready')
-            : null,
-      ),
-      iwError ? React.createElement('div', {
-        style: { marginTop: 6, fontSize: 11, color: UI_COLORS.STATUS_ERROR, lineHeight: 1.4 },
-      }, iwError) : null,
-      iwAiSetupError ? React.createElement('div', {
-        style: { marginTop: 4, fontSize: 11, color: UI_COLORS.STATUS_ERROR },
-      }, iwAiSetupError) : null,
-    );
-  }
+  handleWpAiChange = (): void => {
+    this.setState({ wpAiPickerChoice: null, wpAiSetupError: null });
+  };
 
   render(): React.ReactNode {
     const { loading, setupResult } = this.state;
@@ -1542,40 +1259,14 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
         )
       : null;
 
-    const { site } = this.props;
-
-    return React.createElement('div', { style: { display: 'flex', height: '100%', overflow: 'hidden' } },
-
-      // Left: existing content (55%, scrollable)
-      React.createElement('div', { style: { flex: '0 0 55%', overflowY: 'auto' as const, padding: '16px 20px', borderRight: '1px solid var(--nxai-card-border, #30363d)', boxSizing: 'border-box' as const } },
-        // Top row: 2-column grid
-        React.createElement('div', { style: styles.grid },
-          this.renderContentIndexCard(),
-          this.renderAIProviderCard(),
-        ),
-        // Full-width: Database Health
-        this.renderDatabaseHealthCard(),
-        // Full-width: WP Engine Power (IW connect)
-        this.renderIwCard(),
-        // Full-width: Tools
-        this.renderToolsCard(),
-        // Result banner at bottom
-        resultBanner,
-      ),
-
-      // Right: AI assistant (45%)
-      React.createElement('div', { style: { flex: '0 0 45%', display: 'flex', flexDirection: 'column' as const, overflow: 'hidden' } },
-        React.createElement('div', {
-          style: { padding: '10px 14px', borderBottom: '1px solid var(--nxai-card-border, #30363d)', fontSize: 11, fontWeight: 700, color: '#0ECAD4', flexShrink: 0 },
-        }, `✦ Ask about ${site.name}`),
-        React.createElement(AssistantPanel, {
-          electron: this.props.electron,
-          mode: 'site' as const,
-          siteId: this.props.site.id,
-          siteName: this.props.site.name,
-          layout: 'panel' as const,
-        }),
-      ),
+    return React.createElement('div', {
+      style: { padding: '14px', display: 'flex', flexDirection: 'column' as const, gap: 10, overflowY: 'auto' as const },
+    },
+      this.renderContentIndexCard(),
+      this.renderWpAiCard(),
+      this.renderDatabaseHealthCard(),
+      this.renderToolsCard(),
+      resultBanner,
     );
   }
 }
