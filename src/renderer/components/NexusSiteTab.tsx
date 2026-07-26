@@ -1003,7 +1003,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     this.setState({ iwAiSetupStatus: 'setting_up', iwAiSetupError: null });
     try {
       const result = await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.SETUP_AI, this.props.site.id, { provider: 'power' }
+        IPC_CHANNELS.SETUP_AI, this.props.site.id, 'power'
       ) as { success: boolean; message: string } | null;
       if (result?.success) {
         this.setState({ iwAiSetupStatus: 'done' });

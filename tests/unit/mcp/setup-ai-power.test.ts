@@ -12,6 +12,7 @@ const mockGetConnectionStatus = getConnectionStatus as jest.MockedFunction<typeo
 const connectedStatus = {
   hubInstalled: true, connected: true, copyReset: false,
   clientId: 'client_abc', projectId: 'proj_xyz', accountId: 'acct_111',
+  wpEngineConnectorApproved: false,
 };
 
 const mockLocalServices = {
