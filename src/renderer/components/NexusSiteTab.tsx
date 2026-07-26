@@ -946,6 +946,414 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     );
   }
 
+  renderWpAiCard(): React.ReactNode {
+    const {
+      aiStatus, iwStatus, wpAiPickerChoice, wpAiDirectProvider, wpAiSettingUp, wpAiSetupError,
+    } = this.state;
+
+    const activeConnector = detectWpAiConnector(aiStatus, iwStatus);
+    const workingConnector: 'power' | 'local-gateway' | 'direct' | null = activeConnector ?? wpAiPickerChoice;
+
+    // Key status: which providers have a valid API key synced to this site
+    const keyStatus: Record<string, string> = {};
+    if (aiStatus?.providers) {
+      for (const p of aiStatus.providers) keyStatus[p] = 'valid';
+    }
+
+    const providerLabel = PROVIDER_LABELS[wpAiDirectProvider ?? ''] ?? (wpAiDirectProvider ?? 'Provider');
+
+    // ─── Shared style atoms ───────────────────────────────────────────────────
+    const cardHeadStyle: React.CSSProperties = {
+      padding: '11px 14px',
+      borderBottom: '1px solid #2d3748',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    };
+    const titleStyle: React.CSSProperties = {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.1em',
+      color: '#4b5563',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+    };
+    const badgeBase: React.CSSProperties = {
+      fontSize: 9,
+      fontWeight: 700,
+      padding: '2px 6px',
+      borderRadius: 10,
+      letterSpacing: '.04em',
+    };
+
+    // ─── Step row renderer ────────────────────────────────────────────────────
+    const renderStepRow = (
+      stepNum: number,
+      label: string,
+      detail: string,
+      done: boolean,
+      action?: () => void,
+      actionLabel?: string,
+      locked?: boolean,
+      autoNote?: string,
+    ): React.ReactElement => {
+      const circleBase: React.CSSProperties = {
+        width: 18, height: 18, borderRadius: '50%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 10, fontWeight: 700, flexShrink: 0, marginTop: 1,
+      };
+      const circleStyle: React.CSSProperties = done
+        ? { ...circleBase, background: 'rgba(81,187,123,.15)', color: '#51bb7b' }
+        : locked
+          ? { ...circleBase, background: 'rgba(75,85,99,.2)', color: '#9ca3af', opacity: 0.4 }
+          : { ...circleBase, background: 'rgba(75,85,99,.2)', color: '#9ca3af' };
+
+      return React.createElement('div', {
+        key: `step-${stepNum}`,
+        style: {
+          display: 'flex', gap: 10, padding: '10px 14px',
+          borderBottom: '1px solid rgba(255,255,255,0.04)', alignItems: 'flex-start',
+        },
+      },
+        React.createElement('div', { style: circleStyle }, done ? '✓' : String(stepNum)),
+        React.createElement('div', { style: { flex: 1 } },
+          React.createElement('div', {
+            style: { fontSize: 12, fontWeight: 600, color: done || !locked ? '#e6edf3' : '#6b7280', marginBottom: 2 },
+          }, label),
+          React.createElement('div', {
+            style: { fontSize: 11, color: '#6b7280', lineHeight: '1.4' },
+          }, autoNote && done ? autoNote : detail),
+        ),
+        !done && !locked && action
+          ? React.createElement('button', {
+              style: {
+                fontSize: 11, padding: '3px 10px', borderRadius: 4, border: 'none',
+                background: '#51bb7b', color: '#fff',
+                cursor: wpAiSettingUp ? 'default' : 'pointer',
+                fontFamily: 'inherit', opacity: wpAiSettingUp ? 0.6 : 1, flexShrink: 0,
+              },
+              onClick: wpAiSettingUp ? undefined : action,
+              disabled: !!wpAiSettingUp,
+            }, wpAiSettingUp ? 'Working…' : (actionLabel ?? 'Go'))
+          : null,
+      );
+    };
+
+    // ─── State 2 — active connector ───────────────────────────────────────────
+    if (activeConnector !== null) {
+      const connectorBadge = activeConnector === 'power'
+        ? React.createElement('span', { style: { ...badgeBase, background: 'rgba(14,202,212,.12)', color: '#0ECAD4' } }, 'Power')
+        : activeConnector === 'local-gateway'
+          ? React.createElement('span', { style: { ...badgeBase, background: 'rgba(75,85,99,.3)', color: '#9ca3af' } }, 'Gateway')
+          : React.createElement('span', { style: { ...badgeBase, background: 'rgba(37,99,235,.15)', color: '#60a5fa' } }, 'Direct');
+
+      const head = React.createElement('div', { style: cardHeadStyle },
+        React.createElement('div', { style: titleStyle },
+          'WordPress AI',
+          React.createElement('span', { style: { ...badgeBase, background: 'rgba(81,187,123,.15)', color: '#51bb7b' } }, 'Active'),
+          connectorBadge,
+        ),
+        React.createElement('button', {
+          style: {
+            fontSize: 11, background: 'none', border: 'none',
+            color: '#9ca3af', cursor: 'pointer', fontFamily: 'inherit', padding: '2px 4px',
+          },
+          onClick: () => this.handleWpAiChange(),
+        }, 'Change →'),
+      );
+
+      const dotGreen: React.CSSProperties = {
+        width: 7, height: 7, borderRadius: '50%', background: '#51bb7b', flexShrink: 0,
+      };
+      const activeRowStyle: React.CSSProperties = {
+        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+        borderBottom: '1px solid rgba(255,255,255,0.04)',
+      };
+      const openAdmin = () => {
+        const url = `http://${this.props.site.name}.local/wp-admin/`;
+        if (this.props.electron?.shell?.openExternal) this.props.electron.shell.openExternal(url);
+      };
+
+      const wpAiRow = React.createElement('div', { style: activeRowStyle },
+        React.createElement('span', { style: dotGreen }),
+        React.createElement('div', { style: { flex: 1 } },
+          React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#e6edf3' } }, 'WP AI active'),
+          React.createElement('div', { style: { fontSize: 11, color: '#6b7280' } },
+            'Plugin installed · all experiments enabled',
+          ),
+        ),
+        React.createElement('button', {
+          style: {
+            fontSize: 11, padding: '3px 10px', borderRadius: 4,
+            border: '1px solid #2d3748', background: 'none', color: '#9ca3af',
+            cursor: 'pointer', fontFamily: 'inherit',
+          },
+          onClick: openAdmin,
+        }, 'WP Admin →'),
+      );
+
+      const powerRow = activeConnector === 'power'
+        ? React.createElement('div', { style: activeRowStyle },
+            React.createElement('span', { style: dotGreen }),
+            React.createElement('div', { style: { flex: 1 } },
+              React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#e6edf3' } }, 'Hub Plugin connected'),
+              React.createElement('div', { style: { fontSize: 11, color: '#6b7280' } },
+                iwStatus?.projectId ? `Project: ${iwStatus.projectId}` : 'Power connected',
+              ),
+            ),
+            React.createElement('button', {
+              style: {
+                fontSize: 11, padding: '3px 10px', borderRadius: 4,
+                border: '1px solid #374151', background: 'none', color: '#9ca3af',
+                cursor: 'pointer', fontFamily: 'inherit',
+              },
+              onClick: () => this.handleIwDisconnect(),
+            }, 'Disconnect'),
+          )
+        : null;
+
+      return React.createElement('div', { style: { ...styles.cardFull, padding: 0, borderColor: '#1e4620' } },
+        head,
+        wpAiRow,
+        powerRow,
+      );
+    }
+
+    // ─── workingConnector set — picker or steps ───────────────────────────────
+    if (workingConnector !== null) {
+      // Any sign that setup has begun → show step rows instead of picker cards
+      const anyStepProgress = !!(
+        wpAiSettingUp ||
+        iwStatus?.connected ||
+        (aiStatus?.aiPlugin && aiStatus.aiPlugin !== 'not_installed') ||
+        (aiStatus?.gatewayProvider && aiStatus.gatewayProvider !== 'not_installed')
+      );
+
+      const head = React.createElement('div', { style: cardHeadStyle },
+        React.createElement('div', { style: titleStyle }, 'WordPress AI'),
+        React.createElement('button', {
+          style: {
+            fontSize: 11, background: 'none', border: 'none',
+            color: '#6b7280', cursor: 'pointer', fontFamily: 'inherit', padding: '2px 4px',
+          },
+          onClick: () => this.setState({ wpAiPickerChoice: null, wpAiSetupError: null }),
+        }, '← Back'),
+      );
+
+      const errorEl = wpAiSetupError
+        ? React.createElement('div', {
+            style: { padding: '8px 14px', fontSize: 11, color: '#ef4444', lineHeight: '1.4' },
+          }, wpAiSetupError)
+        : null;
+
+      // ── Picker view — connector not yet started ─────────────────────────────
+      if (!anyStepProgress) {
+        const OPTIONS: Array<{ id: 'power' | 'local-gateway' | 'direct'; name: string; desc: string }> = [
+          { id: 'power', name: 'WP Engine Power', desc: 'Use your WPE account AI — no API key needed. Connect via Hub Plugin.' },
+          { id: 'local-gateway', name: 'Local AI Gateway', desc: 'Route through Nexus to your configured provider (Anthropic, OpenAI, Gemini, Ollama, Power).' },
+          { id: 'direct', name: 'Direct API', desc: 'Connect Anthropic, OpenAI, Google Gemini, or Ollama directly to this site.' },
+        ];
+
+        const DIRECT_PROVIDERS: Array<{ id: 'anthropic' | 'openai' | 'google' | 'ollama'; label: string }> = [
+          { id: 'anthropic', label: 'Anthropic (Claude)' },
+          { id: 'openai', label: 'OpenAI (GPT)' },
+          { id: 'google', label: 'Google (Gemini)' },
+          { id: 'ollama', label: 'Ollama (local)' },
+        ];
+
+        const optionCards = OPTIONS.map(opt =>
+          React.createElement('div', {
+            key: opt.id,
+            style: {
+              border: `1px solid ${wpAiPickerChoice === opt.id ? '#51bb7b' : '#2d3748'}`,
+              borderRadius: 7, padding: '9px 11px',
+              display: 'flex', gap: 9, cursor: 'pointer', marginBottom: 5,
+              background: wpAiPickerChoice === opt.id ? 'rgba(81,187,123,.05)' : 'none',
+            },
+            onClick: () => this.setState({ wpAiPickerChoice: opt.id }),
+          },
+            React.createElement('div', {
+              style: {
+                width: 13, height: 13, borderRadius: '50%',
+                border: `2px solid ${wpAiPickerChoice === opt.id ? '#51bb7b' : '#374151'}`,
+                flexShrink: 0, marginTop: 2,
+                background: wpAiPickerChoice === opt.id ? '#51bb7b' : 'none',
+              },
+            }),
+            React.createElement('div', { style: { flex: 1 } },
+              React.createElement('div', {
+                style: { fontSize: 12, fontWeight: 600, color: '#e6edf3', marginBottom: 2 },
+              }, opt.name),
+              React.createElement('div', {
+                style: { fontSize: 11, color: '#6b7280', lineHeight: '1.4' },
+              }, opt.desc),
+            ),
+          ),
+        );
+
+        const directSubPicker = wpAiPickerChoice === 'direct'
+          ? React.createElement('div', { style: { marginBottom: 10 } },
+              React.createElement('div', { style: { fontSize: 11, color: '#6b7280', marginBottom: 6 } }, 'Choose provider:'),
+              React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' as const } },
+                ...DIRECT_PROVIDERS.map(p =>
+                  React.createElement('button', {
+                    key: p.id,
+                    style: {
+                      fontSize: 11, padding: '3px 10px', borderRadius: 4,
+                      fontFamily: 'inherit', cursor: 'pointer',
+                      border: `1px solid ${wpAiDirectProvider === p.id ? '#51bb7b' : '#374151'}`,
+                      background: wpAiDirectProvider === p.id ? 'rgba(81,187,123,.1)' : 'none',
+                      color: wpAiDirectProvider === p.id ? '#51bb7b' : '#9ca3af',
+                    },
+                    onClick: () => this.setState({ wpAiDirectProvider: p.id }),
+                  }, p.label),
+                ),
+              ),
+            )
+          : null;
+
+        return React.createElement('div', { style: { ...styles.cardFull, padding: 0 } },
+          head,
+          React.createElement('div', { style: { padding: '12px 14px' } },
+            ...optionCards,
+            directSubPicker,
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', marginTop: 8 } },
+              React.createElement('button', {
+                style: {
+                  fontSize: 11, padding: '5px 14px', borderRadius: 5, border: 'none',
+                  background: '#51bb7b', color: '#fff', cursor: 'pointer',
+                  fontFamily: 'inherit', fontWeight: 500,
+                },
+                onClick: () => this.handleWpAiConnect(),
+              }, 'Set up →'),
+            ),
+          ),
+          errorEl,
+        );
+      }
+
+      // ── Steps view — setup in progress or partially complete ───────────────
+      let steps: React.ReactElement[] = [];
+
+      if (workingConnector === 'power') {
+        steps = [
+          renderStepRow(
+            1,
+            'Connect to WP Engine Power',
+            'Installs Hub Plugin, opens WP Admin to complete OAuth.',
+            iwStatus?.connected === true,
+            () => this.handleIwConnect(),
+            'Connect',
+            false,
+          ),
+          renderStepRow(
+            2,
+            'Install WP AI & enable features',
+            'WP AI plugin + all AI experiments. Power handles auth — no key needed.',
+            aiStatus?.aiPlugin === 'active',
+            () => this.handleWpAiSetup('power'),
+            'Setup',
+            !iwStatus?.connected,
+          ),
+          renderStepRow(
+            3,
+            'Authorise Power connector',
+            'Allows the WP Engine connector to serve AI requests.',
+            iwStatus?.wpEngineConnectorApproved === true,
+            undefined,
+            undefined,
+            aiStatus?.aiPlugin !== 'active',
+            'Completed automatically with step 2.',
+          ),
+        ];
+      } else if (workingConnector === 'local-gateway') {
+        steps = [
+          renderStepRow(
+            1,
+            'Install WP AI & Local Gateway plugin',
+            'Installs WP AI plugin + gateway provider, enables all AI experiments.',
+            aiStatus?.aiPlugin === 'active' && aiStatus?.gatewayProvider === 'active',
+            () => this.handleWpAiSetup('local-gateway'),
+            'Install',
+            false,
+          ),
+        ];
+      } else if (workingConnector === 'direct') {
+        steps = [
+          renderStepRow(
+            1,
+            `Install WP AI & ${providerLabel} plugin`,
+            'Installs WP AI plugin + provider plugin, enables all AI experiments.',
+            aiStatus?.aiPlugin === 'active',
+            () => this.handleWpAiSetup(wpAiDirectProvider ?? 'anthropic'),
+            'Install',
+            false,
+          ),
+          renderStepRow(
+            2,
+            'Add API key',
+            `Sync your ${providerLabel} key to this site.`,
+            keyStatus[wpAiDirectProvider ?? ''] === 'valid',
+            undefined,
+            undefined,
+            aiStatus?.aiPlugin !== 'active',
+            'Key is synced automatically when you install.',
+          ),
+        ];
+      }
+
+      return React.createElement('div', { style: { ...styles.cardFull, padding: 0 } },
+        head,
+        ...steps,
+        errorEl,
+      );
+    }
+
+    // ─── State 0 — empty (no connector, no pending choice) ────────────────────
+    const emptyHead = React.createElement('div', { style: cardHeadStyle },
+      React.createElement('div', { style: titleStyle }, 'WordPress AI'),
+    );
+
+    const emptyBody = React.createElement('div', {
+      style: {
+        padding: '20px 16px', textAlign: 'center' as const,
+        display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 10,
+      },
+    },
+      React.createElement('div', { style: { fontSize: 13, fontWeight: 600, color: '#e6edf3' } },
+        'No AI configured for this site',
+      ),
+      React.createElement('div', { style: { fontSize: 11, color: '#6b7280', maxWidth: 220, lineHeight: '1.5' } },
+        'Choose how WordPress AI gets its capabilities.',
+      ),
+      React.createElement('div', { style: { display: 'flex', gap: 8, marginTop: 4 } },
+        React.createElement('button', {
+          style: {
+            fontSize: 11, padding: '5px 12px', borderRadius: 5, border: 'none',
+            background: '#51bb7b', color: '#fff', cursor: 'pointer',
+            fontFamily: 'inherit', fontWeight: 500,
+          },
+          onClick: () => this.setState({ wpAiPickerChoice: 'power' }),
+        }, 'Connect to Power'),
+        React.createElement('button', {
+          style: {
+            fontSize: 11, padding: '5px 10px', borderRadius: 5,
+            border: '1px solid #374151', background: 'none',
+            color: '#9ca3af', cursor: 'pointer', fontFamily: 'inherit',
+          },
+          onClick: () => this.setState({ wpAiPickerChoice: 'local-gateway' }),
+        }, 'Other options ↓'),
+      ),
+    );
+
+    return React.createElement('div', { style: { ...styles.cardFull, padding: 0 } },
+      emptyHead,
+      emptyBody,
+    );
+  }
+
   renderToolsCard(): React.ReactElement {
     const { aiContextStatus, generatingContext } = this.state;
 
