@@ -52,9 +52,16 @@ interface NexusSiteTabState {
   aiContextStatus: { exists: boolean; ageString?: string; filePath?: string } | null;
   generatingContext: boolean;
   siteAIConfig: SiteAIConfig | null;
-  showProviderPicker: boolean;
-  pickerProvider: AIProvider | '';
-  switchingProvider: boolean;
+  /** Which WP AI connector is currently active — derived from aiStatus + iwStatus */
+  wpAiConnector: 'power' | 'local-gateway' | 'direct' | null;
+  /** User's pending connector choice in the picker (State 0) */
+  wpAiPickerChoice: 'power' | 'local-gateway' | 'direct' | null;
+  /** For Direct path: which AI provider the user picked */
+  wpAiDirectProvider: 'anthropic' | 'openai' | 'google' | 'ollama' | null;
+  /** True while any WP AI setup step is running */
+  wpAiSettingUp: boolean;
+  /** Error from most recent WP AI setup step, or null */
+  wpAiSetupError: string | null;
   useLocalGateway: boolean;
   globalAIProvider: string | null;
   dbScan: DbScanResult | null;
@@ -63,8 +70,6 @@ interface NexusSiteTabState {
   iwConnecting: boolean;
   iwPollInterval: ReturnType<typeof setInterval> | null;
   iwError: string | null;
-  iwAiSetupStatus: 'unknown' | 'setting_up' | 'done' | 'failed';
-  iwAiSetupError: string | null;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -213,6 +218,17 @@ const styles = {
   }),
 };
 
+function detectWpAiConnector(
+  aiStatus: SiteAiStatus | null,
+  iwStatus: IwConnectionStatus | null,
+): 'power' | 'local-gateway' | 'direct' | null {
+  if (!aiStatus) return null;
+  if (iwStatus?.connected && iwStatus?.wpEngineConnectorApproved) return 'power';
+  if (aiStatus.gatewayProvider === 'active') return 'local-gateway';
+  if (aiStatus.aiPlugin === 'active') return 'direct';
+  return null;
+}
+
 export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTabState> {
   private mounted = false;
   private _onSettingsApplied: (() => void) | null = null;
@@ -234,9 +250,11 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     aiContextStatus: null,
     generatingContext: false,
     siteAIConfig: null,
-    showProviderPicker: false,
-    pickerProvider: '',
-    switchingProvider: false,
+    wpAiConnector: null,
+    wpAiPickerChoice: null,
+    wpAiDirectProvider: 'anthropic',
+    wpAiSettingUp: false,
+    wpAiSetupError: null,
     useLocalGateway: false,
     globalAIProvider: null,
     dbScan: null,
@@ -245,8 +263,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     iwConnecting: false,
     iwPollInterval: null,
     iwError: null,
-    iwAiSetupStatus: 'unknown',
-    iwAiSetupError: null,
   };
 
   componentDidMount(): void {
@@ -265,9 +281,9 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     this.props.electron.ipcRenderer.on(IPC_CHANNELS.INDEX_PROGRESS, this._onIndexProgress);
   }
 
-  componentDidUpdate(prevProps: NexusSiteTabProps): void {
+  componentDidUpdate(prevProps: NexusSiteTabProps, prevState: NexusSiteTabState): void {
     if (prevProps.site.id !== this.props.site.id) {
-      this.setState({ setupResult: null, showProviderPicker: false });
+      this.setState({ setupResult: null });
       this.fetchData();
       return;
     }
@@ -275,6 +291,12 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     const currStatus = this.props.site.status || this.props.siteStatus;
     if (prevStatus !== 'running' && currStatus === 'running') {
       this.fetchData();
+    }
+    // If connector changed (e.g. after setup completes), clear picker choice
+    const prevConnector = detectWpAiConnector(prevState.aiStatus ?? null, prevState.iwStatus ?? null);
+    const currConnector = detectWpAiConnector(this.state.aiStatus ?? null, this.state.iwStatus ?? null);
+    if (prevConnector !== currConnector && currConnector !== null) {
+      this.setState({ wpAiPickerChoice: null, wpAiSetupError: null });
     }
   }
 
@@ -291,6 +313,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
 
   fetchData = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
+    let rawAiStatus: SiteAiStatus | null = null;
     try {
       const [entries, settings] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_FLEET_STATUS),
@@ -315,7 +338,8 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       const aiResult = await ipc.invoke(IPC_CHANNELS.GET_AI_STATUS, this.props.site.id);
       if (!this.mounted) return;
       if (aiResult?.success) {
-        this.setState({ aiStatus: aiResult.sites?.[this.props.site.id] ?? null });
+        rawAiStatus = aiResult.sites?.[this.props.site.id] ?? null;
+        this.setState({ aiStatus: rawAiStatus });
       }
     } catch {
       // Non-fatal
@@ -370,7 +394,11 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
 
     const iwStatusResult = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null);
     if (!this.mounted) return;
-    this.setState({ iwStatus: (iwStatusResult as IwConnectionStatus | null) ?? null });
+    const iwStatusTyped = (iwStatusResult as IwConnectionStatus | null) ?? null;
+    this.setState({
+      iwStatus: iwStatusTyped,
+      wpAiConnector: detectWpAiConnector(rawAiStatus, iwStatusTyped),
+    });
   };
 
   handleIndex = async (): Promise<void> => {
