@@ -4897,7 +4897,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const hubInstalled = webRoot ? detectHubPlugin(webRoot) : false;
 
       if (localServicesBridge.getSiteStatus(siteId) !== 'running') {
-        return { hubInstalled, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null };
+        return { hubInstalled, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null, wpEngineConnectorApproved: false };
       }
 
       const status = await getConnectionStatus(siteId, localServicesBridge);
@@ -4922,7 +4922,7 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       return status;
     } catch (err: any) {
       localLogger.error('[NexusAI] IW_GET_STATUS error:', (err as Error).message);
-      return { hubInstalled: false, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null };
+      return { hubInstalled: false, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null, wpEngineConnectorApproved: false };
     }
   });
 

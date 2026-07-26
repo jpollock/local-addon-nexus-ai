@@ -344,6 +344,8 @@ export interface IwConnectionStatus {
   projectId: string | null;
   /** wpe_auth_account_id, or null — lazy, written on first token use after connect. */
   accountId: string | null;
+  /** True when 'wpengine' connector is approved in wpai_connector_approvals — WP AI is set up with Power. */
+  wpEngineConnectorApproved: boolean;
 }
 
 /** Persisted binding in Nexus storage, keyed by local site ID. */

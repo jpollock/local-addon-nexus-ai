@@ -79,6 +79,12 @@ $d = [
   'account_id' => get_option('wpe_auth_account_id', ''),
   'copy_reset' => get_option('wpe_auth_copy_detected', ''),
 ];
+$approvals = get_option('wpai_connector_approvals', array());
+$wpe_ok = false;
+foreach (array('ai/ai.php', 'wpe-hub/wpe-hub.php') as $c) {
+  if (!empty($approvals[$c]['wpengine'])) { $wpe_ok = true; break; }
+}
+$d['wpe_approved'] = $wpe_ok ? '1' : '';
 echo json_encode($d);
 `;
 
@@ -92,7 +98,7 @@ export async function getConnectionStatus(
   const hubInstalled = webRoot ? detectHubPlugin(webRoot) : false;
 
   if (!hubInstalled) {
-    return { hubInstalled: false, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null };
+    return { hubInstalled: false, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null, wpEngineConnectorApproved: false };
   }
 
   try {
@@ -109,9 +115,10 @@ export async function getConnectionStatus(
       clientId: connected ? clientId : null,
       projectId: raw.project_id || null,
       accountId: raw.account_id || null,
+      wpEngineConnectorApproved: Boolean(raw.wpe_approved),
     };
   } catch {
-    return { hubInstalled: true, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null };
+    return { hubInstalled: true, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null, wpEngineConnectorApproved: false };
   }
 }
 

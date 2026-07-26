@@ -63,6 +63,8 @@ interface NexusSiteTabState {
   iwConnecting: boolean;
   iwPollInterval: ReturnType<typeof setInterval> | null;
   iwError: string | null;
+  iwAiSetupStatus: 'unknown' | 'setting_up' | 'done' | 'failed';
+  iwAiSetupError: string | null;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -243,6 +245,8 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     iwConnecting: false,
     iwPollInterval: null,
     iwError: null,
+    iwAiSetupStatus: 'unknown',
+    iwAiSetupError: null,
   };
 
   componentDidMount(): void {
@@ -995,8 +999,28 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     }
   };
 
+  handleIwSetupAI = async (): Promise<void> => {
+    this.setState({ iwAiSetupStatus: 'setting_up', iwAiSetupError: null });
+    try {
+      const result = await this.props.electron.ipcRenderer.invoke(
+        IPC_CHANNELS.SETUP_AI, this.props.site.id, { provider: 'power' }
+      ) as { success: boolean; message: string } | null;
+      if (result?.success) {
+        this.setState({ iwAiSetupStatus: 'done' });
+        // Re-fetch IW status to update the card
+        const status = await this.props.electron.ipcRenderer
+          .invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null);
+        if (this.mounted && status) this.setState({ iwStatus: status });
+      } else {
+        this.setState({ iwAiSetupStatus: 'failed', iwAiSetupError: result?.message ?? 'Setup failed' });
+      }
+    } catch (err: any) {
+      this.setState({ iwAiSetupStatus: 'failed', iwAiSetupError: String(err?.message ?? err) });
+    }
+  };
+
   renderIwCard(): React.ReactNode {
-    const { iwStatus, iwConnecting, iwError } = this.state;
+    const { iwStatus, iwConnecting, iwError, iwAiSetupStatus, iwAiSetupError } = this.state;
     if (iwStatus === null) return null;
 
     const { hubInstalled, connected, copyReset, projectId } = iwStatus;
@@ -1043,10 +1067,27 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
           style: buttonStyle, disabled: buttonDisabled,
           onClick: buttonDisabled ? undefined : buttonAction,
         }, buttonLabel),
+        // Show "Setup WP AI" when connected but WP Engine connector not yet approved
+        connected && iwStatus && !iwStatus.wpEngineConnectorApproved
+          ? React.createElement('button', {
+              style: {
+                fontSize: 11, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+                border: 'none', background: '#0ECAD4', color: '#fff', fontFamily: 'inherit',
+                opacity: iwAiSetupStatus === 'setting_up' ? 0.7 : 1,
+              },
+              disabled: iwAiSetupStatus === 'setting_up',
+              onClick: this.handleIwSetupAI,
+            }, iwAiSetupStatus === 'setting_up' ? 'Setting up…' : 'Setup WP AI')
+          : connected && iwStatus?.wpEngineConnectorApproved
+            ? React.createElement('span', { style: { fontSize: 11, color: UI_COLORS.STATUS_RUNNING } }, '✓ WP AI ready')
+            : null,
       ),
       iwError ? React.createElement('div', {
         style: { marginTop: 6, fontSize: 11, color: UI_COLORS.STATUS_ERROR, lineHeight: 1.4 },
       }, iwError) : null,
+      iwAiSetupError ? React.createElement('div', {
+        style: { marginTop: 4, fontSize: 11, color: UI_COLORS.STATUS_ERROR },
+      }, iwAiSetupError) : null,
     );
   }
 
