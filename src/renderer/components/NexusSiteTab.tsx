@@ -731,7 +731,9 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     } = this.state;
 
     const activeConnector = this.state.wpAiConnector;
-    const workingConnector: 'power' | 'local-gateway' | 'direct' | null = activeConnector ?? wpAiPickerChoice;
+    // If user clicked "Change →", show picker/steps regardless of activeConnector
+    const workingConnector: 'power' | 'local-gateway' | 'direct' | null = wpAiPickerChoice ?? activeConnector;
+    const isEditing = wpAiPickerChoice !== null;
 
     // Key status: which providers have a valid API key synced to this site
     const keyStatus: Record<string, string> = {};
@@ -821,7 +823,8 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     };
 
     // ─── State 2 — active connector ───────────────────────────────────────────
-    if (activeConnector !== null) {
+    // State 2 only when truly active AND not in edit mode (user clicked "Change →")
+    if (activeConnector !== null && !isEditing) {
       const connectorBadge = activeConnector === 'power'
         ? React.createElement('span', { style: { ...badgeBase, background: 'rgba(14,202,212,.12)', color: '#0ECAD4' } }, 'Power')
         : activeConnector === 'local-gateway'
@@ -998,7 +1001,13 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
           React.createElement('div', { style: { padding: '12px 14px' } },
             ...optionCards,
             directSubPicker,
-            React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', marginTop: 8 } },
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 } },
+              isEditing && activeConnector !== null
+                ? React.createElement('button', {
+                    style: { fontSize: 11, padding: '5px 10px', borderRadius: 5, border: '1px solid #374151', background: 'none', color: '#9ca3af', cursor: 'pointer', fontFamily: 'inherit' },
+                    onClick: () => this.setState({ wpAiPickerChoice: null, wpAiSetupError: null }),
+                  }, 'Cancel')
+                : null,
               React.createElement('button', {
                 style: {
                   fontSize: 11, padding: '5px 14px', borderRadius: 5, border: 'none',
@@ -1233,7 +1242,14 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
   };
 
   handleWpAiConnect = async (): Promise<void> => {
-    this.handleIwConnect();
+    const { wpAiPickerChoice, wpAiDirectProvider } = this.state;
+    if (wpAiPickerChoice === 'power') {
+      this.handleIwConnect();
+    } else if (wpAiPickerChoice === 'local-gateway') {
+      await this.handleWpAiSetup('local-gateway');
+    } else if (wpAiPickerChoice === 'direct') {
+      await this.handleWpAiSetup(wpAiDirectProvider ?? 'anthropic');
+    }
   };
 
   handleWpAiDisconnect = async (): Promise<void> => {
@@ -1241,7 +1257,10 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
   };
 
   handleWpAiChange = (): void => {
-    this.setState({ wpAiPickerChoice: null, wpAiSetupError: null });
+    this.setState({
+      wpAiPickerChoice: this.state.wpAiConnector,
+      wpAiSetupError: null,
+    });
   };
 
   render(): React.ReactNode {
