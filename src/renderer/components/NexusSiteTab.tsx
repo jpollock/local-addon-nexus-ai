@@ -739,8 +739,11 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     } = this.state;
 
     const activeConnector = this.state.wpAiConnector;
-    // If user clicked "Change →", show picker/steps regardless of activeConnector
-    const workingConnector: 'power' | 'local-gateway' | 'direct' | null = wpAiPickerChoice ?? activeConnector;
+    // If Hub is connected but WP AI isn't fully set up yet, auto-show Power steps
+    // without requiring the user to open the picker. Handles sites connected via
+    // WP Admin Hub onboarding independently of Nexus.
+    const autoWorkingConnector: 'power' | null = (iwStatus?.connected && !activeConnector) ? 'power' : null;
+    const workingConnector: 'power' | 'local-gateway' | 'direct' | null = wpAiPickerChoice ?? activeConnector ?? autoWorkingConnector;
     // isEditing = true only when CHANGING an existing connector, not during fresh setup
     const isEditing = wpAiPickerChoice !== null && activeConnector !== null;
 
