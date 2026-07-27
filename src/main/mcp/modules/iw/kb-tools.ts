@@ -102,8 +102,11 @@ export const iwSearchKbHandler: McpToolHandler = {
   definition: {
     name: 'iw_search_kb',
     description:
-      'Search a Knowledge Base collection using semantic similarity. ' +
-      'Returns ranked results with content excerpts and scores.',
+      'Search a Knowledge Base collection using raw vector similarity — returns the closest ' +
+      'matching chunks with titles, URIs, and excerpts. This is a retrieval primitive: it finds ' +
+      'relevant content but does not synthesize or reason over it. For synthesized answers with ' +
+      'citations (like the Hub Agent provides), pass the results to an LLM with your query. ' +
+      'Use this to build retrieve→reason→respond flows in agents.',
     inputSchema: {
       type: 'object',
       properties: {

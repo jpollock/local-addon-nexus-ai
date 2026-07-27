@@ -41,9 +41,7 @@ interface NexusSiteTabState {
   excluded: boolean;
   loading: boolean;
   aiStatus: SiteAiStatus | null;
-  settingUpAI: boolean;
   setupResult: { success: boolean; message: string } | null;
-  syncingCreds: boolean;
   wpVersion: string | null;
   wpVersionAge: string | null;
   upgradingWp: boolean;
@@ -85,13 +83,7 @@ function formatTimeAgo(timestamp: number): string {
   return `${days}d ago`;
 }
 
-function isWp7OrLater(version: string | null): boolean {
-  if (!version) return false;
-  const match = version.match(/^(\d+)\.(\d+)/);
-  if (!match) return false;
-  const major = parseInt(match[1], 10);
-  return major >= 7;
-}
+
 
 const dot = (color: string): React.CSSProperties => ({
   display: 'inline-block',
@@ -234,9 +226,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     excluded: false,
     loading: true,
     aiStatus: null,
-    settingUpAI: false,
     setupResult: null,
-    syncingCreds: false,
     wpVersion: null,
     wpVersionAge: null,
     upgradingWp: false,
@@ -426,18 +416,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     if (this.mounted) this.setState({ indexing: false });
   };
 
-  handleSyncCredentials = async (): Promise<void> => {
-    this.setState({ syncingCreds: true });
-    try {
-      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_ALL_CREDENTIALS);
-      if (!this.mounted) return;
-      this.setState({ syncingCreds: false });
-      this.fetchData();
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ syncingCreds: false });
-    }
-  };
 
   handleUpgradeWordPress = async (): Promise<void> => {
     this.setState({ upgradingWp: true, setupResult: null });
@@ -879,8 +857,10 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
         borderBottom: '1px solid rgba(255,255,255,0.04)',
       };
       const openAdmin = () => {
-        const url = `http://${this.props.site.name}.local/wp-admin/`;
-        if (this.props.electron?.shell?.openExternal) this.props.electron.shell.openExternal(url);
+        // Use site.domain (Local's actual domain) — not .local shorthand, which breaks for custom domains
+        const domain = (this.props.site as any).domain as string | undefined;
+        const base = domain ? `http://${domain}` : `http://localhost`;
+        if (this.props.electron?.shell?.openExternal) this.props.electron.shell.openExternal(`${base}/wp-admin/`);
       };
 
       const wpAiRow = React.createElement('div', { style: activeRowStyle },
