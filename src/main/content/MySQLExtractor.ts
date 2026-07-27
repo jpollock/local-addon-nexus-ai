@@ -87,9 +87,50 @@ export class MySQLExtractor {
   /**
    * Check whether the site's MySQL socket exists (site must be running).
    */
-  isAvailable(info: SiteConnectionInfo): boolean {
-    const sock = getSocketPath(info.siteId);
+  isAvailable(info: SiteConnectionInfo | string): boolean {
+    const siteId = typeof info === 'string' ? info : info.siteId;
+    const sock = getSocketPath(siteId);
     return fs.existsSync(sock);
+  }
+
+  /**
+   * Test MySQL connection for a site (probe for readiness).
+   * Returns true if connection succeeds, false otherwise.
+   * Uses connectWithRetry (3 retries × 2s) for total 6s timeout.
+   *
+   * @param siteId Site ID or connection info
+   * @param wpConfigPath Optional path to wp-config.php (defaults to standard Local path)
+   */
+  async testConnection(siteId: string, wpConfigPath?: string): Promise<boolean> {
+    const socketPath = getSocketPath(siteId);
+
+    // Use provided config path or construct default
+    const configPath = wpConfigPath ??
+      path.join(os.homedir(), 'Local Sites', siteId, 'app', 'public', 'wp-config.php');
+
+    const dbName = readWpConfigValue(configPath, 'DB_NAME') ?? 'local';
+    const dbUser = readWpConfigValue(configPath, 'DB_USER') ?? 'root';
+    const dbPassword = readWpConfigValue(configPath, 'DB_PASSWORD') ?? 'root';
+
+    try {
+      const connection = await connectWithRetry(
+        () => mysql.createConnection({
+          socketPath,
+          user: dbUser,
+          password: dbPassword,
+          database: dbName,
+        }),
+        3,
+        2000,
+      );
+
+      // Run simple query to verify connection works
+      await connection.query('SELECT 1');
+      await connection.end();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
