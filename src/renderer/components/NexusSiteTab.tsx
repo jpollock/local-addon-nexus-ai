@@ -904,6 +904,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
         : null;
 
       // Footer row: Change connector + Remove WP AI
+      // Footer: Change / Remove — both disabled while any operation is running
       const footerRow = React.createElement('div', {
         style: {
           display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
@@ -911,21 +912,28 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
           borderTop: '1px solid rgba(255,255,255,0.04)',
         },
       },
+        wpAiSettingUp
+          ? React.createElement('span', { style: { fontSize: 11, color: '#6b7280', fontStyle: 'italic' as const } }, 'Working…')
+          : null,
         React.createElement('button', {
           style: {
             fontSize: 11, padding: '3px 10px', borderRadius: 4,
-            border: '1px solid #374151', background: 'none', color: '#9ca3af',
-            cursor: 'pointer', fontFamily: 'inherit',
+            border: '1px solid #374151', background: 'none',
+            color: wpAiSettingUp ? '#4b5563' : '#9ca3af',
+            cursor: wpAiSettingUp ? 'default' : 'pointer', fontFamily: 'inherit',
           },
-          onClick: () => this.handleWpAiChange(),
+          disabled: !!wpAiSettingUp,
+          onClick: wpAiSettingUp ? undefined : () => this.handleWpAiChange(),
         }, 'Change connector'),
         React.createElement('button', {
           style: {
             fontSize: 11, padding: '3px 10px', borderRadius: 4,
-            border: '1px solid #374151', background: 'none', color: '#f87171',
-            cursor: 'pointer', fontFamily: 'inherit',
+            border: '1px solid #374151', background: 'none',
+            color: wpAiSettingUp ? '#4b5563' : '#f87171',
+            cursor: wpAiSettingUp ? 'default' : 'pointer', fontFamily: 'inherit',
           },
-          onClick: () => this.handleWpAiRemove(),
+          disabled: !!wpAiSettingUp,
+          onClick: wpAiSettingUp ? undefined : () => this.handleWpAiRemove(),
         }, 'Remove WP AI'),
       );
 
@@ -939,8 +947,10 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
 
     // ─── workingConnector set — picker or steps ───────────────────────────────
     if (workingConnector !== null) {
-      // Any sign that setup has begun → show step rows instead of picker cards
-      const anyStepProgress = !!(
+      // Any sign that setup has begun → show step rows instead of picker cards.
+      // Exception: when isEditing (user clicked "Change connector"), always show
+      // the picker so they can choose a DIFFERENT connector, not the current one's steps.
+      const anyStepProgress = !isEditing && !!(
         wpAiSettingUp ||
         iwStatus?.connected ||
         (aiStatus?.aiPlugin && aiStatus.aiPlugin !== 'not_installed') ||
