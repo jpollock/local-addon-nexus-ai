@@ -73,7 +73,16 @@ curl -L https://huggingface.co/nomic-ai/nomic-embed-text-v1.5/resolve/main/onnx/
 # Download tokenizer (694KB)
 curl -L https://huggingface.co/nomic-ai/nomic-embed-text-v1.5/resolve/main/tokenizer.json -o tokenizer.json
 
-# Note: vocab.txt not needed for nomic (uses tokenizer.json)
+# Extract vocab.txt from tokenizer.json (required for WordPieceTokenizer)
+node -e "
+const fs = require('fs');
+const tokenizer = JSON.parse(fs.readFileSync('tokenizer.json', 'utf-8'));
+const vocab = tokenizer.model.vocab;
+const sorted = Object.entries(vocab).sort((a, b) => a[1] - b[1]);
+const lines = sorted.map(([token, _]) => token);
+fs.writeFileSync('vocab.txt', lines.join('\n'));
+console.log('Extracted', lines.length, 'tokens');
+"
 ```
 
 ### MiniLM Model
