@@ -121,7 +121,8 @@ export const deepRefreshHandler: McpToolHandler = {
       ['users_can_register',     'users_can_register'],
       ['default_role',           'default_role'],
       ['WPLANG',                 'WPLANG'],
-      // IW / Power / Hub Plugin connection state
+      // IW / Power / Hub Plugin — KB post types and connection state
+      ['wpe_kb_settings_post_types', 'wpe_kb_settings_post_types'],
       ['wpe_auth_registered',    'wpe_auth_registered'],
       ['wpe_auth_client_id',     'wpe_auth_client_id'],
       ['wpe_auth_project_id',    'wpe_auth_project_id'],
@@ -136,6 +137,38 @@ export const deepRefreshHandler: McpToolHandler = {
     }
     const wpSettingsJsonStr = Object.keys(wpSettingsMap).length > 0
       ? JSON.stringify(wpSettingsMap) : null;
+
+    // Determine which post types to count. Use wpe_kb_settings_post_types (set by Hub Plugin)
+    // if available — it lists the types the site actually uses. Fall back to built-in types.
+    // We cannot use --post_type=any because WPE SSH runs with --skip-plugins, so WordPress
+    // only knows about built-in types. Explicit type names query the DB directly and work.
+    let typesToCount: string[] = ['post', 'page'];
+    const kbTypesRaw = wpSettingsMap['wpe_kb_settings_post_types'];
+    if (kbTypesRaw) {
+      try {
+        // Value is a PHP-serialized array or JSON array
+        const parsed: string[] = kbTypesRaw.startsWith('[')
+          ? JSON.parse(kbTypesRaw)
+          : kbTypesRaw.match(/"([^"]+)"/g)?.map((s: string) => s.replace(/"/g, '')) ?? [];
+        if (parsed.length > 0) typesToCount = [...new Set([...parsed, 'post', 'page'])];
+      } catch { /* keep default */ }
+    }
+
+    // Count each type via SSH (skip-plugins safe — explicit type names query DB directly)
+    const typeCountResults = await Promise.all(
+      typesToCount.map(t =>
+        services.localServices!.remoteWpCliRun(installName,
+          ['post', 'list', `--post_type=${t}`, '--post_status=publish', '--format=count'],
+        ).catch(() => ({ success: false, stdout: '0' }))
+      )
+    );
+    const typeCounts: Record<string, number> = {};
+    let totalContentCount = 0;
+    for (let i = 0; i < typesToCount.length; i++) {
+      const n = parseInt(typeCountResults[i].stdout?.trim() ?? '0', 10) || 0;
+      if (n > 0) typeCounts[typesToCount[i]] = n;
+      totalContentCount += n;
+    }
 
     // Persist IW (Intelligent Web / Power / Hub) connection state to IW_SITE_BINDINGS.
     // Keyed by install name so KB tools can look up project_id without a local site.
@@ -272,7 +305,7 @@ export const deepRefreshHandler: McpToolHandler = {
     if (siteId && graphService?.getDb?.()) {
       const siteUrl     = siteUrlResult.success    ? siteUrlResult.stdout?.trim()    || null : null;
       const adminEmail  = adminEmailResult.success ? adminEmailResult.stdout?.trim() || null : null;
-      const postCount   = postCountResult.success  ? parseInt(postCountResult.stdout?.trim() || '0', 10) || null : null;
+      const postCount   = totalContentCount > 0 ? totalContentCount : (postCountResult.success ? parseInt(postCountResult.stdout?.trim() || '0', 10) || null : null);
       const activeTheme = activeThemeResult.success ? activeThemeResult.stdout?.trim() || null : null;
 
       // Parse new analytics fields (using native WP-CLI — wp eval blocked on WPE SSH gateway)
@@ -282,10 +315,9 @@ export const deepRefreshHandler: McpToolHandler = {
         return isNaN(n) ? null : n;
       };
 
-      const postTypePosts = parseCount(postTypePostResult);
-      const postTypePages = parseCount(postTypePageResult);
-      const postCountByType: string | null = (postTypePosts !== null || postTypePages !== null)
-        ? JSON.stringify({ post: postTypePosts ?? 0, page: postTypePages ?? 0 })
+      // Use the per-type counts (queries DB directly with explicit type names — skip-plugins safe)
+      const postCountByType: string | null = Object.keys(typeCounts).length > 0
+        ? JSON.stringify(typeCounts)
         : null;
 
       let lastPostAt: number | null = null;
@@ -338,7 +370,7 @@ export const deepRefreshHandler: McpToolHandler = {
     // Build summary
     const siteUrl    = siteUrlResult?.success    ? siteUrlResult.stdout?.trim()    || 'unknown' : 'unavailable';
     const adminEmail = adminEmailResult?.success ? adminEmailResult.stdout?.trim() || 'unknown' : 'unavailable';
-    const postCount  = postCountResult?.success  ? postCountResult.stdout?.trim()  || '0'       : 'unavailable';
+    const postCount  = totalContentCount > 0 ? String(totalContentCount) : (postCountResult?.success ? postCountResult.stdout?.trim() || '0' : 'unavailable');
 
     const errorNote = errors.length > 0 ? `\n\n⚠️ Partial errors: ${errors.join('; ')}` : '';
 
