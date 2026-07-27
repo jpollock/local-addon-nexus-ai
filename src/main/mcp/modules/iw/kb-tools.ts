@@ -132,14 +132,22 @@ export const iwSearchKbHandler: McpToolHandler = {
         apiKey,
         { method: 'POST', body: JSON.stringify(body) },
       );
-      const results: any[] = data.results ?? data.items ?? [];
+      // Power KB search returns { citations: [...] } — field may vary by API version
+      const results: any[] = data.citations ?? data.results ?? data.items ?? [];
       if (!results.length) return ok('No results found.');
 
       const lines = [`KB Search results for "${args.query}" in ${args.collection_id}:`];
       for (const r of results) {
-        lines.push(`\n  Score: ${r.score?.toFixed(3) ?? '?'}`);
-        if (r.content) lines.push(`  ${String(r.content).slice(0, 200).replace(/\n/g, ' ')}`);
-        if (r.metadata?.url) lines.push(`  URL: ${r.metadata.url}`);
+        const score = r.score?.toFixed(3) ?? '?';
+        const title = r.title ?? r.id ?? '(untitled)';
+        const uri = r.uri ?? r.metadata?.url ?? '';
+        // snippets is an array of strings; content is a flat string
+        const snippet = Array.isArray(r.snippets)
+          ? r.snippets[0]?.slice(0, 200).replace(/\n/g, ' ')
+          : String(r.content ?? '').slice(0, 200).replace(/\n/g, ' ');
+        lines.push(`\n  [${score}] ${title}`);
+        if (uri) lines.push(`  ${uri}`);
+        if (snippet) lines.push(`  ${snippet}`);
       }
       return ok(lines.join('\n'));
     } catch (err: any) {
