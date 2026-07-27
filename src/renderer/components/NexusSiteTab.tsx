@@ -1065,11 +1065,15 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
               React.createElement('button', {
                 style: {
                   fontSize: 11, padding: '5px 14px', borderRadius: 5, border: 'none',
-                  background: '#51bb7b', color: '#fff', cursor: 'pointer',
+                  background: wpAiSettingUp ? 'rgba(81,187,123,.4)' : '#51bb7b',
+                  color: '#fff',
+                  cursor: wpAiSettingUp ? 'default' : 'pointer',
                   fontFamily: 'inherit', fontWeight: 500,
+                  opacity: wpAiSettingUp ? 0.7 : 1,
                 },
-                onClick: () => this.handleWpAiConnect(),
-              }, 'Set up →'),
+                disabled: !!wpAiSettingUp,
+                onClick: wpAiSettingUp ? undefined : () => this.handleWpAiConnect(),
+              }, wpAiSettingUp ? 'Setting up…' : 'Set up →'),
             ),
           ),
           errorEl,
