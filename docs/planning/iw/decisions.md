@@ -155,6 +155,17 @@ Status ∈ {**Decided**, **Leaning**, **Open**}.
 - **Leaning.** **(A)** if Atlas supports env secrets; avoid baking secrets into the build.
 - **Blocks.** J2 production readiness.
 
+### Q11 — Can Nexus use existing WPE credentials to automate Hub registration?  ·  **Decided (✅ proven 2026-07-26)**
+- **Why it matters.** If the CAPI JWT or `wpe_` key could act as an Initial Access Token for Hub's DCR endpoint, Nexus could register a WP site to Power programmatically — eliminating the browser OAuth step entirely.
+- **Options.** (A) Open registration (no auth). (B) CAPI JWT as Bearer IAT. (C) `wpe_` Full Access key as Bearer IAT. (D) Browser PKCE flow (current approach).
+- **Decision.** **(D) — browser PKCE is mandatory.** Proven by probing `https://api.prd.sdp.wpesvc.net/oauth/public/register`:
+  - Open (no auth): **403 RBAC: access denied** — registration is not public.
+  - CAPI JWT Bearer: **401 invalid_token** — CAPI tokens (`api.wpengineapi.com`) are not trusted by the Power auth server (`api.prd.sdp.wpesvc.net`). The two systems are separate OAuth ecosystems.
+  - `wpe_` Full Access key: **rejected as non-JWT** — it's a plain string, not a JWT.
+  - The PKCE browser flow is a deliberate security boundary; user consent is required to tie a specific WP installation to a WP Engine account.
+- **Implication.** The Hub browser flow cannot be bypassed. Nexus's role is to automate everything around it: install Hub Plugin, open the right URL, poll for completion, complete WP AI setup — the user clicks once in the browser, Nexus does the rest.
+- **Blocks.** — (closes the question; confirms the Q3 Option A approach is the right and only path)
+
 ### Q9 — Who owns the per-site KB collection lifecycle — Nexus or the Hub Plugin?  ·  **Open**
 - **Why it matters.** Both can create/populate collections (`findings.md` §4). If both sync the same
   site, we get duplication or drift.
