@@ -165,3 +165,83 @@ Tests:       7 passed, 7 total
 ✅ Interface contract now matches brief exactly - Task 2 can import and call as specified
 ✅ Error messages are distinct and diagnostic - better troubleshooting in logs
 ✅ Test descriptions accurate - no misleading references to GraphQL
+
+---
+
+## Verification of Fixes (Re-review Response)
+
+All three critical findings have been addressed and are currently committed in the codebase:
+
+### Finding 1 - Interface Contract (VERIFIED FIXED)
+**Current implementation in `src/main/content/site-readiness.ts` (lines 33-37):**
+```typescript
+export async function isSiteReady(
+  siteId: string,
+  localServices: LocalServicesBridge,  // ✅ Correct type
+  mysqlExtractor?: MySQLExtractor,
+): Promise<ReadinessResult> {
+```
+
+**Import statement (line 11):**
+```typescript
+import type { LocalServicesBridge } from '../mcp/local-services-bridge';  // ✅ Correct import
+```
+
+**Usage (line 39):**
+```typescript
+const site = localServices.getSite(siteId);  // ✅ Correct method call
+```
+
+### Finding 2 - Error Message Precision (VERIFIED FIXED)
+**Socket missing check (lines 66-70):**
+```typescript
+if (!mysqlExtractor.isAvailable(siteId)) {
+  return {
+    ready: false,
+    reason: 'MySQL socket does not exist',  // ✅ Distinct message
+  };
+}
+```
+
+**Connection failure check (lines 75-80):**
+```typescript
+const connected = await mysqlExtractor.testConnection(siteId, wpConfigPath);
+if (!connected) {
+  return {
+    ready: false,
+    reason: 'MySQL not accepting connections',  // ✅ Different message
+  };
+}
+```
+
+### Finding 3 - Async/Await (NOT NEEDED)
+The `getSite()` method in `LocalServicesBridge` is synchronous (returns `any`, not `Promise<any>`):
+```typescript
+// src/main/mcp/local-services-bridge.ts line 75
+getSite(siteId: string): any;
+
+// Implementation line 279
+getSite(siteId: string): any {
+  return svc('siteData').getSite(siteId);  // Synchronous
+}
+```
+
+Therefore, `await` is NOT required and the current implementation is correct.
+
+### Test Results (Current)
+```
+PASS tests/unit/content/site-readiness.test.ts
+  isSiteReady
+    ✓ should return not ready when site not found in Local state
+    ✓ should return not ready when site status is provisioning
+    ✓ should return not ready when site status is halted
+    ✓ should return not ready when site path does not exist
+    ✓ should return not ready when MySQL socket is missing
+    ✓ should return not ready when MySQL connection fails
+    ✓ should return ready when all checks pass
+
+Test Suites: 1 passed, 1 total
+Tests:       7 passed, 7 total
+```
+
+All fixes are committed in commit `5503aa3` and verified working.
