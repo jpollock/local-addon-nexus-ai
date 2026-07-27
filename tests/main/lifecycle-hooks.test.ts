@@ -1,3 +1,7 @@
+jest.mock('../../src/main/content/site-readiness', () => ({
+  isSiteReady: jest.fn().mockResolvedValue({ ready: true }),
+}));
+
 import { registerLifecycleHooks, LifecycleContext, Logger } from '../../src/main/content/lifecycle-hooks';
 import { ContentPipeline } from '../../src/main/content/ContentPipeline';
 import { IndexRegistry, RegistryStorage } from '../../src/main/content/IndexRegistry';
@@ -10,12 +14,19 @@ function createMockStorage(): RegistryStorage {
   };
 }
 
+function createMockLocalServices() {
+  return {
+    wpCliRun: jest.fn().mockResolvedValue({ success: true, stdout: '' }),
+  } as any;
+}
+
 describe('registerLifecycleHooks', () => {
   let hooks: Record<string, Function>;
   let context: LifecycleContext;
   let pipeline: jest.Mocked<ContentPipeline>;
   let indexRegistry: IndexRegistry;
   let logger: jest.Mocked<Logger>;
+  let localServices: any;
 
   beforeEach(() => {
     hooks = {};
@@ -47,7 +58,9 @@ describe('registerLifecycleHooks', () => {
       warn: jest.fn(),
     };
 
-    registerLifecycleHooks(context, pipeline, indexRegistry, logger);
+    localServices = createMockLocalServices();
+
+    registerLifecycleHooks(context, pipeline, indexRegistry, logger, undefined, undefined, localServices);
   });
 
   test('registers siteStarted, siteStopped, and siteRemoved hooks', () => {
@@ -163,6 +176,7 @@ describe('readyPromise gate', () => {
   let pipeline: jest.Mocked<ContentPipeline>;
   let indexRegistry: IndexRegistry;
   let logger: jest.Mocked<Logger>;
+  let localServices: any;
 
   function createMockStorage(): RegistryStorage {
     const store = new Map<string, any>();
@@ -201,13 +215,15 @@ describe('readyPromise gate', () => {
       error: jest.fn(),
       warn: jest.fn(),
     };
+
+    localServices = createMockLocalServices();
   });
 
   test('siteStarted waits for readyPromise before indexing', async () => {
     let resolveReady!: () => void;
     const readyPromise = new Promise<void>((resolve) => { resolveReady = resolve; });
 
-    registerLifecycleHooks(context, pipeline, indexRegistry, logger, readyPromise);
+    registerLifecycleHooks(context, pipeline, indexRegistry, logger, readyPromise, undefined, localServices);
 
     // Start the hook but don't await it yet
     const hookPromise = hooks.siteStarted({ id: 'site1', name: 'My Site', path: '/tmp/site' });
@@ -226,7 +242,7 @@ describe('readyPromise gate', () => {
   test('siteStarted skips indexing if readyPromise rejects', async () => {
     const readyPromise = Promise.reject(new Error('init failed'));
 
-    registerLifecycleHooks(context, pipeline, indexRegistry, logger, readyPromise);
+    registerLifecycleHooks(context, pipeline, indexRegistry, logger, readyPromise, undefined, localServices);
 
     await hooks.siteStarted({ id: 'site1', name: 'My Site', path: '/tmp/site' });
 
@@ -237,7 +253,7 @@ describe('readyPromise gate', () => {
   });
 
   test('siteStarted works without readyPromise (backward compat)', async () => {
-    registerLifecycleHooks(context, pipeline, indexRegistry, logger);
+    registerLifecycleHooks(context, pipeline, indexRegistry, logger, undefined, undefined, localServices);
 
     await hooks.siteStarted({ id: 'site1', name: 'My Site', path: '/tmp/site' });
 

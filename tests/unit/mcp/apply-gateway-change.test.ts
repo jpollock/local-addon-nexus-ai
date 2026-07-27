@@ -36,6 +36,11 @@ jest.mock('fs-extra', () => ({
   unlinkSync: jest.fn(),
 }));
 
+// Mock site readiness check
+jest.mock('../../../src/main/content/site-readiness', () => ({
+  isSiteReady: jest.fn().mockResolvedValue({ ready: true }),
+}));
+
 import { switchProviderForSite } from '../../../src/main/mcp/modules/wp-connector/switch-provider';
 import { registerLifecycleHooks, LifecycleContext } from '../../../src/main/content/lifecycle-hooks';
 import { IndexRegistry, RegistryStorage } from '../../../src/main/content/IndexRegistry';

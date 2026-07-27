@@ -72,6 +72,9 @@ export interface LocalServicesBridge {
   getSiteStatus(siteId: string): string;
   getAllSiteStatuses(): Record<string, string>;
 
+  // Site Data Access
+  getSite(siteId: string): any;
+
   // Site CRUD
   createSite(opts: CreateSiteOpts): Promise<{ id: string; name: string; domain: string }>;
   deleteSite(siteId: string, trashFiles: boolean): Promise<void>;
@@ -271,6 +274,10 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     getAllSiteStatuses(): Record<string, string> {
       return svc('siteProcessManager').getSiteStatuses();
+    },
+
+    getSite(siteId: string): any {
+      return svc('siteData').getSite(siteId);
     },
 
     // --- Site CRUD ---

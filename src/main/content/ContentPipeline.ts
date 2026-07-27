@@ -30,6 +30,7 @@ export interface ContentPipelineDeps {
 export class ContentPipeline {
   private deps: ContentPipelineDeps;
   private statusMap = new Map<string, IndexStatus>();
+  private activeSites = new Set<string>(); // Track sites being indexed
 
   constructor(deps: ContentPipelineDeps) {
     this.deps = deps;
@@ -44,171 +45,223 @@ export class ContentPipeline {
     return this.statusMap.get(siteId) ?? { state: 'idle' };
   }
 
+  /**
+   * Cancel any in-progress indexing for a site.
+   * Used by siteDeleted hook to prevent "Site not found" errors.
+   */
+  async cancelSite(siteId: string): Promise<void> {
+    if (!this.activeSites.has(siteId)) {
+      return; // Not currently indexing
+    }
+
+    this.activeSites.delete(siteId);
+    console.info(`[ContentPipeline] Canceled indexing for site: ${siteId}`);
+  }
+
+  private buildCancelledResult(siteId: string, startTime: number): IndexResult {
+    return {
+      siteId,
+      documentsIndexed: 0,
+      chunksIndexed: 0,
+      durationMs: Date.now() - startTime,
+      errors: ['Indexing cancelled'],
+    };
+  }
+
   async indexSite(info: SiteConnectionInfo): Promise<IndexResult> {
+    // Add to active set at start
+    this.activeSites.add(info.siteId);
+
     const { vectorStore, embeddingService, mysqlExtractor, fileScanner, indexRegistry } = this.deps;
     const startTime = Date.now();
     const errors: string[] = [];
 
-    this.setStatus(info.siteId, { state: 'indexing', progress: 0, message: 'Scanning site structure...' });
-
-    // 1. File scan (always works — filesystem only)
-    let structure = null;
     try {
-      structure = await fileScanner.scan(info.sitePath);
-    } catch (err) {
-      errors.push(`FileScanner: ${(err as Error).message}`);
-    }
-
-    // 2. MySQL extraction (requires running site)
-    let posts: ExtractedPost[] = [];
-    if (mysqlExtractor.isAvailable(info)) {
-      this.setStatus(info.siteId, { state: 'indexing', progress: 10, message: 'Extracting content from database...' });
-      try {
-        const extracted = await mysqlExtractor.extract(info, structure);
-        posts = extracted.posts;
-
-        // Merge custom tables into structure
-        if (extracted.customTables && structure) {
-          structure.customTables = extracted.customTables;
-        }
-
-        // Merge DB-backed active detection into structure
-        if (structure && extracted.activeThemeSlug) {
-          for (const theme of structure.themes) {
-            theme.isActive = theme.slug === extracted.activeThemeSlug;
-          }
-        }
-        if (structure && extracted.activePluginSlugs) {
-          const activeSlugs = new Set(extracted.activePluginSlugs);
-          for (const plugin of structure.plugins) {
-            plugin.isActive = activeSlugs.has(plugin.slug);
-          }
-        }
-
-        // Merge new structure fields
-        if (structure) {
-          if (extracted.users) structure.users = extracted.users;
-          if (extracted.permalinks) structure.permalinks = extracted.permalinks;
-          if (extracted.health) structure.health = extracted.health;
-        }
-
-        // Collect sub-extractor warnings
-        if (extracted.warnings) {
-          errors.push(...extracted.warnings);
-        }
-      } catch (err) {
-        errors.push(`MySQLExtractor: ${(err as Error).message}`);
+      // Check if cancelled before expensive operations
+      if (!this.activeSites.has(info.siteId)) {
+        return this.buildCancelledResult(info.siteId, startTime);
       }
-    } else {
-      errors.push('MySQL not available — site may not be running');
-    }
 
-    // REST API discovery (requires running site with domain)
-    if (structure && info.domain) {
+      this.setStatus(info.siteId, { state: 'indexing', progress: 0, message: 'Scanning site structure...' });
+
+      // 1. File scan (always works — filesystem only)
+      let structure = null;
       try {
-        const restApi = await discoverRestApi(info.domain);
-        if (restApi) structure.restApi = restApi;
+        structure = await fileScanner.scan(info.sitePath);
       } catch (err) {
-        errors.push(`RestApiScanner: ${(err as Error).message}`);
+        errors.push(`FileScanner: ${(err as Error).message}`);
       }
-    }
 
-    if (posts.length === 0) {
-      const result: IndexResult = {
-        siteId: info.siteId,
-        documentsIndexed: 0,
-        chunksIndexed: 0,
-        durationMs: Date.now() - startTime,
-        errors,
-      };
+      // Check cancellation after file scan
+      if (!this.activeSites.has(info.siteId)) {
+        return this.buildCancelledResult(info.siteId, startTime);
+      }
+
+      // 2. MySQL extraction (requires running site)
+      let posts: ExtractedPost[] = [];
+      if (mysqlExtractor.isAvailable(info)) {
+        this.setStatus(info.siteId, { state: 'indexing', progress: 10, message: 'Extracting content from database...' });
+
+        // Check cancellation before expensive MySQL work
+        if (!this.activeSites.has(info.siteId)) {
+          return this.buildCancelledResult(info.siteId, startTime);
+        }
+
+        try {
+          const extracted = await mysqlExtractor.extract(info, structure);
+          posts = extracted.posts;
+
+          // Merge custom tables into structure
+          if (extracted.customTables && structure) {
+            structure.customTables = extracted.customTables;
+          }
+
+          // Merge DB-backed active detection into structure
+          if (structure && extracted.activeThemeSlug) {
+            for (const theme of structure.themes) {
+              theme.isActive = theme.slug === extracted.activeThemeSlug;
+            }
+          }
+          if (structure && extracted.activePluginSlugs) {
+            const activeSlugs = new Set(extracted.activePluginSlugs);
+            for (const plugin of structure.plugins) {
+              plugin.isActive = activeSlugs.has(plugin.slug);
+            }
+          }
+
+          // Merge new structure fields
+          if (structure) {
+            if (extracted.users) structure.users = extracted.users;
+            if (extracted.permalinks) structure.permalinks = extracted.permalinks;
+            if (extracted.health) structure.health = extracted.health;
+          }
+
+          // Collect sub-extractor warnings
+          if (extracted.warnings) {
+            errors.push(...extracted.warnings);
+          }
+        } catch (err) {
+          errors.push(`MySQLExtractor: ${(err as Error).message}`);
+        }
+      } else {
+        errors.push('MySQL not available — site may not be running');
+      }
+
+      // REST API discovery (requires running site with domain)
+      if (structure && info.domain) {
+        try {
+          const restApi = await discoverRestApi(info.domain);
+          if (restApi) structure.restApi = restApi;
+        } catch (err) {
+          errors.push(`RestApiScanner: ${(err as Error).message}`);
+        }
+      }
+
+      if (posts.length === 0) {
+        const result: IndexResult = {
+          siteId: info.siteId,
+          documentsIndexed: 0,
+          chunksIndexed: 0,
+          durationMs: Date.now() - startTime,
+          errors,
+        };
+
+        indexRegistry.update(info.siteId, {
+          siteName: info.siteName,
+          lastIndexed: Date.now(),
+          documentCount: 0,
+          chunkCount: 0,
+          durationMs: result.durationMs,
+          structure,
+          state: errors.length > 0 ? 'error' : 'indexed',
+          error: errors.length > 0 ? errors.join('; ') : undefined,
+        });
+
+        this.setStatus(info.siteId, errors.length > 0
+          ? { state: 'error', error: errors.join('; '), lastAttempt: Date.now() }
+          : { state: 'indexed', lastIndexed: Date.now(), documentCount: 0 });
+
+        return result;
+      }
+
+      // 3. Chunk
+      this.setStatus(info.siteId, { state: 'indexing', progress: 30, message: `Chunking ${posts.length} posts...` });
+      const chunks = this.chunkPosts(info.siteId, posts);
+
+      // 4. Embed in batches
+      this.setStatus(info.siteId, { state: 'indexing', progress: 40, message: `Generating embeddings for ${chunks.length} chunks...` });
+      const EMBED_BATCH_SIZE = 16;
+      const embeddedDocs: VectorDocument[] = [];
+
+      for (let i = 0; i < chunks.length; i += EMBED_BATCH_SIZE) {
+        // Check cancellation during embedding loop
+        if (!this.activeSites.has(info.siteId)) {
+          return this.buildCancelledResult(info.siteId, startTime);
+        }
+
+        const batch = chunks.slice(i, i + EMBED_BATCH_SIZE);
+        const texts = batch.map((c) => c.textForEmbedding);
+
+        try {
+          const vectors = await embeddingService.embedBatch(texts);
+          for (let j = 0; j < batch.length; j++) {
+            embeddedDocs.push({
+              ...batch[j].doc,
+              vector: vectors[j],
+            });
+          }
+        } catch (err) {
+          errors.push(`Embedding batch ${i}: ${(err as Error).message}`);
+        }
+
+        const progress = 40 + Math.round((i / chunks.length) * 50);
+        this.setStatus(info.siteId, {
+          state: 'indexing',
+          progress,
+          message: `Embedding... ${Math.min(i + EMBED_BATCH_SIZE, chunks.length)}/${chunks.length}`,
+        });
+      }
+
+      // 5. Upsert into VectorStore
+      this.setStatus(info.siteId, { state: 'indexing', progress: 90, message: 'Saving to vector database...' });
+      try {
+        await vectorStore.upsert(info.siteId, embeddedDocs);
+      } catch (err) {
+        errors.push(`VectorStore upsert: ${(err as Error).message}`);
+      }
+
+      // 6. Update registry
+      const durationMs = Date.now() - startTime;
+      const uniquePostIds = new Set(embeddedDocs.map((d) => d.postId));
 
       indexRegistry.update(info.siteId, {
         siteName: info.siteName,
         lastIndexed: Date.now(),
-        documentCount: 0,
-        chunkCount: 0,
-        durationMs: result.durationMs,
+        documentCount: uniquePostIds.size,
+        chunkCount: embeddedDocs.length,
+        durationMs,
         structure,
         state: errors.length > 0 ? 'error' : 'indexed',
         error: errors.length > 0 ? errors.join('; ') : undefined,
       });
 
-      this.setStatus(info.siteId, errors.length > 0
+      const finalStatus: IndexStatus = errors.length > 0
         ? { state: 'error', error: errors.join('; '), lastAttempt: Date.now() }
-        : { state: 'indexed', lastIndexed: Date.now(), documentCount: 0 });
+        : { state: 'indexed', lastIndexed: Date.now(), documentCount: uniquePostIds.size };
 
-      return result;
+      this.setStatus(info.siteId, finalStatus);
+
+      return {
+        siteId: info.siteId,
+        documentsIndexed: uniquePostIds.size,
+        chunksIndexed: embeddedDocs.length,
+        durationMs,
+        errors,
+      };
+    } finally {
+      // Remove from active set at end
+      this.activeSites.delete(info.siteId);
     }
-
-    // 3. Chunk
-    this.setStatus(info.siteId, { state: 'indexing', progress: 30, message: `Chunking ${posts.length} posts...` });
-    const chunks = this.chunkPosts(info.siteId, posts);
-
-    // 4. Embed in batches
-    this.setStatus(info.siteId, { state: 'indexing', progress: 40, message: `Generating embeddings for ${chunks.length} chunks...` });
-    const EMBED_BATCH_SIZE = 16;
-    const embeddedDocs: VectorDocument[] = [];
-
-    for (let i = 0; i < chunks.length; i += EMBED_BATCH_SIZE) {
-      const batch = chunks.slice(i, i + EMBED_BATCH_SIZE);
-      const texts = batch.map((c) => c.textForEmbedding);
-
-      try {
-        const vectors = await embeddingService.embedBatch(texts);
-        for (let j = 0; j < batch.length; j++) {
-          embeddedDocs.push({
-            ...batch[j].doc,
-            vector: vectors[j],
-          });
-        }
-      } catch (err) {
-        errors.push(`Embedding batch ${i}: ${(err as Error).message}`);
-      }
-
-      const progress = 40 + Math.round((i / chunks.length) * 50);
-      this.setStatus(info.siteId, {
-        state: 'indexing',
-        progress,
-        message: `Embedding... ${Math.min(i + EMBED_BATCH_SIZE, chunks.length)}/${chunks.length}`,
-      });
-    }
-
-    // 5. Upsert into VectorStore
-    this.setStatus(info.siteId, { state: 'indexing', progress: 90, message: 'Saving to vector database...' });
-    try {
-      await vectorStore.upsert(info.siteId, embeddedDocs);
-    } catch (err) {
-      errors.push(`VectorStore upsert: ${(err as Error).message}`);
-    }
-
-    // 6. Update registry
-    const durationMs = Date.now() - startTime;
-    const uniquePostIds = new Set(embeddedDocs.map((d) => d.postId));
-
-    indexRegistry.update(info.siteId, {
-      siteName: info.siteName,
-      lastIndexed: Date.now(),
-      documentCount: uniquePostIds.size,
-      chunkCount: embeddedDocs.length,
-      durationMs,
-      structure,
-      state: errors.length > 0 ? 'error' : 'indexed',
-      error: errors.length > 0 ? errors.join('; ') : undefined,
-    });
-
-    const finalStatus: IndexStatus = errors.length > 0
-      ? { state: 'error', error: errors.join('; '), lastAttempt: Date.now() }
-      : { state: 'indexed', lastIndexed: Date.now(), documentCount: uniquePostIds.size };
-
-    this.setStatus(info.siteId, finalStatus);
-
-    return {
-      siteId: info.siteId,
-      documentsIndexed: uniquePostIds.size,
-      chunksIndexed: embeddedDocs.length,
-      durationMs,
-      errors,
-    };
   }
 
   async reindexSite(info: SiteConnectionInfo): Promise<IndexResult> {
