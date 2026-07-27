@@ -3,6 +3,29 @@ import { resolveSite } from '../../site-resolver';
 import { ok, error } from '../wp-cli/preflight';
 import { readIwBinding } from './hub-connect';
 import { getApiKey } from '../../../security/KeyVault';
+import type { IwSiteBinding } from '../../../../common/types';
+import { STORAGE_KEYS } from '../../../../common/constants';
+
+/**
+ * Resolve an IW binding by local site name/ID OR WPE install name.
+ * Local sites are resolved via resolveSite; WPE installs are keyed
+ * by install name in IW_SITE_BINDINGS (populated by wpe_site_deep_refresh).
+ */
+function resolveIwBinding(
+  siteArg: string,
+  services: any,
+): { binding: IwSiteBinding | null; label: string } {
+  const registryStorage = services.registryStorage;
+  // Try local site first
+  const localSite = resolveSite(siteArg, services.siteData);
+  if (localSite) {
+    return { binding: readIwBinding(localSite.id, registryStorage!), label: localSite.name };
+  }
+  // Fall back: treat arg as a WPE install name
+  const bindings = (registryStorage?.get(STORAGE_KEYS.IW_SITE_BINDINGS) ?? {}) as Record<string, IwSiteBinding>;
+  const binding = bindings[siteArg] ?? null;
+  return { binding, label: siteArg };
+}
 
 const KB_BASE = 'https://api.ai.wpengine.com/v1';
 
@@ -26,8 +49,9 @@ export const iwListKbCollectionsHandler: McpToolHandler = {
   definition: {
     name: 'iw_list_kb_collections',
     description:
-      'List Knowledge Base collections for the Power project associated with a local site. ' +
-      'Requires the site to have an active Hub Plugin connection (iw_get_connection_status). ' +
+      'List Knowledge Base collections for the Power project associated with a site. ' +
+      'Accepts a local site name/ID or a WPE install name (e.g. "myloop"). ' +
+      'WPE install bindings are populated automatically by wpe_site_deep_refresh. ' +
       'Nexus reads collections only — it does not create or sync them (Hub Plugin owns that).',
     inputSchema: {
       type: 'object',
@@ -40,13 +64,13 @@ export const iwListKbCollectionsHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const { registryStorage } = services;
-    const site = resolveSite(args.site as string, services.siteData);
-    if (!site) return error(`Site not found: ${args.site}`);
+    const { binding, label } = resolveIwBinding(args.site as string, services);
+    if (!binding?.projectId) return error(
+      `No Power connection found for "${args.site}". ` +
+      `For local sites run iw_connect_site; for WPE installs run wpe_site_deep_refresh first.`
+    );
 
-    const binding = readIwBinding(site.id, registryStorage!);
-    if (!binding?.projectId) return error(`No Hub connection found for ${site.name}. Run iw_connect_site first.`);
-
+    const registryStorage = services.registryStorage;
     const apiKey = getApiKey(registryStorage!, 'power') ?? '';
     if (!apiKey) return error('No Power API key configured. Add your wpe_ key in Nexus Preferences.');
 
@@ -55,7 +79,7 @@ export const iwListKbCollectionsHandler: McpToolHandler = {
       const collections: any[] = data.collections ?? data.items ?? [];
       if (!collections.length) return ok(`No KB collections found for project ${binding.projectId}.`);
 
-      const lines = [`KB Collections — ${site.name} (project: ${binding.projectId}):`];
+      const lines = [`KB Collections — ${label} (project: ${binding.projectId}):`];
       for (const c of collections) {
         lines.push(`  ${c.id}  ${c.name ?? ''}  [${c.status ?? 'unknown'}]  ${c.document_count ?? '?'} docs`);
       }
@@ -82,11 +106,7 @@ export const iwGetKbCollectionHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const { registryStorage } = services;
-    const site = resolveSite(args.site as string, services.siteData);
-    if (!site) return error(`Site not found: ${args.site}`);
-
-    const apiKey = getApiKey(registryStorage!, 'power') ?? '';
+    const apiKey = getApiKey(services.registryStorage!, 'power') ?? '';
     if (!apiKey) return error('No Power API key configured.');
 
     try {
@@ -121,11 +141,7 @@ export const iwSearchKbHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const { registryStorage } = services;
-    const site = resolveSite(args.site as string, services.siteData);
-    if (!site) return error(`Site not found: ${args.site}`);
-
-    const apiKey = getApiKey(registryStorage!, 'power') ?? '';
+    const apiKey = getApiKey(services.registryStorage!, 'power') ?? '';
     if (!apiKey) return error('No Power API key configured.');
 
     try {
