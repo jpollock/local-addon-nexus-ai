@@ -734,14 +734,15 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
 
   renderWpAiCard(): React.ReactNode {
     const {
-      aiStatus, iwStatus, wpAiPickerChoice, wpAiDirectProvider, wpAiSettingUp, wpAiSetupError,
+      aiStatus, iwStatus, iwConnecting, wpAiPickerChoice, wpAiDirectProvider, wpAiSettingUp, wpAiSetupError,
       useLocalGateway, globalAIProvider, keyStatus,
     } = this.state;
 
     const activeConnector = this.state.wpAiConnector;
     // If user clicked "Change →", show picker/steps regardless of activeConnector
     const workingConnector: 'power' | 'local-gateway' | 'direct' | null = wpAiPickerChoice ?? activeConnector;
-    const isEditing = wpAiPickerChoice !== null;
+    // isEditing = true only when CHANGING an existing connector, not during fresh setup
+    const isEditing = wpAiPickerChoice !== null && activeConnector !== null;
 
     // Smart default: what does the user's global Nexus config suggest?
     const DIRECT_PROVIDERS_LIST = ['anthropic', 'openai', 'google', 'ollama'] as const;
@@ -952,6 +953,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       // the picker so they can choose a DIFFERENT connector, not the current one's steps.
       const anyStepProgress = !isEditing && !!(
         wpAiSettingUp ||
+        iwConnecting ||          // Hub connect in progress (Power path)
         iwStatus?.connected ||
         (aiStatus?.aiPlugin && aiStatus.aiPlugin !== 'not_installed') ||
         (aiStatus?.gatewayProvider && aiStatus.gatewayProvider !== 'not_installed')
@@ -1071,9 +1073,9 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
                   fontFamily: 'inherit', fontWeight: 500,
                   opacity: wpAiSettingUp ? 0.7 : 1,
                 },
-                disabled: !!wpAiSettingUp,
-                onClick: wpAiSettingUp ? undefined : () => this.handleWpAiConnect(),
-              }, wpAiSettingUp ? 'Setting up…' : 'Set up →'),
+                disabled: !!wpAiSettingUp || !!iwConnecting,
+                onClick: (wpAiSettingUp || iwConnecting) ? undefined : () => this.handleWpAiConnect(),
+              }, (wpAiSettingUp || iwConnecting) ? 'Setting up…' : 'Set up →'),
             ),
           ),
           errorEl,
