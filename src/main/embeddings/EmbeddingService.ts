@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { VECTOR_DIMENSIONS, EMBEDDING_MAX_SEQUENCE_LENGTH } from '../../common/constants';
+import { EMBEDDING_MODELS } from '../../common/constants';
 import { WordPieceTokenizer } from './tokenizer';
 
 type OrtModule = typeof import('onnxruntime-node');
@@ -21,12 +21,21 @@ export class EmbeddingService {
   private vocabPath: string;
   private runtime: EmbeddingRuntime;
   private unavailableReason: string | null = null;
+  private dimensions: number;
+  private contextWindow: number;
 
-  constructor(modelDir: string, runtime: EmbeddingRuntime = process) {
+  constructor(
+    modelDir: string,
+    dimensions: number,
+    contextWindow: number,
+    runtime: EmbeddingRuntime = process
+  ) {
     this.modelPath = path.join(modelDir, 'model.onnx');
     this.vocabPath = path.join(modelDir, 'vocab.txt');
+    this.dimensions = dimensions;
+    this.contextWindow = contextWindow;
     this.runtime = runtime;
-    this.tokenizer = new WordPieceTokenizer(EMBEDDING_MAX_SEQUENCE_LENGTH);
+    this.tokenizer = new WordPieceTokenizer(contextWindow);
   }
 
   async initialize(): Promise<void> {
@@ -70,7 +79,7 @@ export class EmbeddingService {
     }
 
     const batchSize = texts.length;
-    const seqLen = EMBEDDING_MAX_SEQUENCE_LENGTH;
+    const seqLen = this.contextWindow;
 
     // Tokenize all texts
     const allInputIds = new BigInt64Array(batchSize * seqLen);
@@ -105,7 +114,7 @@ export class EmbeddingService {
     }
 
     const hiddenData = hiddenStates.data as Float32Array;
-    const hiddenSize = VECTOR_DIMENSIONS;
+    const hiddenSize = this.dimensions;
 
     // Mean pooling + L2 normalization for each item in the batch
     const embeddings: Float32Array[] = [];

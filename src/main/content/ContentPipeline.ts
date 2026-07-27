@@ -338,7 +338,24 @@ export class ContentPipeline {
     const chunks: Array<{ doc: Omit<VectorDocument, 'vector'>; textForEmbedding: string }> = [];
 
     for (const post of posts) {
-      const text = post.cleanedContent || post.title;
+      // Build searchable text: post content + ACF custom fields
+      let text = post.cleanedContent || post.title;
+
+      // Append ACF fields as structured text for semantic search
+      if (post.customFields && Object.keys(post.customFields).length > 0) {
+        const fieldLines: string[] = [];
+        for (const [key, value] of Object.entries(post.customFields)) {
+          if (value && typeof value === 'string' && value.trim()) {
+            // Format field name for readability: "trail_length" → "Trail length"
+            const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            fieldLines.push(`${label}: ${value}`);
+          }
+        }
+        if (fieldLines.length > 0) {
+          text += '\n\n' + fieldLines.join('. ') + '.';
+        }
+      }
+
       const words = text.split(/\s+/).filter(Boolean);
 
       if (words.length <= CHUNK_MAX_WORDS) {

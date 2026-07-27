@@ -310,7 +310,8 @@ export const STORAGE_KEYS = {
 // Vector Store
 // ---------------------------------------------------------------------------
 
-export const VECTOR_DIMENSIONS = 384;
+/** Vector dimensions for the active embedding model. Use getVectorDimensions() for runtime lookups. */
+export const VECTOR_DIMENSIONS = 384; // MiniLM default
 export const VECTOR_DB_DIR = 'nexus-ai/vectors';
 export const SITE_TABLE_PREFIX = 'site_';
 
@@ -318,9 +319,22 @@ export const SITE_TABLE_PREFIX = 'site_';
 // Embeddings
 // ---------------------------------------------------------------------------
 
-export const EMBEDDING_MODEL_DIR = 'all-MiniLM-L6-v2-quantized';
+export const EMBEDDING_MODELS = {
+  minilm: {
+    dir: 'all-MiniLM-L6-v2-quantized',
+    dimensions: 384,
+    contextWindow: 256,
+  },
+  nomic: {
+    dir: 'nomic-embed-text-v1.5',
+    dimensions: 768,
+    contextWindow: 8192,
+  },
+} as const;
+
 export const EMBEDDING_MODEL_FILE = 'model.onnx';
 export const EMBEDDING_VOCAB_FILE = 'vocab.txt';
+/** @deprecated Use EMBEDDING_MODELS[model].contextWindow */
 export const EMBEDDING_MAX_SEQUENCE_LENGTH = 256;
 
 // ---------------------------------------------------------------------------
