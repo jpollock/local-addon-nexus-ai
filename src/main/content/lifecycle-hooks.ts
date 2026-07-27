@@ -10,6 +10,7 @@ import type { SiteMetadataCache, SiteMetadata } from '../metadata/SiteMetadataCa
 import type { GraphService } from '../events/GraphService';
 import { autoGenerateContextFile } from '../ai-context/auto-generate';
 import { generateMuPluginContent } from '../ai-gateway/mu-plugin-template';
+import { isSiteReady } from './site-readiness';
 
 /**
  * Auto-apply gateway toggle changes on site start.
@@ -148,9 +149,23 @@ export function registerLifecycleHooks(
   metadataCache?: SiteMetadataCache,
   sendToRenderer?: (channel: string, ...args: unknown[]) => void,
   graphService?: GraphService,
+  mysqlExtractor?: import('./MySQLExtractor').MySQLExtractor,
 ): void {
   context.hooks.addAction('siteStarted', async (site: LocalSiteRef) => {
-    logger.info(`[NexusAI] Site started: ${site.name}, triggering index`);
+    // Readiness gate - exit early if site not ready
+    if (!localServices) {
+      logger.warn(`[NexusAI] LocalServices not available, skipping ${site.name}`);
+      return;
+    }
+
+    const readiness = await isSiteReady(site.id, localServices, mysqlExtractor);
+
+    if (!readiness.ready) {
+      logger.info(`[NexusAI] Site ${site.name} not ready: ${readiness.reason}. Skipping automatic work.`);
+      return;
+    }
+
+    logger.info(`[NexusAI] Site started and ready: ${site.name}, triggering index`);
 
     // Wire real-time progress push to renderer
     if (sendToRenderer) {
@@ -191,18 +206,6 @@ export function registerLifecycleHooks(
     const metadataRefreshPromise = (async () => {
       if (metadataCache && localServices) {
         try {
-          // siteStarted fires before MySQL accepts connections. Poll until the DB is ready
-          // (up to 30s) so WP-CLI commands that bootstrap WordPress don't fail silently.
-          const dbDeadline = Date.now() + 30_000;
-          while (Date.now() < dbDeadline) {
-            const remaining = Math.max(dbDeadline - Date.now(), 1000);
-            const probe = await localServices.wpCliRun(site.id, ['eval', "echo 'db_ready';"], {
-              timeoutMs: Math.min(remaining, 10_000),
-            });
-            if (probe.success && probe.stdout?.trim() === 'db_ready') break;
-            await new Promise((r) => setTimeout(r, 1_000));
-          }
-
           const [
             wpVersion, plugins, themes,
             siteUrl, adminEmail,

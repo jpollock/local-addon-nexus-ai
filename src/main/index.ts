@@ -229,7 +229,7 @@ export default function main(context: any): void {
       }
     } catch { /* renderer not ready */ }
   };
-  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge, metadataCache, sendToRenderer, graphService);
+  registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge, metadataCache, sendToRenderer, graphService, mysqlExtractor);
 
   // Phase 3: Boot MCP server (async — does not block addon load)
   const auditLogger = createAuditLogger(
