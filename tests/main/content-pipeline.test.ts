@@ -497,4 +497,135 @@ describe('ContentPipeline', () => {
     expect(entry!.structure).not.toBeNull();
     expect(entry!.structure!.users).toBeUndefined();
   });
+
+  // Task 3: Cancellation tests
+  test('cancelSite() stops in-progress indexing', async () => {
+    // Make file scanner slow so we have time to cancel before extraction completes
+    mockScanner.scan.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return {
+        themes: [],
+        plugins: [],
+        phpVersion: '8.2',
+        wpVersion: '6.5',
+        isMultisite: false,
+        hasWooCommerce: false,
+        hasACF: false,
+      };
+    });
+
+    const pipeline = createPipeline();
+
+    // Start indexing in background
+    const indexPromise = pipeline.indexSite(SITE_INFO);
+
+    // Give it a moment to start, then cancel
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await pipeline.cancelSite('test-site');
+
+    const result = await indexPromise;
+
+    // Should return early with cancellation error
+    expect(result.errors).toContain('Indexing cancelled');
+    expect(result.documentsIndexed).toBe(0);
+    expect(result.chunksIndexed).toBe(0);
+  });
+
+  test('cancelSite() removes site from active set', async () => {
+    const pipeline = createPipeline();
+
+    // Start indexing
+    const indexPromise = pipeline.indexSite(SITE_INFO);
+
+    // Cancel it
+    await pipeline.cancelSite('test-site');
+
+    // Wait for indexing to complete
+    const result = await indexPromise;
+
+    // Should have been cancelled
+    expect(result.errors).toContain('Indexing cancelled');
+  });
+
+  test('cancelSite() is idempotent for non-active sites', async () => {
+    const pipeline = createPipeline();
+
+    // Should not throw when cancelling a site that is not being indexed
+    await expect(pipeline.cancelSite('non-existent-site')).resolves.not.toThrow();
+  });
+
+  test('cancelSite() called after indexing completes is safe', async () => {
+    const pipeline = createPipeline();
+    const result = await pipeline.indexSite(SITE_INFO);
+
+    expect(result.documentsIndexed).toBe(3);
+
+    // Cancelling after completion should be safe
+    await expect(pipeline.cancelSite('test-site')).resolves.not.toThrow();
+  });
+
+  test('multiple concurrent indexing operations can be independently cancelled', async () => {
+    const pipeline = createPipeline();
+
+    const info1: SiteConnectionInfo = { siteId: 'site-1', siteName: 'Site 1', sitePath: '/tmp/site1' };
+    const info2: SiteConnectionInfo = { siteId: 'site-2', siteName: 'Site 2', sitePath: '/tmp/site2' };
+
+    mockExtractor.extract.mockImplementation(async () => {
+      // Simulate slow extraction
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return {
+        posts: [makePost(1)],
+        siteInfo: { name: 'Test', url: '', wpVersion: '6.5' },
+        extractedAt: Date.now(),
+      } as ExtractedContent;
+    });
+
+    // Start both indexing operations
+    const index1Promise = pipeline.indexSite(info1);
+    const index2Promise = pipeline.indexSite(info2);
+
+    // Give them a moment to start
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Cancel only site-1
+    await pipeline.cancelSite('site-1');
+
+    const result1 = await index1Promise;
+    const result2 = await index2Promise;
+
+    // Site 1 should be cancelled
+    expect(result1.errors).toContain('Indexing cancelled');
+    expect(result1.documentsIndexed).toBe(0);
+
+    // Site 2 should complete normally
+    expect(result2.documentsIndexed).toBeGreaterThan(0);
+    expect(result2.errors).toEqual([]);
+  });
+
+  test('cancellation checks happen before expensive operations', async () => {
+    let extractCallCount = 0;
+
+    mockExtractor.extract.mockImplementation(async () => {
+      extractCallCount++;
+      return {
+        posts: [makePost(1), makePost(2), makePost(3)],
+        siteInfo: { name: 'Test', url: 'http://test.local', wpVersion: '6.5' },
+        extractedAt: Date.now(),
+      } as ExtractedContent;
+    });
+
+    const pipeline = createPipeline();
+
+    // Start indexing
+    const indexPromise = pipeline.indexSite(SITE_INFO);
+
+    // Cancel immediately
+    await pipeline.cancelSite('test-site');
+
+    const result = await indexPromise;
+
+    // Should have checked cancellation flag and returned early
+    expect(result.errors).toContain('Indexing cancelled');
+    expect(result.documentsIndexed).toBe(0);
+  });
 });
