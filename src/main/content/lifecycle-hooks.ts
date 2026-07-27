@@ -539,6 +539,7 @@ echo json_encode($out);`,
 
     try {
       // 1. Cancel any in-progress indexing to prevent "Site not found" errors
+      // Type cast needed: cancelSite is from Task 3 (ContentPipeline.ts:52-59)
       await (pipeline as any).cancelSite(site.id);
 
       // 2. Clear metadata cache
@@ -551,7 +552,23 @@ echo json_encode($out);`,
         }
       }
 
-      // 3. Remove from vector index
+      // 3. Remove from graph.db (delete all site-related content, plugins, themes, users)
+      if (graphService) {
+        try {
+          // Delete all related data
+          await graphService.deletePlugins(site.id);
+          await graphService.deleteThemes(site.id);
+          const content = await graphService.listContent(site.id);
+          for (const item of content) {
+            await graphService.deleteContent(site.id, item.post_id ?? 0);
+          }
+          logger.info(`[NexusAI] Removed ${site.name} from graph.db`);
+        } catch (err) {
+          logger.warn(`[NexusAI] Graph.db removal failed for ${site.name} (non-fatal):`, err);
+        }
+      }
+
+      // 4. Remove from vector index
       try {
         await pipeline.removeSite(site.id);
         logger.info(`[NexusAI] Removed ${site.name} from vector index`);
