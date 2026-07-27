@@ -178,19 +178,20 @@ export const deepRefreshHandler: McpToolHandler = {
         services.localServices.remoteWpCliRun(installName, ['core', 'version']),
         services.localServices.remoteWpCliRun(installName, ['option', 'get', 'siteurl']),
         services.localServices.remoteWpCliRun(installName, ['option', 'get', 'admin_email']),
-        services.localServices.remoteWpCliRun(installName, ['post', 'list', '--post_status=publish', '--format=count']),
+        // Use --post_type=any to count ALL published content including custom post types
+        services.localServices.remoteWpCliRun(installName, ['post', 'list', '--post_type=any', '--post_status=publish', '--format=count']),
         services.localServices.remoteWpCliRun(installName, ['option', 'get', 'stylesheet']),
-        // New: post count for 'post' type (wp eval is blocked on WPE SSH gateway)
+        // Post type breakdown: standard 'post' type
         services.localServices.remoteWpCliRun(installName,
           ['post', 'list', '--post_type=post', '--post_status=publish', '--format=count'],
         ).catch(() => ({ success: false, stdout: null })),
-        // New: page count
+        // Page count
         services.localServices.remoteWpCliRun(installName,
           ['post', 'list', '--post_type=page', '--post_status=publish', '--format=count'],
         ).catch(() => ({ success: false, stdout: null })),
         // New: most recently modified published post date
         services.localServices.remoteWpCliRun(installName,
-          ['post', 'list', '--post_status=publish', '--orderby=modified', '--posts-per-page=1', '--fields=post_modified', '--format=json'],
+          ['post', 'list', '--post_type=any', '--post_status=publish', '--orderby=modified', '--posts-per-page=1', '--fields=post_modified', '--format=json'],
         ).catch(() => ({ success: false, stdout: null })),
         // New: total user count
         services.localServices.remoteWpCliRun(installName,
