@@ -120,6 +120,21 @@ describe('registerLifecycleHooks', () => {
     expect(pipeline.removeSite).toHaveBeenCalledWith('site1');
   });
 
+  test('siteDeleted invalidates metadata cache', async () => {
+    (pipeline as any).cancelSite = jest.fn().mockResolvedValue(undefined);
+    const metadataCache = {
+      invalidate: jest.fn(),
+      get: jest.fn(),
+      set: jest.fn(),
+    } as any;
+
+    registerLifecycleHooks(context, pipeline, indexRegistry, logger, undefined, undefined, undefined, metadataCache);
+
+    await hooks.siteDeleted({ id: 'site1', name: 'My Site', path: '/tmp/site' });
+
+    expect(metadataCache.invalidate).toHaveBeenCalledWith('site1');
+  });
+
   test('siteDeleted logs cancellation message', async () => {
     (pipeline as any).cancelSite = jest.fn().mockResolvedValue(undefined);
 
