@@ -45,10 +45,11 @@ export async function isSiteReady(
   }
 
   // 2. Status check - only 'running' is accepted
-  if (site.status !== 'running') {
+  const status = localServices.getSiteStatus(siteId);
+  if (status !== 'running') {
     return {
       ready: false,
-      reason: `Site status: ${site.status}`,
+      reason: `Site status: ${status}`,
     };
   }
 
