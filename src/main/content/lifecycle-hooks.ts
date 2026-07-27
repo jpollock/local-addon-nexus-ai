@@ -534,6 +534,38 @@ echo json_encode($out);`,
     logger.info(`[NexusAI] Site stopped: ${site.name} (index state preserved)`);
   });
 
+  context.hooks.addAction('siteDeleted', async (site: LocalSiteRef) => {
+    logger.info(`[NexusAI] Site being deleted: ${site.name}, canceling queued work`);
+
+    try {
+      // 1. Cancel any in-progress indexing to prevent "Site not found" errors
+      await (pipeline as any).cancelSite(site.id);
+
+      // 2. Clear metadata cache
+      if (metadataCache) {
+        try {
+          metadataCache.invalidate(site.id);
+          logger.info(`[NexusAI] Invalidated metadata cache for ${site.name}`);
+        } catch (err) {
+          logger.warn(`[NexusAI] Metadata cache invalidation failed for ${site.name} (non-fatal):`, err);
+        }
+      }
+
+      // 3. Remove from vector index
+      try {
+        await pipeline.removeSite(site.id);
+        logger.info(`[NexusAI] Removed ${site.name} from vector index`);
+      } catch (err) {
+        logger.warn(`[NexusAI] Vector index removal failed for ${site.name} (non-fatal):`, err);
+      }
+
+      logger.info(`[NexusAI] Cleanup complete for deleted site: ${site.name}`);
+    } catch (error) {
+      logger.error(`[NexusAI] Deletion cleanup failed for ${site.name}:`, error);
+      // Non-fatal - siteRemoved will run final cleanup
+    }
+  });
+
   context.hooks.addAction('siteRemoved', async (site: LocalSiteRef) => {
     logger.info(`[NexusAI] Site removed: ${site.name}, cleaning up`);
     try {
