@@ -36,10 +36,9 @@ jest.mock('fs-extra', () => ({
   unlinkSync: jest.fn(),
 }));
 
-// Mock fs used by isSiteReady
-jest.mock('fs', () => ({
-  existsSync: jest.fn().mockReturnValue(true),
-  writeFileSync: jest.fn(),
+// Mock site readiness check
+jest.mock('../../../src/main/content/site-readiness', () => ({
+  isSiteReady: jest.fn().mockResolvedValue({ ready: true }),
 }));
 
 import { switchProviderForSite } from '../../../src/main/mcp/modules/wp-connector/switch-provider';
@@ -62,12 +61,6 @@ function createMockLocalServices(overrides?: any) {
     wpCliRun: jest.fn().mockResolvedValue({ success: true, stdout: '' }),
     resolveSiteObject: jest.fn().mockReturnValue({
       paths: { webRoot: '/sites/mysite/app/public' },
-    }),
-    getSite: jest.fn().mockReturnValue({
-      id: 'site-1',
-      name: 'Test Site',
-      status: 'running',
-      path: '/sites/mysite',
     }),
     getWpVersion: jest.fn().mockResolvedValue('7.0.0'),
     getPlugins: jest.fn().mockResolvedValue([]),

@@ -1,3 +1,7 @@
+jest.mock('../../src/main/content/site-readiness', () => ({
+  isSiteReady: jest.fn().mockResolvedValue({ ready: true }),
+}));
+
 import { registerLifecycleHooks, LifecycleContext, Logger } from '../../src/main/content/lifecycle-hooks';
 import { ContentPipeline } from '../../src/main/content/ContentPipeline';
 import { IndexRegistry, RegistryStorage } from '../../src/main/content/IndexRegistry';
@@ -12,12 +16,6 @@ function createMockStorage(): RegistryStorage {
 
 function createMockLocalServices() {
   return {
-    getSite: jest.fn().mockReturnValue({
-      id: 'site1',
-      name: 'My Site',
-      status: 'running',
-      path: '/tmp/site',
-    }),
     wpCliRun: jest.fn().mockResolvedValue({ success: true, stdout: '' }),
   } as any;
 }

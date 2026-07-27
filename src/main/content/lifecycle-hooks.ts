@@ -137,6 +137,8 @@ export interface Logger {
  *   Hooks wait on this before indexing so sites that start before init completes
  *   don't hit "EmbeddingService not initialized" errors.
  * @param metadataCache — Digital twin cache for WordPress metadata (version, plugins, themes)
+ * @param mysqlExtractor — MySQL extractor for site readiness checks. Used by isSiteReady()
+ *   to validate MySQL connection before automatic work starts.
  */
 export function registerLifecycleHooks(
   context: LifecycleContext,
