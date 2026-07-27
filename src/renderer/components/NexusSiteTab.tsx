@@ -63,6 +63,8 @@ interface NexusSiteTabState {
   wpAiSetupError: string | null;
   useLocalGateway: boolean;
   globalAIProvider: string | null;
+  /** Nexus-level key status per provider — used to gate Direct provider options */
+  keyStatus: Record<string, string>;
   dbScan: DbScanResult | null;
   dbScanning: boolean;
   iwStatus: IwConnectionStatus | null;
@@ -249,6 +251,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     wpAiSetupError: null,
     useLocalGateway: false,
     globalAIProvider: null,
+    keyStatus: {},
     dbScan: null,
     dbScanning: false,
     iwStatus: null,
@@ -384,12 +387,16 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       // Non-fatal
     }
 
-    const iwStatusResult = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null);
+    const [iwStatusResult, keyStatusResult] = await Promise.all([
+      ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null),
+      ipc.invoke(IPC_CHANNELS.GET_API_KEY_STATUS).catch(() => ({})),
+    ]);
     if (!this.mounted) return;
     const iwStatusTyped = (iwStatusResult as IwConnectionStatus | null) ?? null;
     this.setState({
       iwStatus: iwStatusTyped,
       wpAiConnector: detectWpAiConnector(rawAiStatus, iwStatusTyped),
+      keyStatus: (keyStatusResult as Record<string, string>) ?? {},
     });
   };
 
@@ -728,6 +735,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
   renderWpAiCard(): React.ReactNode {
     const {
       aiStatus, iwStatus, wpAiPickerChoice, wpAiDirectProvider, wpAiSettingUp, wpAiSetupError,
+      useLocalGateway, globalAIProvider, keyStatus,
     } = this.state;
 
     const activeConnector = this.state.wpAiConnector;
@@ -735,11 +743,17 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     const workingConnector: 'power' | 'local-gateway' | 'direct' | null = wpAiPickerChoice ?? activeConnector;
     const isEditing = wpAiPickerChoice !== null;
 
-    // Key status: which providers have a valid API key synced to this site
-    const keyStatus: Record<string, string> = {};
-    if (aiStatus?.providers) {
-      for (const p of aiStatus.providers) keyStatus[p] = 'valid';
-    }
+    // Smart default: what does the user's global Nexus config suggest?
+    const DIRECT_PROVIDERS_LIST = ['anthropic', 'openai', 'google', 'ollama'] as const;
+    const naturalPath: 'local-gateway' | 'direct' | null = (() => {
+      if (useLocalGateway) return 'local-gateway';
+      if (globalAIProvider && (DIRECT_PROVIDERS_LIST as readonly string[]).includes(globalAIProvider)) return 'direct';
+      return null;
+    })();
+    const naturalDirectProvider = naturalPath === 'direct' ? (globalAIProvider as typeof DIRECT_PROVIDERS_LIST[number]) : null;
+    // Direct path has a key if provider is ollama (keyless) or key exists in Nexus
+    const naturalDirectHasKey = naturalDirectProvider === 'ollama' || !!(naturalDirectProvider && keyStatus[naturalDirectProvider]);
+    const naturalDirectLabel = PROVIDER_LABELS[naturalDirectProvider ?? ''] ?? naturalDirectProvider ?? 'Provider';
 
     const providerLabel = PROVIDER_LABELS[wpAiDirectProvider ?? ''] ?? (wpAiDirectProvider ?? 'Provider');
 
@@ -944,6 +958,10 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
           { id: 'google', label: 'Google (Gemini)' },
           { id: 'ollama', label: 'Ollama (local)' },
         ];
+        // Only show providers with a key configured in Nexus, plus Ollama (keyless).
+        const availableDirectProviders = DIRECT_PROVIDERS.filter(
+          p => p.id === 'ollama' || keyStatus[p.id],
+        );
 
         const optionCards = OPTIONS.map(opt =>
           React.createElement('div', {
@@ -977,22 +995,28 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
 
         const directSubPicker = wpAiPickerChoice === 'direct'
           ? React.createElement('div', { style: { marginBottom: 10 } },
-              React.createElement('div', { style: { fontSize: 11, color: '#6b7280', marginBottom: 6 } }, 'Choose provider:'),
-              React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' as const } },
-                ...DIRECT_PROVIDERS.map(p =>
-                  React.createElement('button', {
-                    key: p.id,
-                    style: {
-                      fontSize: 11, padding: '3px 10px', borderRadius: 4,
-                      fontFamily: 'inherit', cursor: 'pointer',
-                      border: `1px solid ${wpAiDirectProvider === p.id ? '#51bb7b' : '#374151'}`,
-                      background: wpAiDirectProvider === p.id ? 'rgba(81,187,123,.1)' : 'none',
-                      color: wpAiDirectProvider === p.id ? '#51bb7b' : '#9ca3af',
-                    },
-                    onClick: () => this.setState({ wpAiDirectProvider: p.id }),
-                  }, p.label),
-                ),
-              ),
+              availableDirectProviders.length === 0
+                ? React.createElement('div', {
+                    style: { fontSize: 11, color: '#6b7280', padding: '6px 0', lineHeight: '1.5' },
+                  }, 'No API keys configured in Nexus. Add a key in Preferences first.')
+                : React.createElement('div', null,
+                    React.createElement('div', { style: { fontSize: 11, color: '#6b7280', marginBottom: 6 } }, 'Choose provider:'),
+                    React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' as const } },
+                      ...availableDirectProviders.map(p =>
+                        React.createElement('button', {
+                          key: p.id,
+                          style: {
+                            fontSize: 11, padding: '3px 10px', borderRadius: 4,
+                            fontFamily: 'inherit', cursor: 'pointer',
+                            border: `1px solid ${wpAiDirectProvider === p.id ? '#51bb7b' : '#374151'}`,
+                            background: wpAiDirectProvider === p.id ? 'rgba(81,187,123,.1)' : 'none',
+                            color: wpAiDirectProvider === p.id ? '#51bb7b' : '#9ca3af',
+                          },
+                          onClick: () => this.setState({ wpAiDirectProvider: p.id }),
+                        }, p.label),
+                      ),
+                    ),
+                  ),
             )
           : null;
 
@@ -1069,25 +1093,17 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
           ),
         ];
       } else if (workingConnector === 'direct') {
+        // Direct path is ONE step — install + credential sync is automatic inside setup-ai.
+        // Key is already in Nexus KeyVault; setup-ai syncs it to WP DB during install.
         steps = [
           renderStepRow(
             1,
             `Install WP AI & ${providerLabel} plugin`,
-            'Installs WP AI plugin + provider plugin, enables all AI experiments.',
+            `Installs WP AI plugin + ${providerLabel} provider, enables AI experiments, syncs API key.`,
             aiStatus?.aiPlugin === 'active',
             () => this.handleWpAiSetup(wpAiDirectProvider ?? 'anthropic'),
             'Install',
             false,
-          ),
-          renderStepRow(
-            2,
-            'Add API key',
-            `Sync your ${providerLabel} key to this site.`,
-            keyStatus[wpAiDirectProvider ?? ''] === 'valid',
-            undefined,
-            undefined,
-            aiStatus?.aiPlugin !== 'active',
-            'Key is synced automatically when you install.',
           ),
         ];
       }
@@ -1104,6 +1120,27 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       React.createElement('div', { style: titleStyle }, 'WordPress AI'),
     );
 
+    // Smart default CTA — respect global Nexus settings so Local Gateway and
+    // Direct provider paths remain ONE CLICK (same as old behaviour).
+    const primaryAction = (() => {
+      if (naturalPath === 'local-gateway') {
+        return {
+          label: 'Setup AI via Local Gateway',
+          onClick: () => this.handleWpAiSetup('local-gateway'),
+        };
+      }
+      if (naturalPath === 'direct' && naturalDirectHasKey) {
+        return {
+          label: `Setup AI with ${naturalDirectLabel}`,
+          onClick: () => this.handleWpAiSetup(naturalDirectProvider ?? 'anthropic'),
+        };
+      }
+      return {
+        label: 'Connect to Power',
+        onClick: () => this.setState({ wpAiPickerChoice: 'power' }),
+      };
+    })();
+
     const emptyBody = React.createElement('div', {
       style: {
         padding: '20px 16px', textAlign: 'center' as const,
@@ -1113,27 +1150,34 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       React.createElement('div', { style: { fontSize: 13, fontWeight: 600, color: '#e6edf3' } },
         'No AI configured for this site',
       ),
-      React.createElement('div', { style: { fontSize: 11, color: '#6b7280', maxWidth: 220, lineHeight: '1.5' } },
-        'Choose how WordPress AI gets its capabilities.',
+      React.createElement('div', { style: { fontSize: 11, color: '#6b7280', maxWidth: 240, lineHeight: '1.5' } },
+        naturalPath
+          ? `Uses your Nexus AI setting. Choose a different option below.`
+          : 'Choose how WordPress AI gets its capabilities.',
       ),
-      React.createElement('div', { style: { display: 'flex', gap: 8, marginTop: 4 } },
+      React.createElement('div', { style: { display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' as const, justifyContent: 'center' } },
         React.createElement('button', {
           style: {
             fontSize: 11, padding: '5px 12px', borderRadius: 5, border: 'none',
-            background: '#51bb7b', color: '#fff', cursor: 'pointer',
+            background: wpAiSettingUp ? 'rgba(81,187,123,.5)' : '#51bb7b',
+            color: '#fff', cursor: wpAiSettingUp ? 'default' : 'pointer',
             fontFamily: 'inherit', fontWeight: 500,
           },
-          onClick: () => this.setState({ wpAiPickerChoice: 'power' }),
-        }, 'Connect to Power'),
+          disabled: !!wpAiSettingUp,
+          onClick: wpAiSettingUp ? undefined : primaryAction.onClick,
+        }, wpAiSettingUp ? 'Setting up…' : primaryAction.label),
         React.createElement('button', {
           style: {
             fontSize: 11, padding: '5px 10px', borderRadius: 5,
             border: '1px solid #374151', background: 'none',
             color: '#9ca3af', cursor: 'pointer', fontFamily: 'inherit',
           },
-          onClick: () => this.setState({ wpAiPickerChoice: 'local-gateway' }),
+          onClick: () => this.setState({ wpAiPickerChoice: 'power' }),
         }, 'Other options ↓'),
       ),
+      wpAiSetupError ? React.createElement('div', {
+        style: { fontSize: 11, color: '#ef4444', marginTop: 4 },
+      }, wpAiSetupError) : null,
     );
 
     return React.createElement('div', { style: { ...styles.cardFull, padding: 0 } },
@@ -1283,8 +1327,8 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     },
       this.renderContentIndexCard(),
       this.renderWpAiCard(),
-      this.renderDatabaseHealthCard(),
       this.renderToolsCard(),
+      this.renderDatabaseHealthCard(),
       resultBanner,
     );
   }

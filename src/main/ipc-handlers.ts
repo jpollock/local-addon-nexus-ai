@@ -4934,6 +4934,13 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const webRoot: string = site?.paths?.webRoot ?? '';
       const hubInstalled = webRoot ? detectHubPlugin(webRoot) : false;
       if (!hubInstalled) {
+        // Hub Plugin install requires WP-CLI — auto-start site if halted
+        const siteStatus = localServicesBridge.getSiteStatus(siteId);
+        if (siteStatus !== 'running') {
+          localLogger.info(`[NexusAI] IW_CONNECT: auto-starting site ${siteId} for Hub Plugin install`);
+          await localServicesBridge.startSite(siteId);
+          await waitForDatabaseReady(siteId, localServicesBridge, localLogger, 30000);
+        }
         const installResult = await installHubPlugin(siteId, localServicesBridge);
         if (!installResult.ok) return { ok: false, error: installResult.error };
       }
