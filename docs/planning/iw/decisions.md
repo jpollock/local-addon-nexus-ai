@@ -175,6 +175,26 @@ Status ∈ {**Decided**, **Leaning**, **Open**}.
   `kb-sync`); Nexus adds value via search/agents, not by re-implementing indexing.
 - **Blocks.** Any Nexus KB feature; avoids double-indexing.
 
+### Q5 — What's the Atlas upload contract for a Nexus agent build?  ·  **Decided (✅ proven 2026-07-27)**
+- **Why it matters.** J2's whole payoff — defines what Spec 03 (Publisher) must produce.
+- **Spike:** Deployed `nexus-hello-agent` (minimal Node.js HTTP server) to Atlas via zip upload. Live at `htfqiga1ef8zmnpi7ip352h4c.js.wpenginepowered.com`. Account `w7579`, env `45f6f177-ef59-a5e0-1885-08a733921e46`.
+- **Confirmed runtime contract:**
+  - **API auth:** HTTP Basic (`ATLAS_API_USER:ATLAS_API_PASSWORD`, from WPE portal → Users → API Access)
+  - **Three-step deploy:** `POST /v1/.../apps` → `POST /v1/.../environments` → `POST /fu/v1/.../environments/{id}:upload` (multipart)
+  - **Zip structure:** Files inside a named folder at zip root (e.g. `nexus-hello-agent/index.js`)
+  - **Node.js version:** Reads from `package.json engines.node` or `.nvmrc`. Defaults to latest (v24) with `>=18`. Recommend pinning to `"node": "20"` → installs v20.20.2 LTS.
+  - **npm:** v10.8.2 (default for Node 20)
+  - **Build step:** `npm run build` — **REQUIRED**. Missing build script = deploy fails. Use `"build": "echo 'no build step'"` for pure runtime apps.
+  - **Start command:** `npm start` → executes `package.json scripts.start` → e.g. `node index.js`
+  - **PORT:** Atlas injects `process.env.PORT = "8080"`. App **must** listen on `process.env.PORT`.
+  - **NODE_ENV:** Not set by default — inject via `shellVariables` if needed.
+  - **URL pattern:** `{hash}.js.wpenginepowered.com` (hash-based, not `{app-name}`)
+  - **`wpEnvironment`:** Required field — must be a real WP install name in the account (e.g. `jppsandbox`). Empty/fake values rejected. **Expected to become optional in future Atlas versions.**
+  - **Env vars / secrets:** Set via `shellVariables: [{key, value}]` in create-env body, or via portal after first deploy. Never baked into the zip. (Confirms Q8 Option A.)
+  - **App-already-exists handling:** API returns HTTP 400 `APP_ALREADY_EXISTS` (not 409) on create-app — handle both for re-deploys.
+  - **package-lock.json:** Recommended (Atlas warns without it) but not required.
+- **Blocks.** → Q8 confirmed (env secrets at deploy time). Handed to Agent Platform Spec 03.
+
 ### Q10 — If the Agent Platform stalls, does IW build a minimal Atlas deploy?  ·  **Open**
 - **Why it matters.** Journey 2's agent→Atlas delivery is owned by
   [Agent Platform](../nexus-agent-platform/vision.md) Spec 03, which itself depends on Spec 01
