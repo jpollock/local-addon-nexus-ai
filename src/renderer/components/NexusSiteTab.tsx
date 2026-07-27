@@ -393,9 +393,23 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     ]);
     if (!this.mounted) return;
     const iwStatusTyped = (iwStatusResult as IwConnectionStatus | null) ?? null;
+
+    // For halted sites, live data (aiStatus, iwStatus) may be absent.
+    // Fall back to stored per-site SiteAIConfig so State 2 shows correctly.
+    const liveConnector = detectWpAiConnector(rawAiStatus, iwStatusTyped);
+    const storedCfg = this.state.siteAIConfig;
+    const DIRECT_PROVIDERS = ['anthropic', 'openai', 'google', 'ollama'];
+    const fallbackConnector: 'power' | 'local-gateway' | 'direct' | null = liveConnector ?? (() => {
+      if (!storedCfg) return null;
+      if ((storedCfg as any).provider === 'power') return 'power';
+      if ((storedCfg as any).useLocalGateway) return 'local-gateway';
+      if (DIRECT_PROVIDERS.includes((storedCfg as any).provider ?? '')) return 'direct';
+      return null;
+    })();
+
     this.setState({
       iwStatus: iwStatusTyped,
-      wpAiConnector: detectWpAiConnector(rawAiStatus, iwStatusTyped),
+      wpAiConnector: fallbackConnector,
       keyStatus: (keyStatusResult as Record<string, string>) ?? {},
     });
   };

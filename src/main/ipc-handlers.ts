@@ -4940,7 +4940,20 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
       const hubInstalled = webRoot ? detectHubPlugin(webRoot) : false;
 
       if (localServicesBridge.getSiteStatus(siteId) !== 'running') {
-        return { hubInstalled, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null, wpEngineConnectorApproved: false };
+        // Site is halted — return stored binding data so the tab reflects
+        // the known-good state without needing WP-CLI.
+        const stored = readIwBinding(siteId, registryStorage);
+        const connected = !!(stored?.clientId);
+        return {
+          hubInstalled,
+          connected,
+          copyReset: false,
+          clientId: stored?.clientId ?? null,
+          projectId: stored?.projectId ?? null,
+          accountId: stored?.accountId ?? null,
+          // If we have a stored binding, the connector was approved during setup
+          wpEngineConnectorApproved: connected,
+        };
       }
 
       const status = await getConnectionStatus(siteId, localServicesBridge);
