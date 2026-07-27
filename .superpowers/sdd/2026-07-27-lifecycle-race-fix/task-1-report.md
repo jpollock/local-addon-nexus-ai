@@ -97,3 +97,71 @@ None. Implementation complete and all tests passing.
 
 ## Next Steps
 This module is ready for Task 2 to consume in the `siteStarted` lifecycle hook.
+
+---
+
+## Fix Report: Critical Spec Violations Addressed
+
+### Fixes Applied
+
+**1. Critical - Interface Contract Violation (FIXED)**
+- **Issue:** Implementation used `siteData: LocalSiteDataAccessor` instead of `localServices: LocalServicesBridge`
+- **Fix:**
+  - Added `getSite(siteId: string): any` method to `LocalServicesBridge` interface
+  - Implemented `getSite()` in `createLocalServicesBridge()` to delegate to `svc('siteData').getSite(siteId)`
+  - Updated `isSiteReady()` signature to accept `localServices: LocalServicesBridge` as required by brief
+  - Updated all test mocks from `mockSiteData` to `mockLocalServices`
+- **Files Changed:**
+  - `src/main/mcp/local-services-bridge.ts` - added interface method and implementation
+  - `src/main/content/site-readiness.ts` - changed parameter type and name
+  - `tests/unit/content/site-readiness.test.ts` - updated imports and mocks
+
+**2. Important - Error Message Precision (FIXED)**
+- **Issue:** MySQL socket missing and connection failure both returned `'MySQL not accepting connections'`
+- **Fix:**
+  - Socket missing now returns: `'MySQL socket does not exist'`
+  - Connection failure returns: `'MySQL not accepting connections'`
+  - Updated test expectations to match new distinct messages
+- **Files Changed:**
+  - `src/main/content/site-readiness.ts` - line 69 changed error message
+  - `tests/unit/content/site-readiness.test.ts` - line 93 updated expectation
+
+**3. Minor - Test Description (FIXED)**
+- **Issue:** Test description said "when site not found in GraphQL" but implementation uses Local state, not GraphQL
+- **Fix:** Changed test description to "when site not found in Local state"
+- **Files Changed:**
+  - `tests/unit/content/site-readiness.test.ts` - line 21 updated description
+
+### Verification
+
+All 7 tests pass after fixes:
+
+```
+PASS tests/unit/content/site-readiness.test.ts
+  isSiteReady
+    ✓ should return not ready when site not found in Local state (2 ms)
+    ✓ should return not ready when site status is provisioning (1 ms)
+    ✓ should return not ready when site status is halted
+    ✓ should return not ready when site path does not exist
+    ✓ should return not ready when MySQL socket is missing (1 ms)
+    ✓ should return not ready when MySQL connection fails
+    ✓ should return ready when all checks pass
+
+Test Suites: 1 passed, 1 total
+Tests:       7 passed, 7 total
+```
+
+### Updated Interface Contract
+
+- **Consumes:**
+  - `LocalServicesBridge` - for site existence and status checks (via new `getSite()` method)
+  - `MySQLExtractor` (optional) - for MySQL readiness validation
+- **Produces:**
+  - `isSiteReady(siteId: string, localServices: LocalServicesBridge, mysqlExtractor?: MySQLExtractor): Promise<ReadinessResult>`
+  - `ReadinessResult = { ready: boolean; reason?: string }`
+
+### Task 2 Integration Readiness
+
+✅ Interface contract now matches brief exactly - Task 2 can import and call as specified
+✅ Error messages are distinct and diagnostic - better troubleshooting in logs
+✅ Test descriptions accurate - no misleading references to GraphQL

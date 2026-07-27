@@ -8,7 +8,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { LocalSiteDataAccessor } from '../types/site-data';
+import type { LocalServicesBridge } from '../mcp/local-services-bridge';
 import type { MySQLExtractor } from './MySQLExtractor';
 
 export interface ReadinessResult {
@@ -26,17 +26,17 @@ export interface ReadinessResult {
  * 4. MySQL connection works (if mysqlExtractor provided)
  *
  * @param siteId Local site ID
- * @param siteData Local site data accessor (from Local's siteData service)
+ * @param localServices Local services bridge
  * @param mysqlExtractor Optional MySQL extractor for connection testing
  * @returns Ready status with reason if not ready
  */
 export async function isSiteReady(
   siteId: string,
-  siteData: LocalSiteDataAccessor,
+  localServices: LocalServicesBridge,
   mysqlExtractor?: MySQLExtractor,
 ): Promise<ReadinessResult> {
   // 1. Site exists check
-  const site = siteData.getSite(siteId);
+  const site = localServices.getSite(siteId);
   if (!site) {
     return {
       ready: false,
@@ -66,7 +66,7 @@ export async function isSiteReady(
     if (!mysqlExtractor.isAvailable(siteId)) {
       return {
         ready: false,
-        reason: 'MySQL not accepting connections',
+        reason: 'MySQL socket does not exist',
       };
     }
 

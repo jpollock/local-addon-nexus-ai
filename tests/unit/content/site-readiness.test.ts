@@ -1,15 +1,14 @@
 import { isSiteReady } from '../../../src/main/content/site-readiness';
-import type { LocalSiteDataAccessor, LocalSite } from '../../../src/main/types/site-data';
+import { LocalServicesBridge } from '../../../src/main/mcp/local-services-bridge';
 import { MySQLExtractor } from '../../../src/main/content/MySQLExtractor';
 
 describe('isSiteReady', () => {
-  let mockSiteData: jest.Mocked<LocalSiteDataAccessor>;
+  let mockLocalServices: jest.Mocked<LocalServicesBridge>;
   let mockMySQLExtractor: jest.Mocked<MySQLExtractor>;
 
   beforeEach(() => {
-    mockSiteData = {
+    mockLocalServices = {
       getSite: jest.fn(),
-      getSites: jest.fn(),
     } as any;
 
     mockMySQLExtractor = {
@@ -18,10 +17,10 @@ describe('isSiteReady', () => {
     } as any;
   });
 
-  it('should return not ready when site not found in GraphQL', async () => {
-    mockSiteData.getSite.mockReturnValue(null);
+  it('should return not ready when site not found in Local state', async () => {
+    mockLocalServices.getSite.mockReturnValue(null);
 
-    const result = await isSiteReady('test-site', mockSiteData);
+    const result = await isSiteReady('test-site', mockLocalServices);
 
     expect(result).toEqual({
       ready: false,
@@ -30,14 +29,14 @@ describe('isSiteReady', () => {
   });
 
   it('should return not ready when site status is provisioning', async () => {
-    mockSiteData.getSite.mockReturnValue({
+    mockLocalServices.getSite.mockReturnValue({
       id: 'test-site',
       name: 'test-site',
       status: 'provisioning',
       path: '/path/to/site',
     });
 
-    const result = await isSiteReady('test-site', mockSiteData);
+    const result = await isSiteReady('test-site', mockLocalServices);
 
     expect(result).toEqual({
       ready: false,
@@ -46,14 +45,14 @@ describe('isSiteReady', () => {
   });
 
   it('should return not ready when site status is halted', async () => {
-    mockSiteData.getSite.mockReturnValue({
+    mockLocalServices.getSite.mockReturnValue({
       id: 'test-site',
       name: 'test-site',
       status: 'halted',
       path: '/path/to/site',
     });
 
-    const result = await isSiteReady('test-site', mockSiteData);
+    const result = await isSiteReady('test-site', mockLocalServices);
 
     expect(result).toEqual({
       ready: false,
@@ -62,14 +61,14 @@ describe('isSiteReady', () => {
   });
 
   it('should return not ready when site path does not exist', async () => {
-    mockSiteData.getSite.mockReturnValue({
+    mockLocalServices.getSite.mockReturnValue({
       id: 'test-site',
       name: 'test-site',
       status: 'running',
       path: '/nonexistent/path',
     });
 
-    const result = await isSiteReady('test-site', mockSiteData);
+    const result = await isSiteReady('test-site', mockLocalServices);
 
     expect(result).toEqual({
       ready: false,
@@ -78,7 +77,7 @@ describe('isSiteReady', () => {
   });
 
   it('should return not ready when MySQL socket is missing', async () => {
-    mockSiteData.getSite.mockReturnValue({
+    mockLocalServices.getSite.mockReturnValue({
       id: 'test-site',
       name: 'test-site',
       status: 'running',
@@ -86,16 +85,16 @@ describe('isSiteReady', () => {
     });
     mockMySQLExtractor.isAvailable.mockReturnValue(false);
 
-    const result = await isSiteReady('test-site', mockSiteData, mockMySQLExtractor);
+    const result = await isSiteReady('test-site', mockLocalServices, mockMySQLExtractor);
 
     expect(result).toEqual({
       ready: false,
-      reason: 'MySQL not accepting connections',
+      reason: 'MySQL socket does not exist',
     });
   });
 
   it('should return not ready when MySQL connection fails', async () => {
-    mockSiteData.getSite.mockReturnValue({
+    mockLocalServices.getSite.mockReturnValue({
       id: 'test-site',
       name: 'test-site',
       status: 'running',
@@ -104,7 +103,7 @@ describe('isSiteReady', () => {
     mockMySQLExtractor.isAvailable.mockReturnValue(true);
     mockMySQLExtractor.testConnection.mockResolvedValue(false);
 
-    const result = await isSiteReady('test-site', mockSiteData, mockMySQLExtractor);
+    const result = await isSiteReady('test-site', mockLocalServices, mockMySQLExtractor);
 
     expect(result).toEqual({
       ready: false,
@@ -113,7 +112,7 @@ describe('isSiteReady', () => {
   });
 
   it('should return ready when all checks pass', async () => {
-    mockSiteData.getSite.mockReturnValue({
+    mockLocalServices.getSite.mockReturnValue({
       id: 'test-site',
       name: 'test-site',
       status: 'running',
@@ -122,7 +121,7 @@ describe('isSiteReady', () => {
     mockMySQLExtractor.isAvailable.mockReturnValue(true);
     mockMySQLExtractor.testConnection.mockResolvedValue(true);
 
-    const result = await isSiteReady('test-site', mockSiteData, mockMySQLExtractor);
+    const result = await isSiteReady('test-site', mockLocalServices, mockMySQLExtractor);
 
     expect(result).toEqual({
       ready: true,
