@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.5.2] — 2026-07-27
+
+### Fixed
+- **MySQL "Access denied" errors during site provisioning** ([#51](https://github.com/jpollock/local-addon-nexus-ai/issues/51)) — 
+  Sites are now validated as ready (status=running, MySQL accepting connections) before automatic indexing begins. 
+  Prevents race condition where MySQL credentials are not yet provisioned when indexing starts.
+- **"Site not found" errors from queued work after site deletion** ([#51](https://github.com/jpollock/local-addon-nexus-ai/issues/51)) — 
+  Deleting a site now cancels any in-progress indexing and cleans up graph.db, metadata cache, and vector index entries.
+
+### Changed
+- Added centralized site readiness check (`isSiteReady()`) before automatic work
+- Added `siteDeleted` lifecycle hook to cancel queued indexing operations
+- Removed redundant 30-second database polling from `siteStarted` hook
+
+### Technical Details
+- New `isSiteReady()` function validates site existence, status=running, filesystem path exists, and MySQL connectivity
+- `ContentPipeline` now tracks active indexing operations via `activeSites` Set and supports cancellation via `cancelSite()`
+- Fail-closed design: unknown or transitional site states treated as "not ready"
+- Cancellation checks at strategic points: before expensive operations, after file scan, before MySQL extraction, during embedding loop
+
+---
+
 ## [0.5.1] — 2026-07-10
 
 ### Added
