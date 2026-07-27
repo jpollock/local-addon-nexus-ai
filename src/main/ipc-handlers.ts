@@ -1373,6 +1373,49 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.REMOVE_WP_AI, async (_event: any, siteId: string) => {
+    try {
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      // Auto-start if needed for WP-CLI
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      let wasAutoStarted = false;
+      if (statuses[validated] !== 'running') {
+        await localServicesBridge.startSite(validated);
+        wasAutoStarted = true;
+        await waitForDatabaseReady(validated, localServicesBridge, localLogger, 30000);
+      }
+
+      // Deactivate WP AI plugin and all known provider plugins
+      const pluginsToDeactivate = [
+        'ai',
+        'ai-provider-for-anthropic',
+        'ai-provider-for-openai',
+        'ai-provider-for-google',
+        'ai-provider-for-ollama',
+        'ai-provider-for-local-gateway',
+      ];
+      for (const slug of pluginsToDeactivate) {
+        await localServicesBridge.wpCliRun(validated, ['plugin', 'deactivate', slug]).catch(() => {});
+      }
+
+      // Clear per-site AI config from Nexus storage
+      const siteConfigs = (registryStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+      delete siteConfigs[validated];
+      registryStorage.set(STORAGE_KEYS.SITE_AI_CONFIG, siteConfigs);
+
+      if (wasAutoStarted) {
+        await localServicesBridge.stopSite(validated).catch(() => {});
+      }
+
+      localLogger.info(`[NexusAI] WP AI removed from site ${validated}`);
+      return { success: true };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] REMOVE_WP_AI error:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // Event Tracking & Visibility (Sprint 1)
   // ---------------------------------------------------------------------------

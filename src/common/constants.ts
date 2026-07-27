@@ -27,6 +27,7 @@ export const IPC_CHANNELS = {
   SETUP_AI: `${ADDON_PREFIX}:setup-ai`,
   GET_SITE_AI_CONFIG: `${ADDON_PREFIX}:ai:get-site-config`,
   SWITCH_AI_PROVIDER: `${ADDON_PREFIX}:ai:switch-provider`,
+  REMOVE_WP_AI: `${ADDON_PREFIX}:ai:remove-wp-ai`,
   GET_WP_VERSION: `${ADDON_PREFIX}:get-wp-version`,
   UPGRADE_WP: `${ADDON_PREFIX}:upgrade-wp`,
 

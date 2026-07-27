@@ -851,13 +851,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
           React.createElement('span', { style: { ...badgeBase, background: 'rgba(81,187,123,.15)', color: '#51bb7b' } }, 'Active'),
           connectorBadge,
         ),
-        React.createElement('button', {
-          style: {
-            fontSize: 11, background: 'none', border: 'none',
-            color: '#9ca3af', cursor: 'pointer', fontFamily: 'inherit', padding: '2px 4px',
-          },
-          onClick: () => this.handleWpAiChange(),
-        }, 'Change →'),
       );
 
       const dotGreen: React.CSSProperties = {
@@ -910,10 +903,37 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
           )
         : null;
 
+      // Footer row: Change connector + Remove WP AI
+      const footerRow = React.createElement('div', {
+        style: {
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+          gap: 8, padding: '8px 14px',
+          borderTop: '1px solid rgba(255,255,255,0.04)',
+        },
+      },
+        React.createElement('button', {
+          style: {
+            fontSize: 11, padding: '3px 10px', borderRadius: 4,
+            border: '1px solid #374151', background: 'none', color: '#9ca3af',
+            cursor: 'pointer', fontFamily: 'inherit',
+          },
+          onClick: () => this.handleWpAiChange(),
+        }, 'Change connector'),
+        React.createElement('button', {
+          style: {
+            fontSize: 11, padding: '3px 10px', borderRadius: 4,
+            border: '1px solid #374151', background: 'none', color: '#f87171',
+            cursor: 'pointer', fontFamily: 'inherit',
+          },
+          onClick: () => this.handleWpAiRemove(),
+        }, 'Remove WP AI'),
+      );
+
       return React.createElement('div', { style: { ...styles.cardFull, padding: 0, borderColor: '#1e4620' } },
         head,
         wpAiRow,
         powerRow,
+        footerRow,
       );
     }
 
@@ -1267,6 +1287,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     }
   };
 
+  /** Fresh install (no existing config) — always uses SETUP_AI. */
   handleWpAiSetup = async (provider: string): Promise<void> => {
     const { site, electron } = this.props;
     const ipc = electron.ipcRenderer;
@@ -1275,7 +1296,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       const result = await ipc.invoke(IPC_CHANNELS.SETUP_AI, site.id, provider) as { success: boolean; message: string } | null;
       if (!this.mounted) return;
       if (result?.success) {
-        this.setState({ wpAiSettingUp: false, wpAiSetupError: null });
+        this.setState({ wpAiSettingUp: false, wpAiSetupError: null, wpAiPickerChoice: null });
         await this.fetchData();
       } else {
         this.setState({ wpAiSettingUp: false, wpAiSetupError: result?.message ?? 'Setup failed' });
@@ -1285,14 +1306,61 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     }
   };
 
+  /** Switch from an existing provider to a new one — uses SWITCH_AI_PROVIDER
+   *  which deactivates the old plugin before installing the new one. */
+  handleWpAiSwitch = async (provider: string): Promise<void> => {
+    const { site, electron } = this.props;
+    const ipc = electron.ipcRenderer;
+    this.setState({ wpAiSettingUp: true, wpAiSetupError: null });
+    try {
+      const result = await ipc.invoke(IPC_CHANNELS.SWITCH_AI_PROVIDER, site.id, provider) as { success: boolean; error?: string } | null;
+      if (!this.mounted) return;
+      if (result?.success) {
+        this.setState({ wpAiSettingUp: false, wpAiSetupError: null, wpAiPickerChoice: null });
+        await this.fetchData();
+      } else {
+        this.setState({ wpAiSettingUp: false, wpAiSetupError: result?.error ?? 'Switch failed' });
+      }
+    } catch (err: any) {
+      if (this.mounted) this.setState({ wpAiSettingUp: false, wpAiSetupError: String(err?.message ?? err) });
+    }
+  };
+
+  /** Remove WP AI from this site — deactivates the WP AI plugin and clears config. */
+  handleWpAiRemove = async (): Promise<void> => {
+    const { site, electron } = this.props;
+    const ipc = electron.ipcRenderer;
+    this.setState({ wpAiSettingUp: true, wpAiSetupError: null });
+    try {
+      const result = await ipc.invoke(IPC_CHANNELS.REMOVE_WP_AI, site.id) as { success: boolean; error?: string } | null;
+      if (!this.mounted) return;
+      this.setState({ wpAiSettingUp: false, wpAiPickerChoice: null, wpAiSetupError: result?.success === false ? (result.error ?? 'Remove failed') : null });
+      await this.fetchData();
+    } catch (err: any) {
+      if (this.mounted) this.setState({ wpAiSettingUp: false, wpAiSetupError: String(err?.message ?? err) });
+    }
+  };
+
   handleWpAiConnect = async (): Promise<void> => {
-    const { wpAiPickerChoice, wpAiDirectProvider } = this.state;
+    const { wpAiPickerChoice, wpAiDirectProvider, wpAiConnector } = this.state;
+    const isSwitch = wpAiConnector !== null; // true = changing existing config
+
     if (wpAiPickerChoice === 'power') {
+      // Power always uses the Hub connect + SETUP_AI flow regardless of switching
       this.handleIwConnect();
     } else if (wpAiPickerChoice === 'local-gateway') {
-      await this.handleWpAiSetup('local-gateway');
+      if (isSwitch) {
+        await this.handleWpAiSwitch('local-gateway');
+      } else {
+        await this.handleWpAiSetup('local-gateway');
+      }
     } else if (wpAiPickerChoice === 'direct') {
-      await this.handleWpAiSetup(wpAiDirectProvider ?? 'anthropic');
+      const provider = wpAiDirectProvider ?? 'anthropic';
+      if (isSwitch) {
+        await this.handleWpAiSwitch(provider);
+      } else {
+        await this.handleWpAiSetup(provider);
+      }
     }
   };
 
