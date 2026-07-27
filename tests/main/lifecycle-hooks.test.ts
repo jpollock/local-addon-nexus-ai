@@ -36,6 +36,7 @@ describe('registerLifecycleHooks', () => {
         errors: [],
       }),
       removeSite: jest.fn().mockResolvedValue(undefined),
+      cancelSite: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     indexRegistry = new IndexRegistry(createMockStorage());
@@ -98,6 +99,47 @@ describe('registerLifecycleHooks', () => {
 
     expect(logger.error).toHaveBeenCalled();
   });
+
+  test('registers siteDeleted hook', () => {
+    expect(hooks.siteDeleted).toBeDefined();
+  });
+
+  test('siteDeleted calls cancelSite on pipeline', async () => {
+    (pipeline as any).cancelSite = jest.fn().mockResolvedValue(undefined);
+
+    await hooks.siteDeleted({ id: 'site1', name: 'My Site', path: '/tmp/site' });
+
+    expect((pipeline as any).cancelSite).toHaveBeenCalledWith('site1');
+  });
+
+  test('siteDeleted calls removeSite on pipeline', async () => {
+    (pipeline as any).cancelSite = jest.fn().mockResolvedValue(undefined);
+
+    await hooks.siteDeleted({ id: 'site1', name: 'My Site', path: '/tmp/site' });
+
+    expect(pipeline.removeSite).toHaveBeenCalledWith('site1');
+  });
+
+  test('siteDeleted logs cancellation message', async () => {
+    (pipeline as any).cancelSite = jest.fn().mockResolvedValue(undefined);
+
+    await hooks.siteDeleted({ id: 'site1', name: 'My Site', path: '/tmp/site' });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('Site being deleted'),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('Cleanup complete'),
+    );
+  });
+
+  test('siteDeleted logs errors without throwing', async () => {
+    (pipeline as any).cancelSite = jest.fn().mockRejectedValue(new Error('cancel failed'));
+
+    await hooks.siteDeleted({ id: 'site1', name: 'My Site', path: '/tmp/site' });
+
+    expect(logger.error).toHaveBeenCalled();
+  });
 });
 
 describe('readyPromise gate', () => {
@@ -134,6 +176,7 @@ describe('readyPromise gate', () => {
         errors: [],
       }),
       removeSite: jest.fn().mockResolvedValue(undefined),
+      cancelSite: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     indexRegistry = new IndexRegistry(createMockStorage());
