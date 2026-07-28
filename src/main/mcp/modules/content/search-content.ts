@@ -40,7 +40,10 @@ export const searchContentHandler: McpToolHandler = {
       'For searching across all sites simultaneously, use search_across_sites. ' +
       'Works for both local sites (by name/domain) and WPE installs (by install name, e.g. "localwpe"). ' +
       'WPE install content is indexed by wpe_sync_sites — run that first if results are missing. ' +
-      'Returns ranked results with titles, excerpts, relevance scores, and customFields (when indexed).',
+      'Returns ranked results with titles, excerpts, relevance scores, and customFields (when indexed). ' +
+      'For attribute/constraint questions (e.g. "easy", "under $20", "in <region>", a range or category), ' +
+      'first call describe_site_fields to see the site\'s structured fields, then search here with ' +
+      'searchMode:"hybrid", postType, and metadataFilters:[{field,op,value}] (op ∈ eq|ne|lt|lte|gt|gte|contains).',
     inputSchema: {
       type: 'object',
       properties: {
