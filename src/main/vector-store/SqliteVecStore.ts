@@ -136,7 +136,7 @@ export class SqliteVecStore implements IVectorStore {
     if (mode === 'keyword' && options.queryText) {
       // Pure BM25 keyword search
       const limit = options.limit ?? 10;
-      const bm25Rows = this.searchBM25(siteId, options.queryText, limit, options.postType);
+      const bm25Rows = this.searchBM25(siteId, options.queryText, limit * 3, options.postType);
       if (bm25Rows.length === 0) return [];
 
       const placeholders = bm25Rows.map(() => '?').join(', ');
@@ -255,7 +255,7 @@ export class SqliteVecStore implements IVectorStore {
   private searchBM25(
     siteId: string,
     queryText: string,
-    limit: number,
+    fetchLimit: number,
     postTypeFilter?: string,
   ): Array<{ rowid: number; rank: number; post_id: number }> {
     const p = this.tablePrefix(siteId);
@@ -271,9 +271,11 @@ export class SqliteVecStore implements IVectorStore {
 
     // FTS5 rank is negative (better = more negative)
     // Query FTS5 table directly, then join docs
-    // NOTE: FTS5 virtual tables use unquoted table names in MATCH clause
+    // NOTE: FTS5 virtual tables use unquoted table names in MATCH clause.
+    // fetchLimit is the number of candidate rows to pull (callers widen it when
+    // post-fetch metadata filtering will discard many).
     const ftsTableName = `${p}_fts`;
-    const ftsLimit = limit * 3;
+    const ftsLimit = Math.max(1, Math.floor(fetchLimit));
     const ftsRows = this.conn.prepare(
       `SELECT rowid, rank FROM ${ftsTableName} WHERE ${ftsTableName} MATCH ? ORDER BY rank LIMIT ${ftsLimit}`
     ).all(sanitized) as Array<{ rowid: number; rank: number }>;
@@ -315,15 +317,21 @@ export class SqliteVecStore implements IVectorStore {
     const p = this.tablePrefix(siteId);
     const limit = options.limit ?? 10;
     const relevanceFloor = options.relevanceFloor ?? 0.3;
-    const fetchLimit = limit * 3;
+    // When metadataFilters are present, post-fetch filtering discards candidates,
+    // so a limit*3 pool can leave far fewer than `limit` results (poor recall).
+    // Widen the candidate pool substantially in that case so filtering has enough
+    // to work with. Capped so huge indexes stay bounded.
+    const hasFilters = (options.metadataFilters?.length ?? 0) > 0;
+    const FILTERED_FETCH_CAP = 1000;
+    const fetchLimit = hasFilters ? Math.max(limit * 3, FILTERED_FETCH_CAP) : limit * 3;
     const blob = Buffer.from(queryVector.buffer, queryVector.byteOffset, queryVector.byteLength);
 
-    // Step 1: Run vector ANN and BM25 in parallel
+    // Step 1: Run vector ANN and BM25 in parallel (same widened pool for both)
     const vecRows = this.conn.prepare(
       `SELECT rowid, distance FROM "${p}_vec" WHERE embedding MATCH ? AND k = ? ORDER BY distance`,
     ).all(blob, fetchLimit) as Array<{ rowid: number; distance: number }>;
 
-    const bm25Rows = this.searchBM25(siteId, queryText, limit, options.postType);
+    const bm25Rows = this.searchBM25(siteId, queryText, fetchLimit, options.postType);
 
     if (vecRows.length === 0 && bm25Rows.length === 0) return [];
 
