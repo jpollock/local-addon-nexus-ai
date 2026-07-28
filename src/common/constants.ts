@@ -325,10 +325,10 @@ export const EMBEDDING_MODELS = {
     dimensions: 384,
     contextWindow: 256,
   },
-  nomic: {
-    dir: 'nomic-embed-text-v1.5',
-    dimensions: 768,
-    contextWindow: 8192,
+  'bge-small': {
+    dir: 'bge-small-en-v1.5',
+    dimensions: 384,
+    contextWindow: 512,
   },
 } as const;
 

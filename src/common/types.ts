@@ -316,7 +316,7 @@ export interface NexusSettings {
   /** Whether the docked AI chat panel is enabled. Default: true */
   dockedPanelEnabled?: boolean;
   /** Which embedding model to use for semantic search. Default: 'minilm' (22MB, fast). 'nomic' = 522MB download, better quality. */
-  embeddingModel?: 'minilm' | 'nomic';
+  embeddingModel?: 'minilm' | 'bge-small';
 }
 
 export interface SiteAIConfig {

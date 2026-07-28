@@ -188,7 +188,7 @@ export default function main(context: any): void {
   // Resolve paths — __dirname is lib/main/, so go up two levels to addon root
   const addonDir = path.resolve(__dirname, '..', '..');
   // Read embedding model setting
-  const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { embeddingModel?: 'minilm' | 'nomic' } | null;
+  const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { embeddingModel?: 'minilm' | 'bge-small' } | null;
   const embeddingModelKey = settings?.embeddingModel ?? 'minilm';
   const modelConfig = EMBEDDING_MODELS[embeddingModelKey];
   const modelsDir = path.join(addonDir, 'models', modelConfig.dir);
