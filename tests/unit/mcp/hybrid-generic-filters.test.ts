@@ -33,4 +33,19 @@ describe('applyMetadataFilters (generic, domain-agnostic)', () => {
       { field: 'distance', op: 'lte', value: 3 },
     ])).toBe(false);
   });
+
+  it('blank/whitespace field does NOT coerce to 0 in numeric ops', () => {
+    const blankDoc = { difficulty: '', region: 'Mountains' };
+    // lte/eq with numeric filter value should fail on blank field (not numeric)
+    expect(applyMetadataFilters(blankDoc, [{ field: 'difficulty', op: 'lte', value: 2 }])).toBe(false);
+    expect(applyMetadataFilters(blankDoc, [{ field: 'difficulty', op: 'eq', value: 0 }])).toBe(false);
+    // String compare: '' !== '0'
+    expect(applyMetadataFilters(blankDoc, [{ field: 'difficulty', op: 'eq', value: '' }])).toBe(true);
+  });
+
+  it('normal numeric comparisons still pass', () => {
+    const numDoc = { elevation: '1200', distance: '5.5' };
+    expect(applyMetadataFilters(numDoc, [{ field: 'elevation', op: 'gte', value: 1000 }])).toBe(true);
+    expect(applyMetadataFilters(numDoc, [{ field: 'distance', op: 'lte', value: 6 }])).toBe(true);
+  });
 });

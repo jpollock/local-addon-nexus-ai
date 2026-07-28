@@ -17,7 +17,7 @@ export function applyMetadataFilters(
     const rawStr = String(raw);
     const numDoc = Number(rawStr);
     const numFilter = Number(f.value);
-    const bothNumeric = Number.isFinite(numDoc) && Number.isFinite(numFilter);
+    const bothNumeric = rawStr.trim() !== '' && Number.isFinite(numDoc) && Number.isFinite(numFilter);
     let ok: boolean;
     switch (f.op) {
       case 'eq':

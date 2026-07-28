@@ -363,10 +363,9 @@ export class SqliteVecStore implements IVectorStore {
       `SELECT rowid, id, title, content, post_type, post_id, metadata FROM "${p}_docs" WHERE rowid IN (${placeholders})`,
     ).all(...rowidParams) as RawDoc[];
 
-    // Step 5: Apply metadata filters and boosts (Pass 1 — build candidates)
-    // RRF scores are tiny (~0.03 max), so we normalize to 0-1 after boosting,
-    // then apply the relevanceFloor on the normalized scale (top result ≈ 1.0).
-    const filters = options.metadataFilters;
+    // Step 5: Apply metadata filters (Pass 1 — build candidates)
+    // RRF scores are tiny (~0.03 max), so we normalize to 0-1 for final output
+    // and apply the relevanceFloor on the normalized scale (top result ≈ 1.0).
     const byPostId = new Map<number, SearchResult>();
 
     for (const doc of docRows) {
@@ -385,9 +384,8 @@ export class SqliteVecStore implements IVectorStore {
           && !applyMetadataFilters(custom, options.metadataFilters)) {
         continue;
       }
-      // (difficulty boost removed — ranking is pure normalized RRF)
 
-      // Dedup by postId (keep best chunk) — raw boosted score for now
+      // Dedup by postId (keep best chunk)
       const existing = byPostId.get(doc.post_id);
       if (!existing || score > existing.score) {
         byPostId.set(doc.post_id, {
