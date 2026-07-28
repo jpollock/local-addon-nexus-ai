@@ -36,6 +36,21 @@ export const searchContentHandler: McpToolHandler = {
           type: 'number',
           description: 'Minimum relevance score (0-1). Results below this are filtered out. Default: 0.3',
         },
+        searchMode: {
+          type: 'string',
+          description: 'Search mode: "semantic" (vector only, default), "hybrid" (vector + BM25 + metadata), "keyword" (BM25 only)',
+          enum: ['semantic', 'hybrid', 'keyword'],
+        },
+        metadataFilters: {
+          type: 'object',
+          description: 'Metadata filters for hybrid search',
+          properties: {
+            minDifficulty: { type: 'number', description: 'Minimum difficulty (1-5)' },
+            maxDifficulty: { type: 'number', description: 'Maximum difficulty (1-5)' },
+            maxDistance: { type: 'number', description: 'Maximum distance in miles' },
+            maxElevation: { type: 'number', description: 'Maximum elevation gain in feet' },
+          },
+        },
       },
       required: ['site', 'query'],
     },
@@ -77,6 +92,9 @@ export const searchContentHandler: McpToolHandler = {
       limit,
       postType: args.postType as string | undefined,
       relevanceFloor: args.min_score as number | undefined,
+      searchMode: args.searchMode as 'semantic' | 'hybrid' | 'keyword' | undefined,
+      metadataFilters: args.metadataFilters as any,
+      queryText: args.query as string,
     });
 
     if (results.length === 0) {

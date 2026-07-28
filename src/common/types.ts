@@ -55,6 +55,8 @@ export interface SearchOptions {
   relevanceFloor?: number;
   /** Search mode: 'semantic' (vector only, default), 'hybrid' (vector + BM25 + metadata), 'keyword' (BM25 only) */
   searchMode?: 'semantic' | 'hybrid' | 'keyword';
+  /** Query text (required for hybrid and keyword modes) */
+  queryText?: string;
   /** Metadata filters for hybrid search */
   metadataFilters?: {
     minDifficulty?: number;  // 1-5
