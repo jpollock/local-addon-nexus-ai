@@ -679,7 +679,7 @@ Expected: all PASS.
 If the better-sqlite3 binary is currently built for Electron (from a prior `npm run rebuild`), the full suite will throw `NODE_MODULE_VERSION` — run `npm install` first to restore the system-Node binary (MODULE_VERSION 127), then:
 
 Run: `npm test`
-Expected: no NEW failures introduced by this work. (Per project notes, ~5 pre-existing suite failures are unrelated native-module issues; the LanceDB `CustomGC` open-handle warning after a clean run is expected.)
+Expected: no NEW failures introduced by this work. (Per project notes, ~5 pre-existing suite failures are unrelated native-module issues.)
 
 - [ ] **Step 4: Commit any fix the gates surfaced** (skip if Steps 1-3 were clean)
 

@@ -510,7 +510,7 @@
     </tr>
     <tr>
       <td><code>17-indexing-levels</code></td>
-      <td>L1/L2/L3 explicit verification: FileScanner → MySQLExtractor → LanceDB</td>
+      <td>L1/L2/L3 explicit verification: FileScanner → MySQLExtractor → sqlite-vec</td>
       <td><span class="badge proven">✓ Pass</span></td>
     </tr>
     <tr>
@@ -599,7 +599,7 @@
       <td>Preferences → <code>wpeSyncAutoEnabled</code> (default: off) · <code>wpeSyncIntervalHours</code> (default: 8h)</td>
     </tr>
     <tr>
-      <td><div class="feature-name">WPE content indexing</div><div class="feature-detail">SSH WP-CLI: posts/pages/CPTs → LanceDB</div></td>
+      <td><div class="feature-name">WPE content indexing</div><div class="feature-detail">SSH WP-CLI: posts/pages/CPTs → sqlite-vec</div></td>
       <td>Pulls posts via SSH WP-CLI and builds vector index for semantic search. This is what the user sees as "content pulling". Runs on schedule if enabled.</td>
       <td>Preferences → <code>wpeContentIndexAutoEnabled</code> (default: off) · <code>wpeContentIndexIntervalHours</code></td>
     </tr>

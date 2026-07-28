@@ -71,15 +71,11 @@ npm run rebuild
 
 **`npm test` exits cleanly.** `jest.config.js` has `forceExit: true` intentionally.
 
-After every test run you'll see:
-```
-Jest has detected the following 1 open handle potentially keeping Jest from exiting:
-  ●  CustomGC  (from @lancedb/lancedb)
-```
+Native modules (sqlite-vec, onnxruntime) can register background threads/handles with Node's event loop at import time that Jest's sandbox cannot drain naturally. `forceExit: true` makes Jest exit once all tests complete instead of hanging; `detectOpenHandles: true` keeps any such handle visible so a *new*, real leak isn't silently masked.
 
-This is **expected and unfixable at the app level.** LanceDB's Rust native module registers a background GC thread with Node's event loop on import. There is no API to shut it down. `forceExit: true` is the correct fix — `detectOpenHandles: true` keeps it visible so new handles don't get silently masked.
+> Historical: this note used to describe LanceDB's `CustomGC` handle. The vector store was migrated from LanceDB to **sqlite-vec** (`src/main/vector-store/SqliteVecStore.ts`) and `@lancedb/lancedb` is no longer a dependency, so that handle no longer appears — but the native-module rationale for `forceExit` still stands.
 
-**See:** `docs/NATIVE_MODULES.md#lancedb-customgc-open-handle` for details.
+**See:** `docs/NATIVE_MODULES.md` for details.
 
 ---
 

@@ -133,7 +133,7 @@ src/main/
 ├── mcp/                    ✅ MCP server + 11 tool modules
 ├── content/                ✅ Extraction pipeline
 ├── embeddings/             ✅ ONNX inference
-├── vector-store/           ✅ LanceDB wrapper
+├── vector-store/           ✅ sqlite-vec wrapper
 ├── events/                 ✅ Event processing
 ├── graph/                  ✅ Graph database (SQLite)
 ├── ai-gateway/             ✅ Credential proxy

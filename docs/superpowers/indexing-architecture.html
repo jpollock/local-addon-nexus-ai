@@ -187,7 +187,7 @@ td.cr{color:var(--rd);font-size:12px}
 
   <h2>Three Separate Systems</h2>
   <div class="info-grid">
-    <div class="info-box"><div class="info-box-icon">📦</div><div class="info-box-title">Content Index</div><div class="info-box-sub">LanceDB vectors<br>Local sites only<br>Requires running site</div></div>
+    <div class="info-box"><div class="info-box-icon">📦</div><div class="info-box-title">Content Index</div><div class="info-box-sub">sqlite-vec vectors<br>Local sites only<br>Requires running site</div></div>
     <div class="info-box"><div class="info-box-icon">👤</div><div class="info-box-title">Digital Twin</div><div class="info-box-sub">SiteMetadataCache<br>Local + WPE<br>WP-CLI on site start</div></div>
     <div class="info-box"><div class="info-box-icon">🗄</div><div class="info-box-title">Graph DB</div><div class="info-box-sub">SQLite<br>Plugins, themes, users<br>Local + WPE metadata</div></div>
   </div>
@@ -197,7 +197,7 @@ td.cr{color:var(--rd);font-size:12px}
   <h2>Search Capability Today</h2>
   <table>
     <tr><th>Site type</th><th>Keyword</th><th>Semantic</th><th>In Discover</th></tr>
-    <tr><td>Local (indexed, running)</td><td>✅ LanceDB FTS</td><td>✅ ONNX vectors</td><td>✅ Yes</td></tr>
+    <tr><td>Local (indexed, running)</td><td>✅ SQLite FTS5</td><td>✅ ONNX vectors</td><td>✅ Yes</td></tr>
     <tr><td>Local (halted, never indexed)</td><td>❌ Nothing</td><td>❌ Nothing</td><td>❌ Stuck in "waiting"</td></tr>
     <tr><td>WPE (any state)</td><td>❌ Not wired</td><td>❌ Not implemented</td><td>❌ Zero results</td></tr>
   </table>
@@ -236,7 +236,7 @@ td.cr{color:var(--rd);font-size:12px}
         <div class="fa-d"></div>
         <div class="fn">EmbeddingService<br><small style="color:var(--mu)">batch=16, ONNX 384-dim</small></div>
         <div class="fa-d"></div>
-        <div class="fn">VectorStore.upsert<br><small style="color:var(--mu)">LanceDB + FTS index</small></div>
+        <div class="fn">VectorStore.upsert<br><small style="color:var(--mu)">sqlite-vec + FTS5 index</small></div>
         <div class="fa-d"></div>
         <div class="fn fn-end">IndexRegistry.update<br>state = indexed</div>
       </div>
@@ -260,7 +260,7 @@ td.cr{color:var(--rd);font-size:12px}
     <div class="state-tx"><span class="state-tx-from">stale / error</span><span class="state-tx-arrow">→</span><span class="state-tx-to">indexing</span><span class="state-tx-label">site restarts (auto-retry)</span></div>
   </div>
 
-  <h2>LanceDB Table Schema (per site)</h2>
+  <h2>sqlite-vec Table Schema (per site)</h2>
   <pre><code>// Table name: site_{siteId}_content
 {
   id:               string,      // wp_{siteId}_{postId} or _chunk_N
@@ -365,7 +365,7 @@ return cached ?? null;  // stale cache beats nothing</code></pre>
   <h2>Two Separate Stores — Different Purposes</h2>
   <div class="storage-row">
     <div class="storage-box">
-      <div class="storage-box-title">LanceDB (vectors)</div>
+      <div class="storage-box-title">sqlite-vec (vectors)</div>
       <div class="storage-box-items">• Post content as embeddings<br>• Semantic + keyword search<br>• Local sites only<br>• ~100K chunks per site</div>
     </div>
     <div class="storage-box">
@@ -378,7 +378,7 @@ return cached ?? null;  // stale cache beats nothing</code></pre>
     </div>
   </div>
 
-  <div class="callout cd"><strong>Critical gap:</strong> The graph DB <code>content</code> table holds WPE post text (via RemoteContentExtractor) but is not connected to any search path. SEARCH_KEYWORD queries LanceDB only — WPE content is completely unreachable from the Discover tab.</div>
+  <div class="callout cd"><strong>Critical gap:</strong> The graph DB <code>content</code> table holds WPE post text (via RemoteContentExtractor) but is not connected to any search path. SEARCH_KEYWORD queries sqlite-vec only — WPE content is completely unreachable from the Discover tab.</div>
 </div>
 
 <!-- ══════ WPE SYNC ══════ -->
@@ -453,8 +453,8 @@ return cached ?? null;  // stale cache beats nothing</code></pre>
   <h2>Search Backends Today</h2>
   <table>
     <tr><th>Search type</th><th>IPC</th><th>Backend</th><th>Local</th><th>WPE</th></tr>
-    <tr><td>Semantic</td><td>SEARCH</td><td>LanceDB vectorSearch</td><td>✅</td><td>❌</td></tr>
-    <tr><td>Keyword</td><td>SEARCH_KEYWORD</td><td>LanceDB fullTextSearch</td><td>✅</td><td>❌</td></tr>
+    <tr><td>Semantic</td><td>SEARCH</td><td>sqlite-vec vector search</td><td>✅</td><td>❌</td></tr>
+    <tr><td>Keyword</td><td>SEARCH_KEYWORD</td><td>SQLite FTS5</td><td>✅</td><td>❌</td></tr>
     <tr><td>WPE content</td><td>—</td><td>Graph DB content table (not wired)</td><td>N/A</td><td>⚠</td></tr>
   </table>
 </div>
@@ -477,7 +477,7 @@ return cached ?? null;  // stale cache beats nothing</code></pre>
     <div class="issue-icon">🔴</div>
     <div>
       <div class="issue-title">WPE sites return zero results from Discover search</div>
-      <div class="issue-body">SEARCH and SEARCH_KEYWORD only query LanceDB, which contains locally-indexed content only. WPE installs are never included regardless of sync status. A user with 20 WPE sites and 0 local sites gets zero results. The graph DB has a content table but it's not wired to any search handler.</div>
+      <div class="issue-body">SEARCH and SEARCH_KEYWORD only query sqlite-vec, which contains locally-indexed content only. WPE installs are never included regardless of sync status. A user with 20 WPE sites and 0 local sites gets zero results. The graph DB has a content table but it's not wired to any search handler.</div>
     </div>
   </div>
 
@@ -564,7 +564,7 @@ return cached ?? null;  // stale cache beats nothing</code></pre>
   <h2>Target Search Capability Matrix</h2>
   <table>
     <tr><th>Site type</th><th>Keyword</th><th>Semantic</th><th>Requires</th></tr>
-    <tr><td>Local (running once)</td><td>✅ FTS in LanceDB</td><td>✅ ONNX vectors</td><td>Site started + ONNX model loaded</td></tr>
+    <tr><td>Local (running once)</td><td>✅ SQLite FTS5</td><td>✅ ONNX vectors</td><td>Site started + ONNX model loaded</td></tr>
     <tr><td>Local (halted, prev. indexed)</td><td>✅ Persists across stops</td><td>✅ Persists</td><td>Previously indexed while running</td></tr>
     <tr><td>WPE (metadata only)</td><td>⚠ Title + type only</td><td>❌</td><td>WPE CAPI auth</td></tr>
     <tr><td>WPE (content indexed — Phase 2)</td><td>✅ Full text via graph DB FTS5</td><td>✅ ONNX via SSH</td><td>WPE auth + SSH + non-prod permission</td></tr>
@@ -588,7 +588,7 @@ return cached ?? null;  // stale cache beats nothing</code></pre>
     </div>
     <div class="state-box">
       <div class="state-box-name">Content Indexed</div>
-      <div class="state-box-desc">Post content embedded in LanceDB (local) or FTS5 (WPE)</div>
+      <div class="state-box-desc">Post content embedded in sqlite-vec (local) or FTS5 (WPE)</div>
       <div class="state-box-cap">Search: full keyword + semantic</div>
     </div>
   </div>
@@ -660,7 +660,7 @@ ipc.on(IPC_CHANNELS.INDEX_PROGRESS, (_, data) =&gt; {
     <div class="fn">SEARCH_UNIFIED IPC handler</div>
     <div class="flow-branch" style="margin:8px 0">
       <div class="flow-branch-item">
-        <div class="fn">LocalSearcher<br><small style="color:var(--mu)">LanceDB FTS + vectors</small></div>
+        <div class="fn">LocalSearcher<br><small style="color:var(--mu)">SQLite FTS5 + vectors</small></div>
         <div class="fa-d"></div>
         <div class="fn">Local results<br><small style="color:var(--mu)">with semantic score</small></div>
       </div>
@@ -751,12 +751,12 @@ ipc.on(IPC_CHANNELS.INDEX_PROGRESS, (_, data) =&gt; {
   <div class="phase">
     <div class="phase-label">Phase 2 · 3-5 days</div>
     <div class="phase-title">WPE sites appear in Discover search results</div>
-    <div class="phase-desc">Route SEARCH through both LanceDB (local) and graph DB FTS5 (WPE). Result columns show site source clearly.</div>
+    <div class="phase-desc">Route SEARCH through both sqlite-vec (local) and graph DB FTS5 (WPE). Result columns show site source clearly.</div>
   </div>
 
   <ul class="tl">
     <li><div class="tn">1</div><div class="tb"><div class="tt">Enable SQLite FTS5 on graph DB content table</div><div class="td">Add migration in GraphService to create FTS5 virtual table on content(title, content). Enables fast full-text search without loading all rows.</div></div><div class="te">~2h</div></li>
-    <li><div class="tn">2</div><div class="tb"><div class="tt">Add SEARCH_UNIFIED IPC handler</div><div class="td">Queries LanceDB (local semantic + keyword) and graph DB FTS5 (WPE keyword) in parallel. Merges results with source label. Replace dual SEARCH + SEARCH_KEYWORD calls in DiscoverTab.</div></div><div class="te">~3h</div></li>
+    <li><div class="tn">2</div><div class="tb"><div class="tt">Add SEARCH_UNIFIED IPC handler</div><div class="td">Queries sqlite-vec (local semantic + keyword) and graph DB FTS5 (WPE keyword) in parallel. Merges results with source label. Replace dual SEARCH + SEARCH_KEYWORD calls in DiscoverTab.</div></div><div class="te">~3h</div></li>
     <li><div class="tn">3</div><div class="tb"><div class="tt">Run RemoteContentExtractor during WPE sync (opt-in)</div><div class="td">WPEContentIndexer exists but is not called. Add opt-in toggle (off by default) to extract and store WPE post content in graph DB during sync.</div></div><div class="te">~2h</div></li>
     <li><div class="tn">4</div><div class="tb"><div class="tt">DiscoverTab: show WPE sites in keyword column</div><div class="td">Update result cards with a "WPE" badge. Add note in column header: "Local: semantic + keyword / WPE: keyword only".</div></div><div class="te">~2h</div></li>
     <li><div class="tn">5</div><div class="tb"><div class="tt">WPE content sync toggle in Settings</div><div class="td">Settings → WP Engine → Sync Schedule: "Include post content in sync" (off by default, explains SSH usage).</div></div><div class="te">~1h</div></li>
@@ -777,9 +777,9 @@ ipc.on(IPC_CHANNELS.INDEX_PROGRESS, (_, data) =&gt; {
   <h2>Target Architecture</h2>
   <div class="storage-row" style="flex-direction:column;gap:12px">
     <div class="storage-row">
-      <div class="storage-box"><div class="storage-box-title">LocalIndexer</div><div class="storage-box-items">MySQLExtractor + ONNX<br>→ LanceDB (vectors + FTS)<br>→ SiteMetadataCache</div></div>
+      <div class="storage-box"><div class="storage-box-title">LocalIndexer</div><div class="storage-box-items">MySQLExtractor + ONNX<br>→ sqlite-vec (vectors + FTS5)<br>→ SiteMetadataCache</div></div>
       <div class="storage-box"><div class="storage-box-title">WPEMetadataIndexer</div><div class="storage-box-items">CAPI + SSH WP-CLI<br>→ Graph DB (plugins, themes)<br>→ SiteMetadataCache</div></div>
-      <div class="storage-box"><div class="storage-box-title">WPEContentIndexer</div><div class="storage-box-items">SSH + RemoteContentExtractor<br>→ Graph DB (content FTS5)<br>→ LanceDB (optional vectors)</div></div>
+      <div class="storage-box"><div class="storage-box-title">WPEContentIndexer</div><div class="storage-box-items">SSH + RemoteContentExtractor<br>→ Graph DB (content FTS5)<br>→ sqlite-vec (optional vectors)</div></div>
     </div>
     <div style="text-align:center;color:var(--mu);font-size:12px">All three report to ↓</div>
     <div class="storage-box" style="text-align:center">
@@ -871,8 +871,8 @@ ipc.on(IPC_CHANNELS.INDEX_PROGRESS, (_, data) =&gt; {
     <tr><td><code>documentCount</code></td><td>number</td><td>ContentPipeline result</td><td>❌ N/A</td><td>IndexRegistry</td><td>After each index run</td></tr>
     <tr><td><code>chunkCount</code></td><td>number</td><td>ContentPipeline result</td><td>❌ N/A</td><td>IndexRegistry</td><td>After each index run</td></tr>
     <tr><td><code>lastIndexed</code></td><td>timestamp</td><td>ContentPipeline result</td><td>❌ N/A</td><td>IndexRegistry</td><td>After each index run</td></tr>
-    <tr><td><code>vectorTableExists</code></td><td>boolean</td><td>VectorStore.getTable()</td><td>❌ N/A</td><td>LanceDB (derived)</td><td>After index / reset</td></tr>
-    <tr><td><code>ftsIndexExists</code></td><td>boolean</td><td>LanceDB FTS on content</td><td>Graph DB FTS5 (Phase 2)</td><td>LanceDB / Graph DB</td><td>After index</td></tr>
+    <tr><td><code>vectorTableExists</code></td><td>boolean</td><td>VectorStore.getTable()</td><td>❌ N/A</td><td>sqlite-vec (derived)</td><td>After index / reset</td></tr>
+    <tr><td><code>ftsIndexExists</code></td><td>boolean</td><td>SQLite FTS5 on content</td><td>Graph DB FTS5 (Phase 2)</td><td>sqlite-vec / Graph DB</td><td>After index</td></tr>
     <tr><td><code>indexErrors</code></td><td>string[]</td><td>ContentPipeline errors[]</td><td>❌ N/A</td><td>IndexRegistry</td><td>After each index run</td></tr>
   </table>
 

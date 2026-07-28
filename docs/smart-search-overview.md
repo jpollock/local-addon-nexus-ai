@@ -81,7 +81,7 @@ When you're developing in Local, there's no WPE hosting connection. **Nexus AI a
 │  │  find ──────────► EmbeddingService (ONNX)    │    │
 │  │                         │                    │    │
 │  │                         ▼                    │    │
-│  │                   VectorStore (LanceDB)       │    │
+│  │                   VectorStore (sqlite-vec)    │    │
 │  │                                               │    │
 │  │  index/bulkIndex ──► embed + store            │    │
 │  │  delete/deleteAll ──► remove                  │    │
@@ -93,7 +93,7 @@ When you're developing in Local, there's no WPE hosting connection. **Nexus AI a
 │  └──────────────────────────────────────────────┘    │
 │                                                      │
 │  Storage:                                            │
-│  • LanceDB (/nexus-ai/vectors/) — document vectors   │
+│  • sqlite-vec (/nexus-ai/vectors.db) — document vectors   │
 │  • SQLite (/nexus-ai/graph.db)  — synonyms, tracker  │
 │  • ONNX model (all-MiniLM-L6-v2-quantized, 384-dim)  │
 └──────────────────────────────────────────────────────┘
@@ -157,7 +157,7 @@ Here's what happens automatically when you work with a site in Local:
 6. Developer syncs content: WP Admin → Smart Search → Sync
          │
          ▼
-7. atlas-search sends bulkIndex mutations → Nexus embeds + stores in LanceDB
+7. atlas-search sends bulkIndex mutations → Nexus embeds + stores in sqlite-vec
 
 8. WordPress search now uses local semantic index ✅
 ```
@@ -171,7 +171,7 @@ Here's what happens automatically when you work with a site in Local:
 | atlas-search plugin | auto-installed by Nexus | auto-provisioned by WPE |
 | Backend endpoint | `http://127.0.0.1:13000` (Nexus) | WPE Smart Search cloud |
 | Credentials | Local token (Nexus-generated) | WPE-provisioned credentials |
-| Vector index | LanceDB on your Mac | WPE managed cloud index |
+| Vector index | sqlite-vec on your Mac | WPE managed cloud index |
 | MU plugin | Auto-generated, excluded from push | Not present (WPE manages config) |
 | Synonyms / tracker data | Local SQLite | WPE cloud (separate) |
 

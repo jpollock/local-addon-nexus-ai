@@ -1,7 +1,7 @@
 /**
  * SearchTab — Unified fleet search.
  *
- * One search box queries both content vectors (LanceDB) and fleet metadata
+ * One search box queries both content vectors (sqlite-vec) and fleet metadata
  * (graph.db plugins/themes/versions). Results appear in tabbed columns:
  * All / Sites / Content.
  *

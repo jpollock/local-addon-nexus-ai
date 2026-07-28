@@ -2164,7 +2164,7 @@ renderTabBar(): React.ReactNode {
         React.createElement('div', { style: { fontSize: '12px', marginBottom: '10px', lineHeight: 1.5 } },
           React.createElement('strong', { style: { color: '#f87171' } }, 'This will permanently delete:'),
           React.createElement('ul', { style: { margin: '6px 0 0 16px', color: 'var(--nxai-card-sub)' } },
-            React.createElement('li', null, `LanceDB vector tables for ${indexedCount} site${indexedCount !== 1 ? 's' : ''} (${totalDocs.toLocaleString()} documents)`),
+            React.createElement('li', null, `sqlite-vec vector tables for ${indexedCount} site${indexedCount !== 1 ? 's' : ''} (${totalDocs.toLocaleString()} documents)`),
             React.createElement('li', null, 'All IndexRegistry entries (sites will show as unindexed)'),
           ),
           React.createElement('div', { style: { marginTop: '6px', color: 'var(--nxai-card-sub)' } },

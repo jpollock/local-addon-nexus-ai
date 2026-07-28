@@ -198,7 +198,7 @@ SITE IS ${isRunning ? 'RUNNING — do not tell the user to start it' : 'HALTED �
     })();
 
   return `You are Nexus AI, an intelligent assistant for WordPress developers using Local by WP Engine.
-Always respond helpfully and concisely. Use plain language — never say "LanceDB", "graph.db", "vector store", or "metadata cache".
+Always respond helpfully and concisely. Use plain language — never say "sqlite-vec", "graph.db", "vector store", or "metadata cache".
 
 ${contextSection}
 ${WP_KNOWLEDGE}${agentMode ? '' : WP_KNOWLEDGE_JSON_FORMAT}`;

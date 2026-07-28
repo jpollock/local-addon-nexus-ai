@@ -29,7 +29,7 @@ Symlink or copy into Local's addon path, then restart Local.
 
 - Local 9.0.0 or later
 - Node.js 20+
-- ~200 MB disk space (ONNX model + LanceDB binaries)
+- ~200 MB disk space (ONNX model + better-sqlite3/sqlite-vec binaries)
 - Ollama (optional, for local AI chat)
 
 ## Dashboard
@@ -231,7 +231,7 @@ Nexus AI indexes WordPress content for semantic search:
 2. **Extract** — Pulls content from MySQL (posts, pages, products, ACF fields, media)
 3. **Chunk** — Splits long content at sentence boundaries
 4. **Embed** — Generates 384-dimensional vectors using all-MiniLM-L6-v2 (runs locally via ONNX)
-5. **Index** — Stores vectors in LanceDB with cosine distance search
+5. **Index** — Stores vectors in sqlite-vec (`vec0` tables) with cosine distance search
 
 Indexing happens on-demand via Operations → ⚡ Index sites, or per-site via the Site Status panel, or programmatically via the `reindex_site` MCP tool. Content is automatically re-indexed when a site starts if auto-indexing is enabled (Settings → Content index interval).
 

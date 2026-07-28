@@ -209,7 +209,7 @@ export default function main(context: any): void {
   const indexRegistry = new IndexRegistry(registryStorage);
   const graphService = new GraphService(graphDbPath, localLogger);
 
-  // Initialize GraphDB early — SQLite is lightweight and independent of LanceDB.
+  // Initialize GraphDB early — SQLite is lightweight and independent of the vector store.
   // This ensures session tables are ready before any chat IPC fires, even if the
   // VectorStore/EmbeddingService chain fails or is still in progress.
   (async () => {

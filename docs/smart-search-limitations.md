@@ -11,19 +11,19 @@ The `semanticSearch.searchBias` parameter (0–10) is documented as controlling 
 - `searchBias = 0`: FTS-only, no embedding
 - `searchBias > 0`: embedding generated and used for vector search
 
-The actual weighting between vector score and FTS score is handled internally by LanceDB's hybrid search and cannot be controlled per-query. Cloud behavior: continuously adjustable blend.
+The actual weighting between vector score and FTS (BM25) score is handled by the app's Reciprocal Rank Fusion (RRF) over the two result sets and cannot be controlled per-query. Cloud behavior: continuously adjustable blend.
 
 ### `fuzzyDistance` is binary (on/off), not per-word
 
-`tolerance: { name: "fuzzy", fuzzyDistance: 2 }` is accepted but `fuzzyDistance` is ignored. LanceDB FTS has fuzzy support but does not expose per-word character distance configuration. Typo tolerance works via semantic embeddings instead.
+`tolerance: { name: "fuzzy", fuzzyDistance: 2 }` is accepted but `fuzzyDistance` is ignored. SQLite FTS5 does not support per-word edit-distance (fuzzy) matching. Typo tolerance works via semantic embeddings instead.
 
 ### Geographic search is silently ignored
 
-`geoConstraints` in `find` queries is accepted without error but has no effect on results. LanceDB is a vector database, not a geo-search engine.
+`geoConstraints` in `find` queries is accepted without error but has no effect on results. sqlite-vec is a vector-search extension, not a geo-search engine.
 
 ### `queryRescorer` is silently ignored
 
-The `queryRescorer` parameter for re-ranking top results is accepted but not applied. Results are ranked by LanceDB's hybrid scoring.
+The `queryRescorer` parameter for re-ranking top results is accepted but not applied. Results are ranked by the app's FTS5 + RRF hybrid scoring.
 
 ### Field weighting (`fields`, `options.fields.types`) is ignored
 

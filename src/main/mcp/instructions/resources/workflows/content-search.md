@@ -4,7 +4,7 @@ Index WordPress site content for semantic search using AI embeddings.
 
 ## How It Works
 
-Nexus AI extracts content from WordPress sites (posts, pages, products, media), splits it into chunks, generates vector embeddings using a local AI model (all-MiniLM-L6-v2), and stores them in a vector database (LanceDB). You can then search content using natural language queries.
+Nexus AI extracts content from WordPress sites (posts, pages, products, media), splits it into chunks, generates vector embeddings using a local AI model (all-MiniLM-L6-v2), and stores them in a vector database (sqlite-vec). You can then search content using natural language queries.
 
 ## Index a Site
 

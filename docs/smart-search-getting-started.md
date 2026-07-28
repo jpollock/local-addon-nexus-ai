@@ -1,6 +1,6 @@
 # Smart Search Locally — Getting Started
 
-Nexus AI makes WP Engine Smart Search work in Local, backed by LanceDB and ONNX embeddings on your machine instead of WPE's cloud.
+Nexus AI makes WP Engine Smart Search work in Local, backed by sqlite-vec and ONNX embeddings on your machine instead of WPE's cloud.
 
 ## Prerequisites
 

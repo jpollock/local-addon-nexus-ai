@@ -325,7 +325,7 @@
     </tr>
     <tr>
       <td>G14</td>
-      <td>LanceDB has no durability mechanism on abnormal exit</td>
+      <td>Vector index integrity check after abnormal exit (SQLite WAL now provides crash recovery)</td>
       <td>Resilience</td>
       <td><span class="tag p-medium">Medium</span></td>
       <td><span class="tag e-large">Large</span></td>
@@ -582,21 +582,21 @@ export const nexusStore = new NexusStore();</div>
   <div class="proposal-header">
     <span class="tag p-medium">Medium</span>
     <span class="tag phase-3">Phase 3</span>
-    <h3>G14 — LanceDB durability</h3>
+    <h3>G14 — Vector index durability &amp; integrity</h3>
     <span style="color:#8b949e; font-size:11px;">~1 week (research-heavy)</span>
   </div>
   <div class="proposal-body">
-    <p>LanceDB uses its own WAL mechanism (Lance format). On abnormal exit, the WAL may not be committed. Currently we have no recovery strategy — if vectors are lost, the user must re-index.</p>
+    <p>The vector store runs on SQLite (sqlite-vec via better-sqlite3) in WAL mode (<code>synchronous = NORMAL</code>). SQLite automatically recovers the WAL on the next open, so an application crash does not corrupt or lose committed vectors — a large improvement over the previous LanceDB layout, which had no automatic recovery. Residual risk is limited to OS crash / power loss, where the last uncheckpointed transaction(s) may be lost (the database stays consistent, not corrupted). An integrity check is still worthwhile to catch partial/aborted indexing runs.</p>
 
     <h4>Short-term mitigation</h4>
     <ul>
-      <li>Detect vector loss on startup: compare <code>IndexRegistry</code> document counts against actual LanceDB table row counts. If mismatch, mark affected entries as <code>stale</code> automatically.</li>
+      <li>Detect vector loss on startup: compare <code>IndexRegistry</code> document counts against actual sqlite-vec (<code>vec0</code>) table row counts. If mismatch, mark affected entries as <code>stale</code> automatically.</li>
       <li>Surface a "Some indexes appear corrupted — re-index?" banner rather than silently showing wrong data.</li>
     </ul>
     <h4>Long-term</h4>
     <ul>
-      <li>Investigate LanceDB's <code>optimize()</code> / compaction API for explicit commit control</li>
-      <li>Consider checkpointing strategy: call optimize/compact before shutdown</li>
+      <li>Optionally run <code>PRAGMA wal_checkpoint(TRUNCATE)</code> on graceful shutdown to bound WAL file size (sqlite-vec needs no compaction)</li>
+      <li>Consider <code>PRAGMA synchronous = FULL</code> for the vector DB if power-loss durability is deemed worth the write cost</li>
     </ul>
   </div>
 </div>
@@ -632,10 +632,10 @@ export const nexusStore = new NexusStore();</div>
     <h3>~2 weeks</h3>
     <p style="font-size:11px; color:#8b949e; margin-bottom:10px;">Close remaining durability gaps. Lower urgency.</p>
     <ul>
-      <li><span class="tag phase-3">G14</span> LanceDB startup integrity check + stale detection</li>
+      <li><span class="tag phase-3">G14</span> Vector-store startup integrity check + stale detection</li>
       <li><span class="tag phase-3">G12</span> Local L2: scheduled refresh for long-halted sites</li>
       <li>Remove polling timers from all MobX-migrated components</li>
-      <li>LanceDB compaction/optimize before shutdown (research spike)</li>
+      <li>Optional WAL checkpoint on graceful shutdown to bound WAL size (sqlite-vec needs no compaction)</li>
     </ul>
   </div>
 </div>

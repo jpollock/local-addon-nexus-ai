@@ -111,7 +111,7 @@
         <div class="box green" style="width:155px">
           <div class="box-label">Step 3b</div>
           <div class="box-title">searchFleet()</div>
-          <div class="box-sub">LanceDB — ONNX embedding search on indexed post content</div>
+          <div class="box-sub">sqlite-vec — ONNX embedding search on indexed post content</div>
         </div>
       </div>
     </div>
@@ -277,7 +277,7 @@ Answer:</pre>
       <td>Plugin data only after SSH sync. PHP/WP version from CAPI (always).</td>
     </tr>
     <tr>
-      <td><strong>LanceDB</strong><br><code>nexus-ai/vectors/</code></td>
+      <td><strong>sqlite-vec</strong><br><code>nexus-ai/vectors.db</code></td>
       <td>Post/page content chunks with ONNX embeddings (384-dim)</td>
       <td>ContentPipeline on site start (auto-index) or manual index</td>
       <td>searchFleet() — semantic vector similarity</td>
@@ -448,13 +448,13 @@ Answer:</pre>
     </tr>
     <tr>
       <td><strong>WPE content indexing (Phase 2)</strong></td>
-      <td>"WPE sites about [topic]" → SSH → MySQL → LanceDB</td>
+      <td>"WPE sites about [topic]" → SSH → MySQL → sqlite-vec</td>
       <td><span class="pill partial">High</span> — new WpeContentExtractor</td>
     </tr>
     <tr>
       <td><strong>Site profile vectors</strong></td>
       <td>"sites similar to X", "e-commerce sites" without AI</td>
-      <td><span class="pill partial">Medium</span> — embed metadata text → LanceDB</td>
+      <td><span class="pill partial">Medium</span> — embed metadata text → sqlite-vec</td>
     </tr>
     <tr>
       <td><strong>Plugin category expansion</strong></td>

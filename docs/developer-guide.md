@@ -60,7 +60,7 @@ src/
 │   │   └── providers/       # Ollama, OpenAI, Anthropic, Google, WPE
 │   ├── content/             # Extraction and chunking pipeline
 │   ├── embeddings/          # ONNX inference
-│   ├── vector-store/        # LanceDB wrapper
+│   ├── vector-store/        # sqlite-vec wrapper
 │   └── mcp/                 # MCP server and tools
 │       ├── McpServer.ts     # HTTP server, JSON-RPC handling
 │       ├── tool-registry.ts # Tool registration and execution
@@ -224,7 +224,7 @@ npm run test:eval
 
 ### Integration Tests (`tests/integration/`)
 
-Real ONNX model, real LanceDB, real MCP protocol.
+Real ONNX model, real sqlite-vec, real MCP protocol.
 
 ```bash
 npm run download-model            # Required first
@@ -255,7 +255,7 @@ The build has a post-compile step (`scripts/create-entry-points.js`) that:
 
 ### Packaging
 
-Platform-specific packaging strips unused native binaries (ONNX, LanceDB) to reduce addon size:
+Platform-specific packaging strips unused native binaries (ONNX, better-sqlite3 with sqlite-vec) to reduce addon size:
 
 ```bash
 npm run package:mac-arm    # macOS Apple Silicon

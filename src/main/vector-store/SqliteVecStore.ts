@@ -738,7 +738,7 @@ export class SqliteVecStore implements IVectorStore {
     return { siteId, documentCount: row.doc_count, chunkCount: row.chunk_count, lastIndexed: row.last_indexed };
   }
 
-  // No-op — SQLite doesn't need LanceDB-style compaction
+  // No-op — sqlite-vec doesn't need compaction
   async optimize(_siteId: string): Promise<void> { /* intentional no-op */ }
 
   async close(): Promise<void> {
