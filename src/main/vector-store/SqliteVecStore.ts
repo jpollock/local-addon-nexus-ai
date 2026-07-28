@@ -5,6 +5,7 @@ const sqliteVec = require('sqlite-vec') as { load: (db: unknown) => void; serial
 import { VECTOR_DIMENSIONS } from '../../common/constants';
 import { VectorDocument, SearchOptions, SearchResult, SiteIndexStats } from '../../common/types';
 import type { IVectorStore } from './IVectorStore';
+import { applyMetadataFilters } from './metadata-filters';
 
 export class SqliteVecStore implements IVectorStore {
   private db: Database.Database | null = null;
@@ -380,34 +381,11 @@ export class SqliteVecStore implements IVectorStore {
       const custom = meta.customFields ?? {};
 
       // Metadata filters (exclude if doesn't match)
-      if (filters) {
-        // Difficulty filter
-        if (filters.minDifficulty || filters.maxDifficulty) {
-          const diff = parseInt(custom.difficulty ?? '999');
-          if (!isNaN(diff)) {
-            if (filters.minDifficulty && diff < filters.minDifficulty) continue;
-            if (filters.maxDifficulty && diff > filters.maxDifficulty) continue;
-          }
-        }
-
-        // Distance filter (miles)
-        if (filters.maxDistance) {
-          const dist = parseFloat(custom.distance_miles ?? '999999');
-          if (!isNaN(dist) && dist > filters.maxDistance) continue;
-        }
-
-        // Elevation filter (feet)
-        if (filters.maxElevation) {
-          const elev = parseFloat(custom.elevation_gain_ft ?? '999999');
-          if (!isNaN(elev) && elev > filters.maxElevation) continue;
-        }
+      if (options.metadataFilters && options.metadataFilters.length > 0
+          && !applyMetadataFilters(custom, options.metadataFilters)) {
+        continue;
       }
-
-      // Metadata boost: beginner-friendly trails (difficulty 1-2) get +30% score
-      const diff = parseInt(custom.difficulty ?? '999');
-      if (!isNaN(diff) && diff <= 2) {
-        score *= 1.3;
-      }
+      // (difficulty boost removed — ranking is pure normalized RRF)
 
       // Dedup by postId (keep best chunk) — raw boosted score for now
       const existing = byPostId.get(doc.post_id);

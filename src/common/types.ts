@@ -48,6 +48,14 @@ export interface VectorDocument {
   doc_url: string;
 }
 
+export type MetadataFilterOp = 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte' | 'contains';
+
+export interface MetadataFilter {
+  field: string;
+  op: MetadataFilterOp;
+  value: string | number;
+}
+
 export interface SearchOptions {
   limit: number;
   postType?: string;
@@ -58,12 +66,7 @@ export interface SearchOptions {
   /** Query text (required for hybrid and keyword modes) */
   queryText?: string;
   /** Metadata filters for hybrid search */
-  metadataFilters?: {
-    minDifficulty?: number;  // 1-5
-    maxDifficulty?: number;  // 1-5
-    maxDistance?: number;    // miles
-    maxElevation?: number;   // feet
-  };
+  metadataFilters?: MetadataFilter[];
 }
 
 export interface SearchResult {
