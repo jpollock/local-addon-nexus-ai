@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
-import { IPC_CHANNELS, OLLAMA_POLL_INTERVAL_MS, STORAGE_KEYS } from '../common/constants';
+import { IPC_CHANNELS, OLLAMA_POLL_INTERVAL_MS, STORAGE_KEYS, EMBEDDING_MODELS } from '../common/constants';
 import { OperationTracker } from './operation-tracker';
 import { SqliteVecStore } from './vector-store/index';
 import { EmbeddingService } from './embeddings/EmbeddingService';
@@ -22,6 +22,7 @@ import { registerCompositeTools } from './mcp/modules/composite/index';
 import { registerDbScannerTools } from './mcp/modules/db-scanner/index';
 import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
 import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence/index';
+import { registerIwTools } from './mcp/modules/iw/index';
 import { registerTelemetryTools } from './mcp/modules/telemetry-tools';
 import { getGatewayUsageHandler } from './mcp/modules/ai-gateway/get-gateway-usage';
 import { registerTelemetryControlTools } from './mcp/modules/telemetry-control-tools';
@@ -186,14 +187,23 @@ export default function main(context: any): void {
 
   // Resolve paths — __dirname is lib/main/, so go up two levels to addon root
   const addonDir = path.resolve(__dirname, '..', '..');
-  const modelsDir = path.join(addonDir, 'models', 'all-MiniLM-L6-v2-quantized');
+  // Read embedding model setting
+  const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { embeddingModel?: 'minilm' | 'bge-small' } | null;
+  const embeddingModelKey = settings?.embeddingModel ?? 'minilm';
+  const modelConfig = EMBEDDING_MODELS[embeddingModelKey];
+  const modelsDir = path.join(addonDir, 'models', modelConfig.dir);
+
   const localDataDir = path.join(os.homedir(), 'Library', 'Application Support', 'Local');
   const vectorDbPath = path.join(localDataDir, 'nexus-ai', 'vectors.db');
   const graphDbPath = path.join(localDataDir, 'nexus-ai', 'graph.db');
 
   // Phase 1: Initialize foundation services (async)
   const vectorStore = new SqliteVecStore(vectorDbPath);
-  const embeddingService = new EmbeddingService(modelsDir);
+  const embeddingService = new EmbeddingService(
+    modelsDir,
+    modelConfig.dimensions,
+    modelConfig.contextWindow
+  );
   const fileScanner = new FileScanner();
   const mysqlExtractor = new MySQLExtractor();
   const indexRegistry = new IndexRegistry(registryStorage);
@@ -370,6 +380,7 @@ export default function main(context: any): void {
   registerDbScannerTools(registry);
   registerWpConnectorTools(registry);
   registerFleetIntelligenceTools(registry);
+  registerIwTools(registry);
   registerTelemetryTools(registry);
   registry.register(getGatewayUsageHandler);
   registerTelemetryControlTools(registry);

@@ -9,7 +9,7 @@
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
 import { injectThemeVars } from '../utils/theme';
-import type { NexusSettings, AIProvider, SiteAIConfig, DbScanResult } from '../../common/types';
+import type { NexusSettings, AIProvider, SiteAIConfig, DbScanResult, IwConnectionStatus } from '../../common/types';
 
 interface SiteNexusSectionProps {
   site: { id: string; name: string; path: string; status?: string };
@@ -59,6 +59,9 @@ interface SiteNexusSectionState {
   dbScan: DbScanResult | null;
   dbScanning: boolean;
   detailsExpanded: boolean;
+  iwStatus: IwConnectionStatus | null;
+  iwConnecting: boolean;
+  iwPollInterval: ReturnType<typeof setInterval> | null;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -152,6 +155,9 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     dbScan: null,
     dbScanning: false,
     detailsExpanded: false,
+    iwStatus: null,
+    iwConnecting: false,
+    iwPollInterval: null,
   };
 
   componentDidMount(): void {
@@ -182,6 +188,7 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     if (this._onSettingsApplied) {
       window.removeEventListener('nexus-ai:settings-applied', this._onSettingsApplied);
     }
+    if (this.state.iwPollInterval) clearInterval(this.state.iwPollInterval);
   }
 
   fetchData = async (): Promise<void> => {
@@ -272,6 +279,15 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       if (lastScanResult?.success) this.setState({ dbScan: lastScanResult.scan ?? null });
     } catch {
       // Non-fatal
+    }
+
+    // Fetch IW connection status (non-fatal)
+    try {
+      const iwStatusResult = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null);
+      if (!this.mounted) return;
+      this.setState({ iwStatus: (iwStatusResult as IwConnectionStatus | null) ?? null });
+    } catch {
+      // Non-fatal — .catch() above already converted rejection to null
     }
   };
 
@@ -515,6 +531,47 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
     }
   };
 
+  handleIwConnect = async (): Promise<void> => {
+    const { site, electron } = this.props;
+    const ipc = electron.ipcRenderer;
+    this.setState({ iwConnecting: true });
+    try {
+      const connectResult = await ipc.invoke(IPC_CHANNELS.IW_CONNECT, site.id) as { ok: boolean; error?: string } | null;
+      if (!connectResult?.ok) {
+        if (this.mounted) this.setState({ iwConnecting: false });
+        return;
+      }
+    } catch {
+      if (this.mounted) this.setState({ iwConnecting: false });
+      return;
+    }
+
+    if (!this.mounted) return;
+
+    const started = Date.now();
+    const interval = setInterval(async () => {
+      if (!this.mounted) { clearInterval(interval); return; }
+      const status = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, site.id).catch(() => null) as IwConnectionStatus | null;
+      if (status?.connected || Date.now() - started > 180_000) {
+        clearInterval(interval);
+        this.setState({ iwStatus: status, iwConnecting: false, iwPollInterval: null });
+      } else if (status) {
+        this.setState({ iwStatus: status });
+      }
+    }, 2000);
+
+    this.setState({ iwPollInterval: interval });
+  };
+
+  handleIwDisconnect = async (): Promise<void> => {
+    const { site, electron } = this.props;
+    const ipc = electron.ipcRenderer;
+    await ipc.invoke(IPC_CHANNELS.IW_DISCONNECT, site.id);
+    const status = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, site.id).catch(() => null) as IwConnectionStatus | null;
+    if (!this.mounted) return;
+    this.setState({ iwStatus: status });
+  };
+
   /** Helper to create action button using Local's TextButton if available */
   createActionButton(props: {
     onClick?: () => void;
@@ -598,6 +655,59 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
         e.target.style.textDecoration = 'none';
       },
     }, props.children);
+  }
+
+  renderIwRow(): React.ReactNode {
+    const { iwStatus, iwConnecting } = this.state;
+    if (iwStatus === null) return null;
+
+    const { hubInstalled, connected, copyReset, projectId } = iwStatus;
+    const siteNotRunning = this.props.site.status !== 'running';
+
+    const dotColor = connected
+      ? UI_COLORS.STATUS_RUNNING
+      : copyReset ? UI_COLORS.STATUS_ERROR
+      : 'var(--nxai-status-neutral, #9ca3af)';
+
+    const statusText = connected ? 'Connected'
+      : copyReset ? 'Reconnect needed (site was copied)'
+      : hubInstalled ? 'Not connected'
+      : 'Hub Plugin not installed';
+
+    return React.createElement('li', { className: 'TableListRow', key: 'iw-row' },
+      React.createElement('strong', null, 'WP Engine Power'),
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const } },
+        React.createElement('span', {
+          style: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 },
+        },
+          React.createElement('span', {
+            style: { width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block', flexShrink: 0 },
+          }),
+          statusText,
+        ),
+        connected && projectId
+          ? React.createElement('span', {
+              style: { fontSize: 11, fontFamily: 'monospace', opacity: 0.7 },
+            }, projectId)
+          : null,
+        iwConnecting
+          ? React.createElement('span', { style: { fontSize: 12, opacity: 0.7 } }, 'Waiting for browser…')
+          : connected
+            ? React.createElement('button', {
+                style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, border: '1px solid var(--nxai-card-border, #30363d)', background: 'none', color: 'inherit', cursor: 'pointer', fontFamily: 'inherit' },
+                onClick: this.handleIwDisconnect,
+              }, 'Disconnect')
+            : siteNotRunning
+              ? React.createElement('button', {
+                  style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, border: '1px solid var(--nxai-card-border, #30363d)', background: 'none', color: 'inherit', cursor: 'default', fontFamily: 'inherit', opacity: 0.5 },
+                  disabled: true,
+                }, 'Start site to connect')
+              : React.createElement('button', {
+                  style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, border: 'none', background: UI_COLORS.WPE_BRAND, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' },
+                  onClick: this.handleIwConnect,
+                }, hubInstalled ? (copyReset ? 'Reconnect' : 'Connect') : 'Enable & Connect'),
+      ),
+    );
   }
 
   render(): React.ReactNode {
@@ -931,8 +1041,11 @@ export class SiteNexusSection extends React.Component<SiteNexusSectionProps, Sit
       ),
     );
 
+    const iwRow = this.renderIwRow();
+
     const allRows = [
       ...alwaysRows,
+      ...(iwRow ? [iwRow] : []),
       detailToggle,
       ...(detailsExpanded ? detailRows : []),
     ];

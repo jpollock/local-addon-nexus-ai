@@ -27,6 +27,7 @@ export const IPC_CHANNELS = {
   SETUP_AI: `${ADDON_PREFIX}:setup-ai`,
   GET_SITE_AI_CONFIG: `${ADDON_PREFIX}:ai:get-site-config`,
   SWITCH_AI_PROVIDER: `${ADDON_PREFIX}:ai:switch-provider`,
+  REMOVE_WP_AI: `${ADDON_PREFIX}:ai:remove-wp-ai`,
   GET_WP_VERSION: `${ADDON_PREFIX}:get-wp-version`,
   UPGRADE_WP: `${ADDON_PREFIX}:upgrade-wp`,
 
@@ -238,6 +239,11 @@ export const IPC_CHANNELS = {
   CREDENTIAL_API_KEY_STATUS: `${ADDON_PREFIX}:credential:api-key:status`,
   CREDENTIAL_API_KEY_CLEAR:  `${ADDON_PREFIX}:credential:api-key:clear`,
 
+  // WPE Hub Integration (IW Phase 2)
+  IW_GET_STATUS:  `${ADDON_PREFIX}:iw:get-status`,
+  IW_CONNECT:     `${ADDON_PREFIX}:iw:connect`,
+  IW_DISCONNECT:  `${ADDON_PREFIX}:iw:disconnect`,
+
   // Telemetry (fire-and-forget from renderer → main)
   TELEMETRY_TRACK: `${ADDON_PREFIX}:telemetry`,
 } as const;
@@ -297,13 +303,15 @@ export const STORAGE_KEYS = {
   OAUTH_GRANTS: `${ADDON_PREFIX}_oauth_grants`,
   OAUTH_VAULT: `${ADDON_PREFIX}_oauth_vault`,
   API_KEY_CONNECTIONS: `${ADDON_PREFIX}_api_key_connections`,
+  IW_SITE_BINDINGS: `${ADDON_PREFIX}_iw_site_bindings`,
 } as const;
 
 // ---------------------------------------------------------------------------
 // Vector Store
 // ---------------------------------------------------------------------------
 
-export const VECTOR_DIMENSIONS = 384;
+/** Vector dimensions for the active embedding model. Use getVectorDimensions() for runtime lookups. */
+export const VECTOR_DIMENSIONS = 384; // MiniLM default
 export const VECTOR_DB_DIR = 'nexus-ai/vectors';
 export const SITE_TABLE_PREFIX = 'site_';
 
@@ -311,9 +319,22 @@ export const SITE_TABLE_PREFIX = 'site_';
 // Embeddings
 // ---------------------------------------------------------------------------
 
-export const EMBEDDING_MODEL_DIR = 'all-MiniLM-L6-v2-quantized';
+export const EMBEDDING_MODELS = {
+  minilm: {
+    dir: 'all-MiniLM-L6-v2-quantized',
+    dimensions: 384,
+    contextWindow: 256,
+  },
+  'bge-small': {
+    dir: 'bge-small-en-v1.5',
+    dimensions: 384,
+    contextWindow: 512,
+  },
+} as const;
+
 export const EMBEDDING_MODEL_FILE = 'model.onnx';
 export const EMBEDDING_VOCAB_FILE = 'vocab.txt';
+/** @deprecated Use EMBEDDING_MODELS[model].contextWindow */
 export const EMBEDDING_MAX_SEQUENCE_LENGTH = 256;
 
 // ---------------------------------------------------------------------------

@@ -92,6 +92,16 @@ describe('UpdateSettingsSchema — known fields are accepted', () => {
     })).not.toThrow();
   });
 
+  it('accepts aiProvider "power" with a slashed model id (IW Phase 1)', () => {
+    const result = validateInput(UpdateSettingsSchema, {
+      aiProvider: 'power',
+      aiModel: 'anthropic/claude-haiku-4-5',
+    });
+    expect(result.aiProvider).toBe('power');
+    // The slash in a Power `provider/model` id must survive strict-mode parsing.
+    expect(result.aiModel).toBe('anthropic/claude-haiku-4-5');
+  });
+
   it('accepts full settings object with all v2 access control fields together', () => {
     const full = {
       ...base,

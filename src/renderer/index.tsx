@@ -104,7 +104,11 @@ export default function renderer(context: any): void {
       }),
       onApply: async () => {
         if (pendingSettings) {
-          const result = await electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, pendingSettings);
+          // Strip computed fields injected by GET_SETTINGS (e.g. llmAvailable) before
+          // sending to UPDATE_SETTINGS — they are not in UpdateSettingsSchema.strict()
+          // and would cause silent validation failure if included.
+          const { llmAvailable: _derived, ...toSave } = pendingSettings;
+          const result = await electron.ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SETTINGS, toSave);
           pendingSettings = null;
           // Notify all site panels and the docked panel gate to refresh
           window.dispatchEvent(new CustomEvent('nexus-ai:settings-applied', { detail: result }));

@@ -8,8 +8,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
-import type { NexusSettings, AIProvider, SiteAIConfig, DbScanResult } from '../../common/types';
-import { AssistantPanel } from './AssistantPanel';
+import type { NexusSettings, SiteAIConfig, DbScanResult, IwConnectionStatus } from '../../common/types';
 
 export interface NexusSiteTabProps {
   site: { id: string; name: string; path: string; status?: string };
@@ -42,9 +41,7 @@ interface NexusSiteTabState {
   excluded: boolean;
   loading: boolean;
   aiStatus: SiteAiStatus | null;
-  settingUpAI: boolean;
   setupResult: { success: boolean; message: string } | null;
-  syncingCreds: boolean;
   wpVersion: string | null;
   wpVersionAge: string | null;
   upgradingWp: boolean;
@@ -52,13 +49,26 @@ interface NexusSiteTabState {
   aiContextStatus: { exists: boolean; ageString?: string; filePath?: string } | null;
   generatingContext: boolean;
   siteAIConfig: SiteAIConfig | null;
-  showProviderPicker: boolean;
-  pickerProvider: AIProvider | '';
-  switchingProvider: boolean;
+  /** Which WP AI connector is currently active — derived from aiStatus + iwStatus */
+  wpAiConnector: 'power' | 'local-gateway' | 'direct' | null;
+  /** User's pending connector choice in the picker (State 0) */
+  wpAiPickerChoice: 'power' | 'local-gateway' | 'direct' | null;
+  /** For Direct path: which AI provider the user picked */
+  wpAiDirectProvider: 'anthropic' | 'openai' | 'google' | 'ollama' | null;
+  /** True while any WP AI setup step is running */
+  wpAiSettingUp: boolean;
+  /** Error from most recent WP AI setup step, or null */
+  wpAiSetupError: string | null;
   useLocalGateway: boolean;
   globalAIProvider: string | null;
+  /** Nexus-level key status per provider — used to gate Direct provider options */
+  keyStatus: Record<string, string>;
   dbScan: DbScanResult | null;
   dbScanning: boolean;
+  iwStatus: IwConnectionStatus | null;
+  iwConnecting: boolean;
+  iwPollInterval: ReturnType<typeof setInterval> | null;
+  iwError: string | null;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -73,13 +83,7 @@ function formatTimeAgo(timestamp: number): string {
   return `${days}d ago`;
 }
 
-function isWp7OrLater(version: string | null): boolean {
-  if (!version) return false;
-  const match = version.match(/^(\d+)\.(\d+)/);
-  if (!match) return false;
-  const major = parseInt(match[1], 10);
-  return major >= 7;
-}
+
 
 const dot = (color: string): React.CSSProperties => ({
   display: 'inline-block',
@@ -99,13 +103,6 @@ const PROVIDER_LABELS: Record<string, string> = {
   ollama: 'Ollama (local)',
   'local-gateway': 'Local AI Gateway',
 };
-
-const ALL_PROVIDERS: Array<{ id: string; label: string }> = [
-  { id: 'anthropic', label: 'Anthropic (Claude)' },
-  { id: 'openai', label: 'OpenAI (GPT)' },
-  { id: 'google', label: 'Google (Gemini)' },
-  { id: 'ollama', label: 'Ollama (local)' },
-];
 
 // ---------------------------------------------------------------------------
 // Inline styles
@@ -207,6 +204,17 @@ const styles = {
   }),
 };
 
+function detectWpAiConnector(
+  aiStatus: SiteAiStatus | null,
+  iwStatus: IwConnectionStatus | null,
+): 'power' | 'local-gateway' | 'direct' | null {
+  if (!aiStatus) return null;
+  if (iwStatus?.connected && iwStatus?.wpEngineConnectorApproved) return 'power';
+  if (aiStatus.gatewayProvider === 'active') return 'local-gateway';
+  if (aiStatus.aiPlugin === 'active') return 'direct';
+  return null;
+}
+
 export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTabState> {
   private mounted = false;
   private _onSettingsApplied: (() => void) | null = null;
@@ -218,9 +226,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     excluded: false,
     loading: true,
     aiStatus: null,
-    settingUpAI: false,
     setupResult: null,
-    syncingCreds: false,
     wpVersion: null,
     wpVersionAge: null,
     upgradingWp: false,
@@ -228,13 +234,20 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     aiContextStatus: null,
     generatingContext: false,
     siteAIConfig: null,
-    showProviderPicker: false,
-    pickerProvider: '',
-    switchingProvider: false,
+    wpAiConnector: null,
+    wpAiPickerChoice: null,
+    wpAiDirectProvider: 'anthropic',
+    wpAiSettingUp: false,
+    wpAiSetupError: null,
     useLocalGateway: false,
     globalAIProvider: null,
+    keyStatus: {},
     dbScan: null,
     dbScanning: false,
+    iwStatus: null,
+    iwConnecting: false,
+    iwPollInterval: null,
+    iwError: null,
   };
 
   componentDidMount(): void {
@@ -253,9 +266,9 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     this.props.electron.ipcRenderer.on(IPC_CHANNELS.INDEX_PROGRESS, this._onIndexProgress);
   }
 
-  componentDidUpdate(prevProps: NexusSiteTabProps): void {
+  componentDidUpdate(prevProps: NexusSiteTabProps, prevState: NexusSiteTabState): void {
     if (prevProps.site.id !== this.props.site.id) {
-      this.setState({ setupResult: null, showProviderPicker: false });
+      this.setState({ setupResult: null });
       this.fetchData();
       return;
     }
@@ -263,6 +276,12 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     const currStatus = this.props.site.status || this.props.siteStatus;
     if (prevStatus !== 'running' && currStatus === 'running') {
       this.fetchData();
+    }
+    // If connector changed (e.g. after setup completes), clear picker choice
+    const prevConnector = detectWpAiConnector(prevState.aiStatus ?? null, prevState.iwStatus ?? null);
+    const currConnector = detectWpAiConnector(this.state.aiStatus ?? null, this.state.iwStatus ?? null);
+    if (prevConnector !== currConnector && currConnector !== null) {
+      this.setState({ wpAiPickerChoice: null, wpAiSetupError: null });
     }
   }
 
@@ -274,10 +293,12 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     if (this._onIndexProgress) {
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.INDEX_PROGRESS, this._onIndexProgress);
     }
+    if (this.state.iwPollInterval) clearInterval(this.state.iwPollInterval);
   }
 
   fetchData = async (): Promise<void> => {
     const ipc = this.props.electron.ipcRenderer;
+    let rawAiStatus: SiteAiStatus | null = null;
     try {
       const [entries, settings] = await Promise.all([
         ipc.invoke(IPC_CHANNELS.GET_FLEET_STATUS),
@@ -302,7 +323,8 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       const aiResult = await ipc.invoke(IPC_CHANNELS.GET_AI_STATUS, this.props.site.id);
       if (!this.mounted) return;
       if (aiResult?.success) {
-        this.setState({ aiStatus: aiResult.sites?.[this.props.site.id] ?? null });
+        rawAiStatus = aiResult.sites?.[this.props.site.id] ?? null;
+        this.setState({ aiStatus: rawAiStatus });
       }
     } catch {
       // Non-fatal
@@ -354,6 +376,32 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     } catch {
       // Non-fatal
     }
+
+    const [iwStatusResult, keyStatusResult] = await Promise.all([
+      ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null),
+      ipc.invoke(IPC_CHANNELS.GET_API_KEY_STATUS).catch(() => ({})),
+    ]);
+    if (!this.mounted) return;
+    const iwStatusTyped = (iwStatusResult as IwConnectionStatus | null) ?? null;
+
+    // For halted sites, live data (aiStatus, iwStatus) may be absent.
+    // Fall back to stored per-site SiteAIConfig so State 2 shows correctly.
+    const liveConnector = detectWpAiConnector(rawAiStatus, iwStatusTyped);
+    const storedCfg = this.state.siteAIConfig;
+    const DIRECT_PROVIDERS = ['anthropic', 'openai', 'google', 'ollama'];
+    const fallbackConnector: 'power' | 'local-gateway' | 'direct' | null = liveConnector ?? (() => {
+      if (!storedCfg) return null;
+      if ((storedCfg as any).provider === 'power') return 'power';
+      if ((storedCfg as any).useLocalGateway) return 'local-gateway';
+      if (DIRECT_PROVIDERS.includes((storedCfg as any).provider ?? '')) return 'direct';
+      return null;
+    })();
+
+    this.setState({
+      iwStatus: iwStatusTyped,
+      wpAiConnector: fallbackConnector,
+      keyStatus: (keyStatusResult as Record<string, string>) ?? {},
+    });
   };
 
   handleIndex = async (): Promise<void> => {
@@ -368,61 +416,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     if (this.mounted) this.setState({ indexing: false });
   };
 
-  handleSetupAI = async (provider?: AIProvider): Promise<void> => {
-    this.setState({ settingUpAI: true, setupResult: null, showProviderPicker: false });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.SETUP_AI, this.props.site.id, provider,
-      );
-      if (!this.mounted) return;
-      this.setState({
-        settingUpAI: false,
-        setupResult: { success: result.success, message: result.message },
-      });
-      this.fetchData();
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ settingUpAI: false, setupResult: { success: false, message: 'Setup failed' } });
-    }
-  };
-
-  handleSwitchProvider = async (): Promise<void> => {
-    const { pickerProvider } = this.state;
-    if (!pickerProvider) return;
-    this.setState({ switchingProvider: true, setupResult: null, showProviderPicker: false });
-    try {
-      const result = await this.props.electron.ipcRenderer.invoke(
-        IPC_CHANNELS.SWITCH_AI_PROVIDER, this.props.site.id, pickerProvider,
-      );
-      if (!this.mounted) return;
-      this.setState({
-        switchingProvider: false,
-        setupResult: {
-          success: result.success,
-          message: result.success
-            ? `Switched to ${pickerProvider}`
-            : (result.error ?? 'Switch failed'),
-        },
-      });
-      if (result.success) this.fetchData();
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ switchingProvider: false, setupResult: { success: false, message: 'Switch failed' } });
-    }
-  };
-
-  handleSyncCredentials = async (): Promise<void> => {
-    this.setState({ syncingCreds: true });
-    try {
-      await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SYNC_ALL_CREDENTIALS);
-      if (!this.mounted) return;
-      this.setState({ syncingCreds: false });
-      this.fetchData();
-    } catch {
-      if (!this.mounted) return;
-      this.setState({ syncingCreds: false });
-    }
-  };
 
   handleUpgradeWordPress = async (): Promise<void> => {
     this.setState({ upgradingWp: true, setupResult: null });
@@ -675,176 +668,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     );
   }
 
-  renderAIProviderCard(): React.ReactElement {
-    const {
-      aiStatus, siteAIConfig, wpVersion, settingUpAI, switchingProvider,
-      showProviderPicker, pickerProvider, useLocalGateway, globalAIProvider, syncingCreds,
-    } = this.state;
-
-    const isAIConfigured = !!siteAIConfig;
-    const canSetupAI = wpVersion === null || isWp7OrLater(wpVersion);
-    const gatewayActive = aiStatus?.gatewayProvider === 'active';
-    const gatewayPending = useLocalGateway && !gatewayActive && isAIConfigured;
-
-    const headerDotColor = isAIConfigured ? UI_COLORS.STATUS_RUNNING : '#888';
-
-    // Provider picker element
-    const providerPickerEl = showProviderPicker
-      ? React.createElement('span', { style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const, marginTop: 4 } },
-          React.createElement('select', {
-            value: pickerProvider,
-            onChange: (e: any) => this.setState({ pickerProvider: e.target.value }),
-            style: {
-              fontSize: 12,
-              padding: '2px 6px',
-              borderRadius: 4,
-              border: '1px solid rgba(128,128,128,0.3)',
-              backgroundColor: 'transparent',
-              color: 'inherit',
-              cursor: 'pointer',
-            },
-          },
-            React.createElement('option', { value: '' }, 'Pick provider...'),
-            ...ALL_PROVIDERS.map(p =>
-              React.createElement('option', { key: p.id, value: p.id }, p.label),
-            ),
-          ),
-          this.btn({
-            onClick: () => {
-              if (!pickerProvider) return;
-              if (isAIConfigured) {
-                this.handleSwitchProvider();
-              } else {
-                this.handleSetupAI(pickerProvider as AIProvider);
-              }
-            },
-            disabled: !pickerProvider || settingUpAI || switchingProvider,
-            children: isAIConfigured
-              ? (switchingProvider ? 'Switching...' : 'Switch')
-              : (settingUpAI ? 'Setting up...' : 'Go'),
-          }),
-          this.btn({
-            onClick: () => this.setState({ showProviderPicker: false, pickerProvider: '' }),
-            children: 'Cancel',
-          }),
-        )
-      : null;
-
-    // Provider row
-    let providerRow: React.ReactElement;
-    if (isAIConfigured) {
-      const providerDisplayName = PROVIDER_LABELS[siteAIConfig!.provider] ?? siteAIConfig!.provider;
-      const displayName = (useLocalGateway && siteAIConfig!.provider !== 'ollama')
-        ? `${providerDisplayName} via Gateway`
-        : providerDisplayName;
-
-      const changeEl = gatewayPending
-        ? React.createElement('span', { style: { fontSize: 11, opacity: 0.6 } },
-            `\u2192 will switch to ${PROVIDER_LABELS[globalAIProvider ?? ''] ?? globalAIProvider ?? 'global provider'} via Gateway`)
-        : (!useLocalGateway || siteAIConfig!.provider === 'ollama'
-          ? (!showProviderPicker
-              ? this.btn({
-                  onClick: () => this.setState({ showProviderPicker: true, pickerProvider: siteAIConfig!.provider as AIProvider }),
-                  disabled: switchingProvider,
-                  children: switchingProvider ? 'Switching...' : 'Change',
-                })
-              : null)
-          : React.createElement('span', { style: { fontSize: 11, opacity: 0.6 } }, 'Change in Preferences'));
-
-      providerRow = this.cardRow('Provider',
-        React.createElement('span', { style: dot(UI_COLORS.STATUS_RUNNING) }),
-        React.createElement('span', { style: { marginRight: 6 } }, displayName),
-        changeEl,
-        providerPickerEl,
-      );
-    } else {
-      const setupText = settingUpAI ? 'Setting up...'
-        : !canSetupAI ? 'Requires WP 7.0+'
-        : 'Setup AI';
-
-      providerRow = this.cardRow('Provider',
-        React.createElement('span', { style: dot('#888') }),
-        React.createElement('span', { style: { marginRight: 6 } }, 'Not configured'),
-        !showProviderPicker && !settingUpAI
-          ? this.btn({
-              onClick: canSetupAI
-                ? (useLocalGateway
-                    // Gateway enabled: skip provider picker — use global provider directly
-                    ? () => this.handleSetupAI()
-                    // Gateway disabled: show provider picker
-                    : () => this.setState({ showProviderPicker: true, pickerProvider: '' }))
-                : undefined,
-              disabled: !canSetupAI,
-              children: setupText,
-            })
-          : (settingUpAI ? React.createElement('span', { style: { fontSize: 11, opacity: 0.7 } }, 'Setting up...') : null),
-        // Only show provider picker when gateway is not active
-        !useLocalGateway ? providerPickerEl : null,
-      );
-    }
-
-    // Gateway row
-    const gatewayColor = gatewayActive ? UI_COLORS.STATUS_RUNNING
-      : gatewayPending ? UI_COLORS.STATUS_WARNING
-      : '#888';
-    const gatewayLabel = gatewayActive ? 'Active' : gatewayPending ? 'Pending' : 'Inactive';
-
-    const gatewayRow = React.createElement('div', null,
-      this.cardRow('Gateway',
-        React.createElement('span', { style: dot(gatewayColor) }),
-        React.createElement('span', { style: { marginRight: 6 } }, gatewayLabel),
-        gatewayPending && canSetupAI
-          ? this.btn({
-              onClick: settingUpAI ? undefined : () => this.handleSetupAI(),
-              disabled: settingUpAI || !canSetupAI,
-              children: settingUpAI ? 'Applying...' : 'Apply',
-            })
-          : (!gatewayActive && !useLocalGateway
-              ? React.createElement('span', { style: { fontSize: 11, opacity: 0.5 } }, 'Configure in Preferences')
-              : null),
-      ),
-    );
-
-    // Credentials row — hidden when Local Gateway is active because the gateway
-    // plugin handles authentication internally; no WP DB credential sync needed.
-    const credsRow = isAIConfigured && aiStatus && !useLocalGateway
-      ? this.cardRow('Credentials',
-          React.createElement('span', { style: dot(aiStatus.credentialsSynced ? UI_COLORS.STATUS_RUNNING : '#888') }),
-          React.createElement('span', { style: { marginRight: 6 } },
-            aiStatus.credentialsSynced
-              ? `Synced (${PROVIDER_LABELS[siteAIConfig!.provider] ?? siteAIConfig!.provider})`
-              : 'Not synced',
-          ),
-          this.btn({
-            onClick: this.state.syncingCreds ? undefined : this.handleSyncCredentials,
-            disabled: syncingCreds,
-            children: syncingCreds ? 'Syncing...' : 'Sync Keys',
-          }),
-        )
-      : null;
-
-    // WP version row (show if we have it)
-    const wpRow = aiStatus && wpVersion !== null
-      ? this.cardRow('WordPress',
-          React.createElement('span', { style: dot(!isWp7OrLater(wpVersion) ? UI_COLORS.STATUS_WARNING : UI_COLORS.STATUS_RUNNING) }),
-          React.createElement('span', { style: { marginRight: 6 } }, wpVersion),
-          !isWp7OrLater(wpVersion)
-            ? this.btn({
-                onClick: this.state.upgradingWp ? undefined : this.handleUpgradeWordPress,
-                disabled: this.state.upgradingWp,
-                children: this.state.upgradingWp ? 'Upgrading...' : 'Upgrade to WP 7.0',
-              })
-            : null,
-        )
-      : null;
-
-    return this.card('AI Provider', headerDotColor,
-      providerRow,
-      gatewayRow,
-      credsRow ?? React.createElement('div', null),
-      wpRow ?? React.createElement('div', null),
-    );
-  }
 
   renderDatabaseHealthCard(): React.ReactElement {
     const { dbScan, dbScanning } = this.state;
@@ -901,6 +724,501 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     );
   }
 
+  renderWpAiCard(): React.ReactNode {
+    const {
+      aiStatus, iwStatus, iwConnecting, wpAiPickerChoice, wpAiDirectProvider, wpAiSettingUp, wpAiSetupError,
+      useLocalGateway, globalAIProvider, keyStatus,
+    } = this.state;
+
+    const activeConnector = this.state.wpAiConnector;
+    // If Hub is connected but WP AI isn't fully set up yet, auto-show Power steps
+    // without requiring the user to open the picker. Handles sites connected via
+    // WP Admin Hub onboarding independently of Nexus.
+    const autoWorkingConnector: 'power' | null = (iwStatus?.connected && !activeConnector) ? 'power' : null;
+    const workingConnector: 'power' | 'local-gateway' | 'direct' | null = wpAiPickerChoice ?? activeConnector ?? autoWorkingConnector;
+    // isEditing = true only when CHANGING an existing connector, not during fresh setup
+    const isEditing = wpAiPickerChoice !== null && activeConnector !== null;
+
+    // Smart default: what does the user's global Nexus config suggest?
+    const DIRECT_PROVIDERS_LIST = ['anthropic', 'openai', 'google', 'ollama'] as const;
+    const naturalPath: 'local-gateway' | 'direct' | null = (() => {
+      if (useLocalGateway) return 'local-gateway';
+      if (globalAIProvider && (DIRECT_PROVIDERS_LIST as readonly string[]).includes(globalAIProvider)) return 'direct';
+      return null;
+    })();
+    const naturalDirectProvider = naturalPath === 'direct' ? (globalAIProvider as typeof DIRECT_PROVIDERS_LIST[number]) : null;
+    // Direct path has a key if provider is ollama (keyless) or key exists in Nexus
+    const naturalDirectHasKey = naturalDirectProvider === 'ollama' || !!(naturalDirectProvider && keyStatus[naturalDirectProvider]);
+    const naturalDirectLabel = PROVIDER_LABELS[naturalDirectProvider ?? ''] ?? naturalDirectProvider ?? 'Provider';
+
+    const providerLabel = PROVIDER_LABELS[wpAiDirectProvider ?? ''] ?? (wpAiDirectProvider ?? 'Provider');
+
+    // ─── Shared style atoms ───────────────────────────────────────────────────
+    const cardHeadStyle: React.CSSProperties = {
+      padding: '11px 14px',
+      borderBottom: '1px solid #2d3748',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    };
+    const titleStyle: React.CSSProperties = {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.1em',
+      color: '#4b5563',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+    };
+    const badgeBase: React.CSSProperties = {
+      fontSize: 9,
+      fontWeight: 700,
+      padding: '2px 6px',
+      borderRadius: 10,
+      letterSpacing: '.04em',
+    };
+
+    // ─── Step row renderer ────────────────────────────────────────────────────
+    const renderStepRow = (
+      stepNum: number,
+      label: string,
+      detail: string,
+      done: boolean,
+      action?: () => void,
+      actionLabel?: string,
+      locked?: boolean,
+      autoNote?: string,
+    ): React.ReactElement => {
+      const circleBase: React.CSSProperties = {
+        width: 18, height: 18, borderRadius: '50%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 10, fontWeight: 700, flexShrink: 0, marginTop: 1,
+      };
+      const circleStyle: React.CSSProperties = done
+        ? { ...circleBase, background: 'rgba(81,187,123,.15)', color: '#51bb7b' }
+        : locked
+          ? { ...circleBase, background: 'rgba(75,85,99,.2)', color: '#9ca3af', opacity: 0.4 }
+          : { ...circleBase, background: 'rgba(75,85,99,.2)', color: '#9ca3af' };
+
+      return React.createElement('div', {
+        key: `step-${stepNum}`,
+        style: {
+          display: 'flex', gap: 10, padding: '10px 14px',
+          borderBottom: '1px solid rgba(255,255,255,0.04)', alignItems: 'flex-start',
+        },
+      },
+        React.createElement('div', { style: circleStyle }, done ? '✓' : String(stepNum)),
+        React.createElement('div', { style: { flex: 1 } },
+          React.createElement('div', {
+            style: { fontSize: 12, fontWeight: 600, color: done || !locked ? '#e6edf3' : '#6b7280', marginBottom: 2 },
+          }, label),
+          React.createElement('div', {
+            style: { fontSize: 11, color: '#6b7280', lineHeight: '1.4' },
+          }, autoNote && (done || locked) ? autoNote : detail),
+        ),
+        !done && !locked && action
+          ? React.createElement('button', {
+              style: {
+                fontSize: 11, padding: '3px 10px', borderRadius: 4, border: 'none',
+                background: '#51bb7b', color: '#fff',
+                cursor: wpAiSettingUp ? 'default' : 'pointer',
+                fontFamily: 'inherit', opacity: wpAiSettingUp ? 0.6 : 1, flexShrink: 0,
+              },
+              onClick: wpAiSettingUp ? undefined : action,
+              disabled: !!wpAiSettingUp,
+            }, wpAiSettingUp ? 'Working…' : (actionLabel ?? 'Go'))
+          : null,
+      );
+    };
+
+    // ─── State 2 — active connector ───────────────────────────────────────────
+    // State 2 only when truly active AND not in edit mode (user clicked "Change →")
+    if (activeConnector !== null && !isEditing) {
+      const connectorBadge = activeConnector === 'power'
+        ? React.createElement('span', { style: { ...badgeBase, background: 'rgba(14,202,212,.12)', color: '#0ECAD4' } }, 'Power')
+        : activeConnector === 'local-gateway'
+          ? React.createElement('span', { style: { ...badgeBase, background: 'rgba(75,85,99,.3)', color: '#9ca3af' } }, 'Gateway')
+          : React.createElement('span', { style: { ...badgeBase, background: 'rgba(37,99,235,.15)', color: '#60a5fa' } }, 'Direct');
+
+      const head = React.createElement('div', { style: cardHeadStyle },
+        React.createElement('div', { style: titleStyle },
+          'WordPress AI',
+          React.createElement('span', { style: { ...badgeBase, background: 'rgba(81,187,123,.15)', color: '#51bb7b' } }, 'Active'),
+          connectorBadge,
+        ),
+      );
+
+      const dotGreen: React.CSSProperties = {
+        width: 7, height: 7, borderRadius: '50%', background: '#51bb7b', flexShrink: 0,
+      };
+      const activeRowStyle: React.CSSProperties = {
+        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+        borderBottom: '1px solid rgba(255,255,255,0.04)',
+      };
+      const openAdmin = () => {
+        // Use site.domain (Local's actual domain) — not .local shorthand, which breaks for custom domains
+        const domain = (this.props.site as any).domain as string | undefined;
+        const base = domain ? `http://${domain}` : `http://localhost`;
+        if (this.props.electron?.shell?.openExternal) this.props.electron.shell.openExternal(`${base}/wp-admin/`);
+      };
+
+      const wpAiRow = React.createElement('div', { style: activeRowStyle },
+        React.createElement('span', { style: dotGreen }),
+        React.createElement('div', { style: { flex: 1 } },
+          React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#e6edf3' } }, 'WP AI active'),
+          React.createElement('div', { style: { fontSize: 11, color: '#6b7280' } },
+            'Plugin installed · all experiments enabled',
+          ),
+        ),
+        React.createElement('button', {
+          style: {
+            fontSize: 11, padding: '3px 10px', borderRadius: 4,
+            border: '1px solid #2d3748', background: 'none', color: '#9ca3af',
+            cursor: 'pointer', fontFamily: 'inherit',
+          },
+          onClick: openAdmin,
+        }, 'WP Admin →'),
+      );
+
+      const powerRow = activeConnector === 'power'
+        ? React.createElement('div', { style: activeRowStyle },
+            React.createElement('span', { style: dotGreen }),
+            React.createElement('div', { style: { flex: 1 } },
+              React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#e6edf3' } }, 'Hub Plugin connected'),
+              React.createElement('div', { style: { fontSize: 11, color: '#6b7280' } },
+                iwStatus?.projectId ? `Project: ${iwStatus.projectId}` : 'Power connected',
+              ),
+            ),
+            React.createElement('button', {
+              style: {
+                fontSize: 11, padding: '3px 10px', borderRadius: 4,
+                border: '1px solid #374151', background: 'none', color: '#9ca3af',
+                cursor: 'pointer', fontFamily: 'inherit',
+              },
+              onClick: () => this.handleIwDisconnect(),
+            }, 'Disconnect'),
+          )
+        : null;
+
+      // Footer row: Change connector + Remove WP AI
+      // Footer: Change / Remove — both disabled while any operation is running
+      const footerRow = React.createElement('div', {
+        style: {
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+          gap: 8, padding: '8px 14px',
+          borderTop: '1px solid rgba(255,255,255,0.04)',
+        },
+      },
+        wpAiSettingUp
+          ? React.createElement('span', { style: { fontSize: 11, color: '#6b7280', fontStyle: 'italic' as const } }, 'Working…')
+          : null,
+        React.createElement('button', {
+          style: {
+            fontSize: 11, padding: '3px 10px', borderRadius: 4,
+            border: '1px solid #374151', background: 'none',
+            color: wpAiSettingUp ? '#4b5563' : '#9ca3af',
+            cursor: wpAiSettingUp ? 'default' : 'pointer', fontFamily: 'inherit',
+          },
+          disabled: !!wpAiSettingUp,
+          onClick: wpAiSettingUp ? undefined : () => this.handleWpAiChange(),
+        }, 'Change connector'),
+        React.createElement('button', {
+          style: {
+            fontSize: 11, padding: '3px 10px', borderRadius: 4,
+            border: '1px solid #374151', background: 'none',
+            color: wpAiSettingUp ? '#4b5563' : '#f87171',
+            cursor: wpAiSettingUp ? 'default' : 'pointer', fontFamily: 'inherit',
+          },
+          disabled: !!wpAiSettingUp,
+          onClick: wpAiSettingUp ? undefined : () => this.handleWpAiRemove(),
+        }, 'Remove WP AI'),
+      );
+
+      return React.createElement('div', { style: { ...styles.cardFull, padding: 0, borderColor: '#1e4620' } },
+        head,
+        wpAiRow,
+        powerRow,
+        footerRow,
+      );
+    }
+
+    // ─── workingConnector set — picker or steps ───────────────────────────────
+    if (workingConnector !== null) {
+      // Any sign that setup has begun → show step rows instead of picker cards.
+      // Exception: when isEditing (user clicked "Change connector"), always show
+      // the picker so they can choose a DIFFERENT connector, not the current one's steps.
+      const anyStepProgress = !isEditing && !!(
+        wpAiSettingUp ||
+        iwConnecting ||          // Hub connect in progress (Power path)
+        iwStatus?.connected ||
+        (aiStatus?.aiPlugin && aiStatus.aiPlugin !== 'not_installed') ||
+        (aiStatus?.gatewayProvider && aiStatus.gatewayProvider !== 'not_installed')
+      );
+
+      const head = React.createElement('div', { style: cardHeadStyle },
+        React.createElement('div', { style: titleStyle }, 'WordPress AI'),
+        React.createElement('button', {
+          style: {
+            fontSize: 11, background: 'none', border: 'none',
+            color: '#6b7280', cursor: 'pointer', fontFamily: 'inherit', padding: '2px 4px',
+          },
+          onClick: () => this.setState({ wpAiPickerChoice: null, wpAiSetupError: null }),
+        }, '← Back'),
+      );
+
+      const errorEl = wpAiSetupError
+        ? React.createElement('div', {
+            style: { padding: '8px 14px', fontSize: 11, color: '#ef4444', lineHeight: '1.4' },
+          }, wpAiSetupError)
+        : null;
+
+      // ── Picker view — connector not yet started ─────────────────────────────
+      if (!anyStepProgress) {
+        const OPTIONS: Array<{ id: 'power' | 'local-gateway' | 'direct'; name: string; desc: string }> = [
+          { id: 'power', name: 'WP Engine Power', desc: 'Use your WPE account AI — no API key needed. Connect via Hub Plugin.' },
+          { id: 'local-gateway', name: 'Local AI Gateway', desc: 'Route through Nexus to your configured provider (Anthropic, OpenAI, Gemini, Ollama, Power).' },
+          { id: 'direct', name: 'Direct API', desc: 'Connect Anthropic, OpenAI, Google Gemini, or Ollama directly to this site.' },
+        ];
+
+        const DIRECT_PROVIDERS: Array<{ id: 'anthropic' | 'openai' | 'google' | 'ollama'; label: string }> = [
+          { id: 'anthropic', label: 'Anthropic (Claude)' },
+          { id: 'openai', label: 'OpenAI (GPT)' },
+          { id: 'google', label: 'Google (Gemini)' },
+          { id: 'ollama', label: 'Ollama (local)' },
+        ];
+        // Only show providers with a key configured in Nexus, plus Ollama (keyless).
+        const availableDirectProviders = DIRECT_PROVIDERS.filter(
+          p => p.id === 'ollama' || keyStatus[p.id],
+        );
+
+        const optionCards = OPTIONS.map(opt =>
+          React.createElement('div', {
+            key: opt.id,
+            style: {
+              border: `1px solid ${wpAiPickerChoice === opt.id ? '#51bb7b' : '#2d3748'}`,
+              borderRadius: 7, padding: '9px 11px',
+              display: 'flex', gap: 9, cursor: 'pointer', marginBottom: 5,
+              background: wpAiPickerChoice === opt.id ? 'rgba(81,187,123,.05)' : 'none',
+            },
+            onClick: () => this.setState({ wpAiPickerChoice: opt.id }),
+          },
+            React.createElement('div', {
+              style: {
+                width: 13, height: 13, borderRadius: '50%',
+                border: `2px solid ${wpAiPickerChoice === opt.id ? '#51bb7b' : '#374151'}`,
+                flexShrink: 0, marginTop: 2,
+                background: wpAiPickerChoice === opt.id ? '#51bb7b' : 'none',
+              },
+            }),
+            React.createElement('div', { style: { flex: 1 } },
+              React.createElement('div', {
+                style: { fontSize: 12, fontWeight: 600, color: '#e6edf3', marginBottom: 2 },
+              }, opt.name),
+              React.createElement('div', {
+                style: { fontSize: 11, color: '#6b7280', lineHeight: '1.4' },
+              }, opt.desc),
+            ),
+          ),
+        );
+
+        const directSubPicker = wpAiPickerChoice === 'direct'
+          ? React.createElement('div', { style: { marginBottom: 10 } },
+              availableDirectProviders.length === 0
+                ? React.createElement('div', {
+                    style: { fontSize: 11, color: '#6b7280', padding: '6px 0', lineHeight: '1.5' },
+                  }, 'No API keys configured in Nexus. Add a key in Preferences first.')
+                : React.createElement('div', null,
+                    React.createElement('div', { style: { fontSize: 11, color: '#6b7280', marginBottom: 6 } }, 'Choose provider:'),
+                    React.createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' as const } },
+                      ...availableDirectProviders.map(p =>
+                        React.createElement('button', {
+                          key: p.id,
+                          style: {
+                            fontSize: 11, padding: '3px 10px', borderRadius: 4,
+                            fontFamily: 'inherit', cursor: 'pointer',
+                            border: `1px solid ${wpAiDirectProvider === p.id ? '#51bb7b' : '#374151'}`,
+                            background: wpAiDirectProvider === p.id ? 'rgba(81,187,123,.1)' : 'none',
+                            color: wpAiDirectProvider === p.id ? '#51bb7b' : '#9ca3af',
+                          },
+                          onClick: () => this.setState({ wpAiDirectProvider: p.id }),
+                        }, p.label),
+                      ),
+                    ),
+                  ),
+            )
+          : null;
+
+        return React.createElement('div', { style: { ...styles.cardFull, padding: 0 } },
+          head,
+          React.createElement('div', { style: { padding: '12px 14px' } },
+            ...optionCards,
+            directSubPicker,
+            React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 } },
+              isEditing && activeConnector !== null
+                ? React.createElement('button', {
+                    style: { fontSize: 11, padding: '5px 10px', borderRadius: 5, border: '1px solid #374151', background: 'none', color: '#9ca3af', cursor: 'pointer', fontFamily: 'inherit' },
+                    onClick: () => this.setState({ wpAiPickerChoice: null, wpAiSetupError: null }),
+                  }, 'Cancel')
+                : null,
+              React.createElement('button', {
+                style: {
+                  fontSize: 11, padding: '5px 14px', borderRadius: 5, border: 'none',
+                  background: wpAiSettingUp ? 'rgba(81,187,123,.4)' : '#51bb7b',
+                  color: '#fff',
+                  cursor: wpAiSettingUp ? 'default' : 'pointer',
+                  fontFamily: 'inherit', fontWeight: 500,
+                  opacity: wpAiSettingUp ? 0.7 : 1,
+                },
+                disabled: !!wpAiSettingUp || !!iwConnecting,
+                onClick: (wpAiSettingUp || iwConnecting) ? undefined : () => this.handleWpAiConnect(),
+              }, (wpAiSettingUp || iwConnecting) ? 'Setting up…' : 'Set up →'),
+            ),
+          ),
+          errorEl,
+        );
+      }
+
+      // ── Steps view — setup in progress or partially complete ───────────────
+      let steps: React.ReactElement[] = [];
+
+      if (workingConnector === 'power') {
+        steps = [
+          renderStepRow(
+            1,
+            'Connect to WP Engine Power',
+            'Installs Hub Plugin, opens WP Admin to complete OAuth.',
+            iwStatus?.connected === true,
+            () => this.handleIwConnect(),
+            'Connect',
+            false,
+          ),
+          renderStepRow(
+            2,
+            'Install WP AI & enable features',
+            'WP AI plugin + all AI experiments. Power handles auth — no key needed.',
+            aiStatus?.aiPlugin === 'active',
+            () => this.handleWpAiSetup('power'),
+            'Setup',
+            !iwStatus?.connected,
+          ),
+          renderStepRow(
+            3,
+            'Authorise Power connector',
+            'Allows the WP Engine connector to serve AI requests.',
+            iwStatus?.wpEngineConnectorApproved === true,
+            undefined,
+            undefined,
+            aiStatus?.aiPlugin !== 'active',
+            'Completed automatically with step 2.',
+          ),
+        ];
+      } else if (workingConnector === 'local-gateway') {
+        steps = [
+          renderStepRow(
+            1,
+            'Install WP AI & Local Gateway plugin',
+            'Installs WP AI plugin + gateway provider, enables all AI experiments.',
+            aiStatus?.aiPlugin === 'active' && aiStatus?.gatewayProvider === 'active',
+            () => this.handleWpAiSetup('local-gateway'),
+            'Install',
+            false,
+          ),
+        ];
+      } else if (workingConnector === 'direct') {
+        // Direct path is ONE step — install + credential sync is automatic inside setup-ai.
+        // Key is already in Nexus KeyVault; setup-ai syncs it to WP DB during install.
+        steps = [
+          renderStepRow(
+            1,
+            `Install WP AI & ${providerLabel} plugin`,
+            `Installs WP AI plugin + ${providerLabel} provider, enables AI experiments, syncs API key.`,
+            aiStatus?.aiPlugin === 'active',
+            () => this.handleWpAiSetup(wpAiDirectProvider ?? 'anthropic'),
+            'Install',
+            false,
+          ),
+        ];
+      }
+
+      return React.createElement('div', { style: { ...styles.cardFull, padding: 0 } },
+        head,
+        ...steps,
+        errorEl,
+      );
+    }
+
+    // ─── State 0 — empty (no connector, no pending choice) ────────────────────
+    const emptyHead = React.createElement('div', { style: cardHeadStyle },
+      React.createElement('div', { style: titleStyle }, 'WordPress AI'),
+    );
+
+    // Smart default CTA — respect global Nexus settings so Local Gateway and
+    // Direct provider paths remain ONE CLICK (same as old behaviour).
+    const primaryAction = (() => {
+      if (naturalPath === 'local-gateway') {
+        return {
+          label: 'Setup AI via Local Gateway',
+          onClick: () => this.handleWpAiSetup('local-gateway'),
+        };
+      }
+      if (naturalPath === 'direct' && naturalDirectHasKey) {
+        return {
+          label: `Setup AI with ${naturalDirectLabel}`,
+          onClick: () => this.handleWpAiSetup(naturalDirectProvider ?? 'anthropic'),
+        };
+      }
+      return {
+        label: 'Connect to Power',
+        onClick: () => this.setState({ wpAiPickerChoice: 'power' }),
+      };
+    })();
+
+    const emptyBody = React.createElement('div', {
+      style: {
+        padding: '20px 16px', textAlign: 'center' as const,
+        display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 10,
+      },
+    },
+      React.createElement('div', { style: { fontSize: 13, fontWeight: 600, color: '#e6edf3' } },
+        'No AI configured for this site',
+      ),
+      React.createElement('div', { style: { fontSize: 11, color: '#6b7280', maxWidth: 240, lineHeight: '1.5' } },
+        naturalPath
+          ? `Uses your Nexus AI setting. Choose a different option below.`
+          : 'Choose how WordPress AI gets its capabilities.',
+      ),
+      React.createElement('div', { style: { display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' as const, justifyContent: 'center' } },
+        React.createElement('button', {
+          style: {
+            fontSize: 11, padding: '5px 12px', borderRadius: 5, border: 'none',
+            background: wpAiSettingUp ? 'rgba(81,187,123,.5)' : '#51bb7b',
+            color: '#fff', cursor: wpAiSettingUp ? 'default' : 'pointer',
+            fontFamily: 'inherit', fontWeight: 500,
+          },
+          disabled: !!wpAiSettingUp,
+          onClick: wpAiSettingUp ? undefined : primaryAction.onClick,
+        }, wpAiSettingUp ? 'Setting up…' : primaryAction.label),
+        React.createElement('button', {
+          style: {
+            fontSize: 11, padding: '5px 10px', borderRadius: 5,
+            border: '1px solid #374151', background: 'none',
+            color: '#9ca3af', cursor: 'pointer', fontFamily: 'inherit',
+          },
+          onClick: () => this.setState({ wpAiPickerChoice: 'power' }),
+        }, 'Other options ↓'),
+      ),
+      wpAiSetupError ? React.createElement('div', {
+        style: { fontSize: 11, color: '#ef4444', marginTop: 4 },
+      }, wpAiSetupError) : null,
+    );
+
+    return React.createElement('div', { style: { ...styles.cardFull, padding: 0 } },
+      emptyHead,
+      emptyBody,
+    );
+  }
+
   renderToolsCard(): React.ReactElement {
     const { aiContextStatus, generatingContext } = this.state;
 
@@ -942,6 +1260,134 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     );
   }
 
+  handleIwConnect = async (): Promise<void> => {
+    const ipc = this.props.electron.ipcRenderer;
+    this.setState({ iwConnecting: true, iwError: null });
+    try {
+      const connectResult = await ipc.invoke(IPC_CHANNELS.IW_CONNECT, this.props.site.id) as { ok: boolean; error?: string } | null;
+      if (!connectResult?.ok) {
+        if (this.mounted) this.setState({ iwConnecting: false, iwError: connectResult?.error ?? 'Connect failed' });
+        return;
+      }
+    } catch (err: any) {
+      if (this.mounted) this.setState({ iwConnecting: false, iwError: String(err?.message ?? err) });
+      return;
+    }
+    if (!this.mounted) return;
+    const started = Date.now();
+    const interval = setInterval(async () => {
+      if (!this.mounted) { clearInterval(interval); return; }
+      const status = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null) as IwConnectionStatus | null;
+      if (status?.connected || Date.now() - started > 180_000) {
+        clearInterval(interval);
+        this.setState({ iwStatus: status, iwConnecting: false, iwPollInterval: null });
+      } else if (status) {
+        this.setState({ iwStatus: status });
+      }
+    }, 2000);
+    this.setState({ iwPollInterval: interval });
+  };
+
+  handleIwDisconnect = async (): Promise<void> => {
+    const ipc = this.props.electron.ipcRenderer;
+    try {
+      await ipc.invoke(IPC_CHANNELS.IW_DISCONNECT, this.props.site.id);
+      const status = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null) as IwConnectionStatus | null;
+      if (!this.mounted) return;
+      this.setState({ iwStatus: status });
+    } catch {
+      // Best-effort
+    }
+  };
+
+  /** Fresh install (no existing config) — always uses SETUP_AI. */
+  handleWpAiSetup = async (provider: string): Promise<void> => {
+    const { site, electron } = this.props;
+    const ipc = electron.ipcRenderer;
+    this.setState({ wpAiSettingUp: true, wpAiSetupError: null });
+    try {
+      const result = await ipc.invoke(IPC_CHANNELS.SETUP_AI, site.id, provider) as { success: boolean; message: string } | null;
+      if (!this.mounted) return;
+      if (result?.success) {
+        this.setState({ wpAiSettingUp: false, wpAiSetupError: null, wpAiPickerChoice: null });
+        await this.fetchData();
+      } else {
+        this.setState({ wpAiSettingUp: false, wpAiSetupError: result?.message ?? 'Setup failed' });
+      }
+    } catch (err: any) {
+      if (this.mounted) this.setState({ wpAiSettingUp: false, wpAiSetupError: String(err?.message ?? err) });
+    }
+  };
+
+  /** Switch from an existing provider to a new one — uses SWITCH_AI_PROVIDER
+   *  which deactivates the old plugin before installing the new one. */
+  handleWpAiSwitch = async (provider: string): Promise<void> => {
+    const { site, electron } = this.props;
+    const ipc = electron.ipcRenderer;
+    this.setState({ wpAiSettingUp: true, wpAiSetupError: null });
+    try {
+      const result = await ipc.invoke(IPC_CHANNELS.SWITCH_AI_PROVIDER, site.id, provider) as { success: boolean; error?: string } | null;
+      if (!this.mounted) return;
+      if (result?.success) {
+        this.setState({ wpAiSettingUp: false, wpAiSetupError: null, wpAiPickerChoice: null });
+        await this.fetchData();
+      } else {
+        this.setState({ wpAiSettingUp: false, wpAiSetupError: result?.error ?? 'Switch failed' });
+      }
+    } catch (err: any) {
+      if (this.mounted) this.setState({ wpAiSettingUp: false, wpAiSetupError: String(err?.message ?? err) });
+    }
+  };
+
+  /** Remove WP AI from this site — deactivates the WP AI plugin and clears config. */
+  handleWpAiRemove = async (): Promise<void> => {
+    const { site, electron } = this.props;
+    const ipc = electron.ipcRenderer;
+    this.setState({ wpAiSettingUp: true, wpAiSetupError: null });
+    try {
+      const result = await ipc.invoke(IPC_CHANNELS.REMOVE_WP_AI, site.id) as { success: boolean; error?: string } | null;
+      if (!this.mounted) return;
+      this.setState({ wpAiSettingUp: false, wpAiPickerChoice: null, wpAiSetupError: result?.success === false ? (result.error ?? 'Remove failed') : null });
+      await this.fetchData();
+    } catch (err: any) {
+      if (this.mounted) this.setState({ wpAiSettingUp: false, wpAiSetupError: String(err?.message ?? err) });
+    }
+  };
+
+  handleWpAiConnect = async (): Promise<void> => {
+    const { wpAiPickerChoice, wpAiDirectProvider, wpAiConnector } = this.state;
+    const isSwitch = wpAiConnector !== null; // true = changing existing config
+
+    if (wpAiPickerChoice === 'power') {
+      // Power always uses the Hub connect + SETUP_AI flow regardless of switching
+      this.handleIwConnect();
+    } else if (wpAiPickerChoice === 'local-gateway') {
+      if (isSwitch) {
+        await this.handleWpAiSwitch('local-gateway');
+      } else {
+        await this.handleWpAiSetup('local-gateway');
+      }
+    } else if (wpAiPickerChoice === 'direct') {
+      const provider = wpAiDirectProvider ?? 'anthropic';
+      if (isSwitch) {
+        await this.handleWpAiSwitch(provider);
+      } else {
+        await this.handleWpAiSetup(provider);
+      }
+    }
+  };
+
+  handleWpAiDisconnect = async (): Promise<void> => {
+    this.handleIwDisconnect();
+  };
+
+  handleWpAiChange = (): void => {
+    this.setState({
+      wpAiPickerChoice: this.state.wpAiConnector,
+      wpAiSetupError: null,
+    });
+  };
+
   render(): React.ReactNode {
     const { loading, setupResult } = this.state;
 
@@ -957,38 +1403,14 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
         )
       : null;
 
-    const { site } = this.props;
-
-    return React.createElement('div', { style: { display: 'flex', height: '100%', overflow: 'hidden' } },
-
-      // Left: existing content (55%, scrollable)
-      React.createElement('div', { style: { flex: '0 0 55%', overflowY: 'auto' as const, padding: '16px 20px', borderRight: '1px solid var(--nxai-card-border, #30363d)', boxSizing: 'border-box' as const } },
-        // Top row: 2-column grid
-        React.createElement('div', { style: styles.grid },
-          this.renderContentIndexCard(),
-          this.renderAIProviderCard(),
-        ),
-        // Full-width: Database Health
-        this.renderDatabaseHealthCard(),
-        // Full-width: Tools
-        this.renderToolsCard(),
-        // Result banner at bottom
-        resultBanner,
-      ),
-
-      // Right: AI assistant (45%)
-      React.createElement('div', { style: { flex: '0 0 45%', display: 'flex', flexDirection: 'column' as const, overflow: 'hidden' } },
-        React.createElement('div', {
-          style: { padding: '10px 14px', borderBottom: '1px solid var(--nxai-card-border, #30363d)', fontSize: 11, fontWeight: 700, color: '#0ECAD4', flexShrink: 0 },
-        }, `✦ Ask about ${site.name}`),
-        React.createElement(AssistantPanel, {
-          electron: this.props.electron,
-          mode: 'site' as const,
-          siteId: this.props.site.id,
-          siteName: this.props.site.name,
-          layout: 'panel' as const,
-        }),
-      ),
+    return React.createElement('div', {
+      style: { padding: '14px', display: 'flex', flexDirection: 'column' as const, gap: 10, overflowY: 'auto' as const },
+    },
+      this.renderContentIndexCard(),
+      this.renderWpAiCard(),
+      this.renderToolsCard(),
+      this.renderDatabaseHealthCard(),
+      resultBanner,
     );
   }
 }

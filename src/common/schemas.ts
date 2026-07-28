@@ -46,7 +46,7 @@ const WpeSiteExceptionSchema = z.object({
 export const UpdateSettingsSchema = z.object({
   autoIndex: z.boolean().optional(),
   excludedSiteIds: z.array(SiteIdSchema).optional(),
-  aiProvider: z.enum(['anthropic', 'openai', 'ollama', 'google', 'local-gateway']).optional(),
+  aiProvider: z.enum(['anthropic', 'openai', 'ollama', 'google', 'local-gateway', 'power']).optional(),
   aiModel: z.string().optional(),
   onboardingDismissed: z.boolean().optional(),
   useLocalGateway: z.boolean().optional(),
@@ -67,6 +67,7 @@ export const UpdateSettingsSchema = z.object({
   wpeContentIndexIntervalHours: z.number().int().min(1).max(168).optional(),
   chatRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).optional(),
   dockedPanelEnabled: z.boolean().optional(),
+  embeddingModel: z.enum(['minilm', 'bge-small']).optional(),
 }).strict();
 
 export const PluginSlugSchema = z

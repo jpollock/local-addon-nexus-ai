@@ -4,6 +4,7 @@ import { OpenAIProvider } from './openai';
 import { AnthropicProvider } from './anthropic';
 import { GoogleProvider } from './google';
 import { LocalGatewayProvider } from './local-gateway';
+import { PowerProvider } from './power';
 
 // ---------------------------------------------------------------------------
 // Provider Registry
@@ -18,6 +19,7 @@ export function initializeProviders(): void {
     new OpenAIProvider(),
     new GoogleProvider(),
     new LocalGatewayProvider(),
+    new PowerProvider(),
   ];
   for (const p of all) {
     providers.set(p.id, p);

@@ -1,6 +1,34 @@
 import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
 import { resolveSite } from '../../site-resolver';
 import { indexFreshnessWarning } from '../../../twin/twin-helpers';
+import type { MetadataFilter } from '../../../../common/types';
+
+export function formatCustomFields(metadataJson: string): string {
+  let meta: any;
+  try { meta = JSON.parse(metadataJson); } catch { return ''; }
+  const cf = meta?.customFields;
+  if (!cf || typeof cf !== 'object') return '';
+  const entries = Object.entries(cf)
+    .filter(([, v]) => v !== '' && v != null)
+    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join('/') : String(v)}`);
+  return entries.length ? `   fields: ${entries.join(', ')}` : '';
+}
+
+export function coerceMetadataFilters(raw: unknown): MetadataFilter[] | undefined {
+  let val = raw;
+  if (typeof val === 'string') {
+    const t = val.trim();
+    if (!t) return undefined;
+    try { val = JSON.parse(t); } catch { return undefined; }
+  }
+  if (!Array.isArray(val)) return undefined;
+  // keep only well-formed filters
+  const out = val.filter(
+    (f) => f && typeof f === 'object' && typeof (f as any).field === 'string'
+      && typeof (f as any).op === 'string' && 'value' in (f as any),
+  ) as MetadataFilter[];
+  return out.length ? out : undefined;
+}
 
 export const searchContentHandler: McpToolHandler = {
   definition: {
@@ -9,10 +37,13 @@ export const searchContentHandler: McpToolHandler = {
       'Search a single site\'s indexed content using semantic similarity — understands meaning, not just keywords. ' +
       '"Optimize images" also matches posts about compression, WebP, lazy loading, and CDN. ' +
       'The site must be indexed — run reindex_site if results are missing or stale. ' +
-      'For searching across all sites simultaneously, use search_across_sites.' +
+      'For searching across all sites simultaneously, use search_across_sites. ' +
       'Works for both local sites (by name/domain) and WPE installs (by install name, e.g. "localwpe"). ' +
       'WPE install content is indexed by wpe_sync_sites — run that first if results are missing. ' +
-      'Returns ranked results with titles, excerpts, and relevance scores.',
+      'Returns ranked results with titles, excerpts, relevance scores, and customFields (when indexed). ' +
+      'For attribute/constraint questions (e.g. "easy", "under $20", "in <region>", a range or category), ' +
+      'first call describe_site_fields to see the site\'s structured fields, then search here with ' +
+      'searchMode:"hybrid", postType, and metadataFilters:[{field,op,value}] (op ∈ eq|ne|lt|lte|gt|gte|contains).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -35,6 +66,24 @@ export const searchContentHandler: McpToolHandler = {
         min_score: {
           type: 'number',
           description: 'Minimum relevance score (0-1). Results below this are filtered out. Default: 0.3',
+        },
+        searchMode: {
+          type: 'string',
+          description: 'Search mode: "semantic" (vector only, default), "hybrid" (vector + BM25 + metadata), "keyword" (BM25 only)',
+          enum: ['semantic', 'hybrid', 'keyword'],
+        },
+        metadataFilters: {
+          type: 'array',
+          description: 'Generic structured filters over indexed custom fields. Each: {field, op, value}. op ∈ eq/ne/lt/lte/gt/gte/contains. All must pass (AND). Missing field fails closed.',
+          items: {
+            type: 'object',
+            properties: {
+              field: { type: 'string' },
+              op: { type: 'string', enum: ['eq','ne','lt','lte','gt','gte','contains'] },
+              value: { type: ['string','number'] },
+            },
+            required: ['field','op','value'],
+          },
         },
       },
       required: ['site', 'query'],
@@ -77,6 +126,9 @@ export const searchContentHandler: McpToolHandler = {
       limit,
       postType: args.postType as string | undefined,
       relevanceFloor: args.min_score as number | undefined,
+      searchMode: args.searchMode as 'semantic' | 'hybrid' | 'keyword' | undefined,
+      metadataFilters: coerceMetadataFilters(args.metadataFilters),
+      queryText: args.query as string,
     });
 
     if (results.length === 0) {
@@ -92,7 +144,10 @@ export const searchContentHandler: McpToolHandler = {
           ...(meta.categories ?? []),
         ].join(', ');
 
-        return `${i + 1}. **${r.title}** (${tags}, score: ${r.score.toFixed(3)})\n   ${excerpt}\n   Post ID: ${r.postId}`;
+        const customFieldsLine = formatCustomFields(r.metadata);
+        const customFieldsPart = customFieldsLine ? `\n${customFieldsLine}` : '';
+
+        return `${i + 1}. **${r.title}** (${tags}, score: ${r.score.toFixed(3)})\n   ${excerpt}\n   Post ID: ${r.postId}${customFieldsPart}`;
       })
       .join('\n\n');
 

@@ -48,11 +48,25 @@ export interface VectorDocument {
   doc_url: string;
 }
 
+export type MetadataFilterOp = 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte' | 'contains';
+
+export interface MetadataFilter {
+  field: string;
+  op: MetadataFilterOp;
+  value: string | number;
+}
+
 export interface SearchOptions {
   limit: number;
   postType?: string;
   /** Minimum relevance score (0-1). Results below this threshold are filtered out. Default: 0.3 */
   relevanceFloor?: number;
+  /** Search mode: 'semantic' (vector only, default), 'hybrid' (vector + BM25 + metadata), 'keyword' (BM25 only) */
+  searchMode?: 'semantic' | 'hybrid' | 'keyword';
+  /** Query text (required for hybrid and keyword modes) */
+  queryText?: string;
+  /** Metadata filters for hybrid search */
+  metadataFilters?: MetadataFilter[];
 }
 
 export interface SearchResult {
@@ -245,7 +259,7 @@ export interface IpcResponse<T = unknown> {
 // Settings
 // ---------------------------------------------------------------------------
 
-export type AIProvider = 'anthropic' | 'openai' | 'google' | 'ollama' | 'local-gateway';
+export type AIProvider = 'anthropic' | 'openai' | 'google' | 'ollama' | 'local-gateway' | 'power';
 
 /** Per-environment on/off flags for one WPE operation type */
 export interface WpeEnvFlags {
@@ -315,6 +329,8 @@ export interface NexusSettings {
   chatRetentionDays?: 7 | 30 | 90 | null;
   /** Whether the docked AI chat panel is enabled. Default: true */
   dockedPanelEnabled?: boolean;
+  /** Which embedding model to use for semantic search. Default: 'minilm' (22MB, fast). 'nomic' = 522MB download, better quality. */
+  embeddingModel?: 'minilm' | 'bge-small';
 }
 
 export interface SiteAIConfig {
@@ -326,6 +342,36 @@ export interface SiteAIConfig {
   configuredAt: number;
   /** Whether Local AI Gateway was active when this site was configured */
   useLocalGateway?: boolean;
+}
+
+// ===== WPE Hub Integration (IW) Types =====
+
+/** Live connection status read from a site's wp_options via wp eval. */
+export interface IwConnectionStatus {
+  /** True when wp-content/plugins/wpe-hub/ exists (filesystem check). */
+  hubInstalled: boolean;
+  /** True when wpe_auth_registered=true AND wpe_auth_client_id is non-empty. */
+  connected: boolean;
+  /** True when wpe_auth_copy_detected is non-empty — site was cloned, auth cleared. */
+  copyReset: boolean;
+  /** wpe_auth_client_id, or null if not connected. */
+  clientId: string | null;
+  /** wpe_auth_project_id, or null if project picker not complete. */
+  projectId: string | null;
+  /** wpe_auth_account_id, or null — lazy, written on first token use after connect. */
+  accountId: string | null;
+  /** True when 'wpengine' connector is approved in wpai_connector_approvals — WP AI is set up with Power. */
+  wpEngineConnectorApproved: boolean;
+}
+
+/** Persisted binding in Nexus storage, keyed by local site ID. */
+export interface IwSiteBinding {
+  siteId: string;
+  clientId: string;
+  projectId: string;
+  /** May be empty string initially; populated after first token use. */
+  accountId: string;
+  connectedAt: number;
 }
 
 // ===== Chat Session Types =====

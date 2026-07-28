@@ -52,6 +52,14 @@ import { executeSentinelCommands } from './sentinel/SentinelExecutor';
 import type { AIContextData } from './ai-context/AIContextGenerator';
 import { AuditLogger, AUDITED_OPERATIONS } from './audit/AuditLogger';
 import {
+  detectHubPlugin,
+  installHubPlugin,
+  getConnectionStatus,
+  readIwBinding,
+  writeIwBinding,
+  clearIwBinding,
+} from './mcp/modules/iw/hub-connect';
+import {
   validateInput,
   SiteIdSchema,
   UpdateSettingsSchema,
@@ -1362,6 +1370,49 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       return result;
     } catch (err: any) {
       return { success: false, error: err.message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.REMOVE_WP_AI, async (_event: any, siteId: string) => {
+    try {
+      const validated = validateInput(SiteIdSchema, siteId);
+
+      // Auto-start if needed for WP-CLI
+      const statuses = localServicesBridge.getAllSiteStatuses();
+      let wasAutoStarted = false;
+      if (statuses[validated] !== 'running') {
+        await localServicesBridge.startSite(validated);
+        wasAutoStarted = true;
+        await waitForDatabaseReady(validated, localServicesBridge, localLogger, 30000);
+      }
+
+      // Deactivate WP AI plugin and all known provider plugins
+      const pluginsToDeactivate = [
+        'ai',
+        'ai-provider-for-anthropic',
+        'ai-provider-for-openai',
+        'ai-provider-for-google',
+        'ai-provider-for-ollama',
+        'ai-provider-for-local-gateway',
+      ];
+      for (const slug of pluginsToDeactivate) {
+        await localServicesBridge.wpCliRun(validated, ['plugin', 'deactivate', slug]).catch(() => {});
+      }
+
+      // Clear per-site AI config from Nexus storage
+      const siteConfigs = (registryStorage.get(STORAGE_KEYS.SITE_AI_CONFIG) ?? {}) as Record<string, any>;
+      delete siteConfigs[validated];
+      registryStorage.set(STORAGE_KEYS.SITE_AI_CONFIG, siteConfigs);
+
+      if (wasAutoStarted) {
+        await localServicesBridge.stopSite(validated).catch(() => {});
+      }
+
+      localLogger.info(`[NexusAI] WP AI removed from site ${validated}`);
+      return { success: true };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] REMOVE_WP_AI error:', (err as Error).message);
+      return { success: false, error: (err as Error).message };
     }
   });
 
@@ -4878,6 +4929,112 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         ...(properties as any),
       });
     } catch { /* never block the renderer */ }
+  });
+
+  // ─── Intelligent Web (IW) connect handlers ──────────────────────────────────
+
+  safeHandle(IPC_CHANNELS.IW_GET_STATUS, async (_event: any, siteId: string) => {
+    try {
+      const site = localServicesBridge.resolveSiteObject(siteId) as any;
+      const webRoot: string = site?.paths?.webRoot ?? '';
+      const hubInstalled = webRoot ? detectHubPlugin(webRoot) : false;
+
+      if (localServicesBridge.getSiteStatus(siteId) !== 'running') {
+        // Site is halted — return stored binding data so the tab reflects
+        // the known-good state without needing WP-CLI.
+        const stored = readIwBinding(siteId, registryStorage);
+        const connected = !!(stored?.clientId);
+        return {
+          hubInstalled,
+          connected,
+          copyReset: false,
+          clientId: stored?.clientId ?? null,
+          projectId: stored?.projectId ?? null,
+          accountId: stored?.accountId ?? null,
+          // If we have a stored binding, the connector was approved during setup
+          wpEngineConnectorApproved: connected,
+        };
+      }
+
+      const status = await getConnectionStatus(siteId, localServicesBridge);
+      const binding = readIwBinding(siteId, registryStorage);
+
+      // Opportunistically persist binding when connected externally (no Nexus connect flow)
+      if (status.connected && status.clientId && !binding) {
+        writeIwBinding({
+          siteId,
+          clientId: status.clientId,
+          projectId: status.projectId ?? '',
+          accountId: status.accountId ?? '',
+          connectedAt: Date.now(),
+        }, registryStorage);
+      }
+
+      // Update stored binding when lazy accountId arrives
+      if (status.connected && binding && !binding.accountId && status.accountId) {
+        writeIwBinding({ ...binding, accountId: status.accountId }, registryStorage);
+      }
+
+      return status;
+    } catch (err: any) {
+      localLogger.error('[NexusAI] IW_GET_STATUS error:', (err as Error).message);
+      return { hubInstalled: false, connected: false, copyReset: false, clientId: null, projectId: null, accountId: null, wpEngineConnectorApproved: false };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.IW_CONNECT, async (_event: any, siteId: string) => {
+    try {
+      const site = localServicesBridge.resolveSiteObject(siteId) as any;
+      if (!site) return { ok: false, error: 'Site not found' };
+
+      const webRoot: string = site?.paths?.webRoot ?? '';
+      const hubInstalled = webRoot ? detectHubPlugin(webRoot) : false;
+      if (!hubInstalled) {
+        // Hub Plugin install requires WP-CLI — auto-start site if halted
+        const siteStatus = localServicesBridge.getSiteStatus(siteId);
+        if (siteStatus !== 'running') {
+          localLogger.info(`[NexusAI] IW_CONNECT: auto-starting site ${siteId} for Hub Plugin install`);
+          await localServicesBridge.startSite(siteId);
+          await waitForDatabaseReady(siteId, localServicesBridge, localLogger, 30000);
+        }
+        const installResult = await installHubPlugin(siteId, localServicesBridge);
+        if (!installResult.ok) return { ok: false, error: installResult.error };
+      }
+
+      const siteUrl: string = site.url || `http://${site.domain}`;
+      // Open Hub settings directly — WordPress handles auth naturally:
+      // - existing session → lands on Hub settings immediately
+      // - no session → wp-login.php?redirect_to=... → Hub settings after login
+      // localwp_auto_login cannot be used here: Local's bootstrap always redirects
+      // to user_admin_url() (dashboard) regardless of the originating URL.
+      const hubAdminUrl = `${siteUrl}/wp-admin/admin.php?page=wpe-hub-settings`;
+
+      const { shell } = await import('electron');
+      shell.openExternal(hubAdminUrl);
+
+      return { ok: true, polling: true, hubAdminUrl };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] IW_CONNECT error:', (err as Error).message);
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  safeHandle(IPC_CHANNELS.IW_DISCONNECT, async (_event: any, siteId: string) => {
+    try {
+      clearIwBinding(siteId, registryStorage);
+
+      if (localServicesBridge.getSiteStatus(siteId) === 'running') {
+        await localServicesBridge.wpCliRun(siteId, [
+          'eval',
+          `if (class_exists('WpeAuthCore')) { WpeAuthCore::clear_registration(); } delete_option('wpe_auth_copy_detected');`,
+        ]).catch(() => {});
+      }
+
+      return { ok: true };
+    } catch (err: any) {
+      localLogger.error('[NexusAI] IW_DISCONNECT error:', (err as Error).message);
+      return { ok: false, error: (err as Error).message };
+    }
   });
 
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() COMPLETED - all handlers registered');

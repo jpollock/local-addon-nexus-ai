@@ -5,6 +5,7 @@ const sqliteVec = require('sqlite-vec') as { load: (db: unknown) => void; serial
 import { VECTOR_DIMENSIONS } from '../../common/constants';
 import { VectorDocument, SearchOptions, SearchResult, SiteIndexStats } from '../../common/types';
 import type { IVectorStore } from './IVectorStore';
+import { applyMetadataFilters } from './metadata-filters';
 
 export class SqliteVecStore implements IVectorStore {
   private db: Database.Database | null = null;
@@ -111,7 +112,7 @@ export class SqliteVecStore implements IVectorStore {
   async search(
     siteId: string,
     queryVector: Float32Array | number[],
-    options: SearchOptions,
+    options: SearchOptions & { queryText?: string },
   ): Promise<SearchResult[]> {
     // Validate postType early — before any DB access — to prevent injection
     if (options.postType) {
@@ -124,10 +125,68 @@ export class SqliteVecStore implements IVectorStore {
     ).get(`${p}_docs`);
     if (!tableExists) return [];
 
+    const mode = options.searchMode ?? 'semantic';
+    const vec = queryVector instanceof Float32Array ? queryVector : new Float32Array(queryVector);
+
+    // Mode branching: hybrid, keyword, or semantic (default)
+    if (mode === 'hybrid' && options.queryText) {
+      return this.searchHybrid(siteId, vec, options.queryText, options);
+    }
+
+    if (mode === 'keyword' && options.queryText) {
+      // Pure BM25 keyword search
+      const limit = options.limit ?? 10;
+      const bm25Rows = this.searchBM25(siteId, options.queryText, limit * 3, options.postType);
+      if (bm25Rows.length === 0) return [];
+
+      const placeholders = bm25Rows.map(() => '?').join(', ');
+      const rowidParams = bm25Rows.map(r => r.rowid);
+
+      type RawDoc = {
+        rowid: number;
+        id: string;
+        title: string;
+        content: string;
+        post_type: string;
+        post_id: number;
+        metadata: string;
+      };
+
+      const docRows = this.conn.prepare(
+        `SELECT rowid, id, title, content, post_type, post_id, metadata FROM "${p}_docs" WHERE rowid IN (${placeholders})`,
+      ).all(...rowidParams) as RawDoc[];
+
+      const byPostId = new Map<number, SearchResult>();
+      const bm25RankMap = new Map<number, number>();
+      bm25Rows.forEach((r, i) => bm25RankMap.set(r.rowid, i + 1));
+
+      for (const doc of docRows) {
+        const rank = bm25RankMap.get(doc.rowid) ?? 1000;
+        const score = 1 / (60 + rank); // RRF-style scoring for consistency
+
+        const existing = byPostId.get(doc.post_id);
+        if (!existing || score > existing.score) {
+          byPostId.set(doc.post_id, {
+            id: doc.id,
+            title: doc.title,
+            content: doc.content,
+            postType: doc.post_type,
+            postId: doc.post_id,
+            score,
+            metadata: doc.metadata,
+          });
+        }
+      }
+
+      return Array.from(byPostId.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+    }
+
+    // Default: semantic (vector-only) search
     const limit = options.limit ?? 10;
     const relevanceFloor = options.relevanceFloor ?? 0.3;
     const fetchLimit = limit * 3;
-    const vec = queryVector instanceof Float32Array ? queryVector : new Float32Array(queryVector);
     // Convert to raw IEEE-754 bytes — sqliteVec.serialize does not exist in v0.1.9
     const blob = Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength);
 
@@ -186,6 +245,182 @@ export class SqliteVecStore implements IVectorStore {
     }
 
     return Array.from(byPostId.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+  }
+
+  /**
+   * FTS5 BM25 keyword search helper
+   */
+  private searchBM25(
+    siteId: string,
+    queryText: string,
+    fetchLimit: number,
+    postTypeFilter?: string,
+  ): Array<{ rowid: number; rank: number; post_id: number }> {
+    const p = this.tablePrefix(siteId);
+
+    // Sanitize query text for FTS5: remove special chars, split into words
+    const sanitized = queryText
+      .replace(/[^a-zA-Z0-9\s]/g, ' ')  // Remove special chars
+      .split(/\s+/)
+      .filter(w => w.length > 2)  // Keep words longer than 2 chars
+      .join(' ');
+
+    if (!sanitized) return [];
+
+    // FTS5 rank is negative (better = more negative)
+    // Query FTS5 table directly, then join docs
+    // NOTE: FTS5 virtual tables use unquoted table names in MATCH clause.
+    // fetchLimit is the number of candidate rows to pull (callers widen it when
+    // post-fetch metadata filtering will discard many).
+    const ftsTableName = `${p}_fts`;
+    const ftsLimit = Math.max(1, Math.floor(fetchLimit));
+    const ftsRows = this.conn.prepare(
+      `SELECT rowid, rank FROM ${ftsTableName} WHERE ${ftsTableName} MATCH ? ORDER BY rank LIMIT ${ftsLimit}`
+    ).all(sanitized) as Array<{ rowid: number; rank: number }>;
+
+    if (ftsRows.length === 0) return [];
+
+    // Join with docs table to get post_id
+    const placeholders = ftsRows.map(() => '?').join(', ');
+    const rowidParams = ftsRows.map(r => r.rowid);
+
+    let sql = `SELECT rowid, post_id FROM "${p}_docs" WHERE rowid IN (${placeholders})`;
+    const params: any[] = rowidParams;
+
+    if (postTypeFilter) {
+      sql += ` AND post_type = ?`;
+      params.push(postTypeFilter);
+    }
+
+    const docRows = this.conn.prepare(sql).all(...params) as Array<{ rowid: number; post_id: number }>;
+
+    // Merge rank from FTS with post_id from docs
+    const rowidToRank = new Map(ftsRows.map(r => [r.rowid, r.rank]));
+    return docRows.map(d => ({
+      rowid: d.rowid,
+      rank: rowidToRank.get(d.rowid) ?? 0,
+      post_id: d.post_id,
+    }));
+  }
+
+  /**
+   * Hybrid search: Vector ANN + BM25 + metadata fusion
+   */
+  private async searchHybrid(
+    siteId: string,
+    queryVector: Float32Array,
+    queryText: string,
+    options: SearchOptions,
+  ): Promise<SearchResult[]> {
+    const p = this.tablePrefix(siteId);
+    const limit = options.limit ?? 10;
+    const relevanceFloor = options.relevanceFloor ?? 0.3;
+    // When metadataFilters are present, post-fetch filtering discards candidates,
+    // so a limit*3 pool can leave far fewer than `limit` results (poor recall).
+    // Widen the candidate pool substantially in that case so filtering has enough
+    // to work with. Capped so huge indexes stay bounded.
+    const hasFilters = (options.metadataFilters?.length ?? 0) > 0;
+    const FILTERED_FETCH_CAP = 1000;
+    const fetchLimit = hasFilters ? Math.max(limit * 3, FILTERED_FETCH_CAP) : limit * 3;
+    const blob = Buffer.from(queryVector.buffer, queryVector.byteOffset, queryVector.byteLength);
+
+    // Step 1: Run vector ANN and BM25 in parallel (same widened pool for both)
+    const vecRows = this.conn.prepare(
+      `SELECT rowid, distance FROM "${p}_vec" WHERE embedding MATCH ? AND k = ? ORDER BY distance`,
+    ).all(blob, fetchLimit) as Array<{ rowid: number; distance: number }>;
+
+    const bm25Rows = this.searchBM25(siteId, queryText, fetchLimit, options.postType);
+
+    if (vecRows.length === 0 && bm25Rows.length === 0) return [];
+
+    // Step 2: Build rank maps for RRF fusion
+    const vecRankMap = new Map<number, number>(); // rowid -> rank (1-based)
+    vecRows.forEach((r, i) => vecRankMap.set(r.rowid, i + 1));
+
+    const bm25RankMap = new Map<number, number>();
+    bm25Rows.forEach((r, i) => bm25RankMap.set(r.rowid, i + 1));
+
+    // Step 3: Reciprocal Rank Fusion (k=60 is standard)
+    const rrfScore = (rank: number, k = 60): number => 1 / (k + rank);
+    const allRowids = new Set([...vecRankMap.keys(), ...bm25RankMap.keys()]);
+    const fusedScores = new Map<number, number>();
+
+    for (const rowid of allRowids) {
+      const vecRank = vecRankMap.get(rowid) ?? 1000;
+      const bm25Rank = bm25RankMap.get(rowid) ?? 1000;
+      fusedScores.set(rowid, rrfScore(vecRank) + rrfScore(bm25Rank));
+    }
+
+    // Step 4: Fetch doc metadata for all matching rowids
+    const placeholders = Array.from(allRowids).map(() => '?').join(', ');
+    const rowidParams = Array.from(allRowids);
+
+    type RawDoc = {
+      rowid: number;
+      id: string;
+      title: string;
+      content: string;
+      post_type: string;
+      post_id: number;
+      metadata: string;
+    };
+
+    const docRows = this.conn.prepare(
+      `SELECT rowid, id, title, content, post_type, post_id, metadata FROM "${p}_docs" WHERE rowid IN (${placeholders})`,
+    ).all(...rowidParams) as RawDoc[];
+
+    // Step 5: Apply metadata filters (Pass 1 — build candidates)
+    // RRF scores are tiny (~0.03 max), so we normalize to 0-1 for final output
+    // and apply the relevanceFloor on the normalized scale (top result ≈ 1.0).
+    const byPostId = new Map<number, SearchResult>();
+
+    for (const doc of docRows) {
+      // postType filter — vector-matched docs bypass the BM25 postType filter,
+      // so enforce it here for ALL candidates.
+      if (options.postType && doc.post_type !== options.postType) continue;
+
+      let score = fusedScores.get(doc.rowid) ?? 0;
+
+      // Parse metadata for custom fields
+      const meta = JSON.parse(doc.metadata);
+      const custom = meta.customFields ?? {};
+
+      // Metadata filters (exclude if doesn't match)
+      if (options.metadataFilters && options.metadataFilters.length > 0
+          && !applyMetadataFilters(custom, options.metadataFilters)) {
+        continue;
+      }
+
+      // Dedup by postId (keep best chunk)
+      const existing = byPostId.get(doc.post_id);
+      if (!existing || score > existing.score) {
+        byPostId.set(doc.post_id, {
+          id: doc.id,
+          title: doc.title,
+          content: doc.content,
+          postType: doc.post_type,
+          postId: doc.post_id,
+          score,
+          metadata: doc.metadata,
+        });
+      }
+    }
+
+    // Pass 2: normalize scores to 0-1 (min-max by peak), apply relevanceFloor
+    const candidates = Array.from(byPostId.values());
+    if (candidates.length === 0) return [];
+
+    const maxScore = Math.max(...candidates.map(c => c.score));
+    if (maxScore > 0) {
+      for (const c of candidates) {
+        c.score = c.score / maxScore;
+      }
+    }
+
+    return candidates
+      .filter(c => c.score >= relevanceFloor)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
   }
