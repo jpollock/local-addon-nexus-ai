@@ -362,11 +362,17 @@ export class SqliteVecStore implements IVectorStore {
       `SELECT rowid, id, title, content, post_type, post_id, metadata FROM "${p}_docs" WHERE rowid IN (${placeholders})`,
     ).all(...rowidParams) as RawDoc[];
 
-    // Step 5: Apply metadata filters and boosts
+    // Step 5: Apply metadata filters and boosts (Pass 1 — build candidates)
+    // RRF scores are tiny (~0.03 max), so we normalize to 0-1 after boosting,
+    // then apply the relevanceFloor on the normalized scale (top result ≈ 1.0).
     const filters = options.metadataFilters;
     const byPostId = new Map<number, SearchResult>();
 
     for (const doc of docRows) {
+      // postType filter — vector-matched docs bypass the BM25 postType filter,
+      // so enforce it here for ALL candidates.
+      if (options.postType && doc.post_type !== options.postType) continue;
+
       let score = fusedScores.get(doc.rowid) ?? 0;
 
       // Parse metadata for custom fields
@@ -403,10 +409,7 @@ export class SqliteVecStore implements IVectorStore {
         score *= 1.3;
       }
 
-      // Relevance floor
-      if (score < relevanceFloor) continue;
-
-      // Dedup by postId (keep best chunk)
+      // Dedup by postId (keep best chunk) — raw boosted score for now
       const existing = byPostId.get(doc.post_id);
       if (!existing || score > existing.score) {
         byPostId.set(doc.post_id, {
@@ -421,7 +424,19 @@ export class SqliteVecStore implements IVectorStore {
       }
     }
 
-    return Array.from(byPostId.values())
+    // Pass 2: normalize scores to 0-1 (min-max by peak), apply relevanceFloor
+    const candidates = Array.from(byPostId.values());
+    if (candidates.length === 0) return [];
+
+    const maxScore = Math.max(...candidates.map(c => c.score));
+    if (maxScore > 0) {
+      for (const c of candidates) {
+        c.score = c.score / maxScore;
+      }
+    }
+
+    return candidates
+      .filter(c => c.score >= relevanceFloor)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
   }
