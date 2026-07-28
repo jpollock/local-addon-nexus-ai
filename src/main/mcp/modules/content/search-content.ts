@@ -14,6 +14,22 @@ export function formatCustomFields(metadataJson: string): string {
   return entries.length ? `   fields: ${entries.join(', ')}` : '';
 }
 
+export function coerceMetadataFilters(raw: unknown): MetadataFilter[] | undefined {
+  let val = raw;
+  if (typeof val === 'string') {
+    const t = val.trim();
+    if (!t) return undefined;
+    try { val = JSON.parse(t); } catch { return undefined; }
+  }
+  if (!Array.isArray(val)) return undefined;
+  // keep only well-formed filters
+  const out = val.filter(
+    (f) => f && typeof f === 'object' && typeof (f as any).field === 'string'
+      && typeof (f as any).op === 'string' && 'value' in (f as any),
+  ) as MetadataFilter[];
+  return out.length ? out : undefined;
+}
+
 export const searchContentHandler: McpToolHandler = {
   definition: {
     name: 'search_site_content',
@@ -108,7 +124,7 @@ export const searchContentHandler: McpToolHandler = {
       postType: args.postType as string | undefined,
       relevanceFloor: args.min_score as number | undefined,
       searchMode: args.searchMode as 'semantic' | 'hybrid' | 'keyword' | undefined,
-      metadataFilters: args.metadataFilters as MetadataFilter[] | undefined,
+      metadataFilters: coerceMetadataFilters(args.metadataFilters),
       queryText: args.query as string,
     });
 
