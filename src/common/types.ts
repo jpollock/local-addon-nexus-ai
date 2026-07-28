@@ -53,6 +53,15 @@ export interface SearchOptions {
   postType?: string;
   /** Minimum relevance score (0-1). Results below this threshold are filtered out. Default: 0.3 */
   relevanceFloor?: number;
+  /** Search mode: 'semantic' (vector only, default), 'hybrid' (vector + BM25 + metadata), 'keyword' (BM25 only) */
+  searchMode?: 'semantic' | 'hybrid' | 'keyword';
+  /** Metadata filters for hybrid search */
+  metadataFilters?: {
+    minDifficulty?: number;  // 1-5
+    maxDifficulty?: number;  // 1-5
+    maxDistance?: number;    // miles
+    maxElevation?: number;   // feet
+  };
 }
 
 export interface SearchResult {

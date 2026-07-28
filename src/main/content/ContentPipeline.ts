@@ -428,6 +428,7 @@ export class ContentPipeline {
         date: post.date,
         categories: post.categories,
         tags: post.tags,
+        customFields: post.customFields ?? {},
       }),
       indexedAt: Date.now(),
       post_date_gmt: '',
