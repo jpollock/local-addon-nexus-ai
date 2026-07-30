@@ -105,6 +105,7 @@ export class ToolRegistry {
           target: String(args.site ?? args.install_id ?? args.install_name ?? 'unknown'),
           parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
           outcome: result.isError ? 'failure' : 'success',
+          error: result.isError ? (result.content[0]?.text || 'Unknown error') : undefined,
         });
       }
 
@@ -116,6 +117,23 @@ export class ToolRegistry {
 
       // Record error metrics
       metrics.recordToolCall(name, duration, true, accessMethod);
+
+      // Durable trail for unhandled exceptions. A Tier 2/3 operation that
+      // throws mid-execution (an unhandled exception in a WPE API client, a
+      // handler bug) must still leave a trace — this is the case an operator
+      // investigating an incident needs most, and it was silently uncovered
+      // by the success-path-only write above. Mirrors that write exactly,
+      // using the thrown error's message.
+      const tier = getToolSafety(name).tier;
+      if (tier >= 2) {
+        services.operationAuditLog?.log({
+          operation: name,
+          target: String(args.site ?? args.install_id ?? args.install_name ?? 'unknown'),
+          parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
+          outcome: 'failure',
+          error: message,
+        });
+      }
 
       logger.error(`Error in handler "${name}"`, { message, stack: err instanceof Error ? err.stack : undefined });
       return {

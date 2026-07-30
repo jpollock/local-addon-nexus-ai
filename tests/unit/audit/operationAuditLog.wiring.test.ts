@@ -24,6 +24,17 @@ function makeTool(name: string, opts: { isError?: boolean; text?: string } = {})
   };
 }
 
+/** A tool whose handler throws instead of returning an error result — the
+ * regression guard for ToolRegistry.call()'s catch branch. */
+function makeThrowingTool(name: string, errorMessage: string): McpToolHandler {
+  return {
+    definition: { name, description: 'test tool', inputSchema: {} },
+    execute: async () => {
+      throw new Error(errorMessage);
+    },
+  };
+}
+
 describe('audit wiring at the ToolRegistry dispatch chokepoint', () => {
   let dir: string, logPath: string;
   beforeEach(() => { dir = makeDir(); logPath = path.join(dir, 'operation-audit.log'); });
@@ -65,6 +76,25 @@ describe('audit wiring at the ToolRegistry dispatch chokepoint', () => {
 
     const entry = JSON.parse(fs.readFileSync(logPath, 'utf-8').trim());
     expect(entry.outcome).toBe('failure');
+    expect(entry.error).toContain('boom');
+  });
+
+  it('records a durable failure entry with the error message when the handler throws', async () => {
+    const registry = new ToolRegistry();
+    registry.register(makeThrowingTool('wp_core_update', 'connection reset by peer')); // Tier 2
+
+    const result = await registry.call('wp_core_update', { site: 'demo' }, servicesWithAudit(), 'mcp');
+
+    // The tool call itself still resolves with an error result rather than
+    // throwing out of registry.call() — the audit write must not change that.
+    expect(result.isError).toBe(true);
+
+    const lines = fs.readFileSync(logPath, 'utf-8').trim().split('\n');
+    expect(lines).toHaveLength(1);
+    const entry = JSON.parse(lines[0]);
+    expect(entry.operation).toBe('wp_core_update');
+    expect(entry.outcome).toBe('failure');
+    expect(entry.error).toContain('connection reset by peer');
   });
 
   it('does not break the tool call when auditing is unavailable', async () => {
