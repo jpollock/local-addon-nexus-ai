@@ -109,6 +109,7 @@ export class McpSafetyWrapper {
     error: string | undefined,
     duration_ms: number,
   ): void {
+    // In-memory trail (live introspection via getEntries()).
     services.auditLogger?.log({
       timestamp: new Date().toISOString(),
       toolName,
@@ -119,6 +120,19 @@ export class McpSafetyWrapper {
       error,
       duration_ms,
     });
+
+    // Durable trail — Tier 2 (modifying) and Tier 3 (destructive) only. Tier 1
+    // is read-only and would swamp the file with no compliance value.
+    // OperationAuditLog redacts params and never throws.
+    if (tier >= 2) {
+      services.operationAuditLog?.log({
+        operation: toolName,
+        target: String(params.site ?? params.install_id ?? params.install_name ?? 'unknown'),
+        parameters: { ...params, _tier: tier, _durationMs: duration_ms, _confirmed: confirmed },
+        outcome: result === 'success' ? 'success' : result === 'error' ? 'failure' : 'pending',
+        error,
+      });
+    }
   }
 
   /** Public access to ConfirmationManager for ChatService tier 3 approval flow */

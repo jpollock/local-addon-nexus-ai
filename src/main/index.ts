@@ -226,6 +226,16 @@ export default function main(context: any): void {
     }
   })();
 
+  // auditLogger + operationAuditLog — constructed here (before the before-quit
+  // handler below) so the handler's closure can reference them without a TDZ
+  // ReferenceError at quit time; they used to be constructed further down
+  // (near Phase 3) which sat AFTER this handler in source order.
+  const auditLogger = createAuditLogger(
+    path.join(localDataDir, 'nexus-ai', 'audit.log'),
+  );
+  const { OperationAuditLog, defaultAuditLogPath } = require('./audit/OperationAuditLog');
+  const operationAuditLog = new OperationAuditLog(defaultAuditLogPath());
+
   // Checkpoint WAL on clean shutdown so committed writes survive a restart.
   // Also run a passive checkpoint every 5 minutes to keep WAL size bounded.
   const { app } = require('electron');
@@ -233,7 +243,12 @@ export default function main(context: any): void {
     agentScheduler?.stop();
     daemonManager?.stopAll().catch(() => {});
     graphService.close().catch(() => {});
+    auditLogger?.flush().catch(() => {});   // was never called — entries were lost on every exit
   });
+
+  // Periodic flush so a hard kill (SIGKILL, crash) loses at most 5 minutes.
+  setInterval(() => { auditLogger?.flush().catch(() => {}); }, 5 * 60 * 1000);
+
   setInterval(() => {
     try { graphService.getDb()?.pragma('wal_checkpoint(PASSIVE)'); } catch {}
   }, 5 * 60 * 1000);
@@ -279,9 +294,8 @@ export default function main(context: any): void {
   registerLifecycleHooks(context, contentPipeline, indexRegistry, localLogger, readyPromise, registryStorage, localServicesBridge, metadataCache, sendToRenderer, graphService, mysqlExtractor);
 
   // Phase 3: Boot MCP server (async — does not block addon load)
-  const auditLogger = createAuditLogger(
-    path.join(localDataDir, 'nexus-ai', 'audit.log'),
-  );
+  // (auditLogger + operationAuditLog are constructed earlier — see the
+  // before-quit handler above — so they aren't re-declared here.)
 
   // Initialize event processor
   const eventProcessor = new EventProcessor({
@@ -353,6 +367,7 @@ export default function main(context: any): void {
     logger: localLogger,
     localServices: localServicesBridge,
     auditLogger,
+    operationAuditLog,
     registryStorage,
     graphService: graphService as any,
     eventProcessor: eventProcessor as any,
