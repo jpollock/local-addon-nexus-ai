@@ -34,7 +34,7 @@ import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
-import { registerIpcHandlers, getAgentSetting } from './ipc-handlers';
+import { registerIpcHandlers, getAgentSetting, seedAgentDefaultsIfMissing } from './ipc-handlers';
 import { initializeProviders } from './chat/providers/index';
 import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
@@ -563,6 +563,11 @@ export default function main(context: any): void {
         const agentUnsubs = new Map<string, Unsubscribe[]>();
 
         function wireAgentTriggers(agent: AgentDefinition): void {
+          // New agents must not auto-run — seed scheduleEnabled/eventsEnabled to false
+          // (opt-in) before any cron/event trigger below is registered. Never overwrites
+          // an agent that already has persisted settings.
+          seedAgentDefaultsIfMissing([agent.name]);
+
           const unsubs: Unsubscribe[] = [];
           for (const trigger of agent.triggers) {
             if (trigger.type === 'cron') {

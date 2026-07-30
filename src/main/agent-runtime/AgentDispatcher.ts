@@ -10,6 +10,7 @@ import type { ResolvedAIProvider } from '../ai/getAIProvider';
 import type { AgentStateStore } from './AgentStateStore';
 import type { AgentDbManager } from './AgentDbManager';
 import { buildAgentContext } from './buildAgentContext';
+import { getAgentSetting } from '../ipc-handlers';
 
 // Ban consecutive underscores so the __ MCP delimiter is unambiguous.
 const VALID_AGENT_NAME = /^[a-z0-9](?:[a-z0-9]|_(?!_)|-)*[a-z0-9]$|^[a-z0-9]$/;
@@ -43,6 +44,18 @@ export class AgentDispatcher {
   }
 
   async dispatch(agentName: string, toolName: string, args: unknown): Promise<McpToolResult> {
+    // A disabled agent must not run via ANY path — checked before tool lookup so a
+    // disabled agent never leaks which tools it has. This mirrors the guard already
+    // in the AGENT_RUN_NOW IPC handler. Without this, an MCP tool call (e.g. from the
+    // chat assistant) bypasses the cron/event 'enabled' checks entirely, since
+    // contributed tools otherwise have no gate of their own.
+    if (getAgentSetting(agentName, 'enabled') === false) {
+      return {
+        content: [{ type: 'text', text: `Agent "${agentName}" is disabled — enable it in Agent settings before calling its tools.` }],
+        isError: true,
+      };
+    }
+
     const registered = this.contributedRegistry.get(agentName, toolName);
     if (!registered) {
       return {

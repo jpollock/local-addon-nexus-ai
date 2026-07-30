@@ -278,6 +278,57 @@ export function getAgentAutonomy(agentId: string): 'suggest' | 'ask' | 'auto' {
   return cache?.get(agentId)?.autonomy ?? 'ask'; // default ask (safest before settings sync)
 }
 
+/**
+ * Seed safe defaults for agents never before persisted to agent-settings.json.
+ * A freshly-discovered agent must NOT auto-run: enabled:true (usable via chat / Run Now /
+ * contributed tools) but scheduleEnabled:false and eventsEnabled:false (no automatic cron
+ * or event-triggered execution) until the user explicitly opts in via the agent's settings
+ * panel. Without this, `getAgentSetting`'s permissive `?? true` fallback lets a brand-new
+ * agent's hardcoded cron/event triggers fire immediately and unattended — this is how
+ * security-sentinel ended up running a fleet-wide sweep every 15 minutes for weeks with
+ * nobody having configured anything.
+ *
+ * Must be called for every agent BEFORE its triggers are wired (see wireAgentTriggers in
+ * index.ts). Handles two timings:
+ *   - Initial boot: registerIpcHandlers() hasn't run yet, so only the on-disk file exists.
+ *     Seeding it here means the cache picks up safe defaults on its first read.
+ *   - Hot-reload of a new agent while Local is already running: registerIpcHandlers()
+ *     already populated the live in-memory cache, so writing to disk alone would NOT take
+ *     effect (getAgentSetting reads only the cache, never the disk, per call). This also
+ *     seeds the live cache directly so a newly-dropped-in agent is safe immediately.
+ * Never overwrites an existing entry — only fills in agents with no persisted settings.
+ */
+export function seedAgentDefaultsIfMissing(agentNames: string[]): void {
+  const _fs = require('fs') as typeof import('fs');
+  const _os = require('os') as typeof import('os');
+  const _path = require('path') as typeof import('path');
+  const settingsPath = _path.join(_os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agent-settings.json');
+
+  let existing: Record<string, any> = {};
+  try {
+    existing = JSON.parse(_fs.readFileSync(settingsPath, 'utf8'));
+  } catch { /* file absent on first run */ }
+
+  const DEFAULTS = { enabled: true, scheduleEnabled: false, eventsEnabled: false, autonomy: 'ask' as const };
+  const liveCache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+
+  let changed = false;
+  for (const name of agentNames) {
+    if (existing[name]) continue; // already configured on disk — never touch existing settings
+    existing[name] = { ...DEFAULTS };
+    changed = true;
+    // If registerIpcHandlers() already ran, the live cache is what getAgentSetting reads —
+    // update it too so a hot-reloaded agent is safe before its triggers are wired.
+    if (liveCache && !liveCache.has(name)) liveCache.set(name, { ...DEFAULTS });
+  }
+  if (!changed) return;
+
+  try {
+    _fs.mkdirSync(_path.dirname(settingsPath), { recursive: true });
+    _fs.writeFileSync(settingsPath, JSON.stringify(existing, null, 2));
+  } catch { /* non-fatal — worst case the agent falls back to permissive defaults */ }
+}
+
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
   _agentSettingsDepsRef = deps;
   console.log('[NexusAI] 🟢🟢🟢 registerIpcHandlers() CALLED - starting execution');

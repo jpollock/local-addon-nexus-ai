@@ -1,5 +1,10 @@
 import { AgentDispatcher } from '../../../src/main/agent-runtime/AgentDispatcher';
 import { ContributedToolRegistry } from '../../../src/main/agent-runtime/ContributedToolRegistry';
+import { getAgentSetting } from '../../../src/main/ipc-handlers';
+
+jest.mock('../../../src/main/ipc-handlers', () => ({
+  getAgentSetting: jest.fn().mockReturnValue(true),
+}));
 
 const makeReg = () => {
   const reg = new ContributedToolRegistry();
@@ -15,10 +20,33 @@ const makeStubs = () => ({
 });
 
 describe('AgentDispatcher', () => {
+  beforeEach(() => {
+    (getAgentSetting as jest.Mock).mockReset().mockReturnValue(true);
+  });
+
   it('dispatch returns error when tool not found', async () => {
     const d = new AgentDispatcher(makeReg(), makeStubs().toolRegistry, makeStubs().services, '/nonexistent', makeStubs().resolvedProvider, makeStubs().stateStore);
     const r = await d.dispatch('my-agent', 'missing', {});
     expect(r.isError).toBe(true);
+  });
+
+  it('dispatch refuses to run a disabled agent, even for a registered tool', async () => {
+    (getAgentSetting as jest.Mock).mockImplementation((_agentId, key) => key !== 'enabled');
+    const d = new AgentDispatcher(makeReg(), makeStubs().toolRegistry, makeStubs().services, '/nonexistent', makeStubs().resolvedProvider, makeStubs().stateStore);
+    const r = await d.dispatch('my-agent', 'greet', {});
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toContain('disabled');
+    expect(getAgentSetting).toHaveBeenCalledWith('my-agent', 'enabled');
+  });
+
+  it('dispatch checks the "enabled" setting before tool lookup, even for a nonexistent tool', async () => {
+    // A disabled agent should report "disabled", not "not found" — enabled must
+    // gate before tool lookup so a disabled agent never leaks which tools it has.
+    (getAgentSetting as jest.Mock).mockImplementation((_agentId, key) => key !== 'enabled');
+    const d = new AgentDispatcher(makeReg(), makeStubs().toolRegistry, makeStubs().services, '/nonexistent', makeStubs().resolvedProvider, makeStubs().stateStore);
+    const r = await d.dispatch('my-agent', 'missing', {});
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toContain('disabled');
   });
 
   it('clearCache removes module from cache', () => {
