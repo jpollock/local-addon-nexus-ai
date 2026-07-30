@@ -5,6 +5,8 @@
  * Replaces ad-hoc console.log statements for production readiness.
  */
 
+import { rotateIfNeeded } from './rotate';
+
 export enum LogLevel {
   ERROR = 0,
   WARN = 1,
@@ -118,6 +120,7 @@ export class Logger {
     // Write to file if enabled
     if (this.logToFile && this.logFilePath) {
       try {
+        rotateIfNeeded(this.logFilePath);
         const fs = require('fs');
         fs.appendFileSync(this.logFilePath, formatted + '\n', 'utf-8');
       } catch (err) {
