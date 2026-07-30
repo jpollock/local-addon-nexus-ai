@@ -8,13 +8,15 @@
  * writes directly to disk so entries survive crashes and can be exported for
  * compliance review.
  *
- * File location: ~/Library/Application Support/Local/nexus-ai/audit.log
+ * File location: ~/Library/Application Support/Local/nexus-ai/operation-audit.log
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import { redactParams } from '../mcp/audit';
+import { rotateIfNeeded, DEFAULT_MAX_BYTES, DEFAULT_KEEP } from '../logging/rotate';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,11 +38,26 @@ export interface AuditEntry {
 // ---------------------------------------------------------------------------
 
 export class OperationAuditLog {
-  constructor(private logPath: string) {}
+  private readonly maxBytes: number;
+  private readonly keep: number;
+
+  constructor(
+    private logPath: string,
+    opts?: { maxBytes?: number; keep?: number },
+  ) {
+    this.maxBytes = opts?.maxBytes ?? DEFAULT_MAX_BYTES;
+    this.keep = opts?.keep ?? DEFAULT_KEEP;
+  }
 
   /**
    * Append a new entry to the audit log.
    * Synchronous write — ensures the entry is durably flushed before returning.
+   *
+   * `parameters` is redacted HERE rather than at the call site: this log now
+   * receives arbitrary tool arguments from the dispatch chokepoints, so a
+   * call-site convention would eventually leak a token to disk.
+   *
+   * Never throws — a failed audit write must not break the audited operation.
    */
   log(entry: Omit<AuditEntry, 'id' | 'timestamp'>): AuditEntry {
     const full: AuditEntry = {
@@ -48,13 +65,19 @@ export class OperationAuditLog {
       timestamp: new Date().toISOString(),
       userId: this.currentUser(),
       ...entry,
+      parameters: redactParams(entry.parameters ?? {}),
     };
 
-    this.ensureDir();
-    fs.appendFileSync(this.logPath, JSON.stringify(full) + '\n', {
-      encoding: 'utf-8',
-      mode: 0o600,
-    });
+    try {
+      this.ensureDir();
+      rotateIfNeeded(this.logPath, this.maxBytes, this.keep);
+      fs.appendFileSync(this.logPath, JSON.stringify(full) + '\n', {
+        encoding: 'utf-8',
+        mode: 0o600,
+      });
+    } catch {
+      // Fail open. The caller still receives the entry for in-process use.
+    }
 
     return full;
   }

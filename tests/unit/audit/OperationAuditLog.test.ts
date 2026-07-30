@@ -161,3 +161,63 @@ describe('OperationAuditLog', () => {
     }
   });
 });
+
+describe('OperationAuditLog — redaction and rotation', () => {
+  let dir: string;
+  let logPath: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-audit-'));
+    logPath = path.join(dir, 'operation-audit.log');
+  });
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+  it('redacts sensitive parameter values before they reach disk', () => {
+    const log = new OperationAuditLog(logPath);
+    log.log({
+      operation: 'wpe.install.update',
+      target: 'my-install',
+      parameters: { api_token: 'super-secret-value', password: 'hunter2', install: 'my-install' },
+      outcome: 'success',
+    });
+
+    const raw = fs.readFileSync(logPath, 'utf-8');
+    expect(raw).not.toContain('super-secret-value');
+    expect(raw).not.toContain('hunter2');
+    expect(raw).toContain('[REDACTED]');
+    expect(raw).toContain('my-install'); // non-sensitive values survive
+  });
+
+  it('redacts nested sensitive values', () => {
+    const log = new OperationAuditLog(logPath);
+    log.log({
+      operation: 'test.op',
+      target: 't',
+      parameters: { creds: { private_key: 'PEM-DATA-HERE' } },
+      outcome: 'success',
+    });
+    expect(fs.readFileSync(logPath, 'utf-8')).not.toContain('PEM-DATA-HERE');
+  });
+
+  it('rotates the audit log once it exceeds the size cap', () => {
+    const log = new OperationAuditLog(logPath, { maxBytes: 512, keep: 2 });
+    // Each entry is well over 50 bytes; 40 entries comfortably exceeds 512.
+    for (let i = 0; i < 40; i++) {
+      log.log({ operation: 'test.op', target: `target-${i}`, parameters: {}, outcome: 'success' });
+    }
+    expect(fs.existsSync(`${logPath}.1`)).toBe(true);
+    expect(fs.statSync(logPath).size).toBeLessThan(512);
+  });
+
+  it('still returns the full entry to the caller', () => {
+    const log = new OperationAuditLog(logPath);
+    const entry = log.log({ operation: 'o', target: 't', parameters: {}, outcome: 'pending' });
+    expect(entry.id).toBeTruthy();
+    expect(entry.timestamp).toBeTruthy();
+    expect(entry.outcome).toBe('pending');
+  });
+
+  it('does not throw when the log path is unwritable', () => {
+    const log = new OperationAuditLog('/proc/nope/audit.log');
+    expect(() => log.log({ operation: 'o', target: 't', parameters: {}, outcome: 'success' })).not.toThrow();
+  });
+});
