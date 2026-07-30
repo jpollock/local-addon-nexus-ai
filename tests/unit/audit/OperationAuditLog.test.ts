@@ -220,4 +220,170 @@ describe('OperationAuditLog — redaction and rotation', () => {
     const log = new OperationAuditLog('/proc/nope/audit.log');
     expect(() => log.log({ operation: 'o', target: 't', parameters: {}, outcome: 'success' })).not.toThrow();
   });
+
+  // -------------------------------------------------------------------------
+  // I2/I3 — value-level masking reaches the `error` field too. For a failed
+  // WP-CLI or CAPI call `error` is raw tool output.
+  // -------------------------------------------------------------------------
+
+  it('masks credential-shaped values inside the error field', () => {
+    const log = new OperationAuditLog(logPath);
+    log.log({
+      operation: 'cli.wp.command',
+      target: 'prod-install',
+      parameters: {},
+      outcome: 'failure',
+      error: "Error: could not connect to mysql://wpuser:hunter2pass@10.0.0.9/wp — check Authorization: Bearer sk-ant-api03-AbCdEf0123456789xyz",
+    });
+
+    const raw = fs.readFileSync(logPath, 'utf-8');
+    expect(raw).not.toContain('hunter2pass');
+    expect(raw).not.toContain('sk-ant-api03-AbCdEf0123456789xyz');
+    expect(raw).toContain('[REDACTED]');
+    // Diagnostic context that is not a credential survives.
+    expect(raw).toContain('could not connect');
+  });
+
+  it('masks an sk- key in a wp_eval `code` parameter (key-name matching cannot)', () => {
+    const log = new OperationAuditLog(logPath);
+    log.log({
+      operation: 'wp_eval',
+      target: 'my-site',
+      parameters: { code: "update_option('acme_api_key', 'sk-live-Zz0123456789AbCdEfGh');" },
+      outcome: 'success',
+    });
+
+    const raw = fs.readFileSync(logPath, 'utf-8');
+    expect(raw).not.toContain('sk-live-Zz0123456789AbCdEfGh');
+    expect(raw).toContain('[REDACTED]');
+    expect(raw).toContain('update_option'); // entry keeps its audit value
+  });
+
+  it('does not throw on a cyclic parameters object', () => {
+    const log = new OperationAuditLog(logPath);
+    const cyclic: Record<string, unknown> = { site: 'a' };
+    cyclic.self = cyclic;
+    expect(() =>
+      log.log({ operation: 'agent/tool', target: 'a', parameters: cyclic, outcome: 'success' }),
+    ).not.toThrow();
+    expect(log.list()).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// I1 — rotation must not amputate the compliance export.
+// ---------------------------------------------------------------------------
+
+describe('OperationAuditLog — list()/export() across rotated generations', () => {
+  let dir: string;
+  let logPath: string;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-audit-gen-'));
+    logPath = path.join(dir, 'operation-audit.log');
+  });
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+  const COUNT = 20;
+  // Entries are ~180 bytes, so 20 entries ≈ 3.6 KiB. A 1 KiB cap forces ~4
+  // rotations; `keep: 8` leaves enough generations that none is dropped, which
+  // lets these tests assert on the FULL set rather than "some of it".
+  const OPTS = { maxBytes: 1024, keep: 8 };
+
+  function fillAcrossRotations(log: OperationAuditLog, operationFor?: (i: number) => string): void {
+    for (let i = 0; i < COUNT; i++) {
+      log.log({
+        operation: operationFor ? operationFor(i) : 'test.op',
+        target: `target-${i}`,
+        parameters: {},
+        outcome: 'success',
+      });
+    }
+  }
+
+  /** Assert rotation really happened, and return the live file's entry count. */
+  function assertRotated(): number {
+    expect(fs.existsSync(`${logPath}.1`)).toBe(true);
+    expect(fs.existsSync(`${logPath}.2`)).toBe(true);
+    const liveOnly = fs.readFileSync(logPath, 'utf-8').split('\n').filter(Boolean).length;
+    expect(liveOnly).toBeLessThan(COUNT); // the live file alone is incomplete
+    return liveOnly;
+  }
+
+  it('includes entries from rotated generations, newest first', () => {
+    const log = new OperationAuditLog(logPath, OPTS);
+    fillAcrossRotations(log);
+    const liveOnly = assertRotated();
+
+    const entries = log.list();
+    expect(entries.length).toBeGreaterThan(liveOnly);
+    expect(entries).toHaveLength(COUNT); // nothing lost to rotation
+    // Newest first, and the very first entry written is still reachable.
+    expect(entries[0].target).toBe(`target-${COUNT - 1}`);
+    expect(entries[entries.length - 1].target).toBe('target-0');
+  });
+
+  it('keeps list() strictly chronological across the generation boundary', () => {
+    const log = new OperationAuditLog(logPath, OPTS);
+    fillAcrossRotations(log);
+    assertRotated();
+
+    const indices = log.list().map((e) => Number(e.target.replace('target-', '')));
+    expect(indices).toHaveLength(COUNT);
+    // list() is newest-first, so indices must strictly descend.
+    for (let i = 1; i < indices.length; i++) {
+      expect(indices[i]).toBeLessThan(indices[i - 1]);
+    }
+  });
+
+  it('list() still honours limit when the newest entries span generations', () => {
+    const log = new OperationAuditLog(logPath, OPTS);
+    fillAcrossRotations(log);
+    assertRotated();
+
+    const limited = log.list(3);
+    expect(limited.map((e) => e.target)).toEqual([
+      `target-${COUNT - 1}`,
+      `target-${COUNT - 2}`,
+      `target-${COUNT - 3}`,
+    ]);
+  });
+
+  it('export() writes every entry on disk, oldest first', () => {
+    const log = new OperationAuditLog(logPath, OPTS);
+    fillAcrossRotations(log);
+    assertRotated();
+
+    const exportPath = path.join(dir, 'export.jsonl');
+    log.export(exportPath);
+
+    const lines = fs.readFileSync(exportPath, 'utf-8').split('\n').filter(Boolean);
+    expect(lines).toHaveLength(COUNT);
+
+    const parsed = lines.map((l) => JSON.parse(l) as AuditEntry);
+    expect(parsed[0].target).toBe('target-0');
+    expect(parsed[parsed.length - 1].target).toBe(`target-${COUNT - 1}`);
+  });
+
+  it('honours the operation filter across generations', () => {
+    const log = new OperationAuditLog(logPath, OPTS);
+    fillAcrossRotations(log, (i) => (i % 2 === 0 ? 'wpe.install.delete' : 'test.op'));
+    assertRotated();
+
+    const deletes = log.list(undefined, { operation: 'wpe.install.delete' });
+    expect(deletes).toHaveLength(COUNT / 2);
+    expect(deletes.every((e) => e.operation === 'wpe.install.delete')).toBe(true);
+    // The oldest delete lives in a rotated generation.
+    expect(deletes[deletes.length - 1].target).toBe('target-0');
+  });
+
+  it('drops generations beyond `keep` rather than growing without bound', () => {
+    const log = new OperationAuditLog(logPath, { maxBytes: 512, keep: 2 });
+    for (let i = 0; i < 200; i++) {
+      log.log({ operation: 'test.op', target: `target-${i}`, parameters: {}, outcome: 'success' });
+    }
+    expect(fs.existsSync(`${logPath}.3`)).toBe(false);
+    expect(log.list().length).toBeGreaterThan(0);
+    // The newest entry is always present.
+    expect(log.list()[0].target).toBe('target-199');
+  });
 });

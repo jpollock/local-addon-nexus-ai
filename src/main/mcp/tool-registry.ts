@@ -98,16 +98,22 @@ export class ToolRegistry {
       // (McpSafetyWrapper, CLI/GraphQL resolvers, ChatService, and
       // agent-internal tool calls via NexusToolProvider), so it is the one
       // place that owns the durable write — do not duplicate it upstream.
-      const tier = getToolSafety(name).tier;
-      if (tier >= 2) {
-        services.operationAuditLog?.log({
-          operation: name,
-          target: String(args.site ?? args.install_id ?? args.install_name ?? 'unknown'),
-          parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
-          outcome: result.isError ? 'failure' : 'success',
-          error: result.isError ? (result.content[0]?.text || 'Unknown error') : undefined,
-        });
-      }
+      // Wrapped: a throw here would convert a *successful* tool call into an
+      // error result via the catch below. Auditing must never change outcomes.
+      // `content` is optional-chained — a handler may return `{ isError: true }`
+      // with no content array at all.
+      try {
+        const tier = getToolSafety(name).tier;
+        if (tier >= 2) {
+          services.operationAuditLog?.log({
+            operation: name,
+            target: String(args.site ?? args.install_id ?? args.install_name ?? 'unknown'),
+            parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
+            outcome: result.isError ? 'failure' : 'success',
+            error: result.isError ? (result.content?.[0]?.text || 'Unknown error') : undefined,
+          });
+        }
+      } catch { /* never throw from an audit path */ }
 
       logger.debug(`Handler "${name}" completed in ${duration}ms`, { isError: result.isError });
       return result;
@@ -124,16 +130,22 @@ export class ToolRegistry {
       // investigating an incident needs most, and it was silently uncovered
       // by the success-path-only write above. Mirrors that write exactly,
       // using the thrown error's message.
-      const tier = getToolSafety(name).tier;
-      if (tier >= 2) {
-        services.operationAuditLog?.log({
-          operation: name,
-          target: String(args.site ?? args.install_id ?? args.install_name ?? 'unknown'),
-          parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
-          outcome: 'failure',
-          error: message,
-        });
-      }
+      //
+      // Wrapped: this sits in the catch branch, so a throw here escapes call()
+      // and rejects the promise instead of returning the error result the
+      // caller expects.
+      try {
+        const tier = getToolSafety(name).tier;
+        if (tier >= 2) {
+          services.operationAuditLog?.log({
+            operation: name,
+            target: String(args.site ?? args.install_id ?? args.install_name ?? 'unknown'),
+            parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
+            outcome: 'failure',
+            error: message,
+          });
+        }
+      } catch { /* never throw from an audit path */ }
 
       logger.error(`Error in handler "${name}"`, { message, stack: err instanceof Error ? err.stack : undefined });
       return {

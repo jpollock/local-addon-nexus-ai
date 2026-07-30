@@ -15,7 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { redactParams } from '../mcp/audit';
+import { redactParams, maskSecretsInString } from '../mcp/audit';
 import { rotateIfNeeded, DEFAULT_MAX_BYTES, DEFAULT_KEEP } from '../logging/rotate';
 
 // ---------------------------------------------------------------------------
@@ -55,18 +55,38 @@ export class OperationAuditLog {
    *
    * `parameters` is redacted HERE rather than at the call site: this log now
    * receives arbitrary tool arguments from the dispatch chokepoints, so a
-   * call-site convention would eventually leak a token to disk.
+   * call-site convention would eventually leak a token to disk. `error` is
+   * masked the same way — for a failed WP-CLI or CAPI call it is raw tool
+   * output, which routinely carries connection strings and bearer tokens.
    *
    * Never throws — a failed audit write must not break the audited operation.
+   * Entry construction is inside the try for that reason: `randomUUID()` and
+   * the recursive redaction walk are both capable of throwing.
    */
   log(entry: Omit<AuditEntry, 'id' | 'timestamp'>): AuditEntry {
-    const full: AuditEntry = {
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
-      userId: this.currentUser(),
-      ...entry,
-      parameters: redactParams(entry.parameters ?? {}),
-    };
+    let full: AuditEntry;
+    try {
+      full = {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        userId: this.currentUser(),
+        ...entry,
+        parameters: redactParams(entry.parameters ?? {}),
+        ...(entry.error !== undefined
+          ? { error: maskSecretsInString(String(entry.error)) }
+          : {}),
+      };
+    } catch {
+      // Losing the detail beats losing the record that something happened.
+      full = {
+        id: '00000000-0000-0000-0000-000000000000',
+        timestamp: new Date().toISOString(),
+        operation: String(entry?.operation ?? 'unknown'),
+        target: String(entry?.target ?? 'unknown'),
+        parameters: { _redactionFailed: true },
+        outcome: entry?.outcome ?? 'failure',
+      };
+    }
 
     try {
       this.ensureDir();
@@ -83,28 +103,26 @@ export class OperationAuditLog {
   }
 
   /**
-   * Read all entries from the log file, optionally filtered.
+   * Read all entries on disk, optionally filtered.
    * Returns entries in reverse chronological order (newest first).
+   *
+   * Rotated generations are included. `rotateIfNeeded` moves history out of
+   * `logPath` into `.1`/`.2`/`.3`, so reading only `logPath` would silently
+   * drop everything older than the current generation — and `export()` is
+   * built on this method and promises a complete compliance record.
    */
   list(
     limit?: number,
     filter?: { operation?: string },
   ): AuditEntry[] {
-    if (!fs.existsSync(this.logPath)) return [];
-
-    const raw = fs.readFileSync(this.logPath, 'utf-8');
-    const lines = raw.split('\n').filter(Boolean);
-
     const entries: AuditEntry[] = [];
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line) as AuditEntry;
-        if (filter?.operation && entry.operation !== filter.operation) continue;
-        entries.push(entry);
-      } catch {
-        // Skip malformed lines
-      }
+
+    // Oldest generation first (`.keep` … `.1`), then the live file, so the
+    // accumulated order stays chronological.
+    for (let i = this.keep; i >= 1; i--) {
+      this.readInto(`${this.logPath}.${i}`, filter, entries);
     }
+    this.readInto(this.logPath, filter, entries);
 
     // Reverse chronological — newest first
     entries.reverse();
@@ -116,8 +134,34 @@ export class OperationAuditLog {
     return entries;
   }
 
+  /** Append parsed entries from one generation file. Missing files are skipped. */
+  private readInto(
+    filePath: string,
+    filter: { operation?: string } | undefined,
+    out: AuditEntry[],
+  ): void {
+    let raw: string;
+    try {
+      raw = fs.readFileSync(filePath, 'utf-8');
+    } catch {
+      return; // does not exist, or unreadable
+    }
+
+    for (const line of raw.split('\n')) {
+      if (!line) continue;
+      try {
+        const entry = JSON.parse(line) as AuditEntry;
+        if (filter?.operation && entry.operation !== filter.operation) continue;
+        out.push(entry);
+      } catch {
+        // Skip malformed lines
+      }
+    }
+  }
+
   /**
-   * Export all entries to a separate JSONL file.
+   * Export every entry on disk — including rotated generations — to a separate
+   * JSONL file, oldest first.
    */
   export(outputPath: string): void {
     const entries = this.list(); // newest first
