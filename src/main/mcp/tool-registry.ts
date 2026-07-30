@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolDefinition, McpToolResult, NexusServices } from './types';
 import { createLogger } from '../logging/Logger';
 import { getMetrics } from '../telemetry/MetricsCollector';
+import { getToolSafety } from './safety';
 
 const logger = createLogger('ToolRegistry');
 const metrics = getMetrics();
@@ -90,6 +91,22 @@ export class ToolRegistry {
 
       // Record metrics with access method
       metrics.recordToolCall(name, duration, result.isError || false, accessMethod);
+
+      // Durable trail — Tier 2 (modifying) and Tier 3 (destructive) only. Tier
+      // 1 is read-only and would swamp the file with no compliance value.
+      // This is the single funnel every dispatch surface routes through
+      // (McpSafetyWrapper, CLI/GraphQL resolvers, ChatService, and
+      // agent-internal tool calls via NexusToolProvider), so it is the one
+      // place that owns the durable write — do not duplicate it upstream.
+      const tier = getToolSafety(name).tier;
+      if (tier >= 2) {
+        services.operationAuditLog?.log({
+          operation: name,
+          target: String(args.site ?? args.install_id ?? args.install_name ?? 'unknown'),
+          parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
+          outcome: result.isError ? 'failure' : 'success',
+        });
+      }
 
       logger.debug(`Handler "${name}" completed in ${duration}ms`, { isError: result.isError });
       return result;

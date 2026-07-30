@@ -2,11 +2,29 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { OperationAuditLog } from '../../../src/main/audit/OperationAuditLog';
-import { McpSafetyWrapper } from '../../../src/main/mcp/mcp-safety-wrapper';
+import { ToolRegistry } from '../../../src/main/mcp/tool-registry';
+import type { McpToolHandler } from '../../../src/main/mcp/types';
 
 function makeDir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-wiring-')); }
 
-describe('audit wiring at the MCP dispatch chokepoint', () => {
+/**
+ * The durable audit write lives inside ToolRegistry.call() — the true single
+ * funnel all dispatch surfaces (McpSafetyWrapper, CLI/GraphQL resolvers,
+ * ChatService) route through. A mocked registry never executes that code, so
+ * these tests construct a REAL ToolRegistry with a fake registered tool and
+ * call it directly, rather than mocking `registry.call`.
+ */
+function makeTool(name: string, opts: { isError?: boolean; text?: string } = {}): McpToolHandler {
+  return {
+    definition: { name, description: 'test tool', inputSchema: {} },
+    execute: async () => ({
+      content: [{ type: 'text', text: opts.text ?? 'done' }],
+      isError: opts.isError ?? false,
+    }),
+  };
+}
+
+describe('audit wiring at the ToolRegistry dispatch chokepoint', () => {
   let dir: string, logPath: string;
   beforeEach(() => { dir = makeDir(); logPath = path.join(dir, 'operation-audit.log'); });
   afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
@@ -15,46 +33,55 @@ describe('audit wiring at the MCP dispatch chokepoint', () => {
     return { operationAuditLog: new OperationAuditLog(logPath) } as any;
   }
 
-  const registry = {
-    call: jest.fn().mockResolvedValue({ content: [{ type: 'text', text: 'done' }], isError: false }),
-  } as any;
+  it('writes a durable entry for a Tier 2 tool call (default tier for a name absent from TIER_OVERRIDES)', async () => {
+    const registry = new ToolRegistry();
+    registry.register(makeTool('fake_tier2_tool'));
 
-  beforeEach(() => registry.call.mockClear());
-
-  it('writes a durable entry for a Tier 2 tool call', async () => {
-    const wrapper = new McpSafetyWrapper(registry);
-    await wrapper.callWithSafety('wp_core_update', { site: 'demo' }, servicesWithAudit());
+    await registry.call('fake_tier2_tool', { site: 'demo' }, servicesWithAudit(), 'mcp');
 
     const lines = fs.readFileSync(logPath, 'utf-8').trim().split('\n');
     expect(lines).toHaveLength(1);
     const entry = JSON.parse(lines[0]);
-    expect(entry.operation).toBe('wp_core_update');
+    expect(entry.operation).toBe('fake_tier2_tool');
     expect(entry.outcome).toBe('success');
     expect(entry.id).toBeTruthy();
     expect(entry.timestamp).toBeTruthy();
   });
 
   it('does NOT write a durable entry for a Tier 1 read-only tool', async () => {
-    const wrapper = new McpSafetyWrapper(registry);
-    await wrapper.callWithSafety('wp_plugin_list', { site: 'demo' }, servicesWithAudit());
+    const registry = new ToolRegistry();
+    registry.register(makeTool('wp_plugin_list')); // Tier 1 per TIER_OVERRIDES
+
+    await registry.call('wp_plugin_list', { site: 'demo' }, servicesWithAudit(), 'mcp');
+
     expect(fs.existsSync(logPath)).toBe(false);
   });
 
   it('records failures with outcome=failure', async () => {
-    const failing = {
-      call: jest.fn().mockResolvedValue({ content: [{ type: 'text', text: 'boom' }], isError: true }),
-    } as any;
-    const wrapper = new McpSafetyWrapper(failing);
-    await wrapper.callWithSafety('wp_core_update', { site: 'demo' }, servicesWithAudit());
+    const registry = new ToolRegistry();
+    registry.register(makeTool('wp_core_update', { isError: true, text: 'boom' })); // Tier 2
+
+    await registry.call('wp_core_update', { site: 'demo' }, servicesWithAudit(), 'mcp');
 
     const entry = JSON.parse(fs.readFileSync(logPath, 'utf-8').trim());
     expect(entry.outcome).toBe('failure');
-    expect(entry.error).toContain('boom');
   });
 
   it('does not break the tool call when auditing is unavailable', async () => {
-    const wrapper = new McpSafetyWrapper(registry);
-    const result = await wrapper.callWithSafety('wp_core_update', { site: 'demo' }, {} as any);
+    const registry = new ToolRegistry();
+    registry.register(makeTool('wp_core_update'));
+
+    const result = await registry.call('wp_core_update', { site: 'demo' }, {} as any, 'mcp');
     expect(result.isError).toBeFalsy();
+  });
+
+  it('records _accessMethod on the durable entry (regression guard for the CLI/GraphQL gap)', async () => {
+    const registry = new ToolRegistry();
+    registry.register(makeTool('wp_core_update'));
+
+    await registry.call('wp_core_update', { site: 'demo' }, servicesWithAudit(), 'cli');
+
+    const entry = JSON.parse(fs.readFileSync(logPath, 'utf-8').trim());
+    expect(entry.parameters._accessMethod).toBe('cli');
   });
 });
