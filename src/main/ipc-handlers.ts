@@ -11,6 +11,7 @@
  */
 import { IPC_CHANNELS, STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../common/constants';
 import { getApiKey } from './security/KeyVault';
+import { auditDirectOperation } from './audit/auditDirectOperation';
 import { getAIProvider } from './ai/getAIProvider';
 import { registerCredentialHandlers } from './ipc/handlers/credentials';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
@@ -1228,6 +1229,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         { fromVersion: result.fromVersion, toVersion: result.version, targetVersion: result.targetVersion },
         Date.now() - startTime,
       );
+      // Durable trail: `wp core update --force` rewrites WordPress core.
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.wp.core.update',
+        target: siteId,
+        parameters: { siteId, fromVersion: result.fromVersion, toVersion: result.version, targetVersion: result.targetVersion, force: true },
+        outcome: 'success',
+      });
 
       return { success: true, version: result.version };
     } catch (err) {
@@ -1240,6 +1248,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         {},
         Date.now() - startTime,
       );
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.wp.core.update',
+        target: siteId || 'unknown',
+        parameters: { siteId, force: true },
+        outcome: 'failure',
+        error: (err as Error).message,
+      });
       return { success: false, error: (err as Error).message };
     }
   });
@@ -1447,7 +1462,16 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         'ai-provider-for-local-gateway',
       ];
       for (const slug of pluginsToDeactivate) {
-        await localServicesBridge.wpCliRun(validated, ['plugin', 'deactivate', slug]).catch(() => {});
+        const deactivateResult: any = await localServicesBridge
+          .wpCliRun(validated, ['plugin', 'deactivate', slug])
+          .catch((err: any) => ({ success: false, stdout: null, stderr: err?.message ?? String(err) }));
+        auditDirectOperation(deps.nexusServices, {
+          operation: 'ipc.wp.plugin.deactivate',
+          target: validated,
+          parameters: { siteId: validated, plugin: slug, reason: 'remove-wp-ai' },
+          outcome: deactivateResult?.success ? 'success' : 'failure',
+          error: deactivateResult?.success ? undefined : (deactivateResult?.stderr || deactivateResult?.stdout || 'Command failed'),
+        });
       }
 
       // Clear per-site AI config from Nexus storage
@@ -2114,6 +2138,7 @@ Answer:`,
     healthCalculator,
     graphService,
     metadataCache: metadataCache ?? undefined,
+    auditServices: deps.nexusServices,
     setupSiteForAI: async (siteId: string, options?: any) => {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const provider = options?.provider ?? settings?.aiProvider;
@@ -3462,8 +3487,23 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
     const start = Date.now();
     try {
       const result = await localServicesBridge.remoteWpCliRun(installName, args);
+      // Arbitrary WP-CLI against a WP Engine install.
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.wp.command',
+        target: `wpe:${installName}`,
+        parameters: { installName, command: args, remote: true },
+        outcome: result.success ? 'success' : 'failure',
+        error: result.success ? undefined : (result.stdout || 'Command failed'),
+      });
       return { success: result.success, stdout: result.stdout, durationMs: Date.now() - start };
     } catch (err: any) {
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.wp.command',
+        target: `wpe:${installName}`,
+        parameters: { installName, command: args, remote: true },
+        outcome: 'failure',
+        error: err.message,
+      });
       return { success: false, error: err.message, durationMs: Date.now() - start };
     }
   });

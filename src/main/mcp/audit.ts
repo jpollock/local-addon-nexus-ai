@@ -126,9 +126,13 @@ const SECRET_VALUE_PATTERNS: RegExp[] = [
   /\bBearer\s+[A-Za-z0-9._~+/=-]{16,}/gi,
 ];
 
-/** `password=hunter2`, `--api-key: 'sk...'`, `token => "..."` inside a string. */
+/**
+ * `password=hunter2`, `--api-key: 'sk...'`, `token => "..."` inside a string.
+ * `pass` is last in the alternation so `--user_pass=x` matches while
+ * `--password=x` still binds to the longer, more specific branch.
+ */
 const INLINE_ASSIGNMENT =
-  /((?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|auth[_-]?token)['"]?\s*(?:=>|[=:])\s*)(['"]?)([^\s'",;)&]{4,})\2/gi;
+  /((?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|auth[_-]?token|pass)['"]?\s*(?:=>|[=:])\s*)(['"]?)([^\s'",;)&]{4,})\2/gi;
 
 /** `scheme://user:password@host` connection strings in raw tool output. */
 const URL_CREDENTIALS = /\b([a-z][a-z0-9+.-]*:\/\/)([^\s:/@]+):([^\s@/]{3,})@/gi;
