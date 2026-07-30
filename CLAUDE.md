@@ -102,47 +102,129 @@ Native modules (sqlite-vec, onnxruntime) can register background threads/handles
 
 ## Logging & Audit
 
-**Durable audit trail:** `~/Library/Application Support/Local/nexus-ai/operation-audit.log`
-— JSONL, mode 0600, one line per Tier 2/3 operation.
+**Two audit files**, both under `~/Library/Application Support/Local/nexus-ai/`,
+both JSONL, mode 0600, both rotated:
 
-**The durable write lives in `ToolRegistry.call()`** (`src/main/mcp/tool-registry.ts`),
-on both the success path and the `catch` branch. This is the single funnel that MCP
-tools, the chat assistant, CLI/GraphQL resolvers, and agent-internal tool calls
-(dispatched via `NexusToolProvider`) all pass through, so it is the one place that
-owns the durable write.
+| File | Written by | Contents |
+|---|---|---|
+| `operation-audit.log` | `OperationAuditLog` (`src/main/audit/OperationAuditLog.ts`) | One line per Tier 2/3 **mutating** operation. The compliance record. Written synchronously — an entry lost because the process died defeats the purpose. |
+| `audit.log` | `createAuditLogger` (`src/main/mcp/audit.ts`) | In-memory buffer of **all** tiers, flushed on `before-quit` and every 5 minutes from `src/main/index.ts`. Higher volume. |
 
-`AgentDispatcher.dispatch()` (`src/main/agent-runtime/AgentDispatcher.ts`) has its
-*own separate* durable write. Agent-contributed tools dispatch straight to
-`dispatchFunction`/`dispatchRun` and never reach `ToolRegistry.call()`, so without
-this second write agent tool calls would go unaudited.
+### The three writers
 
-`McpSafetyWrapper.auditLog()` (`src/main/mcp/mcp-safety-wrapper.ts`) no longer
-writes durably — that responsibility moved to `ToolRegistry.call()` since
-`callWithSafety()` calls `this.registry.call(...)` beneath it, and writing there
-too would double-log every MCP-routed call. `McpSafetyWrapper.auditLog()` still
-appends to the in-memory `auditLogger` (the `RegistryStorage`-backed one used for
-live introspection via `getEntries()`) — that part is unchanged.
+There are **three** places that write `operation-audit.log`, not two:
 
-**Do not hand-instrument individual tools or handlers** — the two chokepoints
-above (`ToolRegistry.call()` and `AgentDispatcher.dispatch()`) cover everything
-and cannot drift. Any new tool-dispatch surface must route through one of these
-two funnels or it will silently go unaudited.
+1. **`ToolRegistry.call()`** (`src/main/mcp/tool-registry.ts`) — the chokepoint
+   for every MCP tool call, on both the success path and the `catch` branch.
+   MCP tools, the chat assistant, the 8 GraphQL resolvers that call
+   `registry.call(...)`, and agent-internal tool calls (via `NexusToolProvider`)
+   all funnel through here.
+2. **`AgentDispatcher.dispatch()`** (`src/main/agent-runtime/AgentDispatcher.ts`)
+   — its *own separate* write. Agent-contributed tools dispatch straight to
+   `dispatchFunction`/`dispatchRun` and never reach `ToolRegistry.call()`.
+3. **`auditDirectOperation()`** (`src/main/audit/auditDirectOperation.ts`) — the
+   entry point for mutating GraphQL resolvers and IPC handlers that call
+   `services.localServices` directly and therefore reach neither chokepoint.
+   That is roughly thirty paths, including arbitrary WP-CLI against production
+   WP Engine installs and `DELETE /installs/{id}`.
+
+`McpSafetyWrapper.auditLog()` (`src/main/mcp/mcp-safety-wrapper.ts`) writes
+**in-memory only** — durable responsibility moved to `ToolRegistry.call()`,
+which `callWithSafety()` calls beneath it; writing in both would double-log
+every MCP-routed call.
+
+### Rules for new code
+
+- A new **tool** must route through `ToolRegistry.call()` or
+  `AgentDispatcher.dispatch()`. Do not hand-instrument it — the chokepoint
+  already covers it, and a second write double-logs.
+- A new **mutating resolver or IPC handler** that calls `services.localServices`
+  directly must call `auditDirectOperation(services, {...})` on both the success
+  and failure path. Do **not** hand-roll an audit entry: thirty divergent copies
+  is exactly the drift the chokepoint design exists to prevent, and it is how
+  the original "audit never recorded anything" bug survived.
+- Read-only paths are not audited — they would swamp the file with no
+  compliance value. `auditDirectOperation` has no tier gate for the same reason:
+  only call it for things that mutate, which makes them Tier 2/3 by nature.
+- An operation refused by `isOperationAllowed` writes nothing, because nothing
+  happened.
+
+**Naming:** `<surface>.<resource>.<action>`, lowercase, dot-separated —
+`cli.wp.command`, `wpe.install.delete`, `wpe.install.copy`, `wpe.user.create`,
+`ipc.wp.core.update`, `bulk.plugin.update`. `target` is the install name, site
+id, or other resource identifier. (Chokepoint writes use the raw tool name, e.g.
+`wpe_delete_install`, so both shapes appear in the file.)
+
+### Coverage — and the known gaps
+
+**Covered:** all MCP tools (chokepoint 1); all agent-contributed tools
+(chokepoint 2); every mutating WPE CAPI resolver in `resolvers.ts` and
+`resolvers/wpe.ts` (user/site/install/domain/SSL/SSH-key create-update-delete,
+`install_copy`, cache purge, backup create); `nexusWpCommand` local and remote;
+IPC `UPGRADE_WP`, `REMOVE_WP_AI` plugin deactivation, `WPE_DIAGNOSE` remote
+WP-CLI; `BulkOperationManager` per-site plugin updates.
+
+**Known gaps — do not assume completeness:**
+
+- `nexusWpeDomainCheck` (`/domains/{id}/check_status`) is POST-shaped but a
+  read-only DNS check, so it is deliberately not audited.
+- Other IPC handlers that mutate *local* site state (start/stop/clone/delete via
+  Local's own services, `SETUP_AI`, storage cleanup) are not yet routed through
+  `auditDirectOperation`. Local-site operations are lower blast radius than
+  production WPE ones, which is why the first wave prioritised the latter.
+- `src/main/graphql/resolvers/wpe.ts` is instrumented but **currently
+  unreferenced** — `createResolvers` in `resolvers.ts` wins module resolution
+  for `./graphql/resolvers`. It is kept in sync so the in-progress split does
+  not silently lose the audit trail when it lands.
+- WP-CLI argv is masked element-by-element, so `['config','set','DB_PASSWORD','x']`
+  leaves `x` unmasked (the secret is a separate array element from its key).
+  `--user_pass=x` style single-token arguments *are* masked.
+
+### Redaction
+
+`parameters` **and** `error` are redacted inside `OperationAuditLog.log()` (via
+`redactParams` / `maskSecretsInString` from `src/main/mcp/audit.ts`), never at
+the call site, so a new call site cannot leak credentials by forgetting.
+
+Two layers:
+
+- **Key-name** — substring matches (`password`, `token`, `secret`, `api_key`,
+  `credential`, `certificate`, `authorization`, `bearer`, `signature`) plus
+  token matches for short words that are unsafe as substrings (`pass`, `pwd`,
+  `auth`, `key`, `salt`, `cookie`, `session`). Token matching is why `author`
+  and `monkey` are no longer redacted as collateral.
+- **Value-shape** — runs on every string regardless of key name: PEM blocks,
+  `sk-` keys, `ghp_`/`github_pat_`, AWS/Google/Slack keys, `Bearer` headers,
+  `user:pass@host` connection strings, inline `password=` assignments, and 40+
+  char opaque alphanumeric runs. Strings over 2000 chars are truncated.
+
+Value-shape matching exists because key-name matching **structurally cannot**
+protect two payloads: `wp_eval`'s argument is literally named `code` (adding
+`code` as a key pattern would gut the audit value of every eval entry), and
+`error` is raw tool output from a failed WP-CLI or CAPI call.
 
 Tier 1 (read-only) is deliberately not written to disk. Tier 2 is the **default**
 tier for any tool absent from `TIER_OVERRIDES` (`src/main/mcp/safety.ts:223`) —
 `getToolSafety()` falls back to `TIER_OVERRIDES[toolName] ?? 2` — so new tools are
 audited by default unless explicitly marked Tier 1.
 
-`parameters` is redacted inside `OperationAuditLog.log()` (via `redactParams` from
-`src/main/mcp/audit.ts`), never at the call site, so a new call site cannot leak
-credentials by forgetting to redact.
+**Never throw from an audit path.** `OperationAuditLog.log()` builds the entry
+inside its try (`randomUUID()` and the recursive redaction walk can both throw);
+`redactValue` carries a `WeakSet` so cyclic args from agent code terminate; and
+the audit blocks at both chokepoints are individually wrapped so an audit fault
+cannot convert a successful call into an error result.
 
 **Rotation:** all durable writers use `src/main/logging/rotate.ts`
 (`rotateIfNeeded`, `pruneOldFiles`). Default 5 MiB x 3 generations
 (`DEFAULT_MAX_BYTES` / `DEFAULT_KEEP`). Per-run agent logs and reports
 (`run-*.log`, `run-*-report.md`) are pruned to the 20 most recent per agent in
-`buildAgentContext.ts`; `agent.log` itself and the main process log are rotated
-the same way.
+`buildAgentContext.ts`; `agent.log`, the main process log, `operation-audit.log`
+and `audit.log` are all rotated the same way.
+
+`OperationAuditLog.list()` reads the rotated generations (`.{keep}` … `.1`)
+before the live file, so `export()` genuinely exports everything on disk.
+Reading only `logPath` would silently amputate the compliance record at the
+current generation boundary.
 
 **Historical:** `services.operationAuditLog` was declared in the service types but
 never assigned, so `?.log()` calls silently no-opped and no audit file was ever
@@ -153,6 +235,12 @@ in-memory buffer was discarded on every exit. Both are now fixed, wired in
 actually assigned, not merely declared** — a declared-but-unassigned optional
 field fails silently (the `?.` just no-ops) instead of throwing, so nothing
 surfaces the bug until someone goes looking for the file it should have created.
+
+This section previously claimed the two chokepoints "cover everything and cannot
+drift". That was false — it missed the ~30 direct `services.localServices` call
+sites, which is why the "Known gaps" list above is now mandatory. If you close a
+gap, delete it from the list; if you find a new one, add it. A false
+completeness claim here is worse than no claim at all.
 
 ---
 
