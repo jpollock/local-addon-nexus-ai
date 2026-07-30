@@ -137,28 +137,30 @@ describe('agent log rotation and pruning', () => {
     });
 
     it('rotates agent.log when appending logs (via ctx.log calls)', () => {
+      const logFile = path.join(logDir, 'agent.log');
+
+      // Pre-seed agent.log to just over the 5 MiB rotation threshold so that
+      // a single ctx.log.info() call triggers rotation. This is fast and will
+      // fail immediately if rotateIfNeeded is not wired into appendLog.
+      const seedSize = 5 * 1024 * 1024 + 1;
+      fs.writeFileSync(logFile, 'x'.repeat(seedSize));
+
       const { ctx } = buildAgentContext({
         agent: makeAgent(),
         ...makeStubs(logDir),
       });
 
-      const logFile = path.join(logDir, 'agent.log');
+      // Single log call should trigger rotation
+      ctx.log.info('trigger');
 
-      // Append enough to verify logging works. With 200 messages, if rotation
-      // doesn't work the file would eventually be huge. The contract test above
-      // proves rotateIfNeeded works at a 4KB threshold; this proves appendLog
-      // calls it via the public ctx.log API.
-      for (let i = 0; i < 200; i++) {
-        ctx.log.info(`message ${i} ${'x'.repeat(200)}`);
-      }
+      // After rotation, agent.log.1 should exist with the seed content
+      expect(fs.existsSync(`${logFile}.1`)).toBe(true);
+      expect(fs.statSync(`${logFile}.1`).size).toBe(seedSize);
 
-      // The log file should exist
+      // agent.log should now be small (contains only the new log line)
       expect(fs.existsSync(logFile)).toBe(true);
-      const size = fs.statSync(logFile).size;
-
-      // With default rotation threshold (5 MiB), 200 messages won't hit it.
-      // But for safety, verify the file is bounded to less than 100 MiB.
-      expect(size).toBeLessThan(100 * 1024 * 1024);
+      const currentSize = fs.statSync(logFile).size;
+      expect(currentSize).toBeLessThan(1024); // New log line is tiny
     });
   });
 });
