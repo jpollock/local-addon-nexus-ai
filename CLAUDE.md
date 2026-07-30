@@ -100,6 +100,62 @@ Native modules (sqlite-vec, onnxruntime) can register background threads/handles
 
 ---
 
+## Logging & Audit
+
+**Durable audit trail:** `~/Library/Application Support/Local/nexus-ai/operation-audit.log`
+— JSONL, mode 0600, one line per Tier 2/3 operation.
+
+**The durable write lives in `ToolRegistry.call()`** (`src/main/mcp/tool-registry.ts`),
+on both the success path and the `catch` branch. This is the single funnel that MCP
+tools, the chat assistant, CLI/GraphQL resolvers, and agent-internal tool calls
+(dispatched via `NexusToolProvider`) all pass through, so it is the one place that
+owns the durable write.
+
+`AgentDispatcher.dispatch()` (`src/main/agent-runtime/AgentDispatcher.ts`) has its
+*own separate* durable write. Agent-contributed tools dispatch straight to
+`dispatchFunction`/`dispatchRun` and never reach `ToolRegistry.call()`, so without
+this second write agent tool calls would go unaudited.
+
+`McpSafetyWrapper.auditLog()` (`src/main/mcp/mcp-safety-wrapper.ts`) no longer
+writes durably — that responsibility moved to `ToolRegistry.call()` since
+`callWithSafety()` calls `this.registry.call(...)` beneath it, and writing there
+too would double-log every MCP-routed call. `McpSafetyWrapper.auditLog()` still
+appends to the in-memory `auditLogger` (the `RegistryStorage`-backed one used for
+live introspection via `getEntries()`) — that part is unchanged.
+
+**Do not hand-instrument individual tools or handlers** — the two chokepoints
+above (`ToolRegistry.call()` and `AgentDispatcher.dispatch()`) cover everything
+and cannot drift. Any new tool-dispatch surface must route through one of these
+two funnels or it will silently go unaudited.
+
+Tier 1 (read-only) is deliberately not written to disk. Tier 2 is the **default**
+tier for any tool absent from `TIER_OVERRIDES` (`src/main/mcp/safety.ts:223`) —
+`getToolSafety()` falls back to `TIER_OVERRIDES[toolName] ?? 2` — so new tools are
+audited by default unless explicitly marked Tier 1.
+
+`parameters` is redacted inside `OperationAuditLog.log()` (via `redactParams` from
+`src/main/mcp/audit.ts`), never at the call site, so a new call site cannot leak
+credentials by forgetting to redact.
+
+**Rotation:** all durable writers use `src/main/logging/rotate.ts`
+(`rotateIfNeeded`, `pruneOldFiles`). Default 5 MiB x 3 generations
+(`DEFAULT_MAX_BYTES` / `DEFAULT_KEEP`). Per-run agent logs and reports
+(`run-*.log`, `run-*-report.md`) are pruned to the 20 most recent per agent in
+`buildAgentContext.ts`; `agent.log` itself and the main process log are rotated
+the same way.
+
+**Historical:** `services.operationAuditLog` was declared in the service types but
+never assigned, so `?.log()` calls silently no-opped and no audit file was ever
+created on any machine. `mcp/audit.ts`'s `AuditLogger.flush()` was likewise never
+called in production — no `before-quit` handler, no periodic flush — so its
+in-memory buffer was discarded on every exit. Both are now fixed, wired in
+`src/main/index.ts`. **Lesson: if you add a new service handle, verify it is
+actually assigned, not merely declared** — a declared-but-unassigned optional
+field fails silently (the `?.` just no-ops) instead of throwing, so nothing
+surfaces the bug until someone goes looking for the file it should have created.
+
+---
+
 ## Known Pitfalls
 
 - [Smart Search MU plugin pitfalls](feedback_smart_search_mu_plugin.md) — `is_plugin_active()` fires too early in WordPress bootstrap; `siteStarted` races MySQL startup. Use filesystem checks in Node.js, not WP-CLI.
