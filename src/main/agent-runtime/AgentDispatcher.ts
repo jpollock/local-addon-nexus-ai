@@ -99,6 +99,7 @@ export class AgentDispatcher {
           _durationMs: Date.now() - start,
         },
         outcome: outcome === 'ok' ? 'success' : 'failure',
+        error: outcome === 'error' ? (result.content[0]?.text || 'Unknown error') : undefined,
       });
     }
 
