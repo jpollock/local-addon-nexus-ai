@@ -279,6 +279,40 @@ describe('argv-aware masking', () => {
     expect(out).toContain('--porcelain');
   });
 
+  // A command can arrive as ONE space-separated string rather than a pre-split
+  // array — `nexus:sentinel:execute` receives exactly that, and echoed command
+  // lines in raw tool output do too. Argv masking has nothing to bind to there.
+  describe('command-string form', () => {
+    test.each([
+      ['wp config set DB_PASSWORD Pr0dDbP4ssw0rd', 'Pr0dDbP4ssw0rd'],
+      ['wp config set AUTH_KEY x8Tq2i9Kd', 'x8Tq2i9Kd'],
+      ['wp option update stripe_secret_key sk_live_AbC', 'sk_live_AbC'],
+      ['wp user update 1 --user_pass Hunter2', 'Hunter2'],
+      ['wp user create bob b@x.com --password Hunter2', 'Hunter2'],
+    ])('masks the value in %s', (command, secret) => {
+      const out = maskSecretsInString(command);
+      expect(out).not.toContain(secret);
+      expect(out).toContain('[REDACTED]');
+    });
+
+    test('keeps the constant/option NAME in the command string', () => {
+      expect(maskSecretsInString('wp config set DB_PASSWORD Pr0dDbP4ssw0rd'))
+        .toBe('wp config set DB_PASSWORD [REDACTED]');
+    });
+
+    test.each([
+      ['prose containing the word password', 'Please reset your password now and try again.'],
+      ['prose containing the word token', 'The token expires soon, ask an admin for a new one.'],
+      ['non-secret option update', 'wp option update blogname MyGreatSite'],
+      ['non-secret config set', 'wp config set WP_DEBUG true --raw'],
+      ['non-secret user meta update', 'wp user meta update 1 nickname Bobby'],
+      ['sentinel rm remediation', 'rm -f wp-content/mu-plugins/evil.php'],
+      ['plugin deactivate', 'wp plugin deactivate badplugin --skip-plugins'],
+    ])('leaves %s intact', (_label, text) => {
+      expect(maskSecretsInString(text)).toBe(text);
+    });
+  });
+
   test('still redacts objects nested in arrays', () => {
     const result = redactParams({ items: [{ password: 'abc' }, { name: 'safe' }] });
     const items = result.items as any[];

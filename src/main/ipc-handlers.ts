@@ -4810,13 +4810,42 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   });
 
   // Sentinel Review UI: execute remediation commands on a WPE install via SSH
+  //
+  // Blast radius exceeds anything else instrumented on this branch: arbitrary
+  // WP-CLI over SSH against a PRODUCTION install, plus raw
+  // `rm -f /nas/content/live/<install>/<path>` that deliberately bypasses
+  // WordPress entirely (see SentinelExecutor.remoteSshRaw). Both outcomes are
+  // audited — a remediation that fails half way through is exactly the case
+  // someone will need the record for.
   safeHandle('nexus:sentinel:execute', async (_event: any, { installName, commands }: { installName: string; commands: string[] }) => {
+    const started = Date.now();
     try {
       const result = await executeSentinelCommands(installName, commands, localServicesBridge);
+      const failed = result.steps.filter((s) => !s.ok);
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.sentinel.execute',
+        target: `wpe:${installName}`,
+        parameters: {
+          installName,
+          commands,
+          stepCount: result.steps.length,
+          failedCount: failed.length,
+          durationMs: Date.now() - started,
+        },
+        outcome: result.success ? 'success' : 'failure',
+        error: result.success ? undefined : failed.map((s) => `${s.command}: ${s.error ?? 'failed'}`).join(' | '),
+      });
       // TODO: delete sandbox site after successful execution
       // Sandbox name is not currently passed with the request; needs protocol update
       return { success: result.success, steps: result.steps };
     } catch (err: any) {
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.sentinel.execute',
+        target: `wpe:${installName}`,
+        parameters: { installName, commands, durationMs: Date.now() - started },
+        outcome: 'failure',
+        error: err?.message ?? String(err),
+      });
       localLogger.error('[nexus:sentinel:execute] Execution failed:', err.message);
       return { success: false, steps: [] };
     }

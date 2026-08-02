@@ -172,6 +172,26 @@ const DEFINE_ASSIGNMENT =
 const URL_CREDENTIALS = /\b([a-z][a-z0-9+.-]*:\/\/)([^\s:/@]+):([^\s@/]{3,})@/gi;
 
 /**
+ * The same positional problem as argv arrays, but for a command that arrives as
+ * ONE space-separated STRING rather than a pre-split array.
+ *
+ * `SentinelExecutor` is the live example: `nexus:sentinel:execute` receives
+ * `["wp config set DB_PASSWORD Pr0dDbP4ssw0rd"]` — an array of whole command
+ * lines, so element-wise argv masking has nothing to bind to. Echoed command
+ * lines in raw tool output have the same shape.
+ *
+ * Anchored on literal WP-CLI subcommands rather than on "a sensitive word
+ * followed by a token", because the latter mangles prose: "reset your password
+ * now" would lose the word after `password`.
+ */
+const COMMAND_NAME_VALUE =
+  /\b((?:config\s+set|option\s+(?:update|add|set)|user\s+meta\s+(?:update|add))\s+)([A-Za-z_][A-Za-z0-9_.-]*)(\s+)(\S+)/g;
+
+/** `--user_pass hunter2` — flag and value separated by a space, so no `=`. */
+const SEPARATED_SECRET_FLAG =
+  /(--(?:user[_-]?pass(?:word)?|pass(?:word)?|api[_-]?key|access[_-]?key|auth[_-]?token|secret|token)\s+)(?!-)(\S+)/gi;
+
+/**
  * An unbroken alphanumeric run of OPAQUE_RUN_MIN+ characters.
  *
  * This threshold used to be 40, chosen so that only hashes matched. The
@@ -256,6 +276,14 @@ export function maskSecretsInString(value: string): string {
     out = out.replace(DEFINE_ASSIGNMENT, (_m, lead: string, quote: string) => `${lead}${quote}${REDACTED}${quote}`);
     out = out.replace(INLINE_ASSIGNMENT, (_m, lead: string, quote: string) => `${lead}${quote}${REDACTED}${quote}`);
     out = out.replace(URL_CREDENTIALS, (_m, scheme: string, user: string) => `${scheme}${user}:${REDACTED}@`);
+    out = out.replace(
+      COMMAND_NAME_VALUE,
+      (m: string, lead: string, name: string, gap: string) =>
+        (isSensitiveKey(name) || CONFIG_CONSTANT_SECRET.test(name))
+          ? `${lead}${name}${gap}${REDACTED}` // the NAME survives, the value does not
+          : m,
+    );
+    out = out.replace(SEPARATED_SECRET_FLAG, (_m, lead: string) => `${lead}${REDACTED}`);
     out = out.replace(MIXED_SYMBOL_TOKEN, (m: string) => (looksLikePassword(m) ? REDACTED : m));
     out = out.replace(OPAQUE_ALNUM_RUN, (m: string) => (looksOpaque(m) ? REDACTED : m));
   } catch {
