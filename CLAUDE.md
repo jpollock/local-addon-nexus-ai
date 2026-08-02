@@ -162,41 +162,94 @@ id, or other resource identifier. (Chokepoint writes use the raw tool name, e.g.
 `resolvers/wpe.ts` (user/site/install/domain/SSL/SSH-key create-update-delete,
 `install_copy`, cache purge, backup create); `nexusWpCommand` local and remote;
 IPC `UPGRADE_WP`, `REMOVE_WP_AI` plugin deactivation, `WPE_DIAGNOSE` remote
-WP-CLI; `BulkOperationManager` per-site plugin updates.
+WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates.
 
 **Known gaps — do not assume completeness:**
 
 - `nexusWpeDomainCheck` (`/domains/{id}/check_status`) is POST-shaped but a
   read-only DNS check, so it is deliberately not audited.
-- Other IPC handlers that mutate *local* site state (start/stop/clone/delete via
-  Local's own services, `SETUP_AI`, storage cleanup) are not yet routed through
-  `auditDirectOperation`. Local-site operations are lower blast radius than
-  production WPE ones, which is why the first wave prioritised the latter.
+- `nexus:sentinel:execute-sandbox` runs WP-CLI against a *local* sandbox site
+  (not the production install) and is not audited.
+- IPC handlers that mutate local site state — `START_SITE` / `STOP_SITE`,
+  `SETUP_AI`, `SWITCH_AI_PROVIDER`, `STORAGE_CLEANUP`, `RESET_AND_REFRESH`,
+  `RESET_CONTENT_INDEX`, `FACTORY_RESET`, `WPE_PULL_TO_LOCAL`, and the
+  saved-query / site-group CRUD channels — are not routed through
+  `auditDirectOperation`. Note `WPE_PULL_TO_LOCAL` *does* write to the separate
+  `AuditLogger` store (see "Three sinks" below), just not to
+  `operation-audit.log`.
 - `src/main/graphql/resolvers/wpe.ts` is instrumented but **currently
   unreferenced** — `createResolvers` in `resolvers.ts` wins module resolution
   for `./graphql/resolvers`. It is kept in sync so the in-progress split does
   not silently lose the audit trail when it lands.
-- WP-CLI argv is masked element-by-element, so `['config','set','DB_PASSWORD','x']`
-  leaves `x` unmasked (the secret is a separate array element from its key).
-  `--user_pass=x` style single-token arguments *are* masked.
+
+**How this list has been wrong before.** It previously scoped the remaining gap
+to "IPC handlers that mutate *local* site state" and asserted production-WPE
+paths were prioritised first. `nexus:sentinel:execute` disproved that: it ran
+arbitrary WP-CLI over SSH against a production install *and* raw
+`rm -f /nas/content/live/<install>/<path>`, and was not audited at all. It is
+audited now. Before adding a coverage claim here, grep for the surface rather
+than reasoning about which wave "should" have covered it.
+
+### Three sinks, not one
+
+There are three durable audit writers, and they are easy to confuse:
+
+| file | writer | location |
+|---|---|---|
+| `operation-audit.log` | `audit/OperationAuditLog.ts` | `nexus-ai/` (JSONL, rotated) |
+| `audit.log` | `mcp/audit.ts` `createAuditLogger` | `nexus-ai/` (JSONL, rotated) |
+| `nexus_audit_logs.json` | `audit/AuditLogger.ts` via `registryStorage` | Local's `userData` (1000-entry cap) |
+
+All three redact inside `log()`. The third one did not until Aug 2026 — it wrote
+`params` and `error` completely unmasked across 24 write sites, five of which
+pass the raw IPC request object through on failure. It is also hardened to 0600
+after each write, best-effort, because `RegistryStorage` exposes only get/set
+and cannot carry a mode.
 
 ### Redaction
 
-`parameters` **and** `error` are redacted inside `OperationAuditLog.log()` (via
-`redactParams` / `maskSecretsInString` from `src/main/mcp/audit.ts`), never at
-the call site, so a new call site cannot leak credentials by forgetting.
+`parameters`, `error` **and** `target` are redacted inside
+`OperationAuditLog.log()` (via `redactParams` / `maskSecretsInString` from
+`src/main/mcp/audit.ts`), never at the call site, so a new call site cannot leak
+credentials by forgetting. `mcp/audit.ts`'s logger does the same for `params`,
+`error` and `toolName`.
 
-Two layers:
+Three layers:
 
 - **Key-name** — substring matches (`password`, `token`, `secret`, `api_key`,
-  `credential`, `certificate`, `authorization`, `bearer`, `signature`) plus
-  token matches for short words that are unsafe as substrings (`pass`, `pwd`,
-  `auth`, `key`, `salt`, `cookie`, `session`). Token matching is why `author`
-  and `monkey` are no longer redacted as collateral.
+  `access_key`, `private_key`, `credential`, `authorization`, `bearer`,
+  `signature`) plus token matches for short words that are unsafe as substrings
+  (`pass`, `pwd`, `auth`, `salt`, `cookie`, `session`). Token matching is why
+  `author` and `monkey` are no longer redacted as collateral.
+  **`key`, `keys`, `certificate` and `cert` are deliberately NOT key-name
+  matches.** Tokenizing `key` inverted the log's meaning rather than protecting
+  anything: `{key: 'wpeOperationPermissions.wpcli.production', value: 'true'}`
+  logged the *name* as `[REDACTED]` and kept the value. It also destroyed SSH
+  **public** keys and `{sshKeyId}`, where "which key was authorized or revoked"
+  is the entire point of the entry. Names that genuinely signal a secret still
+  match; value shape decides the rest.
 - **Value-shape** — runs on every string regardless of key name: PEM blocks,
-  `sk-` keys, `ghp_`/`github_pat_`, AWS/Google/Slack keys, `Bearer` headers,
-  `user:pass@host` connection strings, inline `password=` assignments, and 40+
-  char opaque alphanumeric runs. Strings over 2000 chars are truncated.
+  `sk-`/`sk_`/`rk_`/`pk_`/`key-` vendor keys, `ghp_`/`github_pat_`,
+  AWS/Google/Slack keys, `Bearer` headers, `user:pass@host` connection strings,
+  inline `password=` assignments, PHP `define('DB_PASSWORD', '…')`, opaque
+  alphanumeric runs of **20+** chars, and password-shaped tokens carrying all
+  four character classes. Strings are **not** truncated — rotation bounds file
+  size instead.
+- **Positional** — a credential is often a *separate token* from the name that
+  identifies it, which neither layer above can see. Both argv arrays
+  (`['config','set','DB_PASSWORD','x']`) and whole command strings
+  (`'wp config set DB_PASSWORD x'`, which is what `nexus:sentinel:execute`
+  passes) mask the token following a sensitive name, plus separated flags
+  (`--user_pass x`) and attached `-p<secret>`. The name is always preserved.
+
+**The 20-char threshold is measured, not guessed.** It was 40, which only ever
+caught SHA-1-length hashes: ten of ten realistic credentials in the 16–36 char
+band were written to disk verbatim. Lowering it trades false negatives against
+false positives, so if you change it, re-measure **both** directions — the
+must-mask corpus and the must-survive corpus are both encoded as tests in
+`tests/main/audit.test.ts` (`opaque-run masking — must-mask/must-survive
+corpus`). Known and accepted false positives: git SHAs, sha256 checksums, and
+long CamelCase identifiers containing digits are masked.
 
 Value-shape matching exists because key-name matching **structurally cannot**
 protect two payloads: `wp_eval`'s argument is literally named `code` (adding
@@ -225,6 +278,14 @@ and `audit.log` are all rotated the same way.
 before the live file, so `export()` genuinely exports everything on disk.
 Reading only `logPath` would silently amputate the compliance record at the
 current generation boundary.
+
+**`export()` destinations are validated.** It writes the complete de-rotated
+trail to a caller-supplied path, and a path under `~/Local Sites/<site>/app/
+public/` is served over HTTP by nginx. `webServedReason()` rejects Local site
+directories, `app/public`, `wp-content`, `public_html`, `htdocs`, `www` and
+`public`. The file is also `chmod`ed to 0600 *after* the write: `writeFileSync`'s
+`mode` applies only at creation, so exporting over an existing 0644 file left it
+0644.
 
 **Historical:** `services.operationAuditLog` was declared in the service types but
 never assigned, so `?.log()` calls silently no-opped and no audit file was ever
