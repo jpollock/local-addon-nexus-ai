@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { OperationAuditLog, AuditEntry } from '../../../src/main/audit/OperationAuditLog';
+import { OperationAuditLog, AuditEntry, webServedReason } from '../../../src/main/audit/OperationAuditLog';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -374,6 +374,98 @@ describe('OperationAuditLog — list()/export() across rotated generations', () 
     expect(deletes.every((e) => e.operation === 'wpe.install.delete')).toBe(true);
     // The oldest delete lives in a rotated generation.
     expect(deletes[deletes.length - 1].target).toBe('target-0');
+  });
+
+  // -------------------------------------------------------------------------
+  // S6 — export destination safety.
+  //
+  // export() takes a caller-supplied path, mkdir -p's it, and writes the
+  // COMPLETE de-rotated trail — every generation. A path under
+  // ~/Local Sites/<site>/app/public/ is served over HTTP by nginx.
+  // -------------------------------------------------------------------------
+
+  describe('export destination validation', () => {
+    it.each([
+      ['Local site webroot', '/Users/someone/Local Sites/acme/app/public/audit.jsonl'],
+      ['app/public anywhere', '/srv/myproject/app/public/audit.jsonl'],
+      ['wp-content', '/var/sites/acme/wp-content/uploads/audit.jsonl'],
+      ['public_html', '/home/acme/public_html/audit.jsonl'],
+      ['htdocs', '/opt/htdocs/audit.jsonl'],
+      ['www', '/var/www/audit.jsonl'],
+    ])('refuses to export into %s', (_label, target) => {
+      const log = new OperationAuditLog(logPath);
+      log.log({ operation: 'wpe.install.delete', target: 'acme-prod', parameters: {}, outcome: 'success' });
+
+      expect(() => log.export(target)).toThrow(/Refusing to export/);
+      // Nothing is written when it refuses.
+      expect(fs.existsSync(target)).toBe(false);
+    });
+
+    it('allows an ordinary destination and writes the entries', () => {
+      const log = new OperationAuditLog(logPath);
+      log.log({ operation: 'wpe.install.delete', target: 'acme-prod', parameters: {}, outcome: 'success' });
+
+      const out = path.join(dir, 'exports', 'audit.jsonl');
+      expect(() => log.export(out)).not.toThrow();
+      expect(fs.readFileSync(out, 'utf-8')).toContain('acme-prod');
+    });
+
+    it('forces 0600 even when overwriting an existing world-readable file', () => {
+      const log = new OperationAuditLog(logPath);
+      log.log({ operation: 'wpe.install.delete', target: 'acme-prod', parameters: {}, outcome: 'success' });
+
+      // writeFileSync's `mode` only applies at CREATION, so an export over an
+      // existing 0644 file kept 0644 until the explicit chmod was added.
+      const out = path.join(dir, 'audit-export.jsonl');
+      fs.writeFileSync(out, 'stale', { mode: 0o644 });
+      fs.chmodSync(out, 0o644);
+      expect(fs.statSync(out).mode & 0o777).toBe(0o644);
+
+      log.export(out);
+      expect(fs.statSync(out).mode & 0o777).toBe(0o600);
+    });
+
+    it('creates a fresh export at 0600', () => {
+      const log = new OperationAuditLog(logPath);
+      log.log({ operation: 'o', target: 't', parameters: {}, outcome: 'success' });
+      const out = path.join(dir, 'fresh.jsonl');
+      log.export(out);
+      expect(fs.statSync(out).mode & 0o777).toBe(0o600);
+    });
+
+    it('webServedReason names a safe path as safe', () => {
+      expect(webServedReason('/Users/someone/Desktop/audit.jsonl')).toBeNull();
+      expect(webServedReason('/tmp/nexus/audit.jsonl')).toBeNull();
+    });
+
+    it('webServedReason explains why a webroot is rejected', () => {
+      expect(webServedReason('/Users/x/Local Sites/acme/app/public/a.jsonl')).toMatch(/Local Sites/);
+      expect(webServedReason('/srv/app/public/a.jsonl')).toMatch(/app\/public/);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // S7 — `target` is masked like every other string field.
+  // -------------------------------------------------------------------------
+
+  describe('target masking', () => {
+    it('masks a credential-shaped target', () => {
+      const log = new OperationAuditLog(logPath);
+      log.log({
+        operation: 'wpe.install.delete',
+        target: 'install-0123456789abcdef0123456789abcdef',
+        parameters: {},
+        outcome: 'success',
+      });
+      const raw = fs.readFileSync(logPath, 'utf-8');
+      expect(raw).not.toContain('0123456789abcdef0123456789abcdef');
+    });
+
+    it('leaves ordinary install names alone', () => {
+      const log = new OperationAuditLog(logPath);
+      log.log({ operation: 'wpe.install.delete', target: 'acme-prod', parameters: {}, outcome: 'success' });
+      expect(log.list()[0].target).toBe('acme-prod');
+    });
   });
 
   it('drops generations beyond `keep` rather than growing without bound', () => {

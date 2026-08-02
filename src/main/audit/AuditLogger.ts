@@ -5,7 +5,11 @@
  * Provides accountability for destructive operations on production sites.
  */
 
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import type { RegistryStorage } from '../content/IndexRegistry';
+import { redactParams, maskSecretsInString } from '../mcp/audit';
 
 export interface AuditLog {
   timestamp: number;
@@ -28,24 +32,70 @@ export interface AuditLogFilters {
   until?: number; // timestamp
 }
 
+/**
+ * Where `RegistryStorage` (Local's `userData`) persists this log.
+ *
+ * The store is a plain JSON file written at Local's default 0644, i.e. readable
+ * by every account on the machine. `RegistryStorage` exposes only get/set, so
+ * the mode cannot be passed through it — the file is hardened after the write
+ * instead. Best effort by design: this must never break an audited operation.
+ */
+export function defaultAuditStorePath(): string {
+  return path.join(
+    os.homedir(),
+    'Library',
+    'Application Support',
+    'Local',
+    'nexus_audit_logs.json',
+  );
+}
+
 export class AuditLogger {
   private static readonly STORAGE_KEY = 'nexus_audit_logs';
   private static readonly MAX_LOGS = 1000;
 
-  constructor(private storage: RegistryStorage) {}
+  constructor(
+    private storage: RegistryStorage,
+    private storePath: string = defaultAuditStorePath(),
+  ) {}
 
   /**
    * Log an operation.
+   *
+   * `params` and `error` are redacted HERE, for the same reason
+   * `OperationAuditLog` redacts in `log()`: this is the third durable sink, it
+   * has 24 write sites, and five of them dump the raw IPC request object on
+   * failure (`ipc-handlers.ts` WPE pull/push, `ipc/handlers/wpe-sync.ts`). It
+   * previously wrote both fields with no masking at all.
+   *
+   * Never throws — a failed audit write must not break the audited operation.
    *
    * @param entry - Audit log entry (timestamp added automatically)
    */
   log(entry: Omit<AuditLog, 'timestamp'>): void {
     const logs = this.getLogs();
 
-    const fullEntry: AuditLog = {
-      ...entry,
-      timestamp: Date.now(),
-    };
+    let fullEntry: AuditLog;
+    try {
+      fullEntry = {
+        ...entry,
+        params: redactParams(entry.params ?? {}),
+        ...(entry.error !== undefined
+          ? { error: maskSecretsInString(String(entry.error)) }
+          : {}),
+        timestamp: Date.now(),
+      };
+    } catch {
+      // Losing the detail beats losing the record that something happened.
+      fullEntry = {
+        operation: String(entry?.operation ?? 'unknown'),
+        target: String(entry?.target ?? 'unknown'),
+        targetType: entry?.targetType ?? 'registry',
+        params: { _redactionFailed: true },
+        result: entry?.result ?? 'failure',
+        timestamp: Date.now(),
+      };
+    }
 
     logs.push(fullEntry);
 
@@ -55,6 +105,22 @@ export class AuditLogger {
     }
 
     this.storage.set(AuditLogger.STORAGE_KEY, logs);
+    this.hardenStorePermissions();
+  }
+
+  /**
+   * Restrict the backing store to 0600. Best effort: the file is owned by
+   * Local's storage layer, may not exist yet on the first write, and a failure
+   * here must not propagate into the audited operation.
+   */
+  private hardenStorePermissions(): void {
+    try {
+      if (!this.storePath) return;
+      if ((fs.statSync(this.storePath).mode & 0o777) === 0o600) return;
+      fs.chmodSync(this.storePath, 0o600);
+    } catch {
+      // Not yet written, not ours, or not permitted — nothing to do.
+    }
   }
 
   /**
