@@ -62,6 +62,13 @@ describe('wpeSshKeyPath', () => {
     (process as any).electronPaths = { userDataPath: '/custom/userdata' };
     expect(wpeSshKeyPath()).toBe(path.join('/custom/userdata', 'ssh', 'wpe-connect'));
   });
+
+  it('falls back to os.homedir() when electronPaths is undefined', () => {
+    delete (process as any).electronPaths;
+    expect(wpeSshKeyPath()).toBe(
+      path.join(os.homedir(), 'Library', 'Application Support', 'Local', 'ssh', 'wpe-connect')
+    );
+  });
 });
 
 it('pins the SSH timeout', () => {
