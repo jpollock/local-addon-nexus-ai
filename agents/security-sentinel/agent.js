@@ -61,7 +61,7 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
     query: `
       SELECT s.id, s.name, s.source, s.environment, s.ssh_last_sync_at,
              s.post_count, s.user_count, s.settings_json,
-             s.wp_version, s.php_version, s.admin_email, s.account_id
+             s.wp_version, s.php_version, s.admin_email, s.account_id, s.domain
       FROM sites s
       WHERE (s.source = 'wpe' OR s.source = 'local')
         AND s.name NOT LIKE 'sentinel-%'
@@ -102,6 +102,7 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
       id:            site.id,
       name:          site.name,
       source:        site.source,      // 'wpe' or 'local'
+      domain:        site.domain,      // real primary domain — see siteUrlFor()
       environment:   site.environment,
       sshLastSyncAt: site.ssh_last_sync_at,
       postCount:     Number(site.post_count) || 0,
@@ -118,6 +119,57 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
   }
 
   return installs;
+}
+
+/**
+ * Turn a coverage record into two human-readable lists: what was inspected, and what was not.
+ *
+ * The second list is the point. A Tier 1 pass that finds nothing is not evidence a site is
+ * uncompromised — it is evidence that the specific things it looked at were unremarkable. Any
+ * verdict that omits the second list is overstating its own result.
+ */
+function describeCoverage(coverage) {
+  const LABELS = {
+    metadata:   'plugin/user/config metadata (cached)',
+    exposure:   'production exposure config',
+    relative:   'change vs. previous baseline',
+    logs:       'access-log attack signals',
+    filesystem: 'filesystem contents',
+  };
+  const checked = [];
+  const skipped = [];
+  for (const [key, label] of Object.entries(LABELS)) {
+    (coverage[key] ? checked : skipped).push(label);
+  }
+  return { checked, skipped };
+}
+
+/**
+ * Resolve the URL the behavioral probes should hit.
+ *
+ * These probes send real HTTP requests to a live site — including one that spoofs Googlebot to
+ * test for cloaking. The previous implementation built the URL as
+ * `https://${install.name}.wpengine.com` unconditionally, which is wrong twice over: a *local*
+ * site has no such host, and a local site whose name happens to collide with someone else's WPE
+ * install would send Googlebot-spoofed traffic to a stranger's production site every scan.
+ *
+ * Prefer the real domain from graph.db. Fall back to the wpengine.com convention only for
+ * source='wpe' installs, and return null rather than guessing for anything else — the caller
+ * treats a null URL as "behavioral probes unavailable", which is honest, where probing the
+ * wrong host is not.
+ */
+function siteUrlFor(install, log) {
+  const domain = (install.domain || '').trim();
+  if (domain) {
+    return /^https?:\/\//i.test(domain) ? domain : `https://${domain}`;
+  }
+  if (install.source === 'wpe') {
+    const url = `https://${install.name}.wpengine.com`;
+    log?.warn?.(`[Tier 2] No domain recorded for "${install.name}"; falling back to ${url}`);
+    return url;
+  }
+  log?.warn?.(`[Tier 2] No domain for local site "${install.name}" — skipping behavioral probes`);
+  return null;
 }
 
 // Parses the markdown table output from fleet_sql into an array of objects
@@ -320,7 +372,9 @@ module.exports = {
   ],
   tools: [
     'fleet_sql', 'wpe_site_deep_refresh', 'wp_user_list',
-    'local_create_site', 'local_clone_site', 'local_start_site', 'local_restart_site',
+    // local_restart_site was dropped when the php.ini hardening was removed — it had no other
+    // caller, and an unused capability grant is one an agent can still be induced to misuse.
+    'local_create_site', 'local_clone_site', 'local_start_site', 'local_stop_site',
     'local_wpe_pull', 'local_wpe_push',
     'local_operation_status', 'compare_sites', 'wp_plugin_list', 'wp_eval',
     'get_log_aggregates', 'fetch_log_window',
@@ -350,6 +404,19 @@ module.exports = {
     for (const install of installs) {
       const signals = [];
 
+      // What did we ACTUALLY inspect? Several Tier 1 check groups return an empty array under
+      // ordinary conditions — no baseline yet, not a production environment, no log data — and
+      // an empty array is indistinguishable from "looked and found nothing". Reporting "clean"
+      // on that basis overstates the result, which is the single most misleading thing this
+      // agent can do. Track coverage explicitly and report it alongside the verdict.
+      const coverage = {
+        metadata: true,   // plugins, users, settings from graph.db — always available
+        exposure: install.environment === 'production',
+        relative: false,  // set below, once we know whether a baseline existed
+        logs: false,      // set by the log-check block
+        filesystem: false, // Tier 1 never reads the filesystem; only Tier 2 does
+      };
+
       // Tier 1: Absolute checks
       signals.push(...runAbsoluteChecks(install));
       signals.push(...runExposureChecks(install));
@@ -364,8 +431,10 @@ module.exports = {
         }
       }
 
-      // Relative checks
+      // Relative checks. With no stored baseline these return [] — a cold start cannot detect
+      // change, so REL-01..04 contribute nothing on a site's first ever scan.
       const baseline = loadBaseline(install.id, state);
+      coverage.relative = !!baseline;
       signals.push(...runRelativeChecks(install, baseline));
 
       // Log-backed checks (LOG-AUTH, LOG-PROBE, LOG-ENUM, LOG-DIST)
@@ -402,11 +471,12 @@ module.exports = {
         const logResult = await runLogChecks(logSiteId, tools, log);
         signals.push(...logResult.signals);
         attackSummary = logResult.attackSummary;
+        coverage.logs = logResult.available === true;
       } catch (err) {
         log.warn(`security-sentinel: log checks failed for ${install.name}: ${err.message} (skipping)`);
       }
 
-      allInstallResults.push({ install, signals });
+      allInstallResults.push({ install, signals, coverage });
 
       const criticalCount = signals.filter(s => s.severity === 'critical').length;
       // Only active-compromise signals count toward Tier 2 escalation — EXP (pre-breach) signals are informational
@@ -418,7 +488,14 @@ module.exports = {
       }
 
       if (signals.length === 0) {
-        log.info(`security-sentinel: ${install.name} — ✓ clean`);
+        // Say what was actually inspected. "clean" on its own invites the reader to conclude
+        // the site is not compromised, when a Tier 1 pass has read cached plugin, user and
+        // settings rows and nothing else — no files, no database contents, no core integrity.
+        const { checked, skipped } = describeCoverage(coverage);
+        log.info(
+          `security-sentinel: ${install.name} — no signals from ${checked.join(', ')}` +
+          (skipped.length ? ` — NOT checked: ${skipped.join(', ')}` : ''),
+        );
         log.siteStatus(install.name, 'clean');
       } else if (criticalCount >= 1 || compromiseHighCount >= 2) {
         log.siteStatus(install.name, 'escalated');
@@ -457,7 +534,37 @@ module.exports = {
       : allFindings.length > 0 ? 'findings'
       : 'clean';
 
-    return { verdict, findings: allFindings, plan: latestPlan ?? undefined, sites: {} };
+    // Populate the SDK's per-site map. It was previously returned as {} on every run, so nothing
+    // downstream could tell which sites were swept, let alone what was inspected on each.
+    const sites = {};
+    for (const { install, signals, coverage } of allInstallResults) {
+      const { checked, skipped } = describeCoverage(coverage || {});
+      sites[install.name] = {
+        status: signals.length === 0 ? 'clean'
+          : signals.some(s => s.severity === 'critical') ? 'escalated'
+          : 'findings',
+        findings: signals.map(s => ({
+          id: s.id, severity: s.severity, title: s.title,
+          site: install.name, category: s.category,
+        })),
+        checked,
+        notChecked: skipped,
+      };
+    }
+
+    // A summary that states its own limits. `clean` here means "the checks that ran found
+    // nothing", never "this site is not compromised" — Tier 1 does not read the filesystem.
+    const swept = allInstallResults.length;
+    const withLogs = allInstallResults.filter(r => r.coverage?.logs).length;
+    const coldStart = allInstallResults.filter(r => r.coverage && !r.coverage.relative).length;
+    const summary = [
+      `Swept ${swept} site(s). Verdict: ${verdict}, ${allFindings.length} finding(s).`,
+      `Access-log signals available for ${withLogs}/${swept}.`,
+      coldStart > 0 ? `${coldStart} site(s) had no prior baseline, so change-detection (REL-*) could not run.` : null,
+      `Tier 1 does not inspect the filesystem or database contents; only escalated sites reach Tier 2.`,
+    ].filter(Boolean).join(' ');
+
+    return { verdict, findings: allFindings, plan: latestPlan ?? undefined, sites, summary };
   },
 
   // Exported for unit testing only
@@ -475,7 +582,7 @@ async function runLogChecks(siteId, tools, log) {
     rawResult = await tools.invoke('get_log_aggregates', { siteId, from, to: today });
   } catch (err) {
     log.info(`[LOG] get_log_aggregates unavailable for ${siteId}: ${err.message} — skipping log checks`);
-    return { signals: [], attackSummary: null };
+    return { signals: [], attackSummary: null, available: false };
   }
 
   // NexusToolProvider auto-parses JSON — rawResult may already be the parsed object
@@ -486,7 +593,7 @@ async function runLogChecks(siteId, tools, log) {
     const text = typeof rawResult === 'string' ? rawResult : rawResult?.content?.[0]?.text;
     if (!text) {
       log.info(`[LOG] get_log_aggregates returned empty response for ${siteId} — skipping log checks`);
-      return { signals: [], attackSummary: null };
+      return { signals: [], attackSummary: null, available: false };
     }
     try { parsed = JSON.parse(text); } catch { return { signals: [], attackSummary: null }; }
   }
@@ -494,7 +601,7 @@ async function runLogChecks(siteId, tools, log) {
   const aggregates = Object.values(parsed?.aggregates ?? {});
   if (aggregates.length === 0) {
     log.info(`[LOG] No log data for ${siteId} — skipping log checks`);
-    return { signals: [], attackSummary: null };
+    return { signals: [], attackSummary: null, available: false };
   }
 
   // Fold 30-day totals
@@ -596,7 +703,7 @@ async function runLogChecks(siteId, tools, log) {
   ].filter(Boolean);
 
   const attackSummary = signals.length > 0 ? summaryLines.join('\n') : null;
-  return { signals, attackSummary };
+  return { signals, attackSummary, available: true };
 }
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
@@ -1052,6 +1159,10 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
 
     // Behavioral: external HTTP checks
     (async () => {
+      // siteUrlFor() returns null when it cannot determine a real host. Probing anyway would
+      // send six requests — one of them spoofing Googlebot — to a guessed hostname that may
+      // belong to someone else. Return empty and let the caller report the probes as unavailable.
+      if (!siteUrl) return {};
       const UA_CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/125 Safari/537.36';
       const UA_GBOT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
       const headers = (ua, referer) => ({ 'User-Agent': ua, ...(referer ? { Referer: referer } : {}) });
@@ -1748,66 +1859,38 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     if (!pullDone) { log.warn(`[Tier 2] Pull timed out for ${install.name}`); return null; }
   }
 
-  log.info(`[Tier 2] Sandbox ready. Hardening PHP environment...`);
+  log.info(`[Tier 2] Sandbox ready.`);
   // Register sandbox with the tool provider so wp_eval site-scope enforcement allows it.
   // This is a no-op when running outside the agent runtime (unit tests, etc.).
   if (typeof tools.registerSandbox === 'function') tools.registerSandbox(sandboxName);
 
-  // Harden sandbox PHP: disable raw socket functions in php.ini + block WordPress HTTP layer.
-  // This prevents any backdoor code that runs during wp_eval from making outbound connections.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('fs');
-    const phpIniResult = await tools.invoke('wp_eval', {
-      site: sandboxName, skip_plugins: true, skip_themes: true,
-      code: `echo php_ini_loaded_file();`,
-    });
-    const phpIniPath = typeof phpIniResult === 'string' ? phpIniResult.trim() : '';
-    if (phpIniPath && fs.existsSync(phpIniPath)) {
-      const DISABLE = '\n; Nexus AI Sentinel sandbox isolation\ndisable_functions = fsockopen,pfsockopen,curl_exec,curl_multi_exec,exec,shell_exec,system,passthru,proc_open,popen\n';
-      fs.appendFileSync(phpIniPath, DISABLE);
-      await tools.invoke('local_restart_site', { site: sandboxName });
-      // Wait for PHP-FPM and MySQL to fully restart before running more wp_eval calls.
-      // local_restart_site returns before services are ready — poll until wp_eval succeeds.
-      let ready = false;
-      for (let i = 0; i < 15 && !ready; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        try {
-          const probe = await tools.invoke('wp_eval', {
-            site: sandboxName, skip_plugins: true, skip_themes: true,
-            code: `echo 'ok';`,
-          });
-          if (typeof probe === 'string' && probe.includes('ok')) ready = true;
-        } catch { /* still restarting */ }
-      }
-      log.info(`[Tier 2] Sandbox PHP hardened: raw socket functions disabled (ready: ${ready})`);
-    }
-  } catch (err) {
-    log.warn(`[Tier 2] PHP disable_functions failed: ${err.message} — continuing without it`);
-  }
-
-  // Block WordPress HTTP layer (defence-in-depth alongside disable_functions)
-  try {
-    await tools.invoke('wp_eval', {
-      site: sandboxName, skip_plugins: true, skip_themes: true,
-      code: `
-        $config = ABSPATH . 'wp-config.php';
-        $c = @file_get_contents($config);
-        if ($c !== false && strpos($c, 'WP_HTTP_BLOCK_EXTERNAL') === false) {
-          $nl = strpos($c, "\n");
-          $defines = "\ndefine('WP_HTTP_BLOCK_EXTERNAL', true);\ndefine('WP_ACCESSIBLE_HOSTS', 'api.wordpress.org,core.svn.wordpress.org,downloads.wordpress.org');";
-          // Insert defines after the first line (the opening <?php tag)
-          $patched = $nl !== false
-            ? substr($c, 0, $nl) . $defines . substr($c, $nl)
-            : $c . $defines;
-          @file_put_contents($config, $patched);
-        }
-        echo 'done';
-      `,
-    });
-  } catch (err) {
-    log.warn(`[Tier 2] WP_HTTP_BLOCK_EXTERNAL failed: ${err.message}`);
-  }
+  // THE SANDBOX IS NOT A CONTAINMENT BOUNDARY. Do not add hardening here without reading this.
+  //
+  // Two attempts previously lived at this point and both have been removed, because both were
+  // measured and neither worked:
+  //
+  // 1. Appending `disable_functions` to php.ini. This never applied even once. The probe
+  //    (`echo php_ini_loaded_file();`) runs through WP-CLI, i.e. the CLI SAPI, which loads no
+  //    php.ini at all — so the guard fell through and the block silently skipped. When it did
+  //    write, the file under Local/run/<siteId>/conf/php/ is regenerated from php.ini.hbs on
+  //    every start, so the `local_restart_site` performed to *apply* the change was the same
+  //    operation that erased it. And it targeted PHP-FPM while every check here runs on the CLI
+  //    SAPI. Measured on this machine: 20 failures to 10 believed successes, and zero php.ini
+  //    anywhere carrying its marker. It also cost ~30s per scan waiting for a pointless restart.
+  //
+  // 2. Defining WP_HTTP_BLOCK_EXTERNAL in the sandbox's wp-config.php. This applied, but only
+  //    constrains WordPress's own wp_remote_* API, which malware has no reason to use — and it
+  //    mutated the evidence, which is worse than useless when the sandbox is meant to be a
+  //    forensic artifact.
+  //
+  // Even a correctly delivered blocklist would not contain this. Measured against Local's PHP:
+  // the list above left 5 of 8 egress channels open (stream_socket_client, file_get_contents and
+  // fopen on URLs, gethostbyname, mail), and `disable_classes` is accepted but inert for
+  // statically compiled extensions, so `new mysqli(...)` and `new SoapClient(...)` get out under
+  // any configuration. See docs/planning/2026-08-03-php-ini-scan-dir-hardening.md.
+  //
+  // The real fix is not to execute the code at all: 21 of 22 Tier 2 units need only bytes and
+  // belong in Node. See docs/planning/2026-08-03-sentinel-execution-model.md.
 
   log.info(`[Tier 2] Running filesystem checks...`);
 
@@ -2135,7 +2218,12 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     site: sandboxName,
     code: `
       global $wpdb;
-      $count = $wpdb->get_var("SELECT COUNT(DISTINCT u.ID) FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'");
+      // The capabilities meta_key is PREFIXED — it is "{$wpdb->prefix}capabilities", not the
+      // literal 'wp_capabilities'. WP Engine installs use randomized table prefixes, so
+      // hardcoding 'wp_' made this query return 0 on every production target and the check
+      // silently never fired. Derive it.
+      $capKey = $wpdb->prefix . 'capabilities';
+      $count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(DISTINCT u.ID) FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = %s AND m.meta_value LIKE '%administrator%'", $capKey));
       $wpCount = count(get_users(['role' => 'administrator']));
       echo json_encode(['db' => (int)$count, 'wp' => (int)$wpCount]);
     `,
@@ -2143,7 +2231,13 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
   let adminMismatch = false;
   try {
     const counts = JSON.parse(extractResult(dbCountResult) || '{}');
-    if (counts.db && counts.wp && counts.db !== counts.wp) {
+    // Guard on PRESENCE, not truthiness. The previous `counts.db && counts.wp` swallowed the
+    // worst case: a backdoor hiding *every* admin makes counts.wp === 0, which is falsy, so the
+    // check discarded exactly the evidence it exists to find. counts.db === 0 is a different
+    // matter — it means the DB query found no admins at all, which is a broken query rather
+    // than a finding, so that one stays excluded.
+    const haveCounts = typeof counts.db === 'number' && typeof counts.wp === 'number';
+    if (haveCounts && counts.db > 0 && counts.db !== counts.wp) {
       adminMismatch = true;
       fsSignals.push({
         id: 'FS-MISMATCH', severity: 'critical', category: 'active-compromise',
@@ -2460,7 +2554,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   // Collect raw data for all specialists in parallel
   log.phase('Data collection', `Gathering filesystem, DB and behavioral data for ${install.name}`);
-  const siteUrl = `https://${install.name}.wpengine.com`;
+  const siteUrl = siteUrlFor(install, log);
   const specialistData = await collectSpecialistData(sandboxName, siteUrl, tools);
 
   // Fan out to five parallel specialist AI calls — each is pure reasoning over provided data
@@ -2589,8 +2683,18 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     plan.synthesizerSteps = synthesis.remediationSteps; // advisory, surfaced in UI
   }
 
-  // Sandbox intentionally kept alive — the user will execute or dismiss via Sentinel Review UI.
-  // Deletion is handled by the nexus:sentinel:execute IPC handler after execution completes.
+  // Sandbox is EVIDENCE — kept on disk so the user can inspect it from the Sentinel Review UI,
+  // and because deletion is handled by the nexus:sentinel:execute IPC handler after execution.
+  // But keeping the *files* does not require keeping the site *running*: a running sandbox is a
+  // live PHP-FPM plus MySQL pair serving a known-compromised site, one per scan, indefinitely.
+  // Thirteen of them accumulated on one machine before this was noticed. Stop it; keep the bytes.
+  try {
+    await tools.invoke('local_stop_site', { site: sandboxName });
+    log.info(`[Tier 2] Sandbox ${sandboxName} stopped (files retained as evidence)`);
+  } catch (err) {
+    log.warn(`[Tier 2] Could not stop sandbox ${sandboxName}: ${err.message} — it is still running`);
+  }
+
   return plan;
 }
 
