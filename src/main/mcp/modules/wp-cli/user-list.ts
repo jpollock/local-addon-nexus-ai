@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error } from './preflight';
-import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { resolveTransport } from '../../../transport';
 import { withSiteRunning } from '../with-site-running';
 
 export const userListHandler: McpToolHandler = {
@@ -18,22 +18,30 @@ export const userListHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const target = await resolveTarget(args, services, 'wpcli_read');
-    if ('content' in target) return target;
+    const transport = await resolveTransport(args, services, 'wpcli_read');
+    if ('content' in transport) return transport;
 
-    if (target.type === 'remote') {
-      const result = await remoteWpCliRun(
-        target.installName,
-        ['user', 'list', '--format=json'],
-        services,
-      );
+    const executeCommand = async (): Promise<McpToolResult> => {
+      const result = await transport.runWpCli(['user', 'list', '--format=json']);
+
       if (!result.success) {
-        return error(`Remote WP-CLI error: ${result.stdout}`);
+        return error(
+          transport.kind === 'wpe-ssh'
+            ? `Remote WP-CLI error: ${result.stdout}`
+            : `Failed to list users: ${result.stdout}`
+        );
       }
+
       try {
         const users = JSON.parse(result.stdout || '[]');
         if (users.length === 0) return ok('No users found.');
-        const lines = [`## Users (${users.length}) — ${target.installName}`];
+
+        const heading =
+          transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe'
+            ? `## Users (${users.length}) — ${transport.siteRef.installName}`
+            : `## Users (${users.length})`;
+
+        const lines = [heading];
         for (const u of users) {
           lines.push(`- ${u.user_login} (${u.display_name}) [${u.roles}]`);
         }
@@ -41,31 +49,13 @@ export const userListHandler: McpToolHandler = {
       } catch {
         return ok(result.stdout || 'No users found.');
       }
+    };
+
+    // Local sites require the site to be running
+    if (transport.kind === 'local' && transport.siteRef.kind === 'local') {
+      return withSiteRunning(transport.siteRef.siteId, services, executeCommand);
     }
 
-    return withSiteRunning(target.site.id, services, async () => {
-      const result = await services.localServices!.wpCliRun(target.site.id, [
-        'user', 'list', '--format=json',
-      ]);
-
-      if (!result.success) {
-        return error(`Failed to list users: ${result.stdout}`);
-      }
-
-      try {
-        const users = JSON.parse(result.stdout || '[]');
-        if (users.length === 0) {
-          return ok('No users found.');
-        }
-
-        const lines = [`## Users (${users.length})`];
-        for (const u of users) {
-          lines.push(`- ${u.user_login} (${u.display_name}) [${u.roles}]`);
-        }
-        return ok(lines.join('\n'));
-      } catch {
-        return ok(result.stdout || 'No users found.');
-      }
-    });
+    return executeCommand();
   },
 };
