@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
+import { WpeSshTransport } from '../transport/WpeSshTransport';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -829,71 +830,9 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
     // --- Remote WP-CLI (via SSH to WP Engine) ---
 
     async remoteWpCliRun(installName: string, args: string[], opts?: { skipPlugins?: boolean }): Promise<WpCliResult> {
-      // Shell-escape each argument to prevent command injection
-      const escapeShellArg = (arg: string): string => {
-        // Replace single quotes with '\'' (close quote, escaped quote, open quote)
-        // This is the safest way to escape for SSH which uses sh/bash
-        return `'${arg.replace(/'/g, "'\\''")}'`;
-      };
-
-      // Build WP-CLI command — skip plugins/themes by default for speed/safety,
-      // but allow content extraction to load plugins (needed for custom post types)
-      const skipFlags = opts?.skipPlugins === false ? '' : '--skip-plugins --skip-themes';
-      const escapedArgs = args.map(escapeShellArg);
-      const wpCommand = `wp ${skipFlags} ${escapedArgs.join(' ')}`.trim();
-
-      // SSH key path: {userDataPath}/ssh/wpe-connect
-      const userDataPath = (process as any).electronPaths?.userDataPath
-        ?? path.join(os.homedir(), 'Library', 'Application Support', 'Local');
-      const sshKeyPath = path.join(userDataPath, 'ssh', 'wpe-connect');
-
-      const username = `local+ssh+${installName}`;
-      const host = `${installName}.ssh.wpengine.net`;
-
-      const sshArgs = [
-        '-F', '/dev/null',
-        '-o', 'IdentitiesOnly=yes',
-        '-o', 'PubkeyAcceptedKeyTypes=+ssh-rsa',
-        '-o', 'ServerAliveInterval=60',
-        '-o', 'ServerAliveCountMax=120',
-        '-o', 'StrictHostKeyChecking=accept-new',
-        // ControlMaster: reuse SSH connections to reduce overhead
-        '-o', 'ControlMaster=auto',
-        '-o', 'ControlPath=/tmp/ssh-nexus-%C',
-        '-o', 'ControlPersist=30s',
-        '-i', sshKeyPath,
-        `${username}@${host}`,
-        wpCommand,
-      ];
-
-      return new Promise<WpCliResult>((resolve) => {
-        let stdout = '';
-        let stderr = '';
-
-        const proc = spawn('ssh', sshArgs, {
-          stdio: ['ignore', 'pipe', 'pipe'],
-          // 35s: WPE SSH cold-start variance is 13-30s depending on server load,
-          // DB size, and PHP process warmth. Subsequent calls via ControlMaster
-          // complete in 1-3s. Truly unreachable sites fail immediately with DNS
-          // error regardless of timeout.
-          timeout: 35000,
-        });
-
-        proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
-        proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
-
-        proc.on('close', (code: number | null) => {
-          if (code === 0) {
-            resolve({ stdout, success: true });
-          } else {
-            resolve({ stdout: stderr || `SSH exited with code ${code}`, success: false });
-          }
-        });
-
-        proc.on('error', (err: Error) => {
-          resolve({ stdout: err.message, success: false });
-        });
-      });
+      // Implementation lives in WpeSshTransport; this remains the bridge-facing
+      // entry point so existing consumers keep working unchanged.
+      return new WpeSshTransport(installName).runWpCli(args, opts);
     },
 
     async resolveWpeInstall(siteId: string): Promise<WpeInstallInfo | null> {

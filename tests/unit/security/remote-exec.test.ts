@@ -1,83 +1,83 @@
 /**
  * Security tests for remote WP-CLI execution
  */
-import { isBlockedCommand } from '../../../src/main/mcp/modules/wp-cli/remote-exec';
+import { checkCommand, MCP_REMOTE_POLICY } from '../../../src/main/transport/policy';
 
 describe('Remote WP-CLI Security', () => {
-  describe('isBlockedCommand', () => {
+  describe('checkCommand with MCP_REMOTE_POLICY', () => {
     it('should block eval commands', () => {
-      expect(isBlockedCommand(['eval', 'echo "test"'])).toBe('eval');
+      expect(checkCommand(['eval', 'echo "test"'], MCP_REMOTE_POLICY)).toBe('eval');
       // eval-file starts with 'eval' so it matches the first blocked command
-      expect(isBlockedCommand(['eval-file', 'test.php'])).toBe('eval');
+      expect(checkCommand(['eval-file', 'test.php'], MCP_REMOTE_POLICY)).toBe('eval');
     });
 
     it('should block shell commands', () => {
-      expect(isBlockedCommand(['shell'])).toBe('shell');
+      expect(checkCommand(['shell'], MCP_REMOTE_POLICY)).toBe('shell');
     });
 
     it('should block direct database access', () => {
-      expect(isBlockedCommand(['db', 'query', 'SELECT * FROM wp_users'])).toBe('db query');
-      expect(isBlockedCommand(['db', 'cli'])).toBe('db cli');
+      expect(checkCommand(['db', 'query', 'SELECT * FROM wp_users'], MCP_REMOTE_POLICY)).toBe('db query');
+      expect(checkCommand(['db', 'cli'], MCP_REMOTE_POLICY)).toBe('db cli');
     });
 
     it('should allow whitelisted plugin commands', () => {
-      expect(isBlockedCommand(['plugin', 'list'])).toBeNull();
-      expect(isBlockedCommand(['plugin', 'install', 'akismet'])).toBeNull();
-      expect(isBlockedCommand(['plugin', 'activate', 'akismet'])).toBeNull();
-      expect(isBlockedCommand(['plugin', 'deactivate', 'akismet'])).toBeNull();
-      expect(isBlockedCommand(['plugin', 'update', 'akismet'])).toBeNull();
+      expect(checkCommand(['plugin', 'list'], MCP_REMOTE_POLICY)).toBeNull();
+      expect(checkCommand(['plugin', 'install', 'akismet'], MCP_REMOTE_POLICY)).toBeNull();
+      expect(checkCommand(['plugin', 'activate', 'akismet'], MCP_REMOTE_POLICY)).toBeNull();
+      expect(checkCommand(['plugin', 'deactivate', 'akismet'], MCP_REMOTE_POLICY)).toBeNull();
+      expect(checkCommand(['plugin', 'update', 'akismet'], MCP_REMOTE_POLICY)).toBeNull();
     });
 
     it('should allow whitelisted theme commands', () => {
-      expect(isBlockedCommand(['theme', 'list'])).toBeNull();
+      expect(checkCommand(['theme', 'list'], MCP_REMOTE_POLICY)).toBeNull();
     });
 
     it('should allow whitelisted core commands', () => {
-      expect(isBlockedCommand(['core', 'version'])).toBeNull();
+      expect(checkCommand(['core', 'version'], MCP_REMOTE_POLICY)).toBeNull();
     });
 
     it('should allow whitelisted user commands', () => {
-      expect(isBlockedCommand(['user', 'list'])).toBeNull();
+      expect(checkCommand(['user', 'list'], MCP_REMOTE_POLICY)).toBeNull();
     });
 
     it('should allow whitelisted option commands', () => {
-      expect(isBlockedCommand(['option', 'get', 'siteurl'])).toBeNull();
+      expect(checkCommand(['option', 'get', 'siteurl'], MCP_REMOTE_POLICY)).toBeNull();
     });
 
     it('should allow whitelisted site health commands', () => {
-      expect(isBlockedCommand(['site', 'health'])).toBeNull();
+      expect(checkCommand(['site', 'health'], MCP_REMOTE_POLICY)).toBeNull();
     });
 
     it('should block non-whitelisted commands', () => {
-      const result = isBlockedCommand(['post', 'create']);
+      const result = checkCommand(['post', 'create'], MCP_REMOTE_POLICY);
       expect(result).toContain('post create');
       expect(result).toContain('not allowed');
     });
 
     it('should block config commands', () => {
-      const result = isBlockedCommand(['config', 'set']);
+      const result = checkCommand(['config', 'set'], MCP_REMOTE_POLICY);
       expect(result).toContain('not allowed');
     });
 
     it('should block cache commands', () => {
-      const result = isBlockedCommand(['cache', 'flush']);
+      const result = checkCommand(['cache', 'flush'], MCP_REMOTE_POLICY);
       expect(result).toContain('not allowed');
     });
 
     it('should be case-insensitive for blocklist', () => {
-      expect(isBlockedCommand(['EVAL', 'echo "test"'])).toBe('eval');
-      expect(isBlockedCommand(['Eval', 'echo "test"'])).toBe('eval');
+      expect(checkCommand(['EVAL', 'echo "test"'], MCP_REMOTE_POLICY)).toBe('eval');
+      expect(checkCommand(['Eval', 'echo "test"'], MCP_REMOTE_POLICY)).toBe('eval');
     });
 
     it('should be case-insensitive for whitelist', () => {
-      expect(isBlockedCommand(['PLUGIN', 'LIST'])).toBeNull();
-      expect(isBlockedCommand(['Plugin', 'List'])).toBeNull();
+      expect(checkCommand(['PLUGIN', 'LIST'], MCP_REMOTE_POLICY)).toBeNull();
+      expect(checkCommand(['Plugin', 'List'], MCP_REMOTE_POLICY)).toBeNull();
     });
 
     it('should handle command injection attempts', () => {
       // These would be caught by slug validation in preflight, but test here too
-      const result1 = isBlockedCommand(['plugin', 'install', 'test; rm -rf /']);
-      const result2 = isBlockedCommand(['plugin', 'install', 'test && cat /etc/passwd']);
+      const result1 = checkCommand(['plugin', 'install', 'test; rm -rf /'], MCP_REMOTE_POLICY);
+      const result2 = checkCommand(['plugin', 'install', 'test && cat /etc/passwd'], MCP_REMOTE_POLICY);
 
       // These should still be allowed (slug validation will catch the malicious payload)
       expect(result1).toBeNull();
