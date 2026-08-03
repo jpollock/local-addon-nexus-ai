@@ -573,6 +573,57 @@ module.exports = {
 
 // ─── Log-backed checks (LOG-AUTH, LOG-PROBE, LOG-ENUM, LOG-DIST) ────────────
 
+// Cap on raw lines carried forward. The point is a representative sample for a human and for
+// the Tier 2 synthesizer's context window, not the whole window — which can be millions of
+// lines and would blow both.
+const LOG_EVIDENCE_LINES = 40;
+
+/**
+ * Pull raw log lines as evidence for a log-backed finding.
+ *
+ * Three things were wrong with the call this replaces:
+ *
+ *   1. It discarded the result. `await tools.invoke('fetch_log_window', ...)` assigned nothing,
+ *      and the tool persists nothing by design — so the "forensic fetch" streamed the window,
+ *      paid the cost, and dropped every line on the floor. The log said it "completed".
+ *   2. It skipped phase 1 of the tool's two-phase contract by passing confirm:true immediately,
+ *      so the cost estimate that exists precisely to stop an unbounded scan was never read.
+ *   3. It fired on a second, stricter set of hardcoded numbers (>500 auth, >200 IPs) rather
+ *      than on the findings. A site with a confirmed LOG-AUTH just under the line produced a
+ *      finding with no supporting lines, which is the case where a human most needs them.
+ *
+ * Returns null when evidence could not be obtained — never throws, because failing to collect
+ * corroboration must not lose the signal that prompted it.
+ */
+async function fetchLogEvidence(siteId, from, to, filter, tools, log) {
+  const params = { siteId, from, to, ...filter };
+  try {
+    // Phase 1 — estimate. Advisory: an unparseable estimate proceeds, matching prior behaviour.
+    const est = await tools.invoke('fetch_log_window', params);
+    const estText = typeof est === 'string' ? est : est?.content?.[0]?.text ?? JSON.stringify(est ?? '');
+    const gb = Number(estText.match(/([\d.]+)\s*GB/i)?.[1] ?? 0);
+    if (gb > 5) {
+      log.warn(`[LOG] Declining forensic fetch for ${siteId}: estimate ${gb} GB exceeds the 5 GB cap`);
+      return null;
+    }
+
+    // Phase 2 — stream and filter.
+    const raw = await tools.invoke('fetch_log_window', { ...params, confirm: true });
+    const text = typeof raw === 'string' ? raw : raw?.content?.[0]?.text ?? '';
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      log.info(`[LOG] Forensic fetch for ${siteId} returned no lines`);
+      return null;
+    }
+    const sample = lines.slice(0, LOG_EVIDENCE_LINES);
+    log.info(`[LOG] Forensic fetch for ${siteId}: ${lines.length} line(s), keeping ${sample.length}`);
+    return { lines: sample, totalLines: lines.length, truncated: lines.length > sample.length };
+  } catch (err) {
+    log.warn(`[LOG] Forensic fetch failed for ${siteId}: ${err.message}`);
+    return null;
+  }
+}
+
 async function runLogChecks(siteId, tools, log) {
   const today = new Date().toISOString().slice(0, 10);
   const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
@@ -675,15 +726,35 @@ async function runLogChecks(siteId, tools, log) {
     });
   }
 
-  // Hardcoded L2 escalation — LOG-AUTH critical (>500) or LOG-DIST critical (>200)
-  if (totalAuthAttacks > 500 || peakDayDistinctIps > 200) {
-    const dominantPath = totalLoginPosts >= totalXmlrpcPosts ? '/wp-login.php' : '/xmlrpc.php';
-    const pathFilter   = totalAuthAttacks > 500 ? { pathContains: dominantPath } : {};
-    try {
-      await tools.invoke('fetch_log_window', { siteId, from, to: today, ...pathFilter, confirm: true });
-      log.info(`[LOG] Forensic fetch_log_window completed for ${siteId} (critical threshold exceeded)`);
-    } catch (err) {
-      log.warn(`[LOG] fetch_log_window escalation failed for ${siteId}: ${err.message}`);
+  // Raw-line evidence, attached to whichever finding prompted it. Driven by the signals rather
+  // than by a second set of thresholds: if a check was confident enough to raise a finding, that
+  // finding deserves its supporting lines.
+  let evidence = null;
+  if (signals.length > 0) {
+    // Narrow the window to whatever the strongest signal is about, so the sample is on-topic.
+    const has = id => signals.some(s => s.id === id);
+    let filter = {};
+    if (has('LOG-AUTH')) {
+      filter = { pathContains: totalLoginPosts >= totalXmlrpcPosts ? '/wp-login.php' : '/xmlrpc.php' };
+    } else if (has('LOG-PROBE') && highProbes.length > 0) {
+      filter = { pathContains: highProbes[0][0] };
+    } else if (has('LOG-ENUM')) {
+      filter = { pathContains: '/wp-json/wp/v2/users' };
+    }
+    // LOG-DIST alone stays unfiltered — the finding is about breadth of source IPs, and
+    // constraining by path would hide exactly the spread that is the evidence.
+
+    evidence = await fetchLogEvidence(siteId, from, today, filter, tools, log);
+    if (evidence) {
+      for (const sig of signals) {
+        sig.evidence = {
+          sampleLines: evidence.lines,
+          totalMatched: evidence.totalLines,
+          truncated: evidence.truncated,
+          window: { from, to: today },
+          filter,
+        };
+      }
     }
   }
 
@@ -700,10 +771,14 @@ async function runLogChecks(siteId, tools, log) {
       ? `- Enumeration: user REST API (${userRestApiHits} hits), author scan (${authorScanHits} hits)`
       : null,
     `- Distinct attacker IPs (peak day): ${peakDayDistinctIps}`,
+    evidence
+      ? `- Raw sample (${evidence.lines.length} of ${evidence.totalLines} matching lines):\n` +
+        evidence.lines.map(l => `    ${l}`).join('\n')
+      : `- No raw log lines could be retrieved; the counts above are aggregates only.`,
   ].filter(Boolean);
 
   const attackSummary = signals.length > 0 ? summaryLines.join('\n') : null;
-  return { signals, attackSummary, available: true };
+  return { signals, attackSummary, available: true, evidence };
 }
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
