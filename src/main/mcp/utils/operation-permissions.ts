@@ -4,6 +4,20 @@ import { STORAGE_KEYS } from '../../../common/constants';
 type Operation = 'pull' | 'wpcli_read' | 'wpcli' | 'push' | 'delete';
 type EnvKey = 'development' | 'staging' | 'production';
 
+/**
+ * Whether the remote permission gate applies to a site with this host.
+ *
+ * Local sites are exempt by design. The gate exists to bound blast radius on
+ * machines the user does not control; a Local site has Local's own UI
+ * confirmations. This is the guarantee that makes "block writes on WPE
+ * development installs" safe to configure: it cannot leak into local work.
+ *
+ * Unknown hosts are gated — fail closed.
+ */
+export function isGatedHost(host: string | undefined): boolean {
+  return host !== 'local';
+}
+
 export const DEFAULT_OPERATION_PERMISSIONS: Record<Operation, Record<EnvKey, boolean>> = {
   pull:       { development: true,  staging: true,  production: true  },
   wpcli_read: { development: true,  staging: true,  production: true  }, // read-only SSH: plugin list, core version, user list, etc.
@@ -21,6 +35,11 @@ export const DEFAULT_OPERATION_PERMISSIONS: Record<Operation, Record<EnvKey, boo
  *   3. DEFAULT_OPERATION_PERMISSIONS[operation][environment]
  *
  * Undefined or unrecognised environments are treated as 'production' (safe default).
+ *
+ * SCOPING: only call this for sites where isGatedHost(host) is true. Local
+ * sites are exempt by design — see isGatedHost. Routing a local site through
+ * this function would let a user's WPE lockdown block their own local work,
+ * which is the exact failure this split prevents.
  *
  * @param operation   The operation type to check
  * @param environment The install environment string (e.g. 'production')
