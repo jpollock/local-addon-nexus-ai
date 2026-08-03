@@ -62,7 +62,7 @@ export const deepRefreshHandler: McpToolHandler = {
     const cache = (services as any).registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
     const cachedInstall = cache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installName);
     const environment = cachedInstall?.environment ?? 'production';
-    if (!isOperationAllowed('wpcli_read', environment, settings, installName)) {
+    if (!isOperationAllowed('wpcli_read', environment, settings, `wpe:${installName}`)) {
       return {
         content: [{
           type: 'text' as const,

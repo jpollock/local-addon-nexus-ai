@@ -43,6 +43,18 @@ const WpeSiteExceptionSchema = z.object({
   }),
 });
 
+const RemoteSiteExceptionSchema = z.object({
+  targetRef: z.string().min(1),
+  environment: z.string().min(1),
+  overrides: z.object({
+    pull:       z.boolean().optional(),
+    wpcli_read: z.boolean().optional(),
+    wpcli:      z.boolean().optional(),
+    push:       z.boolean().optional(),
+    delete:     z.boolean().optional(),
+  }),
+});
+
 export const UpdateSettingsSchema = z.object({
   autoIndex: z.boolean().optional(),
   excludedSiteIds: z.array(SiteIdSchema).optional(),
@@ -60,6 +72,8 @@ export const UpdateSettingsSchema = z.object({
   wpeAccountFilter: z.array(z.string()).nullable().optional(),
   wpeOperationPermissions: WpeOperationPermissionsSchema,
   wpeSiteExceptions: z.array(WpeSiteExceptionSchema).nullable().optional(),
+  remoteOperationPermissions: WpeOperationPermissionsSchema,
+  remoteSiteExceptions: z.array(RemoteSiteExceptionSchema).nullable().optional(),
   wpeAllowedEnvironments: z.array(z.string()).optional(), // legacy — kept for migration
   wpeBannerDismissed: z.boolean().optional(),
   wpeNotConnectedBannerDismissed: z.boolean().optional(),

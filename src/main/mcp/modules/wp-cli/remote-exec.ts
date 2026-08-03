@@ -70,7 +70,7 @@ export async function resolveTarget(
       if (installInfo) {
         // Linked-site path: environment is known from installInfo
         const environment = installInfo.environment ?? 'production';
-        if (!isOperationAllowed(operation, environment, settings, installInfo.installName)) {
+        if (!isOperationAllowed(operation, environment, settings, `wpe:${installInfo.installName}`)) {
           return error(
             `Operation blocked: WP-CLI is not permitted on "${environment}" environments. ` +
             `Adjust in Nexus AI → Settings → WP Engine Access.`,
@@ -92,7 +92,7 @@ export async function resolveTarget(
     );
     const environment = cachedInstall?.environment ?? 'production';
 
-    if (!isOperationAllowed(operation, environment, settings, installName)) {
+    if (!isOperationAllowed(operation, environment, settings, `wpe:${installName}`)) {
       return error(
         `Operation blocked: WP-CLI is not permitted on "${environment}" environments. ` +
         `Adjust in Nexus AI → Settings → WP Engine Access.`,

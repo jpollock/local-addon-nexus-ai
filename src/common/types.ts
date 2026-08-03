@@ -269,10 +269,10 @@ export interface WpeEnvFlags {
 }
 
 /**
- * Granular per-operation permissions for WPE access control.
+ * Granular per-operation permissions for remote SSH access control.
  * Replaces wpeAllowedEnvironments. Missing keys fall back to DEFAULT_OPERATION_PERMISSIONS.
  */
-export interface WpeOperationPermissions {
+export interface RemoteOperationPermissions {
   pull?:       WpeEnvFlags;  // local_wpe_pull
   wpcli_read?: WpeEnvFlags;  // WP-CLI read-only: plugin list, core version, user list, option get, site health
   wpcli?:      WpeEnvFlags;  // WP-CLI write: plugin install/update/activate, core update, post create/update/delete
@@ -280,9 +280,25 @@ export interface WpeOperationPermissions {
   delete?:     WpeEnvFlags;  // delete-install, delete-site, promote-environment, update-install, purge-cache
 }
 
-/** A site-level override for one or more operations on a specific install+environment */
+/** @deprecated Renamed to RemoteOperationPermissions. */
+export type WpeOperationPermissions = RemoteOperationPermissions;
+
+/** A site-level override for one or more operations on a specific target+environment */
+export interface RemoteSiteException {
+  targetRef: string;   // 'wpe:<installName>' or 'ssh:<alias>'
+  environment: string;   // 'production' | 'staging' | 'development'
+  overrides: {
+    pull?:       boolean;
+    wpcli_read?: boolean;
+    wpcli?:      boolean;
+    push?:       boolean;
+    delete?:     boolean;
+  };
+}
+
+/** @deprecated Renamed to RemoteSiteException; installName is now targetRef. */
 export interface WpeSiteException {
-  installName: string;   // WPE install name (e.g. "mystore")
+  installName: string;   // WPE install name (e.g. "mystore") — deprecated, use targetRef
   environment: string;   // 'production' | 'staging' | 'development'
   overrides: {
     pull?:       boolean;
@@ -309,10 +325,16 @@ export interface NexusSettings {
   /** WPE environment types Nexus is allowed to access. Default: staging + development only.
    *  Set to include 'production' to enable production access. */
   wpeAllowedEnvironments?: ('production' | 'staging' | 'development')[];
-  /** Granular per-operation permissions. Replaces wpeAllowedEnvironments. */
+  /** Granular per-operation permissions. Replaces wpeAllowedEnvironments.
+   *  @deprecated Renamed to remoteOperationPermissions. */
   wpeOperationPermissions?: WpeOperationPermissions;
-  /** Per-install, per-environment overrides for individual operations. */
+  /** Per-install, per-environment overrides for individual operations.
+   *  @deprecated Renamed to remoteSiteExceptions. */
   wpeSiteExceptions?: WpeSiteException[];
+  /** Granular per-operation permissions for remote SSH hosts (WPE + external). */
+  remoteOperationPermissions?: RemoteOperationPermissions;
+  /** Per-target, per-environment overrides for individual operations. */
+  remoteSiteExceptions?: RemoteSiteException[];
   /** Hours between scheduled local site content index runs. 0 or undefined = manual only. */
   localContentIndexIntervalHours?: number;
   /** Whether the opportunistic content indexer is enabled. Default: false. */

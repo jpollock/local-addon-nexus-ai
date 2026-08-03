@@ -29,7 +29,7 @@ export const updateInstallHandler: McpToolHandler = {
       const cachedInstall = cache?.installs?.find((i: any) => i.installId === installId);
       const installEnvironment = cachedInstall?.environment ?? 'production';
       const installNameForCheck = cachedInstall?.installName ?? cachedInstall?.install_name ?? installId;
-      if (!isOperationAllowed('push', installEnvironment, settings, installNameForCheck)) {
+      if (!isOperationAllowed('push', installEnvironment, settings, `wpe:${installNameForCheck}`)) {
         return {
           content: [{ type: 'text' as const, text:
             `Operation blocked: this operation is not permitted on "${installEnvironment}" environments. ` +

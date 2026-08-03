@@ -50,7 +50,7 @@ export const promoteEnvironmentHandler: McpToolHandler = {
       const destEnvironment = (dstInstall as any)?.environment ?? 'production';
       const destInstallName = (dstInstall as any)?.name ?? destId;
       const settings = getEffectiveSettings((services as any).registryStorage);
-      if (!isOperationAllowed('delete', destEnvironment, settings, destInstallName)) {
+      if (!isOperationAllowed('delete', destEnvironment, settings, `wpe:${destInstallName}`)) {
         return {
           content: [{ type: 'text' as const, text:
             `Operation blocked: this operation is not permitted on "${destEnvironment}" environments. ` +

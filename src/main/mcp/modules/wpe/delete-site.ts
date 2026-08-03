@@ -52,7 +52,7 @@ export const deleteSiteHandler: McpToolHandler = {
           for (const inst of installs) {
             const instEnv = inst?.environment ?? 'production';
             const instName = inst?.name ?? inst?.installName ?? inst?.install_name ?? inst?.id;
-            if (!isOperationAllowed('delete', instEnv, settings, instName)) {
+            if (!isOperationAllowed('delete', instEnv, settings, `wpe:${instName}`)) {
               return {
                 content: [{
                   type: 'text' as const,
@@ -113,7 +113,7 @@ export const deleteSiteHandler: McpToolHandler = {
       for (const inst of confirmInstalls) {
         const instEnv = inst?.environment ?? 'production';
         const instName = inst?.name ?? inst?.id;
-        if (!isOperationAllowed('delete', instEnv, confirmSettings, instName)) {
+        if (!isOperationAllowed('delete', instEnv, confirmSettings, `wpe:${instName}`)) {
           return {
             content: [{ type: 'text' as const, text:
               `Operation blocked: this operation is not permitted on "${instEnv}" environments. ` +

@@ -36,7 +36,7 @@ export const deleteInstallHandler: McpToolHandler = {
         // Block deletion if environment is not permitted
         const settings = getEffectiveSettings((services as any).registryStorage);
         const effectiveEnv = environment === 'unknown' ? 'production' : environment;
-        if (!isOperationAllowed('delete', effectiveEnv, settings, installName)) {
+        if (!isOperationAllowed('delete', effectiveEnv, settings, `wpe:${installName}`)) {
           return {
             content: [{ type: 'text' as const, text:
               `Operation blocked: this operation is not permitted on "${effectiveEnv}" environments. ` +
@@ -119,7 +119,7 @@ export const deleteInstallHandler: McpToolHandler = {
       const confirmInstall = await services.localServices!.capiDirect(`/installs/${installId}`) as any;
       const confirmEnv = confirmInstall?.environment ?? 'production';
       const confirmSettings = getEffectiveSettings((services as any).registryStorage);
-      if (!isOperationAllowed('delete', confirmEnv, confirmSettings, confirmInstall?.name ?? installId)) {
+      if (!isOperationAllowed('delete', confirmEnv, confirmSettings, `wpe:${confirmInstall?.name ?? installId}`)) {
         return {
           content: [{ type: 'text' as const, text:
             `Operation blocked: this operation is not permitted on "${confirmEnv}" environments. ` +

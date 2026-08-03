@@ -1,4 +1,4 @@
-import type { NexusSettings, WpeOperationPermissions } from '../../../common/types';
+import type { NexusSettings, WpeOperationPermissions, RemoteOperationPermissions, RemoteSiteException } from '../../../common/types';
 import { STORAGE_KEYS } from '../../../common/constants';
 
 type Operation = 'pull' | 'wpcli_read' | 'wpcli' | 'push' | 'delete';
@@ -13,11 +13,11 @@ export const DEFAULT_OPERATION_PERMISSIONS: Record<Operation, Record<EnvKey, boo
 };
 
 /**
- * Check if an operation is permitted on a given WPE install environment.
+ * Check if an operation is permitted on a given remote target environment.
  *
  * Resolution order:
- *   1. Site exception for (installName, environment) — if present, wins
- *   2. wpeOperationPermissions[operation][environment] — if set
+ *   1. Site exception for (targetRef, environment) — if present, wins
+ *   2. remoteOperationPermissions[operation][environment] — if set
  *   3. DEFAULT_OPERATION_PERMISSIONS[operation][environment]
  *
  * Undefined or unrecognised environments are treated as 'production' (safe default).
@@ -25,31 +25,38 @@ export const DEFAULT_OPERATION_PERMISSIONS: Record<Operation, Record<EnvKey, boo
  * @param operation   The operation type to check
  * @param environment The install environment string (e.g. 'production')
  * @param settings    Current NexusSettings
- * @param installName WPE install name; required to apply site exceptions
+ * @param targetRef   Target reference ('wpe:<installName>' or 'ssh:<alias>'); bare install names auto-prefixed with 'wpe:'
  */
 export function isOperationAllowed(
   operation: 'pull' | 'wpcli_read' | 'wpcli' | 'push' | 'delete',
   environment: string | undefined,
-  settings: Pick<NexusSettings, 'wpeOperationPermissions' | 'wpeSiteExceptions'>,
-  installName?: string,
+  settings: Pick<NexusSettings,
+    'remoteOperationPermissions' | 'remoteSiteExceptions' |
+    'wpeOperationPermissions' | 'wpeSiteExceptions'>,
+  targetRef?: string,
 ): boolean {
   const env = normaliseEnv(environment);
+  const exceptions = settings.remoteSiteExceptions
+    ?? (settings.wpeSiteExceptions as any as RemoteSiteException[] | undefined);
+  const perms = settings.remoteOperationPermissions ?? settings.wpeOperationPermissions;
 
-  // 1. Site exception wins if installName provided and exception exists
-  if (installName && settings.wpeSiteExceptions?.length) {
-    const exc = settings.wpeSiteExceptions.find(
-      (e) => e.installName === installName && e.environment === env,
+  // 1. Site exception wins if targetRef provided and exception exists
+  if (targetRef && exceptions?.length) {
+    // Auto-prefix bare install names with 'wpe:' for backward compatibility
+    const normalizedRef = targetRef.includes(':') ? targetRef : `wpe:${targetRef}`;
+    const exc = exceptions.find(
+      (e: any) => (e.targetRef ?? `wpe:${e.installName}`) === normalizedRef && e.environment === env,
     );
     if (exc && operation in exc.overrides) {
-      const override = exc.overrides[operation];
+      const override = (exc.overrides as any)[operation];
       return override !== undefined ? override : DEFAULT_OPERATION_PERMISSIONS[operation][env];
     }
   }
 
   // 2. Per-operation setting
-  const perOp = settings.wpeOperationPermissions?.[operation];
+  const perOp = perms?.[operation];
   if (perOp && env in perOp) {
-    const val = perOp[env as EnvKey];
+    const val = (perOp as any)[env];
     return val !== undefined ? val : DEFAULT_OPERATION_PERMISSIONS[operation][env];
   }
 
@@ -88,16 +95,56 @@ export function migrateFromLegacyEnvFilter(
 }
 
 /**
- * Get settings with legacy wpeAllowedEnvironments migrated to wpeOperationPermissions.
+ * Migrates WPE-named permission settings to remote-scoped ones.
+ *
+ * Modelled on migrateFromLegacyEnvFilter: returns undefined for a key when
+ * there is nothing to migrate, and never overwrites already-migrated settings.
+ * Exceptions gain a target ref so they can address an ssh: host as well as a
+ * WPE install.
+ */
+export function migrateWpePermissionSettings(
+  settings: Pick<NexusSettings,
+    'wpeOperationPermissions' | 'wpeSiteExceptions' |
+    'remoteOperationPermissions' | 'remoteSiteExceptions'>,
+): { remoteOperationPermissions?: RemoteOperationPermissions; remoteSiteExceptions?: RemoteSiteException[] } {
+  const out: {
+    remoteOperationPermissions?: RemoteOperationPermissions;
+    remoteSiteExceptions?: RemoteSiteException[];
+  } = {};
+
+  if (!settings.remoteOperationPermissions && settings.wpeOperationPermissions) {
+    out.remoteOperationPermissions = settings.wpeOperationPermissions;
+  }
+
+  if (!settings.remoteSiteExceptions && settings.wpeSiteExceptions?.length) {
+    out.remoteSiteExceptions = settings.wpeSiteExceptions.map((e: any) => ({
+      targetRef: e.targetRef ?? `wpe:${e.installName}`,
+      environment: e.environment,
+      overrides: e.overrides,
+    }));
+  }
+
+  return out;
+}
+
+/**
+ * Get settings with all legacy permission formats migrated to remote-scoped ones.
  * Use this instead of reading registryStorage directly at enforcement points.
  */
 export function getEffectiveSettings(
   registryStorage: { get(key: string): unknown } | null | undefined,
-): Pick<NexusSettings, 'wpeOperationPermissions' | 'wpeSiteExceptions'> {
+): Pick<NexusSettings,
+  'wpeOperationPermissions' | 'wpeSiteExceptions' |
+  'remoteOperationPermissions' | 'remoteSiteExceptions'> {
   const raw = (registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
-  const migrated = migrateFromLegacyEnvFilter(raw);
-  if (migrated) {
-    return { ...raw, wpeOperationPermissions: migrated };
-  }
-  return raw;
+
+  // Legacy env-filter migration runs first: it produces the WPE-shaped
+  // permissions that the remote-scoped migration below then carries forward.
+  const legacyMigrated = migrateFromLegacyEnvFilter(raw);
+  const withLegacy = legacyMigrated
+    ? { ...raw, wpeOperationPermissions: legacyMigrated }
+    : raw;
+
+  const remote = migrateWpePermissionSettings(withLegacy);
+  return { ...withLegacy, ...remote };
 }

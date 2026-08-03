@@ -109,7 +109,7 @@ export const wpePushHandler: McpToolHandler = {
 
     // Check push permission before firing the IPC call
     const settings = getEffectiveSettings((services as any).registryStorage);
-    if (!isOperationAllowed('push', environment, settings, installName)) {
+    if (!isOperationAllowed('push', environment, settings, `wpe:${installName}`)) {
       return {
         content: [{ type: 'text' as const, text:
           `Push blocked: pushing to "${environment ?? 'production'}" environments is not permitted. ` +

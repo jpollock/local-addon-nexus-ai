@@ -1671,7 +1671,7 @@ export function createResolvers(context: ResolverContext) {
                     const bareCached = bareCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === wpeRow.name);
                     const bareEnv = bareCached?.environment ?? 'production';
                     const bareOp = classifyWpCliOp(command);
-                    if (!isOperationAllowed(bareOp, bareEnv, bareSettings, wpeRow.name)) {
+                    if (!isOperationAllowed(bareOp, bareEnv, bareSettings, `wpe:${wpeRow.name}`)) {
                       return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${bareEnv}" environments. Adjust in Nexus AI → Settings → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
                     }
                     const result = await services.localServices.remoteWpCliRun(wpeRow.name, command);
@@ -1752,7 +1752,7 @@ export function createResolvers(context: ResolverContext) {
             const wpeCached = wpeCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installNameOnly);
             const wpeEnv = parsed.environment ?? wpeCached?.environment ?? 'production';
             const wpeOp = classifyWpCliOp(command);
-            if (!isOperationAllowed(wpeOp, wpeEnv, wpeSettings, installNameOnly)) {
+            if (!isOperationAllowed(wpeOp, wpeEnv, wpeSettings, `wpe:${installNameOnly}`)) {
               return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${wpeEnv}" environments. Adjust in Nexus AI → Settings → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
             }
 
@@ -1902,7 +1902,7 @@ export function createResolvers(context: ResolverContext) {
             const pluginListCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
             const pluginListCached = pluginListCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installNameOnly);
             const pluginListEnv = parsed.environment ?? pluginListCached?.environment ?? 'production';
-            if (!isOperationAllowed('wpcli_read', pluginListEnv, pluginListSettings, installNameOnly)) {
+            if (!isOperationAllowed('wpcli_read', pluginListEnv, pluginListSettings, `wpe:${installNameOnly}`)) {
               return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${pluginListEnv}" environments. Adjust in Nexus AI → Settings → WP Engine Access.`, plugins: [] };
             }
 
@@ -2421,7 +2421,7 @@ export function createResolvers(context: ResolverContext) {
           // Access control check — use parsed.environment (explicit in target) first
           const cacheSettings = getEffectiveSettings(services.registryStorage);
           const envForCheck = parsed.environment ?? 'production';
-          if (!isOperationAllowed('push', envForCheck, cacheSettings, parsed.installName!)) {
+          if (!isOperationAllowed('push', envForCheck, cacheSettings, `wpe:${parsed.installName!}`)) {
             return {
               success: false,
               error: `Operation blocked: this operation is not permitted on "${envForCheck}" environments. Adjust in Nexus AI → Settings → WP Engine Access.`,
@@ -4759,7 +4759,7 @@ export function createResolvers(context: ResolverContext) {
           const nameForCheck = confirmName || installId;
           const cachedForDelete = deleteCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === nameForCheck);
           const envForDelete = cachedForDelete?.environment ?? 'production';
-          if (!isOperationAllowed('delete', envForDelete, deleteSettings, nameForCheck)) {
+          if (!isOperationAllowed('delete', envForDelete, deleteSettings, `wpe:${nameForCheck}`)) {
             return { success: false, error: `Operation blocked: delete is not permitted on "${envForDelete}" environments. Adjust in Nexus AI → Settings → WP Engine Access.` };
           }
           const install = await services.localServices.capiDirect(`/installs/${installId}`) as any;

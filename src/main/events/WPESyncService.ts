@@ -188,7 +188,7 @@ export class WPESyncService {
       const effectiveSettings = getEffectiveSettings(this.registryStorage);
       const beforeEnvFilter = wpeInstalls.length;
       const wpeInstallsFiltered = wpeInstalls.filter((i) =>
-        isOperationAllowed('wpcli_read', i.environment, effectiveSettings, i.install_name)
+        isOperationAllowed('wpcli_read', i.environment, effectiveSettings, `wpe:${i.install_name}`)
       );
       if (wpeInstallsFiltered.length < beforeEnvFilter) {
         this.logger.info(
@@ -876,7 +876,7 @@ export class WPESyncService {
       };
 
       // Check operation permissions before syncing
-      if (!isOperationAllowed('wpcli_read', wpeInstall.environment, getEffectiveSettings(this.registryStorage), wpeInstall.install_name)) {
+      if (!isOperationAllowed('wpcli_read', wpeInstall.environment, getEffectiveSettings(this.registryStorage), `wpe:${wpeInstall.install_name}`)) {
         this.logger?.info(
           `[WPESyncService] Skipping ${wpeInstall.install_name} — ` +
           `wpcli_read not permitted on '${wpeInstall.environment}' environment`,
