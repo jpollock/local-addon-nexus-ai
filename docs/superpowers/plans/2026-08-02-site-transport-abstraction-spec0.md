@@ -730,7 +730,7 @@ GraphQL keeps terse ones, so no user-visible text changes."
 - Produces:
   - `type TransportKind = 'local' | 'wpe-ssh' | 'external-ssh' | 'external-rest'`
   - `type Capability = 'wp-cli' | 'arbitrary-options' | 'db-query' | 'eval' | 'search-replace' | 'core-update' | 'theme-activate'`
-  - `interface SiteRef { kind: 'local'; siteId: string } | { kind: 'wpe'; installName: string }`
+  - `type SiteRef = { kind: 'local'; siteId: string; siteName: string } | { kind: 'wpe'; installName: string }` (`siteName` is consumed by Task 7's `LocalTransport`)
   - `interface RunOpts { skipPlugins?: boolean; timeoutMs?: number }`
   - `interface ProbeResult { reachable: boolean; wpCliVersion?: string; wpVersion?: string; detail?: string }`
   - `interface DeleteResult { success: boolean; output: string }`
