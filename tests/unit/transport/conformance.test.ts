@@ -24,29 +24,91 @@ function fakeProc(opts: { code?: number; stdout?: string; stderr?: string } = {}
   return proc;
 }
 
-export function runTransportConformance(name: string, factory: () => SiteTransport) {
+/**
+ * The gate every SiteTransport implementation must pass.
+ *
+ * Callers supply TWO fixtures: one whose underlying call succeeds and one whose
+ * underlying call fails. Requiring both is the point — the previous version
+ * tested only the happy path, so a transport that threw on failure, or returned
+ * an empty diagnostic, passed.
+ */
+export interface ConformanceFixtures {
+  /** Transport whose underlying execution succeeds. */
+  ok: () => SiteTransport;
+  /** Transport whose underlying execution fails (non-zero exit or spawn error). */
+  failing: () => SiteTransport;
+}
+
+const ALL_CAPABILITIES = [
+  'wp-cli', 'arbitrary-options', 'db-query', 'eval',
+  'search-replace', 'core-update', 'theme-activate',
+] as const;
+
+export function runTransportConformance(name: string, fx: ConformanceFixtures) {
   describe(`SiteTransport conformance — ${name}`, () => {
-    it('exposes a stable kind and siteRef', () => {
-      const t = factory();
+    it('exposes a non-empty kind and a siteRef with a kind discriminant', () => {
+      const t = fx.ok();
       expect(typeof t.kind).toBe('string');
+      expect(t.kind.length).toBeGreaterThan(0);
       expect(t.siteRef).toBeDefined();
+      expect(typeof t.siteRef.kind).toBe('string');
     });
 
-    it('supports() answers every seeded capability without throwing', () => {
-      const t = factory();
-      for (const cap of ['wp-cli', 'arbitrary-options', 'db-query', 'eval',
-                         'search-replace', 'core-update', 'theme-activate'] as const) {
+    it('supports() returns a boolean for every seeded capability', () => {
+      const t = fx.ok();
+      for (const cap of ALL_CAPABILITIES) {
         expect(typeof t.supports(cap)).toBe('boolean');
       }
     });
 
-    it('runWpCli resolves rather than rejecting on failure', async () => {
-      const t = factory();
-      await expect(t.runWpCli(['core', 'version'])).resolves.toHaveProperty('success');
+    it('runWpCli succeeds on the happy path and returns a string-or-null stdout', async () => {
+      const r = await fx.ok().runWpCli(['core', 'version']);
+      expect(r.success).toBe(true);
+      expect(r.stdout === null || typeof r.stdout === 'string').toBe(true);
     });
 
-    it('probe() resolves with a reachable flag', async () => {
-      await expect(factory().probe()).resolves.toHaveProperty('reachable');
+    it('runWpCli RESOLVES with success:false on failure — never rejects', async () => {
+      const r = await fx.failing().runWpCli(['core', 'version']);
+      expect(r.success).toBe(false);
+    });
+
+    it('runWpCli failure carries diagnostic output rather than an empty string', async () => {
+      const r = await fx.failing().runWpCli(['core', 'version']);
+      expect(String(r.stdout ?? '')).not.toBe('');
+    });
+
+    it('runWpCli accepts RunOpts without throwing', async () => {
+      await expect(
+        fx.ok().runWpCli(['core', 'version'], { skipPlugins: false, timeoutMs: 5000 }),
+      ).resolves.toHaveProperty('success');
+    });
+
+    it('runWpCli survives two sequential calls', async () => {
+      const t = fx.ok();
+      const a = await t.runWpCli(['core', 'version']);
+      const b = await t.runWpCli(['plugin', 'list']);
+      expect(a.success).toBe(true);
+      expect(b.success).toBe(true);
+    });
+
+    it('deleteRemoteFile resolves with {success, output} on both paths', async () => {
+      const okRes = await fx.ok().deleteRemoteFile('/tmp/nexus-conformance-probe');
+      expect(typeof okRes.success).toBe('boolean');
+      expect(typeof okRes.output).toBe('string');
+
+      const failRes = await fx.failing().deleteRemoteFile('/tmp/nexus-conformance-probe');
+      expect(typeof failRes.success).toBe('boolean');
+      expect(typeof failRes.output).toBe('string');
+    });
+
+    it('probe() reports reachable=true on the happy path', async () => {
+      const p = await fx.ok().probe();
+      expect(p.reachable).toBe(true);
+    });
+
+    it('probe() reports reachable=false when unreachable, and never rejects', async () => {
+      const p = await fx.failing().probe();
+      expect(p.reachable).toBe(false);
     });
   });
 }
@@ -57,7 +119,16 @@ describe('WpeSshTransport', () => {
     spawnMock.mockImplementation(() => fakeProc({ stdout: 'ok' }));
   });
 
-  runTransportConformance('WpeSshTransport', () => new WpeSshTransport('acmeprod'));
+  runTransportConformance('WpeSshTransport', {
+    ok: () => {
+      spawnMock.mockImplementation(() => fakeProc({ stdout: 'ok' }));
+      return new WpeSshTransport('acmeprod');
+    },
+    failing: () => {
+      spawnMock.mockImplementation(() => fakeProc({ code: 1, stdout: 'boom-out', stderr: 'boom-err' }));
+      return new WpeSshTransport('acmeprod');
+    },
+  });
 
   it('runWpCli sends the same argv the legacy path did', async () => {
     await new WpeSshTransport('acmeprod').runWpCli(['plugin', 'list', '--format=json']);
@@ -95,8 +166,14 @@ describe('LocalTransport', () => {
     wpCliRun: jest.fn(async () => ({ stdout: 'WordPress 6.8', success: true })),
   }) as any;
 
-  runTransportConformance('LocalTransport', () =>
-    new LocalTransport('site-1', 'Test Site', services()));
+  runTransportConformance('LocalTransport', {
+    ok: () => new LocalTransport('site-1', 'Test Site', {
+      wpCliRun: jest.fn(async () => ({ stdout: 'WordPress 6.8', success: true })),
+    } as any),
+    failing: () => new LocalTransport('site-1', 'Test Site', {
+      wpCliRun: jest.fn(async () => ({ stdout: 'wp-cli not found', success: false })),
+    } as any),
+  });
 
   it('delegates runWpCli to localServices with the site id', async () => {
     const s = services();
