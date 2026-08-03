@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error } from './preflight';
-import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { resolveTransport } from '../../../transport';
 import { withSiteRunning } from '../with-site-running';
 
 export const optionGetHandler: McpToolHandler = {
@@ -23,33 +23,44 @@ export const optionGetHandler: McpToolHandler = {
     const option = args.option as string;
     if (!option) return error('Option name is required.');
 
-    const target = await resolveTarget(args, services, 'wpcli_read');
-    if ('content' in target) return target;
+    const transport = await resolveTransport(args, services, 'wpcli_read');
+    if ('content' in transport) return transport;
 
-    if (target.type === 'remote') {
-      const result = await remoteWpCliRun(target.installName, ['option', 'get', option], services);
-      if (!result.success) {
-        return error(`Remote WP-CLI error: ${result.stdout}`);
+    const executeCommand = async (): Promise<McpToolResult> => {
+      // For remote, use WP-CLI; for local, try getOption first, fall back to WP-CLI
+      if (transport.kind === 'wpe-ssh') {
+        const result = await transport.runWpCli(['option', 'get', option]);
+        if (!result.success) {
+          return error(`Remote WP-CLI error: ${result.stdout}`);
+        }
+        return ok(`${option}: ${result.stdout?.trim() ?? '(empty)'}`);
       }
-      return ok(`${option}: ${result.stdout?.trim() ?? '(empty)'}`);
-    }
 
-    return withSiteRunning(target.site.id, services, async () => {
+      // Local path: try getOption first
       try {
-        const value = await services.localServices!.getOption(target.site.id, option);
+        const value = await services.localServices!.getOption(
+          transport.siteRef.kind === 'local' ? transport.siteRef.siteId : '',
+          option
+        );
         if (value === null) {
           return error(`Option "${option}" not found.`);
         }
-
         return ok(`${option}: ${value}`);
       } catch (err) {
         // Fall back to WP-CLI if getOption fails
-        const result = await services.localServices!.wpCliRun(target.site.id, ['option', 'get', option, '--format=json']);
+        const result = await transport.runWpCli(['option', 'get', option, '--format=json']);
         if (!result.success) {
           return error(`Option "${option}" not found.`);
         }
         return ok(`${option}: ${result.stdout?.trim() ?? '(empty)'}`);
       }
-    });
+    };
+
+    // Local sites require the site to be running
+    if (transport.kind === 'local' && transport.siteRef.kind === 'local') {
+      return withSiteRunning(transport.siteRef.siteId, services, executeCommand);
+    }
+
+    return executeCommand();
   },
 };

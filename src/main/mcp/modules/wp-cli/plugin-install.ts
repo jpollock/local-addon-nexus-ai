@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, validateSlug } from './preflight';
-import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { resolveTransport } from '../../../transport';
 import { withSiteRunning } from '../with-site-running';
 
 export const pluginInstallHandler: McpToolHandler = {
@@ -31,28 +31,35 @@ export const pluginInstallHandler: McpToolHandler = {
     const slugErr = validateSlug(slug, 'plugin');
     if (slugErr) return slugErr;
 
-    const target = await resolveTarget(args, services);
-    if ('content' in target) return target;
+    const transport = await resolveTransport(args, services, 'wpcli');
+    if ('content' in transport) return transport;
 
     const cliArgs = ['plugin', 'install', slug];
     if (args.version) cliArgs.push(`--version=${args.version as string}`);
     if (args.activate) cliArgs.push('--activate');
 
-    if (target.type === 'remote') {
-      const result = await remoteWpCliRun(target.installName, cliArgs, services);
+    const executeCommand = async (): Promise<McpToolResult> => {
+      const result = await transport.runWpCli(cliArgs);
       if (!result.success) {
-        return error(`Failed to install plugin "${slug}" on ${target.installName}: ${result.stdout}`);
+        return error(
+          transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe'
+            ? `Failed to install plugin "${slug}" on ${transport.siteRef.installName}: ${result.stdout}`
+            : `Failed to install plugin "${slug}": ${result.stdout}`
+        );
       }
-      return ok(`Plugin "${slug}" installed${args.activate ? ' and activated' : ''} on ${target.installName}.`);
+
+      return ok(
+        transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe'
+          ? `Plugin "${slug}" installed${args.activate ? ' and activated' : ''} on ${transport.siteRef.installName}.`
+          : `Plugin "${slug}" installed${args.activate ? ' and activated' : ''}.`
+      );
+    };
+
+    // Local sites require the site to be running
+    if (transport.kind === 'local' && transport.siteRef.kind === 'local') {
+      return withSiteRunning(transport.siteRef.siteId, services, executeCommand);
     }
 
-    return withSiteRunning(target.site.id, services, async () => {
-      const result = await services.localServices!.wpCliRun(target.site.id, cliArgs);
-      if (!result.success) {
-        return error(`Failed to install plugin "${slug}": ${result.stdout}`);
-      }
-
-      return ok(`Plugin "${slug}" installed${args.activate ? ' and activated' : ''}.`);
-    });
+    return executeCommand();
   },
 };

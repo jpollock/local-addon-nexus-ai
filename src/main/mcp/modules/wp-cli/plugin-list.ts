@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error } from './preflight';
-import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { resolveTransport } from '../../../transport';
 import { cachedDataNote, haltedNoDataError } from './twin-fallback';
 import { freshnessFooter } from '../../../twin/twin-helpers';
 
@@ -23,71 +23,74 @@ export const pluginListHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const target = await resolveTarget(args, services, 'wpcli_read');
-    if ('content' in target) return target; // error result
+    const transport = await resolveTransport(args, services, 'wpcli_read');
+    if ('content' in transport) return transport;
 
-    if (target.type === 'remote') {
-      const result = await remoteWpCliRun(
-        target.installName,
-        ['plugin', 'list', '--format=json'],
-        services,
-      );
-      if (!result.success) {
-        return error(`Remote WP-CLI error: ${result.stdout}`);
+    const executeCommand = async (): Promise<McpToolResult> => {
+      // Remote: always call WP-CLI
+      if (transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe') {
+        const result = await transport.runWpCli(['plugin', 'list', '--format=json']);
+        if (!result.success) {
+          return error(`Remote WP-CLI error: ${result.stdout}`);
+        }
+        try {
+          const plugins = JSON.parse(result.stdout || '[]');
+          if (plugins.length === 0) return ok('No plugins installed.');
+          const lines = [`## Plugins (${plugins.length}) — ${transport.siteRef.installName}`];
+          for (const p of plugins) {
+            const status = p.status === 'active' ? '**active**' : p.status;
+            lines.push(`- ${p.name} v${p.version} [${status}]`);
+          }
+          return ok(lines.join('\n'));
+        } catch {
+          return ok(result.stdout || 'No plugins found.');
+        }
       }
-      try {
-        const plugins = JSON.parse(result.stdout || '[]');
-        if (plugins.length === 0) return ok('No plugins installed.');
-        const lines = [`## Plugins (${plugins.length}) — ${target.installName}`];
-        for (const p of plugins) {
-          const status = p.status === 'active' ? '**active**' : p.status;
-          lines.push(`- ${p.name} v${p.version} [${status}]`);
+
+      // Local: check if running; fall back to twin if halted
+      const siteId = transport.siteRef.kind === 'local' ? transport.siteRef.siteId : '';
+      const siteStatus = services.localServices!.getSiteStatus(siteId);
+      if (siteStatus !== 'running') {
+        const twin = services.twinService?.get(siteId);
+        if (twin?.plugins?.length) {
+          const check = services.twinService?.canAnswer?.(twin, 'plugins');
+          if (check && !check.can) {
+            return error(`No cached plugin data for ${transport.siteRef.kind === 'local' ? transport.siteRef.siteName : 'site'}. ${check.reason ?? ''}`);
+          }
+          const lines: string[] = [];
+          if (check?.confidence === 'stale' && check.reason) {
+            lines.push(`> ⚠️ ${check.reason}`);
+          } else {
+            lines.push(cachedDataNote(twin.asOf ?? Date.now(), transport.siteRef.kind === 'local' ? transport.siteRef.siteName : 'site'));
+          }
+          lines.push(`## Plugins (${twin.plugins.length})`);
+          for (const p of twin.plugins) {
+            const pStatus = p.status === 'active' ? '**active**' : (p.status ?? 'unknown');
+            lines.push(`- ${p.name}${p.version ? ` v${p.version}` : ''} [${pStatus}]`);
+          }
+          const footer = freshnessFooter(twin);
+          if (footer) { lines.push(''); lines.push(footer); }
+          return ok(lines.join('\n'));
         }
-        return ok(lines.join('\n'));
-      } catch {
-        return ok(result.stdout || 'No plugins found.');
+        return error(haltedNoDataError(transport.siteRef.kind === 'local' ? transport.siteRef.siteName : 'site'));
       }
-    }
 
-    // Local path — check if running; fall back to twin if halted
-    const siteStatus = services.localServices!.getSiteStatus(target.site.id);
-    if (siteStatus !== 'running') {
-      const twin = services.twinService?.get(target.site.id);
-      if (twin?.plugins?.length) {
-        const check = services.twinService?.canAnswer?.(twin, 'plugins');
-        if (check && !check.can) {
-          return error(`No cached plugin data for ${target.site.name}. ${check.reason ?? ''}`);
-        }
-        const lines: string[] = [];
-        if (check?.confidence === 'stale' && check.reason) {
-          lines.push(`> ⚠️ ${check.reason}`);
-        } else {
-          lines.push(cachedDataNote(twin.asOf ?? Date.now(), target.site.name));
-        }
-        lines.push(`## Plugins (${twin.plugins.length})`);
-        for (const p of twin.plugins) {
-          const pStatus = p.status === 'active' ? '**active**' : (p.status ?? 'unknown');
-          lines.push(`- ${p.name}${p.version ? ` v${p.version}` : ''} [${pStatus}]`);
-        }
-        const footer = freshnessFooter(twin);
-        if (footer) { lines.push(''); lines.push(footer); }
-        return ok(lines.join('\n'));
+      const plugins = await services.localServices!.getPlugins(siteId);
+
+      if (plugins.length === 0) {
+        return ok('No plugins installed.');
       }
-      return error(haltedNoDataError(target.site.name));
-    }
 
-    const plugins = await services.localServices!.getPlugins(target.site.id);
+      const lines = [`## Plugins (${plugins.length})`];
+      for (const p of plugins) {
+        const pStatus = p.status === 'active' ? '**active**' : p.status;
+        lines.push(`- ${p.name} v${p.version} [${pStatus}]`);
+      }
 
-    if (plugins.length === 0) {
-      return ok('No plugins installed.');
-    }
+      return ok(lines.join('\n'));
+    };
 
-    const lines = [`## Plugins (${plugins.length})`];
-    for (const p of plugins) {
-      const pStatus = p.status === 'active' ? '**active**' : p.status;
-      lines.push(`- ${p.name} v${p.version} [${pStatus}]`);
-    }
-
-    return ok(lines.join('\n'));
+    // Note: twin fallback already handles halted case, so no withSiteRunning wrapper needed
+    return executeCommand();
   },
 };

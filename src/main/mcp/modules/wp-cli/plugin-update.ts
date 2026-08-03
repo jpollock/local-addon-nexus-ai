@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, validateSlug } from './preflight';
-import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { resolveTransport } from '../../../transport';
 import { withSiteRunning } from '../with-site-running';
 
 export const pluginUpdateHandler: McpToolHandler = {
@@ -31,29 +31,38 @@ export const pluginUpdateHandler: McpToolHandler = {
       if (slugErr) return slugErr;
     }
 
-    const target = await resolveTarget(args, services);
-    if ('content' in target) return target;
+    const transport = await resolveTransport(args, services, 'wpcli');
+    if ('content' in transport) return transport;
 
     const cliArgs = slug === '--all'
       ? ['plugin', 'update', '--all']
       : ['plugin', 'update', slug];
 
-    if (target.type === 'remote') {
-      const result = await remoteWpCliRun(target.installName, cliArgs, services);
+    const executeCommand = async (): Promise<McpToolResult> => {
+      // Plugin updates download from WordPress.org — allow up to 3 minutes
+      const timeoutMs = transport.kind === 'local' ? 180000 : undefined;
+      const result = await transport.runWpCli(cliArgs, timeoutMs ? { timeoutMs } : undefined);
       if (!result.success) {
-        return error(`Failed to update plugin "${slug}" on ${target.installName}: ${result.stdout}`);
+        return error(
+          transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe'
+            ? `Failed to update plugin "${slug}" on ${transport.siteRef.installName}: ${result.stdout}`
+            : `Failed to update plugin "${slug}": ${result.stdout}`
+        );
       }
-      return ok(result.stdout || `Plugin "${slug}" updated on ${target.installName}.`);
+
+      return ok(
+        result.stdout ||
+        (transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe'
+          ? `Plugin "${slug}" updated on ${transport.siteRef.installName}.`
+          : `Plugin "${slug}" updated.`)
+      );
+    };
+
+    // Local sites require the site to be running
+    if (transport.kind === 'local' && transport.siteRef.kind === 'local') {
+      return withSiteRunning(transport.siteRef.siteId, services, executeCommand);
     }
 
-    return withSiteRunning(target.site.id, services, async () => {
-      // Plugin updates download from WordPress.org — allow up to 3 minutes
-      const result = await services.localServices!.wpCliRun(target.site.id, cliArgs, { timeoutMs: 180000 });
-      if (!result.success) {
-        return error(`Failed to update plugin "${slug}": ${result.stdout}`);
-      }
-
-      return ok(result.stdout || `Plugin "${slug}" updated.`);
-    });
+    return executeCommand();
   },
 };

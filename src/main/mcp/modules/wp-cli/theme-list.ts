@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error } from './preflight';
-import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { resolveTransport } from '../../../transport';
 import { cachedDataNote, haltedNoDataError } from './twin-fallback';
 import { freshnessFooter } from '../../../twin/twin-helpers';
 
@@ -19,71 +19,74 @@ export const themeListHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const target = await resolveTarget(args, services, 'wpcli_read');
-    if ('content' in target) return target;
+    const transport = await resolveTransport(args, services, 'wpcli_read');
+    if ('content' in transport) return transport;
 
-    if (target.type === 'remote') {
-      const result = await remoteWpCliRun(
-        target.installName,
-        ['theme', 'list', '--format=json'],
-        services,
-      );
-      if (!result.success) {
-        return error(`Remote WP-CLI error: ${result.stdout}`);
+    const executeCommand = async (): Promise<McpToolResult> => {
+      // Remote: always call WP-CLI
+      if (transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe') {
+        const result = await transport.runWpCli(['theme', 'list', '--format=json']);
+        if (!result.success) {
+          return error(`Remote WP-CLI error: ${result.stdout}`);
+        }
+        try {
+          const themes = JSON.parse(result.stdout || '[]');
+          if (themes.length === 0) return ok('No themes installed.');
+          const lines = [`## Themes (${themes.length}) — ${transport.siteRef.installName}`];
+          for (const t of themes) {
+            const status = t.status === 'active' ? '**active**' : t.status;
+            lines.push(`- ${t.name} v${t.version} [${status}]`);
+          }
+          return ok(lines.join('\n'));
+        } catch {
+          return ok(result.stdout || 'No themes found.');
+        }
       }
-      try {
-        const themes = JSON.parse(result.stdout || '[]');
-        if (themes.length === 0) return ok('No themes installed.');
-        const lines = [`## Themes (${themes.length}) — ${target.installName}`];
-        for (const t of themes) {
-          const status = t.status === 'active' ? '**active**' : t.status;
-          lines.push(`- ${t.name} v${t.version} [${status}]`);
+
+      // Local: check if running; fall back to twin if halted
+      const siteId = transport.siteRef.kind === 'local' ? transport.siteRef.siteId : '';
+      const siteStatus = services.localServices!.getSiteStatus(siteId);
+      if (siteStatus !== 'running') {
+        const twin = services.twinService?.get(siteId);
+        if (twin?.themes?.length) {
+          const check = services.twinService?.canAnswer?.(twin, 'themes');
+          if (check && !check.can) {
+            return error(`No cached theme data for ${transport.siteRef.kind === 'local' ? transport.siteRef.siteName : 'site'}. ${check.reason ?? ''}`);
+          }
+          const lines: string[] = [];
+          if (check?.confidence === 'stale' && check.reason) {
+            lines.push(`> ⚠️ ${check.reason}`);
+          } else {
+            lines.push(cachedDataNote(twin.asOf ?? Date.now(), transport.siteRef.kind === 'local' ? transport.siteRef.siteName : 'site'));
+          }
+          lines.push(`## Themes (${twin.themes.length})`);
+          for (const t of twin.themes) {
+            const tStatus = t.status === 'active' ? '**active**' : (t.status ?? 'unknown');
+            lines.push(`- ${t.name}${t.version ? ` v${t.version}` : ''} [${tStatus}]`);
+          }
+          const footer = freshnessFooter(twin);
+          if (footer) { lines.push(''); lines.push(footer); }
+          return ok(lines.join('\n'));
         }
-        return ok(lines.join('\n'));
-      } catch {
-        return ok(result.stdout || 'No themes found.');
+        return error(haltedNoDataError(transport.siteRef.kind === 'local' ? transport.siteRef.siteName : 'site'));
       }
-    }
 
-    // Local path — check if running; fall back to twin if halted
-    const siteStatus = services.localServices!.getSiteStatus(target.site.id);
-    if (siteStatus !== 'running') {
-      const twin = services.twinService?.get(target.site.id);
-      if (twin?.themes?.length) {
-        const check = services.twinService?.canAnswer?.(twin, 'themes');
-        if (check && !check.can) {
-          return error(`No cached theme data for ${target.site.name}. ${check.reason ?? ''}`);
-        }
-        const lines: string[] = [];
-        if (check?.confidence === 'stale' && check.reason) {
-          lines.push(`> ⚠️ ${check.reason}`);
-        } else {
-          lines.push(cachedDataNote(twin.asOf ?? Date.now(), target.site.name));
-        }
-        lines.push(`## Themes (${twin.themes.length})`);
-        for (const t of twin.themes) {
-          const tStatus = t.status === 'active' ? '**active**' : (t.status ?? 'unknown');
-          lines.push(`- ${t.name}${t.version ? ` v${t.version}` : ''} [${tStatus}]`);
-        }
-        const footer = freshnessFooter(twin);
-        if (footer) { lines.push(''); lines.push(footer); }
-        return ok(lines.join('\n'));
+      const themes = await services.localServices!.getThemes(siteId);
+
+      if (themes.length === 0) {
+        return ok('No themes installed.');
       }
-      return error(haltedNoDataError(target.site.name));
-    }
 
-    const themes = await services.localServices!.getThemes(target.site.id);
+      const lines = [`## Themes (${themes.length})`];
+      for (const t of themes) {
+        const tStatus = t.status === 'active' ? '**active**' : t.status;
+        lines.push(`- ${t.name} v${t.version} [${tStatus}]`);
+      }
 
-    if (themes.length === 0) {
-      return ok('No themes installed.');
-    }
+      return ok(lines.join('\n'));
+    };
 
-    const lines = [`## Themes (${themes.length})`];
-    for (const t of themes) {
-      const tStatus = t.status === 'active' ? '**active**' : t.status;
-      lines.push(`- ${t.name} v${t.version} [${tStatus}]`);
-    }
-
-    return ok(lines.join('\n'));
+    // Note: twin fallback already handles halted case, so no withSiteRunning wrapper needed
+    return executeCommand();
   },
 };

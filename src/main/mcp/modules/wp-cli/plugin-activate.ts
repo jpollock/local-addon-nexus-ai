@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error, validateSlug } from './preflight';
-import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { resolveTransport } from '../../../transport';
 import { withSiteRunning } from '../with-site-running';
 
 export const pluginActivateHandler: McpToolHandler = {
@@ -27,24 +27,31 @@ export const pluginActivateHandler: McpToolHandler = {
     const slugErr = validateSlug(slug, 'plugin');
     if (slugErr) return slugErr;
 
-    const target = await resolveTarget(args, services);
-    if ('content' in target) return target;
+    const transport = await resolveTransport(args, services, 'wpcli');
+    if ('content' in transport) return transport;
 
-    if (target.type === 'remote') {
-      const result = await remoteWpCliRun(target.installName, ['plugin', 'activate', slug], services);
+    const executeCommand = async (): Promise<McpToolResult> => {
+      const result = await transport.runWpCli(['plugin', 'activate', slug]);
       if (!result.success) {
-        return error(`Failed to activate plugin "${slug}" on ${target.installName}: ${result.stdout}`);
+        return error(
+          transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe'
+            ? `Failed to activate plugin "${slug}" on ${transport.siteRef.installName}: ${result.stdout}`
+            : `Failed to activate plugin "${slug}": ${result.stdout}`
+        );
       }
-      return ok(`Plugin "${slug}" activated on ${target.installName}.`);
+
+      return ok(
+        transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe'
+          ? `Plugin "${slug}" activated on ${transport.siteRef.installName}.`
+          : `Plugin "${slug}" activated.`
+      );
+    };
+
+    // Local sites require the site to be running
+    if (transport.kind === 'local' && transport.siteRef.kind === 'local') {
+      return withSiteRunning(transport.siteRef.siteId, services, executeCommand);
     }
 
-    return withSiteRunning(target.site.id, services, async () => {
-      const result = await services.localServices!.wpCliRun(target.site.id, ['plugin', 'activate', slug]);
-      if (!result.success) {
-        return error(`Failed to activate plugin "${slug}": ${result.stdout}`);
-      }
-
-      return ok(`Plugin "${slug}" activated.`);
-    });
+    return executeCommand();
   },
 };
