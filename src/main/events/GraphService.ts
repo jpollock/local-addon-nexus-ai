@@ -206,6 +206,9 @@ export class GraphService {
       this.logger.info('[GraphService] WPE columns already exist, skipping migration');
     }
 
+    // Migration: add taxonomy columns (platform, host) and backfill environment
+    applyTaxonomyMigration(this.db!);
+
     // Migration: add php_version column if missing
     if (!this.hasColumn('sites', 'php_version')) {
       this.logger.info('[GraphService] Adding php_version column to sites table...');
@@ -1414,4 +1417,33 @@ function extractNumber(data: Record<string, unknown>, keys: string[]): number | 
     if (typeof val === 'string' && !isNaN(Number(val))) return Number(val);
   }
   return null;
+}
+
+/**
+ * Adds the taxonomy columns. Idempotent: safe to call on every startup.
+ *
+ * `environment` is NOT added here — it already exists and is populated for WPE
+ * installs by upsertSite. This only backfills it where null.
+ *
+ * A WPE row with no environment becomes 'production' deliberately: that is the
+ * value normaliseEnv already assigns to unknown environments, and it is the
+ * most restrictive, so a mislabelled row fails closed. A later WPE sync
+ * corrects it.
+ */
+export function applyTaxonomyMigration(db: import('better-sqlite3').Database): void {
+  const cols = (db.prepare('PRAGMA table_info(sites)').all() as Array<{ name: string }>)
+    .map(c => c.name);
+
+  if (!cols.includes('platform')) {
+    db.exec("ALTER TABLE sites ADD COLUMN platform TEXT DEFAULT 'wordpress'");
+  }
+  if (!cols.includes('host')) {
+    db.exec('ALTER TABLE sites ADD COLUMN host TEXT');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_sites_host ON sites(host)');
+  }
+
+  db.exec("UPDATE sites SET platform = 'wordpress' WHERE platform IS NULL");
+  db.exec('UPDATE sites SET host = source WHERE host IS NULL');
+  db.exec("UPDATE sites SET environment = 'development' WHERE environment IS NULL AND host = 'local'");
+  db.exec("UPDATE sites SET environment = 'production'  WHERE environment IS NULL AND host = 'wpe'");
 }
