@@ -425,3 +425,31 @@ A later extension worth noting: `wp_list_abilities` / `wp_run_ability` are
 already wired to the WP 7.0 Abilities API, which is a legitimate route to a
 richer REST surface without inventing a proprietary plugin. It is not Spec 2
 material, since a site being migrated away from is unlikely to be on WP 7.0.
+
+### 8.1 `wpe-rest` — coherent, deliberately deferred
+
+Reaching a **WPE** install over REST rather than SSH is a legitimate member of
+axis 1, and its coherence is a useful check that the seam is in the right place.
+It is deliberately absent from `TransportKind` for now:
+
+- No identified need — the driving requirement was non-WPE hosts.
+- The credential story is worse. SSH covers every install with the single
+  `wpe-connect` key from Local's Connect flow; REST needs an application
+  password provisioned per install, across a fleet that is ~300 installs today.
+- It is a structurally weaker transport (see Spec 2 above) for a host where a
+  stronger one already works.
+- Whether WPE's platform rules permit the required REST endpoints is **unverified**.
+
+**Adding it later is cheap, by construction.** Nothing branches on
+`TransportKind` — tools call `transport.runWpCli()`, and `kind` exists only for
+logging, audit and telemetry. The absence of exhaustive switches on it is the
+point of this refactor, so a fifth value costs a line plus an implementation.
+
+**Trigger condition to revisit:** fleet-scale reads. `WPESyncService` sweeps
+installs via `isOperationAllowed('wpcli_read', …)` (`:191`, `:879`), and each is
+an SSH spawn plus WP-CLI bootstrap — seconds apiece across hundreds of installs.
+If that sweep is measured and found to be SSH-bound, a read-only `wpe-rest`
+transport becomes a real performance argument. Two caveats: drive it from
+measured sync times rather than intuition, and check first whether part of what
+the sweep collects is better served by CAPI on axis 2 — though plugins, themes
+and options are WordPress-internal, so CAPI cannot supply those.
