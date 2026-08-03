@@ -48,6 +48,25 @@ export const GRAPHQL_REMOTE_POLICY: CommandPolicy = {
   blocked: ['db query', 'eval', 'eval-file', 'shell'],
 };
 
+/**
+ * Policy for arbitrary SSH hosts: blocklist only, deliberately no whitelist.
+ *
+ * MCP_REMOTE_POLICY's 14-command whitelist is what makes five MCP tools
+ * permanently dead on WP Engine. Applying it here would reproduce that on day
+ * one and contradict the full-parity decision for external hosts.
+ *
+ * External hosts are therefore more permissive than WPE-via-MCP. That is
+ * intended: the whitelist is vestigial, the user named the host explicitly, and
+ * the environment gate still applies — registration defaults to production, so
+ * writes are refused until a host is deliberately labelled otherwise.
+ *
+ * Do NOT unify this with the other two policies. That is a separate decision
+ * with its own spec.
+ */
+export const EXTERNAL_REMOTE_POLICY: CommandPolicy = {
+  blocked: ['eval', 'eval-file', 'shell', 'db query', 'db cli'],
+};
+
 /** Returns null when permitted, or a human-readable reason when refused. */
 export function checkCommand(args: string[], policy: CommandPolicy): string | null {
   const joined = args.join(' ').toLowerCase();

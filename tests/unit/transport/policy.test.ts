@@ -3,6 +3,7 @@ import {
   withPolicy,
   MCP_REMOTE_POLICY,
   GRAPHQL_REMOTE_POLICY,
+  EXTERNAL_REMOTE_POLICY,
 } from '../../../src/main/transport/policy';
 
 describe('MCP_REMOTE_POLICY (blocklist + whitelist)', () => {
@@ -30,6 +31,32 @@ describe('GRAPHQL_REMOTE_POLICY (blocklist only)', () => {
   });
   it('does NOT block db cli — the GraphQL blocklist omits it, preserved deliberately', () => {
     expect(checkCommand(['db', 'cli'], GRAPHQL_REMOTE_POLICY)).toBeNull();
+  });
+});
+
+describe('EXTERNAL_REMOTE_POLICY (blocklist only, no whitelist)', () => {
+  it('blocks the dangerous five', () => {
+    expect(checkCommand(['eval', '<?php'], EXTERNAL_REMOTE_POLICY)).toBe('eval');
+    expect(checkCommand(['shell'], EXTERNAL_REMOTE_POLICY)).toBe('shell');
+    expect(checkCommand(['db', 'cli'], EXTERNAL_REMOTE_POLICY)).toBe('db cli');
+  });
+
+  it('permits core update — which MCP_REMOTE_POLICY refuses', () => {
+    // The divergence is the point. Applying MCP's 14-command whitelist to
+    // external hosts would reproduce, on day one, the five permanently-dead
+    // MCP tools and contradict the full-parity decision.
+    expect(checkCommand(['core', 'update'], EXTERNAL_REMOTE_POLICY)).toBeNull();
+    expect(checkCommand(['core', 'update'], MCP_REMOTE_POLICY))
+      .toMatch(/not allowed for remote execution/);
+  });
+
+  it('permits post create and theme activate — also refused by MCP', () => {
+    expect(checkCommand(['post', 'create'], EXTERNAL_REMOTE_POLICY)).toBeNull();
+    expect(checkCommand(['theme', 'activate', 'x'], EXTERNAL_REMOTE_POLICY)).toBeNull();
+  });
+
+  it('has no whitelist at all', () => {
+    expect(EXTERNAL_REMOTE_POLICY.allowed).toBeUndefined();
   });
 });
 
