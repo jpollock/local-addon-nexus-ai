@@ -65,6 +65,7 @@ jest.mock('child_process', () => ({
   spawn: (cmd: string, args: string[]) => spawnMock(cmd, args)
 }));
 
+import { createLocalServicesBridge } from '../../../src/main/mcp/local-services-bridge';
 import { coreVersionHandler } from '../../../src/main/mcp/modules/wp-cli/core-version';
 import { optionGetHandler } from '../../../src/main/mcp/modules/wp-cli/option-get';
 import { pluginActivateHandler } from '../../../src/main/mcp/modules/wp-cli/plugin-activate';
@@ -153,12 +154,13 @@ const DISPATCH_CASES: Array<{ name: string; handler: any; args: Record<string, u
 ];
 
 function makeServices() {
+  const bridge = createLocalServicesBridge({} as any);
   return {
-    localServices: {
+    localServices: Object.assign(bridge, {
       isCAPIAvailable: () => true,
       isSSHKeyAvailable: () => true,
-      resolveWpeInstall: jest.fn(async () => null),
-    },
+      resolveWpeInstall: async () => null,
+    }),
     siteData: { getSites: () => ({}), getSite: () => null },
     registryStorage: {
       get: (key: string) => {
