@@ -22,6 +22,7 @@ pluginCommand
   .description('List plugins')
   .option('--json', 'Output as JSON')
   .option('--status <status>', 'Filter by status (active, inactive, all)')
+  .option('--path <dir>', 'WordPress root on an external SSH host')
   .action(async (target, options) => {
     try {
       parseTarget(target);
@@ -29,7 +30,9 @@ pluginCommand
       // MCP path: skip for --json (MCP returns markdown, not structured data)
       if (!options.json && loadMcpConnectionInfo()) {
         try {
-          const { text, isError } = await callMcpTool('wp_plugin_list', targetToMcpArgs(target));
+          const mcpArgs = targetToMcpArgs(target);
+          if (options.path) mcpArgs.wp_path = options.path;
+          const { text, isError } = await callMcpTool('wp_plugin_list', mcpArgs);
           if (isError) {
             console.error(`\n❌ ${text}`);
             process.exit(1);
@@ -344,11 +347,14 @@ const coreCommand = new Command('core').description('Manage WordPress core');
 coreCommand
   .command('version <target>')
   .description('Get WordPress version')
-  .action(async (target) => {
+  .option('--path <dir>', 'WordPress root on an external SSH host')
+  .action(async (target, options) => {
     try {
       if (loadMcpConnectionInfo()) {
         try {
-          const { text, isError } = await callMcpTool('wp_core_version', targetToMcpArgs(target));
+          const mcpArgs = targetToMcpArgs(target);
+          if (options.path) mcpArgs.wp_path = options.path;
+          const { text, isError } = await callMcpTool('wp_core_version', mcpArgs);
           if (isError) {
             console.error(`\n❌ ${text}`);
             process.exit(1);

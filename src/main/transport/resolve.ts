@@ -3,7 +3,11 @@ import { resolveTarget } from '../mcp/modules/wp-cli/remote-exec';
 import type { SiteTransport } from './types';
 import { WpeSshTransport } from './WpeSshTransport';
 import { LocalTransport } from './LocalTransport';
-import { withPolicy, MCP_REMOTE_POLICY } from './policy';
+import { withPolicy, MCP_REMOTE_POLICY, EXTERNAL_REMOTE_POLICY } from './policy';
+import { parseTarget } from '../../common/target';
+import { error } from '../mcp/modules/wp-cli/preflight';
+import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
+import { ExternalSshTransport } from './ExternalSshTransport';
 
 /**
  * Resolve MCP tool args to a transport. Delegates target resolution (and
@@ -18,6 +22,35 @@ export async function resolveTransport(
   services: NexusServices,
   operation: string,
 ): Promise<SiteTransport | McpToolResult> {
+  // External SSH hosts arrive as an undeclared `ssh_target` arg from the CLI.
+  // Handled before resolveTarget so no existing local/WPE resolution runs and
+  // therefore none of it can regress. The arg is intentionally absent from every
+  // tool's inputSchema in this milestone; Plan B promotes it.
+  const sshTarget = typeof args.ssh_target === 'string' ? args.ssh_target : undefined;
+  if (sshTarget) {
+    let parsed;
+    try {
+      parsed = parseTarget(sshTarget);
+    } catch (e: any) {
+      return error(e?.message ?? `Invalid SSH target: ${sshTarget}`);
+    }
+    if (parsed.type !== 'external' || !parsed.alias) {
+      return error(`Not an external SSH target: ${sshTarget}. Expected ssh:alias@environment`);
+    }
+
+    // Same gate as WP Engine installs, keyed on an ssh: target ref.
+    const settings = getEffectiveSettings((services as any).registryStorage);
+    if (!isOperationAllowed(operation as any, parsed.environment, settings, `ssh:${parsed.alias}`)) {
+      return error(
+        `Operation blocked: not permitted on "${parsed.environment}" environments. `
+        + `Adjust in Nexus AI → Settings → WP Engine Access.`,
+      );
+    }
+
+    const wpPath = typeof args.wp_path === 'string' ? args.wp_path : undefined;
+    return withPolicy(new ExternalSshTransport(parsed.alias, wpPath), EXTERNAL_REMOTE_POLICY);
+  }
+
   const target = await resolveTarget(args as any, services, operation as any);
   if ('content' in target) return target;
 

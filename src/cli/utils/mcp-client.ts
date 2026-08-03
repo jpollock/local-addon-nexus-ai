@@ -115,8 +115,14 @@ export async function callMcpTool(
  *   wpe:install-name         → { install_name: 'install-name' }
  *   name@production          → { install_name: 'name' }
  *   bare-name                → { site: 'bare-name' }
+ *   ssh:alias@environment    → { ssh_target: 'ssh:alias@environment' }
  */
 export function targetToMcpArgs(target: string): Record<string, string> {
+  if (target.startsWith('ssh:')) {
+    // Passed whole; resolveTransport parses it. wp_path is added separately by
+    // the calling command from its --path option.
+    return { ssh_target: target };
+  }
   if (target.endsWith('@local')) {
     return { site: target.slice(0, -'@local'.length) };
   }
