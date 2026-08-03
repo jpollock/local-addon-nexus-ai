@@ -166,6 +166,48 @@ describe('nexus:sentinel:execute is audited', () => {
     expect(entries[0].error).toContain('ssh: connect timeout');
   });
 
+  it('does not leak a failed step\'s raw command text (or its credential) into `error`', async () => {
+    // The mysql attached-password form: `-p<secret>` masking only exists for
+    // argv arrays (see CLAUDE.md), so a whole command STRING carrying it is
+    // exactly the shape that defeated the withhold list before this fix — the
+    // `error` field re-interpolated `step.command` verbatim for every failed
+    // step, even though `commands` above it was already withheld.
+    executeSentinelCommands.mockResolvedValue({
+      success: false,
+      steps: [
+        { command: 'rm -f wp-content/mu-plugins/evil.php', ok: true, durationMs: 5 },
+        {
+          command: 'wp db cli -- -uroot -pS3cret99',
+          ok: false,
+          durationMs: 9,
+          error: 'Permission denied',
+        },
+      ],
+    });
+
+    const res = await mockIpc.invoke('nexus:sentinel:execute', {
+      installName: 'acme-prod',
+      commands: ['rm -f wp-content/mu-plugins/evil.php', 'wp db cli -- -uroot -pS3cret99'],
+    });
+    expect(res.success).toBe(false);
+
+    // Assert against the real bytes on disk, not the returned object — the
+    // object was never the leak; the file is.
+    const raw = fs.readFileSync(logPath, 'utf-8');
+    expect(raw).not.toContain('-pS3cret99');
+    expect(raw).not.toContain('uroot');
+    expect(raw).not.toContain('wp db cli');
+    // The step's own error message — the thing that actually tells you what
+    // went wrong — must still survive.
+    expect(raw).toContain('Permission denied');
+
+    const entries = readEntries(logPath);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].error).toContain('Permission denied');
+    expect(entries[0].error).not.toContain('-pS3cret99');
+    expect(entries[0].error).not.toContain('wp db cli');
+  });
+
   it('redacts a credential embedded in a remediation command', async () => {
     executeSentinelCommands.mockResolvedValue({ success: true, steps: [{ command: 'x', ok: true, durationMs: 1 }] });
 

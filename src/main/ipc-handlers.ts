@@ -4821,7 +4821,13 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     const started = Date.now();
     try {
       const result = await executeSentinelCommands(installName, commands, localServicesBridge);
-      const failed = result.steps.filter((s) => !s.ok);
+      // Keep each failed step's ORIGINAL position (1-based) — `failed` below is
+      // a filtered subset of `result.steps`, so its own array index does not
+      // correspond to "which step ran". The index has to be captured before
+      // filtering.
+      const failed = result.steps
+        .map((s, stepIndex) => ({ ...s, stepNumber: stepIndex + 1 }))
+        .filter((s) => !s.ok);
       auditDirectOperation(deps.nexusServices, {
         operation: 'ipc.sentinel.execute',
         target: `wpe:${installName}`,
@@ -4833,7 +4839,17 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
           durationMs: Date.now() - started,
         },
         outcome: result.success ? 'success' : 'failure',
-        error: result.success ? undefined : failed.map((s) => `${s.command}: ${s.error ?? 'failed'}`).join(' | '),
+        // No raw command text here. `commands` above is already withheld as a
+        // whole, so the command syntax was never going to reach the log via
+        // that field — but this field used to re-interpolate `s.command`
+        // (the raw, agent-composed command line) per failed step, defeating
+        // the withhold for every credential embedded in a command that failed
+        // (e.g. the mysql attached-password form `-p<secret>`, which has no
+        // command-string masking equivalent — see CLAUDE.md). A positional
+        // reference plus the step's own error message carries the same
+        // forensic value without the syntax.
+        error: result.success ? undefined
+          : failed.map((s) => `step ${s.stepNumber} of ${result.steps.length}: ${s.error ?? 'failed'}`).join(' | '),
       });
       // TODO: delete sandbox site after successful execution
       // Sandbox name is not currently passed with the request; needs protocol update
