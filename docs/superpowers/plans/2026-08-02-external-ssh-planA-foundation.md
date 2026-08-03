@@ -16,7 +16,7 @@
 
 Every task's requirements implicitly include this section.
 
-- **No behavior change visible to users.** This plan fixes latent bugs and prepares structure. The one intentional behavior change is Task 1, which corrects queries that are already wrong.
+- **No behavior change visible to users.** Every task here is behaviour-preserving *today*. Task 1 is correctness-preserving rather than behaviour-changing: `source != 'local'` and `source = 'wpe'` are identical while `source` has exactly two values — the fix matters only once Plan B adds a third. If any task produces an observable difference, that is a defect, not an intended outcome.
 - **Never `git push`, `npm version`, or `git tag`.** Commit locally only.
 - **Tests run against the system-Node build of `better-sqlite3`.** Run `npm install` before testing; `npm run rebuild` only before loading in Local. Never interleave — and note the repo may currently be Electron-built, in which case `npm install` is required first.
 - **Do not change `better-sqlite3` from 12.11.1.**
@@ -706,7 +706,31 @@ grep -rn "isOperationAllowed(" src/ | grep -v "utils/operation-permissions.ts"
 
 For each, wrap the install name: `isOperationAllowed(op, env, settings, installName)` → `isOperationAllowed(op, env, settings, \`wpe:${installName}\`)`.
 
-Then call `getEffectiveSettings` — which already applies `migrateFromLegacyEnvFilter` — and extend it to apply `migrateWpePermissionSettings` too, so every caller sees migrated settings without changing.
+Then extend `getEffectiveSettings` so every caller receives migrated settings without changing. Replace it with:
+
+```ts
+export function getEffectiveSettings(
+  registryStorage: { get(key: string): unknown } | null | undefined,
+): Pick<NexusSettings,
+  'wpeOperationPermissions' | 'wpeSiteExceptions' |
+  'remoteOperationPermissions' | 'remoteSiteExceptions'> {
+  const raw = (registryStorage?.get(STORAGE_KEYS.SETTINGS) ?? {}) as NexusSettings;
+
+  // Legacy env-filter migration runs first: it produces the WPE-shaped
+  // permissions that the remote-scoped migration below then carries forward.
+  const legacyMigrated = migrateFromLegacyEnvFilter(raw);
+  const withLegacy = legacyMigrated
+    ? { ...raw, wpeOperationPermissions: legacyMigrated }
+    : raw;
+
+  const remote = migrateWpePermissionSettings(withLegacy);
+  return { ...withLegacy, ...remote };
+}
+```
+
+Order matters: `migrateFromLegacyEnvFilter` writes `wpeOperationPermissions`, and
+`migrateWpePermissionSettings` reads it. Running them the other way round would
+silently drop the settings of a user who is still on the oldest format.
 
 - [ ] **Step 7: Verify**
 
