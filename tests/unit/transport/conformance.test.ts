@@ -1,0 +1,90 @@
+/**
+ * Shared conformance suite. Every SiteTransport implementation must pass it.
+ * Spec 1 and Spec 2 transports plug in here — a new transport is "done" when
+ * this passes.
+ */
+import { EventEmitter } from 'events';
+
+const spawnMock = jest.fn();
+jest.mock('child_process', () => ({ spawn: (...args: any[]) => spawnMock(...args) }));
+
+import type { SiteTransport } from '../../../src/main/transport/types';
+import { WpeSshTransport } from '../../../src/main/transport/WpeSshTransport';
+
+function fakeProc(opts: { code?: number; stdout?: string; stderr?: string } = {}) {
+  const proc: any = new EventEmitter();
+  proc.stdout = new EventEmitter();
+  proc.stderr = new EventEmitter();
+  setImmediate(() => {
+    if (opts.stdout) proc.stdout.emit('data', Buffer.from(opts.stdout));
+    if (opts.stderr) proc.stderr.emit('data', Buffer.from(opts.stderr));
+    proc.emit('close', opts.code ?? 0);
+  });
+  return proc;
+}
+
+export function runTransportConformance(name: string, factory: () => SiteTransport) {
+  describe(`SiteTransport conformance — ${name}`, () => {
+    it('exposes a stable kind and siteRef', () => {
+      const t = factory();
+      expect(typeof t.kind).toBe('string');
+      expect(t.siteRef).toBeDefined();
+    });
+
+    it('supports() answers every seeded capability without throwing', () => {
+      const t = factory();
+      for (const cap of ['wp-cli', 'arbitrary-options', 'db-query', 'eval',
+                         'search-replace', 'core-update', 'theme-activate'] as const) {
+        expect(typeof t.supports(cap)).toBe('boolean');
+      }
+    });
+
+    it('runWpCli resolves rather than rejecting on failure', async () => {
+      const t = factory();
+      await expect(t.runWpCli(['core', 'version'])).resolves.toHaveProperty('success');
+    });
+
+    it('probe() resolves with a reachable flag', async () => {
+      await expect(factory().probe()).resolves.toHaveProperty('reachable');
+    });
+  });
+}
+
+describe('WpeSshTransport', () => {
+  beforeEach(() => {
+    spawnMock.mockReset();
+    spawnMock.mockImplementation(() => fakeProc({ stdout: 'ok' }));
+  });
+
+  runTransportConformance('WpeSshTransport', () => new WpeSshTransport('acmeprod'));
+
+  it('runWpCli sends the same argv the legacy path did', async () => {
+    await new WpeSshTransport('acmeprod').runWpCli(['plugin', 'list', '--format=json']);
+    const [cmd, args, opts] = spawnMock.mock.calls[0];
+    expect(cmd).toBe('ssh');
+    expect(args.at(-2)).toBe('local+ssh+acmeprod@acmeprod.ssh.wpengine.net');
+    expect(args.at(-1)).toBe("wp --skip-plugins --skip-themes 'plugin' 'list' '--format=json'");
+    expect(opts.timeout).toBe(35000);
+  });
+
+  it('runWpCli returns stderr on failure (legacy remoteWpCliRun shape)', async () => {
+    spawnMock.mockImplementation(() => fakeProc({ code: 1, stdout: 'partial', stderr: 'boom' }));
+    await expect(new WpeSshTransport('acmeprod').runWpCli(['core', 'version']))
+      .resolves.toEqual({ stdout: 'boom', success: false });
+  });
+
+  it('deleteRemoteFile issues a bare rm -f and returns stdout on failure (legacy remoteSshRaw shape)', async () => {
+    spawnMock.mockImplementation(() => fakeProc({ code: 1, stdout: 'from-stdout', stderr: 'from-stderr' }));
+    const res = await new WpeSshTransport('acmeprod')
+      .deleteRemoteFile('/nas/content/live/acmeprod/evil.php');
+    expect(spawnMock.mock.calls[0][1].at(-1))
+      .toBe("rm -f '/nas/content/live/acmeprod/evil.php'");
+    expect(res).toEqual({ success: false, output: 'from-stdout' });
+  });
+
+  it('deleteRemoteFile escapes single quotes in the path', async () => {
+    await new WpeSshTransport('acme').deleteRemoteFile("/nas/content/live/acme/it's.php");
+    expect(spawnMock.mock.calls[0][1].at(-1))
+      .toBe("rm -f '/nas/content/live/acme/it'\\''s.php'");
+  });
+});
