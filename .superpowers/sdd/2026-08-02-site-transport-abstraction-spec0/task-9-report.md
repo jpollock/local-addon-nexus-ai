@@ -285,3 +285,63 @@ The 11 passing dispatch tests are:
 **Note:** `core-version` is still unmigrated and passes the dispatch test with the fixed fixture, confirming the fixture works for both code paths.
 
 **Commit:** `00626349` — "test(transport): fix dispatch test fixture to work with unmigrated tools"
+
+---
+
+# Task 9b Report: Six Blocked-Tool Migration
+
+**Status:** COMPLETE (6 of 6 migrated, committed)
+
+**Migrated:**
+1. `core-update.ts` — Blocked: `['core', 'update']` not in whitelist
+2. `eval.ts` — Blocked: `['eval', code]` in blocklist
+3. `post-create.ts` — Blocked: `['post', 'create', ...]` not in whitelist
+4. `post-update.ts` — Blocked: `['post', 'update', ...]` not in whitelist
+5. `post-delete.ts` — Blocked: `['post', 'delete', ...]` not in whitelist
+6. `theme-activate.ts` — Blocked: `['theme', 'activate', slug]` not in whitelist
+
+**User-visible error preservation:**
+
+For each tool, traced the exact refusal message when targeting a remote install:
+
+| Tool | Before (via `isBlockedCommand` → `remoteWpCliRun`) | After (via `withPolicy`) | Match |
+|------|-----------------------------------------------------|--------------------------|-------|
+| core-update | `Command "Command "core update" not allowed for remote execution. Use local WP-CLI for advanced operations." is blocked for security reasons on remote sites.` | Same (nested quote preserved) | ✅ |
+| eval | `Command "eval" is blocked for security reasons on remote sites.` | Same (blocklist hit) | ✅ |
+| post-create | `Command "Command "post create" not allowed..." is blocked...` | Same | ✅ |
+| post-update | `Command "Command "post update" not allowed..." is blocked...` | Same | ✅ |
+| post-delete | `Command "Command "post delete" not allowed..." is blocked...` | Same | ✅ |
+| theme-activate | `Command "Command "theme activate" not allowed..." is blocked...` | Same | ✅ |
+
+**Non-mechanical notes:**
+
+- **eval.ts:** Has a pre-emptive local-only running-state check. Preserved by moving the check BEFORE `runWpCli`, since it's a local-specific requirement (MySQL must be available for eval to work). Remote path never reaches this check because `withPolicy` blocks it first.
+  
+- **theme-activate.ts:** Always passes `skipThemes: true` to WP-CLI options, allowing theme switching even when the active theme crashes WordPress. This option was missing from `RunOpts` interface, causing typecheck failure. Fixed by adding `skipThemes?: boolean` to `RunOpts` in `types.ts`.
+
+- **core-update.ts:** Preserves the 180-second timeout for local sites (core downloads can be slow). Remote path uses default timeout (no timeout override).
+
+**Type system fix:**
+
+`RunOpts` interface was missing `skipThemes`, which `wpCliRun` in `local-services-bridge.ts` already accepted. Added it to `RunOpts` to match the actual bridge signature and satisfy TypeScript.
+
+**Verification:**
+
+After EACH file:
+```
+npx jest tests/unit/transport/tool-dispatch.test.ts
+✅ 12/12 pass (all whitelisted tools still dispatch correctly)
+```
+
+Final checks:
+```
+npx tsc --noEmit -p tsconfig.json
+✅ No errors
+
+npx jest tests/unit/transport/
+✅ 55/55 pass (all transport tests including conformance)
+```
+
+**Commit:** `17c096fa` — "refactor(wp-cli): migrate six blocked tools to transports (Task 9b)"
+
+**Concerns:** None. All six tools migrated mechanically following the established pattern. Policy refusal messages byte-identical to pre-migration. Type system correctly extended to include `skipThemes` in `RunOpts`.
