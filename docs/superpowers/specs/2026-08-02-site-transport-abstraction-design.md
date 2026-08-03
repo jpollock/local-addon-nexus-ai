@@ -453,3 +453,48 @@ transport becomes a real performance argument. Two caveats: drive it from
 measured sync times rather than intuition, and check first whether part of what
 the sweep collects is better served by CAPI on axis 2 — though plugins, themes
 and options are WordPress-internal, so CAPI cannot supply those.
+
+---
+
+## 9. Implementation outcome (added 2026-08-02, after Spec 0 shipped)
+
+Spec 0 is implemented on `feat/site-transport-abstraction`. Two current-state
+claims above were **wrong** and are corrected here rather than edited in place,
+so the error is visible:
+
+- **§3.1 item 5 said "~6 direct callers."** The real figure is **44 call sites
+  across 8 files**: `deep-refresh.ts` (16), `resolvers.ts` (11),
+  `resolvers/twin.ts` (7), `WPESyncService.ts` (4), `resolvers/wp-cli.ts` (2),
+  `WpeRefreshScheduler.ts` (2), `RemoteContentExtractor.ts` (1),
+  `wait-for-ssh.ts` (1). Three of those files were not listed at all. The
+  undercount came from reasoning about which surfaces "should" be affected
+  instead of grepping — the same failure mode this project's CLAUDE.md warns
+  about for audit coverage.
+- **§3.2's parser skew is resolved.** `installName` is now canonical in
+  `src/common/target.ts`; `requireWpeTarget` still returns `installId` as a
+  deprecated alias so CLI call sites needed no change.
+
+§3.4 (five unreachable remote tools), §3.6 (`environment-filter.ts` dead), and
+§3.7 (`resolvers/wp-cli.ts` unreferenced, missing its gate and audit) were
+re-verified during implementation and **remain accurate**.
+
+### What Spec 1 must do before adding a third transport
+
+- **Harden the conformance suite first.** Two reviewers independently judged
+  `tests/unit/transport/conformance.test.ts` too loose to be the gate this
+  document designates it. A broken implementation passes today if `runWpCli`
+  returns `{success:true, stdout:<anything>}` and `probe()` returns
+  `{reachable:true}`. Untested: failure paths, timeout propagation, spawn error,
+  multi-call state. The real Spec 0 protection is the per-implementation tests
+  plus the two characterization suites — which do not extend to a new transport.
+- **The whitelist bypass moved; it did not close.** Task 10 was deliberately
+  skipped: `localServices.remoteWpCliRun` now delegates to `WpeSshTransport`, so
+  all 44 sites route through the transport, but none is policy-guarded — exactly
+  as before. Closing that needs the policy-unification spec, not Spec 1.
+- **Two hazards are commented in code, not fixed**, because fixing them would
+  have been behaviour change: `GRAPHQL_REMOTE_POLICY` is unconsumed and its
+  matching is stricter than the inline checks it models
+  (`startsWith || includes(' ' + x)` vs `startsWith` only); and
+  `buildWpCliCommand`'s skip-flag ternary is all-or-nothing, so `skipThemes` is
+  accepted by `RunOpts` but ignored — if `theme activate` is ever whitelisted for
+  remote, it loses **both** skip flags.
