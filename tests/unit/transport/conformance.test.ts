@@ -10,6 +10,7 @@ jest.mock('child_process', () => ({ spawn: (...args: any[]) => spawnMock(...args
 
 import type { SiteTransport } from '../../../src/main/transport/types';
 import { WpeSshTransport } from '../../../src/main/transport/WpeSshTransport';
+import { LocalTransport } from '../../../src/main/transport/LocalTransport';
 
 function fakeProc(opts: { code?: number; stdout?: string; stderr?: string } = {}) {
   const proc: any = new EventEmitter();
@@ -86,5 +87,33 @@ describe('WpeSshTransport', () => {
     await new WpeSshTransport('acme').deleteRemoteFile("/nas/content/live/acme/it's.php");
     expect(spawnMock.mock.calls[0][1].at(-1))
       .toBe("rm -f '/nas/content/live/acme/it'\\''s.php'");
+  });
+});
+
+describe('LocalTransport', () => {
+  const services = () => ({
+    wpCliRun: jest.fn(async () => ({ stdout: 'WordPress 6.8', success: true })),
+  }) as any;
+
+  runTransportConformance('LocalTransport', () =>
+    new LocalTransport('site-1', 'Test Site', services()));
+
+  it('delegates runWpCli to localServices with the site id', async () => {
+    const s = services();
+    await new LocalTransport('site-1', 'Test Site', s).runWpCli(['core', 'version']);
+    expect(s.wpCliRun).toHaveBeenCalledWith('site-1', ['core', 'version'], undefined);
+  });
+
+  it('passes timeoutMs through', async () => {
+    const s = services();
+    await new LocalTransport('site-1', 'Test Site', s).runWpCli(['core', 'version'], { timeoutMs: 5000 });
+    expect(s.wpCliRun).toHaveBeenCalledWith('site-1', ['core', 'version'], { timeoutMs: 5000 });
+  });
+
+  it('refuses deleteRemoteFile — local sites have no remote filesystem', async () => {
+    const res = await new LocalTransport('site-1', 'Test Site', services())
+      .deleteRemoteFile('/tmp/x');
+    expect(res.success).toBe(false);
+    expect(res.output).toMatch(/not supported/i);
   });
 });
