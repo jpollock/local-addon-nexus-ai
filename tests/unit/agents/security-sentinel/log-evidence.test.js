@@ -159,3 +159,39 @@ describe('Log availability is reported, not assumed', () => {
     expect(res.signals).toHaveLength(0);
   });
 });
+
+describe('Folded metrics are returned so the fleet can rank attack pressure', () => {
+  it('returns the counts, not just the signals derived from them', async () => {
+    const tools = mkTools(aggregates({
+      loginPosts: 900, xmlrpcPosts: 100, userRestApi: 30, authorScan: 15,
+      distinctIps: 75, probes: { '/.env': 300 },
+    }));
+    const res = await runLogChecks('testsite', tools, mkLog());
+
+    expect(res.metrics).toEqual({
+      daysAvailable: 1,
+      authAttacks: 1000,
+      loginPosts: 900,
+      xmlrpcPosts: 100,
+      enumerationHits: 45,
+      peakDayDistinctIps: 75,
+      topProbePath: '/.env',
+      topProbeHits: 300,
+    });
+  });
+
+  it('returns metrics for a quiet site too — zero pressure is a measurement, not an absence', async () => {
+    const res = await runLogChecks('testsite', mkTools(aggregates()), mkLog());
+    expect(res.metrics.authAttacks).toBe(0);
+    expect(res.metrics.daysAvailable).toBe(1);
+    expect(res.metrics.topProbePath).toBeNull();
+    expect(res.metrics.topProbeHits).toBe(0);
+  });
+
+  it('carries no metrics when the logs were never readable', async () => {
+    // Distinguishable from a quiet site: undefined means unmeasured, 0 means measured-as-zero.
+    const tools = { invoke: jest.fn().mockRejectedValue(new Error('not connected')) };
+    const res = await runLogChecks('testsite', tools, mkLog());
+    expect(res.metrics).toBeUndefined();
+  });
+});

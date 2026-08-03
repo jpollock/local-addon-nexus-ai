@@ -467,16 +467,18 @@ module.exports = {
       }
 
       let attackSummary = null;
+      let logMetrics = null;
       try {
         const logResult = await runLogChecks(logSiteId, tools, log);
         signals.push(...logResult.signals);
         attackSummary = logResult.attackSummary;
         coverage.logs = logResult.available === true;
+        logMetrics = logResult.metrics ?? null;
       } catch (err) {
         log.warn(`security-sentinel: log checks failed for ${install.name}: ${err.message} (skipping)`);
       }
 
-      allInstallResults.push({ install, signals, coverage });
+      allInstallResults.push({ install, signals, coverage, logMetrics });
 
       const criticalCount = signals.filter(s => s.severity === 'critical').length;
       // Only active-compromise signals count toward Tier 2 escalation — EXP (pre-breach) signals are informational
@@ -537,7 +539,7 @@ module.exports = {
     // Populate the SDK's per-site map. It was previously returned as {} on every run, so nothing
     // downstream could tell which sites were swept, let alone what was inspected on each.
     const sites = {};
-    for (const { install, signals, coverage } of allInstallResults) {
+    for (const { install, signals, coverage, logMetrics } of allInstallResults) {
       const { checked, skipped } = describeCoverage(coverage || {});
       sites[install.name] = {
         status: signals.length === 0 ? 'clean'
@@ -549,7 +551,39 @@ module.exports = {
         })),
         checked,
         notChecked: skipped,
+        logMetrics: logMetrics ?? null,
       };
+    }
+
+    // Fleet-level triage scoping. Access logs are the only compromise evidence available for a
+    // remote WPE install without building a local sandbox, which makes attack pressure the
+    // cheapest basis the fleet has for choosing where to spend the expensive checks next.
+    //
+    // This ranks and reports; it deliberately does NOT change escalation. Auto-escalating on log
+    // pressure alone would build a sandbox per noisy site, and a brute-force wave against
+    // /wp-login.php is evidence of being *targeted*, not of being *compromised* — the two are
+    // routinely confused, and conflating them here would spend gigabytes chasing failed logins.
+    // Whether pressure should trigger Tier 2 on its own is a policy call for the operator.
+    const pressure = allInstallResults
+      .filter(r => r.logMetrics)
+      .map(r => ({
+        name: r.install.name,
+        score: r.logMetrics.authAttacks + r.logMetrics.enumerationHits + r.logMetrics.peakDayDistinctIps * 10,
+        m: r.logMetrics,
+      }))
+      .filter(r => r.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+
+    if (pressure.length > 0) {
+      log.info('security-sentinel: attack pressure ranking (log-derived, for scoping the next sweep):');
+      for (const p of pressure) {
+        log.info(
+          `  ${p.name}: ${p.m.authAttacks.toLocaleString()} auth, ${p.m.enumerationHits} enum, ` +
+          `${p.m.peakDayDistinctIps} peak-day IPs over ${p.m.daysAvailable} day(s)` +
+          (p.m.topProbePath ? ` — top probe ${p.m.topProbePath} (${p.m.topProbeHits})` : ''),
+        );
+      }
     }
 
     // A summary that states its own limits. `clean` here means "the checks that ran found
@@ -561,10 +595,14 @@ module.exports = {
       `Swept ${swept} site(s). Verdict: ${verdict}, ${allFindings.length} finding(s).`,
       `Access-log signals available for ${withLogs}/${swept}.`,
       coldStart > 0 ? `${coldStart} site(s) had no prior baseline, so change-detection (REL-*) could not run.` : null,
+      pressure.length > 0
+        ? `Highest log-derived attack pressure: ${pressure.map(p => `${p.name} (${p.m.authAttacks.toLocaleString()} auth, ${p.m.peakDayDistinctIps} peak-day IPs)`).join('; ')}. ` +
+          `Pressure means targeted, not compromised — it scopes where to look, it does not escalate.`
+        : null,
       `Tier 1 does not inspect the filesystem or database contents; only escalated sites reach Tier 2.`,
     ].filter(Boolean).join(' ');
 
-    return { verdict, findings: allFindings, plan: latestPlan ?? undefined, sites, summary };
+    return { verdict, findings: allFindings, plan: latestPlan ?? undefined, sites, summary, attackPressure: pressure };
   },
 
   // Exported for unit testing only
@@ -778,7 +816,23 @@ async function runLogChecks(siteId, tools, log) {
   ].filter(Boolean);
 
   const attackSummary = signals.length > 0 ? summaryLines.join('\n') : null;
-  return { signals, attackSummary, available: true, evidence };
+
+  // Folded metrics are returned, not just the signals derived from them. Access logs are the
+  // only compromise evidence obtainable for a remote WPE install without building a local
+  // sandbox, so they are the cheapest input the fleet has for deciding where to look next —
+  // but that scoping happens at the fleet level, and the caller cannot rank what it cannot see.
+  const metrics = {
+    daysAvailable: aggregates.length,
+    authAttacks: totalAuthAttacks,
+    loginPosts: totalLoginPosts,
+    xmlrpcPosts: totalXmlrpcPosts,
+    enumerationHits: totalEnum,
+    peakDayDistinctIps,
+    topProbePath: topProbes[0]?.[0] ?? null,
+    topProbeHits: topProbes[0]?.[1] ?? 0,
+  };
+
+  return { signals, attackSummary, available: true, evidence, metrics };
 }
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
