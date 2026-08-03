@@ -87,3 +87,38 @@ describe('formatTarget', () => {
     expect(formatTarget(parseTarget('wpe:a/b@production'))).toBe('wpe:a/b@production');
   });
 });
+
+describe('parseTarget — external SSH targets', () => {
+  it.each(['production', 'staging', 'development'])('parses ssh:alias@%s', (env) => {
+    expect(parseTarget(`ssh:acme-box@${env}`)).toEqual({
+      type: 'external',
+      original: `ssh:acme-box@${env}`,
+      alias: 'acme-box',
+      environment: env,
+    });
+  });
+
+  it('accepts aliases containing dots, dashes and underscores', () => {
+    expect(parseTarget('ssh:web-01.prod_eu@production').alias).toBe('web-01.prod_eu');
+  });
+
+  it('throws terse text for an ssh: target with no environment', () => {
+    expect(() => parseTarget('ssh:acme-box'))
+      .toThrow('Incomplete SSH target: ssh:acme-box. Expected ssh:alias@environment');
+  });
+
+  it('throws verbose text when asked', () => {
+    expect(() => parseTarget('ssh:acme-box', { verboseErrors: true }))
+      .toThrow(/Expected: ssh:alias@environment/);
+  });
+
+  it('rejects ssh:alias@local — local is not a deployment environment', () => {
+    expect(() => parseTarget('ssh:acme-box@local')).toThrow(/Incomplete SSH target/);
+  });
+
+  it('leaves existing target forms untouched', () => {
+    expect(parseTarget('mysite@local').type).toBe('local');
+    expect(parseTarget('wpe:acct/inst@production').type).toBe('wpe');
+    expect(parseTarget('barename').type).toBe('local');
+  });
+});

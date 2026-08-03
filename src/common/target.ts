@@ -10,12 +10,14 @@
 export type TargetEnvironment = 'production' | 'staging' | 'development';
 
 export interface ParsedTarget {
-  type: 'local' | 'wpe';
+  type: 'local' | 'wpe' | 'external';
   original: string;
   siteName?: string;
   account?: string;
   /** For WPE: the install portion. May contain slashes (the regex is lazy). */
   installName?: string;
+  /** For external SSH hosts: the ~/.ssh/config Host alias. */
+  alias?: string;
   environment?: TargetEnvironment;
 }
 
@@ -28,6 +30,29 @@ const ENVIRONMENTS: readonly string[] = ['production', 'staging', 'development']
 
 export function parseTarget(target: string, opts: ParseTargetOptions = {}): ParsedTarget {
   const verbose = opts.verboseErrors ?? false;
+
+  // Checked FIRST, ahead of the @local suffix test. `ssh:x@local` would
+  // otherwise match endsWith('@local') and silently parse as a local site
+  // named "ssh:x". Ordering it here turns that into a clear error instead.
+  const sshMatch = target.match(/^ssh:(.+?)@(production|staging|development)$/);
+  if (sshMatch) {
+    return {
+      type: 'external',
+      original: target,
+      alias: sshMatch[1],
+      environment: sshMatch[2] as TargetEnvironment,
+    };
+  }
+
+  if (target.startsWith('ssh:')) {
+    throw new Error(
+      verbose
+        ? `Incomplete SSH target: ${target}\n\n` +
+          `Expected: ssh:alias@environment\n` +
+          `Environments: production, staging, development`
+        : `Incomplete SSH target: ${target}. Expected ssh:alias@environment`,
+    );
+  }
 
   if (target.endsWith('@local')) {
     return { type: 'local', original: target, siteName: target.replace('@local', '') };
