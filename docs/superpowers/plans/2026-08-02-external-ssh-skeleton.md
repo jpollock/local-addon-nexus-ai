@@ -22,6 +22,9 @@ Every task's requirements implicitly include this section.
 - **Baseline: 12 failed suites / 22 failed tests** pre-exist from native modules. Add none. Verify by comparing failing-suite **names**, not counts.
 - **If a run shows `NODE_MODULE_VERSION 146 ... requires 141`**, or a wave of database-suite failures: run `npm rebuild better-sqlite3`. Not `npm install` — it will not rebuild an already-installed package. Never `npm run rebuild` — that builds for Electron and breaks testing.
 - **This code is a probe, not a foundation.** Plan B may replace any of it, particularly the undeclared `ssh_target` arg.
+- **ACCEPTED LIMITATION — only two commands support `ssh:` targets.** Widening `ParsedTarget.type` is global, but only `wp core version` and `wp plugin list` are wired (they are 2 of the 4 subcommands routing through MCP). The other 18 `nexus wp` subcommands route through GraphQL, where `resolvers.ts` narrows on `parsed.type` 21 times — including `if (parsed.type !== 'local')` guards that mean "therefore WP Engine". Passing an `ssh:` target to one of those will produce a confusing WP-Engine-flavoured error rather than a clear refusal.
+
+  This was surfaced in pre-flight and **deliberately accepted** by the human partner: this is a throwaway probe driven by two specific commands, and adding a rejection guard to the GraphQL path is scope the skeleton does not need. **Reviewers: this is a known, accepted limitation, not a defect to report.** Plan B fixes it properly by widening the union everywhere and updating those narrowing sites.
 
 ---
 
