@@ -11,6 +11,7 @@ jest.mock('child_process', () => ({ spawn: (...args: any[]) => spawnMock(...args
 import type { SiteTransport } from '../../../src/main/transport/types';
 import { WpeSshTransport } from '../../../src/main/transport/WpeSshTransport';
 import { LocalTransport } from '../../../src/main/transport/LocalTransport';
+import { ExternalSshTransport } from '../../../src/main/transport/ExternalSshTransport';
 
 function fakeProc(opts: { code?: number; stdout?: string; stderr?: string } = {}) {
   const proc: any = new EventEmitter();
@@ -190,6 +191,60 @@ describe('LocalTransport', () => {
   it('refuses deleteRemoteFile — local sites have no remote filesystem', async () => {
     const res = await new LocalTransport('site-1', 'Test Site', services())
       .deleteRemoteFile('/tmp/x');
+    expect(res.success).toBe(false);
+    expect(res.output).toMatch(/not supported/i);
+  });
+});
+
+describe('ExternalSshTransport', () => {
+  beforeEach(() => {
+    spawnMock.mockReset();
+    spawnMock.mockImplementation(() => fakeProc({ stdout: 'ok' }));
+  });
+
+  runTransportConformance('ExternalSshTransport', {
+    ok: () => {
+      spawnMock.mockImplementation(() => fakeProc({ stdout: 'WordPress 6.8' }));
+      return new ExternalSshTransport('acme-box');
+    },
+    failing: () => {
+      spawnMock.mockImplementation(() => fakeProc({ code: 1, stderr: 'ssh: connect refused' }));
+      return new ExternalSshTransport('acme-box');
+    },
+  });
+
+  it('invokes ssh with the alias and a bare wp command', async () => {
+    await new ExternalSshTransport('acme-box').runWpCli(['core', 'version']);
+    const [cmd, args, opts] = spawnMock.mock.calls[0];
+    expect(cmd).toBe('ssh');
+    expect(args).toEqual(['-o', 'BatchMode=yes', 'acme-box', "wp 'core' 'version'"]);
+    expect(opts.timeout).toBe(20000);
+  });
+
+  it('passes --path through when constructed with one', async () => {
+    await new ExternalSshTransport('acme-box', '/var/www/html').runWpCli(['core', 'version']);
+    expect(spawnMock.mock.calls[0][1].at(-1))
+      .toBe("wp --path='/var/www/html' 'core' 'version'");
+  });
+
+  it('hints about WP-CLI provisioning when wp is missing', async () => {
+    spawnMock.mockImplementation(() =>
+      fakeProc({ code: 127, stderr: 'bash: wp: command not found' }));
+    const res = await new ExternalSshTransport('acme-box').runWpCli(['core', 'version']);
+    expect(res.success).toBe(false);
+    expect(res.stdout).toMatch(/not implemented yet/i);
+  });
+
+  it('hints about --path when WordPress is not found', async () => {
+    spawnMock.mockImplementation(() => fakeProc({
+      code: 1, stderr: 'Error: This does not seem to be a WordPress installation.',
+    }));
+    const res = await new ExternalSshTransport('acme-box').runWpCli(['core', 'version']);
+    expect(res.stdout).toMatch(/--path=/);
+  });
+
+  it('refuses deleteRemoteFile — Sentinel remediation is WP Engine only', async () => {
+    const res = await new ExternalSshTransport('acme-box').deleteRemoteFile('/tmp/x');
     expect(res.success).toBe(false);
     expect(res.output).toMatch(/not supported/i);
   });
