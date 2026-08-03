@@ -345,3 +345,126 @@ npx jest tests/unit/transport/
 **Commit:** `17c096fa` — "refactor(wp-cli): migrate six blocked tools to transports (Task 9b)"
 
 **Concerns:** None. All six tools migrated mechanically following the established pattern. Policy refusal messages byte-identical to pre-migration. Type system correctly extended to include `skipThemes` in `RunOpts`.
+
+---
+
+# Task 9c Report: core-version Migration (Last of 15)
+
+**Status:** COMPLETE (1 of 1 migrated, committed)
+
+**Migrated:**
+1. `core-version.ts` — The most intricate of fifteen tools, deliberately left for last.
+
+**Why intricate:**
+
+Beyond the ordinary local/remote split, this tool carries three pieces of logic preserved byte-for-byte:
+
+1. **Bare-name graph-DB fallback.** When target resolution FAILS, inspects the error, and if the failure was NOT an access-control block, queries `graphService.getDb()` for a WPE install whose lowercased name matches, returns cached `wp_version` with freshness note instead of error.
+
+2. **Access-control carve-out inside that fallback.** Explicitly refuses to serve cached data when the original error text contains `'Operation blocked'` or `'not permitted'`. This is security-relevant: serving cache there would silently bypass user permission settings.
+
+3. **Graph-DB cache check on remote path** (before SSH) and twin fallback on local path (when halted), both returning cached version with age note.
+
+**Before/after shape:**
+
+Before:
+```ts
+const target = await resolveTarget(args, services, 'wpcli_read');
+
+if ('content' in target) {
+  const errText = (target.content?.[0] as any)?.text ?? '';
+  const isAccessBlocked = errText.includes('Operation blocked') || errText.includes('not permitted');
+  if (!isAccessBlocked) {
+    // ... bare-name graph DB fallback
+  }
+  return target; // original error (including access blocked)
+}
+
+if (target.type === 'remote') {
+  // ... graph DB cache check
+  const result = await remoteWpCliRun(target.installName, ['core', 'version'], services);
+  // ...
+}
+
+// Local path with twin fallback
+```
+
+After:
+```ts
+const transport = await resolveTransport(args, services, 'wpcli_read');
+
+if ('content' in transport) {
+  const errText = (transport.content?.[0] as any)?.text ?? '';
+  const isAccessBlocked = errText.includes('Operation blocked') || errText.includes('not permitted');
+  if (!isAccessBlocked) {
+    // ... bare-name graph DB fallback (unchanged)
+  }
+  return transport; // original error (including access blocked)
+}
+
+const executeCommand = async (): Promise<McpToolResult> => {
+  if (transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe') {
+    // ... graph DB cache check (same logic, different accessor)
+    const result = await transport.runWpCli(['core', 'version']);
+    // ...
+  }
+  
+  // Local path with twin fallback (same logic, accessor changes)
+};
+
+return executeCommand();
+```
+
+**Access-control carve-out preservation (quoted):**
+
+Before:
+```ts
+const isAccessBlocked = errText.includes('Operation blocked') || errText.includes('not permitted');
+if (!isAccessBlocked) {
+  // ... serve cache
+}
+return target; // original error (including access blocked)
+```
+
+After:
+```ts
+const isAccessBlocked = errText.includes('Operation blocked') || errText.includes('not permitted');
+if (!isAccessBlocked) {
+  // ... serve cache
+}
+return transport; // original error (including access blocked)
+```
+
+The carve-out survives character-for-character, just with `transport` in place of `target`.
+
+**Bare-name fallback survival:**
+
+The graph DB query against `LOWER(name)=?` with `query.toLowerCase()` survives intact. The error inspection (`'content' in transport`) is the same discriminator, just on the new type.
+
+**Cache path survival:**
+
+1. **Remote graph-DB cache:** moved inside `if (transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe')` block, accesses install name via `transport.siteRef.installName` instead of `target.installName`. Query, age calculation, and note text (`synced recently`, `synced Nh ago`, `synced Nd ago`) byte-identical.
+
+2. **Local twin fallback:** moved inside the else branch, accesses site ID and name via `transport.siteRef.siteId` / `.siteName`. `canAnswer` check, stale warning, `cachedDataNote`, `freshnessFooter` all preserved byte-for-byte.
+
+**Verification:**
+
+```bash
+npx jest tests/unit/transport/tool-dispatch.test.ts --testNamePattern="wp_core_version"
+✅ 1 passed (wp_core_version sends the expected WP-CLI args)
+
+npx jest tests/unit/transport/tool-dispatch.test.ts
+✅ 12/12 pass (all whitelisted tools dispatch correctly)
+
+npx tsc --noEmit -p tsconfig.json
+✅ No errors
+
+npx jest tests/unit/transport/
+✅ 55/55 pass (all transport tests including conformance)
+```
+
+The `wp_core_version` dispatch test passed BEFORE migration (against unmigrated code) and AFTER migration (against the new transport code), confirming the dispatched WP-CLI args are byte-identical.
+
+**Commit:** `f65469cb` — "refactor(wp-cli): migrate core-version to transports (Task 9c)"
+
+**Concerns:** None. All fifteen tools now use the transport abstraction. Access-control logic preserved byte-for-byte. All cache paths and freshness notes unchanged. Dispatch test confirms args unchanged.
