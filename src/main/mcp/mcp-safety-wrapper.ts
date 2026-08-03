@@ -109,6 +109,12 @@ export class McpSafetyWrapper {
     error: string | undefined,
     duration_ms: number,
   ): void {
+    // In-memory trail (live introspection via getEntries()).
+    // The durable Tier >= 2 trail is NOT written here: callWithSafety() calls
+    // this.registry.call(...) below, and ToolRegistry.call() is the true
+    // single funnel for all dispatch surfaces (MCP, CLI/GraphQL, chat), so it
+    // owns the durable write. Writing it here too would double-log every
+    // MCP-routed tool call.
     services.auditLogger?.log({
       timestamp: new Date().toISOString(),
       toolName,

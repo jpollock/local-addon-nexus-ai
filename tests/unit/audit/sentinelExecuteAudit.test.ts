@@ -1,0 +1,229 @@
+/**
+ * S9 — `nexus:sentinel:execute` must be audited.
+ *
+ * This handler runs arbitrary WP-CLI over SSH against a PRODUCTION install and
+ * raw `rm -f /nas/content/live/<install>/<path>` that deliberately bypasses
+ * WordPress (SentinelExecutor.remoteSshRaw). Its blast radius exceeds every
+ * path this branch already instruments, and it produced no durable audit entry
+ * at all.
+ *
+ * The handler is exercised through a real `registerIpcHandlers` call against a
+ * captured `ipcMain`, not by mocking the handler itself — a mocked handler
+ * would not prove the audit call is wired into the code that ships. No SQLite:
+ * every dependency here is an inert stub.
+ */
+
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { OperationAuditLog, AuditEntry } from '../../../src/main/audit/OperationAuditLog';
+
+// --- capture ipcMain handlers -------------------------------------------------
+
+class MockIpcMain {
+  handlers = new Map<string, Function>();
+  handle(channel: string, handler: Function) { this.handlers.set(channel, handler); }
+  on() { /* sync channels are irrelevant here */ }
+  removeHandler(channel: string) { this.handlers.delete(channel); }
+  removeAllListeners() { /* hot-reload cleanup, no-op in tests */ }
+  invoke(channel: string, ...args: any[]) {
+    const handler = this.handlers.get(channel);
+    if (!handler) throw new Error(`No handler registered for ${channel}`);
+    return handler({}, ...args);
+  }
+}
+const mockIpc = new MockIpcMain();
+jest.mock('electron', () => ({ ipcMain: mockIpc, shell: { openPath: jest.fn() }, app: { getPath: () => '/tmp' } }));
+
+// --- stub the executor: we assert on the AUDIT, not on SSH --------------------
+
+const executeSentinelCommands = jest.fn();
+jest.mock('../../../src/main/sentinel/SentinelExecutor', () => ({
+  executeSentinelCommands: (...args: any[]) => executeSentinelCommands(...args),
+}));
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import { registerIpcHandlers } from '../../../src/main/ipc-handlers';
+
+// --- helpers ------------------------------------------------------------------
+
+function makeLog(): { dir: string; logPath: string; log: OperationAuditLog } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-sentinel-audit-'));
+  const logPath = path.join(dir, 'operation-audit.log');
+  return { dir, logPath, log: new OperationAuditLog(logPath) };
+}
+
+function readEntries(logPath: string): AuditEntry[] {
+  if (!fs.existsSync(logPath)) return [];
+  return fs.readFileSync(logPath, 'utf-8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as AuditEntry);
+}
+
+function register(log: OperationAuditLog): void {
+  const noop = () => {};
+  const deps: any = {
+    siteData: { getSite: () => null, getSites: () => ({}) },
+    localServicesBridge: {},
+    indexRegistry: { listAll: () => [], get: () => null, update: noop },
+    embeddingService: {},
+    contentPipeline: {},
+    vectorStore: {},
+    registryStorage: { get: () => null, set: noop },
+    localLogger: { info: noop, warn: noop, error: noop, debug: noop },
+    getMcpServer: () => null,
+    getStartupStatus: () => ({ ready: true, phase: 'ready' }),
+    graphService: { getDb: () => null },
+    eventProcessor: {},
+    vectorDbPath: '/tmp/nexus-test-vectors.db',
+    nexusServices: { operationAuditLog: log },
+  };
+  registerIpcHandlers(deps);
+}
+
+// --- tests --------------------------------------------------------------------
+
+describe('nexus:sentinel:execute is audited', () => {
+  let dir: string;
+  let logPath: string;
+
+  beforeEach(() => {
+    executeSentinelCommands.mockReset();
+    const made = makeLog();
+    dir = made.dir;
+    logPath = made.logPath;
+    register(made.log);
+  });
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+  it('registers the channel at all', () => {
+    expect(mockIpc.handlers.has('nexus:sentinel:execute')).toBe(true);
+  });
+
+  it('writes a success entry naming the install and the commands run', async () => {
+    executeSentinelCommands.mockResolvedValue({
+      success: true,
+      steps: [
+        { command: 'rm -f wp-content/mu-plugins/evil.php', ok: true, durationMs: 12 },
+        { command: 'wp plugin deactivate badplugin', ok: true, durationMs: 30 },
+      ],
+    });
+
+    const res = await mockIpc.invoke('nexus:sentinel:execute', {
+      installName: 'acme-prod',
+      commands: ['rm -f wp-content/mu-plugins/evil.php', 'wp plugin deactivate badplugin'],
+    });
+    expect(res.success).toBe(true);
+
+    const entries = readEntries(logPath);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].operation).toBe('ipc.sentinel.execute');
+    expect(entries[0].target).toBe('wpe:acme-prod');
+    expect(entries[0].outcome).toBe('success');
+    // CHANGED EXPECTATION (withhold list). These are whole shell/WP-CLI command
+    // lines composed by an agent — the highest-blast-radius freeform surface in
+    // the addon — so they are withheld rather than written. The marker keeps the
+    // shape of what ran (two commands, 66 characters) without the syntax.
+    expect(entries[0].parameters.commands).toBe('[WITHHELD: freeform input, 2 elements, 66 chars]');
+    // Everything needed to identify the operation still survives.
+    expect(entries[0].parameters.installName).toBe('acme-prod');
+    expect(entries[0].parameters.stepCount).toBe(2);
+  });
+
+  it('writes a failure entry when a step fails', async () => {
+    executeSentinelCommands.mockResolvedValue({
+      success: false,
+      steps: [
+        { command: 'rm -f wp-content/mu-plugins/evil.php', ok: true, durationMs: 5 },
+        { command: 'wp plugin deactivate badplugin', ok: false, durationMs: 9, error: 'Permission denied' },
+      ],
+    });
+
+    const res = await mockIpc.invoke('nexus:sentinel:execute', {
+      installName: 'acme-prod',
+      commands: ['rm -f wp-content/mu-plugins/evil.php', 'wp plugin deactivate badplugin'],
+    });
+    expect(res.success).toBe(false);
+
+    const entries = readEntries(logPath);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].outcome).toBe('failure');
+    expect(entries[0].parameters.failedCount).toBe(1);
+    expect(entries[0].error).toContain('Permission denied');
+  });
+
+  it('writes a failure entry when the executor throws', async () => {
+    executeSentinelCommands.mockRejectedValue(new Error('ssh: connect timeout'));
+
+    const res = await mockIpc.invoke('nexus:sentinel:execute', {
+      installName: 'acme-prod',
+      commands: ['wp plugin deactivate badplugin'],
+    });
+    expect(res.success).toBe(false);
+
+    const entries = readEntries(logPath);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].operation).toBe('ipc.sentinel.execute');
+    expect(entries[0].outcome).toBe('failure');
+    expect(entries[0].error).toContain('ssh: connect timeout');
+  });
+
+  it('does not leak a failed step\'s raw command text (or its credential) into `error`', async () => {
+    // The mysql attached-password form: `-p<secret>` masking only exists for
+    // argv arrays (see CLAUDE.md), so a whole command STRING carrying it is
+    // exactly the shape that defeated the withhold list before this fix — the
+    // `error` field re-interpolated `step.command` verbatim for every failed
+    // step, even though `commands` above it was already withheld.
+    executeSentinelCommands.mockResolvedValue({
+      success: false,
+      steps: [
+        { command: 'rm -f wp-content/mu-plugins/evil.php', ok: true, durationMs: 5 },
+        {
+          command: 'wp db cli -- -uroot -pS3cret99',
+          ok: false,
+          durationMs: 9,
+          error: 'Permission denied',
+        },
+      ],
+    });
+
+    const res = await mockIpc.invoke('nexus:sentinel:execute', {
+      installName: 'acme-prod',
+      commands: ['rm -f wp-content/mu-plugins/evil.php', 'wp db cli -- -uroot -pS3cret99'],
+    });
+    expect(res.success).toBe(false);
+
+    // Assert against the real bytes on disk, not the returned object — the
+    // object was never the leak; the file is.
+    const raw = fs.readFileSync(logPath, 'utf-8');
+    expect(raw).not.toContain('-pS3cret99');
+    expect(raw).not.toContain('uroot');
+    expect(raw).not.toContain('wp db cli');
+    // The step's own error message — the thing that actually tells you what
+    // went wrong — must still survive.
+    expect(raw).toContain('Permission denied');
+
+    const entries = readEntries(logPath);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].error).toContain('Permission denied');
+    expect(entries[0].error).not.toContain('-pS3cret99');
+    expect(entries[0].error).not.toContain('wp db cli');
+  });
+
+  it('redacts a credential embedded in a remediation command', async () => {
+    executeSentinelCommands.mockResolvedValue({ success: true, steps: [{ command: 'x', ok: true, durationMs: 1 }] });
+
+    await mockIpc.invoke('nexus:sentinel:execute', {
+      installName: 'acme-prod',
+      commands: ['wp config set DB_PASSWORD Pr0dDbP4ssw0rd'],
+    });
+
+    const raw = fs.readFileSync(logPath, 'utf-8');
+    expect(raw).not.toContain('Pr0dDbP4ssw0rd');
+    // CHANGED EXPECTATION (withhold list): the constant NAME no longer survives
+    // either, because the whole command line is withheld. Preserving the name
+    // required parsing the command syntax, which is the thing that kept
+    // shipping defects — the `user meta update` arity and the quoted-value tail
+    // were both live leaks in this exact code path.
+    expect(raw).not.toContain('DB_PASSWORD');
+    expect(raw).toContain('[WITHHELD: freeform input');
+  });
+});

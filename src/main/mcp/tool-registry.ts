@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolDefinition, McpToolResult, NexusServices } from './types';
 import { createLogger } from '../logging/Logger';
 import { getMetrics } from '../telemetry/MetricsCollector';
+import { getToolSafety } from './safety';
 
 const logger = createLogger('ToolRegistry');
 const metrics = getMetrics();
@@ -91,6 +92,29 @@ export class ToolRegistry {
       // Record metrics with access method
       metrics.recordToolCall(name, duration, result.isError || false, accessMethod);
 
+      // Durable trail — Tier 2 (modifying) and Tier 3 (destructive) only. Tier
+      // 1 is read-only and would swamp the file with no compliance value.
+      // This is the single funnel every dispatch surface routes through
+      // (McpSafetyWrapper, CLI/GraphQL resolvers, ChatService, and
+      // agent-internal tool calls via NexusToolProvider), so it is the one
+      // place that owns the durable write — do not duplicate it upstream.
+      // Wrapped: a throw here would convert a *successful* tool call into an
+      // error result via the catch below. Auditing must never change outcomes.
+      // `content` is optional-chained — a handler may return `{ isError: true }`
+      // with no content array at all.
+      try {
+        const tier = getToolSafety(name).tier;
+        if (tier >= 2) {
+          services.operationAuditLog?.log({
+            operation: name,
+            target: String(args.site ?? args.install_id ?? args.install_name ?? 'unknown'),
+            parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
+            outcome: result.isError ? 'failure' : 'success',
+            error: result.isError ? (result.content?.[0]?.text || 'Unknown error') : undefined,
+          });
+        }
+      } catch { /* never throw from an audit path */ }
+
       logger.debug(`Handler "${name}" completed in ${duration}ms`, { isError: result.isError });
       return result;
     } catch (err) {
@@ -99,6 +123,29 @@ export class ToolRegistry {
 
       // Record error metrics
       metrics.recordToolCall(name, duration, true, accessMethod);
+
+      // Durable trail for unhandled exceptions. A Tier 2/3 operation that
+      // throws mid-execution (an unhandled exception in a WPE API client, a
+      // handler bug) must still leave a trace — this is the case an operator
+      // investigating an incident needs most, and it was silently uncovered
+      // by the success-path-only write above. Mirrors that write exactly,
+      // using the thrown error's message.
+      //
+      // Wrapped: this sits in the catch branch, so a throw here escapes call()
+      // and rejects the promise instead of returning the error result the
+      // caller expects.
+      try {
+        const tier = getToolSafety(name).tier;
+        if (tier >= 2) {
+          services.operationAuditLog?.log({
+            operation: name,
+            target: String(args.site ?? args.install_id ?? args.install_name ?? 'unknown'),
+            parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
+            outcome: 'failure',
+            error: message,
+          });
+        }
+      } catch { /* never throw from an audit path */ }
 
       logger.error(`Error in handler "${name}"`, { message, stack: err instanceof Error ? err.stack : undefined });
       return {

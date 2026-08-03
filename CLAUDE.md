@@ -100,6 +100,264 @@ Native modules (sqlite-vec, onnxruntime) can register background threads/handles
 
 ---
 
+## Logging & Audit
+
+**Two audit files**, both under `~/Library/Application Support/Local/nexus-ai/`,
+both JSONL, mode 0600, both rotated:
+
+| File | Written by | Contents |
+|---|---|---|
+| `operation-audit.log` | `OperationAuditLog` (`src/main/audit/OperationAuditLog.ts`) | One line per Tier 2/3 **mutating** operation. The compliance record. Written synchronously — an entry lost because the process died defeats the purpose. |
+| `audit.log` | `createAuditLogger` (`src/main/mcp/audit.ts`) | In-memory buffer of **all** tiers, flushed on `before-quit` and every 5 minutes from `src/main/index.ts`. Higher volume. |
+
+### The three writers
+
+There are **three** places that write `operation-audit.log`, not two:
+
+1. **`ToolRegistry.call()`** (`src/main/mcp/tool-registry.ts`) — the chokepoint
+   for every MCP tool call, on both the success path and the `catch` branch.
+   MCP tools, the chat assistant, the 8 GraphQL resolvers that call
+   `registry.call(...)`, and agent-internal tool calls (via `NexusToolProvider`)
+   all funnel through here.
+2. **`AgentDispatcher.dispatch()`** (`src/main/agent-runtime/AgentDispatcher.ts`)
+   — its *own separate* write. Agent-contributed tools dispatch straight to
+   `dispatchFunction`/`dispatchRun` and never reach `ToolRegistry.call()`.
+3. **`auditDirectOperation()`** (`src/main/audit/auditDirectOperation.ts`) — the
+   entry point for mutating GraphQL resolvers and IPC handlers that call
+   `services.localServices` directly and therefore reach neither chokepoint.
+   That is roughly thirty paths, including arbitrary WP-CLI against production
+   WP Engine installs and `DELETE /installs/{id}`.
+
+`McpSafetyWrapper.auditLog()` (`src/main/mcp/mcp-safety-wrapper.ts`) writes
+**in-memory only** — durable responsibility moved to `ToolRegistry.call()`,
+which `callWithSafety()` calls beneath it; writing in both would double-log
+every MCP-routed call.
+
+### Rules for new code
+
+- A new **tool** must route through `ToolRegistry.call()` or
+  `AgentDispatcher.dispatch()`. Do not hand-instrument it — the chokepoint
+  already covers it, and a second write double-logs.
+- A new **mutating resolver or IPC handler** that calls `services.localServices`
+  directly must call `auditDirectOperation(services, {...})` on both the success
+  and failure path. Do **not** hand-roll an audit entry: thirty divergent copies
+  is exactly the drift the chokepoint design exists to prevent, and it is how
+  the original "audit never recorded anything" bug survived.
+- Read-only paths are not audited — they would swamp the file with no
+  compliance value. `auditDirectOperation` has no tier gate for the same reason:
+  only call it for things that mutate, which makes them Tier 2/3 by nature.
+- An operation refused by `isOperationAllowed` writes nothing, because nothing
+  happened.
+
+**Naming:** `<surface>.<resource>.<action>`, lowercase, dot-separated —
+`cli.wp.command`, `wpe.install.delete`, `wpe.install.copy`, `wpe.user.create`,
+`ipc.wp.core.update`, `bulk.plugin.update`. `target` is the install name, site
+id, or other resource identifier. (Chokepoint writes use the raw tool name, e.g.
+`wpe_delete_install`, so both shapes appear in the file.)
+
+### Coverage — and the known gaps
+
+**Covered:** all MCP tools (chokepoint 1); all agent-contributed tools
+(chokepoint 2); every mutating WPE CAPI resolver in `resolvers.ts` and
+`resolvers/wpe.ts` (user/site/install/domain/SSL/SSH-key create-update-delete,
+`install_copy`, cache purge, backup create); `nexusWpCommand` local and remote;
+IPC `UPGRADE_WP`, `REMOVE_WP_AI` plugin deactivation, `WPE_DIAGNOSE` remote
+WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates.
+
+**Known gaps — do not assume completeness:**
+
+- `nexusWpeDomainCheck` (`/domains/{id}/check_status`) is POST-shaped but a
+  read-only DNS check, so it is deliberately not audited.
+- `nexus:sentinel:execute-sandbox` runs WP-CLI against a *local* sandbox site
+  (not the production install) and is not audited.
+- IPC handlers that mutate local site state — `START_SITE` / `STOP_SITE`,
+  `SETUP_AI`, `SWITCH_AI_PROVIDER`, `STORAGE_CLEANUP`, `RESET_AND_REFRESH`,
+  `RESET_CONTENT_INDEX`, `FACTORY_RESET`, `WPE_PULL_TO_LOCAL`, and the
+  saved-query / site-group CRUD channels — are not routed through
+  `auditDirectOperation`. Note `WPE_PULL_TO_LOCAL` *does* write to the separate
+  `AuditLogger` store (see "Three sinks" below), just not to
+  `operation-audit.log`.
+- `src/main/graphql/resolvers/wpe.ts` is instrumented but **currently
+  unreferenced** — `createResolvers` in `resolvers.ts` wins module resolution
+  for `./graphql/resolvers`. It is kept in sync so the in-progress split does
+  not silently lose the audit trail when it lands.
+
+**How this list has been wrong before.** It previously scoped the remaining gap
+to "IPC handlers that mutate *local* site state" and asserted production-WPE
+paths were prioritised first. `nexus:sentinel:execute` disproved that: it ran
+arbitrary WP-CLI over SSH against a production install *and* raw
+`rm -f /nas/content/live/<install>/<path>`, and was not audited at all. It is
+audited now. Before adding a coverage claim here, grep for the surface rather
+than reasoning about which wave "should" have covered it.
+
+### Three sinks, not one
+
+There are three durable audit writers, and they are easy to confuse:
+
+| file | writer | location |
+|---|---|---|
+| `operation-audit.log` | `audit/OperationAuditLog.ts` | `nexus-ai/` (JSONL, rotated) |
+| `audit.log` | `mcp/audit.ts` `createAuditLogger` | `nexus-ai/` (JSONL, rotated) |
+| `nexus_audit_logs.json` | `audit/AuditLogger.ts` via `registryStorage` | Local's `userData` (1000-entry cap) |
+
+All three redact inside `log()`. The third one did not until Aug 2026 — it wrote
+`params` and `error` completely unmasked across 24 write sites, seven of which
+pass the raw IPC request object through on failure. It is also hardened to 0600
+after each write, best-effort, because `RegistryStorage` exposes only get/set
+and cannot carry a mode.
+
+### Redaction
+
+`parameters`, `error` **and** `target` are redacted inside
+`OperationAuditLog.log()` (via `redactParams` / `maskSecretsInString` from
+`src/main/mcp/audit.ts`), never at the call site, so a new call site cannot leak
+credentials by forgetting. `mcp/audit.ts`'s logger does the same for `params`,
+`error` and `toolName`.
+
+**Withholding is the primary defense; masking is the backstop.** Parameters
+whose value is *executed syntax the caller composes freely* are not masked at
+all — they are **withheld**, replaced by
+`[WITHHELD: freeform input, 412 chars]` (arrays also carry an element count).
+The list is in `FREEFORM_FIELDS` (`src/main/mcp/audit.ts`): `code`, `command`,
+`commands`, `args`, `argv`, `query`, `sql`, `script`, `patch`.
+
+Why: four review rounds found four credential-exposure paths on this branch and
+**every one was a freeform command surface** — `wp_eval`'s `code`,
+`nexusWpCommand`'s argv, `SentinelExecutor`'s command strings. Not one was a
+structured tool parameter. Masking arbitrary command syntax correctly is a
+losing game; the syntax is no longer written.
+
+- Matched by **parameter name**, inside the shared redaction walk, so all three
+  sinks get it and no call site can leak by forgetting. Both dispatch
+  chokepoints spread `...args` verbatim, so a tool-scoped list would silently
+  miss every tool added later.
+- Names are normalised (lowercased, `_`/`-` stripped). Matching is **exact, not
+  tokenised** — tokenising `code` would withhold `statusCode` and `zipCode`.
+- **Withheld, not deleted.** A vanished key reads as an operation that took no
+  arguments. Length is kept; a content hash deliberately is **not** — the
+  `operation` name pins the command template and the char count pins the
+  length, so a short digest would be a guess-confirmation oracle against
+  exactly the credential being withheld.
+- **Not** on the list, and left to masking: `search`/`replace`,
+  `title`/`content`, `prompt`/`system`, `input` (`wp_run_ability` — a
+  structured bag, still redacted key by key), `value`, `option`. These are
+  structured parameters or body text, not composed syntax.
+- Adding a new freeform surface? **Add its parameter name to
+  `FREEFORM_FIELDS`.** The masking layers below are the net if you forget, but
+  they are the net, not the plan.
+
+Three masking layers remain underneath, unchanged in role:
+
+- **Key-name** — substring matches (`password`, `token`, `secret`, `api_key`,
+  `access_key`, `private_key`, `credential`, `authorization`, `bearer`,
+  `signature`) plus token matches for short words that are unsafe as substrings
+  (`pass`, `pwd`, `auth`, `salt`, `cookie`, `session`). Token matching is why
+  `author` and `monkey` are no longer redacted as collateral.
+  **`key`, `keys`, `certificate` and `cert` are deliberately NOT key-name
+  matches.** Tokenizing `key` inverted the log's meaning rather than protecting
+  anything: `{key: 'wpeOperationPermissions.wpcli.production', value: 'true'}`
+  logged the *name* as `[REDACTED]` and kept the value. It also destroyed SSH
+  **public** keys and `{sshKeyId}`, where "which key was authorized or revoked"
+  is the entire point of the entry. Names that genuinely signal a secret still
+  match; value shape decides the rest.
+- **Value-shape** — runs on every string regardless of key name: PEM blocks,
+  `sk-`/`sk_`/`rk_`/`pk_`/`key-` vendor keys, `ghp_`/`github_pat_`,
+  AWS/Google/Slack keys, `Bearer` headers, `user:pass@host` connection strings,
+  inline `password=` assignments, PHP `define('DB_PASSWORD', '…')`, opaque
+  alphanumeric runs of **20+** chars, and password-shaped tokens carrying all
+  four character classes. Strings are **not** truncated — rotation bounds file
+  size instead.
+- **Positional** — a credential is often a *separate token* from the name that
+  identifies it, which neither layer above can see. Both argv arrays
+  (`['config','set','DB_PASSWORD','x']`) and whole command strings
+  (`'wp config set DB_PASSWORD x'`) mask the token following a sensitive name,
+  plus separated flags (`--user_pass x`). The name is preserved.
+  Two shape-specific notes:
+  - Attached `-p<secret>` works on **argv arrays only** — it is an element-wise
+    rule in `redactArray`, and there is no command-string equivalent. (This
+    used to be documented as covering "both argv arrays and whole command
+    strings"; it never did.) It also no longer fires on every `-p…` element:
+    `-path`, `-post-type` and `-p1` are left alone, at the cost of missing an
+    all-lowercase-alphabetic password attached to `-p`.
+  - Positional masking is armed only by a **bare token**, never by a whole
+    command line. An element containing a space is a command line, not a name;
+    arming on one destroyed the element that followed it.
+
+**The 20-char threshold is measured, not guessed.** It was 40, which only ever
+caught SHA-1-length hashes: ten of ten realistic credentials in the 16–36 char
+band were written to disk verbatim. Lowering it trades false negatives against
+false positives, so if you change it, re-measure **both** directions — the
+must-mask corpus and the must-survive corpus are both encoded as tests in
+`tests/main/audit.test.ts` (`opaque-run masking — must-mask/must-survive
+corpus`). Known and accepted false positives: **any** unbroken 20+ character
+alphanumeric run carrying at least one letter, one digit and 8 or more distinct
+characters is masked — git SHAs, sha256 checksums, and identifiers of any
+casing, including all-lowercase (`acmeprod2026staging1`), not only "long
+CamelCase identifiers containing digits" as this previously claimed.
+
+That false-positive class is why `target` and `install_name` are exempted from
+the opaque-run rule when the **whole** value is a legal WPE install name
+(`[a-z0-9-]`, ≤20 chars — `create-install.ts` rejects 21+, so exactly 20 is
+legal and reachable). Without the carve-out a legal install name redacted the
+one field saying which production install was operated on. Every other pattern
+still runs on those fields, and a value that is not a legal install name is
+masked as before.
+
+Value-shape matching exists because key-name matching **structurally cannot**
+protect free-text payloads: `error` is raw tool output from a failed WP-CLI or
+CAPI call, and any freeform field not yet on `FREEFORM_FIELDS` reaches disk
+through it. (`wp_eval`'s `code` was the original motivating example; it is now
+withheld outright rather than masked.)
+
+Tier 1 (read-only) is deliberately not written to disk. Tier 2 is the **default**
+tier for any tool absent from `TIER_OVERRIDES` (`src/main/mcp/safety.ts:223`) —
+`getToolSafety()` falls back to `TIER_OVERRIDES[toolName] ?? 2` — so new tools are
+audited by default unless explicitly marked Tier 1.
+
+**Never throw from an audit path.** `OperationAuditLog.log()` builds the entry
+inside its try (`randomUUID()` and the recursive redaction walk can both throw);
+`redactValue` carries a `WeakSet` so cyclic args from agent code terminate; and
+the audit blocks at both chokepoints are individually wrapped so an audit fault
+cannot convert a successful call into an error result.
+
+**Rotation:** all durable writers use `src/main/logging/rotate.ts`
+(`rotateIfNeeded`, `pruneOldFiles`). Default 5 MiB x 3 generations
+(`DEFAULT_MAX_BYTES` / `DEFAULT_KEEP`). Per-run agent logs and reports
+(`run-*.log`, `run-*-report.md`) are pruned to the 20 most recent per agent in
+`buildAgentContext.ts`; `agent.log`, the main process log, `operation-audit.log`
+and `audit.log` are all rotated the same way.
+
+`OperationAuditLog.list()` reads the rotated generations (`.{keep}` … `.1`)
+before the live file, so `export()` genuinely exports everything on disk.
+Reading only `logPath` would silently amputate the compliance record at the
+current generation boundary.
+
+**`export()` destinations are validated.** It writes the complete de-rotated
+trail to a caller-supplied path, and a path under `~/Local Sites/<site>/app/
+public/` is served over HTTP by nginx. `webServedReason()` rejects Local site
+directories, `app/public`, `wp-content`, `public_html`, `htdocs`, `www` and
+`public`. The file is also `chmod`ed to 0600 *after* the write: `writeFileSync`'s
+`mode` applies only at creation, so exporting over an existing 0644 file left it
+0644.
+
+**Historical:** `services.operationAuditLog` was declared in the service types but
+never assigned, so `?.log()` calls silently no-opped and no audit file was ever
+created on any machine. `mcp/audit.ts`'s `AuditLogger.flush()` was likewise never
+called in production — no `before-quit` handler, no periodic flush — so its
+in-memory buffer was discarded on every exit. Both are now fixed, wired in
+`src/main/index.ts`. **Lesson: if you add a new service handle, verify it is
+actually assigned, not merely declared** — a declared-but-unassigned optional
+field fails silently (the `?.` just no-ops) instead of throwing, so nothing
+surfaces the bug until someone goes looking for the file it should have created.
+
+This section previously claimed the two chokepoints "cover everything and cannot
+drift". That was false — it missed the ~30 direct `services.localServices` call
+sites, which is why the "Known gaps" list above is now mandatory. If you close a
+gap, delete it from the list; if you find a new one, add it. A false
+completeness claim here is worse than no claim at all.
+
+---
+
 ## Known Pitfalls
 
 - [Smart Search MU plugin pitfalls](feedback_smart_search_mu_plugin.md) — `is_plugin_active()` fires too early in WordPress bootstrap; `siteStarted` races MySQL startup. Use filesystem checks in Node.js, not WP-CLI.

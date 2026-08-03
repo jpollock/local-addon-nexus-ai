@@ -11,6 +11,7 @@
  */
 import { IPC_CHANNELS, STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../common/constants';
 import { getApiKey } from './security/KeyVault';
+import { auditDirectOperation } from './audit/auditDirectOperation';
 import { getAIProvider } from './ai/getAIProvider';
 import { registerCredentialHandlers } from './ipc/handlers/credentials';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
@@ -276,6 +277,57 @@ export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabl
 export function getAgentAutonomy(agentId: string): 'suggest' | 'ask' | 'auto' {
   const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
   return cache?.get(agentId)?.autonomy ?? 'ask'; // default ask (safest before settings sync)
+}
+
+/**
+ * Seed safe defaults for agents never before persisted to agent-settings.json.
+ * A freshly-discovered agent must NOT auto-run: enabled:true (usable via chat / Run Now /
+ * contributed tools) but scheduleEnabled:false and eventsEnabled:false (no automatic cron
+ * or event-triggered execution) until the user explicitly opts in via the agent's settings
+ * panel. Without this, `getAgentSetting`'s permissive `?? true` fallback lets a brand-new
+ * agent's hardcoded cron/event triggers fire immediately and unattended — this is how
+ * security-sentinel ended up running a fleet-wide sweep every 15 minutes for weeks with
+ * nobody having configured anything.
+ *
+ * Must be called for every agent BEFORE its triggers are wired (see wireAgentTriggers in
+ * index.ts). Handles two timings:
+ *   - Initial boot: registerIpcHandlers() hasn't run yet, so only the on-disk file exists.
+ *     Seeding it here means the cache picks up safe defaults on its first read.
+ *   - Hot-reload of a new agent while Local is already running: registerIpcHandlers()
+ *     already populated the live in-memory cache, so writing to disk alone would NOT take
+ *     effect (getAgentSetting reads only the cache, never the disk, per call). This also
+ *     seeds the live cache directly so a newly-dropped-in agent is safe immediately.
+ * Never overwrites an existing entry — only fills in agents with no persisted settings.
+ */
+export function seedAgentDefaultsIfMissing(agentNames: string[]): void {
+  const _fs = require('fs') as typeof import('fs');
+  const _os = require('os') as typeof import('os');
+  const _path = require('path') as typeof import('path');
+  const settingsPath = _path.join(_os.homedir(), 'Library', 'Application Support', 'Local', 'nexus-ai', 'agent-settings.json');
+
+  let existing: Record<string, any> = {};
+  try {
+    existing = JSON.parse(_fs.readFileSync(settingsPath, 'utf8'));
+  } catch { /* file absent on first run */ }
+
+  const DEFAULTS = { enabled: true, scheduleEnabled: false, eventsEnabled: false, autonomy: 'ask' as const };
+  const liveCache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+
+  let changed = false;
+  for (const name of agentNames) {
+    if (existing[name]) continue; // already configured on disk — never touch existing settings
+    existing[name] = { ...DEFAULTS };
+    changed = true;
+    // If registerIpcHandlers() already ran, the live cache is what getAgentSetting reads —
+    // update it too so a hot-reloaded agent is safe before its triggers are wired.
+    if (liveCache && !liveCache.has(name)) liveCache.set(name, { ...DEFAULTS });
+  }
+  if (!changed) return;
+
+  try {
+    _fs.mkdirSync(_path.dirname(settingsPath), { recursive: true });
+    _fs.writeFileSync(settingsPath, JSON.stringify(existing, null, 2));
+  } catch { /* non-fatal — worst case the agent falls back to permissive defaults */ }
 }
 
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
@@ -1177,6 +1229,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         { fromVersion: result.fromVersion, toVersion: result.version, targetVersion: result.targetVersion },
         Date.now() - startTime,
       );
+      // Durable trail: `wp core update --force` rewrites WordPress core.
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.wp.core.update',
+        target: siteId,
+        parameters: { siteId, fromVersion: result.fromVersion, toVersion: result.version, targetVersion: result.targetVersion, force: true },
+        outcome: 'success',
+      });
 
       return { success: true, version: result.version };
     } catch (err) {
@@ -1189,6 +1248,13 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         {},
         Date.now() - startTime,
       );
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.wp.core.update',
+        target: siteId || 'unknown',
+        parameters: { siteId, force: true },
+        outcome: 'failure',
+        error: (err as Error).message,
+      });
       return { success: false, error: (err as Error).message };
     }
   });
@@ -1396,7 +1462,16 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         'ai-provider-for-local-gateway',
       ];
       for (const slug of pluginsToDeactivate) {
-        await localServicesBridge.wpCliRun(validated, ['plugin', 'deactivate', slug]).catch(() => {});
+        const deactivateResult: any = await localServicesBridge
+          .wpCliRun(validated, ['plugin', 'deactivate', slug])
+          .catch((err: any) => ({ success: false, stdout: null, stderr: err?.message ?? String(err) }));
+        auditDirectOperation(deps.nexusServices, {
+          operation: 'ipc.wp.plugin.deactivate',
+          target: validated,
+          parameters: { siteId: validated, plugin: slug, reason: 'remove-wp-ai' },
+          outcome: deactivateResult?.success ? 'success' : 'failure',
+          error: deactivateResult?.success ? undefined : (deactivateResult?.stderr || deactivateResult?.stdout || 'Command failed'),
+        });
       }
 
       // Clear per-site AI config from Nexus storage
@@ -2063,6 +2138,7 @@ Answer:`,
     healthCalculator,
     graphService,
     metadataCache: metadataCache ?? undefined,
+    auditServices: deps.nexusServices,
     setupSiteForAI: async (siteId: string, options?: any) => {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as NexusSettings | null;
       const provider = options?.provider ?? settings?.aiProvider;
@@ -3411,8 +3487,23 @@ Assistant: { "filters": { "plugins": ["woocommerce"], "phpEolOnly": true } }`;
     const start = Date.now();
     try {
       const result = await localServicesBridge.remoteWpCliRun(installName, args);
+      // Arbitrary WP-CLI against a WP Engine install.
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.wp.command',
+        target: `wpe:${installName}`,
+        parameters: { installName, command: args, remote: true },
+        outcome: result.success ? 'success' : 'failure',
+        error: result.success ? undefined : (result.stdout || 'Command failed'),
+      });
       return { success: result.success, stdout: result.stdout, durationMs: Date.now() - start };
     } catch (err: any) {
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.wp.command',
+        target: `wpe:${installName}`,
+        parameters: { installName, command: args, remote: true },
+        outcome: 'failure',
+        error: err.message,
+      });
       return { success: false, error: err.message, durationMs: Date.now() - start };
     }
   });
@@ -4719,13 +4810,58 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
   });
 
   // Sentinel Review UI: execute remediation commands on a WPE install via SSH
+  //
+  // Blast radius exceeds anything else instrumented on this branch: arbitrary
+  // WP-CLI over SSH against a PRODUCTION install, plus raw
+  // `rm -f /nas/content/live/<install>/<path>` that deliberately bypasses
+  // WordPress entirely (see SentinelExecutor.remoteSshRaw). Both outcomes are
+  // audited — a remediation that fails half way through is exactly the case
+  // someone will need the record for.
   safeHandle('nexus:sentinel:execute', async (_event: any, { installName, commands }: { installName: string; commands: string[] }) => {
+    const started = Date.now();
     try {
       const result = await executeSentinelCommands(installName, commands, localServicesBridge);
+      // Keep each failed step's ORIGINAL position (1-based) — `failed` below is
+      // a filtered subset of `result.steps`, so its own array index does not
+      // correspond to "which step ran". The index has to be captured before
+      // filtering.
+      const failed = result.steps
+        .map((s, stepIndex) => ({ ...s, stepNumber: stepIndex + 1 }))
+        .filter((s) => !s.ok);
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.sentinel.execute',
+        target: `wpe:${installName}`,
+        parameters: {
+          installName,
+          commands,
+          stepCount: result.steps.length,
+          failedCount: failed.length,
+          durationMs: Date.now() - started,
+        },
+        outcome: result.success ? 'success' : 'failure',
+        // No raw command text here. `commands` above is already withheld as a
+        // whole, so the command syntax was never going to reach the log via
+        // that field — but this field used to re-interpolate `s.command`
+        // (the raw, agent-composed command line) per failed step, defeating
+        // the withhold for every credential embedded in a command that failed
+        // (e.g. the mysql attached-password form `-p<secret>`, which has no
+        // command-string masking equivalent — see CLAUDE.md). A positional
+        // reference plus the step's own error message carries the same
+        // forensic value without the syntax.
+        error: result.success ? undefined
+          : failed.map((s) => `step ${s.stepNumber} of ${result.steps.length}: ${s.error ?? 'failed'}`).join(' | '),
+      });
       // TODO: delete sandbox site after successful execution
       // Sandbox name is not currently passed with the request; needs protocol update
       return { success: result.success, steps: result.steps };
     } catch (err: any) {
+      auditDirectOperation(deps.nexusServices, {
+        operation: 'ipc.sentinel.execute',
+        target: `wpe:${installName}`,
+        parameters: { installName, commands, durationMs: Date.now() - started },
+        outcome: 'failure',
+        error: err?.message ?? String(err),
+      });
       localLogger.error('[nexus:sentinel:execute] Execution failed:', err.message);
       return { success: false, steps: [] };
     }

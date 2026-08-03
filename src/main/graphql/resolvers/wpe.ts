@@ -7,6 +7,7 @@
  */
 
 import type { NexusServices } from '../../types/nexus-services';
+import { auditDirectOperation } from '../../audit/auditDirectOperation';
 import type { ResolverParent } from '../resolver-utils';
 import {
   buildDateRange,
@@ -258,12 +259,21 @@ export function createWpeResolvers(services: NexusServices) {
           input.notificationEmails || undefined
         ) as any;
 
+        auditDirectOperation(services, {
+          operation: 'wpe.backup.create', target: install.name,
+          parameters: { installId: install.id, description: input.description }, outcome: 'success',
+        });
+
         return {
           success: true,
           backupId: backupResult?.id || null,
           message: `Backup created for install ${install.name}`,
         };
       } catch (error: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.backup.create', target: String(input?.installId ?? 'unknown'),
+          parameters: { input }, outcome: 'failure', error: error.message,
+        });
         return { success: false, error: error.message };
       }
     },
@@ -272,8 +282,14 @@ export function createWpeResolvers(services: NexusServices) {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         await services.localServices.capiDirect(`/installs/${target}/cache_purge`, 'POST', {});
+        auditDirectOperation(services, {
+          operation: 'wpe.cache.purge', target, parameters: { target }, outcome: 'success',
+        });
         return { success: true, message: `Cache purged for install ${target}` };
       } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.cache.purge', target, parameters: { target }, outcome: 'failure', error: err.message,
+        });
         return { success: false, error: err.message };
       }
     },
@@ -332,16 +348,36 @@ export function createWpeResolvers(services: NexusServices) {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         const data = await services.localServices.capiDirect(`/accounts/${accountId}/account_users`, 'POST', { email, first_name: firstName, last_name: lastName, roles: role }) as any;
+        auditDirectOperation(services, {
+          operation: 'wpe.user.create', target: accountId,
+          parameters: { accountId, email, firstName, lastName, role, createdUserId: data?.id }, outcome: 'success',
+        });
         return { success: true, data: JSON.stringify(data) };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.user.create', target: accountId,
+          parameters: { accountId, email, firstName, lastName, role }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeUserUpdate: async (_parent: ResolverParent, { accountId, userId, role }: { accountId: string; userId: string; role: string }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         const data = await services.localServices.capiDirect(`/accounts/${accountId}/account_users/${userId}`, 'PATCH', { roles: role }) as any;
+        auditDirectOperation(services, {
+          operation: 'wpe.user.update', target: `${accountId}/${userId}`,
+          parameters: { accountId, userId, role }, outcome: 'success',
+        });
         return { success: true, data: JSON.stringify(data) };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.user.update', target: `${accountId}/${userId}`,
+          parameters: { accountId, userId, role }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeUserRemove: async (_parent: ResolverParent, { accountId, userId, confirm }: { accountId: string; userId: string; confirm?: boolean }) => {
@@ -349,8 +385,18 @@ export function createWpeResolvers(services: NexusServices) {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         if (!confirm) return { success: false, error: 'Pass --confirm to remove this user' };
         await services.localServices.capiDirect(`/accounts/${accountId}/account_users/${userId}`, 'DELETE');
+        auditDirectOperation(services, {
+          operation: 'wpe.user.delete', target: `${accountId}/${userId}`,
+          parameters: { accountId, userId }, outcome: 'success',
+        });
         return { success: true, message: `User ${userId} removed` };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.user.delete', target: `${accountId}/${userId}`,
+          parameters: { accountId, userId }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeUserAudit: async (_parent: ResolverParent, { accountId }: { accountId?: string }) => {
@@ -392,16 +438,36 @@ export function createWpeResolvers(services: NexusServices) {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         const data = await services.localServices.capiDirect('/sites', 'POST', { name, account_id: accountId }) as any;
+        auditDirectOperation(services, {
+          operation: 'wpe.site.create', target: name,
+          parameters: { name, accountId, createdSiteId: data?.id }, outcome: 'success',
+        });
         return { success: true, data: JSON.stringify(data) };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.site.create', target: name,
+          parameters: { name, accountId }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeCreateInstall: async (_parent: ResolverParent, { siteId, name, environment, accountId }: { siteId: string; name: string; environment: string; accountId: string }) => {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         const data = await services.localServices.capiDirect('/installs', 'POST', { site: siteId, name, environment, account: accountId }) as any;
+        auditDirectOperation(services, {
+          operation: 'wpe.install.create', target: name,
+          parameters: { name, siteId, environment, accountId, createdInstallId: data?.id }, outcome: 'success',
+        });
         return { success: true, data: JSON.stringify(data) };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.install.create', target: name,
+          parameters: { name, siteId, environment, accountId }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeUpdateInstall: async (_parent: ResolverParent, { installId, phpVersion, environment }: { installId: string; phpVersion?: string; environment?: string }) => {
@@ -412,8 +478,18 @@ export function createWpeResolvers(services: NexusServices) {
         if (phpVersion) body.php_version = phpVersion;
         if (environment) body.environment = environment;
         const data = await services.localServices.capiDirect(`/installs/${uuid}`, 'PATCH', body) as any;
+        auditDirectOperation(services, {
+          operation: 'wpe.install.update', target: installId,
+          parameters: { installId, uuid, phpVersion, environment }, outcome: 'success',
+        });
         return { success: true, data: JSON.stringify(data) };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.install.update', target: installId,
+          parameters: { installId, phpVersion, environment }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeDeleteInstall: async (_parent: ResolverParent, { installId, confirmName }: { installId: string; confirmName?: string }) => {
@@ -423,8 +499,19 @@ export function createWpeResolvers(services: NexusServices) {
         const uuid = await resolveInstallUuid(installId);
         const body = confirmName ? { name: confirmName } : {};
         await services.localServices.capiDirect(`/installs/${uuid}`, 'DELETE', body);
+        // Irreversible destruction of a WP Engine install.
+        auditDirectOperation(services, {
+          operation: 'wpe.install.delete', target: confirmName ?? installId,
+          parameters: { installId, uuid, confirmName }, outcome: 'success',
+        });
         return { success: true, message: `Install ${installId} deleted` };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.install.delete', target: confirmName ?? installId,
+          parameters: { installId, confirmName }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeBackupStatus: async (_parent: ResolverParent, { installId, backupId }: { installId: string; backupId: string }) => {
@@ -461,8 +548,18 @@ export function createWpeResolvers(services: NexusServices) {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         const uuid = await resolveInstallUuid(installId);
         const data = await services.localServices.capiDirect(`/installs/${uuid}/domains`, 'POST', { name: domain }) as any;
+        auditDirectOperation(services, {
+          operation: 'wpe.domain.create', target: installId,
+          parameters: { installId, uuid, domain, createdDomainId: data?.id }, outcome: 'success',
+        });
         return { success: true, data: JSON.stringify(data) };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.domain.create', target: installId,
+          parameters: { installId, domain }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeDomainRemove: async (_parent: ResolverParent, { installId, domainId, confirm }: { installId: string; domainId: string; confirm?: boolean }) => {
@@ -471,8 +568,18 @@ export function createWpeResolvers(services: NexusServices) {
         if (!confirm) return { success: false, error: 'Pass --confirm to remove this domain' };
         const uuid = await resolveInstallUuid(installId);
         await services.localServices.capiDirect(`/installs/${uuid}/domains/${domainId}`, 'DELETE');
+        auditDirectOperation(services, {
+          operation: 'wpe.domain.delete', target: installId,
+          parameters: { installId, uuid, domainId }, outcome: 'success',
+        });
         return { success: true, message: `Domain ${domainId} removed` };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.domain.delete', target: installId,
+          parameters: { installId, domainId }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeDomainCheck: async (_parent: ResolverParent, { installId, domainId }: { installId: string; domainId: string }) => {
@@ -498,8 +605,18 @@ export function createWpeResolvers(services: NexusServices) {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         const uuid = await resolveInstallUuid(installId);
         await services.localServices.capiDirect(`/installs/${uuid}/ssl_certificates`, 'POST', { domain_ids: domainIds });
+        auditDirectOperation(services, {
+          operation: 'wpe.ssl.request', target: installId,
+          parameters: { installId, uuid, domainIds }, outcome: 'success',
+        });
         return { success: true, message: 'SSL certificate provisioning requested' };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.ssl.request', target: installId,
+          parameters: { installId, domainIds }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeSshKeys: async () => {
@@ -514,8 +631,18 @@ export function createWpeResolvers(services: NexusServices) {
       try {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         const data = await services.localServices.capiDirect('/ssh_keys', 'POST', { public_key: publicKey }) as any;
+        auditDirectOperation(services, {
+          operation: 'wpe.sshkey.create', target: label ?? String(data?.id ?? 'unknown'),
+          parameters: { label, publicKey, createdKeyId: data?.id }, outcome: 'success',
+        });
         return { success: true, keyId: data?.id, label: data?.label };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.sshkey.create', target: label ?? 'unknown',
+          parameters: { label, publicKey }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeSshKeyRemove: async (_parent: ResolverParent, { sshKeyId, confirm }: { sshKeyId: string; confirm?: boolean }) => {
@@ -523,8 +650,18 @@ export function createWpeResolvers(services: NexusServices) {
         if (!services.localServices) return { success: false, error: 'Local services not available' };
         if (!confirm) return { success: false, error: 'Pass --confirm to remove this SSH key' };
         await services.localServices.capiDirect(`/ssh_keys/${sshKeyId}`, 'DELETE');
+        auditDirectOperation(services, {
+          operation: 'wpe.sshkey.delete', target: sshKeyId,
+          parameters: { sshKeyId }, outcome: 'success',
+        });
         return { success: true, message: `SSH key ${sshKeyId} removed` };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.sshkey.delete', target: sshKeyId,
+          parameters: { sshKeyId }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpePromote: async (_parent: ResolverParent, { sourceInstallId, destInstallId, includeDatabase, confirm }: { sourceInstallId: string; destInstallId: string; includeDatabase?: boolean; confirm?: boolean }) => {
@@ -546,8 +683,24 @@ export function createWpeResolvers(services: NexusServices) {
           destination_environment_id: (dst as any)?.id ?? destInstallId,
           custom_options: { include_files: true, include_db: includeDatabase !== false },
         });
+        // install_copy OVERWRITES the destination environment.
+        auditDirectOperation(services, {
+          operation: 'wpe.install.copy', target: (dst as any)?.name ?? destInstallId,
+          parameters: {
+            sourceInstallId, destInstallId, includeDatabase: includeDatabase !== false,
+            sourceName: (src as any)?.name, destName: (dst as any)?.name,
+            destEnvironment: (dst as any)?.environment,
+          },
+          outcome: 'success',
+        });
         return { success: true, message: `Promotion started from ${sourceInstallId} to ${destInstallId}` };
-      } catch (err: any) { return { success: false, error: err.message }; }
+      } catch (err: any) {
+        auditDirectOperation(services, {
+          operation: 'wpe.install.copy', target: destInstallId,
+          parameters: { sourceInstallId, destInstallId, includeDatabase }, outcome: 'failure', error: err.message,
+        });
+        return { success: false, error: err.message };
+      }
     },
 
     nexusWpeDiagnose: async (_parent: ResolverParent, { installId }: { installId: string }) => {

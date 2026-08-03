@@ -10,6 +10,7 @@ import type {
   SiteOpResult,
   BulkOpType,
 } from './types';
+import { auditDirectOperation, type AuditCapableServices } from '../audit/auditDirectOperation';
 
 export interface BulkOpDeps {
   contentPipeline: { indexSite(info: any): Promise<any> };
@@ -39,6 +40,13 @@ export interface BulkOpDeps {
   onProgress: (opId: string, status: BulkOperationStatus) => void;
   /** Optional: called for 'setup-ai' bulk operations */
   setupSiteForAI?: (siteId: string, options?: any) => Promise<any>;
+  /**
+   * Optional: durable audit sink. Bulk operations mutate many production-
+   * adjacent sites in one action, so each per-site mutation gets its own
+   * entry — an operator investigating "what changed on this site" searches by
+   * site, not by bulk op id.
+   */
+  auditServices?: AuditCapableServices;
 }
 
 const MAX_CONCURRENCY = 5; // Increased from 3 for better performance (50 sites: ~10 min vs ~17 min)
@@ -361,6 +369,14 @@ echo json_encode(['total'=>$total,'byType'=>$byType]);`,
       pluginSlug,
       '--format=json',
     ]);
+
+    auditDirectOperation(this.deps.auditServices, {
+      operation: 'bulk.plugin.update',
+      target: siteId,
+      parameters: { siteId, plugin: pluginSlug },
+      outcome: result.success ? 'success' : 'failure',
+      error: result.success ? undefined : `Plugin update failed for ${pluginSlug}`,
+    });
 
     if (!result.success) {
       throw new Error(`Plugin update failed for ${pluginSlug}`);

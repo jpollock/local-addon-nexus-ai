@@ -10,6 +10,7 @@ import type { ResolvedAIProvider } from '../ai/getAIProvider';
 import type { AgentStateStore } from './AgentStateStore';
 import type { AgentDbManager } from './AgentDbManager';
 import { buildAgentContext } from './buildAgentContext';
+import { getAgentSetting } from '../ipc-handlers';
 
 // Ban consecutive underscores so the __ MCP delimiter is unambiguous.
 const VALID_AGENT_NAME = /^[a-z0-9](?:[a-z0-9]|_(?!_)|-)*[a-z0-9]$|^[a-z0-9]$/;
@@ -43,6 +44,18 @@ export class AgentDispatcher {
   }
 
   async dispatch(agentName: string, toolName: string, args: unknown): Promise<McpToolResult> {
+    // A disabled agent must not run via ANY path — checked before tool lookup so a
+    // disabled agent never leaks which tools it has. This mirrors the guard already
+    // in the AGENT_RUN_NOW IPC handler. Without this, an MCP tool call (e.g. from the
+    // chat assistant) bypasses the cron/event 'enabled' checks entirely, since
+    // contributed tools otherwise have no gate of their own.
+    if (getAgentSetting(agentName, 'enabled') === false) {
+      return {
+        content: [{ type: 'text', text: `Agent "${agentName}" is disabled — enable it in Agent settings before calling its tools.` }],
+        isError: true,
+      };
+    }
+
     const registered = this.contributedRegistry.get(agentName, toolName);
     if (!registered) {
       return {
@@ -61,15 +74,39 @@ export class AgentDispatcher {
 
     if (result.isError) outcome = 'error';
 
-    this.services.auditLogger?.log({
-      timestamp: new Date().toISOString(),
-      toolName: `${agentName}/${toolName}`,
-      tier: registered.permissionTier as 1 | 2 | 3,
-      params: args && typeof args === 'object' ? (args as Record<string, unknown>) : {},
-      confirmed: null,
-      result: outcome === 'ok' ? 'success' : 'error',
-      duration_ms: Date.now() - start,
-    });
+    // The whole audit block is wrapped: agent handlers are the least-trusted
+    // code in the system (cyclic args, absent `content` arrays), and a throw
+    // here would surface as a dispatch failure for a tool that already ran.
+    try {
+      this.services.auditLogger?.log({
+        timestamp: new Date().toISOString(),
+        toolName: `${agentName}/${toolName}`,
+        tier: registered.permissionTier as 1 | 2 | 3,
+        params: args && typeof args === 'object' ? (args as Record<string, unknown>) : {},
+        confirmed: null,
+        result: outcome === 'ok' ? 'success' : 'error',
+        duration_ms: Date.now() - start,
+      });
+
+      // Durable trail for agent-contributed tools. This path bypasses
+      // McpSafetyWrapper entirely — it is the path the security-sentinel incident
+      // used — so it needs its own write or agent tool calls stay unaudited.
+      if (registered.permissionTier >= 2) {
+        this.services.operationAuditLog?.log({
+          operation: `${agentName}/${toolName}`,
+          target: args && typeof args === 'object'
+            ? String((args as Record<string, unknown>).site ?? 'unknown')
+            : 'unknown',
+          parameters: {
+            ...(args && typeof args === 'object' ? (args as Record<string, unknown>) : {}),
+            _tier: registered.permissionTier,
+            _durationMs: Date.now() - start,
+          },
+          outcome: outcome === 'ok' ? 'success' : 'failure',
+          error: outcome === 'error' ? (result.content?.[0]?.text || 'Unknown error') : undefined,
+        });
+      }
+    } catch { /* never throw from an audit path */ }
 
     return result;
   }

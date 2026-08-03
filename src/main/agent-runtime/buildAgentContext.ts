@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../logging/Logger';
+import { rotateIfNeeded, pruneOldFiles } from '../logging/rotate';
 import { getAgentAutonomy } from '../ipc-handlers';
 import { NexusToolProvider } from './NexusToolProvider';
 import { AgentAIClient } from './AgentAIClient';
@@ -89,13 +90,25 @@ export function buildAgentContext(deps: AgentContextDeps): {
   });
 
   try { fs.mkdirSync(logDir, { recursive: true }); } catch { /* ignore */ }
+
+  // Per-run logs and reports accumulated one pair per run forever. Keep the 20
+  // most recent of each; older runs remain summarised in the agent_runs table.
+  try {
+    pruneOldFiles(logDir, /^run-.*\.log$/, 20);
+    pruneOldFiles(logDir, /^run-.*-report\.md$/, 20);
+  } catch { /* best effort */ }
+
   const logFile = path.join(logDir, logFileName ?? 'agent.log');
   const appLog = createLogger(`agent:${agentName}`);
 
+  /** Agent logs are appended on every single log call and were previously
+   *  uncapped — security-sentinel/agent.log reached 9.1 MB. Rotate before each
+   *  append; rotateIfNeeded is a cheap statSync when under the limit. */
   function appendLog(level: string, msg: string): void {
     try {
+      rotateIfNeeded(logFile);
       fs.appendFileSync(logFile, `[${level}] ${new Date().toISOString()} ${msg}\n`);
-    } catch { /* non-fatal */ }
+    } catch { /* logging must never break the agent */ }
   }
 
   // Accumulators for structured log events — merged into AgentResult after run
