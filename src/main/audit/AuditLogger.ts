@@ -64,8 +64,9 @@ export class AuditLogger {
    *
    * `params` and `error` are redacted HERE, for the same reason
    * `OperationAuditLog` redacts in `log()`: this is the third durable sink, it
-   * has 24 write sites, and five of them dump the raw IPC request object on
-   * failure (`ipc-handlers.ts` WPE pull/push, `ipc/handlers/wpe-sync.ts`). It
+   * has 24 write sites, and seven of them dump the raw IPC request object on
+   * failure (`ipc-handlers.ts` index_site x2 and WPE pull x2,
+   * `ipc/handlers/bulk.ts`, `ipc/handlers/wpe-sync.ts` x2). It
    * previously wrote both fields with no masking at all.
    *
    * Never throws — a failed audit write must not break the audited operation.

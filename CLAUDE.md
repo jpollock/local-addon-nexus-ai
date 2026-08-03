@@ -201,7 +201,7 @@ There are three durable audit writers, and they are easy to confuse:
 | `nexus_audit_logs.json` | `audit/AuditLogger.ts` via `registryStorage` | Local's `userData` (1000-entry cap) |
 
 All three redact inside `log()`. The third one did not until Aug 2026 — it wrote
-`params` and `error` completely unmasked across 24 write sites, five of which
+`params` and `error` completely unmasked across 24 write sites, seven of which
 pass the raw IPC request object through on failure. It is also hardened to 0600
 after each write, best-effort, because `RegistryStorage` exposes only get/set
 and cannot carry a mode.
@@ -214,7 +214,39 @@ and cannot carry a mode.
 credentials by forgetting. `mcp/audit.ts`'s logger does the same for `params`,
 `error` and `toolName`.
 
-Three layers:
+**Withholding is the primary defense; masking is the backstop.** Parameters
+whose value is *executed syntax the caller composes freely* are not masked at
+all — they are **withheld**, replaced by
+`[WITHHELD: freeform input, 412 chars]` (arrays also carry an element count).
+The list is in `FREEFORM_FIELDS` (`src/main/mcp/audit.ts`): `code`, `command`,
+`commands`, `args`, `argv`, `query`, `sql`, `script`, `patch`.
+
+Why: four review rounds found four credential-exposure paths on this branch and
+**every one was a freeform command surface** — `wp_eval`'s `code`,
+`nexusWpCommand`'s argv, `SentinelExecutor`'s command strings. Not one was a
+structured tool parameter. Masking arbitrary command syntax correctly is a
+losing game; the syntax is no longer written.
+
+- Matched by **parameter name**, inside the shared redaction walk, so all three
+  sinks get it and no call site can leak by forgetting. Both dispatch
+  chokepoints spread `...args` verbatim, so a tool-scoped list would silently
+  miss every tool added later.
+- Names are normalised (lowercased, `_`/`-` stripped). Matching is **exact, not
+  tokenised** — tokenising `code` would withhold `statusCode` and `zipCode`.
+- **Withheld, not deleted.** A vanished key reads as an operation that took no
+  arguments. Length is kept; a content hash deliberately is **not** — the
+  `operation` name pins the command template and the char count pins the
+  length, so a short digest would be a guess-confirmation oracle against
+  exactly the credential being withheld.
+- **Not** on the list, and left to masking: `search`/`replace`,
+  `title`/`content`, `prompt`/`system`, `input` (`wp_run_ability` — a
+  structured bag, still redacted key by key), `value`, `option`. These are
+  structured parameters or body text, not composed syntax.
+- Adding a new freeform surface? **Add its parameter name to
+  `FREEFORM_FIELDS`.** The masking layers below are the net if you forget, but
+  they are the net, not the plan.
+
+Three masking layers remain underneath, unchanged in role:
 
 - **Key-name** — substring matches (`password`, `token`, `secret`, `api_key`,
   `access_key`, `private_key`, `credential`, `authorization`, `bearer`,
@@ -238,9 +270,18 @@ Three layers:
 - **Positional** — a credential is often a *separate token* from the name that
   identifies it, which neither layer above can see. Both argv arrays
   (`['config','set','DB_PASSWORD','x']`) and whole command strings
-  (`'wp config set DB_PASSWORD x'`, which is what `nexus:sentinel:execute`
-  passes) mask the token following a sensitive name, plus separated flags
-  (`--user_pass x`) and attached `-p<secret>`. The name is always preserved.
+  (`'wp config set DB_PASSWORD x'`) mask the token following a sensitive name,
+  plus separated flags (`--user_pass x`). The name is preserved.
+  Two shape-specific notes:
+  - Attached `-p<secret>` works on **argv arrays only** — it is an element-wise
+    rule in `redactArray`, and there is no command-string equivalent. (This
+    used to be documented as covering "both argv arrays and whole command
+    strings"; it never did.) It also no longer fires on every `-p…` element:
+    `-path`, `-post-type` and `-p1` are left alone, at the cost of missing an
+    all-lowercase-alphabetic password attached to `-p`.
+  - Positional masking is armed only by a **bare token**, never by a whole
+    command line. An element containing a space is a command line, not a name;
+    arming on one destroyed the element that followed it.
 
 **The 20-char threshold is measured, not guessed.** It was 40, which only ever
 caught SHA-1-length hashes: ten of ten realistic credentials in the 16–36 char
@@ -248,13 +289,25 @@ band were written to disk verbatim. Lowering it trades false negatives against
 false positives, so if you change it, re-measure **both** directions — the
 must-mask corpus and the must-survive corpus are both encoded as tests in
 `tests/main/audit.test.ts` (`opaque-run masking — must-mask/must-survive
-corpus`). Known and accepted false positives: git SHAs, sha256 checksums, and
-long CamelCase identifiers containing digits are masked.
+corpus`). Known and accepted false positives: **any** unbroken 20+ character
+alphanumeric run carrying at least one letter, one digit and 8 or more distinct
+characters is masked — git SHAs, sha256 checksums, and identifiers of any
+casing, including all-lowercase (`acmeprod2026staging1`), not only "long
+CamelCase identifiers containing digits" as this previously claimed.
+
+That false-positive class is why `target` and `install_name` are exempted from
+the opaque-run rule when the **whole** value is a legal WPE install name
+(`[a-z0-9-]`, ≤20 chars — `create-install.ts` rejects 21+, so exactly 20 is
+legal and reachable). Without the carve-out a legal install name redacted the
+one field saying which production install was operated on. Every other pattern
+still runs on those fields, and a value that is not a legal install name is
+masked as before.
 
 Value-shape matching exists because key-name matching **structurally cannot**
-protect two payloads: `wp_eval`'s argument is literally named `code` (adding
-`code` as a key pattern would gut the audit value of every eval entry), and
-`error` is raw tool output from a failed WP-CLI or CAPI call.
+protect free-text payloads: `error` is raw tool output from a failed WP-CLI or
+CAPI call, and any freeform field not yet on `FREEFORM_FIELDS` reaches disk
+through it. (`wp_eval`'s `code` was the original motivating example; it is now
+withheld outright rather than masked.)
 
 Tier 1 (read-only) is deliberately not written to disk. Tier 2 is the **default**
 tier for any tool absent from `TIER_OVERRIDES` (`src/main/mcp/safety.ts:223`) —

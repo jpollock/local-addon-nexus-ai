@@ -4,8 +4,8 @@
  * `src/main/audit/AuditLogger.ts` wrote `params` and `error` with NO masking at
  * all, persisted via `registryStorage` to
  * `~/Library/Application Support/Local/nexus_audit_logs.json` at mode 0644.
- * It has 24 write sites, five of which dump the raw IPC request object on
- * failure (`ipc-handlers.ts` WPE pull/push, `ipc/handlers/wpe-sync.ts`) — which
+ * It has 24 write sites, seven of which dump the raw IPC request object on
+ * failure (`ipc-handlers.ts`, `ipc/handlers/bulk.ts`, `wpe-sync.ts`) — which
  * is how a `--user_pass` or an API token reached that file.
  *
  * The other two sinks (`mcp/audit.ts`, `audit/OperationAuditLog.ts`) redact
@@ -51,7 +51,7 @@ describe('AuditLogger — redaction', () => {
   });
 
   it('masks credential-shaped values in a raw IPC request object', () => {
-    // Five call sites pass the whole IPC request through as `params` on failure.
+    // Seven call sites pass the whole IPC request through as `params` on failure.
     const storage = makeStorage();
     const logger = new AuditLogger(storage, '');
 
