@@ -22,6 +22,7 @@ export type SiteRef =
 
 export interface RunOpts {
   skipPlugins?: boolean;
+  skipThemes?: boolean;
   timeoutMs?: number;
 }
 

@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error } from './preflight';
-import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { resolveTransport } from '../../../transport';
 import { withSiteRunning } from '../with-site-running';
 
 export const coreUpdateHandler: McpToolHandler = {
@@ -29,25 +29,38 @@ export const coreUpdateHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const target = await resolveTarget(args, services);
-    if ('content' in target) return target;
+    const transport = await resolveTransport(args, services, 'wpcli');
+    if ('content' in transport) return transport;
 
     const cliArgs = ['core', 'update'];
     if (args.version) cliArgs.push(`--version=${args.version}`);
     if (args.force) cliArgs.push('--force');
 
-    if (target.type === 'remote') {
-      const result = await remoteWpCliRun(target.installName, cliArgs, services);
-      if (!result.success) return error(`Failed to update WP core on ${target.installName}: ${result.stdout}`);
-      return ok(result.stdout || `WordPress core updated on ${target.installName}.`);
+    const executeCommand = async (): Promise<McpToolResult> => {
+      const timeoutMs = transport.kind === 'local' ? 180000 : undefined;
+      const result = await transport.runWpCli(cliArgs, { timeoutMs });
+
+      if (!result.success) {
+        return error(
+          transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe'
+            ? `Failed to update WP core on ${transport.siteRef.installName}: ${result.stdout}`
+            : `Failed to update WP core: ${result.stdout}`
+        );
+      }
+
+      return ok(
+        result.stdout ||
+          (transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe'
+            ? `WordPress core updated on ${transport.siteRef.installName}.`
+            : 'WordPress core updated.')
+      );
+    };
+
+    // Local sites require the site to be running
+    if (transport.kind === 'local' && transport.siteRef.kind === 'local') {
+      return withSiteRunning(transport.siteRef.siteId, services, executeCommand);
     }
 
-    return withSiteRunning(target.site.id, services, async () => {
-      // Core update downloads from WordPress.org — allow up to 3 minutes
-      const result = await services.localServices!.wpCliRun(target.site.id, cliArgs, { timeoutMs: 180000 });
-      if (!result.success) return error(`Failed to update WP core: ${result.stdout}`);
-
-      return ok(result.stdout || 'WordPress core updated.');
-    });
+    return executeCommand();
   },
 };

@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error } from './preflight';
-import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { resolveTransport } from '../../../transport';
 import { withSiteRunning } from '../with-site-running';
 
 export const wpPostUpdateHandler: McpToolHandler = {
@@ -46,12 +46,11 @@ export const wpPostUpdateHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const target = await resolveTarget(args, services);
-    if ('content' in target) return target; // error result
+    const transport = await resolveTransport(args, services, 'wpcli');
+    if ('content' in transport) return transport;
 
     const postId = args.post_id as number;
 
-    // Build update arguments
     const cliArgs = ['post', 'update', String(postId)];
 
     if (args.title) {
@@ -66,23 +65,25 @@ export const wpPostUpdateHandler: McpToolHandler = {
       cliArgs.push('--post_status=' + args.status);
     }
 
-    if (target.type === 'remote') {
-      const result = await remoteWpCliRun(target.installName, cliArgs, services);
+    const executeCommand = async (): Promise<McpToolResult> => {
+      const result = await transport.runWpCli(cliArgs);
+
       if (!result.success) {
-        return error(`Remote WP-CLI error: ${result.stdout}`);
+        return error(
+          transport.kind === 'wpe-ssh'
+            ? `Remote WP-CLI error: ${result.stdout}`
+            : `Failed to update post: ${result.stdout}`
+        );
       }
+
       return ok(`Updated post ${postId}`);
+    };
+
+    // Local sites require the site to be running
+    if (transport.kind === 'local' && transport.siteRef.kind === 'local') {
+      return withSiteRunning(transport.siteRef.siteId, services, executeCommand);
     }
 
-    // Local path
-    return withSiteRunning(target.site.id, services, async () => {
-      const result = await services.localServices!.wpCliRun(target.site.id, cliArgs);
-
-      if (!result.success) {
-        return error('Failed to update post: ' + result.stdout);
-      }
-
-      return ok(`Updated post ${postId}`);
-    });
+    return executeCommand();
   },
 };

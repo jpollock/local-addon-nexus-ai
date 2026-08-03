@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { ok, error } from './preflight';
-import { resolveTarget, remoteWpCliRun } from './remote-exec';
+import { resolveTransport } from '../../../transport';
 import { withSiteRunning } from '../with-site-running';
 
 export const wpPostCreateHandler: McpToolHandler = {
@@ -46,15 +46,14 @@ export const wpPostCreateHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const target = await resolveTarget(args, services);
-    if ('content' in target) return target; // error result
+    const transport = await resolveTransport(args, services, 'wpcli');
+    if ('content' in transport) return transport;
 
     const title = args.title as string;
     const content = (args.content as string) || '';
     const status = (args.status as string) || 'publish';
     const postType = (args.post_type as string) || 'post';
 
-    // Build WP-CLI command
     const cliArgs = [
       'post',
       'create',
@@ -62,29 +61,29 @@ export const wpPostCreateHandler: McpToolHandler = {
       '--post_content=' + content,
       '--post_status=' + status,
       '--post_type=' + postType,
-      '--porcelain', // Return just the post ID
+      '--porcelain',
     ];
 
-    if (target.type === 'remote') {
-      const result = await remoteWpCliRun(target.installName, cliArgs, services);
+    const executeCommand = async (): Promise<McpToolResult> => {
+      const result = await transport.runWpCli(cliArgs);
+
       if (!result.success) {
-        return error(`Remote WP-CLI error: ${result.stdout}`);
+        return error(
+          transport.kind === 'wpe-ssh'
+            ? `Remote WP-CLI error: ${result.stdout}`
+            : `Failed to create post: ${result.stdout}`
+        );
       }
+
       const postId = result.stdout?.trim() || '';
       return ok(`Created post ${postId}: "${title}" (status: ${status})`);
+    };
+
+    // Local sites require the site to be running
+    if (transport.kind === 'local' && transport.siteRef.kind === 'local') {
+      return withSiteRunning(transport.siteRef.siteId, services, executeCommand);
     }
 
-    // Local path
-    return withSiteRunning(target.site.id, services, async () => {
-      const result = await services.localServices!.wpCliRun(target.site.id, cliArgs);
-
-      if (!result.success) {
-        return error('Failed to create post: ' + result.stdout);
-      }
-
-      const postId = result.stdout?.trim() || '';
-
-      return ok(`Created post ${postId}: "${title}" (status: ${status})`);
-    });
+    return executeCommand();
   },
 };
