@@ -206,9 +206,6 @@ export class GraphService {
       this.logger.info('[GraphService] WPE columns already exist, skipping migration');
     }
 
-    // Migration: add taxonomy columns (platform, host) and backfill environment
-    applyTaxonomyMigration(this.db!);
-
     // Migration: add php_version column if missing
     if (!this.hasColumn('sites', 'php_version')) {
       this.logger.info('[GraphService] Adding php_version column to sites table...');
@@ -261,6 +258,9 @@ export class GraphService {
         this.logger.info(`[GraphService] ✓ Added ${col} column to sites`);
       }
     }
+
+    // Migration: add taxonomy columns (platform, host) and backfill environment
+    applyTaxonomyMigration(this.db!);
 
     // Migration: create site_usage table if missing
     const hasSiteUsage = this.db
@@ -1444,6 +1444,13 @@ export function applyTaxonomyMigration(db: import('better-sqlite3').Database): v
 
   db.exec("UPDATE sites SET platform = 'wordpress' WHERE platform IS NULL");
   db.exec('UPDATE sites SET host = source WHERE host IS NULL');
-  db.exec("UPDATE sites SET environment = 'development' WHERE environment IS NULL AND host = 'local'");
-  db.exec("UPDATE sites SET environment = 'production'  WHERE environment IS NULL AND host = 'wpe'");
+
+  // `environment` is added by the deferred column loop in initialize(). Guard on
+  // it rather than assuming: this function is exported and called standalone in
+  // tests, and a fresh database reaches here without the column if the call is
+  // ever reordered.
+  if (cols.includes('environment')) {
+    db.exec("UPDATE sites SET environment = 'development' WHERE environment IS NULL AND host = 'local'");
+    db.exec("UPDATE sites SET environment = 'production'  WHERE environment IS NULL AND host = 'wpe'");
+  }
 }

@@ -60,4 +60,27 @@ describe('taxonomy migration', () => {
     const env = (db.prepare("SELECT environment FROM sites WHERE id='w2'").get() as any).environment;
     expect(env).toBe('production');
   });
+
+  it('does not throw on a fresh database with no environment column', () => {
+    const db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE sites (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, domain TEXT NOT NULL,
+        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+        source TEXT DEFAULT 'local'
+      );
+    `);
+    db.prepare('INSERT INTO sites (id,name,domain,created_at,updated_at,source) VALUES (?,?,?,0,0,?)').run('l1', 'Local', 'l.local', 'local');
+
+    expect(() => applyTaxonomyMigration(db as any)).not.toThrow();
+
+    const cols = (db.prepare('PRAGMA table_info(sites)').all() as any[]).map(c => c.name);
+    expect(cols).toContain('platform');
+    expect(cols).toContain('host');
+    expect(cols).not.toContain('environment'); // still absent
+
+    const row = db.prepare('SELECT platform, host FROM sites WHERE id=?').get('l1') as any;
+    expect(row.platform).toBe('wordpress');
+    expect(row.host).toBe('local');
+  });
 });
