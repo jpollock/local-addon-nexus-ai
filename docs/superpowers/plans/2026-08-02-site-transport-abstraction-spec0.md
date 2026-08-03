@@ -1310,6 +1310,7 @@ The guard moves onto the transport, but **takes each caller's rules as a paramet
   - `interface CommandPolicy { blocked: string[]; allowed?: Set<string> }`
   - `MCP_REMOTE_POLICY` and `GRAPHQL_REMOTE_POLICY` constants
   - `checkCommand(args: string[], policy: CommandPolicy): string | null`
+  - `withPolicy(transport: SiteTransport, policy: CommandPolicy): SiteTransport`
   - `resolveTransport(args, services, operation): Promise<SiteTransport | McpToolResult>`
 
 - [ ] **Step 1: Write the failing test**
@@ -1348,7 +1349,56 @@ describe('GRAPHQL_REMOTE_POLICY (blocklist only)', () => {
     expect(checkCommand(['db', 'cli'], GRAPHQL_REMOTE_POLICY)).toBeNull();
   });
 });
+
+describe('withPolicy', () => {
+  const inner = () => ({
+    kind: 'wpe-ssh' as const,
+    siteRef: { kind: 'wpe' as const, installName: 'acmeprod' },
+    runWpCli: jest.fn(async () => ({ stdout: 'ran', success: true })),
+    deleteRemoteFile: jest.fn(async () => ({ success: true, output: '' })),
+    supports: () => true,
+    probe: jest.fn(async () => ({ reachable: true })),
+  });
+
+  it('passes permitted commands through to the inner transport', async () => {
+    const t = inner();
+    const res = await withPolicy(t, MCP_REMOTE_POLICY).runWpCli(['plugin', 'list']);
+    expect(t.runWpCli).toHaveBeenCalledWith(['plugin', 'list'], undefined);
+    expect(res).toEqual({ stdout: 'ran', success: true });
+  });
+
+  it('returns the legacy wrapper result shape for a blocklist hit, without calling through', async () => {
+    const t = inner();
+    const res = await withPolicy(t, MCP_REMOTE_POLICY).runWpCli(['eval', '<?php']);
+    expect(t.runWpCli).not.toHaveBeenCalled();
+    expect(res).toEqual({
+      stdout: 'Command "eval" is blocked for security reasons on remote sites.',
+      success: false,
+    });
+  });
+
+  it('reproduces the legacy nested-quote message on a whitelist miss — ugly, but current behaviour', async () => {
+    const res = await withPolicy(inner(), MCP_REMOTE_POLICY).runWpCli(['core', 'update']);
+    expect(res).toEqual({
+      stdout: 'Command "Command "core update" not allowed for remote execution. '
+            + 'Use local WP-CLI for advanced operations." is blocked for security reasons on remote sites.',
+      success: false,
+    });
+  });
+
+  it('does not gate deleteRemoteFile, supports or probe', async () => {
+    const t = inner();
+    const wrapped = withPolicy(t, MCP_REMOTE_POLICY);
+    await wrapped.deleteRemoteFile('/tmp/x');
+    await wrapped.probe();
+    expect(t.deleteRemoteFile).toHaveBeenCalled();
+    expect(t.probe).toHaveBeenCalled();
+    expect(wrapped.kind).toBe('wpe-ssh');
+  });
+});
 ```
+
+Update the import line at the top of this test to include `withPolicy`.
 
 - [ ] **Step 2: Run it and watch it fail**
 
@@ -1417,6 +1467,45 @@ export function checkCommand(args: string[], policy: CommandPolicy): string | nu
 
   return null;
 }
+
+/**
+ * Wrap a transport so runWpCli enforces a command policy.
+ *
+ * The refused result is byte-identical to what remote-exec.ts's wrapper
+ * returned, INCLUDING the nested-quote message a whitelist miss produces
+ * (`Command "Command "core update" not allowed…" is blocked…`). That reads
+ * like a bug and is not one to fix here: callers format it into their own
+ * error text, so changing it changes user-visible output. Spec 0 is a
+ * zero-behavior-change refactor.
+ *
+ * Only runWpCli is gated. deleteRemoteFile is Sentinel's deliberate WP-CLI
+ * bypass and was never covered by the old wrapper.
+ */
+export function withPolicy(transport: SiteTransport, policy: CommandPolicy): SiteTransport {
+  return {
+    kind: transport.kind,
+    siteRef: transport.siteRef,
+    supports: (cap) => transport.supports(cap),
+    probe: () => transport.probe(),
+    deleteRemoteFile: (p) => transport.deleteRemoteFile(p),
+    async runWpCli(args, opts) {
+      const blocked = checkCommand(args, policy);
+      if (blocked) {
+        return {
+          stdout: `Command "${blocked}" is blocked for security reasons on remote sites.`,
+          success: false,
+        };
+      }
+      return transport.runWpCli(args, opts);
+    },
+  };
+}
+```
+
+Add the type import at the top of `policy.ts`:
+
+```ts
+import type { SiteTransport } from './types';
 ```
 
 - [ ] **Step 4: Write `resolve.ts`**
@@ -1429,6 +1518,7 @@ import { resolveTarget } from '../mcp/modules/wp-cli/remote-exec';
 import type { SiteTransport } from './types';
 import { WpeSshTransport } from './WpeSshTransport';
 import { LocalTransport } from './LocalTransport';
+import { withPolicy, MCP_REMOTE_POLICY } from './policy';
 
 /**
  * Resolve MCP tool args to a transport. Delegates target resolution (and
@@ -1447,7 +1537,9 @@ export async function resolveTransport(
   if ('content' in target) return target;
 
   if (target.type === 'remote') {
-    return new WpeSshTransport(target.installName);
+    // MCP's whitelist applied HERE, not in each tool. Local transports are
+    // deliberately ungated: the old wrapper only ever ran on the remote branch.
+    return withPolicy(new WpeSshTransport(target.installName), MCP_REMOTE_POLICY);
   }
   return new LocalTransport(target.site.id, target.site.name, services.localServices!);
 }
@@ -1593,15 +1685,23 @@ After:
 const transport = await resolveTransport(args, services, 'wpcli_read');
 if ('content' in transport) return transport;
 
-const blocked = checkCommand(['user', 'list', '--format=json'], MCP_REMOTE_POLICY);
-if (transport.kind === 'wpe-ssh' && blocked) {
-  return error(`Command "${blocked}" is blocked for security reasons on remote sites.`);
-}
-
 const result = await transport.runWpCli(['user', 'list', '--format=json']);
 ```
 
-Keep each tool's *presentation* branch as-is where it differs by side — `user-list.ts` prefixes the remote heading with the install name, and that is observable output. Branch on `transport.kind` for formatting only, never for execution.
+**No guard code belongs in a tool.** `resolveTransport` already wrapped a remote
+transport in `withPolicy(…, MCP_REMOTE_POLICY)`, so a blocked command comes back
+as `{ success: false, stdout: 'Command "…" is blocked…' }` and each tool's
+existing `error(\`Remote WP-CLI error: ${result.stdout}\`)` produces byte-identical
+text to today. Copying a `checkCommand` call into 15 files would both duplicate a
+logic block and drop that prefix.
+
+Keep each tool's *presentation* branch as-is where it differs by side —
+`user-list.ts` prefixes the remote heading with the install name, and that is
+observable output. Branch on `transport.kind` for formatting only, never for
+execution or policy.
+
+Local sites keep their `withSiteRunning(...)` wrapper — that is a running-state
+check, not policy, and removing it would change behavior on halted sites.
 
 Migrate one file, run the dispatch test, then move to the next. Do not batch all 15 before testing.
 
