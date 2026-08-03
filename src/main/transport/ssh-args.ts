@@ -58,3 +58,48 @@ export function buildWpeSshArgs(
     remoteCommand,
   ];
 }
+
+/**
+ * Shorter than WPE's 35s: there is no managed-hosting cold start to wait for,
+ * and a hung SSH to an unreachable box should fail while the user is watching.
+ */
+export const EXTERNAL_SSH_TIMEOUT_MS = 20000;
+
+/**
+ * WP-CLI command for an arbitrary host.
+ *
+ * No --skip-plugins/--skip-themes: those exist for WP Engine's mu-plugin
+ * environment, and suppressing plugins on someone else's host would change what
+ * `wp` reports without them asking.
+ *
+ * `wpPath` is optional. Omitted, WP-CLI searches upward from the SSH login
+ * directory — which is the web root on many hosts, so the common case needs no
+ * flag at all.
+ */
+export function buildExternalWpCliCommand(args: string[], wpPath?: string): string {
+  const pathFlag = wpPath ? `--path=${escapeShellArg(wpPath)} ` : '';
+  return `wp ${pathFlag}${args.map(escapeShellArg).join(' ')}`.trim();
+}
+
+/**
+ * INVERTED RULE — read before changing.
+ *
+ * This must NOT pass `-F /dev/null`. buildWpeSshArgs passes it deliberately so
+ * WP Engine connections ignore the user's SSH config and stay reproducible.
+ * This function depends on that config entirely: the alias supplies host, user,
+ * port, key, ProxyJump and agent settings, which is the whole reason
+ * alias-based credentials were chosen and why no key material is stored.
+ *
+ * Adding -F /dev/null here would break every bastion and jump-host setup and
+ * would present as a network fault rather than a code defect.
+ *
+ * BatchMode=yes prevents ssh prompting for a password on a non-tty, which would
+ * hang the spawn until the timeout instead of failing immediately.
+ */
+export function buildExternalSshArgs(alias: string, remoteCommand: string): string[] {
+  return [
+    '-o', 'BatchMode=yes',
+    alias,
+    remoteCommand,
+  ];
+}

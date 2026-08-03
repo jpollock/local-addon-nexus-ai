@@ -18,7 +18,8 @@ export type Capability =
 
 export type SiteRef =
   | { kind: 'local'; siteId: string; siteName: string }
-  | { kind: 'wpe'; installName: string };
+  | { kind: 'wpe'; installName: string }
+  | { kind: 'external'; alias: string };
 
 export interface RunOpts {
   skipPlugins?: boolean;
