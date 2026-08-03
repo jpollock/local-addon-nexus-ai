@@ -94,6 +94,20 @@ describe('WP-CLI Tools', () => {
     });
   });
 
+  describe('external SSH transport', () => {
+    test('wp_core_version uses external SSH path and does not fall through to local', async () => {
+      // This test verifies FINDING 1: external-ssh transport branches correctly
+      // and does NOT fall through to the local path (which would throw "Site not found:")
+      const result = await registry.call('wp_core_version', { ssh_target: 'ssh:acme-box@staging' }, services);
+      // The SSH spawn will fail (no actual host), but it should reach the SSH path
+      // and return a Remote WP-CLI error, NOT "Site not found:"
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).not.toContain('Site not found:');
+      // Should contain either timeout, spawn error, or Remote WP-CLI error
+      expect(result.content[0].text).toMatch(/Remote WP-CLI error|timed out|spawn/i);
+    });
+  });
+
   // --- wp_plugin_list ---
 
   describe('wp_plugin_list', () => {

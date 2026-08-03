@@ -107,7 +107,7 @@ export class ToolRegistry {
         if (tier >= 2) {
           services.operationAuditLog?.log({
             operation: name,
-            target: String(args.site ?? args.install_id ?? args.install_name ?? 'unknown'),
+            target: String(args.site ?? args.install_id ?? args.install_name ?? args.ssh_target ?? 'unknown'),
             parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
             outcome: result.isError ? 'failure' : 'success',
             error: result.isError ? (result.content?.[0]?.text || 'Unknown error') : undefined,
@@ -139,7 +139,7 @@ export class ToolRegistry {
         if (tier >= 2) {
           services.operationAuditLog?.log({
             operation: name,
-            target: String(args.site ?? args.install_id ?? args.install_name ?? 'unknown'),
+            target: String(args.site ?? args.install_id ?? args.install_name ?? args.ssh_target ?? 'unknown'),
             parameters: { ...args, _tier: tier, _durationMs: duration, _accessMethod: accessMethod ?? 'unknown' },
             outcome: 'failure',
             error: message,

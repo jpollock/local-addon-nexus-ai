@@ -1,9 +1,12 @@
 /**
- * Pure builders for WP Engine SSH invocations. Extracted verbatim from the two
- * duplicated implementations (local-services-bridge remoteWpCliRun and
- * SentinelExecutor remoteSshRaw) so both can share one definition.
+ * SSH argument builders for two opposing families: WP Engine and external hosts.
  *
- * The argv here is pinned by tests/unit/transport/ssh-argv-characterization.test.ts.
+ * WP Engine builders (buildWpeSshArgs, buildWpCliCommand) pass `-F /dev/null` to
+ * enforce reproducibility and ignore user SSH config. External builders
+ * (buildExternalSshArgs, buildExternalWpCliCommand) do NOT — they depend
+ * entirely on the user's ~/.ssh/config for credentials and routing.
+ *
+ * The WPE argv is pinned by tests/unit/transport/ssh-argv-characterization.test.ts.
  * Changing it changes how Nexus reaches every production install — don't, casually.
  */
 import * as path from 'path';
@@ -38,6 +41,15 @@ export function buildWpCliCommand(args: string[], opts?: { skipPlugins?: boolean
   return `wp ${skipFlags} ${args.map(escapeShellArg).join(' ')}`.trim();
 }
 
+/**
+ * WP Engine SSH args. Passes `-F /dev/null` deliberately to enforce
+ * reproducibility and ignore user SSH config — WPE credentials are managed
+ * internally and routing is standard.
+ *
+ * INVERTED in buildExternalSshArgs: that function depends on the user's
+ * ~/.ssh/config entirely and must NOT pass -F /dev/null. See that function's
+ * comment before adding any new builder.
+ */
 export function buildWpeSshArgs(
   installName: string,
   remoteCommand: string,
@@ -74,7 +86,8 @@ export const EXTERNAL_SSH_TIMEOUT_MS = 20000;
  *
  * `wpPath` is optional. Omitted, WP-CLI searches upward from the SSH login
  * directory — which is the web root on many hosts, so the common case needs no
- * flag at all.
+ * flag at all. `wpPath` must be absolute — `~` will not expand because the
+ * argument is escaped (no shell expansion occurs on a single-quoted string).
  */
 export function buildExternalWpCliCommand(args: string[], wpPath?: string): string {
   const pathFlag = wpPath ? `--path=${escapeShellArg(wpPath)} ` : '';

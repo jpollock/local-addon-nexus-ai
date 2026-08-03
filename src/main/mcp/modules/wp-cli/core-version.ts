@@ -53,6 +53,15 @@ export const coreVersionHandler: McpToolHandler = {
     }
 
     const executeCommand = async (): Promise<McpToolResult> => {
+      // External SSH: always call WP-CLI
+      if (transport.kind === 'external-ssh') {
+        const result = await transport.runWpCli(['core', 'version']);
+        if (!result.success) {
+          return error(`Remote WP-CLI error: ${result.stdout}`);
+        }
+        return ok(`WordPress ${result.stdout?.trim() ?? 'unknown'}`);
+      }
+
       // Remote: check graph DB cache first — avoids SSH for data we already have
       if (transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe') {
         const db = services.graphService?.getDb?.();

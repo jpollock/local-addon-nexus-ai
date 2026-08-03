@@ -68,6 +68,13 @@ export class ExternalSshTransport implements SiteTransport {
     const res = await runSsh(this.alias, buildExternalWpCliCommand(args, this.wpPath));
     if (res.spawnError !== undefined) return { stdout: res.spawnError, success: false };
     if (res.code === 0) return { stdout: res.stdout, success: true };
+    // Timeout: spawn kills the child with SIGTERM, yielding code=null and empty stderr
+    if (res.code === null && !res.stderr.trim()) {
+      return {
+        stdout: `SSH to '${this.alias}' timed out after ${EXTERNAL_SSH_TIMEOUT_MS / 1000}s (no response). Check the host is reachable and the alias is correct.`,
+        success: false,
+      };
+    }
     return {
       stdout: annotateFailure(res.stderr) || `SSH exited with code ${res.code}`,
       success: false,

@@ -27,6 +27,27 @@ export const pluginListHandler: McpToolHandler = {
     if ('content' in transport) return transport;
 
     const executeCommand = async (): Promise<McpToolResult> => {
+      // External SSH: always call WP-CLI
+      if (transport.kind === 'external-ssh') {
+        const result = await transport.runWpCli(['plugin', 'list', '--format=json']);
+        if (!result.success) {
+          return error(`Remote WP-CLI error: ${result.stdout}`);
+        }
+        try {
+          const plugins = JSON.parse(result.stdout || '[]');
+          if (plugins.length === 0) return ok('No plugins installed.');
+          const alias = transport.siteRef.kind === 'external' ? transport.siteRef.alias : 'external';
+          const lines = [`## Plugins (${plugins.length}) — ${alias}`];
+          for (const p of plugins) {
+            const status = p.status === 'active' ? '**active**' : p.status;
+            lines.push(`- ${p.name} v${p.version} [${status}]`);
+          }
+          return ok(lines.join('\n'));
+        } catch {
+          return ok(result.stdout || 'No plugins found.');
+        }
+      }
+
       // Remote: always call WP-CLI
       if (transport.kind === 'wpe-ssh' && transport.siteRef.kind === 'wpe') {
         const result = await transport.runWpCli(['plugin', 'list', '--format=json']);
