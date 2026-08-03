@@ -54,7 +54,7 @@ export const evalHandler: McpToolHandler = {
       const siteStatus = services.localServices!.getSiteStatus(transport.siteRef.siteId);
       if (siteStatus !== 'running') {
         return error(
-          `wp_eval requires the site to be running (MySQL must be available). ` +
+          `Site "${transport.siteRef.siteName}" is ${siteStatus}. wp_eval requires the site to be running (MySQL must be available). ` +
           `Start it first with local_start_site, then retry.`,
         );
       }

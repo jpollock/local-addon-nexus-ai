@@ -22,6 +22,17 @@ export function escapeShellArg(arg: string): string {
   return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 
+/**
+ * Build a WP-CLI command string for SSH execution.
+ *
+ * HAZARD: the ternary is all-or-nothing. RunOpts accepts skipThemes, but this
+ * function does not honour it. skipPlugins: false zeroes the entire flag string,
+ * stripping BOTH --skip-plugins and --skip-themes.
+ *
+ * Unreachable today: theme-activate.ts passes skipPlugins=false but the command
+ * is blocked before dispatch. If ALLOWED_REMOTE_COMMANDS ever whitelists theme
+ * activate, both flags must be honoured independently at that time.
+ */
 export function buildWpCliCommand(args: string[], opts?: { skipPlugins?: boolean }): string {
   const skipFlags = opts?.skipPlugins === false ? '' : '--skip-plugins --skip-themes';
   return `wp ${skipFlags} ${args.map(escapeShellArg).join(' ')}`.trim();

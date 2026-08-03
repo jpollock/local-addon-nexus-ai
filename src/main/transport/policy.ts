@@ -33,6 +33,17 @@ export const MCP_REMOTE_POLICY: CommandPolicy = {
   ]),
 };
 
+/**
+ * GRAPHQL_REMOTE_POLICY currently has no consumers in src/ — the live GraphQL
+ * checks remain inline at src/main/graphql/resolvers.ts:1627 and
+ * src/main/graphql/resolvers/wp-cli.ts:12.
+ *
+ * It is NOT semantically equivalent to the live checks. The live code uses
+ * startsWith-only matching; adopting this constant would tighten to
+ * startsWith || includes(' ' + x), which would refuse commands like
+ * "plugin install shell-script" (currently permitted). That is a behavior
+ * change, not a refactor.
+ */
 export const GRAPHQL_REMOTE_POLICY: CommandPolicy = {
   blocked: ['db query', 'eval', 'eval-file', 'shell'],
 };
