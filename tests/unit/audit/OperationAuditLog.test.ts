@@ -244,7 +244,12 @@ describe('OperationAuditLog — redaction and rotation', () => {
     expect(raw).toContain('could not connect');
   });
 
-  it('masks an sk- key in a wp_eval `code` parameter (key-name matching cannot)', () => {
+  // CHANGED EXPECTATION (withhold list). `code` is no longer masked in place —
+  // it is withheld, so the payload never reaches disk at all. The
+  // `toContain('update_option')` assertion this test used to make is now
+  // inverted on purpose: keeping the surrounding PHP was the old bargain, and
+  // it is exactly what four rounds of review showed cannot be made safe.
+  it('withholds a wp_eval `code` parameter — no part of it reaches disk', () => {
     const log = new OperationAuditLog(logPath);
     log.log({
       operation: 'wp_eval',
@@ -255,8 +260,11 @@ describe('OperationAuditLog — redaction and rotation', () => {
 
     const raw = fs.readFileSync(logPath, 'utf-8');
     expect(raw).not.toContain('sk-live-Zz0123456789AbCdEfGh');
-    expect(raw).toContain('[REDACTED]');
-    expect(raw).toContain('update_option'); // entry keeps its audit value
+    expect(raw).not.toContain('update_option');
+    expect(raw).toContain('[WITHHELD: freeform input');
+    // The operation is still fully identified.
+    expect(raw).toContain('wp_eval');
+    expect(raw).toContain('my-site');
   });
 
   it('does not throw on a cyclic parameters object', () => {
@@ -465,6 +473,65 @@ describe('OperationAuditLog — list()/export() across rotated generations', () 
       const log = new OperationAuditLog(logPath);
       log.log({ operation: 'wpe.install.delete', target: 'acme-prod', parameters: {}, outcome: 'success' });
       expect(log.list()[0].target).toBe('acme-prod');
+    });
+
+    // STRENGTHENED. `acme-prod` is 9 characters, hyphenated, and carries no
+    // digit, so it clears `looksOpaque` on three separate counts and could
+    // never have detected the real bug: WPE caps install names at 20 chars
+    // (`create-install.ts:48` rejects 21+), so a hyphen-free 20-character name
+    // with a digit is LEGAL and matched the opaque-run rule exactly. It landed
+    // on the one field saying which production install was operated on.
+    it.each([
+      ['exactly 20 chars, no hyphen, with digits', 'acmeprod2026staging1'],
+      ['20 chars, all lowercase alnum', 'wpengineproductions1'],
+      ['20 chars with a hyphen', 'acme-prod-2026-live1'],
+    ])('keeps a legal WPE install name as the target (%s)', (_label, name) => {
+      expect((name as string).length).toBe(20); // the boundary is the point
+      const log = new OperationAuditLog(logPath);
+      log.log({ operation: 'wpe.install.delete', target: name as string, parameters: {}, outcome: 'success' });
+
+      expect(log.list()[0].target).toBe(name);
+      expect(fs.readFileSync(logPath, 'utf-8')).toContain(name as string);
+    });
+
+    it('keeps a legal install name in the `install_name` parameter too', () => {
+      const log = new OperationAuditLog(logPath);
+      log.log({
+        operation: 'wpe.install.delete',
+        target: 'wpe:acmeprod2026staging1',
+        parameters: { install_name: 'acmeprod2026staging1', installName: 'acmeprod2026staging1' },
+        outcome: 'success',
+      });
+      const entry = log.list()[0];
+      expect(entry.parameters.install_name).toBe('acmeprod2026staging1');
+      expect(entry.parameters.installName).toBe('acmeprod2026staging1');
+    });
+
+    // The carve-out must not become a hole: it applies only when the WHOLE
+    // value is a legal install name, so anything longer is masked as before.
+    it('still masks an opaque target that is not a legal install name', () => {
+      const log = new OperationAuditLog(logPath);
+      log.log({
+        operation: 'wpe.install.delete',
+        target: 'acmeprod2026staging12', // 21 chars — one over the WPE cap
+        parameters: { install_name: 'AcmeProd2026Staging1' }, // uppercase is illegal
+        outcome: 'success',
+      });
+      const raw = fs.readFileSync(logPath, 'utf-8');
+      expect(raw).not.toContain('acmeprod2026staging12');
+      expect(raw).not.toContain('AcmeProd2026Staging1');
+    });
+
+    it('still masks a vendor-prefixed key even under an identity field', () => {
+      // Only the generic opaque-run rule is skipped; every other pattern runs.
+      const log = new OperationAuditLog(logPath);
+      log.log({
+        operation: 'wpe.install.delete',
+        target: 'key-0a1b2c3d4e5f67',
+        parameters: {},
+        outcome: 'success',
+      });
+      expect(fs.readFileSync(logPath, 'utf-8')).not.toContain('key-0a1b2c3d4e5f67');
     });
   });
 

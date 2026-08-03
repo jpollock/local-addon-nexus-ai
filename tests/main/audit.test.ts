@@ -140,14 +140,30 @@ describe('redactParams', () => {
   // protect it.
   // -------------------------------------------------------------------------
 
-  test('masks an sk- API key inside a wp_eval `code` payload', () => {
+  // CHANGED EXPECTATION (withhold list). `code` is now WITHHELD rather than
+  // masked, so the payload — including the `update_option` context this test
+  // used to assert survived — is deliberately no longer written. The masking
+  // this test covered is preserved verbatim in the companion test below, which
+  // carries the identical payload under a key that is NOT on the withhold list.
+  test('withholds a wp_eval `code` payload rather than masking it', () => {
     const result = redactParams({
       code: "update_option('mysite_openai_api_key', 'sk-proj-AbCdEf0123456789ZzYyXx');",
     });
     expect(result.code).not.toContain('sk-proj-AbCdEf0123456789ZzYyXx');
-    expect(result.code).toContain('[REDACTED]');
-    // Surrounding context survives — the entry keeps its audit value.
-    expect(result.code).toContain('update_option');
+    // The payload is gone in its entirety, not just the credential-shaped part.
+    expect(result.code).not.toContain('update_option');
+    expect(result.code).toContain('[WITHHELD: freeform input');
+  });
+
+  test('still masks an sk- API key under a key that is NOT on the withhold list', () => {
+    // Defense in depth: the withhold list is the primary defense, value-shape
+    // masking is the net for any freeform surface added later and not listed.
+    const result = redactParams({
+      note: "update_option('mysite_openai_api_key', 'sk-proj-AbCdEf0123456789ZzYyXx');",
+    });
+    expect(result.note).not.toContain('sk-proj-AbCdEf0123456789ZzYyXx');
+    expect(result.note).toContain('[REDACTED]');
+    expect(result.note).toContain('update_option');
   });
 
   test('masks a PEM private key block under a non-sensitive key name', () => {
@@ -193,11 +209,15 @@ describe('redactParams', () => {
   // reverted: a 5000-char `wp_eval` payload was being stored as 2023 chars,
   // which is forensic loss on exactly the parameter this masking exists to make
   // safe to keep. Rotation bounds file size; entries are not mangled.
+  // CHANGED CARRIER (withhold list). The property under test is that
+  // `maskSecretsInString` never truncates; it was carried on `code`, which is
+  // now withheld. `note` exercises the identical code path. The withheld
+  // fields keep their own size record — see the `chars` count in the marker.
   test('does not truncate long string values', () => {
     const long = 'x'.repeat(5000);
-    const result = redactParams({ code: long }) as { code: string };
-    expect(result.code).toHaveLength(5000);
-    expect(result.code).not.toContain('truncated');
+    const result = redactParams({ note: long }) as { note: string };
+    expect(result.note).toHaveLength(5000);
+    expect(result.note).not.toContain('truncated');
   });
 
   test('maskSecretsInString is exported and idempotent on clean input', () => {
@@ -234,8 +254,15 @@ describe('redactParams', () => {
 // ---------------------------------------------------------------------------
 
 describe('argv-aware masking', () => {
+  // CHANGED CARRIER (withhold list). These cases used to be carried on
+  // `command`, which is now withheld outright — asserting on argv masking
+  // through a withheld key would assert nothing. `unlistedArgv` stands for the
+  // arrays that still reach masking: raw IPC request dumps (seven call sites
+  // pass the whole request object through on failure) and any freeform array
+  // added later under a name not yet on the withhold list. This layer is the
+  // backstop, so it stays covered exactly as before.
   const argvOf = (command: string[]): string[] =>
-    (redactParams({ command }) as { command: string[] }).command;
+    (redactParams({ unlistedArgv: command }) as { unlistedArgv: string[] }).unlistedArgv;
 
   test.each([
     ['config set DB_PASSWORD', ['config', 'set', 'DB_PASSWORD', 'Pr0dDbP4ssw0rd'], 'Pr0dDbP4ssw0rd'],
@@ -260,6 +287,64 @@ describe('argv-aware masking', () => {
     // -u is a username, not a credential; destroying it destroys the record of
     // which account was used.
     expect(out).toContain('-uroot');
+  });
+
+  // -------------------------------------------------------------------------
+  // B1 — `introducesSecret` armed on a WHOLE COMMAND LINE.
+  //
+  // It applies `isSensitiveKey`, an unanchored `includes()`, to each array
+  // element. An element that merely MENTIONS a secret anywhere therefore armed
+  // `maskNext` and destroyed the element AFTER it. Measured on a real sentinel
+  // remediation array: the raw `rm -f /nas/content/live/…` record — the single
+  // most consequential line in it — was replaced by `[REDACTED]`.
+  //
+  // This is forensic loss on ANY array, independent of the withhold list, which
+  // is why it is carried here on a key that is not withheld.
+  // -------------------------------------------------------------------------
+  describe('whole command lines do not arm positional masking', () => {
+    it('keeps the element following one that merely contains "password"', () => {
+      const out = argvOf([
+        'wp config set DB_PASSWORD Pr0dDbP4ssw0rd',
+        'rm -f /nas/content/live/acme/wp-content/mu-plugins/evil.php',
+      ]);
+      // Element 0 is still masked in place, by string masking.
+      expect(out[0]).toBe('wp config set DB_PASSWORD [REDACTED]');
+      // Element 1 must survive INTACT — it is the record of what was deleted.
+      expect(out[1]).toBe('rm -f /nas/content/live/acme/wp-content/mu-plugins/evil.php');
+    });
+
+    it('keeps the element following one containing "token" or "secret"', () => {
+      const out = argvOf([
+        'wp option update stripe_secret_key sk_live_AbCdEfGhIjKl',
+        'wp plugin deactivate badplugin',
+      ]);
+      expect(out[0]).not.toContain('sk_live_AbCdEfGhIjKl');
+      expect(out[1]).toBe('wp plugin deactivate badplugin');
+    });
+
+    it('still masks positionally when the NAME is a bare token, not a line', () => {
+      // The fix must not disarm the case positional masking exists for.
+      const out = argvOf(['config', 'set', 'DB_PASSWORD', 'Pr0dDbP4ssw0rd']);
+      expect(out).toEqual(['config', 'set', 'DB_PASSWORD', '[REDACTED]']);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Attached `-p` was `/^(-p)(?!-)(.+)$/` — ANY element starting with `-p`.
+  // `-path` in particular destroys the record of WHERE a command ran.
+  // -------------------------------------------------------------------------
+  describe('attached -p flag is not applied to ordinary single-dash flags', () => {
+    it.each([
+      ['-path', ['wp', 'plugin', 'list', '-path', '/srv/www/acme']],
+      ['-post-type', ['wp', 'post', 'list', '-post-type', 'page']],
+      ['-p1', ['wp', 'post', 'list', '-p1']],
+    ])('leaves %s intact', (flag, argv) => {
+      expect(argvOf(argv as string[])).toContain(flag as string);
+    });
+
+    it('still masks a real attached password', () => {
+      expect(argvOf(['-pSuperSecret99'])).toEqual(['-p[REDACTED]']);
+    });
   });
 
   test('leaves ordinary argv untouched', () => {
@@ -305,11 +390,60 @@ describe('argv-aware masking', () => {
       ['prose containing the word token', 'The token expires soon, ask an admin for a new one.'],
       ['non-secret option update', 'wp option update blogname MyGreatSite'],
       ['non-secret config set', 'wp config set WP_DEBUG true --raw'],
-      ['non-secret user meta update', 'wp user meta update 1 nickname Bobby'],
       ['sentinel rm remediation', 'rm -f wp-content/mu-plugins/evil.php'],
       ['plugin deactivate', 'wp plugin deactivate badplugin --skip-plugins'],
     ])('leaves %s intact', (_label, text) => {
       expect(maskSecretsInString(text)).toBe(text);
+    });
+
+    // -----------------------------------------------------------------------
+    // B2 — `user meta update` ARITY.
+    //
+    // Real syntax is `wp user meta update <user> <key> <value>`. The pattern
+    // expected `wp user meta update <key> <value>`, so the numeric user id
+    // failed the `[A-Za-z_]` name class and the branch NEVER FIRED.
+    //
+    // `'wp user meta update 1 nickname Bobby'` used to sit in the must-survive
+    // list above and passed for exactly the wrong reason: nothing matched it,
+    // so of course it survived. It is REPLACED by this pair. The must-mask
+    // case is what makes the must-survive case meaningful — if the branch stops
+    // firing, the first test below fails, and only then does "Bobby survives"
+    // mean the pattern declined to mask rather than never having looked.
+    // -----------------------------------------------------------------------
+    test('masks a secret user meta value (the branch must actually fire)', () => {
+      const out = maskSecretsInString('wp user meta update 1 api_token abc123def456');
+      expect(out).not.toContain('abc123def456');
+      expect(out).toBe('wp user meta update 1 api_token [REDACTED]');
+    });
+
+    test('leaves a non-secret user meta value intact', () => {
+      expect(maskSecretsInString('wp user meta update 1 nickname Bobby'))
+        .toBe('wp user meta update 1 nickname Bobby');
+    });
+
+    test('masks a secret user meta value addressed by login rather than id', () => {
+      const out = maskSecretsInString('wp user meta add bob@example.com api_token abc123def456');
+      expect(out).not.toContain('abc123def456');
+      expect(out).toContain('[REDACTED]');
+    });
+
+    // -----------------------------------------------------------------------
+    // B3 — a QUOTED value. `(\S+)` stopped at the first space, so the tail of
+    // `"P@ss word with spaces"` was written to disk verbatim.
+    // -----------------------------------------------------------------------
+    test.each([
+      ['double-quoted', 'wp config set DB_PASSWORD "P@ss word with spaces"'],
+      ['single-quoted', "wp config set DB_PASSWORD 'P@ss word with spaces'"],
+    ])('masks a %s value including its tail', (_label, command) => {
+      const out = maskSecretsInString(command);
+      expect(out).not.toContain('word with spaces');
+      expect(out).toBe('wp config set DB_PASSWORD [REDACTED]');
+    });
+
+    test('masks a quoted option value with spaces', () => {
+      const out = maskSecretsInString('wp option update stripe_secret_key "live key here"');
+      expect(out).not.toContain('live key here');
+      expect(out).toBe('wp option update stripe_secret_key [REDACTED]');
     });
   });
 

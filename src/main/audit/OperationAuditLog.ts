@@ -132,7 +132,11 @@ export class OperationAuditLog {
         // routine path puts a secret there today, but the guarantee this class
         // advertises is that a NEW call site cannot leak by forgetting — and
         // that was true for two of its three string fields, not all three.
-        target: maskSecretsInString(String(entry.target ?? '')),
+        // `identityField` keeps a legal WPE install name — `[a-z0-9-]`, up to 20
+        // chars — out of the generic opaque-alphanumeric-run rule. `target` is
+        // the one field saying WHICH production install was operated on, and a
+        // hyphen-free 20-character name matched that rule exactly.
+        target: maskSecretsInString(String(entry.target ?? ''), { identityField: true }),
         parameters: redactParams(entry.parameters ?? {}),
         ...(entry.error !== undefined
           ? { error: maskSecretsInString(String(entry.error)) }

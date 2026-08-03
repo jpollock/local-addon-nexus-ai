@@ -254,7 +254,10 @@ describe('direct-call audit coverage — GraphQL resolvers', () => {
     expect(entries[0].operation).toBe('cli.wp.command');
     expect(entries[0].target).toBe('wpe:acme-prod');
     expect(entries[0].parameters.remote).toBe(true);
-    expect(entries[0].parameters.command).toEqual(['plugin', 'update', 'akismet']);
+    // CHANGED EXPECTATION (withhold list): the argv is withheld, not recorded.
+    // Everything that identifies the operation still survives, which is the
+    // property the withheld marker exists to preserve.
+    expect(entries[0].parameters.command).toBe('[WITHHELD: freeform input, 3 elements, 19 chars]');
 
     fs.rmSync(dir, { recursive: true, force: true });
   });

@@ -118,11 +118,13 @@ describe('nexus:sentinel:execute is audited', () => {
     expect(entries[0].operation).toBe('ipc.sentinel.execute');
     expect(entries[0].target).toBe('wpe:acme-prod');
     expect(entries[0].outcome).toBe('success');
-    // Which commands ran against production is the whole point of the record.
-    expect(entries[0].parameters.commands).toEqual([
-      'rm -f wp-content/mu-plugins/evil.php',
-      'wp plugin deactivate badplugin',
-    ]);
+    // CHANGED EXPECTATION (withhold list). These are whole shell/WP-CLI command
+    // lines composed by an agent — the highest-blast-radius freeform surface in
+    // the addon — so they are withheld rather than written. The marker keeps the
+    // shape of what ran (two commands, 66 characters) without the syntax.
+    expect(entries[0].parameters.commands).toBe('[WITHHELD: freeform input, 2 elements, 66 chars]');
+    // Everything needed to identify the operation still survives.
+    expect(entries[0].parameters.installName).toBe('acme-prod');
     expect(entries[0].parameters.stepCount).toBe(2);
   });
 
@@ -174,6 +176,12 @@ describe('nexus:sentinel:execute is audited', () => {
 
     const raw = fs.readFileSync(logPath, 'utf-8');
     expect(raw).not.toContain('Pr0dDbP4ssw0rd');
-    expect(raw).toContain('DB_PASSWORD');
+    // CHANGED EXPECTATION (withhold list): the constant NAME no longer survives
+    // either, because the whole command line is withheld. Preserving the name
+    // required parsing the command syntax, which is the thing that kept
+    // shipping defects — the `user meta update` arity and the quoted-value tail
+    // were both live leaks in this exact code path.
+    expect(raw).not.toContain('DB_PASSWORD');
+    expect(raw).toContain('[WITHHELD: freeform input');
   });
 });

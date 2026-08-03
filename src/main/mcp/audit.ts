@@ -183,9 +183,22 @@ const URL_CREDENTIALS = /\b([a-z][a-z0-9+.-]*:\/\/)([^\s:/@]+):([^\s@/]{3,})@/gi
  * Anchored on literal WP-CLI subcommands rather than on "a sensitive word
  * followed by a token", because the latter mangles prose: "reset your password
  * now" would lose the word after `password`.
+ *
+ * ARITY MATTERS. `user meta update|add` takes the USER first:
+ * `wp user meta update <user> <key> <value>`. The original pattern expected
+ * `user meta update <key> <value>`, so the numeric user id failed the
+ * `[A-Za-z_]` name class and the branch never fired at all —
+ * `wp user meta update 1 api_token abc123def456` was written verbatim. The
+ * `\S+` before the name consumes the user id / login / email.
+ *
+ * The VALUE alternation accepts a quoted string before falling back to a bare
+ * token. `\S+` alone stopped at the first space, so
+ * `config set DB_PASSWORD "P@ss word with spaces"` masked only `"P@ss` and
+ * wrote ` word with spaces"` to disk. Quoted forms are tried first; the whole
+ * quoted token (quotes included) is what gets replaced.
  */
 const COMMAND_NAME_VALUE =
-  /\b((?:config\s+set|option\s+(?:update|add|set)|user\s+meta\s+(?:update|add))\s+)([A-Za-z_][A-Za-z0-9_.-]*)(\s+)(\S+)/g;
+  /\b((?:config\s+set|option\s+(?:update|add|set)|user\s+meta\s+(?:update|add)\s+\S+)\s+)([A-Za-z_][A-Za-z0-9_.-]*)(\s+)(?:"[^"]*"|'[^']*'|\S+)/g;
 
 /** `--user_pass hunter2` — flag and value separated by a space, so no `=`. */
 const SEPARATED_SECRET_FLAG =
@@ -260,6 +273,34 @@ function looksLikePassword(run: string): boolean {
 export const REDACTED = '[REDACTED]';
 
 /**
+ * A legal WP Engine install name: lowercase alphanumerics and hyphens, capped
+ * at 20 characters by `create-install.ts` (which rejects 21+), so exactly 20 is
+ * legal and reachable.
+ *
+ * `looksOpaque` masks any 20+ character alphanumeric run carrying a letter, a
+ * digit and 8+ distinct characters — which a hyphen-free 20-character install
+ * name such as `acmeprod2026staging1` satisfies exactly. That landed on
+ * `target` / `install_name`: the one field identifying WHICH production install
+ * was operated on. An entry reading `target: "[REDACTED]"` records that
+ * something was deleted but not what.
+ */
+const LEGAL_INSTALL_NAME = /^[a-z0-9][a-z0-9-]{0,19}$/;
+
+export interface MaskOptions {
+  /**
+   * This value identifies the resource that was operated on (`target`,
+   * `install_name`). When the WHOLE value is a legal install name, the generic
+   * opaque-alphanumeric-run rule is skipped for it.
+   *
+   * Deliberately narrow. Every other rule still runs, including the vendor
+   * prefixes (`sk_`, `key-`, `AKIA…`) that can also appear in the
+   * `[a-z0-9-]` charset, and a value that is NOT a legal install name — the
+   * 40-char `install-0123456789abcdef…` shape — is masked as before.
+   */
+  identityField?: boolean;
+}
+
+/**
  * Mask credential-shaped substrings inside an arbitrary string. Never throws.
  *
  * Deliberately does NOT truncate. A 2000-char cap was tried and reverted: a
@@ -267,8 +308,9 @@ export const REDACTED = '[REDACTED]';
  * forensic loss on exactly the parameter this masking exists to make safe to
  * keep. File size is bounded by rotation, not by mangling individual entries.
  */
-export function maskSecretsInString(value: string): string {
+export function maskSecretsInString(value: string, opts?: MaskOptions): string {
   let out = value;
+  const keepIdentity = opts?.identityField === true && LEGAL_INSTALL_NAME.test(value);
   try {
     for (const re of SECRET_VALUE_PATTERNS) {
       out = out.replace(re, REDACTED);
@@ -285,7 +327,9 @@ export function maskSecretsInString(value: string): string {
     );
     out = out.replace(SEPARATED_SECRET_FLAG, (_m, lead: string) => `${lead}${REDACTED}`);
     out = out.replace(MIXED_SYMBOL_TOKEN, (m: string) => (looksLikePassword(m) ? REDACTED : m));
-    out = out.replace(OPAQUE_ALNUM_RUN, (m: string) => (looksOpaque(m) ? REDACTED : m));
+    if (!keepIdentity) {
+      out = out.replace(OPAQUE_ALNUM_RUN, (m: string) => (looksOpaque(m) ? REDACTED : m));
+    }
   } catch {
     return REDACTED; // a pathological input must not break the audit path
   }
@@ -293,8 +337,113 @@ export function maskSecretsInString(value: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Redaction — recursive walk
+// Withholding — freeform command surfaces
 // ---------------------------------------------------------------------------
+
+/**
+ * Parameter names whose value is EXECUTED SYNTAX the caller composes freely:
+ * PHP source, a WP-CLI argv vector, a shell command line, a SQL statement.
+ *
+ * These are not masked, they are WITHHELD — the value never reaches disk in any
+ * form. Four review rounds found four credential-exposure paths and every one
+ * of them was on a surface in this list; not one was a structured tool
+ * parameter. Each round's regex also shipped new defects of its own (a WP-CLI
+ * arity the pattern got wrong, a quoted value whose tail was written verbatim).
+ * Masking arbitrary command syntax correctly is a losing game, so the syntax is
+ * no longer written.
+ *
+ * MATCHED BY NAME, not by tool, and applied inside the shared redaction walk —
+ * the same reasoning that put `redactParams` inside `OperationAuditLog.log()`.
+ * All three sinks funnel through `redactParams`, so no call site can leak by
+ * forgetting, and the two dispatch chokepoints spread `...args` verbatim, which
+ * means a tool-scoped list would silently miss every tool added later.
+ *
+ * Names are normalised (lowercased, `_`/`-` stripped), so `install_name` and
+ * `installName` are one entry. Matching is EXACT rather than tokenised on
+ * purpose: tokenising would withhold `statusCode`, `errorCode` and `zipCode` on
+ * the strength of the token `code`.
+ *
+ * Deliberately NOT here — see the report for the full reasoning per surface:
+ * `search`/`replace` (wp_search_replace), `title`/`content` (wp_post_*),
+ * `prompt`/`system` (ask_ollama), `input` (wp_run_ability), `value`, `option`.
+ * All are structured parameters or body text rather than composed syntax, and
+ * value-shape plus key-name masking still runs over every one of them.
+ *
+ * `sql` and `script` are forward-looking: no surface uses those names today,
+ * but they are the names the next such field would be given.
+ */
+const FREEFORM_FIELDS = new Set([
+  'code',      // wp_eval — arbitrary PHP
+  'command',   // nexusWpCommand argv, ipc.wp.command (WPE_DIAGNOSE) argv
+  'commands',  // nexus:sentinel:execute — whole command lines, incl. raw `rm -f`
+  'args',      // raw IPC request dumps carrying a WP-CLI argv
+  'argv',
+  'query',     // fleet_sql — arbitrary SQL executed via db.prepare()
+  'sql',
+  'script',
+  'patch',     // nexus_update_settings — caller-composed JSON blob, opaque to
+               // key-name masking because its interior keys are inside a string
+]);
+
+export function isFreeformField(key: string): boolean {
+  return FREEFORM_FIELDS.has(normaliseFieldName(key));
+}
+
+export const WITHHELD_PREFIX = '[WITHHELD: freeform input';
+
+/**
+ * The replacement written in place of a withheld value.
+ *
+ * WITHHELD, NOT DELETED. An entry whose `command` key simply vanished reads as
+ * an operation that took no arguments; the marker records that a field existed
+ * and was deliberately not kept.
+ *
+ * Length is retained so an investigator can still tell roughly how large the
+ * payload was, and element count so an argv vector is distinguishable from a
+ * one-liner.
+ *
+ * NO CONTENT HASH. A short hash would let an investigator confirm the same
+ * command ran twice, which is genuinely useful — but it is also a
+ * guess-confirmation oracle against exactly the credential the withholding
+ * exists to protect. The exported trail publishes both the template (the
+ * `operation` name pins it to, say, `config set DB_PASSWORD <value>`) and the
+ * exact character count, so a dictionary attack over an 8-hex-char digest
+ * recovers a low-entropy password from an audit export. Closing that would take
+ * a persistent per-installation salt, i.e. new file I/O on a path whose whole
+ * contract is "never throws". Correlation is not worth either cost.
+ */
+export function withheldMarker(value: string | unknown[]): string {
+  try {
+    if (Array.isArray(value)) {
+      let chars = 0;
+      for (const el of value) chars += (typeof el === 'string' ? el : String(el)).length;
+      return `${WITHHELD_PREFIX}, ${value.length} elements, ${chars} chars]`;
+    }
+    return `${WITHHELD_PREFIX}, ${value.length} chars]`;
+  } catch {
+    return `${WITHHELD_PREFIX}]`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Redaction — identity fields
+// ---------------------------------------------------------------------------
+
+/** Normalise a parameter name for list matching: `install_name` → `installname`. */
+function normaliseFieldName(key: string): string {
+  return key.toLowerCase().replace(/[_-]/g, '');
+}
+
+/**
+ * Fields that name the resource an operation acted on. Opaque-run masking is
+ * skipped for these when the whole value is a legal install name — see
+ * `LEGAL_INSTALL_NAME`.
+ */
+const IDENTITY_FIELDS = new Set(['target', 'installname']);
+
+function isIdentityField(key: string): boolean {
+  return IDENTITY_FIELDS.has(normaliseFieldName(key));
+}
 
 // ---------------------------------------------------------------------------
 // Redaction — argv awareness
@@ -314,6 +463,29 @@ const CONFIG_CONSTANT_SECRET = /^[A-Z][A-Z0-9_]*_(?:KEY|SALT|PASSWORD|PASSWD|PAS
 const ATTACHED_PASSWORD_FLAG = /^(-p)(?!-)(.+)$/;
 
 /**
+ * Is the tail of a `-p…` element a credential rather than the rest of a flag
+ * name?
+ *
+ * Matching `-p` plus anything turned every single-dash long flag into
+ * `-p[REDACTED]`: `-path`, `-post-type` and `-p1` all lost their meaning, and
+ * `-path` in particular destroys the record of WHERE a command ran.
+ *
+ * Two cheap discriminators, both measured against the false positives above:
+ * a flag name continues as pure lowercase letters and hyphens (`ath`,
+ * `ost-type`, `orcelain`), and a tail shorter than 6 characters (`1`, `ath`)
+ * is not a password anyone sets.
+ *
+ * Accepted gap: an all-lowercase-alphabetic password attached to `-p`
+ * (`-phunterhunter`) is indistinguishable from a long flag name and is not
+ * masked here. The separated form (`--password hunterhunter`) still is.
+ */
+function looksLikeAttachedPassword(tail: string): boolean {
+  if (tail.length < 6) return false;
+  if (/^[a-z]+(?:-[a-z]+)*$/.test(tail)) return false;
+  return true;
+}
+
+/**
  * Does this argv element name a secret carried by the FOLLOWING element?
  *
  * Covers both the separated flag form (`--user_pass Hunter2` — two elements,
@@ -325,6 +497,15 @@ const ATTACHED_PASSWORD_FLAG = /^(-p)(?!-)(.+)$/;
 function introducesSecret(token: string): boolean {
   const bare = token.replace(/^-{1,2}/, '');
   if (!bare) return false;
+  // A whole command line is not a NAME, and this predicate's only job is to
+  // decide whether the NEXT array element is the value belonging to this one.
+  // `isSensitiveKey` is an unanchored `includes()`, so an element that merely
+  // mentions a secret anywhere — `'wp config set DB_PASSWORD x'`, one line of a
+  // sentinel remediation array — armed `maskNext` and destroyed the element
+  // after it. Measured: the raw `rm -f /nas/content/live/…` record, the single
+  // most consequential line in that array, was replaced by `[REDACTED]`.
+  // Whole lines are already handled by `maskSecretsInString` element-wise.
+  if (/\s/.test(bare)) return false;
   if (CONFIG_CONSTANT_SECRET.test(bare)) return true;
   return isSensitiveKey(bare);
 }
@@ -363,7 +544,7 @@ function redactArray(arr: unknown[], seen: WeakSet<object>): unknown[] {
     maskNext = introducesSecret(item);
 
     const attached = ATTACHED_PASSWORD_FLAG.exec(item);
-    if (attached) {
+    if (attached && looksLikeAttachedPassword(attached[2])) {
       // Keep the flag: "a password was passed to mysql" is the forensic fact.
       out[i] = `${attached[1]}${REDACTED}`;
       continue;
@@ -379,8 +560,15 @@ function redactValue(key: string, value: unknown, seen: WeakSet<object>): unknow
   if (isSensitiveKey(key)) {
     return REDACTED;
   }
+  // Withholding runs BEFORE any masking: the point is that this value's syntax
+  // is never parsed for credentials at all, because parsing it correctly is the
+  // thing that has failed four times. Objects fall through to the recursive
+  // walk so a structured payload is still redacted key by key.
+  if (isFreeformField(key) && (typeof value === 'string' || Array.isArray(value))) {
+    return withheldMarker(value);
+  }
   if (typeof value === 'string') {
-    return maskSecretsInString(value);
+    return maskSecretsInString(value, isIdentityField(key) ? { identityField: true } : undefined);
   }
   if (value !== null && typeof value === 'object') {
     // Agent-supplied args can be cyclic; unguarded recursion would blow the

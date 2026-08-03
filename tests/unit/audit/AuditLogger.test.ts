@@ -58,12 +58,20 @@ describe('AuditLogger — redaction', () => {
     logger.logFailure('wpe_pull_to_local', 'acme-prod', 'wpe_install', 'Pull failed', {
       request: { installId: 'i-1', wpeApiPassword: 'Tr0ub4dor&3' },
       command: ['config', 'set', 'DB_PASSWORD', 'Pr0dDbP4ssw0rd'],
+      // Not on the withhold list, so it still exercises argv masking on this
+      // sink — the name must survive while the value must not.
+      unlistedArgv: ['config', 'set', 'AUTH_KEY', 'x8Tq2i9KdV4z'],
     });
 
     const raw = JSON.stringify(stored(storage));
     expect(raw).not.toContain('Tr0ub4dor&3');
     expect(raw).not.toContain('Pr0dDbP4ssw0rd');
-    expect(raw).toContain('DB_PASSWORD'); // the name survives, the value does not
+    expect(raw).not.toContain('x8Tq2i9KdV4z');
+    // CHANGED EXPECTATION (withhold list): `command` is withheld on this sink
+    // too, so `DB_PASSWORD` no longer survives via that key. The "name
+    // survives, value does not" property is now asserted on `unlistedArgv`.
+    expect(raw).toContain('[WITHHELD: freeform input');
+    expect(raw).toContain('AUTH_KEY');
   });
 
   it('masks credential-shaped values in the error field', () => {
