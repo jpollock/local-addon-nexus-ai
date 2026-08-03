@@ -72,7 +72,7 @@ export const findSitesWithPluginHandler: McpToolHandler = {
             SELECT p.slug, p.version, p.is_active, s.name as site_name
             FROM plugins p
             JOIN sites s ON p.site_id = s.id
-            WHERE s.source != 'local'
+            WHERE s.source = 'wpe'
               AND (LOWER(p.slug) = ? OR LOWER(p.slug) LIKE ?)
           `).all(queryLower, `%${queryLower}%`) as Array<{
             slug: string; version: string; is_active: number; site_name: string;
@@ -92,7 +92,7 @@ export const findSitesWithPluginHandler: McpToolHandler = {
           }
 
           const wpeCount = (db.prepare(
-            "SELECT COUNT(*) as c FROM sites WHERE source != 'local'"
+            "SELECT COUNT(*) as c FROM sites WHERE source = 'wpe'"
           ).get() as { c: number })?.c ?? 0;
           wpeTotal = wpeCount;
         }

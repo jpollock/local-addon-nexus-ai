@@ -462,7 +462,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const cutoffSec = Math.floor((Date.now() - thresholdHours * 3_600_000) / 1000);
 
       const sites = db.prepare(
-        "SELECT id, wp_version, php_version, last_sync_at FROM sites WHERE source != 'local' AND is_active = 1",
+        "SELECT id, wp_version, php_version, last_sync_at FROM sites WHERE source = 'wpe' AND is_active = 1",
       ).all() as Array<{ id: string; wp_version: string | null; php_version: string | null; last_sync_at: number | null }>;
 
       if (sites.length === 0) return { total: 0, fresh: 0, stale: 0, withPlugins: 0, withUsers: 0, withWpVersion: 0, withPhpVersion: 0, lastSyncAt: null };
@@ -1830,7 +1830,7 @@ Answer:`,
 
       if (db) {
         const wpeSites = db.prepare(
-          "SELECT id, wp_version, last_sync_at FROM sites WHERE source != 'local' AND is_active = 1"
+          "SELECT id, wp_version, last_sync_at FROM sites WHERE source = 'wpe' AND is_active = 1"
         ).all() as Array<{ id: string; wp_version: string | null; last_sync_at: number | null }>;
 
         for (const site of wpeSites) {

@@ -85,13 +85,13 @@ export const fleetPluginsHandler: McpToolHandler = {
         const db = graphService.getDb();
         if (db) {
           wpeSiteCount = ((db.prepare(
-            "SELECT COUNT(*) as c FROM sites WHERE source != 'local' AND is_active = 1"
+            "SELECT COUNT(*) as c FROM sites WHERE source = 'wpe' AND is_active = 1"
           ).get() as { c: number })?.c) ?? 0;
 
           const rows = db.prepare(`
             SELECT p.slug, p.name, p.is_active, s.name as site_name
             FROM plugins p JOIN sites s ON p.site_id = s.id
-            WHERE s.source != 'local' AND s.is_active = 1
+            WHERE s.source = 'wpe' AND s.is_active = 1
           `).all() as Array<{ slug: string; name: string | null; is_active: number; site_name: string }>;
 
           for (const row of rows) {

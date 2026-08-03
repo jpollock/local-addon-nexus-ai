@@ -20,7 +20,7 @@ export function buildFleetContext(
   try {
     const db = graphService?.getDb?.();
     if (db) {
-      const row = db.prepare("SELECT COUNT(*) as count FROM sites WHERE source != 'local' AND is_active = 1").get() as any;
+      const row = db.prepare("SELECT COUNT(*) as count FROM sites WHERE source = 'wpe' AND is_active = 1").get() as any;
       wpeSiteCount = row?.count ?? 0;
     }
   } catch { /* graph.db unavailable */ }
