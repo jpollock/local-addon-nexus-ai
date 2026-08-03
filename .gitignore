@@ -26,3 +26,6 @@ STRATEGIC_ANALYSIS.md
 docs/superpowers/
 *.env.local
 dev-reload.sh
+
+# Subagent-driven-development scratch workspace (ledger, briefs, review packages)
+.superpowers/
