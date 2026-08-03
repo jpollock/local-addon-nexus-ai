@@ -20,6 +20,11 @@ export class LocalTransport implements SiteTransport {
   }
 
   runWpCli(args: string[], opts?: RunOpts): Promise<WpCliResult> {
+    // Call with two arguments when opts is absent. Passing an explicit
+    // `undefined` third argument is runtime-equivalent but arity-visible:
+    // Jest's toHaveBeenCalledWith is arity-strict, and pre-existing suites
+    // (tests/main/wp-cli-tools.test.ts) assert the two-argument shape that
+    // callers used before the transport migration. Do not collapse this.
     return opts === undefined
       ? this.localServices.wpCliRun(this.siteId, args)
       : this.localServices.wpCliRun(this.siteId, args, opts as any);
