@@ -768,9 +768,14 @@ describe('buildWpCliCommand', () => {
     expect(buildWpCliCommand(['plugin', 'list', '--format=json']))
       .toBe("wp --skip-plugins --skip-themes 'plugin' 'list' '--format=json'");
   });
-  it('omits skip flags when skipPlugins is false', () => {
+  it('omits skip flags when skipPlugins is false, leaving the legacy double space', () => {
+    // NOTE the two spaces after `wp`. The legacy template is
+    // `wp ${skipFlags} ${args}`.trim() — with skipFlags empty, trim() only
+    // strips the ends, so the interior gap survives. Task 1's characterization
+    // test pins this against the real code. Do NOT "fix" it: the string is what
+    // gets executed over SSH today.
     expect(buildWpCliCommand(['post', 'list'], { skipPlugins: false }))
-      .toBe("wp 'post' 'list'");
+      .toBe("wp  'post' 'list'");
   });
 });
 
