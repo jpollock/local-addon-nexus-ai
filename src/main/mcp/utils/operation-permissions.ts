@@ -55,9 +55,13 @@ export function isOperationAllowed(
   targetRef?: string,
 ): boolean {
   const env = normaliseEnv(environment);
-  const exceptions = settings.remoteSiteExceptions
-    ?? (settings.wpeSiteExceptions as any as RemoteSiteException[] | undefined);
-  const perms = settings.remoteOperationPermissions ?? settings.wpeOperationPermissions;
+  const exceptions = settings.remoteSiteExceptions?.length
+    ? settings.remoteSiteExceptions
+    : (settings.wpeSiteExceptions as any as RemoteSiteException[] | undefined);
+  const perms = settings.remoteOperationPermissions
+    && Object.keys(settings.remoteOperationPermissions).length
+    ? settings.remoteOperationPermissions
+    : settings.wpeOperationPermissions;
 
   // 1. Site exception wins if targetRef provided and exception exists
   if (targetRef && exceptions?.length) {

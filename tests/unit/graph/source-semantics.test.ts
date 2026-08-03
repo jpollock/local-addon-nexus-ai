@@ -30,7 +30,7 @@ describe('sites.source semantics', () => {
     const offenders: string[] = [];
     for (const file of walkTsFiles(SRC)) {
       fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
-        if (/source\s*!=\s*'local'/.test(line)) {
+        if (/source\s*(!=|<>)\s*['"]local['"]/.test(line)) {
           offenders.push(`${path.relative(SRC, file)}:${i + 1}`);
         }
       });

@@ -339,8 +339,8 @@ export class GraphService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(`
-      INSERT INTO sites (id, name, domain, wp_version, php_version, account_id, last_sync_at, is_active, created_at, updated_at, source, environment, remote_install_id, remote_domain, wpe_site_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sites (id, name, domain, wp_version, php_version, account_id, last_sync_at, is_active, created_at, updated_at, source, environment, remote_install_id, remote_domain, wpe_site_id, platform, host)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         domain = excluded.domain,
@@ -354,7 +354,9 @@ export class GraphService {
         environment = COALESCE(excluded.environment, environment),
         remote_install_id = excluded.remote_install_id,
         remote_domain = excluded.remote_domain,
-        wpe_site_id = COALESCE(excluded.wpe_site_id, wpe_site_id)
+        wpe_site_id = COALESCE(excluded.wpe_site_id, wpe_site_id),
+        platform = excluded.platform,
+        host = COALESCE(excluded.host, host)
     `);
 
     stmt.run(
@@ -372,7 +374,9 @@ export class GraphService {
       site.environment ?? null,
       site.remote_install_id ?? null,
       site.remote_domain ?? null,
-      (site as any).wpe_site_id ?? null
+      (site as any).wpe_site_id ?? null,
+      'wordpress',
+      site.source ?? 'local'
     );
   }
 
@@ -1439,8 +1443,8 @@ export function applyTaxonomyMigration(db: import('better-sqlite3').Database): v
   }
   if (!cols.includes('host')) {
     db.exec('ALTER TABLE sites ADD COLUMN host TEXT');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_sites_host ON sites(host)');
   }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_sites_host ON sites(host)');
 
   db.exec("UPDATE sites SET platform = 'wordpress' WHERE platform IS NULL");
   db.exec('UPDATE sites SET host = source WHERE host IS NULL');

@@ -37,6 +37,26 @@ describe('migrateWpePermissionSettings', () => {
   });
 });
 
+describe('isOperationAllowed — empty-array fallback regression', () => {
+  it('an empty remoteSiteExceptions does NOT suppress a populated wpeSiteExceptions', () => {
+    const settings = {
+      remoteSiteExceptions: [],
+      wpeSiteExceptions: [
+        { installName: 'acme', environment: 'production', overrides: { wpcli: true } },
+      ],
+    } as any;
+    expect(isOperationAllowed('wpcli', 'production', settings, 'wpe:acme')).toBe(true);
+  });
+
+  it('an empty remoteOperationPermissions does NOT suppress a populated wpeOperationPermissions', () => {
+    const settings = {
+      remoteOperationPermissions: {},
+      wpeOperationPermissions: { wpcli: { development: true, staging: true, production: true } },
+    } as any;
+    expect(isOperationAllowed('wpcli', 'production', settings)).toBe(true);
+  });
+});
+
 describe('isOperationAllowed with target refs', () => {
   const settings = {
     remoteOperationPermissions: { wpcli: { development: true, staging: true, production: false } },
