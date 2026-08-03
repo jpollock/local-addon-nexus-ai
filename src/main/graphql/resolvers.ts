@@ -29,7 +29,7 @@ import { auditDirectOperation } from '../audit/auditDirectOperation';
 import type { NexusServices } from '../types/nexus-services';
 import type { LocalSite, LocalSiteDataAccessor } from '../types/site-data';
 import pLimit from 'p-limit';
-import { withQueue } from './resolver-utils';
+import { withQueue, parseTarget } from './resolver-utils';
 
 /** Read-only WP-CLI commands — use wpcli_read permission (default: all envs allowed). */
 const WPCLI_READ_COMMANDS = new Set([
@@ -57,18 +57,6 @@ interface ResolverContext {
   services: NexusServices;
 }
 
-/**
- * Target Parser
- */
-interface ParsedTarget {
-  type: 'local' | 'wpe';
-  siteName?: string;
-  installName?: string; // For WPE: "account/install" format
-  environment?: string;
-  account?: string;
-  installId?: string;
-}
-
 interface AgentStatusType {
   name: string;
   version: string;
@@ -88,46 +76,6 @@ function formatTwinAge(ageMs: number): string {
   const h = Math.floor(m / 60);
   if (h < 24)   return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
-}
-
-function parseTarget(target: string): ParsedTarget {
-  // mysite@local
-  if (target.endsWith('@local')) {
-    return {
-      type: 'local',
-      siteName: target.replace('@local', ''),
-    };
-  }
-
-  // wpe:account/install@environment
-  const wpeMatch = target.match(/^wpe:(.+?)\/(.+?)@(production|staging|development)$/);
-  if (wpeMatch) {
-    return {
-      type: 'wpe',
-      account: wpeMatch[1],
-      installName: wpeMatch[2],
-      environment: wpeMatch[3],
-    };
-  }
-
-  // Incomplete WPE target (starts with wpe: but missing @environment)
-  if (target.startsWith('wpe:')) {
-    throw new Error(
-      `Incomplete WPE target: ${target}. Expected wpe:account/install@environment`
-    );
-  }
-
-  // Plain name (no @) — treat as local, resolved later by resolveSite()
-  if (!target.includes('@')) {
-    return {
-      type: 'local',
-      siteName: target,
-    };
-  }
-
-  throw new Error(
-    `Invalid target syntax: ${target}. Expected 'mysite', 'mysite@local', or 'wpe:account/install@environment'`
-  );
 }
 
 /**

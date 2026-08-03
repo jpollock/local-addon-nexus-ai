@@ -25,7 +25,7 @@ describe('CLI Target Parsing', () => {
 
       expect(result.type).toBe('wpe');
       expect(result.account).toBe('w7579');
-      expect(result.installId).toBe('myinstall');
+      expect(result.installName).toBe('myinstall');
       expect(result.environment).toBe('production');
     });
 
@@ -56,7 +56,7 @@ describe('CLI Target Parsing', () => {
     it('should handle install names with hyphens', () => {
       const result = parseTarget('wpe:w7579/my-test-install@production');
 
-      expect(result.installId).toBe('my-test-install');
+      expect(result.installName).toBe('my-test-install');
     });
 
     it('should accept plain name as local target', () => {

@@ -9,6 +9,8 @@
 import type { NexusServices } from '../types/nexus-services';
 import type { GraphService } from '../events/GraphService';
 import PQueue from 'p-queue';
+import { parseTarget as parseTargetShared } from '../../common/target';
+export type { ParsedTarget } from '../../common/target';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,65 +30,9 @@ export interface ResolverContext {
   services: NexusServices;
 }
 
-/**
- * Parsed representation of a target string passed by the CLI.
- *
- * Supported formats:
- *   - `mysite`                              → local, name = mysite
- *   - `mysite@local`                        → local, name = mysite
- *   - `wpe:account/install@environment`     → wpe
- */
-export interface ParsedTarget {
-  type: 'local' | 'wpe';
-  siteName?: string;
-  installName?: string; // For WPE: "account/install" format
-  environment?: string;
-  account?: string;
-  installId?: string;
-}
-
-// ---------------------------------------------------------------------------
-// Target parser
-// ---------------------------------------------------------------------------
-
-export function parseTarget(target: string): ParsedTarget {
-  // mysite@local
-  if (target.endsWith('@local')) {
-    return {
-      type: 'local',
-      siteName: target.replace('@local', ''),
-    };
-  }
-
-  // wpe:account/install@environment
-  const wpeMatch = target.match(/^wpe:(.+?)\/(.+?)@(production|staging|development)$/);
-  if (wpeMatch) {
-    return {
-      type: 'wpe',
-      account: wpeMatch[1],
-      installName: wpeMatch[2],
-      environment: wpeMatch[3],
-    };
-  }
-
-  // Incomplete WPE target (starts with wpe: but missing @environment)
-  if (target.startsWith('wpe:')) {
-    throw new Error(
-      `Incomplete WPE target: ${target}. Expected wpe:account/install@environment`
-    );
-  }
-
-  // Plain name (no @) — treat as local, resolved later by resolveSite()
-  if (!target.includes('@')) {
-    return {
-      type: 'local',
-      siteName: target,
-    };
-  }
-
-  throw new Error(
-    `Invalid target syntax: ${target}. Expected 'mysite', 'mysite@local', or 'wpe:account/install@environment'`
-  );
+/** Server-side parsing keeps the terse legacy error text (user-visible via GraphQL). */
+export function parseTarget(target: string) {
+  return parseTargetShared(target);
 }
 
 // ---------------------------------------------------------------------------
