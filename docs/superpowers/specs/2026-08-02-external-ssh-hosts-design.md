@@ -291,6 +291,40 @@ absent rather than failing.
 
 ---
 
+## 9a. Plan A outcome — the landmine class is wider than §2 said
+
+Plan A shipped (branch `feat/site-taxonomy-foundation`, 8 commits on top of
+Spec 0). It fixed the eleven SQL queries, hardened the conformance suite, added
+`platform`/`host` with backfill, renamed the permission settings, and made the
+local exemption explicit.
+
+**But §2 scoped the landmine hunt to SQL, and that was too narrow.** The final
+whole-branch review found the same bug class in TypeScript, which the
+source-scanning test does not look for:
+
+- **Nine collapsing ternaries** of the form
+  `source: row.source === 'local' ? 'local' : 'wpe'` —
+  `AssistantService.ts:180,227,250,292`; `metadataSearch.ts:169,192,222,270,291`.
+  Each relabels an external site as WP Engine. They exist because the target
+  type is the closed union, so they cannot be fixed by renaming alone.
+- **Closed `'local' | 'wpe'` unions** at `types.ts:432,497`, `schemas.ts:453`,
+  `target.ts:13`, `GraphService.ts:461`, plus `cli/commands/system.ts:19`.
+
+**Consequence: the branch is NOT yet able to admit `host='external'`, and that
+is correct — widening the union is Plan B's first job, not Plan A's.** Plan B
+must widen the union *before* anything writes the new value, and extend the
+scanner in `tests/unit/graph/source-semantics.test.ts` to cover the ternary
+form as well as the SQL form.
+
+Two further items Plan A left for Plan B:
+
+- `upsertSite` now writes `platform`/`host` (fixed in the Plan A fix wave), but
+  nothing writes `'external'` yet.
+- `remoteOperationPermissions` / `remoteSiteExceptions` persist and take read
+  precedence, but no UI or `nexus settings reset` manages them. Plan B ships
+  that surface. Until then a value set via CLI or MCP shadows the Preferences
+  UI. The sharpest edge — an empty array suppressing all exceptions — was fixed.
+
 ## 10. Risks
 
 1. **The eleven landmine queries.** Highest severity: silent, type-invisible, and
