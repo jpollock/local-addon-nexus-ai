@@ -20,7 +20,9 @@ export class LocalTransport implements SiteTransport {
   }
 
   runWpCli(args: string[], opts?: RunOpts): Promise<WpCliResult> {
-    return this.localServices.wpCliRun(this.siteId, args, opts as any);
+    return opts === undefined
+      ? this.localServices.wpCliRun(this.siteId, args)
+      : this.localServices.wpCliRun(this.siteId, args, opts as any);
   }
 
   /**

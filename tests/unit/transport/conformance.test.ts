@@ -101,7 +101,7 @@ describe('LocalTransport', () => {
   it('delegates runWpCli to localServices with the site id', async () => {
     const s = services();
     await new LocalTransport('site-1', 'Test Site', s).runWpCli(['core', 'version']);
-    expect(s.wpCliRun).toHaveBeenCalledWith('site-1', ['core', 'version'], undefined);
+    expect(s.wpCliRun).toHaveBeenCalledWith('site-1', ['core', 'version']);
   });
 
   it('passes timeoutMs through', async () => {
