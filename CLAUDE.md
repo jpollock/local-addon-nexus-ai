@@ -428,4 +428,17 @@ completeness claim here is worse than no claim at all.
 ## Known Pitfalls
 
 - [Smart Search MU plugin pitfalls](feedback_smart_search_mu_plugin.md) — `is_plugin_active()` fires too early in WordPress bootstrap; `siteStarted` races MySQL startup. Use filesystem checks in Node.js, not WP-CLI.
-- `wpeAllowedEnvironments` blocks SSH/WP-CLI on excluded environments — default excludes production. CAPI operations and push/pull are NOT affected. See `src/main/mcp/utils/environment-filter.ts`.
+- **`wpeAllowedEnvironments` is dead code — it blocks nothing.** This entry used to
+  say it "blocks SSH/WP-CLI on excluded environments, default excludes production."
+  That is false: all four exported functions of
+  `src/main/mcp/utils/environment-filter.ts` have **zero callers** outside their own
+  test file. It was superseded by the granular permissions — `types.ts:299` says
+  "Replaces wpeAllowedEnvironments", `schemas.ts:77` marks it "legacy — kept for
+  migration", and `operation-permissions.ts:133` is the one-way converter.
+  The gate that actually runs is `isOperationAllowed` against
+  `remoteOperationPermissions`, whose defaults
+  (`operation-permissions.ts:22`) are: `wpcli_read` **allowed on every
+  environment including production**; `wpcli` and `push` refused on production;
+  `delete` refused everywhere. So on a production install, reads work and writes
+  do not — SSH is *not* off wholesale. Delete `environment-filter.ts` or wire it
+  up; do not cite it as a live protection.

@@ -269,23 +269,64 @@ intersecting each tool's <code>&lt;arg0&gt; &lt;arg1&gt;</code> against
     <tr>
       <td><strong>WP Engine</strong> via MCP tool</td>
       <td><code>MCP_REMOTE_POLICY</code>: 14-command whitelist <em>and</em> blocklist (<code>eval</code>, <code>eval-file</code>, <code>shell</code>, <code>db query</code>, <code>db cli</code>)</td>
-      <td><code>remoteOperationPermissions</code>; <code>wpcli</code> writes refused on production</td>
-      <td><code>wpeAllowedEnvironments</code> defaults to <code>['staging','development']</code> — <strong>SSH/WP-CLI is off on production entirely</strong></td>
+      <td><code>remoteOperationPermissions</code></td>
+      <td>—</td>
     </tr>
     <tr>
       <td><strong>WP Engine</strong> via <code>nexusWpCommand</code></td>
       <td>inline blocklist only (<code>db query</code>, <code>eval</code>, <code>eval-file</code>, <code>shell</code>), <code>startsWith</code> matching, no whitelist</td>
-      <td>same</td>
-      <td>same</td>
+      <td><code>remoteOperationPermissions</code></td>
+      <td>—</td>
     </tr>
     <tr>
       <td><strong>External</strong> via <code>resolveTransport</code></td>
       <td><code>EXTERNAL_REMOTE_POLICY</code>: blocklist only, <strong>no whitelist</strong></td>
-      <td>most-restrictive of the registered label and the target suffix; <code>wpcli</code> writes refused on production</td>
-      <td><code>wpeAllowedEnvironments</code> does <strong>not</strong> apply to external hosts</td>
+      <td><code>remoteOperationPermissions</code>, keyed on the <strong>most restrictive</strong> of the registered label and the target suffix</td>
+      <td>—</td>
     </tr>
   </tbody>
 </table>
+
+<h3>The environment gate is already unified</h3>
+<p><code>DEFAULT_OPERATION_PERMISSIONS</code> (<code>operation-permissions.ts:22</code>) is the same
+table for WP&nbsp;Engine and external:</p>
+
+<table style="max-width:560px">
+  <thead><tr><th>Operation</th><th class="c">development</th><th class="c">staging</th><th class="c">production</th></tr></thead>
+  <tbody>
+    <tr><td class="cmd">wpcli_read</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr><td class="cmd">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr><td class="cmd">push</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr><td class="cmd">delete</td><td class="c"><span class="pill p-no">no</span></td><td class="c"><span class="pill p-no">no</span></td><td class="c"><span class="pill p-no">no</span></td></tr>
+  </tbody>
+</table>
+
+<p>On production, <strong>reads are permitted and writes are refused</strong> — for WP&nbsp;Engine
+and external alike. External additionally takes the most restrictive of two labels.</p>
+
+<div class="finding alert">
+  <h4><code>wpeAllowedEnvironments</code> is dead code</h4>
+  <p>All four exported functions of <code>mcp/utils/environment-filter.ts</code> have
+  <strong>zero callers</strong> outside their own test file. It was superseded by the granular
+  permissions above — <code>types.ts:299</code> says "Replaces wpeAllowedEnvironments",
+  <code>schemas.ts:77</code> marks it "legacy — kept for migration", and
+  <code>operation-permissions.ts:133</code> is the one-way converter. Any claim that it "blocks
+  SSH/WP-CLI on production by default" is false; nothing consults it. That claim currently
+  appears in CLAUDE.md's Known Pitfalls.</p>
+</div>
+
+<h3>What migrating <code>nexusWpCommand</code> onto <code>resolveTransport</code> would cost</h3>
+<p>Every argv the CLI sends, scored against <code>MCP_REMOTE_POLICY</code>'s whitelist.
+<strong>Eight of the 17</strong> <code>nexusWpCommand</code> commands would stop working on
+WP&nbsp;Engine if migrated as-is:</p>
+<p style="font-family:var(--mono);font-size:13.5px;color:var(--no)">
+theme activate &middot; core update &middot; db export &middot; db import &middot; search-replace
+&middot; post create &middot; post update &middot; post delete</p>
+<p>The other nine — <code>plugin install/activate/deactivate/update</code>,
+<code>theme list</code>, <code>core version</code>, <code>user list</code>,
+<code>option get</code>, <code>site health</code> — are whitelisted and would survive. So the
+migration cannot adopt MCP's policy unchanged: it must either pass a CLI-shaped policy through
+<code>resolveTransport</code>, or unify the two policies deliberately.</p>
 
 <h2><span class="num">§5</span>The open question</h2>
 <p>Two problems of very different size:</p>

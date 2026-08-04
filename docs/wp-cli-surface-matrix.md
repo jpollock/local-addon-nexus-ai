@@ -114,23 +114,62 @@ tool) — but see §5.
 
 ## 4. Limits, by target and route
 
-| Route | Command policy | Environment gate | Other |
+| Route | Command policy | Environment gate |
+|---|---|---|
+| **Local** (any surface) | none | exempt — `isGatedHost(host)` is `host !== 'local'` |
+| **WPE via MCP tool** | `MCP_REMOTE_POLICY`: 14-command whitelist **and** blocklist (`eval`, `eval-file`, `shell`, `db query`, `db cli`) | `remoteOperationPermissions` |
+| **WPE via `nexusWpCommand`** | inline blocklist only (`db query`, `eval`, `eval-file`, `shell`), `startsWith` matching, no whitelist | `remoteOperationPermissions` |
+| **External via `resolveTransport`** | `EXTERNAL_REMOTE_POLICY`: blocklist only (`eval`, `eval-file`, `shell`, `db query`, `db cli`), **no whitelist** | `remoteOperationPermissions`, keyed on the **most restrictive** of the registered label and the target suffix |
+
+### The environment gate is already unified
+
+`DEFAULT_OPERATION_PERMISSIONS` (`mcp/utils/operation-permissions.ts:22-27`) is the
+same table for WPE and external:
+
+| operation | development | staging | production |
 |---|---|---|---|
-| **Local** (any surface) | none | exempt — `isGatedHost(host)` is `host !== 'local'` | — |
-| **WPE via MCP tool** | `MCP_REMOTE_POLICY`: 14-command whitelist **and** blocklist (`eval`, `eval-file`, `shell`, `db query`, `db cli`) | `remoteOperationPermissions`; `wpcli` writes refused on production | `wpeAllowedEnvironments` defaults to `['staging','development']` — **SSH/WP-CLI is off on production entirely** |
-| **WPE via `nexusWpCommand`** | inline blocklist only (`db query`, `eval`, `eval-file`, `shell`), `startsWith` matching, no whitelist | same | same |
-| **External via `resolveTransport`** | `EXTERNAL_REMOTE_POLICY`: blocklist only (`eval`, `eval-file`, `shell`, `db query`, `db cli`), **no whitelist** | most-restrictive of the registered label and the target suffix; `wpcli` writes refused on production | `wpeAllowedEnvironments` does **not** apply to external hosts |
+| `wpcli_read` | yes | yes | **yes** |
+| `wpcli` | yes | yes | no |
+| `push` | yes | yes | no |
+| `delete` | no | no | no |
 
-Two consequences worth stating plainly:
+So on production, **reads are permitted and writes are refused** — for WPE and
+external alike. The only difference is that external additionally takes the
+most-restrictive of two environment labels.
 
-- **External hosts already have the most permissive policy of the three.** Spec 1
-  chose blocklist-only deliberately, so applying MCP's whitelist would reproduce
-  the five dead tools on day one. The restriction on external hosts today is not
-  policy — it is plumbing.
-- **A human at the CLI gets more on WPE than an agent does.** The CLI's
+**`wpeAllowedEnvironments` is dead code.** All four exported functions of
+`mcp/utils/environment-filter.ts` have **zero callers** outside their own test
+file. It was superseded by the granular permissions above — `types.ts:299` says
+"Replaces wpeAllowedEnvironments", `schemas.ts:77` marks it "legacy — kept for
+migration", and `operation-permissions.ts:133` is the one-way converter. Any
+claim that it "blocks SSH/WP-CLI on production by default" is false: nothing
+consults it.
+
+### Two consequences worth stating plainly
+
+- **External hosts already have the most permissive command policy of the
+  three.** Spec 1 chose blocklist-only deliberately — applying MCP's whitelist
+  would have reproduced the five dead tools on day one. The restriction on
+  external hosts is not policy, it is plumbing.
+- **A human at the CLI gets more on WPE than an agent does.** The
   `nexusWpCommand` route has no whitelist; the MCP route has a 14-command one.
-  `policy.ts` calls this divergence "real and load-bearing" and Spec 0
-  deliberately preserved it.
+  `policy.ts:7` calls the divergence "real and load-bearing"; Spec 0 preserved
+  it deliberately.
+
+### What migrating `nexusWpCommand` onto `resolveTransport` would cost
+
+Scored every argv the CLI sends against `MCP_REMOTE_POLICY`'s whitelist. **Eight
+of the 17** `nexusWpCommand` commands would stop working on WP Engine if
+migrated as-is:
+
+`theme activate` · `core update` · `db export` · `db import` · `search-replace` ·
+`post create` · `post update` · `post delete`
+
+The remaining nine (`plugin install/activate/deactivate/update`, `theme list`,
+`core version`, `user list`, `option get`, `site health`) are whitelisted and
+would survive. So the migration cannot adopt MCP's policy unchanged — it must
+either pass a CLI-shaped policy through `resolveTransport`, or unify the two
+policies deliberately.
 
 ---
 
