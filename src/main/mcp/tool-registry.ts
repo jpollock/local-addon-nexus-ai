@@ -7,6 +7,63 @@ const logger = createLogger('ToolRegistry');
 const metrics = getMetrics();
 
 /**
+ * Record an external host in the fleet after a successful command against it.
+ *
+ * With registration deferred to Plan B2, this is how an external site first
+ * appears: use it once and it joins. Only successful calls qualify, so a
+ * typo'd alias does not litter the fleet with unreachable hosts.
+ *
+ * Never throws. Persistence is a side benefit of a command the user already
+ * got the answer to; a storage fault must not turn a successful call into a
+ * failed one. Same discipline as the audit write beside it.
+ */
+export async function maybeUpsertExternalSite(
+  args: Record<string, unknown>,
+  succeeded: boolean,
+  registryStorage: { get(k: string): unknown; set(k: string, v: unknown): void } | null | undefined,
+  graphService: { upsertSite(site: any): Promise<void> } | null | undefined,
+): Promise<void> {
+  try {
+    if (!succeeded) return;
+    const sshTarget = typeof args.ssh_target === 'string' ? args.ssh_target : undefined;
+    if (!sshTarget || !registryStorage || !graphService) return;
+
+    const { parseTarget } = require('../../common/target');
+    const parsed = parseTarget(sshTarget);
+    if (parsed.type !== 'external' || !parsed.alias) return;
+
+    const { externalSiteId, upsertExternalProfile } = require('../external/externalSiteStore');
+    const now = Date.now();
+    const wpPath = typeof args.wp_path === 'string' ? args.wp_path : undefined;
+
+    upsertExternalProfile(registryStorage, {
+      alias: parsed.alias,
+      wpPath,
+      environment: parsed.environment,
+      firstSeenAt: now,
+      lastSeenAt: now,
+    });
+
+    await graphService.upsertSite({
+      id: externalSiteId(parsed.alias),
+      name: parsed.alias,
+      // No domain is known without querying the site; the alias is the stable
+      // human-facing identifier until B2's registration probe can fill it in.
+      domain: parsed.alias,
+      source: 'external',
+      host: 'external',
+      environment: parsed.environment,
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+      last_sync_at: now,
+    });
+  } catch {
+    // Deliberately swallowed — see the docblock.
+  }
+}
+
+/**
  * Central registry for MCP tools. Modules register handlers during startup.
  * The registry is a dumb router: it validates prerequisites and dispatches to handlers.
  *
@@ -114,6 +171,13 @@ export class ToolRegistry {
           });
         }
       } catch { /* never throw from an audit path */ }
+
+      await maybeUpsertExternalSite(
+        args as Record<string, unknown>,
+        true,
+        (services as any).registryStorage,
+        (services as any).graphService,
+      );
 
       logger.debug(`Handler "${name}" completed in ${duration}ms`, { isError: result.isError });
       return result;
