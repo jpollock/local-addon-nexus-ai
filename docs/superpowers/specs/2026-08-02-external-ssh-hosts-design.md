@@ -325,6 +325,71 @@ Two further items Plan A left for Plan B:
   that surface. Until then a value set via CLI or MCP shadows the Preferences
   UI. The sharpest edge — an empty array suppressing all exceptions — was fixed.
 
+## 9b. Amendments from the Milestone 1 skeleton run (2026-08-03)
+
+The walking skeleton (`2026-08-02-external-ssh-skeleton-design.md`) ran
+successfully against a **Hostinger shared-hosting** site — a genuinely
+third-party host. `nexus wp core version ssh:<alias>@production --path=…`
+returned `WordPress 7.0.2`, and `wp plugin list` returned six plugins. The
+transport thesis is proven.
+
+It also disproved three assumptions in this document. They are amended here
+rather than edited in place, so the corrections stay visible.
+
+### Amendment 1 — the phar becomes detect-then-offer, not always-ship
+
+§1 and §6 say to **always** ship a pinned `wp-cli.phar`, on the reasoning that
+host WP-CLI versions vary unpredictably. The first real third-party host tested
+had **WP-CLI 2.12.0 preinstalled and current**.
+
+Registration now **probes for `wp` and its version first**. If present and
+recent enough, use it and write nothing. Offer the phar upload only when it is
+missing or too old. Writing a binary to someone else's server is a real
+imposition and, on this evidence, often an unnecessary one.
+
+### Amendment 2 — WordPress path discovery is mandatory, not a convenience
+
+The skeleton spec guessed the SSH login directory is the web root on many hosts,
+so `--path` would usually be unnecessary. **Wrong for Hostinger**: WordPress
+lives at `~/domains/<domain>/public_html` while login lands in `~`, so `--path`
+was required for every command.
+
+§6 step 3's `wp-config.php` search is therefore **load-bearing**. Registration
+cannot treat the path as optional, and a host whose path cannot be discovered
+must prompt rather than silently defaulting to the login directory.
+
+### Amendment 3 — registration must handle SSH key setup
+
+§6 does not mention authentication at all. In practice it is the **first thing a
+real user hits**: Hostinger enables SSH with password auth and keys are opt-in
+through its control panel. `BatchMode=yes` correctly refused rather than
+hanging, surfacing ssh's own `Permission denied (publickey,password)`.
+
+Registration must **detect password-only auth and guide the user** — run
+`ssh-copy-id`, or paste the public key into the host's control panel. Nexus does
+**not** run `ssh-copy-id` itself: that would mean prompting for and handling the
+user's password, a materially larger security surface than anything else in this
+design.
+
+### Validated as designed
+
+Alias-based credentials. The test host runs SSH on **port 65002**, and that
+number appears nowhere in Nexus — `~/.ssh/config` absorbed it with zero code.
+This is direct evidence for choosing aliases over an explicit
+host/port/user/key form, and it means `ProxyJump` and bastions will work the
+same way.
+
+### Remaining scope, split in two
+
+| Plan | Contents |
+|---|---|
+| **B1** | Widen the `'local' \| 'wpe'` union (12 sites) and the 9 collapsing ternaries; persist external sites; fleet integration. External hosts become real fleet members, still addressed by hand-typed `ssh:` targets. |
+| **B2** | Registration UX — `nexus host add`, connect probe, `wp-config.php` discovery, WP-CLI detect-then-offer, key-auth guidance, connection profiles. |
+
+B1 delivers standalone value: external sites appear in fleet views, inventory
+and health. B2 makes registering one pleasant. The skeleton proved hand-typed
+targets work, so B1 is genuinely usable without B2.
+
 ## 10. Risks
 
 1. **The eleven landmine queries.** Highest severity: silent, type-invisible, and
