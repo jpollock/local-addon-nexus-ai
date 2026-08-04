@@ -165,7 +165,7 @@ export interface LocalServicesBridge {
   resolveSiteObject(siteId: string): unknown;
 
   // Remote WP-CLI (via SSH to WP Engine)
-  remoteWpCliRun(installName: string, args: string[], opts?: { skipPlugins?: boolean }): Promise<WpCliResult>;
+  remoteWpCliRun(installName: string, args: string[], opts?: { skipPlugins?: boolean; skipThemes?: boolean }): Promise<WpCliResult>;
   resolveWpeInstall(siteId: string): Promise<WpeInstallInfo | null>;
   isSSHKeyAvailable(): boolean;
 
@@ -829,7 +829,7 @@ export function createLocalServicesBridge(serviceContainer: any): LocalServicesB
 
     // --- Remote WP-CLI (via SSH to WP Engine) ---
 
-    async remoteWpCliRun(installName: string, args: string[], opts?: { skipPlugins?: boolean }): Promise<WpCliResult> {
+    async remoteWpCliRun(installName: string, args: string[], opts?: { skipPlugins?: boolean; skipThemes?: boolean }): Promise<WpCliResult> {
       // Implementation lives in WpeSshTransport; this remains the bridge-facing
       // entry point so existing consumers keep working unchanged.
       return new WpeSshTransport(installName).runWpCli(args, opts);

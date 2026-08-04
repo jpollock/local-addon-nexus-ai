@@ -69,16 +69,34 @@ export function assertSafeSshAlias(alias: string): void {
 /**
  * Build a WP-CLI command string for SSH execution.
  *
- * HAZARD: the ternary is all-or-nothing. RunOpts accepts skipThemes, but this
- * function does not honour it. skipPlugins: false zeroes the entire flag string,
- * stripping BOTH --skip-plugins and --skip-themes.
+ * `--skip-plugins` and `--skip-themes` are emitted INDEPENDENTLY, each
+ * defaulting to on. A caller that wants neither must now say so explicitly:
+ * `{ skipPlugins: false, skipThemes: false }`.
  *
- * Unreachable today: theme-activate.ts passes skipPlugins=false but the command
- * is blocked before dispatch. If ALLOWED_REMOTE_COMMANDS ever whitelists theme
- * activate, both flags must be honoured independently at that time.
+ * This used to be one all-or-nothing ternary — `skipPlugins: false` zeroed the
+ * whole flag string and silently discarded `skipThemes`. That was documented
+ * here as an unreachable hazard, because ALLOWED_REMOTE_COMMANDS blocked
+ * `theme activate` before it could dispatch. Unifying the surfaces deleted that
+ * whitelist (transport/policy.ts), which made the hazard live:
+ * `wp_theme_activate` passes `{ skipPlugins: false, skipThemes: true }` and was
+ * emitting a bare `wp 'theme' 'activate' '<slug>'` on WP Engine. Losing
+ * `--skip-themes` defeats the only reason that tool exists — activating a
+ * replacement theme while the current one fatals on bootstrap — and losing
+ * `--skip-plugins` fires every plugin's `switch_theme` hook during a production
+ * theme swap.
+ *
+ * The no-opts argv is byte-identical to before, and both it and the
+ * both-flags-off form are pinned by
+ * tests/unit/transport/ssh-argv-characterization.test.ts.
  */
-export function buildWpCliCommand(args: string[], opts?: { skipPlugins?: boolean }): string {
-  const skipFlags = opts?.skipPlugins === false ? '' : '--skip-plugins --skip-themes';
+export function buildWpCliCommand(
+  args: string[],
+  opts?: { skipPlugins?: boolean; skipThemes?: boolean },
+): string {
+  const skipFlags = [
+    opts?.skipPlugins === false ? null : '--skip-plugins',
+    opts?.skipThemes === false ? null : '--skip-themes',
+  ].filter(Boolean).join(' ');
   return `wp ${skipFlags} ${args.map(escapeShellArg).join(' ')}`.trim();
 }
 

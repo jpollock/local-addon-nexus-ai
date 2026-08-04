@@ -20,13 +20,29 @@ describe('buildWpCliCommand', () => {
     expect(buildWpCliCommand(['plugin', 'list', '--format=json']))
       .toBe("wp --skip-plugins --skip-themes 'plugin' 'list' '--format=json'");
   });
-  it('omits skip flags when skipPlugins is false, leaving the legacy double space', () => {
-    // NOTE the two spaces after `wp`. The legacy template is
-    // `wp ${skipFlags} ${args}`.trim() — with skipFlags empty, trim() only
-    // strips the ends, so the interior gap survives. Task 1's characterization
-    // test pins this against the real code. Do NOT "fix" it: the string is what
-    // gets executed over SSH today.
+  it('keeps --skip-themes when only skipPlugins is false', () => {
+    // The flags are independent. skipPlugins: false used to zero the whole flag
+    // string, which is what silently stripped --skip-themes from
+    // wp_theme_activate once the remote whitelist stopped blocking it.
     expect(buildWpCliCommand(['post', 'list'], { skipPlugins: false }))
+      .toBe("wp --skip-themes 'post' 'list'");
+  });
+  it('keeps --skip-plugins when only skipThemes is false', () => {
+    expect(buildWpCliCommand(['post', 'list'], { skipThemes: false }))
+      .toBe("wp --skip-plugins 'post' 'list'");
+  });
+  it('honours theme-activate: --skip-themes without --skip-plugins', () => {
+    // The exact opts wp_theme_activate sends. Losing --skip-themes here breaks
+    // crash recovery on a WP Engine install whose active theme fatals.
+    expect(buildWpCliCommand(['theme', 'activate', 'twentytwentyone'], { skipPlugins: false, skipThemes: true }))
+      .toBe("wp --skip-themes 'theme' 'activate' 'twentytwentyone'");
+  });
+  it('omits both flags only when both are false, leaving the legacy double space', () => {
+    // NOTE the two spaces after `wp`. The template is
+    // `wp ${skipFlags} ${args}`.trim() — with skipFlags empty, trim() only
+    // strips the ends, so the interior gap survives. This is the string
+    // RemoteContentExtractor executes over SSH today. Do NOT "fix" it.
+    expect(buildWpCliCommand(['post', 'list'], { skipPlugins: false, skipThemes: false }))
       .toBe("wp  'post' 'list'");
   });
 });

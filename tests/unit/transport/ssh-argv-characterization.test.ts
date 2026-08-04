@@ -64,9 +64,20 @@ describe('WPE SSH argv — golden characterization', () => {
       expect(opts).toEqual({ stdio: ['ignore', 'pipe', 'pipe'], timeout: 35000 });
     });
 
-    it('omits skip flags when skipPlugins is explicitly false', async () => {
-      await bridge().remoteWpCliRun('acmeprod', ['post', 'list'], { skipPlugins: false });
+    it('omits both skip flags when both are explicitly false', async () => {
+      // The legacy `wp  'post' 'list'` shape — two spaces — is still reachable,
+      // and RemoteContentExtractor still emits exactly it. What changed is that
+      // it now takes both flags to get there.
+      await bridge().remoteWpCliRun('acmeprod', ['post', 'list'], { skipPlugins: false, skipThemes: false });
       expect(spawnMock.mock.calls[0][1].at(-1)).toBe("wp  'post' 'list'");
+    });
+
+    it('drops only --skip-plugins when only skipPlugins is false', async () => {
+      // DELIBERATE CHANGE from the original characterization. The all-or-nothing
+      // ternary this pinned is what discarded wp_theme_activate's skipThemes
+      // once the remote command whitelist was removed.
+      await bridge().remoteWpCliRun('acmeprod', ['post', 'list'], { skipPlugins: false });
+      expect(spawnMock.mock.calls[0][1].at(-1)).toBe("wp --skip-themes 'post' 'list'");
     });
 
     it('shell-escapes embedded single quotes', async () => {
