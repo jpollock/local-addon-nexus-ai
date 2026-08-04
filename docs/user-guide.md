@@ -425,17 +425,22 @@ Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not L
 
 **Which `nexus wp` commands work against a registered host — read this before relying on it.**
 
-Once a host is registered you address it as `ssh:<alias>@<environment>`, with no `--path` needed. But only these three `nexus wp` commands currently reach an external host:
+Once a host is registered you address it as `ssh:<alias>@<environment>`, with no `--path` needed. But only four of the 22 `nexus wp` subcommands currently reach an external host:
 
 ```bash
-nexus wp core version ssh:<alias>@<environment>
-nexus wp plugin list  ssh:<alias>@<environment>
-nexus wp health       ssh:<alias>@<environment>
+nexus wp core version   ssh:<alias>@<environment>          # read
+nexus wp plugin list    ssh:<alias>@<environment>          # read
+nexus wp health         ssh:<alias>@<environment>          # read
+nexus wp plugin update  ssh:<alias>@<environment> <slug>   # write
 ```
 
-All three are read-only. Every other `nexus wp` subcommand routes through a path that understands Local and WP Engine targets only, and will fail on an `ssh:` target. Broader support is planned; until it lands, treat external hosts as read-only from the CLI.
+Every other `nexus wp` subcommand routes through a path that understands Local and WP Engine targets only, and will fail on an `ssh:` target. Broader support is planned.
 
-One consequence worth knowing: because no write command can currently reach an external host, the environment write-gate described above is enforced but not yet reachable from the CLI. It is not decorative — it will apply the moment write commands are wired up — but you cannot exercise it today.
+`wp plugin update` is the one write, which makes it the way to see the environment gate in action. On a host registered as `production`:
+
+```bash
+nexus wp plugin update ssh:<alias>@development <slug>   # refused — registered production
+```
 
 ### WP Engine Commands (`nexus wpe`)
 
