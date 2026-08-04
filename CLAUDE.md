@@ -120,6 +120,34 @@ Target syntax: `ssh:<alias>@<production|staging|development>`.
   `resolve.ts` too or it is write-only.
 - Probe commands are read-only, so they are not audited. `host add`/`remove`
   mutate only local addon state and never reach `services.localServices`.
+- **The registered `environment` is a write gate, and it has two sources.**
+  `resolveTransport` gates on the **more restrictive** of the label stored by
+  `nexus host add` and the suffix on the caller's target string
+  (`mostRestrictiveEnvironment`, `mcp/utils/operation-permissions.ts`;
+  `development` < `staging` < `production`). Gating on the target alone let a
+  host registered `--env production` be written to by addressing it as
+  `ssh:<alias>@development`. For the same reason `upsertExternalProfile`'s
+  **lazy** writes (`source: 'sighting'`, the default) can never change a
+  registered environment — only `nexus host add` (`source: 'registration'`)
+  can. Omitting `--env` means *unspecified*: an existing host keeps its label,
+  and only a new one defaults to `production`.
+- **The probe bypasses both `withPolicy(EXTERNAL_REMOTE_POLICY)` and
+  `isOperationAllowed`.** `probeExternalHost` calls `sshExec` directly, so
+  neither layer is in its path. This is accepted, not overlooked: its command
+  set is **closed and read-only** (`echo`, `command -v wp`, a fixed
+  `[ -x ]` loop, `wp --version`, a bounded `find`, `wp core version`,
+  `wp option get siteurl`), and `wpcli_read` is permitted on every environment
+  by default, so the gate would refuse nothing it currently runs. The one real
+  consequence: a `remoteSiteExceptions` entry denying `ssh:<alias>` does **not**
+  stop `nexus host test` from SSHing to that host. If the probe ever gains a
+  caller-influenced or mutating command, that reasoning dies with it and it must
+  be routed through the policy and the gate like every other remote call.
+- **Aliases are format-validated in `ssh-args.ts`** (`assertSafeSshAlias`,
+  `^[A-Za-z0-9][A-Za-z0-9._-]*$`), not per command. ssh reads its first
+  non-option argument as the host, so a leading `-` makes the alias an
+  *option* — `-oProxyCommand=…` in argv position is local command execution.
+  Enforced at the argv builders because they are the only place an SSH
+  invocation is constructed, so every entry point passes through them.
 
 ---
 

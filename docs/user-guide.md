@@ -418,7 +418,8 @@ Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not L
 
 - The alias is a `Host` entry in `~/.ssh/config`. Nexus stores no key material and never writes anything to your server.
 - The WordPress path is discovered automatically; `--path` is only needed when discovery finds nothing or finds several installs.
-- `--env` defaults to `production`. Writes are refused on production by default (see Settings > Nexus AI > Operation Permissions).
+- `--env` defaults to `production` for a host you have not registered before; re-running `nexus host add` without `--env` leaves an existing host's label alone. Writes are refused on production by default (see Settings > Nexus AI > Operation Permissions).
+- The registered environment is the write gate, and a target suffix cannot loosen it: a host registered as `production` still refuses writes when addressed as `ssh:<alias>@development`. Relabel it with `nexus host add <alias> --env development`.
 - Once a host is registered, address it as `ssh:<alias>@<environment>` — for example `nexus wp core version ssh:myhost@production` — with no `--path` needed.
 - If key-based login is not set up, `nexus host test` tells you the exact `ssh-copy-id` command to run. You run it; Nexus does not.
 
