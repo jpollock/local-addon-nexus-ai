@@ -2069,4 +2069,80 @@ export const typeDefs = gql`
     permissionTier: Int!
     inputSchema: String!
   }
+
+  # ============================================================================
+  # External Host Registration
+  # ============================================================================
+
+  type NexusHostProbeFailure {
+    "One of: alias-not-found, auth-failed, unreachable, wp-cli-missing, wordpress-not-found, multiple-wordpress"
+    kind: String!
+    "ssh's or WP-CLI's own output, verbatim"
+    detail: String!
+    "The exact next command or action"
+    remedy: String!
+  }
+
+  type NexusHostProbeReport {
+    ok: Boolean!
+    alias: String!
+    "Resolved by ssh -G. Defaults when the alias is not in ~/.ssh/config."
+    hostname: String!
+    user: String!
+    port: String!
+    "Absolute WP-CLI path when off PATH; null means plain wp works"
+    wpCliPath: String
+    wpCliVersion: String
+    wpPath: String
+    wpVersion: String
+    siteUrl: String
+    "WordPress roots found when discovery was ambiguous"
+    candidates: [String!]
+    failure: NexusHostProbeFailure
+  }
+
+  type NexusHostEntry {
+    alias: String!
+    wpPath: String
+    wpCliPath: String
+    environment: String!
+    firstSeenAt: Float!
+    lastSeenAt: Float!
+  }
+
+  type NexusHostProbeResult {
+    success: Boolean!
+    error: String
+    report: NexusHostProbeReport
+  }
+
+  type NexusHostAddResult {
+    success: Boolean!
+    error: String
+    report: NexusHostProbeReport
+    registered: Boolean!
+  }
+
+  type NexusHostListResult {
+    success: Boolean!
+    error: String
+    hosts: [NexusHostEntry!]!
+  }
+
+  type NexusHostRemoveResult {
+    success: Boolean!
+    error: String
+    removed: Boolean!
+  }
+
+  extend type Mutation {
+    "Probe an external SSH host. Persists nothing."
+    nexusHostProbe(alias: String!, path: String): NexusHostProbeResult!
+    "Probe an external SSH host and register it on success."
+    nexusHostAdd(alias: String!, path: String, environment: String): NexusHostAddResult!
+    "List registered external SSH hosts."
+    nexusHostList: NexusHostListResult!
+    "Forget an external SSH host."
+    nexusHostRemove(alias: String!): NexusHostRemoveResult!
+  }
 `;

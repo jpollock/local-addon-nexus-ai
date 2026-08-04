@@ -30,6 +30,12 @@ import type { NexusServices } from '../types/nexus-services';
 import type { LocalSite, LocalSiteDataAccessor } from '../types/site-data';
 import pLimit from 'p-limit';
 import { withQueue, parseTarget } from './resolver-utils';
+import { probeExternalHost } from '../external/probeExternalHost';
+import type { ProbeReport } from '../external/probeExternalHost';
+import {
+  externalSiteId, getExternalProfile, listExternalProfiles,
+  removeExternalProfile, upsertExternalProfile,
+} from '../external/externalSiteStore';
 
 /** Read-only WP-CLI commands — use wpcli_read permission (default: all envs allowed). */
 const WPCLI_READ_COMMANDS = new Set([
@@ -139,6 +145,24 @@ function resolveSite(identifier: string, siteData: LocalSiteDataAccessor): Local
     s.id === identifier ||
     s.domain === identifier
   );
+}
+
+/** Flatten a ProbeReport into the GraphQL shape (resolved.* becomes three scalars). */
+function toHostReport(r: ProbeReport) {
+  return {
+    ok: r.ok,
+    alias: r.alias,
+    hostname: r.resolved?.hostname ?? r.alias,
+    user: r.resolved?.user ?? '',
+    port: r.resolved?.port ?? '22',
+    wpCliPath: r.wpCliPath ?? null,
+    wpCliVersion: r.wpCliVersion ?? null,
+    wpPath: r.wpPath ?? null,
+    wpVersion: r.wpVersion ?? null,
+    siteUrl: r.siteUrl ?? null,
+    candidates: r.candidates ?? null,
+    failure: r.failure ?? null,
+  };
 }
 
 /**
@@ -5371,6 +5395,125 @@ export function createResolvers(context: ResolverContext) {
         } catch (err: any) {
           return { success: false, error: err.message, report: null };
         }
+      },
+
+      nexusHostProbe: async (_p: ResolverParent, { alias, path }: { alias: string; path?: string }) => {
+        return withQueue(async () => {
+          try {
+            const report = await probeExternalHost(alias, { wpPath: path ?? undefined });
+            return { success: true, error: null, report: toHostReport(report) };
+          } catch (e: any) {
+            return { success: false, error: e?.message ?? String(e), report: null };
+          }
+        });
+      },
+
+      nexusHostAdd: async (
+        _p: ResolverParent,
+        { alias, path, environment }: { alias: string; path?: string; environment?: string },
+      ) => {
+        return withQueue(async () => {
+          try {
+            const env = environment ?? 'production';
+            if (!['production', 'staging', 'development'].includes(env)) {
+              return {
+                success: false, registered: false, report: null,
+                error: `Invalid environment '${env}'. Expected production, staging or development.`,
+              };
+            }
+            // TypeScript narrowing: after validation, env is one of the literal types
+            const validEnv = env as 'production' | 'staging' | 'development';
+            const storage = (services as any).registryStorage;
+            if (!storage) {
+              return { success: false, registered: false, report: null, error: 'Storage not available' };
+            }
+
+            const report = await probeExternalHost(alias, { wpPath: path ?? undefined });
+
+            // Refuse on any probe failure: a typo must not litter the fleet with
+            // hosts that were never reachable.
+            if (!report.ok) {
+              return { success: true, registered: false, report: toHostReport(report), error: null };
+            }
+
+            const now = Date.now();
+            upsertExternalProfile(storage, {
+              alias,
+              wpPath: report.wpPath,
+              wpCliPath: report.wpCliPath,
+              environment: validEnv,
+              firstSeenAt: now,
+              lastSeenAt: now,
+            });
+
+            let domain = alias;
+            if (report.siteUrl) {
+              try { domain = new URL(report.siteUrl).hostname || alias; } catch { /* keep alias */ }
+            }
+
+            await (services as any).graphService?.upsertSite({
+              id: externalSiteId(alias),
+              name: alias,
+              domain,
+              source: 'external',
+              host: 'external',
+              environment: validEnv,
+              wp_version: report.wpVersion,
+              is_active: true,
+              created_at: now,
+              updated_at: now,
+              last_sync_at: now,
+            });
+
+            return { success: true, registered: true, report: toHostReport(report), error: null };
+          } catch (e: any) {
+            return { success: false, registered: false, report: null, error: e?.message ?? String(e) };
+          }
+        });
+      },
+
+      nexusHostList: async () => {
+        try {
+          const storage = (services as any).registryStorage;
+          if (!storage) return { success: false, error: 'Storage not available', hosts: [] };
+          return { success: true, error: null, hosts: listExternalProfiles(storage) };
+        } catch (e: any) {
+          return { success: false, error: e?.message ?? String(e), hosts: [] };
+        }
+      },
+
+      nexusHostRemove: async (_p: ResolverParent, { alias }: { alias: string }) => {
+        return withQueue(async () => {
+          try {
+            const storage = (services as any).registryStorage;
+            if (!storage) return { success: false, error: 'Storage not available', removed: false };
+
+            const profile = getExternalProfile(storage, alias);
+            const removed = removeExternalProfile(storage, alias);
+
+            // Deactivate rather than delete: GraphService has no per-site delete,
+            // and its retention sweep already hard-deletes inactive sites and
+            // their content once they age out. A later re-add revives the row.
+            if (removed && profile) {
+              const now = Date.now();
+              await (services as any).graphService?.upsertSite({
+                id: externalSiteId(alias),
+                name: alias,
+                domain: alias,
+                source: 'external',
+                host: 'external',
+                environment: profile.environment,
+                is_active: false,
+                created_at: profile.firstSeenAt,
+                updated_at: now,
+              });
+            }
+
+            return { success: true, error: null, removed };
+          } catch (e: any) {
+            return { success: false, error: e?.message ?? String(e), removed: false };
+          }
+        });
       },
     },
 
