@@ -78,17 +78,40 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
   // because those MCP tools return markdown text, not JSON — s.account_id is now in the SELECT
   // for when a proper structured lookup is available.
 
-  for (const site of rows) {
-    // Handle unsynced WPE installs — trigger a fresh sync first
-    // Local sites don't have SSH so skip the deep refresh
-    if (!site.ssh_last_sync_at && site.source !== 'local') {
-      try {
-        await tools.invoke('wpe_site_deep_refresh', { install_name: site.name });
-      } catch (err) {
-        // Continue — the site may not be SSH-accessible; we'll flag it
-      }
-    }
+  // Deep refresh is capped and reported, not attempted for the whole fleet.
+  //
+  // Every WPE install here has a null ssh_last_sync_at, and the old loop retried every one of
+  // them, one SSH round trip at a time, on every sweep. That is self-perpetuating: the serial
+  // sweep never reaches the end, so ssh_last_sync_at is never written, so the next sweep starts
+  // over with the same full list. It never converges and never gets cheaper.
+  //
+  // Freshness is WpeRefreshScheduler's job — it owns the staleness threshold and runs on its own
+  // interval. The sentinel's job is to say what it looked at. So: refresh a bounded number per
+  // sweep, and report the rest as stale rather than silently reading old rows.
+  const needsRefresh = rows.filter(s => !s.ssh_last_sync_at && s.source !== 'local');
+  const toRefresh = needsRefresh.slice(0, MAX_REFRESH_PER_SWEEP);
+  const refreshDeferred = needsRefresh.length - toRefresh.length;
 
+  if (needsRefresh.length > 0 && log?.info) {
+    log.info(
+      `[fleet] ${needsRefresh.length} install(s) have never completed an SSH sync; ` +
+      `refreshing ${toRefresh.length} this sweep (concurrency ${FLEET_CONCURRENCY})` +
+      (refreshDeferred > 0 ? `, ${refreshDeferred} deferred to WpeRefreshScheduler` : ''),
+    );
+  }
+
+  const refreshOutcomes = await mapWithConcurrency(toRefresh, FLEET_CONCURRENCY, (site) =>
+    tools.invoke('wpe_site_deep_refresh', { install_name: site.name }),
+  );
+  const refreshFailed = refreshOutcomes.filter(r => r.error).length;
+  if (refreshFailed > 0 && log?.warn) {
+    // Previously an empty catch. If every refresh is failing, that is the reason the fleet never
+    // becomes fresh, and it needs to be visible rather than absorbed once per site per sweep.
+    const sample = refreshOutcomes.find(r => r.error)?.error?.message ?? 'unknown';
+    log.warn(`[fleet] ${refreshFailed}/${toRefresh.length} deep refresh(es) failed — e.g. ${String(sample).slice(0, 160)}`);
+  }
+
+  const collected = await mapWithConcurrency(rows, FLEET_CONCURRENCY, async (site) => {
     const pluginsResult = await tools.invoke('fleet_sql', {
       query: `SELECT slug, name, version, is_active FROM plugins WHERE site_id = ?`,
       params: [site.id],
@@ -98,7 +121,7 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
       params: [site.id],
     });
 
-    installs.push({
+    return {
       id:            site.id,
       name:          site.name,
       source:        site.source,      // 'wpe' or 'local'
@@ -115,7 +138,17 @@ async function collectFleetData(tools, scopeInstallId, scopeInstallName, log) {
       adminUsers:    parseSqlResult(usersResult, warnDrop(`users@${site.name}`)).filter(u => {
         try { return JSON.parse(u.roles || '[]').includes('administrator'); } catch { return false; }
       }),
-    });
+    };
+  });
+
+  for (let i = 0; i < collected.length; i++) {
+    if (collected[i].error) {
+      // A site whose metadata could not be read must not silently vanish from the sweep — that
+      // is a site reported on by omission.
+      log?.warn?.(`[fleet] could not collect metadata for "${rows[i].name}": ${collected[i].error.message}`);
+      continue;
+    }
+    installs.push(collected[i].value);
   }
 
   return installs;
@@ -328,6 +361,59 @@ function phpStringArray(items) {
   return `[${items.map(s => `'${String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`).join(',')}]`;
 }
 
+// ─── Fleet sweep cost controls ──────────────────────────────────────────────
+//
+// The cron trigger is `*/15 * * * *` and fires with no event, so getScanScope() returns nulls,
+// collectFleetData() applies no site filter, and every sweep covers the whole fleet — 375 sites
+// on this machine. That was previously two nested serial loops with no cap and no guard:
+//
+//   1. collectFleetData ran wpe_site_deep_refresh, one SSH round trip at a time, for every
+//      install with a null ssh_last_sync_at. All 343 WPE installs here have one.
+//   2. The main loop ran Tier 1 per site, then Tier 2 inline for anything that escalated.
+//      A measured Tier 2 took ~5 minutes for a single site: 14 s to start the source, 106 s to
+//      clone, 20 s to poll, then 120 s of specialist LLM calls.
+//
+// A sweep therefore takes far longer than the 15 minutes between fires, and AgentScheduler has
+// no overlap guard — nodeCron calls runner.run() unconditionally. Overlapping sweeps each build
+// their own sandboxes, which is how thirteen accumulated to 6.5 GB.
+
+// Local's GraphQL server is single-threaded, and the house rule for resolvers that do real work
+// (WP-CLI, SSH, file ops) is a p-queue capped at 3. Same ceiling here: the goal is to stop the
+// serial crawl, not to stampede the event loop.
+const FLEET_CONCURRENCY = 3;
+
+// Tier 2 builds a sandbox — a full site clone plus five LLM specialist calls. It is deliberately
+// NOT parallelised and is capped per sweep. Anything over the cap is reported as deferred, never
+// silently dropped.
+const MAX_TIER2_PER_SWEEP = 3;
+
+// SSH deep refreshes per sweep. WpeRefreshScheduler owns fleet freshness on its own interval;
+// the sentinel does a bounded top-up so a security sweep cannot turn into a fleet-wide SSH job.
+const MAX_REFRESH_PER_SWEEP = 10;
+
+/** Map with bounded concurrency, preserving input order. Rejections surface as {error}. */
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      try {
+        results[i] = { value: await fn(items[i], i) };
+      } catch (err) {
+        results[i] = { error: err };
+      }
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+// One sweep at a time, per process. The scheduler has no overlap guard, so this is the only
+// thing standing between a slow fleet sweep and N concurrent copies of itself.
+let sweepInFlight = false;
+
 const contributedTools = {
   /** Trigger a targeted security scan for a specific site on demand. */
   scan: {
@@ -433,6 +519,20 @@ module.exports = {
   async run({ event, tools, ai, log, state, autonomy }) {
     const scope = getScanScope(event);
     const scopeLabel = scope.installId || scope.installName || 'fleet-wide';
+
+    // The cron fires every 15 minutes; a fleet sweep takes considerably longer than that, and
+    // AgentScheduler starts a run without checking whether the last one finished. Refuse rather
+    // than pile up — overlapping sweeps duplicate every SSH round trip and every sandbox.
+    if (sweepInFlight) {
+      log.warn(
+        `security-sentinel: a sweep is already running — skipping this ${scopeLabel} trigger. ` +
+        `The scheduler has no overlap guard, so this is expected when a sweep outlives its interval.`,
+      );
+      return { verdict: 'skipped', findings: [], sites: {}, summary: 'Skipped: a sweep was already in progress.' };
+    }
+    sweepInFlight = true;
+
+    try {
     log.info(`security-sentinel: starting sweep for ${scopeLabel}`);
 
     log.info('security-sentinel: calling collectFleetData...');
@@ -448,6 +548,10 @@ module.exports = {
     const allInstallResults = [];
     const allFindings = [];
     let latestPlan = null;
+    // Tier 2 is the expensive tier and the one that leaves artifacts on disk. Count escalations
+    // so the cap can defer rather than let one sweep build an unbounded number of sandboxes.
+    let tier2Count = 0;
+    const tier2Deferred = [];
 
     for (const install of installs) {
       const signals = [];
@@ -549,14 +653,28 @@ module.exports = {
         log.siteStatus(install.name, 'clean');
       } else if (criticalCount >= 1 || compromiseHighCount >= 2) {
         log.siteStatus(install.name, 'escalated');
-        log.phase('Tier 2', `Deep investigation: ${install.name}`);
         signals.forEach(s => log.finding({
           id: s.id, severity: s.severity, title: s.title,
           description: s.detail, site: install.name,
           category: s.category,
         }));
-        const plan = await tier2Investigate(install, signals, tools, ai, log, state, 20000, autonomy, attackSummary);
-        if (plan) latestPlan = plan;
+        if (tier2Count >= MAX_TIER2_PER_SWEEP) {
+          // Deferred, and said out loud. A measured Tier 2 is ~5 minutes and leaves a full site
+          // clone on disk; without a cap one fleet-wide sweep can escalate dozens of sites and
+          // fill the disk. Silently skipping would be worse than the accumulation — the site
+          // would read as "escalated" with no investigation and no explanation.
+          tier2Deferred.push(install.name);
+          log.warn(
+            `security-sentinel: ${install.name} escalated but Tier 2 was DEFERRED — ` +
+            `${MAX_TIER2_PER_SWEEP} deep investigations already run this sweep. ` +
+            `It will be picked up on the next sweep; its Tier 1 findings stand.`,
+          );
+        } else {
+          tier2Count++;
+          log.phase('Tier 2', `Deep investigation: ${install.name} (${tier2Count}/${MAX_TIER2_PER_SWEEP})`);
+          const plan = await tier2Investigate(install, signals, tools, ai, log, state, 20000, autonomy, attackSummary);
+          if (plan) latestPlan = plan;
+        }
       } else {
         log.siteStatus(install.name, 'findings');
         signals.forEach(s => log.finding({ id: s.id, severity: s.severity, title: s.title, site: install.name }));
@@ -647,14 +765,27 @@ module.exports = {
         ? `Highest log-derived attack pressure: ${pressure.map(p => `${p.name} (${p.m.authAttacks.toLocaleString()} auth, ${p.m.peakDayDistinctIps} peak-day IPs)`).join('; ')}. ` +
           `Pressure means targeted, not compromised — it scopes where to look, it does not escalate.`
         : null,
+      // Deferred work is part of the result, not a footnote. A sweep that escalated eight sites
+      // and investigated three has not covered the fleet, and must not read as though it had.
+      tier2Deferred.length > 0
+        ? `${tier2Deferred.length} escalated site(s) did NOT receive a Tier 2 investigation this sweep ` +
+          `(cap ${MAX_TIER2_PER_SWEEP}): ${tier2Deferred.join(', ')}.`
+        : null,
       `Tier 1 does not inspect the filesystem or database contents; only escalated sites reach Tier 2.`,
     ].filter(Boolean).join(' ');
 
-    return { verdict, findings: allFindings, plan: latestPlan ?? undefined, sites, summary, attackPressure: pressure };
+    return {
+      verdict, findings: allFindings, plan: latestPlan ?? undefined, sites, summary,
+      attackPressure: pressure,
+      tier2: { run: tier2Count, deferred: tier2Deferred, cap: MAX_TIER2_PER_SWEEP },
+    };
+    } finally {
+      sweepInFlight = false;
+    }
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators, KNOWN_MU_PLUGINS, KNOWN_ROOT_PHP, phpStringArray },
+  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators, KNOWN_MU_PLUGINS, KNOWN_ROOT_PHP, phpStringArray, mapWithConcurrency, FLEET_CONCURRENCY, MAX_TIER2_PER_SWEEP, MAX_REFRESH_PER_SWEEP },
 };
 
 // ─── Log-backed checks (LOG-AUTH, LOG-PROBE, LOG-ENUM, LOG-DIST) ────────────
