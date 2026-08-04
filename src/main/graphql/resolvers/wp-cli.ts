@@ -24,8 +24,8 @@
  *
  * nexusWpPluginList deliberately does NOT audit: `plugin list` cannot mutate,
  * and read-only paths are not audited (CLAUDE.md, auditDirectOperation.ts).
- * That rule is about volume as much as compliance value, and this resolver is
- * high-volume.
+ * That is the whole reason — no second one is needed, and an earlier draft's
+ * "it is high-volume" was simply untrue (one caller, src/cli/commands/wp.ts:49).
  */
 
 import type { NexusServices } from '../../types/nexus-services';
@@ -147,12 +147,11 @@ export function createWpCliResolvers(services: NexusServices) {
      * --json` reaches it directly (wp.ts:31 skips the MCP path for --json),
      * as does the plain form whenever the MCP server is down.
      *
-     * NOT AUDITED, unlike nexusWpCommand above. `plugin list` cannot mutate,
-     * and this resolver is high-volume — fleet views, health checks, the CLI
-     * and agents all reach it. Writing an entry per call would flood
-     * operation-audit.log with records nobody will ever need, which is exactly
-     * the harm CLAUDE.md's "read-only paths are not audited" rule prevents.
-     * nexusWpCommand is audited because it runs arbitrary argv and can mutate.
+     * NOT AUDITED, unlike nexusWpCommand above, for one sufficient reason:
+     * `plugin list` cannot mutate, and read-only paths are not audited
+     * (CLAUDE.md; the docblock on auditDirectOperation). nexusWpCommand is
+     * audited because it runs arbitrary argv and can mutate, which makes it
+     * Tier 2/3 by nature. Nothing about call volume enters into it.
      */
     nexusWpPluginList: async (_parent: ResolverParent, { target }: { target: string }) => {
       return withQueue(async () => {

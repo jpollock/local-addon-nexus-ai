@@ -79,11 +79,16 @@ export function assertSafeSshAlias(alias: string): void {
  * `theme activate` before it could dispatch. Unifying the surfaces deleted that
  * whitelist (transport/policy.ts), which made the hazard live:
  * `wp_theme_activate` passes `{ skipPlugins: false, skipThemes: true }` and was
- * emitting a bare `wp 'theme' 'activate' '<slug>'` on WP Engine. Losing
- * `--skip-themes` defeats the only reason that tool exists — activating a
- * replacement theme while the current one fatals on bootstrap — and losing
- * `--skip-plugins` fires every plugin's `switch_theme` hook during a production
- * theme swap.
+ * emitting a bare `wp 'theme' 'activate' '<slug>'` on WP Engine. The dropped
+ * flag was `--skip-themes`, and dropping it defeats the only reason that tool
+ * exists: it could no longer activate a replacement theme on an install whose
+ * current theme fatals on bootstrap, because WP-CLI loads that theme first.
+ *
+ * The absence of `--skip-plugins` in that command is NOT part of the bug.
+ * `theme-activate.ts:51` asks for it deliberately, so plugins load and their
+ * `switch_theme` hooks fire — presumably on purpose, since a theme switch that
+ * skipped plugins would miss legitimate integrations. Only the flag the caller
+ * asked for and did not get was a regression.
  *
  * The no-opts argv is byte-identical to before, and both it and the
  * both-flags-off form are pinned by

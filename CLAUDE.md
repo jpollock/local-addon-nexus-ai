@@ -224,8 +224,10 @@ every MCP-routed call.
   compliance value. `auditDirectOperation` has no tier gate for the same reason:
   only call it for things that mutate, which makes them Tier 2/3 by nature.
   `nexusWpPluginList` is the worked example: it shares a module and a router
-  with the audited `nexusWpCommand`, and is still not audited, because
-  `plugin list` cannot mutate and the resolver is high-volume.
+  with the audited `nexusWpCommand`, and is still not audited, for the only
+  reason needed — `plugin list` cannot mutate. Volume does not enter into it
+  (that resolver has exactly one caller, `src/cli/commands/wp.ts:49`); "cannot
+  mutate" is sufficient on its own.
 - An operation refused by `isOperationAllowed` now audits the refusal as
   `outcome: 'failure'` in `nexusWpCommand`. The resolver itself audits;
   `resolveTransport` does not.

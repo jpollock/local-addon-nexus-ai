@@ -187,11 +187,12 @@ describe('nexusWpPluginList', () => {
   /**
    * The correct behaviour is that NO entry is written. `plugin list` cannot
    * mutate, and read-only paths are not audited (CLAUDE.md; the docblock on
-   * auditDirectOperation) — the rule is about volume as much as compliance
-   * value, and fleet views, health checks, the CLI and agents all reach this
-   * resolver. The sibling nexusWpCommand in the same module DOES audit, which
-   * is what makes it worth pinning that this one does not: sharing a module
-   * and a router is not a reason to share the audit.
+   * auditDirectOperation). That is the entire reason.
+   *
+   * The sibling nexusWpCommand in the same module DOES audit, which is what
+   * makes this worth pinning: sharing a module and a router is not a reason to
+   * share the audit, and tidying the two into symmetry would be a plausible
+   * mistake.
    */
   it('writes no audit entry, on any outcome', async () => {
     const outcomes: Array<() => void> = [
