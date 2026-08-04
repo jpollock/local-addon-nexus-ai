@@ -3,6 +3,7 @@ import {
   DEFAULT_OPERATION_PERMISSIONS,
   migrateFromLegacyEnvFilter,
   getEffectiveSettings,
+  mostRestrictiveEnvironment,
 } from '../../../src/main/mcp/utils/operation-permissions';
 import type { NexusSettings } from '../../../src/common/types';
 import { STORAGE_KEYS } from '../../../src/common/constants';
@@ -309,5 +310,33 @@ describe('getEffectiveSettings', () => {
     // And together they produce the right result
     expect(isOperationAllowed('push', 'production', result, 'mystore')).toBe(true);
     expect(isOperationAllowed('push', 'production', result, 'other')).toBe(false);
+  });
+});
+
+describe('mostRestrictiveEnvironment', () => {
+  it('returns the stricter of two labels', () => {
+    expect(mostRestrictiveEnvironment('development', 'production')).toBe('production');
+    expect(mostRestrictiveEnvironment('production', 'development')).toBe('production');
+    expect(mostRestrictiveEnvironment('development', 'staging')).toBe('staging');
+    expect(mostRestrictiveEnvironment('staging', 'staging')).toBe('staging');
+    expect(mostRestrictiveEnvironment('development', 'development')).toBe('development');
+  });
+
+  it('ignores undefined rather than treating it as production', () => {
+    // An unregistered host contributes no opinion; its target must still govern.
+    expect(mostRestrictiveEnvironment('development', undefined)).toBe('development');
+    expect(mostRestrictiveEnvironment(undefined, 'staging')).toBe('staging');
+  });
+
+  it('fails closed on an unrecognised value and on no values at all', () => {
+    expect(mostRestrictiveEnvironment('development', 'banana')).toBe('production');
+    expect(mostRestrictiveEnvironment()).toBe('production');
+    expect(mostRestrictiveEnvironment(undefined, undefined)).toBe('production');
+  });
+
+  it('is what makes wpcli refused on a production host addressed as development', () => {
+    const env = mostRestrictiveEnvironment('development', 'production');
+    expect(DEFAULT_OPERATION_PERMISSIONS.wpcli[env]).toBe(false);
+    expect(DEFAULT_OPERATION_PERMISSIONS.wpcli_read[env]).toBe(true);
   });
 });

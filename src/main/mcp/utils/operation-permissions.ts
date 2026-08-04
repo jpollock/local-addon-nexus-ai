@@ -93,6 +93,42 @@ function normaliseEnv(env: string | undefined): EnvKey {
   return 'production'; // safe default — production is most restrictive
 }
 
+/** How locked down each environment is. Mirrors DEFAULT_OPERATION_PERMISSIONS. */
+const ENV_RESTRICTIVENESS: Record<EnvKey, number> = {
+  development: 0,
+  staging: 1,
+  production: 2,
+};
+
+/**
+ * The most restrictive of several environment labels, ordered
+ * development < staging < production.
+ *
+ * WHY THIS EXISTS: an external SSH host has *two* environment labels, and they
+ * come from different places. One is registered by `nexus host add --env`; the
+ * other is the suffix on the target string the caller composes freshly on every
+ * command (`ssh:<alias>@development`). Gating on the target alone means a host
+ * deliberately registered as `production` becomes writable the moment someone
+ * types a different suffix — `wpcli` is refused on production and allowed on
+ * development by default, so the label *is* the write gate. Taking the more
+ * restrictive of the two makes the registered label a floor a suffix cannot
+ * lower, while still letting a caller voluntarily address a development host
+ * as production.
+ *
+ * `undefined` entries are IGNORED rather than normalised, and that distinction
+ * matters: an unregistered alias contributes no opinion, so its target
+ * environment governs exactly as it did before. A *present* but unrecognised
+ * value still normalises to 'production' (fail closed), as does the
+ * all-undefined case.
+ */
+export function mostRestrictiveEnvironment(...envs: Array<string | undefined>): EnvKey {
+  const stated = envs.filter((e): e is string => e !== undefined);
+  if (stated.length === 0) return 'production';
+  return stated
+    .map(normaliseEnv)
+    .reduce((a, b) => (ENV_RESTRICTIVENESS[b] > ENV_RESTRICTIVENESS[a] ? b : a));
+}
+
 /**
  * Convert legacy wpeAllowedEnvironments to WpeOperationPermissions.
  * Returns undefined if no migration needed (no legacy setting, or already migrated).

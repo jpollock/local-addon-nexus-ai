@@ -6,7 +6,9 @@ import { LocalTransport } from './LocalTransport';
 import { withPolicy, MCP_REMOTE_POLICY, EXTERNAL_REMOTE_POLICY } from './policy';
 import { parseTarget } from '../../common/target';
 import { error } from '../mcp/modules/wp-cli/preflight';
-import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
+import {
+  isOperationAllowed, getEffectiveSettings, mostRestrictiveEnvironment,
+} from '../mcp/utils/operation-permissions';
 import { ExternalSshTransport } from './ExternalSshTransport';
 import { getExternalProfile } from '../external/externalSiteStore';
 
@@ -39,20 +41,35 @@ export async function resolveTransport(
       return error(`Not an external SSH target: ${sshTarget}. Expected ssh:alias@environment`);
     }
 
-    // Same gate as WP Engine installs, keyed on an ssh: target ref.
-    const settings = getEffectiveSettings((services as any).registryStorage);
-    if (!isOperationAllowed(operation as any, parsed.environment, settings, `ssh:${parsed.alias}`)) {
+    // Registration (nexus host add) stores what the probe discovered. Reading it
+    // back here is the whole point: otherwise a registered host still needs
+    // --path on every command.
+    //
+    // Read BEFORE the gate, not after: the registered environment is half of
+    // what the gate decides on. This lookup used to sit below it, which is how
+    // a host registered --env production stayed writable when addressed as
+    // ssh:<alias>@development.
+    const storage = (services as any).registryStorage;
+    const profile = storage ? getExternalProfile(storage, parsed.alias) : null;
+
+    // Same gate as WP Engine installs, keyed on an ssh: target ref — but on the
+    // more restrictive of the label the host was registered with and the one
+    // the caller typed. See mostRestrictiveEnvironment for why the target
+    // string alone cannot be trusted. An unregistered alias contributes
+    // nothing, so its target environment governs exactly as before.
+    const gatedEnv = mostRestrictiveEnvironment(parsed.environment, profile?.environment);
+    const settings = getEffectiveSettings(storage);
+    if (!isOperationAllowed(operation as any, gatedEnv, settings, `ssh:${parsed.alias}`)) {
+      const registeredNote = profile && gatedEnv !== parsed.environment
+        ? ` '${parsed.alias}' is registered as "${profile.environment}", which is what applies.`
+        : '';
       return error(
-        `Operation blocked: not permitted on "${parsed.environment}" environments. `
+        `Operation blocked: not permitted on "${gatedEnv}" environments.${registeredNote} `
         + `Adjust in Nexus AI → Settings → WP Engine Access.`,
       );
     }
 
-    // Registration (nexus host add) stores what the probe discovered. Reading it
-    // back here is the whole point: otherwise a registered host still needs
-    // --path on every command. An explicit wp_path wins — the user meant it.
-    const storage = (services as any).registryStorage;
-    const profile = storage ? getExternalProfile(storage, parsed.alias) : null;
+    // An explicit wp_path wins — the user meant it.
     const explicitPath = typeof args.wp_path === 'string' ? args.wp_path : undefined;
     const wpPath = explicitPath ?? profile?.wpPath;
     return withPolicy(

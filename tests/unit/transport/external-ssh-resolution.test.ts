@@ -135,3 +135,86 @@ describe('resolveTransport — stored external profile', () => {
     expect('content' in t).toBe(false);
   });
 });
+
+describe('resolveTransport — the registered environment is a floor', () => {
+  beforeEach(() => {
+    spawnMock.mockReset();
+    spawnMock.mockImplementation(() => fakeProc({ stdout: 'ok' }));
+  });
+
+  function servicesWith(profiles: any[]) {
+    const store: Record<string, unknown> = {};
+    store[STORAGE_KEYS.EXTERNAL_SITE_PROFILES] = Object.fromEntries(
+      profiles.map((p) => [p.alias, p]),
+    );
+    return {
+      registryStorage: {
+        get: (k: string) => store[k],
+        set: (k: string, v: unknown) => { store[k] = v; },
+      },
+    } as any;
+  }
+
+  const PROD_HOST = {
+    alias: 'prod-box', wpPath: '/var/www/html', environment: 'production',
+    firstSeenAt: 1, lastSeenAt: 1,
+  };
+
+  it('refuses a write on a registered production host addressed as @development', async () => {
+    // The whole point: wpcli is {development:true, staging:true, production:false}
+    // by default, so gating on the target string alone would allow this.
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:prod-box@development' }, servicesWith([PROD_HOST]), 'wpcli');
+    if (!('content' in t)) fail('Expected a refusal, got a transport');
+    expect(t.isError).toBe(true);
+    expect(t.content[0].text).toContain('production');
+    expect(t.content[0].text).toContain('prod-box');
+  });
+
+  it('still allows a read on that same host and target', async () => {
+    // wpcli_read is true on every environment — the floor must not over-block.
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:prod-box@development' }, servicesWith([PROD_HOST]), 'wpcli_read');
+    expect('content' in t).toBe(false);
+  });
+
+  it('refuses the write when the target says production too', async () => {
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:prod-box@production' }, servicesWith([PROD_HOST]), 'wpcli');
+    expect('content' in t).toBe(true);
+  });
+
+  it('allows a write on a host registered as development', async () => {
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:dev-box@development' },
+      servicesWith([{ alias: 'dev-box', environment: 'development', firstSeenAt: 1, lastSeenAt: 1 }]),
+      'wpcli');
+    expect('content' in t).toBe(false);
+  });
+
+  it('lets the target tighten a registered development host', async () => {
+    // Restrictiveness runs both ways: a caller may voluntarily address a
+    // development host as production, and the stricter of the two applies.
+    const t = await resolveTransport(
+      { ssh_target: 'ssh:dev-box@production' },
+      servicesWith([{ alias: 'dev-box', environment: 'development', firstSeenAt: 1, lastSeenAt: 1 }]),
+      'wpcli');
+    expect('content' in t).toBe(true);
+  });
+
+  it('leaves an unregistered alias governed by its target, exactly as before', async () => {
+    const services = servicesWith([PROD_HOST]);
+    // A write to an unregistered alias at @development is still allowed — the
+    // floor only exists where a registration does.
+    const dev = await resolveTransport({ ssh_target: 'ssh:stranger@development' }, services, 'wpcli');
+    expect('content' in dev).toBe(false);
+    // ...and still refused at @production.
+    const prod = await resolveTransport({ ssh_target: 'ssh:stranger@production' }, services, 'wpcli');
+    expect('content' in prod).toBe(true);
+  });
+
+  it('does not throw when no storage is available at all', async () => {
+    const t = await resolveTransport({ ssh_target: 'ssh:h1@development' }, {} as any, 'wpcli');
+    expect('content' in t).toBe(false);
+  });
+});
