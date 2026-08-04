@@ -61,9 +61,28 @@ describe('resolveTargetArgs', () => {
       .toEqual({ install_name: 'myinstall', install_name_explicit: true });
   });
 
-  it('prefers a local site over a WPE install of the same name', () => {
-    expect(resolveTargetArgs('clash', services({ localSites: ['clash'], wpeInstalls: ['clash'] })))
-      .toEqual({ site: 'clash' });
+  it('throws when a bare name matches both a local site and a WPE install', () => {
+    expect(() => resolveTargetArgs('blog', services({ localSites: ['blog'], wpeInstalls: ['blog'] })))
+      .toThrow(/Ambiguous target "blog"/);
+  });
+
+  it('error message contains all three disambiguation forms', () => {
+    expect(() => resolveTargetArgs('blog', services({ localSites: ['blog'], wpeInstalls: ['blog'] })))
+      .toThrow(/blog@local/);
+    expect(() => resolveTargetArgs('blog', services({ localSites: ['blog'], wpeInstalls: ['blog'] })))
+      .toThrow(/wpe:/);
+    expect(() => resolveTargetArgs('blog', services({ localSites: ['blog'], wpeInstalls: ['blog'] })))
+      .toThrow(/ssh:/);
+  });
+
+  it('maps a bare name that is ONLY a local site to site (unambiguous)', () => {
+    expect(resolveTargetArgs('onlylocal', services({ localSites: ['onlylocal'] })))
+      .toEqual({ site: 'onlylocal' });
+  });
+
+  it('maps a bare name that is ONLY a WPE install to install_name (unambiguous)', () => {
+    expect(resolveTargetArgs('onlywpe', services({ wpeInstalls: ['onlywpe'] })))
+      .toEqual({ install_name: 'onlywpe', install_name_explicit: true });
   });
 
   it('falls back to site for an unknown bare name, so the caller reports "not found"', () => {

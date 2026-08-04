@@ -41,21 +41,37 @@ export function resolveTargetArgs(
   }
 
   const name = parsed.siteName!;
-  if (resolveSite(name, services.siteData)) return { site: name };
+  const localSite = resolveSite(name, services.siteData);
 
+  let wpeInstallName: string | undefined;
   try {
     const db = services.graphService?.getDb?.();
     const row = db?.prepare(
       "SELECT name FROM sites WHERE source='wpe' AND LOWER(name)=? AND is_active=1 LIMIT 1",
     ).get(name.toLowerCase()) as { name?: string } | undefined;
-    // Reached only after resolveSite came back empty, so re-running the local
-    // lookup downstream cannot change the answer — but the flag keeps the
-    // mapper's contract single: it never emits an ambiguous install_name.
-    if (row?.name) return { install_name: row.name, install_name_explicit: true };
+    wpeInstallName = row?.name;
   } catch {
-    // Graph DB unavailable or mid-migration — fall through to the local path,
-    // which reports "not found". A lookup failure must not throw here.
+    // Graph DB unavailable or mid-migration — fall through.
+    // A lookup failure must not throw here.
   }
+
+  // If the bare name matches both a Local site AND an active WPE install,
+  // refuse it — the user must disambiguate with @ naming.
+  if (localSite && wpeInstallName) {
+    throw new Error(
+      `Ambiguous target "${name}" — it matches both a Local site and the WP Engine install "${wpeInstallName}". Specify which one you mean:\n` +
+      `  ${name}@local\n` +
+      `  wpe:<account>/${wpeInstallName}@production\n` +
+      `  ssh:${wpeInstallName}@production`
+    );
+  }
+
+  if (localSite) return { site: name };
+
+  // Reached only after resolveSite came back empty, so re-running the local
+  // lookup downstream cannot change the answer — but the flag keeps the
+  // mapper's contract single: it never emits an ambiguous install_name.
+  if (wpeInstallName) return { install_name: wpeInstallName, install_name_explicit: true };
 
   return { site: name };
 }
