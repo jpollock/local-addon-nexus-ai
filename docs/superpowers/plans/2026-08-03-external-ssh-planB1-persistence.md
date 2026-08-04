@@ -717,16 +717,19 @@ Expected: FAIL listing eleven offenders.
 
 - [ ] **Step 4: Broaden each filter**
 
-Replace `source = 'wpe'` with `source != 'local'` **in these six files only**.
+Replace `source = 'wpe'` with `source IN ('wpe', 'external')` **in these six files only**.
 
-That predicate is correct *here* and wrong elsewhere, which is worth understanding rather than pattern-matching: these queries mean "every site that is not on this machine", which genuinely is every non-local kind. The bug Plan A fixed was different — code that meant "is a WP Engine install" and used `!= 'local'` as a proxy. Same syntax, opposite intent.
+**Do NOT use `source != 'local'`.** It reads as the natural predicate here, and it is what an earlier draft of this plan specified — but `tests/unit/graph/source-semantics.test.ts:33` asserts that pattern appears **zero** times in `src/`, so it would fail the suite. That scanner exists because the same syntax previously meant "is a WP Engine install", and no scanner can distinguish the two intents. Keeping it absolute is worth more than the shorter predicate.
 
-For SQL with a table alias, preserve it: `s.source = 'wpe'` → `s.source != 'local'`.
+The explicit list also has a defensible failure mode: a fourth site kind will not silently appear in fleet views. Given this entire effort began with a third value being silently mishandled, forcing a deliberate decision per query is the safer direction.
+
+For SQL with a table alias, preserve it: `s.source = 'wpe'` → `s.source IN ('wpe', 'external')`.
 
 Add a short comment above each so the intent survives:
 
 ```sql
--- Every non-local site: WPE installs and external SSH hosts alike.
+-- Remote sites of every kind: WPE installs and external SSH hosts.
+-- Add new remote kinds here; `!= 'local'` is forbidden (see source-semantics.test.ts).
 ```
 
 - [ ] **Step 5: Confirm the WPE-specific filters were not touched**
@@ -775,4 +778,4 @@ The six WPE-specific filters in modules/wpe are deliberately unchanged."
 
 **Type consistency.** `SiteSource` and `toSiteSource` defined in Task 1, consumed in Tasks 2 and 4. `ExternalSiteProfile`, `externalSiteId`, `upsertExternalProfile`, `getExternalProfile`, `listExternalProfiles` defined in Task 3, consumed in Task 4. `maybeUpsertExternalSite(args, succeeded, registryStorage, graphService)` defined in Task 4.
 
-**Three things to expect at execution time.** Task 1's `tsc` run is the one most likely to surface unexpected narrowing sites — the plan says report rather than fix, and Task 2 covers the two known files. Task 4 hooks the chokepoint every MCP tool uses, so it is the highest-blast-radius change here; the swallow-everything discipline and `wp-cli-tools.test.ts` are the guards. And Task 5 reintroduces `source != 'local'` in six files, which will look like a regression of Plan A to anyone reading quickly — the comment on each line and the commit message exist to prevent that misreading.
+**Three things to expect at execution time.** Task 1's `tsc` run is the one most likely to surface unexpected narrowing sites — the plan says report rather than fix, and Task 2 covers the two known files. Task 4 hooks the chokepoint every MCP tool uses, so it is the highest-blast-radius change here; the swallow-everything discipline and `wp-cli-tools.test.ts` are the guards. And Task 5 originally specified `source != 'local'`, which would have failed Plan A's source scanner outright — caught in pre-flight and changed to `source IN ('wpe', 'external')`. The lesson generalises: a predicate that reads naturally may still be forbidden by a test written for a different intent.
