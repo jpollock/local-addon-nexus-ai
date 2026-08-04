@@ -304,6 +304,7 @@ export const STORAGE_KEYS = {
   OAUTH_VAULT: `${ADDON_PREFIX}_oauth_vault`,
   API_KEY_CONNECTIONS: `${ADDON_PREFIX}_api_key_connections`,
   IW_SITE_BINDINGS: `${ADDON_PREFIX}_iw_site_bindings`,
+  EXTERNAL_SITE_PROFILES: `${ADDON_PREFIX}_external_site_profiles`,
 } as const;
 
 // ---------------------------------------------------------------------------
