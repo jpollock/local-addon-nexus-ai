@@ -114,6 +114,7 @@ export interface Site {
   created_at: number;
   updated_at: number;
   source?: SiteSource;
+  host?: SiteSource;  // Where the site is hosted — parallels source, populated from explicit args
   environment?: 'production' | 'staging' | 'development';
   remote_install_id?: string;
   remote_domain?: string;

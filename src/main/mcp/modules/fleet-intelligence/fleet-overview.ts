@@ -47,9 +47,10 @@ export const fleetOverviewHandler: McpToolHandler = {
               COUNT(*) as count,
               SUM(post_count) as total_posts,
               SUM(user_count) as total_users,
-              COUNT(CASE WHEN wp_version IS NOT NULL THEN 1 END) as with_wp_version,
+              COUNT(CASE WHEN wp_version IS NOT NULL AND source = 'wpe' THEN 1 END) as with_wp_version,
               COUNT(CASE WHEN post_count IS NOT NULL THEN 1 END) as with_post_count,
-              MAX(last_post_at) as most_recent_post
+              MAX(last_post_at) as most_recent_post,
+              COUNT(CASE WHEN source = 'wpe' THEN 1 END) as wpe_count
             FROM sites WHERE source IN ('wpe', 'external') AND is_active=1
           `).all() as typeof wpeRows;
         }
@@ -86,7 +87,7 @@ export const fleetOverviewHandler: McpToolHandler = {
       lines.push(`**${localCount} site${localCount !== 1 ? 's' : ''}** — ${localIndexed} with full data`);
     } else {
       const totalSites = localCount + wpeCount;
-      lines.push(`**${totalSites} total sites** — ${localCount} local · ${wpeCount} WP Engine`);
+      lines.push(`**${totalSites} total sites** — ${localCount} local · ${wpeCount} remote`);
     }
     lines.push('');
 
@@ -114,7 +115,8 @@ export const fleetOverviewHandler: McpToolHandler = {
       const row = wpeRows[0];
       lines.push('### WP Engine Installs');
       lines.push(`- **Installs:** ${row.count}`);
-      lines.push(`- **With WP version (CAPI):** ${row.with_wp_version} of ${row.count}`);
+      const wpeOnly = (row as any).wpe_count ?? row.count;
+      lines.push(`- **With WP version (CAPI):** ${row.with_wp_version} of ${wpeOnly}`);
       const sshSynced = row.with_post_count;
       if (sshSynced > 0) {
         lines.push(`- **SSH-synced (full data):** ${sshSynced} of ${row.count}`);
@@ -145,7 +147,8 @@ export const fleetOverviewHandler: McpToolHandler = {
 
     // ── Data freshness note ────────────────────────────────────────────────
     if (wpeCount > 0 && wpeRows[0] && wpeRows[0].with_post_count < wpeCount) {
-      const pct = Math.round((wpeRows[0].with_post_count / wpeCount) * 100);
+      const wpeOnly = (wpeRows[0] as any).wpe_count ?? wpeCount;
+      const pct = wpeOnly > 0 ? Math.round((wpeRows[0].with_post_count / wpeOnly) * 100) : 0;
       lines.push(
         `> ℹ️ WPE post/user totals cover ${pct}% of installs. ` +
         `Enable "Site info updates" in the Nexus AI Settings tab to schedule automatic SSH syncs, ` +

@@ -46,8 +46,8 @@ export const findOutdatedSitesHandler: McpToolHandler = {
         },
         source: {
           type: 'string',
-          enum: ['local', 'wpe', 'all'],
-          description: 'Filter to local sites, WP Engine installs, or all (default: all)',
+          enum: ['local', 'wpe', 'external', 'all'],
+          description: 'Filter to local sites, WP Engine installs, external SSH hosts, or all (default: all)',
         },
       },
     },

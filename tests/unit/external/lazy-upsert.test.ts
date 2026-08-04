@@ -58,4 +58,17 @@ describe('maybeUpsertExternalSite', () => {
     ).resolves.toBeUndefined();
     expect(g.upsertSite).not.toHaveBeenCalled();
   });
+
+  it('does not upsert when succeeded=false even with valid ssh_target', async () => {
+    // Regression test for Finding 1: a handler returning { isError: true } must not
+    // write a fleet row. Previously the hardcoded `true` in tool-registry.ts:177 did.
+    const g = fakeGraph();
+    await maybeUpsertExternalSite(
+      { ssh_target: 'ssh:acme@production', wp_path: '/var/www/html' },
+      false,
+      fakeStorage() as any,
+      g as any
+    );
+    expect(g.upsertSite).not.toHaveBeenCalled();
+  });
 });

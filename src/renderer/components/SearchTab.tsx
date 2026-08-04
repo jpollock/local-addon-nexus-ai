@@ -143,10 +143,10 @@ export class SearchTab extends React.Component<SearchTabProps, SearchTabState> {
     const dotColor = !isPlugin
       ? '#0ECAD4'  // version/php matches — always show as informational teal
       : isActive
-        ? (r.siteSource === 'wpe' ? '#0ECAD4' : '#51BB7B')
+        ? (r.siteSource === 'wpe' ? '#0ECAD4' : r.siteSource === 'external' ? '#F59E0B' : '#51BB7B')
         : '#555';
 
-    const sourceLabel = r.siteSource === 'wpe' ? 'WPE' : 'Local';
+    const sourceLabel = r.siteSource === 'wpe' ? 'WPE' : r.siteSource === 'external' ? 'External' : 'Local';
 
     return React.createElement('div', {
       key: `${r.siteId}-${r.field}-${i}`,
@@ -174,9 +174,9 @@ export class SearchTab extends React.Component<SearchTabProps, SearchTabState> {
       React.createElement('span', {
         style: {
           fontSize: 9, padding: '1px 4px', borderRadius: 3, flexShrink: 0,
-          background: r.siteSource === 'wpe' ? 'rgba(14,202,212,0.06)' : 'rgba(81,187,123,0.06)',
-          color: r.siteSource === 'wpe' ? '#0ECAD4' : '#51BB7B',
-          border: `1px solid ${r.siteSource === 'wpe' ? 'rgba(14,202,212,0.15)' : 'rgba(81,187,123,0.15)'}`,
+          background: r.siteSource === 'wpe' ? 'rgba(14,202,212,0.06)' : r.siteSource === 'external' ? 'rgba(245,158,11,0.06)' : 'rgba(81,187,123,0.06)',
+          color: r.siteSource === 'wpe' ? '#0ECAD4' : r.siteSource === 'external' ? '#F59E0B' : '#51BB7B',
+          border: `1px solid ${r.siteSource === 'wpe' ? 'rgba(14,202,212,0.15)' : r.siteSource === 'external' ? 'rgba(245,158,11,0.15)' : 'rgba(81,187,123,0.15)'}`,
         },
       }, sourceLabel),
     );

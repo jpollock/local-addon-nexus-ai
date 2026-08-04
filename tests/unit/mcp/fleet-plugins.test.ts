@@ -256,7 +256,7 @@ describe('nexus_fleet_plugins MCP tool', () => {
 // ---------------------------------------------------------------------------
 
 describe('nexus_fleet_plugins — WPE data path', () => {
-  function createMockGraphService(wpePluginRows: Array<{ slug: string; name: string | null; is_active: number; site_name: string }>, wpeSiteCount = 1) {
+  function createMockGraphService(wpePluginRows: Array<{ slug: string; name: string | null; is_active: number; site_name: string; source: string }>, wpeSiteCount = 1) {
     return {
       getDb: () => ({
         prepare: (sql: string) => ({
@@ -272,7 +272,7 @@ describe('nexus_fleet_plugins — WPE data path', () => {
 
   function createServicesWithWpe(
     twins: SiteDigitalTwin[],
-    wpePluginRows: Array<{ slug: string; name: string | null; is_active: number; site_name: string }>,
+    wpePluginRows: Array<{ slug: string; name: string | null; is_active: number; site_name: string; source: string }>,
     wpeSiteCount = 1,
   ) {
     return {
@@ -285,7 +285,7 @@ describe('nexus_fleet_plugins — WPE data path', () => {
 
   test('includes WPE plugins in output', async () => {
     const services = createServicesWithWpe([], [
-      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'my-wpe-site' },
+      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'my-wpe-site', source: 'wpe' },
     ]);
     const result = await fleetPluginsHandler.execute({}, services);
     const text = getText(result);
@@ -295,7 +295,7 @@ describe('nexus_fleet_plugins — WPE data path', () => {
 
   test('shows WPE site name in example sites', async () => {
     const services = createServicesWithWpe([], [
-      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'my-wpe-site' },
+      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'my-wpe-site', source: 'wpe' },
     ]);
     const result = await fleetPluginsHandler.execute({}, services);
     const text = getText(result);
@@ -311,7 +311,7 @@ describe('nexus_fleet_plugins — WPE data path', () => {
       }),
     ];
     const services = createServicesWithWpe(twins, [
-      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'wpe-site' },
+      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'wpe-site', source: 'wpe' },
     ]);
     const result = await fleetPluginsHandler.execute({}, services);
     const text = getText(result);
@@ -323,17 +323,17 @@ describe('nexus_fleet_plugins — WPE data path', () => {
 
   test('WPE sites counted in total site count', async () => {
     const services = createServicesWithWpe([], [
-      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'wpe-site' },
+      { slug: 'woocommerce', name: 'WooCommerce', is_active: 1, site_name: 'wpe-site', source: 'wpe' },
     ], 5);
     const result = await fleetPluginsHandler.execute({}, services);
     const text = getText(result);
-    // 0 local + 5 WPE = 5 total sites in the summary line
-    expect(text).toContain('5 WPE');
+    // 0 local + 5 remote = 5 total sites in the summary line
+    expect(text).toContain('5 remote');
   });
 
   test('inactive WPE plugins not counted in active count', async () => {
     const services = createServicesWithWpe([], [
-      { slug: 'hello-dolly', name: 'Hello Dolly', is_active: 0, site_name: 'wpe-site' },
+      { slug: 'hello-dolly', name: 'Hello Dolly', is_active: 0, site_name: 'wpe-site', source: 'wpe' },
     ]);
     // min_sites default is 1 (active sites) — inactive WPE plugin should be filtered
     const result = await fleetPluginsHandler.execute({ min_sites: 1 }, services);
@@ -353,6 +353,6 @@ describe('nexus_fleet_plugins — WPE data path', () => {
     const result = await fleetPluginsHandler.execute({}, services);
     const text = getText(result);
     expect(text).toContain('woocommerce');
-    expect(text).toContain('0 WPE');
+    expect(text).toContain('0 remote');
   });
 });

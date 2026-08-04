@@ -174,7 +174,7 @@ export class ToolRegistry {
 
       await maybeUpsertExternalSite(
         args as Record<string, unknown>,
-        true,
+        !result.isError,
         (services as any).registryStorage,
         (services as any).graphService,
       );

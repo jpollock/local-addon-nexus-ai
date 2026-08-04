@@ -8,8 +8,8 @@ export const fleetPluginsHandler: McpToolHandler = {
   definition: {
     name: 'nexus_fleet_plugins',
     description:
-      'List all plugins across the FULL fleet (local + WP Engine) aggregated from twin cache and graph.db. ' +
-      'Shows how many sites each plugin is active on across both local and WPE environments. ' +
+      'List all plugins across the FULL fleet (local + remote) aggregated from twin cache and graph.db. ' +
+      'Shows how many sites each plugin is active on across both local and remote environments. ' +
       'Filter with search= (partial name match) or min_sites= (minimum active site count).',
     inputSchema: {
       type: 'object',
@@ -91,10 +91,10 @@ export const fleetPluginsHandler: McpToolHandler = {
           ).get() as { c: number })?.c) ?? 0;
 
           const rows = db.prepare(`
-            SELECT p.slug, p.name, p.is_active, s.name as site_name
+            SELECT p.slug, p.name, p.is_active, s.name as site_name, s.source
             FROM plugins p JOIN sites s ON p.site_id = s.id
             WHERE s.source IN ('wpe', 'external') AND s.is_active = 1
-          `).all() as Array<{ slug: string; name: string | null; is_active: number; site_name: string }>;
+          `).all() as Array<{ slug: string; name: string | null; is_active: number; site_name: string; source: string }>;
 
           for (const row of rows) {
             if (!pluginMap.has(row.slug)) {
@@ -105,7 +105,8 @@ export const fleetPluginsHandler: McpToolHandler = {
             entry.wpeInstalled++;
             if (row.is_active) {
               entry.wpeActive++;
-              if (entry.exampleSites.length < 3) entry.exampleSites.push(`${row.site_name} [wpe]`);
+              const label = row.source === 'wpe' ? 'wpe' : row.source === 'external' ? 'external' : 'local';
+              if (entry.exampleSites.length < 3) entry.exampleSites.push(`${row.site_name} [${label}]`);
             }
           }
         }
@@ -130,18 +131,18 @@ export const fleetPluginsHandler: McpToolHandler = {
     if (plugins.length === 0) {
       const filterDesc = search ? ` matching "${search}"` : '';
       return ok(
-        `No plugins found${filterDesc} across ${totalSites} sites (${localSiteCount} local, ${wpeSiteCount} WPE).\n\n` +
-        'Run `nexus fleet refresh` to populate local twin data, or sync WPE sites to populate graph.db.'
+        `No plugins found${filterDesc} across ${totalSites} sites (${localSiteCount} local, ${wpeSiteCount} remote).\n\n` +
+        'Run `nexus fleet refresh` to populate local twin data, or sync remote sites to populate graph.db.'
       );
     }
 
     const lines: string[] = [
       '## Fleet Plugins',
       '',
-      `**${plugins.length} plugin${plugins.length !== 1 ? 's' : ''} found** across ${totalSites} sites (${localSiteCount} local, ${wpeSiteCount} WPE)`,
+      `**${plugins.length} plugin${plugins.length !== 1 ? 's' : ''} found** across ${totalSites} sites (${localSiteCount} local, ${wpeSiteCount} remote)`,
       '',
-      '| Plugin | Active (local) | Active (WPE) | Total active | Example sites |',
-      '|--------|---------------|-------------|--------------|---------------|',
+      '| Plugin | Active (local) | Active (remote) | Total active | Example sites |',
+      '|--------|---------------|-----------------|--------------|---------------|',
     ];
 
     for (const plugin of plugins) {

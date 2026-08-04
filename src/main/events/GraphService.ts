@@ -377,7 +377,7 @@ export class GraphService {
       site.remote_domain ?? null,
       (site as any).wpe_site_id ?? null,
       'wordpress',
-      site.source ?? 'local'
+      site.host ?? site.source ?? 'local'
     );
   }
 

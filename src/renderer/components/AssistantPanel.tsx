@@ -170,7 +170,7 @@ export class AssistantPanel extends React.Component<AssistantPanelProps, Assista
   renderSiteRow(site: NonNullable<QueryPlan['sites']>[0], i: number): React.ReactNode {
     const tagColors: Record<string, string> = { warn: '#f87171', ok: '#51BB7B', info: '#0ECAD4' };
     const tagBgs: Record<string, string> = { warn: 'rgba(239,68,68,.1)', ok: 'rgba(81,187,123,.1)', info: 'rgba(14,202,212,.1)' };
-    const dotColor = site.source === 'wpe' ? '#0ECAD4' : '#51BB7B';
+    const dotColor = site.source === 'wpe' ? '#0ECAD4' : site.source === 'external' ? '#F59E0B' : '#51BB7B';
     const tagKind = site.tagKind ?? 'info';
 
     return React.createElement('div', {
