@@ -1,4 +1,16 @@
-/** Read-only WP-CLI commands — these use the wpcli_read permission (allowed on every environment by default). */
+/**
+ * Read-only WP-CLI commands — these use the wpcli_read permission (allowed on
+ * every environment by default).
+ *
+ * `db export` is deliberately NOT in this set, and must not be added back. It
+ * only reads the database, but it *writes a file*: with no path argument
+ * WP-CLI drops `<dbname>-<date>.sql` into the SSH login directory, which on
+ * most shared hosts and VPS layouts is the web root. That file holds every user
+ * hash, every option row and whatever credentials live in wp_options, at a
+ * guessable URL. Calling it a read let it run unchallenged on production —
+ * which became reachable on arbitrary external hosts once nexusWpCommand
+ * gained ssh: targets. It falls closed to `wpcli` like any other write.
+ */
 const WPCLI_READ_COMMANDS = new Set([
   'plugin list', 'plugin get',
   'theme list', 'theme get',
@@ -8,7 +20,6 @@ const WPCLI_READ_COMMANDS = new Set([
   'site health',
   'post list', 'post get',
   'post-type list',
-  'db export',
 ]);
 
 /**

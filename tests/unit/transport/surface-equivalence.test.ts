@@ -36,7 +36,10 @@ const COMMAND_CLASSIFICATIONS: Array<[string[], 'wpcli_read' | 'wpcli']> = [
   [['theme','activate','x'], 'wpcli'],
   [['core','version'], 'wpcli_read'],
   [['core','update'], 'wpcli'],
-  [['db','export'], 'wpcli_read'],
+  // `db export` reads the DB but writes a dump — every user hash and every
+  // option row — into the SSH login directory, which is the web root on many
+  // hosts. It is a write. See the comment above WPCLI_READ_COMMANDS.
+  [['db','export'], 'wpcli'],
   [['db','import','f.sql'], 'wpcli'],
   [['search-replace','a','b'], 'wpcli'],
   [['post','create'], 'wpcli'],
@@ -61,6 +64,15 @@ describe('surface equivalence', () => {
 
   it.each(COMMAND_CLASSIFICATIONS)('classifies %j as %s', (cmd, expectedOp) => {
     expect(classifyWpCliOp(cmd)).toBe(expectedOp);
+  });
+
+  it('refuses db export on production, and would leave the dump in the web root if it did not', () => {
+    // Pinned separately from the property below so the intent survives even if
+    // the classification table is edited: `wp db export` with no path writes
+    // <dbname>-<date>.sql into the SSH login directory.
+    const settings = { remoteOperationPermissions: DEFAULT_OPERATION_PERMISSIONS };
+    expect(classifyWpCliOp(['db', 'export'])).toBe('wpcli');
+    expect(isOperationAllowed('wpcli', 'production', settings, 'ssh:box')).toBe(false);
   });
 
   it('refuses every write on production and permits every read', () => {

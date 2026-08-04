@@ -140,6 +140,13 @@ So on production, **reads are permitted and writes are refused** — for WPE and
 external alike. The only difference is that external additionally takes the
 most-restrictive of two environment labels.
 
+**`wp db export` classifies as `wpcli`, not `wpcli_read`.** It only reads the
+database, but it writes the dump to disk: with no path argument WP-CLI drops
+`<dbname>-<date>.sql` into the SSH login directory, which is the web root on
+many shared hosts and VPS layouts — every user hash and every option row at a
+guessable URL. It was in `WPCLI_READ_COMMANDS` and is not any more, so it is
+refused on production like any other write.
+
 **`wpeAllowedEnvironments` is dead code.** All four exported functions of
 `mcp/utils/environment-filter.ts` have **zero callers** outside their own test
 file. It was superseded by the granular permissions above — `types.ts:299` says
