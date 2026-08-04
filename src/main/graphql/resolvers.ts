@@ -37,6 +37,8 @@ import {
   removeExternalProfile, upsertExternalProfile,
 } from '../external/externalSiteStore';
 import { classifyWpCliOp } from '../transport/classify';
+import { resolveTargetArgs } from '../transport/resolveTargetArgs';
+import { resolveTransport } from '../transport';
 
 /** The root value for GraphQL resolvers — always null/undefined for Query/Mutation. */
 type ResolverParent = unknown;
@@ -1613,194 +1615,58 @@ export function createResolvers(context: ResolverContext) {
       },
 
       /**
-       * Run any WP-CLI command on a site (local or WPE)
+       * Run any WP-CLI command on a site (local, WP Engine, or external SSH host).
        */
       nexusWpCommand: async (_parent: ResolverParent, { target, command }: { target: string; command: string[] }) => {
         return withQueue(async () => {
-        try {
-          if (!services.localServices) {
-            return {
-              success: false,
-              error: 'Local services not available',
-              stdout: '',
-              stderr: '',
-              exitCode: 1,
-            };
-          }
-
-          const parsed = parseTarget(target);
-
-          // Blocked commands on remote (security)
-          const blockedRemoteCommands = ['db query', 'eval', 'eval-file', 'shell'];
-          const commandStr = command.join(' ');
-          if (parsed.type === 'wpe' && blockedRemoteCommands.some(cmd => commandStr.startsWith(cmd))) {
-            return {
-              success: false,
-              error: `Command "${commandStr}" is blocked on remote sites for security reasons.`,
-              stdout: '',
-              stderr: '',
-              exitCode: 1,
-            };
-          }
-
-          if (parsed.type === 'local') {
-            // Local site
-            const site = resolveSite(parsed.siteName!, services.siteData);
-            if (!site) {
-              // Bare-name fallback: check WPE graph DB before giving up
-              const db = services.graphService?.getDb?.();
-              if (db) {
-                try {
-                  const wpeRow = db.prepare(
-                    "SELECT name FROM sites WHERE source='wpe' AND LOWER(name)=? AND is_active=1 LIMIT 1"
-                  ).get(parsed.siteName!.toLowerCase()) as any;
-                  if (wpeRow) {
-                    if (blockedRemoteCommands.some(cmd => commandStr.startsWith(cmd))) {
-                      return {
-                        success: false,
-                        error: `Command "${commandStr}" is blocked on remote sites for security reasons.`,
-                        stdout: '',
-                        stderr: '',
-                        exitCode: 1,
-                      };
-                    }
-                    if (!services.localServices.isSSHKeyAvailable()) {
-                      return {
-                        success: false,
-                        error: 'WP Engine SSH key not found. Connect to WP Engine via Local\'s UI first.',
-                        stdout: '',
-                        stderr: '',
-                        exitCode: 1,
-                      };
-                    }
-                    const bareSettings = getEffectiveSettings(services.registryStorage);
-                    const bareCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
-                    const bareCached = bareCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === wpeRow.name);
-                    const bareEnv = bareCached?.environment ?? 'production';
-                    const bareOp = classifyWpCliOp(command);
-                    if (!isOperationAllowed(bareOp, bareEnv, bareSettings, `wpe:${wpeRow.name}`)) {
-                      return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${bareEnv}" environments. Adjust in Nexus AI → Settings → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
-                    }
-                    const result = await services.localServices.remoteWpCliRun(wpeRow.name, command);
-                    // Remote WP-CLI against a WP Engine install — arbitrary
-                    // command execution on a production site. Highest blast
-                    // radius of any direct-call path in the addon.
-                    auditDirectOperation(services, {
-                      operation: 'cli.wp.command',
-                      target: `wpe:${wpeRow.name}`,
-                      parameters: { target, command, remote: true, environment: bareEnv, resolvedVia: 'bare-name-graph-db' },
-                      outcome: result.success ? 'success' : 'failure',
-                      error: result.success ? undefined : (result.stdout || result.stderr || 'Command failed'),
-                    });
-                    return {
-                      success: result.success,
-                      error: result.success ? null : (result.stdout || result.stderr || 'Command failed'),
-                      stdout: result.stdout || '',
-                      stderr: result.stderr || '',
-                      exitCode: result.success ? 0 : 1,
-                    };
-                  }
-                } catch { /* graph not ready */ }
-              }
-              return {
-                success: false,
-                error: `Site not found: ${parsed.siteName}`,
-                stdout: '',
-                stderr: '',
-                exitCode: 1,
-              };
-            }
-
-            const status = services.localServices!.getSiteStatus(site.id);
-            if (status !== 'running') {
-              return {
-                success: false,
-                error: `Site "${site.name}" is ${status}. Start it first.`,
-                stdout: '',
-                stderr: '',
-                exitCode: 1,
-              };
-            }
-
-            const result = await services.localServices.wpCliRun(site.id, command);
-            const localOk = result.success || result.exitCode === 0;
-
+          // One router for every target type. This resolver used to hand-roll
+          // target resolution, a command blocklist and two permission-gate
+          // calls; all three now live in resolveTransport, which is why an
+          // ssh: target works here at all.
+          const operation = classifyWpCliOp(command);
+          const audit = (outcome: 'success' | 'failure', err?: string) =>
             auditDirectOperation(services, {
               operation: 'cli.wp.command',
-              target: site.name,
-              parameters: { target, command, remote: false, siteId: site.id },
-              outcome: localOk ? 'success' : 'failure',
-              error: localOk ? undefined : (result.stderr || 'Command failed'),
+              target,
+              parameters: { target, command },
+              outcome,
+              error: err,
             });
 
-            return {
-              success: localOk,
-              error: result.success ? null : (result.stderr || 'Command failed'),
-              stdout: result.stdout || '',
-              stderr: result.stderr || '',
-              exitCode: result.exitCode || 0,
-            };
-          } else {
-            // WPE site via SSH
-            const installNameOnly = parsed.installName!.split('/').pop() || parsed.installName!;
-
-            if (!services.localServices.isSSHKeyAvailable()) {
-              return {
-                success: false,
-                error: 'WP Engine SSH key not found. Connect to WP Engine via Local\'s UI first.',
-                stdout: '',
-                stderr: '',
-                exitCode: 1,
-              };
+          try {
+            if (!services.localServices) {
+              audit('failure', 'Local services not available');
+              return { success: false, error: 'Local services not available', stdout: '', stderr: '', exitCode: 1 };
             }
 
-            const wpeSettings = getEffectiveSettings(services.registryStorage);
-            const wpeCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
-            const wpeCached = wpeCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installNameOnly);
-            const wpeEnv = parsed.environment ?? wpeCached?.environment ?? 'production';
-            const wpeOp = classifyWpCliOp(command);
-            if (!isOperationAllowed(wpeOp, wpeEnv, wpeSettings, `wpe:${installNameOnly}`)) {
-              return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${wpeEnv}" environments. Adjust in Nexus AI → Settings → WP Engine Access.`, stdout: '', stderr: '', exitCode: 1 };
+            const args = resolveTargetArgs(target, services);
+            const transport = await resolveTransport(args, services, operation);
+            if ('content' in transport) {
+              const msg = (transport.content?.[0] as { text?: string } | undefined)?.text ?? 'Target could not be resolved';
+              audit('failure', msg);
+              return { success: false, error: msg, stdout: '', stderr: '', exitCode: 1 };
             }
 
-            const result = await services.localServices.remoteWpCliRun(installNameOnly, command);
-
-            // Remote WP-CLI against a WP Engine install — arbitrary command
-            // execution on a production site.
-            auditDirectOperation(services, {
-              operation: 'cli.wp.command',
-              target: `wpe:${installNameOnly}`,
-              parameters: { target, command, remote: true, environment: wpeEnv },
-              outcome: result.success ? 'success' : 'failure',
-              error: result.success ? undefined : (result.stdout || result.stderr || 'Command failed'),
-            });
-
+            const result = await transport.runWpCli(command);
+            // WpCliResult carries stdout + success always, and stderr/exitCode
+            // optionally (local-services-bridge.ts:17-23 — "Not always present").
+            // Transports that spawn ssh fold their error text into stdout, so
+            // fall back to it rather than reporting an empty failure.
+            const okRun = result.success || result.exitCode === 0;
+            const failText = result.stderr || result.stdout || 'Command failed';
+            audit(okRun ? 'success' : 'failure', okRun ? undefined : failText);
             return {
-              success: result.success,
-              error: result.success ? null : (result.stdout || result.stderr || 'Command failed'),
-              stdout: result.stdout || '',
-              stderr: result.stderr || '',
-              exitCode: result.success ? 0 : 1,
+              success: okRun,
+              error: okRun ? null : failText,
+              stdout: result.stdout ?? '',
+              stderr: result.stderr ?? '',
+              exitCode: result.exitCode ?? (okRun ? 0 : 1),
             };
+          } catch (e: any) {
+            const msg = e?.message ?? String(e);
+            audit('failure', msg);
+            return { success: false, error: msg, stdout: '', stderr: '', exitCode: 1 };
           }
-        } catch (error: any) {
-          // A command that threw mid-execution is the case an operator
-          // investigating an incident needs most.
-          auditDirectOperation(services, {
-            operation: 'cli.wp.command',
-            target,
-            parameters: { target, command },
-            outcome: 'failure',
-            error: error.message,
-          });
-          return {
-            success: false,
-            error: error.message,
-            stdout: '',
-            stderr: '',
-            exitCode: 1,
-          };
-        }
         });
       },
 

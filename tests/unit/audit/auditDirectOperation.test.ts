@@ -20,6 +20,7 @@ import { OperationAuditLog, AuditEntry } from '../../../src/main/audit/Operation
 import { createResolvers } from '../../../src/main/graphql/resolvers';
 import { createWpeResolvers } from '../../../src/main/graphql/resolvers/wpe';
 import { BulkOperationManager } from '../../../src/main/bulk/BulkOperationManager';
+import { WpeSshTransport } from '../../../src/main/transport/WpeSshTransport';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -152,7 +153,9 @@ describe('direct-call audit coverage — GraphQL resolvers', () => {
       localServices,
       operationAuditLog: log,
       registryStorage: makeRegistryStorage(),
-      siteData: { getSites: () => ({}) },
+      // getSite is part of the SiteDataAccessor contract and mcp/site-resolver
+      // calls it first. Omitting it throws rather than returning "not found".
+      siteData: { getSites: () => ({}), getSite: () => null },
       graphService: { getDb: () => null },
       indexRegistry: { listAll: () => [] },
     };
@@ -237,10 +240,15 @@ describe('direct-call audit coverage — GraphQL resolvers', () => {
 
   it('audits remote WP-CLI against a WP Engine install', async () => {
     const { dir, logPath, log } = makeLog();
-    const remoteWpCliRun = jest.fn(async () => ({ success: true, stdout: 'Success', stderr: '' }));
+    // nexusWpCommand now routes through resolveTransport, which builds a real
+    // WpeSshTransport rather than calling localServices.remoteWpCliRun. Stub
+    // the transport itself so no ssh process is spawned.
+    const runWpCli = jest
+      .spyOn(WpeSshTransport.prototype, 'runWpCli')
+      .mockResolvedValue({ success: true, stdout: 'Success', stderr: '' });
     const Mutation = getMutation({
-      remoteWpCliRun,
       isSSHKeyAvailable: () => true,
+      isCAPIAvailable: () => true,
     }, log);
 
     const res = await Mutation.nexusWpCommand(null, {
@@ -248,12 +256,19 @@ describe('direct-call audit coverage — GraphQL resolvers', () => {
       command: ['plugin', 'update', 'akismet'],
     });
     expect(res.success).toBe(true);
+    expect(runWpCli).toHaveBeenCalledWith(['plugin', 'update', 'akismet'], undefined);
+    runWpCli.mockRestore();
 
     const entries = readEntries(logPath);
     expect(entries).toHaveLength(1);
     expect(entries[0].operation).toBe('cli.wp.command');
-    expect(entries[0].target).toBe('wpe:acme-prod');
-    expect(entries[0].parameters.remote).toBe(true);
+    // CHANGED EXPECTATION (resolveTransport delegation): the resolver no longer
+    // resolves the target itself, so it audits the target string the caller
+    // actually typed rather than the post-resolution `wpe:<install>` form. It
+    // still names the install, and it is now the same value on every outcome —
+    // including a refusal, where nothing has been resolved to name.
+    expect(entries[0].target).toBe('wpe:acme/acme-prod@staging');
+    expect(entries[0].parameters.target).toBe('wpe:acme/acme-prod@staging');
     // CHANGED EXPECTATION (withhold list): the argv is withheld, not recorded.
     // Everything that identifies the operation still survives, which is the
     // property the withheld marker exists to preserve.
@@ -265,11 +280,12 @@ describe('direct-call audit coverage — GraphQL resolvers', () => {
   it('audits local WP-CLI', async () => {
     const { dir, logPath, log } = makeLog();
     const wpCliRun = jest.fn(async () => ({ success: true, stdout: 'ok', stderr: '', exitCode: 0 }));
+    const sites: Record<string, any> = { 's1': { id: 's1', name: 'mysite' } };
     const services: any = {
       localServices: { wpCliRun, getSiteStatus: () => 'running' },
       operationAuditLog: log,
       registryStorage: { get: () => ({}), set: () => {} },
-      siteData: { getSites: () => ({ 's1': { id: 's1', name: 'mysite' } }) },
+      siteData: { getSites: () => sites, getSite: (id: string) => sites[id] ?? null },
       graphService: { getDb: () => null },
       indexRegistry: { listAll: () => [] },
     };
@@ -281,8 +297,8 @@ describe('direct-call audit coverage — GraphQL resolvers', () => {
     const entries = readEntries(logPath);
     expect(entries).toHaveLength(1);
     expect(entries[0].operation).toBe('cli.wp.command');
-    expect(entries[0].target).toBe('mysite');
-    expect(entries[0].parameters.remote).toBe(false);
+    expect(entries[0].target).toBe('mysite@local');
+    expect(entries[0].parameters.target).toBe('mysite@local');
 
     fs.rmSync(dir, { recursive: true, force: true });
   });
