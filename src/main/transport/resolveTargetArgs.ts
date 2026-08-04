@@ -1,0 +1,48 @@
+import { parseTarget } from '../../common/target';
+import { resolveSite } from '../mcp/site-resolver';
+import type { NexusServices } from '../mcp/types';
+
+/**
+ * Translate a CLI-shaped target string into the args object resolveTransport
+ * consumes (`site`, `install_name`, or `ssh_target`).
+ *
+ * THE BARE-NAME FALLBACK IS LOAD-BEARING. `nexus wp core version my-install`
+ * with no prefix is a path users rely on: when a plain name is not a Local
+ * site, it is looked up in the graph DB as an active WPE install and routed
+ * remotely. resolveTarget does not do this — it keys off which argument was
+ * supplied — so the behaviour lives here or nowhere. Deleting it breaks that
+ * command silently, with a "site not found" error rather than a clue.
+ *
+ * A name that matches neither returns `{ site: name }` on purpose, so the
+ * caller produces the familiar "Site not found" message.
+ */
+export function resolveTargetArgs(
+  target: string,
+  services: NexusServices,
+): Record<string, unknown> {
+  const parsed = parseTarget(target);
+
+  if (parsed.type === 'external') return { ssh_target: target };
+
+  if (parsed.type === 'wpe') {
+    // installName may carry an account prefix; the transport wants the install only.
+    const installName = parsed.installName!.split('/').pop() || parsed.installName!;
+    return { install_name: installName };
+  }
+
+  const name = parsed.siteName!;
+  if (resolveSite(name, services.siteData)) return { site: name };
+
+  try {
+    const db = services.graphService?.getDb?.();
+    const row = db?.prepare(
+      "SELECT name FROM sites WHERE source='wpe' AND LOWER(name)=? AND is_active=1 LIMIT 1",
+    ).get(name.toLowerCase()) as { name?: string } | undefined;
+    if (row?.name) return { install_name: row.name };
+  } catch {
+    // Graph DB unavailable or mid-migration — fall through to the local path,
+    // which reports "not found". A lookup failure must not throw here.
+  }
+
+  return { site: name };
+}

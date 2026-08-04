@@ -36,24 +36,7 @@ import {
   externalSiteId, getExternalProfile, listExternalProfiles,
   removeExternalProfile, upsertExternalProfile,
 } from '../external/externalSiteStore';
-
-/** Read-only WP-CLI commands — use wpcli_read permission (default: all envs allowed). */
-const WPCLI_READ_COMMANDS = new Set([
-  'plugin list', 'plugin get',
-  'theme list', 'theme get',
-  'core version',
-  'user list', 'user get',
-  'option get',
-  'site health',
-  'post list', 'post get',
-  'post-type list',
-  'db export',
-]);
-
-function classifyWpCliOp(command: string[]): 'wpcli_read' | 'wpcli' {
-  const key = command.slice(0, 2).join(' ').toLowerCase();
-  return WPCLI_READ_COMMANDS.has(key) ? 'wpcli_read' : 'wpcli';
-}
+import { classifyWpCliOp } from '../transport/classify';
 
 /** The root value for GraphQL resolvers — always null/undefined for Query/Mutation. */
 type ResolverParent = unknown;
