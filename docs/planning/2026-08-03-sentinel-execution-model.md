@@ -518,8 +518,22 @@ Order and rough size only. Not an implementation plan.
     (~300 KB gzipped), then a deterministic sort-and-sliding-window in Node — replacing the current
     path where 500 files are collected in directory-iteration order (`:974`), truncated to the first
     60 unsorted (`:1105`), and handed to an LLM to bucket timestamps. Add the `mtime << ctime`
-    check, which is free and strictly better than ABS-08. Unblocks: the agent's self-declared
-    "primary signal of an automated attack" starts working; ABS-08 becomes deletable.
+    check — free, and the one timestamp signal `touch()` cannot rewrite. Unblocks: the agent's
+    self-declared "primary signal of an automated attack" starts working.
+
+    **CORRECTION (measured 2026-08-03).** This line previously called `mtime << ctime` "strictly
+    better than ABS-08" and concluded "ABS-08 becomes deletable". Both were wrong. Measured on
+    `markshare`, **167 of 974** PHP files show >30d skew, and every one is a bundled theme or
+    boilerplate `index.php` — archive extraction preserves the upstream mtime while setting a
+    fresh ctime, so the skew is an artifact of *installation*, not of tampering. Ship it only
+    scoped to files that fail, or are absent from, a checksum manifest. Do not delete ABS-08 on
+    the strength of it.
+
+    Same correction applies to the variable-variable pattern (`\$\$[a-zA-Z_]`) recorded elsewhere
+    as zero-false-positive: that measurement covered only two sites' `wp-content`. Over full
+    docroots, `myloop` returns **45 hit files**, all from one legitimate plugin
+    (`press-permit-core`, which uses variable variables throughout). It needs a per-site learned
+    baseline; it is not a hard signal.
 
 **Wave 3 — port the rest, decide the sandbox (weeks)**
 
