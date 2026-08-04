@@ -1,6 +1,7 @@
 import {
   buildExternalSshArgs,
   buildExternalWpCliCommand,
+  buildSshConfigDumpArgs,
   EXTERNAL_SSH_TIMEOUT_MS,
 } from '../../../src/main/transport/ssh-args';
 
@@ -49,6 +50,52 @@ describe('buildExternalWpCliCommand', () => {
       .toBe("wp 'option' 'update' 'x' 'Bob'\\''s'");
     expect(buildExternalWpCliCommand(['core', 'version'], "/srv/it's"))
       .toBe("wp --path='/srv/it'\\''s' 'core' 'version'");
+  });
+});
+
+describe('buildExternalWpCliCommand — wpCliBin', () => {
+  it('defaults to bare wp when no binary is given', () => {
+    expect(buildExternalWpCliCommand(['core', 'version'])).toBe("wp 'core' 'version'");
+  });
+
+  it('uses and escapes an explicit binary path', () => {
+    expect(buildExternalWpCliCommand(['core', 'version'], undefined, '/opt/cpanel/composer/bin/wp'))
+      .toBe("'/opt/cpanel/composer/bin/wp' 'core' 'version'");
+  });
+
+  it('keeps wpCliBin third so wpPath is not transposed', () => {
+    expect(buildExternalWpCliCommand(['core', 'version'], '/home/u/public_html', '/usr/local/bin/wp'))
+      .toBe("'/usr/local/bin/wp' --path='/home/u/public_html' 'core' 'version'");
+  });
+
+  it('escapes a binary path containing a quote', () => {
+    expect(buildExternalWpCliCommand(['x'], undefined, "/tmp/w'p"))
+      .toBe("'/tmp/w'\\''p' 'x'");
+  });
+});
+
+describe('buildExternalSshArgs — connectTimeoutSec', () => {
+  it('omits ConnectTimeout by default', () => {
+    expect(buildExternalSshArgs('h1', 'echo ok')).toEqual(['-o', 'BatchMode=yes', 'h1', 'echo ok']);
+  });
+
+  it('inserts ConnectTimeout before the alias when asked', () => {
+    expect(buildExternalSshArgs('h1', 'echo ok', { connectTimeoutSec: 10 }))
+      .toEqual(['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', 'h1', 'echo ok']);
+  });
+
+  it('still never passes -F /dev/null', () => {
+    expect(buildExternalSshArgs('h1', 'echo ok', { connectTimeoutSec: 10 })).not.toContain('-F');
+  });
+});
+
+describe('buildSshConfigDumpArgs', () => {
+  it('asks ssh to dump the resolved config for the alias', () => {
+    expect(buildSshConfigDumpArgs('h1')).toEqual(['-G', 'h1']);
+  });
+
+  it('does not pass -F /dev/null', () => {
+    expect(buildSshConfigDumpArgs('h1')).not.toContain('-F');
   });
 });
 

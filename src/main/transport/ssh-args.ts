@@ -88,10 +88,17 @@ export const EXTERNAL_SSH_TIMEOUT_MS = 20000;
  * directory — which is the web root on many hosts, so the common case needs no
  * flag at all. `wpPath` must be absolute — `~` will not expand because the
  * argument is escaped (no shell expansion occurs on a single-quoted string).
+ *
+ * `wpCliBin` is the absolute path to WP-CLI when it is not on the remote's
+ * non-interactive PATH — the common failure, since ~/.bashrc frequently
+ * early-returns when there is no tty. Undefined means plain `wp`. It is third,
+ * not second: swapping it with wpPath compiles (both are `string | undefined`)
+ * and silently transposes the one existing call site.
  */
-export function buildExternalWpCliCommand(args: string[], wpPath?: string): string {
+export function buildExternalWpCliCommand(args: string[], wpPath?: string, wpCliBin?: string): string {
+  const bin = wpCliBin ? escapeShellArg(wpCliBin) : 'wp';
   const pathFlag = wpPath ? `--path=${escapeShellArg(wpPath)} ` : '';
-  return `wp ${pathFlag}${args.map(escapeShellArg).join(' ')}`.trim();
+  return `${bin} ${pathFlag}${args.map(escapeShellArg).join(' ')}`.trim();
 }
 
 /**
@@ -108,11 +115,38 @@ export function buildExternalWpCliCommand(args: string[], wpPath?: string): stri
  *
  * BatchMode=yes prevents ssh prompting for a password on a non-tty, which would
  * hang the spawn until the timeout instead of failing immediately.
+ *
+ * connectTimeoutSec bounds the TCP connect only, not the session. The probe
+ * sets it so an unreachable host fails while the user is watching instead of
+ * waiting out the full spawn timeout.
  */
-export function buildExternalSshArgs(alias: string, remoteCommand: string): string[] {
+export function buildExternalSshArgs(
+  alias: string,
+  remoteCommand: string,
+  opts?: { connectTimeoutSec?: number },
+): string[] {
+  const connectTimeout = opts?.connectTimeoutSec
+    ? ['-o', `ConnectTimeout=${opts.connectTimeoutSec}`]
+    : [];
   return [
     '-o', 'BatchMode=yes',
+    ...connectTimeout,
     alias,
     remoteCommand,
   ];
+}
+
+/**
+ * Ask ssh to print the config it would use for an alias (hostname, user, port).
+ *
+ * Resolution, NOT validation: `ssh -G` exits 0 for an alias that appears in no
+ * config file, returning the literal alias as hostname, the local username, and
+ * port 22. It cannot distinguish a configured alias from a typo, so nothing may
+ * gate on its exit code. Its output exists to build an accurate ssh-copy-id
+ * remedy; connectivity is what actually validates the alias.
+ *
+ * No -F /dev/null, for the same reason as buildExternalSshArgs.
+ */
+export function buildSshConfigDumpArgs(alias: string): string[] {
+  return ['-G', alias];
 }
