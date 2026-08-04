@@ -33,6 +33,11 @@ export const siteHealthHandler: McpToolHandler = {
     const transport = await resolveTransport(args, services, 'wpcli_read');
     if ('content' in transport) return transport;
 
+    // For local sites, retrieve the site record to get the domain (local-only field)
+    const localSite = transport.kind === 'local' && transport.siteRef.kind === 'local'
+      ? services.siteData?.getSite(transport.siteRef.siteId)
+      : undefined;
+
     // Helper to run the health check commands via the transport
     const runHealthCheck = async (siteName: string) => {
       // Run multiple lightweight WP-CLI commands in parallel to build a health report
@@ -56,6 +61,11 @@ export const siteHealthHandler: McpToolHandler = {
       // Site name from options
       if (optionResult.status === 'fulfilled' && optionResult.value.success) {
         lines.push(`**Site Title:** ${(optionResult.value.stdout ?? '').trim()}`);
+      }
+
+      // Domain (local sites only — remote targets do not expose this field)
+      if (localSite?.domain) {
+        lines.push(`**Domain:** ${localSite.domain}`);
       }
 
       lines.push('');

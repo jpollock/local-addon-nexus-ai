@@ -11,7 +11,7 @@ import * as transportModule from '../../../src/main/transport';
 import type { NexusServices } from '../../../src/main/mcp/types';
 import type { SiteTransport } from '../../../src/main/transport/types';
 
-function makeServices(): NexusServices {
+function makeServices(overrides: any = {}): NexusServices {
   return {
     vectorStore: {} as any,
     embeddingService: {} as any,
@@ -21,10 +21,12 @@ function makeServices(): NexusServices {
     siteData: {
       getSite: jest.fn(),
       getSites: jest.fn().mockReturnValue({}),
+      ...overrides.siteData,
     },
     localServices: {
       wpCliRun: jest.fn(),
       getSiteStatus: jest.fn().mockReturnValue('running'),
+      ...overrides.localServices,
     } as any,
     logger: { info: jest.fn(), error: jest.fn() } as any,
   } as any;
@@ -85,5 +87,60 @@ describe('wp_site_health — remote transport integration', () => {
     const text = (result.content?.[0] as any)?.text ?? '';
     expect(text).toContain('Site Health:');
     expect(runWpCli).toHaveBeenCalled();
+  });
+
+  it('includes Domain line for local sites (regression pin)', async () => {
+    const runWpCli = jest.fn()
+      .mockResolvedValueOnce({ success: true, stdout: '7.0.2' })
+      .mockResolvedValueOnce({ success: true, stdout: '[]' })
+      .mockResolvedValueOnce({ success: true, stdout: '[]' })
+      .mockResolvedValueOnce({ success: true, stdout: 'My Local Site' })
+      .mockResolvedValueOnce({ success: true, stdout: '[]' });
+
+    const transport = mockTransport({
+      kind: 'local',
+      siteRef: { kind: 'local', siteId: 'site-123', siteName: 'testsite' },
+      runWpCli,
+    });
+    jest.spyOn(transportModule, 'resolveTransport').mockResolvedValue(transport);
+
+    const mockGetSite = jest.fn().mockReturnValue({
+      id: 'site-123',
+      name: 'testsite',
+      domain: 'testsite.local',
+    });
+
+    const services = makeServices({
+      siteData: { getSite: mockGetSite, getSites: jest.fn().mockReturnValue({}) },
+    });
+
+    const result = await siteHealthHandler.execute({ site: 'testsite' }, services);
+
+    expect(result.isError).toBeUndefined();
+    const text = (result.content?.[0] as any)?.text ?? '';
+    expect(text).toContain('**Domain:** testsite.local');
+    expect(mockGetSite).toHaveBeenCalledWith('site-123');
+  });
+
+  it('omits Domain line for remote WPE installs (no domain known)', async () => {
+    const runWpCli = jest.fn()
+      .mockResolvedValueOnce({ success: true, stdout: '7.0.2' })
+      .mockResolvedValueOnce({ success: true, stdout: '[]' })
+      .mockResolvedValueOnce({ success: true, stdout: '[]' })
+      .mockResolvedValueOnce({ success: true, stdout: 'Acme' })
+      .mockResolvedValueOnce({ success: true, stdout: '[]' });
+
+    const transport = mockTransport({
+      kind: 'wpe-ssh',
+      siteRef: { kind: 'wpe', installName: 'acmeprod' },
+      runWpCli,
+    });
+    jest.spyOn(transportModule, 'resolveTransport').mockResolvedValue(transport);
+
+    const services = makeServices();
+    const result = await siteHealthHandler.execute({ install_name: 'acmeprod' }, services);
+
+    const text = (result.content?.[0] as any)?.text ?? '';
+    expect(text).not.toContain('**Domain:**');
   });
 });
