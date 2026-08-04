@@ -12,6 +12,21 @@ import { getClient } from '../utils/graphql';
 
 const hostCommand = new Command('host').description('External SSH host management');
 
+/**
+ * Client timeout for the two commands that run a probe.
+ *
+ * MUST STAY ABOVE THE PROBE'S WORST CASE, which is ~155s — see the timeout
+ * block in src/main/external/probeExternalHost.ts for the arithmetic. Below it,
+ * a host slow enough to land in the gap makes the CLI print a timeout and exit
+ * 1 *while the resolver finishes and registers the host*: failure reported for
+ * an operation that succeeded. That is the slow-home-directory case the design
+ * names as a known risk, so it is not hypothetical.
+ *
+ * The extra headroom over 155s covers the resolver's serialising queue, which a
+ * probe may sit behind. Raise a probe step timeout and you must raise this.
+ */
+const HOST_PROBE_CLIENT_TIMEOUT_MS = 210000;
+
 const PROBE_FIELDS = `
   ok
   alias
@@ -50,10 +65,48 @@ function printReport(r: any): void {
   console.log('');
 }
 
+/**
+ * `failure` is nullable in the schema while `ok` is not, so `ok: false` with no
+ * failure is representable. Guarded rather than assumed: dereferencing it would
+ * replace the diagnosis with "Cannot read properties of null (reading 'split')".
+ */
 function printFailure(r: any): void {
+  if (!r?.failure) {
+    console.error(
+      `\n✗ ${r?.alias ?? 'host'}: the probe reported a failure but returned no diagnosis. `
+      + 'Re-run with --json to see the raw response.\n',
+    );
+    return;
+  }
   console.error(`\n✗ ${r.alias}: ${r.failure.kind}\n`);
-  console.error(r.failure.detail.split('\n').map((l: string) => `  ${l}`).join('\n'));
-  console.error(`\n${r.failure.remedy}\n`);
+  console.error(String(r.failure.detail ?? '').split('\n').map((l: string) => `  ${l}`).join('\n'));
+  console.error(`\n${r.failure.remedy ?? ''}\n`);
+}
+
+/**
+ * What `add` will actually label this host, for the pre-confirmation preview.
+ *
+ * Omitting `--env` means "leave a registered host alone", so echoing the flag
+ * back would be a lie for exactly the case that motivated dropping its default.
+ * Returns null when the lookup itself failed — the caller says so rather than
+ * guessing 'production', which would be wrong for every staging host.
+ */
+async function previewEnvironment(
+  client: { mutate: <T>(q: string, v: Record<string, unknown>) => Promise<T> },
+  alias: string,
+  envFlag?: string,
+): Promise<string | null> {
+  if (envFlag) return envFlag;
+  try {
+    const r = await client.mutate<{ nexusHostList: any }>(
+      'mutation { nexusHostList { success hosts { alias environment } } }', {},
+    );
+    if (!r.nexusHostList?.success) return null;
+    const existing = (r.nexusHostList.hosts ?? []).find((h: any) => h.alias === alias);
+    return existing?.environment ?? 'production';
+  } catch {
+    return null;
+  }
 }
 
 // ============================================================================
@@ -67,7 +120,7 @@ hostCommand
   .option('--json', 'Output as JSON')
   .action(async (alias, options) => {
     try {
-      const client = getClient({ timeout: 120000 });
+      const client = getClient({ timeout: HOST_PROBE_CLIENT_TIMEOUT_MS });
       const result = await client.mutate<{ nexusHostProbe: any }>(`
         mutation($alias: String!, $path: String) {
           nexusHostProbe(alias: $alias, path: $path) { success error report { ${PROBE_FIELDS} } }
@@ -103,12 +156,17 @@ hostCommand
   .command('add <alias>')
   .description('Probe an SSH host and add it to the fleet')
   .option('--path <dir>', 'WordPress root (skips discovery)')
-  .option('--env <environment>', 'production | staging | development', 'production')
+  // No commander default. A default here reaches the resolver as a value the
+  // user "chose", which makes re-running `host add` to refresh a path relabel a
+  // staging host as production. Omitted means unspecified; the resolver keeps
+  // an existing host's label and falls back to production only for a new one.
+  .option('--env <environment>',
+    'production | staging | development (new hosts default to production; an already-registered host keeps its label)')
   .option('-y, --yes', 'Skip the confirmation prompt')
   .option('--json', 'Output as JSON')
   .action(async (alias, options) => {
     try {
-      const client = getClient({ timeout: 120000 });
+      const client = getClient({ timeout: HOST_PROBE_CLIENT_TIMEOUT_MS });
 
       if (!options.yes && !options.json) {
         console.log(`\nProbing ${alias}...`);
@@ -127,7 +185,10 @@ hostCommand
         if (!pr.report.ok) { printFailure(pr.report); process.exit(1); }
 
         printReport(pr.report);
-        console.log(`  Environment ${options.env}   (writes are refused on production by default)`);
+        const envPreview = await previewEnvironment(client, alias, options.env);
+        console.log(envPreview === null
+          ? '  Environment production for a new host; unchanged if this host is already registered'
+          : `  Environment ${envPreview}   (writes are refused on production by default)`);
         if (!(await confirm(`\nAdd ${alias} to the fleet?`))) {
           console.log('Cancelled.');
           process.exit(0);
@@ -140,14 +201,14 @@ hostCommand
       const result = await client.mutate<{ nexusHostAdd: any }>(`
         mutation($alias: String!, $path: String, $environment: String) {
           nexusHostAdd(alias: $alias, path: $path, environment: $environment) {
-            success error registered report { ${PROBE_FIELDS} }
+            success error registered environment report { ${PROBE_FIELDS} }
           }
         }
-      `, { alias, path: options.path ?? null, environment: options.env });
+      `, { alias, path: options.path ?? null, environment: options.env ?? null });
 
-      const { success, error, registered, report } = result.nexusHostAdd;
+      const { success, error, registered, report, environment } = result.nexusHostAdd;
       if (options.json) {
-        console.log(JSON.stringify({ registered, report, error }, null, 2));
+        console.log(JSON.stringify({ registered, environment, report, error }, null, 2));
         process.exit(registered ? 0 : 1);
       }
       if (!success) { console.error(`✗ ${error}`); process.exit(1); }
@@ -162,7 +223,10 @@ hostCommand
 
       console.log(`\n✓ Added ${alias} to the fleet.`);
       printReport(report);
-      console.log(`  Try: nexus wp core version ssh:${alias}@${options.env}\n`);
+      // The resolver's environment, not options.env: with --env omitted the two
+      // differ for a host that was already registered, and a target line the
+      // user cannot address the host by is worse than no target line.
+      console.log(`  Try: nexus wp core version ssh:${alias}@${environment ?? 'production'}\n`);
     } catch (e: any) {
       console.error(`✗ ${e.message}`);
       process.exit(1);
@@ -190,7 +254,15 @@ hostCommand
       `, {});
 
       const { success, error, hosts } = result.nexusHostList;
-      if (options.json) { console.log(JSON.stringify(hosts, null, 2)); return; }
+      if (options.json) {
+        // Failure is reported in the payload AND the exit code. Printing
+        // `hosts` unconditionally emitted `[]` for a failed resolver, discarded
+        // `error`, and exited 0 — a script could not tell "no hosts" from "the
+        // addon is broken". `test` and `add` already order it this way.
+        console.log(JSON.stringify(success ? hosts : { error }, null, 2));
+        if (!success) process.exit(1);
+        return;
+      }
       if (!success) { console.error(`✗ ${error}`); process.exit(1); }
 
       if (hosts.length === 0) {

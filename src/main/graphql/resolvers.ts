@@ -5414,29 +5414,45 @@ export function createResolvers(context: ResolverContext) {
       ) => {
         return withQueue(async () => {
           try {
-            const env = environment ?? 'production';
-            if (!['production', 'staging', 'development'].includes(env)) {
+            if (environment !== undefined && environment !== null
+              && !['production', 'staging', 'development'].includes(environment)) {
               return {
-                success: false, registered: false, report: null,
-                error: `Invalid environment '${env}'. Expected production, staging or development.`,
+                success: false, registered: false, report: null, environment: null,
+                error: `Invalid environment '${environment}'. Expected production, staging or development.`,
               };
             }
-            // TypeScript narrowing: after validation, env is one of the literal types
-            const validEnv = env as 'production' | 'staging' | 'development';
             const storage = (services as any).registryStorage;
             if (!storage) {
-              return { success: false, registered: false, report: null, error: 'Storage not available' };
+              return {
+                success: false, registered: false, report: null, environment: null,
+                error: 'Storage not available',
+              };
             }
+
+            // No --env means "unspecified", not "production". Re-running
+            // `nexus host add <alias>` to refresh a discovered path is the
+            // idempotency this command advertises; defaulting to production
+            // there would silently relabel a staging host — and the label is
+            // the write gate. Only a genuinely new host falls back to
+            // production, which is the most restrictive default.
+            const existing = getExternalProfile(storage, alias);
+            const validEnv = (environment ?? existing?.environment ?? 'production') as
+              'production' | 'staging' | 'development';
 
             const report = await probeExternalHost(alias, { wpPath: path ?? undefined });
 
             // Refuse on any probe failure: a typo must not litter the fleet with
             // hosts that were never reachable.
             if (!report.ok) {
-              return { success: true, registered: false, report: toHostReport(report), error: null };
+              return {
+                success: true, registered: false, report: toHostReport(report),
+                environment: validEnv, error: null,
+              };
             }
 
             const now = Date.now();
+            // 'registration': this is the deliberate path, so the label it
+            // computed wins over whatever a previous lazy sighting stored.
             upsertExternalProfile(storage, {
               alias,
               wpPath: report.wpPath,
@@ -5444,7 +5460,7 @@ export function createResolvers(context: ResolverContext) {
               environment: validEnv,
               firstSeenAt: now,
               lastSeenAt: now,
-            });
+            }, 'registration');
 
             let domain = alias;
             if (report.siteUrl) {
@@ -5465,9 +5481,17 @@ export function createResolvers(context: ResolverContext) {
               last_sync_at: now,
             });
 
-            return { success: true, registered: true, report: toHostReport(report), error: null };
+            // `environment` is returned so the CLI can print what was actually
+            // used rather than echoing a flag the user may not have passed.
+            return {
+              success: true, registered: true, report: toHostReport(report),
+              environment: validEnv, error: null,
+            };
           } catch (e: any) {
-            return { success: false, registered: false, report: null, error: e?.message ?? String(e) };
+            return {
+              success: false, registered: false, report: null, environment: null,
+              error: e?.message ?? String(e),
+            };
           }
         });
       },

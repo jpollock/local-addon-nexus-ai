@@ -2121,6 +2121,8 @@ export const typeDefs = gql`
     error: String
     report: NexusHostProbeReport
     registered: Boolean!
+    "The environment actually used. Omitting the argument leaves an already-registered host's label alone, so this is not always what the caller passed."
+    environment: String
   }
 
   type NexusHostListResult {

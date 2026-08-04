@@ -113,6 +113,60 @@ describe('nexusHostAdd', () => {
   });
 });
 
+describe('nexusHostAdd — the environment label', () => {
+  it('defaults a brand-new host to production', async () => {
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    const r = await (createResolvers(c.context).Mutation as any).nexusHostAdd(null, { alias: 'h1' });
+    expect(profiles(c.store).h1.environment).toBe('production');
+    expect(r.environment).toBe('production');
+  });
+
+  it('leaves an already-registered staging host alone when --env is omitted', async () => {
+    // The idempotency the design advertises: re-running `host add` to refresh a
+    // discovered path must not relabel the host, because the label gates writes.
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    const m = createResolvers(c.context).Mutation as any;
+    await m.nexusHostAdd(null, { alias: 'h1', environment: 'staging' });
+    const r = await m.nexusHostAdd(null, { alias: 'h1' });
+    expect(profiles(c.store).h1.environment).toBe('staging');
+    expect(r.environment).toBe('staging');
+  });
+
+  it('relabels a production host when --env staging is passed deliberately', async () => {
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    const m = createResolvers(c.context).Mutation as any;
+    await m.nexusHostAdd(null, { alias: 'h1', environment: 'production' });
+    const r = await m.nexusHostAdd(null, { alias: 'h1', environment: 'staging' });
+    expect(profiles(c.store).h1.environment).toBe('staging');
+    expect(r.environment).toBe('staging');
+    expect(c.upserted.at(-1).environment).toBe('staging');
+  });
+
+  it('treats an explicit null environment as unspecified, not invalid', async () => {
+    // The CLI sends null for an omitted --env, since GraphQL variables are
+    // serialised as JSON. That must not trip the validity check.
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    const m = createResolvers(c.context).Mutation as any;
+    await m.nexusHostAdd(null, { alias: 'h1', environment: 'development' });
+    const r = await m.nexusHostAdd(null, { alias: 'h1', environment: null });
+    expect(r.success).toBe(true);
+    expect(r.environment).toBe('development');
+  });
+
+  it('writes the resolved environment to the sites row, not the argument', async () => {
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    const m = createResolvers(c.context).Mutation as any;
+    await m.nexusHostAdd(null, { alias: 'h1', environment: 'staging' });
+    await m.nexusHostAdd(null, { alias: 'h1' });
+    expect(c.upserted.at(-1).environment).toBe('staging');
+  });
+});
+
 describe('nexusHostProbe', () => {
   it('never persists, even on success', async () => {
     probeMock.mockResolvedValue(okReport());
