@@ -420,8 +420,22 @@ Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not L
 - The WordPress path is discovered automatically; `--path` is only needed when discovery finds nothing or finds several installs.
 - `--env` defaults to `production` for a host you have not registered before; re-running `nexus host add` without `--env` leaves an existing host's label alone. Writes are refused on production by default (see Settings > Nexus AI > Operation Permissions).
 - The registered environment is the write gate, and a target suffix cannot loosen it: a host registered as `production` still refuses writes when addressed as `ssh:<alias>@development`. Relabel it with `nexus host add <alias> --env development`.
-- Once a host is registered, address it as `ssh:<alias>@<environment>` — for example `nexus wp core version ssh:myhost@production` — with no `--path` needed.
 - If key-based login is not set up, `nexus host test` tells you the exact `ssh-copy-id` command to run. You run it; Nexus does not.
+- Aliases must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`. A `user@host` form or an IPv6 literal is rejected — put those in a `~/.ssh/config` `Host` block and use the block's name.
+
+**Which `nexus wp` commands work against a registered host — read this before relying on it.**
+
+Once a host is registered you address it as `ssh:<alias>@<environment>`, with no `--path` needed. But only these three `nexus wp` commands currently reach an external host:
+
+```bash
+nexus wp core version ssh:<alias>@<environment>
+nexus wp plugin list  ssh:<alias>@<environment>
+nexus wp health       ssh:<alias>@<environment>
+```
+
+All three are read-only. Every other `nexus wp` subcommand routes through a path that understands Local and WP Engine targets only, and will fail on an `ssh:` target. Broader support is planned; until it lands, treat external hosts as read-only from the CLI.
+
+One consequence worth knowing: because no write command can currently reach an external host, the environment write-gate described above is enforced but not yet reachable from the CLI. It is not decorative — it will apply the moment write commands are wired up — but you cannot exercise it today.
 
 ### WP Engine Commands (`nexus wpe`)
 

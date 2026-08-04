@@ -131,6 +131,21 @@ Target syntax: `ssh:<alias>@<production|staging|development>`.
   registered environment — only `nexus host add` (`source: 'registration'`)
   can. Omitting `--env` means *unspecified*: an existing host keeps its label,
   and only a new one defaults to `production`.
+- **Only three `nexus wp` commands actually reach an external host.**
+  `wp core version`, `wp plugin list` and `wp health` go through
+  `targetToMcpArgs` → `callMcpTool` → `resolveTransport`, which is the only
+  path that understands `ssh_target`. The other ~77 call sites in
+  `src/cli/commands/wp.ts` go through the `nexusWpCommand` resolver
+  (`graphql/resolvers.ts`), which branches on `local` and `wpe` only — an
+  `ssh:` target falls past the `local` branch into the WPE path and fails.
+  `ssh_target` is also still undeclared in every wp-cli tool's `inputSchema`,
+  so MCP agents cannot discover it. All three working commands are read-only,
+  which means **the environment write-gate above is enforced but not currently
+  reachable from any CLI surface** — it is unit-tested and it fires in
+  `resolveTransport`, but no caller can exercise it yet. Widening this is
+  spec-worthy, not a patch: routing external through `nexusWpCommand` drags it
+  under `GRAPHQL_REMOTE_POLICY`, which Spec 0 deliberately kept separate from
+  `EXTERNAL_REMOTE_POLICY`.
 - **The probe bypasses both `withPolicy(EXTERNAL_REMOTE_POLICY)` and
   `isOperationAllowed`.** `probeExternalHost` calls `sshExec` directly, so
   neither layer is in its path. This is accepted, not overlooked: its command
