@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { DAY_MS } from '../../../twin/twin-helpers';
 import type { SiteSource } from '../../../../common/types';
+import { toSiteSource } from '../../../../common/types';
 
 interface ThemeMatch {
   siteName: string;
@@ -77,13 +78,13 @@ export const findSitesWithThemeHandler: McpToolHandler = {
           // Remote sites of every kind: WPE installs and external SSH hosts.
           // Add new remote kinds here; `!= 'local'` is forbidden (see source-semantics.test.ts).
           const rows = db.prepare(`
-            SELECT t.slug, t.name, t.version, t.is_active, s.name as site_name
+            SELECT t.slug, t.name, t.version, t.is_active, s.name as site_name, s.source
             FROM themes t
             JOIN sites s ON t.site_id = s.id
             WHERE s.source IN ('wpe', 'external')
               AND (LOWER(t.slug) = ? OR LOWER(t.name) LIKE ?)
           `).all(queryLower, `%${queryLower}%`) as Array<{
-            slug: string; name: string; version: string; is_active: number; site_name: string;
+            slug: string; name: string; version: string; is_active: number; site_name: string; source: string;
           }>;
 
           for (const row of rows) {
@@ -93,7 +94,7 @@ export const findSitesWithThemeHandler: McpToolHandler = {
               version: row.version ?? '?',
               status: row.is_active ? 'active' : 'inactive',
               isChildTheme: false,
-              source: 'wpe',
+              source: toSiteSource(row.source),
             });
           }
 
@@ -108,7 +109,7 @@ export const findSitesWithThemeHandler: McpToolHandler = {
     const totalSearched = indexed.length + wpeTotal;
 
     if (matches.length === 0) {
-      return ok(`No sites have a theme matching "${query}" (searched ${totalSearched} sites: ${indexed.length} local, ${wpeTotal} WPE).`);
+      return ok(`No sites have a theme matching "${query}" (searched ${totalSearched} sites: ${indexed.length} local, ${wpeTotal} remote).`);
     }
 
     const lines: string[] = [`## Sites with theme "${query}"`, ''];
@@ -116,16 +117,16 @@ export const findSitesWithThemeHandler: McpToolHandler = {
     lines.push('|------|-------|---------|--------|--------|-------------|');
 
     const localMatches = matches.filter((m) => m.source === 'local');
-    const wpeMatches = matches.filter((m) => m.source === 'wpe');
+    const remoteMatches = matches.filter((m) => m.source === 'wpe' || m.source === 'external');
 
-    for (const m of [...localMatches, ...wpeMatches]) {
+    for (const m of [...localMatches, ...remoteMatches]) {
       const date = m.lastIndexed ? new Date(m.lastIndexed).toISOString().split('T')[0] : '—';
       const childInfo = m.isChildTheme ? ` (child of ${m.parentTheme || '?'})` : '';
-      lines.push(`| ${m.siteName} | ${m.themeName}${childInfo} | v${m.version} | ${m.status} | ${m.source === 'wpe' ? '[wpe]' : '[local]'} | ${date} |`);
+      lines.push(`| ${m.siteName} | ${m.themeName}${childInfo} | v${m.version} | ${m.status} | [${m.source}] | ${date} |`);
     }
 
     lines.push('');
-    lines.push(`Found in ${matches.length} of ${totalSearched} sites (${indexed.length} local, ${wpeTotal} WPE).`);
+    lines.push(`Found in ${matches.length} of ${totalSearched} sites (${indexed.length} local, ${wpeTotal} remote).`);
 
     if (staleCount > 0) {
       if (staleCount === indexed.length) {

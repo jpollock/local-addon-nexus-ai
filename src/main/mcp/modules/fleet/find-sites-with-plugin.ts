@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { HOUR_MS, DAY_MS } from '../../../twin/twin-helpers';
 import type { SiteSource } from '../../../../common/types';
+import { toSiteSource } from '../../../../common/types';
 
 interface Match {
   siteName: string;
@@ -72,13 +73,13 @@ export const findSitesWithPluginHandler: McpToolHandler = {
           // Remote sites of every kind: WPE installs and external SSH hosts.
           // Add new remote kinds here; `!= 'local'` is forbidden (see source-semantics.test.ts).
           const rows = db.prepare(`
-            SELECT p.slug, p.version, p.is_active, s.name as site_name
+            SELECT p.slug, p.version, p.is_active, s.name as site_name, s.source
             FROM plugins p
             JOIN sites s ON p.site_id = s.id
             WHERE s.source IN ('wpe', 'external')
               AND (LOWER(p.slug) = ? OR LOWER(p.slug) LIKE ?)
           `).all(queryLower, `%${queryLower}%`) as Array<{
-            slug: string; version: string; is_active: number; site_name: string;
+            slug: string; version: string; is_active: number; site_name: string; source: string;
           }>;
 
           const wpeSitesSeen = new Set<string>();
@@ -89,7 +90,7 @@ export const findSitesWithPluginHandler: McpToolHandler = {
                 siteName: row.site_name,
                 version: row.version ?? '?',
                 status: row.is_active ? 'active' : 'inactive',
-                source: 'wpe',
+                source: toSiteSource(row.source),
               });
             }
           }
@@ -105,7 +106,7 @@ export const findSitesWithPluginHandler: McpToolHandler = {
     const totalSearched = indexed.length + wpeTotal;
 
     if (matches.length === 0) {
-      return ok(`No sites have a plugin matching "${query}" (searched ${totalSearched} sites: ${indexed.length} local, ${wpeTotal} WPE).`);
+      return ok(`No sites have a plugin matching "${query}" (searched ${totalSearched} sites: ${indexed.length} local, ${wpeTotal} remote).`);
     }
 
     const lines: string[] = [`## Sites with "${query}"`, ''];
@@ -113,15 +114,15 @@ export const findSitesWithPluginHandler: McpToolHandler = {
     lines.push('|------|---------|--------|--------|-------------|');
 
     const localMatches = matches.filter((m) => m.source === 'local');
-    const wpeMatches = matches.filter((m) => m.source === 'wpe');
+    const remoteMatches = matches.filter((m) => m.source === 'wpe' || m.source === 'external');
 
-    for (const m of [...localMatches, ...wpeMatches]) {
+    for (const m of [...localMatches, ...remoteMatches]) {
       const date = m.lastIndexed ? new Date(m.lastIndexed).toISOString().split('T')[0] : '—';
-      lines.push(`| ${m.siteName} | v${m.version} | ${m.status} | ${m.source === 'wpe' ? '[wpe]' : '[local]'} | ${date} |`);
+      lines.push(`| ${m.siteName} | v${m.version} | ${m.status} | [${m.source}] | ${date} |`);
     }
 
     lines.push('');
-    lines.push(`Found in ${matches.length} of ${totalSearched} sites (${indexed.length} local, ${wpeTotal} WPE).`);
+    lines.push(`Found in ${matches.length} of ${totalSearched} sites (${indexed.length} local, ${wpeTotal} remote).`);
 
     // Staleness: only warn if a meaningful fraction of local sites are stale
     if (staleCount > 0) {

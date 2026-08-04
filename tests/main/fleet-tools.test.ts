@@ -729,8 +729,8 @@ describe('edge cases', () => {
 // ---------------------------------------------------------------------------
 
 function makeGraphService(opts: {
-  pluginRows?: Array<{ slug: string; name: string | null; is_active: number; site_name: string }>;
-  themeRows?: Array<{ slug: string; name: string; version: string; is_active: number; site_name: string }>;
+  pluginRows?: Array<{ slug: string; name: string | null; is_active: number; site_name: string; source?: string }>;
+  themeRows?: Array<{ slug: string; name: string; version: string; is_active: number; site_name: string; source?: string }>;
   wpeSiteCount?: number;
   wpeSites?: Array<{ name: string; wp_version: string | null; php_version: string | null }>;
 }) {
@@ -744,8 +744,9 @@ function makeGraphService(opts: {
     getDb: () => ({
       prepare: (sql: string) => ({
         all: (..._args: any[]) => {
-          if (sql.includes('themes')) return themeRows;
-          if (sql.includes('plugins')) return pluginRows;
+          // Add default source='wpe' if not specified (backwards compat)
+          if (sql.includes('themes')) return themeRows.map(r => ({ ...r, source: r.source ?? 'wpe' }));
+          if (sql.includes('plugins')) return pluginRows.map(r => ({ ...r, source: r.source ?? 'wpe' }));
           if (sql.includes('sites') && !sql.includes('plugins') && !sql.includes('themes')) return wpeSites;
           return [];
         },
@@ -817,7 +818,7 @@ describe('find_sites_with_plugin — WPE data path', () => {
     const text = getText(result);
 
     // 2 local (Curated Shelf + Dev Store) + 1 WPE match, searched 3 local + 2 WPE
-    expect(text).toContain('3 local, 2 WPE');
+    expect(text).toContain('3 local, 2 remote');
     expect(text).toContain('wpe-prod');
   });
 
@@ -832,7 +833,7 @@ describe('find_sites_with_plugin — WPE data path', () => {
     const result = await registry.call('find_sites_with_plugin', { plugin: 'nonexistent' }, services);
     const text = getText(result);
 
-    expect(text).toContain('0 local, 3 WPE');
+    expect(text).toContain('0 local, 3 remote');
   });
 });
 
@@ -867,7 +868,7 @@ describe('find_sites_with_theme — WPE data path', () => {
     const result = await registry.call('find_sites_with_theme', { theme: 'nonexistent' }, services);
     const text = getText(result);
 
-    expect(text).toContain('0 local, 4 WPE');
+    expect(text).toContain('0 local, 4 remote');
   });
 });
 
