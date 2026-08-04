@@ -1,5 +1,6 @@
 /**
- * nexusWpCommand — the GraphQL resolver behind ~17 `nexus wp` CLI commands.
+ * nexusWpCommand and nexusWpPluginList — the GraphQL resolvers behind the
+ * `nexus wp` CLI commands.
  *
  * It used to hand-roll its own target resolution, command blocklist and
  * permission gate, and knew only two target types. These tests pin the
@@ -125,5 +126,106 @@ describe('nexusWpCommand', () => {
       null, { target: 'ssh:box@production', command: ['plugin', 'install', 'x'] });
     expect(auditMock).toHaveBeenCalledTimes(1);
     expect(auditMock.mock.calls[0][1]).toMatchObject({ outcome: 'failure' });
+  });
+});
+
+const PLUGIN_JSON = JSON.stringify([
+  { name: 'akismet', title: 'Akismet Anti-spam', status: 'active', version: '5.3', update_version: '5.4' },
+]);
+
+describe('nexusWpPluginList', () => {
+  const list = (target: string) =>
+    createResolvers(ctx()).Mutation.nexusWpPluginList(null, { target });
+
+  it('does not crash on an ssh: target — the whole point of the migration', async () => {
+    // Before the migration an ssh: target fell past the `local` branch into the
+    // WPE `else`, where parsed.installName is undefined:
+    //   "Cannot read properties of undefined (reading 'split')".
+    // Reachable via `nexus wp plugin list <ssh-target> --json` (wp.ts:31 skips
+    // the MCP path for --json) and whenever the MCP server is down.
+    resolveTransportMock.mockResolvedValue(transport({ stdout: PLUGIN_JSON, success: true }));
+    const r = await list('ssh:box@production');
+    expect(r.success).toBe(true);
+    expect(r.error).toBeUndefined();
+    expect(r.plugins).toEqual([{
+      name: 'Akismet Anti-spam', slug: 'akismet', status: 'active',
+      version: '5.3', update: '5.4', autoUpdate: null,
+    }]);
+  });
+
+  it('classifies plugin list as a read and passes wpcli_read to the gate', async () => {
+    resolveTransportMock.mockResolvedValue(transport({ stdout: '[]', success: true }));
+    await list('ssh:box@production');
+    expect(resolveTransportMock).toHaveBeenCalledWith(
+      { ssh_target: 'ssh:box@production' }, expect.anything(), 'wpcli_read');
+  });
+
+  it('asks for the fields the response shape promises', async () => {
+    // Plain --format=json returns neither title nor update_version, so `name`
+    // would silently become the slug and `update` would always be null.
+    const t = transport({ stdout: '[]', success: true });
+    resolveTransportMock.mockResolvedValue(t);
+    await list('ssh:box@production');
+    expect(t.runWpCli).toHaveBeenCalledWith([
+      'plugin', 'list', '--format=json',
+      '--fields=name,title,version,status,update_version',
+    ]);
+  });
+
+  it('returns the refusal instead of throwing, and audits it', async () => {
+    resolveTransportMock.mockResolvedValue({ content: [{ text: 'Operation blocked: nope' }], isError: true });
+    const r = await list('ssh:box@production');
+    expect(r.success).toBe(false);
+    expect(r.error).toContain('Operation blocked');
+    expect(r.plugins).toEqual([]);
+    expect(auditMock.mock.calls[0][1]).toMatchObject({
+      operation: 'cli.wp.plugin.list', outcome: 'failure',
+    });
+  });
+
+  it('audits success with the resolved identity', async () => {
+    resolveTransportMock.mockResolvedValue(
+      transport({ stdout: '[]', success: true }, { kind: 'wpe', installName: 'acme-prod' }));
+    await list('acme-prod');
+    expect(auditMock).toHaveBeenCalledTimes(1);
+    expect(auditMock.mock.calls[0][1]).toMatchObject({
+      operation: 'cli.wp.plugin.list', outcome: 'success',
+    });
+    expect(auditMock.mock.calls[0][1].parameters).toMatchObject({
+      resolved: { kind: 'wpe', installName: 'acme-prod' },
+    });
+  });
+
+  it('keeps the WPE hostname hint on a failed remote lookup', async () => {
+    resolveTransportMock.mockResolvedValue(transport(
+      { stdout: 'ssh: Could not resolve hostname nope.ssh.wpengine.net', success: false },
+      { kind: 'wpe', installName: 'nope' }));
+    const r = await list('wpe:acct/nope@production');
+    expect(r.success).toBe(false);
+    expect(r.error).toContain('nope.ssh.wpengine.net');
+    expect(auditMock.mock.calls[0][1]).toMatchObject({ outcome: 'failure' });
+  });
+
+  it('does not dress up an external host failure as a WPE one', async () => {
+    resolveTransportMock.mockResolvedValue(
+      transport({ stdout: 'Permission denied (publickey).', success: false }));
+    const r = await list('ssh:box@production');
+    expect(r.error).toBe('Permission denied (publickey).');
+  });
+
+  it('reports unparseable output rather than throwing', async () => {
+    resolveTransportMock.mockResolvedValue(transport({ stdout: 'PHP Warning: ...', success: true }));
+    const r = await list('ssh:box@production');
+    expect(r.success).toBe(false);
+    expect(r.error).toBe('Failed to parse plugin list JSON');
+    expect(auditMock.mock.calls[0][1]).toMatchObject({ outcome: 'failure' });
+  });
+
+  it('audits a thrown exception', async () => {
+    resolveTransportMock.mockRejectedValue(new Error('graph db exploded'));
+    const r = await list('ssh:box@production');
+    expect(r.success).toBe(false);
+    expect(r.error).toBe('graph db exploded');
+    expect(auditMock.mock.calls[0][1]).toMatchObject({ outcome: 'failure', error: 'graph db exploded' });
   });
 });

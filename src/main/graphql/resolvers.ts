@@ -44,6 +44,36 @@ import type { SiteRef } from '../transport';
 /** The root value for GraphQL resolvers — always null/undefined for Query/Mutation. */
 type ResolverParent = unknown;
 
+/**
+ * The one argv nexusWpPluginList runs, on every target type.
+ *
+ * `--fields` is not decoration: `wp plugin list --format=json` returns only
+ * name/status/update/version, and the GraphQL response shape promises `name`
+ * (the plugin *title*) and `update`. Local sites used to get those from Local's
+ * own getPlugins API; asking WP-CLI for them keeps the response identical
+ * across all three transports. `auto_update` is deliberately absent — it needs
+ * WP-CLI 2.5+, and an unknown field makes the whole command fail rather than
+ * degrade, so it stays null exactly as it already did on both old branches.
+ */
+const PLUGIN_LIST_ARGV = [
+  'plugin', 'list', '--format=json',
+  '--fields=name,title,version,status,update_version',
+];
+
+/** Turn two common WPE SSH failures into something the user can act on. */
+function annotatePluginListFailure(raw: string, siteRef: SiteRef): string {
+  if (siteRef.kind !== 'wpe') return raw;
+  if (raw.includes('Could not resolve hostname')) {
+    return `Cannot connect to WPE install "${siteRef.installName}". `
+      + 'The install name may be incorrect or the install may not exist. '
+      + `SSH hostname attempted: ${siteRef.installName}.ssh.wpengine.net`;
+  }
+  if (raw.includes('Permission denied')) {
+    return 'SSH authentication failed. Verify your WP Engine SSH key is set up correctly in Local.';
+  }
+  return raw;
+}
+
 interface ResolverContext {
   registry: ToolRegistry;
   services: NexusServices;
@@ -1682,166 +1712,83 @@ export function createResolvers(context: ResolverContext) {
       },
 
       /**
-       * List plugins on a site (local or WPE)
+       * List plugins on a site — local, WP Engine, or an external SSH host.
+       *
+       * Same router as nexusWpCommand. This resolver used to hand-roll target
+       * resolution and its own isOperationAllowed call with an environment
+       * derived from the target suffix, and it knew only two target types: an
+       * `ssh:` target fell through the `local` branch into the WPE `else`,
+       * where `installName` is undefined, and threw "Cannot read properties of
+       * undefined (reading 'split')". `nexus wp plugin list <ssh-target>
+       * --json` reaches it directly (wp.ts:31 skips the MCP path for --json),
+       * as does the plain form whenever the MCP server is down.
        */
       nexusWpPluginList: async (_parent: ResolverParent, { target }: { target: string }) => {
         return withQueue(async () => {
-        try {
-          if (!services.localServices) {
-            return {
-              success: false,
-              error: 'Local services not available',
-              plugins: [],
-            };
-          }
+          // `plugin list` is a read on every surface; the gate inside
+          // resolveTransport is given the same classification the CLI route
+          // computes for it.
+          const operation = classifyWpCliOp(PLUGIN_LIST_ARGV);
 
-          const parsed = parseTarget(target);
+          let resolved: SiteRef | undefined;
+          const audit = (outcome: 'success' | 'failure', err?: string) =>
+            auditDirectOperation(services, {
+              operation: 'cli.wp.plugin.list',
+              target,
+              parameters: { target, ...(resolved ? { resolved } : {}) },
+              outcome,
+              error: err,
+            });
 
-          if (parsed.type === 'local') {
-            // Local site
-            const site = resolveSite(parsed.siteName!, services.siteData);
-            if (!site) {
-              // Bare-name fallback: check WPE graph DB before giving up
-              const db = services.graphService?.getDb?.();
-              if (db) {
-                try {
-                  const wpeRow = db.prepare(
-                    "SELECT name FROM sites WHERE source='wpe' AND LOWER(name)=? AND is_active=1 LIMIT 1"
-                  ).get(parsed.siteName!.toLowerCase()) as any;
-                  if (wpeRow) {
-                    if (!services.localServices.isSSHKeyAvailable()) {
-                      return {
-                        success: false,
-                        error: 'WP Engine SSH key not found. Connect to WP Engine via Local\'s UI first.',
-                        plugins: [],
-                      };
-                    }
-                    const pluginResult = await services.localServices.remoteWpCliRun(
-                      wpeRow.name,
-                      ['plugin', 'list', '--format=json', '--fields=name,title,version,status,update_version'],
-                    );
-                    if (!pluginResult.success) {
-                      return { success: false, error: pluginResult.stdout || pluginResult.stderr || 'Command failed', plugins: [] };
-                    }
-                    const raw = JSON.parse(pluginResult.stdout || '[]');
-                    return {
-                      success: true,
-                      plugins: raw.map((p: any) => ({
-                        name: p.title || p.name,
-                        slug: p.name,
-                        status: p.status,
-                        version: p.version,
-                        update: p.update_version || null,
-                        autoUpdate: null,
-                      })),
-                    };
-                  }
-                } catch { /* graph not ready */ }
-              }
-              return {
-                success: false,
-                error: `Site not found: ${parsed.siteName}`,
-                plugins: [],
-              };
+          try {
+            if (!services.localServices) {
+              audit('failure', 'Local services not available');
+              return { success: false, error: 'Local services not available', plugins: [] };
             }
 
-            const status = services.localServices!.getSiteStatus(site.id);
-            if (status !== 'running') {
-              return {
-                success: false,
-                error: `Site "${site.name}" is ${status}. Start it first.`,
-                plugins: [],
-              };
+            const args = resolveTargetArgs(target, services);
+            const transport = await resolveTransport(args, services, operation);
+            if ('content' in transport) {
+              const msg = (transport.content?.[0] as { text?: string } | undefined)?.text ?? 'Target could not be resolved';
+              audit('failure', msg);
+              return { success: false, error: msg, plugins: [] };
+            }
+            resolved = transport.siteRef;
+
+            const result = await transport.runWpCli(PLUGIN_LIST_ARGV);
+            if (!result.success && result.exitCode !== 0) {
+              // Both SSH transports fold their error text into stdout.
+              const raw = result.stdout || result.stderr || 'Failed to list plugins';
+              const msg = annotatePluginListFailure(raw, transport.siteRef);
+              audit('failure', msg);
+              return { success: false, error: msg, plugins: [] };
             }
 
-            const plugins = await services.localServices.getPlugins(site.id);
+            let parsed: any[];
+            try {
+              parsed = JSON.parse(result.stdout || '[]');
+            } catch {
+              audit('failure', 'Failed to parse plugin list JSON');
+              return { success: false, error: 'Failed to parse plugin list JSON', plugins: [] };
+            }
 
+            audit('success');
             return {
               success: true,
-              plugins: plugins.map((p: any) => ({
+              plugins: parsed.map((p: any) => ({
                 name: p.title || p.name,
                 slug: p.name,
                 status: p.status,
                 version: p.version,
                 update: p.update_version || null,
-                autoUpdate: null,
+                autoUpdate: p.auto_update ?? null,
               })),
             };
-          } else {
-            // WPE site via SSH
-            // Extract just the install name from "account/install" format
-            const installNameOnly = parsed.installName!.split('/').pop() || parsed.installName!;
-
-            // Check if SSH key is available
-            if (!services.localServices.isSSHKeyAvailable()) {
-              return {
-                success: false,
-                error: 'WP Engine SSH key not found. Connect to WP Engine via Local\'s UI first to generate the SSH key.',
-                plugins: [],
-              };
-            }
-
-            // Access control check using parsed.environment (explicit in target)
-            const pluginListSettings = getEffectiveSettings(services.registryStorage);
-            const pluginListCache = services.registryStorage?.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs?: Array<{ installName?: string; install_name?: string; environment?: string }> } | null;
-            const pluginListCached = pluginListCache?.installs?.find((i: any) => (i.installName ?? i.install_name) === installNameOnly);
-            const pluginListEnv = parsed.environment ?? pluginListCached?.environment ?? 'production';
-            if (!isOperationAllowed('wpcli_read', pluginListEnv, pluginListSettings, `wpe:${installNameOnly}`)) {
-              return { success: false, error: `Operation blocked: WP-CLI is not permitted on "${pluginListEnv}" environments. Adjust in Nexus AI → Settings → WP Engine Access.`, plugins: [] };
-            }
-
-            const wpCliResult = await services.localServices.remoteWpCliRun(
-              installNameOnly,
-              ['plugin', 'list', '--format=json']
-            );
-
-            if (!wpCliResult.success) {
-              let errorMsg = wpCliResult.stdout || 'Failed to list plugins on WPE install';
-
-              // Provide helpful error messages for common issues
-              if (errorMsg.includes('Could not resolve hostname')) {
-                errorMsg = `Cannot connect to WPE install "${installNameOnly}". ` +
-                          `The install name may be incorrect or the install may not exist. ` +
-                          `SSH hostname attempted: ${installNameOnly}.ssh.wpengine.net`;
-              } else if (errorMsg.includes('Permission denied')) {
-                errorMsg = 'SSH authentication failed. Verify your WP Engine SSH key is set up correctly in Local.';
-              }
-
-              return {
-                success: false,
-                error: errorMsg,
-                plugins: [],
-              };
-            }
-
-            try {
-              const plugins = JSON.parse(wpCliResult.stdout || '[]');
-              return {
-                success: true,
-                plugins: plugins.map((p: any) => ({
-                  name: p.title || p.name,
-                  slug: p.name,
-                  status: p.status,
-                  version: p.version,
-                  update: p.update_version || null,
-                  autoUpdate: p.auto_update || null,
-                })),
-              };
-            } catch {
-              return {
-                success: false,
-                error: 'Failed to parse plugin list JSON',
-                plugins: [],
-              };
-            }
+          } catch (e: any) {
+            const msg = e?.message ?? String(e);
+            audit('failure', msg);
+            return { success: false, error: msg, plugins: [] };
           }
-        } catch (error: any) {
-          return {
-            success: false,
-            error: error.message,
-            plugins: [],
-          };
-        }
         });
       },
 
