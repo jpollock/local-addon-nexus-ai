@@ -2610,24 +2610,57 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         }
         $data = json_decode(wp_remote_retrieve_body($response), true);
         $checksums = $data['checksums'] ?? [];
+        // api.wordpress.org answers HTTP 200 with {"checksums":false} for any version it does
+        // not publish — release candidates, nightlies, and any locally-built core. `?? []` does
+        // NOT rescue that: false is not null, so $checksums stays false, foreach iterates zero
+        // times, $failures stays empty, and the check reports 'passed' having verified nothing.
+        // Measured live: version 7.0-RC4-62365 returns exactly that body, and one site on this
+        // machine runs it. A core-integrity check that cannot obtain a manifest has not passed;
+        // it has not run.
+        if (!is_array($checksums) || count($checksums) === 0) {
+          echo json_encode(['status' => 'unavailable', 'failures' => [], 'verified' => 0,
+                            'reason' => "wordpress.org publishes no checksum manifest for version {$wp_version}"]);
+          exit;
+        }
         $failures = [];
+        $verified = 0;
         $abspath = ABSPATH;
         foreach ($checksums as $file => $expected_md5) {
           // Skip wp-content/ — themes/plugins are user territory, not core
           if (strpos($file, 'wp-content/') === 0) continue;
           $full_path = $abspath . $file;
           if (!file_exists($full_path)) continue;
+          $verified++;
           if (md5_file($full_path) !== $expected_md5) {
             $failures[] = "Error: File doesn't verify against checksum: {$file}";
           }
         }
+        // Zero files compared against a non-empty manifest means ABSPATH is wrong or the tree is
+        // unreadable — also not a pass.
+        if ($verified === 0) {
+          echo json_encode(['status' => 'unavailable', 'failures' => [], 'verified' => 0,
+                            'reason' => 'manifest obtained but no core file could be read']);
+          exit;
+        }
         echo json_encode([
           'status' => count($failures) > 0 ? 'failed' : 'passed',
           'failures' => $failures,
+          'verified' => $verified,
         ]);
       `,
     });
     const coreCheck = JSON.parse(extractResult(coreCheckResult) || '{"status":"unavailable","failures":[]}');
+    if (coreCheck.status === 'unavailable') {
+      // Surfaced as a finding, not swallowed. Silence here reads as "core is intact", which is
+      // the single most misleading thing this agent can imply about a site it never checked.
+      fsSignals.push({
+        id: 'CHK-01-SKIPPED', severity: 'medium', category: 'coverage-gap',
+        installName: install.name,
+        title: `Core integrity NOT verified: ${coreCheck.reason || 'checksum manifest unavailable'}`,
+        detail: 'No core file was compared against WordPress.org. This is not evidence that core is intact — it is the absence of evidence either way. Release candidates, nightlies and custom builds have no published manifest.',
+        fix: 'Compare against a known-good copy of the same build, or update to a released version and re-scan.',
+      });
+    }
     if (coreCheck.status === 'failed' && coreCheck.failures.length > 0) {
       fsSignals.push({
         id: 'CHK-01', severity: 'critical', category: 'active-compromise',
@@ -2638,7 +2671,12 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         evidence: coreCheck.failures.map(f => f.trim()),
       });
     }
-    log.info(`[Tier 2] Core integrity: ${coreCheck.status}`);
+    log.info(
+      `[Tier 2] Core integrity: ${coreCheck.status}` +
+      (coreCheck.status === 'unavailable'
+        ? ` — 0 files verified (${coreCheck.reason || 'no manifest'})`
+        : ` — ${coreCheck.verified ?? 0} file(s) verified`),
+    );
   } catch (err) {
     log.warn(`[Tier 2] CHK-01 failed: ${err.message}`);
   }
@@ -2652,6 +2690,10 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         $active = get_option('active_plugins', []);
         $failures = [];
         $unverifiable = [];
+        $verified = [];
+        // The cap is a cost control, but a silent cap reports a partial scan as a complete one.
+        // Count what it drops so the verdict can say so.
+        $capped = max(0, count($active) - 30);
         foreach (array_slice($active, 0, 30) as $plugin_file) {
           $slug = explode('/', $plugin_file)[0];
           $data = get_plugins("/{$slug}");
@@ -2665,6 +2707,14 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
           }
           $checksums = json_decode(wp_remote_retrieve_body($resp), true);
           $files = $checksums['files'] ?? [];
+          // Same false-rescues-null trap as CHK-01: a body of {"files":false} leaves $files
+          // false, foreach runs zero times, and the plugin counts as verified having compared
+          // nothing.
+          if (!is_array($files) || count($files) === 0) {
+            $unverifiable[] = "{$slug} ({$version}) — empty manifest";
+            continue;
+          }
+          $verified[] = $slug;
           $plugin_dir = WP_PLUGIN_DIR . '/' . $slug . '/';
           foreach ($files as $file => $hashes) {
             $expected = $hashes['md5'] ?? null;
@@ -2680,6 +2730,9 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
           'status' => count($failures) > 0 ? 'failed' : 'passed',
           'failures' => $failures,
           'unverifiable' => $unverifiable,
+          'verified' => count($verified),
+          'activeTotal' => count($active),
+          'capped' => $capped,
         ]);
       `,
     });
@@ -2694,10 +2747,32 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         evidence: pluginCheck.failures.map(f => f.trim()),
       });
     }
-    if (pluginCheck.unverifiable && pluginCheck.unverifiable.length > 0) {
-      log.info(`[Tier 2] ${pluginCheck.unverifiable.length} plugin(s) not verifiable (not on wordpress.org or version mismatch)`);
+    // Coverage, as a finding rather than an info line. Premium and custom plugins have no
+    // wordpress.org manifest, so on a real site most of the plugin surface can be unverifiable
+    // while the check still reports 'passed' — which reads as "your plugins are intact".
+    const unverifiable = pluginCheck.unverifiable ?? [];
+    const capped = pluginCheck.capped ?? 0;
+    if (unverifiable.length > 0 || capped > 0) {
+      const parts = [];
+      if (unverifiable.length) parts.push(`${unverifiable.length} plugin(s) have no wordpress.org manifest`);
+      if (capped) parts.push(`${capped} active plugin(s) beyond the 30-plugin cap were not examined`);
+      fsSignals.push({
+        id: 'CHK-02-PARTIAL', severity: 'medium', category: 'coverage-gap',
+        installName: install.name,
+        title: `Plugin integrity only partially verified: ${parts.join('; ')}`,
+        detail:
+          `Verified ${pluginCheck.verified ?? 0} of ${pluginCheck.activeTotal ?? '?'} active plugin(s) against ` +
+          `wordpress.org. Premium, custom and bundled plugins publish no checksums, so an attacker editing a ` +
+          `file inside one is invisible to this check.`,
+        fix: 'Compare unverifiable plugins against a known-good copy, or a fresh download from the vendor.',
+        evidence: unverifiable.slice(0, 20),
+      });
     }
-    log.info(`[Tier 2] Plugin integrity: ${pluginCheck.status}`);
+    log.info(
+      `[Tier 2] Plugin integrity: ${pluginCheck.status} — ` +
+      `${pluginCheck.verified ?? 0}/${pluginCheck.activeTotal ?? '?'} verified, ` +
+      `${unverifiable.length} unverifiable, ${capped} beyond cap`,
+    );
   } catch (err) {
     log.warn(`[Tier 2] CHK-02 failed: ${err.message}`);
   }
@@ -3168,6 +3243,16 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
           if (is_wp_error($response)) { echo json_encode(['still_failing' => [], 'error' => 'Could not fetch checksums']); exit; }
           $data = json_decode(wp_remote_retrieve_body($response), true);
           $checksums = $data['checksums'] ?? [];
+          // Same trap as CHK-01, and more dangerous here: this is the step that RESTORES core.
+          // api.wordpress.org answers HTTP 200 with {"checksums":false} for any unpublished
+          // version, `?? []` does not rescue false, foreach runs zero times, $restored and
+          // $still_failing both come back empty — and an empty still_failing is how this step
+          // reports success. It would claim to have cleaned core without reading one file.
+          if (!is_array($checksums) || count($checksums) === 0) {
+            echo json_encode(['still_failing' => [],
+                              'error' => "No checksum manifest published for version {$wp_version} — core could NOT be restored or verified"]);
+            exit;
+          }
           $abspath = ABSPATH;
 
           // Pass 1: find tampered files and download fresh copies from SVN
@@ -3410,7 +3495,23 @@ async function executeChecklist(checklist, install, sandboxName, tools, log, rep
       let stepPassed = false;
       let detail = '';
 
-      if (item.verifyKey) {
+      // A step that could not run is not a step that succeeded. Every verification below infers
+      // success from *absence* — an empty array, a missing filename — so a step which bailed out
+      // before doing any work produces exactly the same evidence as one that finished cleanly.
+      // Step 5a is the live example: given a WordPress version wordpress.org publishes no
+      // manifest for, it restores nothing, reports `still_failing: []`, and scores ✅ for having
+      // cleaned core files it never read. An explicit `error` in the payload overrides every
+      // verification mode and fails the step.
+      let payloadError = null;
+      try {
+        const p = JSON.parse(resultStr);
+        if (p && typeof p === 'object' && p.error) payloadError = String(p.error);
+      } catch { /* not JSON — the modes below handle it */ }
+
+      if (payloadError) {
+        stepPassed = false;
+        detail = `could not run: ${payloadError.slice(0, 150)}`;
+      } else if (item.verifyKey) {
         // verifyKey: parse JSON and check that result[verifyKey] is an empty array
         let parsed;
         try { parsed = JSON.parse(resultStr); } catch { parsed = {}; }
