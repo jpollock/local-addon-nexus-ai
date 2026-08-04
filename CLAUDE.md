@@ -131,22 +131,21 @@ Target syntax: `ssh:<alias>@<production|staging|development>`.
   registered environment — only `nexus host add` (`source: 'registration'`)
   can. Omitting `--env` means *unspecified*: an existing host keeps its label,
   and only a new one defaults to `production`.
-- **Only four of the 22 `nexus wp` subcommands reach an external host.**
-  `wp plugin list`, `wp plugin update`, `wp core version` and `wp health` go
-  through `targetToMcpArgs` → `callMcpTool` → `resolveTransport`, the only path
-  that understands `ssh_target`. Every other subcommand in
-  `src/cli/commands/wp.ts` goes through the `nexusWpCommand` resolver
-  (`graphql/resolvers.ts`), which branches on `local` and `wpe` only — an
-  `ssh:` target falls past the `local` branch into the WPE path and fails.
-  `ssh_target` is also still undeclared in every wp-cli tool's `inputSchema`,
-  so MCP agents cannot discover it.
-  `wp plugin update` resolves with operation `'wpcli'` (a write), so the
-  environment gate above **is** reachable from the CLI: on a host registered
-  `production`, `nexus wp plugin update ssh:<alias>@development <slug>` is
-  refused. The other three are `wpcli_read`.
-  Widening this is spec-worthy, not a patch: routing external through
-  `nexusWpCommand` drags it under `GRAPHQL_REMOTE_POLICY`, which Spec 0
-  deliberately kept separate from `EXTERNAL_REMOTE_POLICY`.
+  **A `@staging` suffix on a target no longer loosens the permission gate** —
+  it cannot override a host registered as `production`. This is deliberate: the
+  environment now comes from the install cache (for WPE) or the most restrictive
+  of the registered label and the typed suffix (for external).
+- **17 of the 22 `nexus wp` subcommands reach an external host** (every command
+  routed through `nexusWpCommand`), up from 3 before the unification.
+  `nexusWpCommand` now delegates to `resolveTransport` via `resolveTargetArgs`,
+  so an `ssh:` target works on all of them. Three are MCP-first (`wp plugin list`,
+  `wp plugin update`, `wp core version`), trying `callMcpTool` and falling back
+  to GraphQL when MCP is unreachable; the other 14 go straight through
+  `nexusWpCommand`. All `resolveTransport`-backed MCP tools now declare
+  `ssh_target` and `wp_path` in their `inputSchema`, so agents can discover them.
+  The 5 that do NOT work: `db scan/clean/report` (local-only by design, separate
+  resolvers), `health` (MCP tool not ported onto `resolveTransport`), and `users`
+  (reads the graph DB, not WP-CLI).
 - **The probe bypasses both `withPolicy(EXTERNAL_REMOTE_POLICY)` and
   `isOperationAllowed`.** `probeExternalHost` calls `sshExec` directly, so
   neither layer is in its path. This is accepted, not overlooked: its command
@@ -164,6 +163,16 @@ Target syntax: `ssh:<alias>@<production|staging|development>`.
   *option* — `-oProxyCommand=…` in argv position is local command execution.
   Enforced at the argv builders because they are the only place an SSH
   invocation is constructed, so every entry point passes through them.
+- **One router, one policy.** `resolveTransport` is the only place a target is
+  resolved and a remote command policy applied. `nexusWpCommand` delegates to it
+  via `resolveTargetArgs`. Do not add target resolution, a command blocklist or
+  an `isOperationAllowed` call to a resolver — that is the drift this
+  unification removed, and it is how the CLI and MCP surfaces diverged before.
+- **`resolveTargetArgs` owns the bare-name → WPE fallback.** `nexus wp core
+  version my-install` with no prefix depends on it. `resolveTarget` does not do
+  this; it keys off which argument was supplied.
+- **`resolveTransport` does not audit.** `nexusWpCommand` must keep calling
+  `auditDirectOperation` itself, on both outcomes.
 
 ---
 
@@ -213,14 +222,25 @@ every MCP-routed call.
 - Read-only paths are not audited — they would swamp the file with no
   compliance value. `auditDirectOperation` has no tier gate for the same reason:
   only call it for things that mutate, which makes them Tier 2/3 by nature.
-- An operation refused by `isOperationAllowed` writes nothing, because nothing
-  happened.
+- An operation refused by `isOperationAllowed` now audits the refusal as
+  `outcome: 'failure'` in `nexusWpCommand`. The resolver itself audits;
+  `resolveTransport` does not.
 
 **Naming:** `<surface>.<resource>.<action>`, lowercase, dot-separated —
 `cli.wp.command`, `wpe.install.delete`, `wpe.install.copy`, `wpe.user.create`,
 `ipc.wp.core.update`, `bulk.plugin.update`. `target` is the install name, site
 id, or other resource identifier. (Chokepoint writes use the raw tool name, e.g.
 `wpe_delete_install`, so both shapes appear in the file.)
+
+**`cli.wp.command` entry shape:**
+- `operation`: `'cli.wp.command'`
+- `target`: the raw target string
+- `parameters`: `{ target, command: string[], resolved?: SiteRef }`
+- `resolved` (when present): `{kind:'wpe',installName}`, `{kind:'local',siteId,siteName}`,
+  or `{kind:'external',alias}` — the resolved identity, so a bare-name run
+  against a production install is distinguishable from a local one in the audit trail
+- `outcome`: `'success' | 'failure'`
+- `error` (on failure): the error message
 
 ### Coverage — and the known gaps
 

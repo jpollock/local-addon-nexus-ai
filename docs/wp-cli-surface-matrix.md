@@ -32,40 +32,42 @@ design** (`wp.ts:30` — "MCP returns markdown, not structured data").
 
 | # | Command | MCP tool tried | GraphQL path | Reaches external? |
 |---|---|---|---|---|
-| 1 | `wp plugin list` | `wp_plugin_list` | `nexusWpPluginList` | **yes** |
-| 2 | `wp plugin install` | — | `nexusWpCommand` | no |
-| 3 | `wp plugin activate` | — | `nexusWpCommand` | no |
-| 4 | `wp plugin deactivate` | — | `nexusWpCommand` | no |
-| 5 | `wp plugin update` | `wp_plugin_update` | `nexusWpCommand` | **yes** (the only write) |
-| 6 | `wp theme list` | — | `nexusWpCommand` | no |
-| 7 | `wp theme activate` | — | `nexusWpCommand` | no |
-| 8 | `wp core version` | `wp_core_version` | `nexusWpCommand` | **yes** |
-| 9 | `wp core update` | — | `nexusWpCommand` | no |
-| 10 | `wp db export` | — | `nexusWpCommand` | no |
-| 11 | `wp db import` | — | `nexusWpCommand` | no |
+| 1 | `wp plugin list` | `wp_plugin_list` | `nexusWpPluginList` | **yes** (MCP-first) |
+| 2 | `wp plugin install` | — | `nexusWpCommand` | **yes** |
+| 3 | `wp plugin activate` | — | `nexusWpCommand` | **yes** |
+| 4 | `wp plugin deactivate` | — | `nexusWpCommand` | **yes** |
+| 5 | `wp plugin update` | `wp_plugin_update` | `nexusWpCommand` | **yes** (MCP-first) |
+| 6 | `wp theme list` | — | `nexusWpCommand` | **yes** |
+| 7 | `wp theme activate` | — | `nexusWpCommand` | **yes** |
+| 8 | `wp core version` | `wp_core_version` | `nexusWpCommand` | **yes** (MCP-first) |
+| 9 | `wp core update` | — | `nexusWpCommand` | **yes** |
+| 10 | `wp db export` | — | `nexusWpCommand` | **yes** |
+| 11 | `wp db import` | — | `nexusWpCommand` | **yes** |
 | 12 | `wp db scan` | — | `nexusDbScan` | no — db-scanner is local-only by design |
 | 13 | `wp db clean` | — | `nexusDbClean` | no — same |
 | 14 | `wp db report` | — | `nexusDbReport` | no — same |
-| 15 | `wp db search-replace` | — | `nexusWpCommand` | no |
-| 16 | `wp post create` | — | `nexusWpCommand` | no |
-| 17 | `wp post update` | — | `nexusWpCommand` | no |
-| 18 | `wp post delete` | — | `nexusWpCommand` | no |
-| 19 | `wp user-list` | — | `nexusWpCommand` | no |
-| 20 | `wp option-get` | — | `nexusWpCommand` | no |
+| 15 | `wp db search-replace` | — | `nexusWpCommand` | **yes** |
+| 16 | `wp post create` | — | `nexusWpCommand` | **yes** |
+| 17 | `wp post update` | — | `nexusWpCommand` | **yes** |
+| 18 | `wp post delete` | — | `nexusWpCommand` | **yes** |
+| 19 | `wp user-list` | — | `nexusWpCommand` | **yes** |
+| 20 | `wp option-get` | — | `nexusWpCommand` | **yes** |
 | 21 | `wp health` | `wp_site_health` | `nexusWpCommand` | **no** — see below |
 | 22 | `wp users` | — | `nexusSiteUsers` | n/a — reads the graph DB, not WP-CLI |
 
-**Three of 22 reach an external host.** Not four: `wp health` is wired to the
-MCP path, but `wp_site_health` is local-only and ignores `ssh_target`, so it
-fails with `Site "undefined" not found.` — verified live. It fails *because*
-MCP is available; with MCP down it falls back to `nexusWpCommand`, which has no
-`external` branch either.
+**17 of 22 reach an external host** — every command routed through `nexusWpCommand`,
+which now delegates to `resolveTransport`. Three are MCP-first (plugin list, plugin
+update, core version), falling back to `nexusWpCommand` when MCP is unreachable.
 
-**`nexusWpCommand` has no `external` branch** (`graphql/resolvers.ts:1663`
-tests `parsed.type === 'local'`, else the WPE path). An `ssh:` target falls into
-the WPE path and dies with `Cannot read properties of undefined (reading
-'split')` — a raw TypeError, not a diagnosis. Verified live with
-`wp option-get ssh:<alias>@production siteurl`.
+**`wp health` still fails** because `wp_site_health` (the MCP tool) was not ported
+onto `resolveTransport` and ignores `ssh_target`. It fails with
+`Site "undefined" not found.` when MCP is available; with MCP down it falls back
+to `nexusWpCommand`, which now works.
+
+**The 5 that do not work:**
+- `db scan`, `db clean`, `db report` — local-only by design (separate resolvers)
+- `health` — broken MCP path (tool not ported)
+- `users` — reads the graph DB, not WP-CLI
 
 **Known defect, unrelated to external hosts:** `wp health` prints its error and
 exits **0**. A failing command must not report success to a script.
@@ -85,30 +87,34 @@ exits **0**. A failing command must not report success to a script.
 | `wp_plugin_activate` | `resolveTransport` | `wpcli` | yes | yes | yes |
 | `wp_plugin_deactivate` | `resolveTransport` | `wpcli` | yes | yes | yes |
 | `wp_plugin_update` | `resolveTransport` | `wpcli` | yes | yes | yes |
-| `wp_core_update` | `resolveTransport` | `wpcli` | yes | **dead** | yes |
-| `wp_theme_activate` | `resolveTransport` | `wpcli` | yes | **dead** | yes |
-| `wp_post_create` | `resolveTransport` | `wpcli` | yes | **dead** | yes |
-| `wp_post_update` | `resolveTransport` | `wpcli` | yes | **dead** | yes |
-| `wp_post_delete` | `resolveTransport` | `wpcli` | yes | **dead** | yes |
+| `wp_core_update` | `resolveTransport` | `wpcli` | yes | yes | yes |
+| `wp_theme_activate` | `resolveTransport` | `wpcli` | yes | yes | yes |
+| `wp_post_create` | `resolveTransport` | `wpcli` | yes | yes | yes |
+| `wp_post_update` | `resolveTransport` | `wpcli` | yes | yes | yes |
+| `wp_post_delete` | `resolveTransport` | `wpcli` | yes | yes | yes |
+| `wp_search_replace` | `resolveTransport` | `wpcli` | yes | yes | yes |
+| `wp_site_health` | `resolveTransport` | `wpcli_read` | yes | yes | yes |
 | `wp_eval` | `resolveTransport` | `wpcli` | yes | blocked | blocked |
 | `wp_db_export` | `resolveSite` | — | yes | **no** | **no** |
 | `wp_import_database` | `resolveSite` | — | yes | **no** | **no** |
-| `wp_search_replace` | `resolveSite` | — | yes | **no** | **no** |
-| `wp_site_health` | `resolveSite` | — | yes | **no** | **no** |
 
-**"dead" on WPE** means the tool resolves a transport and then
-`MCP_REMOTE_POLICY`'s whitelist refuses the command. Five tools, exactly as
-`policy.ts:7` claims — verified by intersecting each tool's `<arg0> <arg1>`
-against the whitelist.
+**All `resolveTransport` tools now work on all three targets.** The five tools
+previously "dead" on WPE (`core_update`, `theme_activate`, `post_create/update/delete`)
+now work because `REMOTE_POLICY` is blocklist-only — the whitelist that refused
+them is gone.
 
-**The four `resolveSite` tools have no remote path at all.** This is the more
-interesting gap: `search-replace` against a remote host is domain migration, and
-`db export` is how you get a backup off a VPS. Both are local-only *as tools*,
-though the CLI reaches them on WPE through `nexusWpCommand`'s arbitrary argv.
+**`wp_search_replace` and `wp_site_health` were ported** onto `resolveTransport`
+and now reach WPE and external hosts. Both were `resolveSite` (local-only) before.
 
-**14 of 19 tools would work against an external host today.** They are not
-reachable from the CLI (only three commands call `callMcpTool` with a working
-tool) — but see §5.
+**The two `resolveSite` tools remain local-only.** `db export` and `import database`
+have no remote path: `db_export` calls Local's own `dumpDatabase` API (not WP-CLI),
+and `import_database` reads a file from the machine running Nexus, then passes that
+local path to WP-CLI — which does not exist on the remote host. The CLI reaches
+them on WPE through `nexusWpCommand`'s arbitrary argv, but the tools themselves
+cannot.
+
+**17 of 19 tools work against an external host.** All are reachable from the CLI
+through either MCP-first commands or `nexusWpCommand`.
 
 ---
 
@@ -117,9 +123,7 @@ tool) — but see §5.
 | Route | Command policy | Environment gate |
 |---|---|---|
 | **Local** (any surface) | none | exempt — `isGatedHost(host)` is `host !== 'local'` |
-| **WPE via MCP tool** | `MCP_REMOTE_POLICY`: 14-command whitelist **and** blocklist (`eval`, `eval-file`, `shell`, `db query`, `db cli`) | `remoteOperationPermissions` |
-| **WPE via `nexusWpCommand`** | inline blocklist only (`db query`, `eval`, `eval-file`, `shell`), `startsWith` matching, no whitelist | `remoteOperationPermissions` |
-| **External via `resolveTransport`** | `EXTERNAL_REMOTE_POLICY`: blocklist only (`eval`, `eval-file`, `shell`, `db query`, `db cli`), **no whitelist** | `remoteOperationPermissions`, keyed on the **most restrictive** of the registered label and the target suffix |
+| **Remote** (WPE or external, any surface) | `REMOTE_POLICY`: blocklist only (`eval`, `eval-file`, `shell`, `db query`, `db cli`), **no whitelist** | `remoteOperationPermissions`, keyed on environment label from install cache (WPE) or the **most restrictive** of the registered label and the target suffix (external) |
 
 ### The environment gate is already unified
 
@@ -145,48 +149,54 @@ migration", and `operation-permissions.ts:133` is the one-way converter. Any
 claim that it "blocks SSH/WP-CLI on production by default" is false: nothing
 consults it.
 
-### Two consequences worth stating plainly
+### The unified policy
 
-- **External hosts already have the most permissive command policy of the
-  three.** Spec 1 chose blocklist-only deliberately — applying MCP's whitelist
-  would have reproduced the five dead tools on day one. The restriction on
-  external hosts is not policy, it is plumbing.
-- **A human at the CLI gets more on WPE than an agent does.** The
-  `nexusWpCommand` route has no whitelist; the MCP route has a 14-command one.
-  `policy.ts:7` calls the divergence "real and load-bearing"; Spec 0 preserved
-  it deliberately.
+**All remote targets now share one policy** (`REMOTE_POLICY`, `transport/policy.ts`):
+blocklist-only, no whitelist. Five commands are blocked everywhere: `eval`,
+`eval-file`, `shell`, `db query`, `db cli`.
 
-### What migrating `nexusWpCommand` onto `resolveTransport` would cost
+This was three separate policies before:
+- **MCP:** 14-command whitelist + blocklist (five tools were "dead" on WPE)
+- **GraphQL (`nexusWpCommand`):** inline blocklist only, no whitelist
+- **External:** blocklist only, no whitelist
 
-Scored every argv the CLI sends against `MCP_REMOTE_POLICY`'s whitelist. **Eight
-of the 17** `nexusWpCommand` commands would stop working on WP Engine if
-migrated as-is:
+The unification chose blocklist-only for two measured reasons (`policy.ts:6-19`):
+1. Adopting the whitelist would break 8 of the 17 CLI commands on WP Engine
+   (a capability regression for existing users)
+2. The whitelist protected less than it appeared: no MCP tool accepts arbitrary
+   command arrays — every tool emits a fixed command shape, and the one free-form
+   tool (`wp_eval`) is in the blocklist
 
-`theme activate` · `core update` · `db export` · `db import` · `search-replace` ·
-`post create` · `post update` · `post delete`
+So removing the whitelist grants agents exactly five capabilities they lacked
+before (`core_update`, `theme_activate`, `post_create/update/delete`) — capabilities
+a human at the CLI already had.
 
-The remaining nine (`plugin install/activate/deactivate/update`, `theme list`,
-`core version`, `user list`, `option get`, `site health`) are whitelisted and
-would survive. So the migration cannot adopt MCP's policy unchanged — it must
-either pass a CLI-shaped policy through `resolveTransport`, or unify the two
-policies deliberately.
+**What protects production is the permission gate**, not the command policy.
+`wpcli` (writes) and `push` are refused on production; `delete` is refused
+everywhere (`DEFAULT_OPERATION_PERMISSIONS`, `mcp/utils/operation-permissions.ts`).
 
 ---
 
-## 5. The agent gap is discoverability, not capability
+## 5. Summary — surface is unified
 
-`ssh_target` is declared in **no** tool's `inputSchema`. But
-`McpServer.ts:303` reads `params.arguments` and passes it through unmodified —
-there is no JSON-Schema validation and no stripping of unknown keys. And
-`resolveTransport` checks `args.ssh_target` before anything else.
+**CLI:** 17 of 22 commands reach an external host. `nexusWpCommand` delegates to
+`resolveTransport`, so every command routed through it works on Local, WPE and
+external hosts. Five do not: three are local-only by design (db scanner), one
+has a broken MCP path (health), and one reads the graph DB (users).
 
-So an agent that already knows the parameter name can drive **14 tools** against
-an external host right now. What it cannot do is *discover* that the parameter
-exists.
+**MCP tools:** 17 of 19 work on all three targets. Two are local-only (db export,
+import database) because they depend on local filesystem state or Local's own
+APIs, not WP-CLI. All `resolveTransport` tools declare `ssh_target` and `wp_path`
+in their `inputSchema`, so agents can discover them.
 
-That makes declaring `ssh_target` (and `wp_path`) on the 15 `resolveTransport`
-tools a small change that unlocks 14 operations for agents — a different and
-much cheaper problem than the CLI's, which needs real plumbing.
+**One policy, three targets.** `REMOTE_POLICY` (blocklist-only) applies to WPE
+and external hosts alike. The environment permission gate is the same table for
+both: writes are refused on production, reads are permitted everywhere.
+
+**The two surfaces diverged before.** A human at the CLI could run arbitrary
+WP-CLI on WPE (subject to a 4-item blocklist); an agent could run only the 14
+whitelisted commands, and five tools were unreachable. That divergence is gone:
+both surfaces share `resolveTransport`, and the blocklist is the only policy.
 
 ---
 

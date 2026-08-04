@@ -102,48 +102,39 @@ WP-CLI <em>verbs</em> are four different populations, and mixing them is what pr
   <div class="card"><div class="n">22</div><div class="l">CLI subcommands</div><div class="s">nexus wp …</div></div>
   <div class="card"><div class="n">19</div><div class="l">MCP tools</div><div class="s">wp_* handlers</div></div>
   <div class="card good"><div class="n">22</div><div class="l">work on Local</div><div class="s">no policy, no gate</div></div>
-  <div class="card warn"><div class="n">~18</div><div class="l">CLI → WP Engine</div><div class="s">4-item blocklist</div></div>
-  <div class="card bad"><div class="n">3</div><div class="l">CLI → external</div><div class="s">of 22</div></div>
-  <div class="card info"><div class="n">14</div><div class="l">MCP tools → external</div><div class="s">if reachable</div></div>
+  <div class="card good"><div class="n">17</div><div class="l">CLI → external</div><div class="s">of 22 — unified</div></div>
+  <div class="card good"><div class="n">17</div><div class="l">MCP tools → external</div><div class="s">of 19 — ported</div></div>
+  <div class="card info"><div class="n">1</div><div class="l">remote policy</div><div class="s">blocklist-only</div></div>
 </div>
 
 <h2><span class="num">§1</span>The findings that matter</h2>
 
 <div class="finding good">
-  <h4>The agent gap is discoverability, not capability</h4>
-  <p><code>ssh_target</code> is declared in no tool's <code>inputSchema</code> — but
-  <code>McpServer.ts:303</code> reads <code>params.arguments</code> and passes it through with
-  <strong>no JSON-Schema validation and no stripping of unknown keys</strong>, and
-  <code>resolveTransport</code> checks <code>args.ssh_target</code> first. An agent that already
-  knows the parameter name can drive <strong>14 tools</strong> against an external host today.
-  It simply cannot discover that the parameter exists. Declaring it on 15 schemas is small,
-  mechanical, and unlocks all 14 immediately.</p>
+  <h4>The surfaces are unified — one router, one policy</h4>
+  <p><code>nexusWpCommand</code> now delegates to <code>resolveTransport</code>, so
+  <strong>17 of 22 CLI commands</strong> reach an external host — every command routed through
+  it works on Local, WP&nbsp;Engine and external hosts. All three targets share one policy
+  (<code>REMOTE_POLICY</code>): blocklist-only, no whitelist. The divergence between what a human
+  at the CLI could do and what an agent could do is gone.</p>
 </div>
 
-<div class="finding alert">
-  <h4>External hosts already have the most permissive policy of the three</h4>
-  <p><code>EXTERNAL_REMOTE_POLICY</code> is blocklist-only by deliberate choice in Spec 1 —
-  applying MCP's whitelist would have reproduced the five dead WPE tools on day one. So the
-  restriction on external hosts is <strong>not policy, it is plumbing</strong>. The "policy fork"
-  that opened this investigation does not exist.</p>
-</div>
-
-<div class="finding alert">
-  <h4>A human at the CLI gets more on WP Engine than an agent does</h4>
-  <p>The CLI's <code>nexusWpCommand</code> route applies a 4-item blocklist and no whitelist.
-  The MCP route applies a 14-command whitelist, which is why five tools have remote paths that
-  can never succeed. <code>policy.ts:7</code> calls the divergence "real and load-bearing"; Spec 0
-  preserved it deliberately.</p>
+<div class="finding good">
+  <h4>Two tools were ported; five tools resurrected</h4>
+  <p><code>wp_search_replace</code> and <code>wp_site_health</code> were ported onto
+  <code>resolveTransport</code> and now work on all three targets. The five tools previously
+  "dead" on WPE (<code>core_update</code>, <code>theme_activate</code>,
+  <code>post_create/update/delete</code>) now work because the whitelist that refused them is gone.
+  <strong>17 of 19 MCP tools</strong> work against external hosts.</p>
 </div>
 
 <div class="finding">
-  <h4>Four tools have no remote path at all</h4>
-  <p><code>db export</code>, <code>import database</code>, <code>search replace</code> and
-  <code>site health</code> call <code>resolveSite</code>, not <code>resolveTransport</code>.
-  <code>search-replace</code> against a remote host is domain migration and <code>db export</code>
-  is how you get a backup off a VPS — arguably the two most valuable things to have on someone
-  else's box. The CLI reaches them on WP&nbsp;Engine only through
-  <code>nexusWpCommand</code>'s arbitrary argv.</p>
+  <h4>Two tools remain local-only by design</h4>
+  <p><code>wp_db_export</code> and <code>wp_import_database</code> have no remote path:
+  <code>db_export</code> calls Local's own <code>dumpDatabase</code> API (not WP-CLI), and
+  <code>import_database</code> reads a file from the machine running Nexus, then passes that
+  local path to WP-CLI — which does not exist on the remote host. The CLI reaches them on
+  WP&nbsp;Engine through <code>nexusWpCommand</code>'s arbitrary argv, but the tools themselves
+  cannot.</p>
 </div>
 
 <h2><span class="num">§2</span>CLI subcommands — how each is serviced</h2>
@@ -168,40 +159,39 @@ output can never use it.</p>
   </tr></thead>
   <tbody>
     <tr data-ext="1" data-mcp="1"><td class="idx">1</td><td class="cmd">wp plugin list</td><td class="path">wp_plugin_list</td><td class="path">nexusWpPluginList</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">2</td><td class="cmd">wp plugin install</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">3</td><td class="cmd">wp plugin activate</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">4</td><td class="cmd">wp plugin deactivate</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">2</td><td class="cmd">wp plugin install</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">3</td><td class="cmd">wp plugin activate</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">4</td><td class="cmd">wp plugin deactivate</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
     <tr data-ext="1" data-mcp="1"><td class="idx">5</td><td class="cmd">wp plugin update</td><td class="path">wp_plugin_update</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">6</td><td class="cmd">wp theme list</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">7</td><td class="cmd">wp theme activate</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">6</td><td class="cmd">wp theme list</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">7</td><td class="cmd">wp theme activate</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
     <tr data-ext="1" data-mcp="1"><td class="idx">8</td><td class="cmd">wp core version</td><td class="path">wp_core_version</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">9</td><td class="cmd">wp core update</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">10</td><td class="cmd">wp db export</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">11</td><td class="cmd">wp db import</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">9</td><td class="cmd">wp core update</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">10</td><td class="cmd">wp db export</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">11</td><td class="cmd">wp db import</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
     <tr data-ext="0" data-mcp="0"><td class="idx">12</td><td class="cmd">wp db scan</td><td class="path">—</td><td class="path">nexusDbScan</td><td class="c"><span class="pill p-na">local only</span></td></tr>
     <tr data-ext="0" data-mcp="0"><td class="idx">13</td><td class="cmd">wp db clean</td><td class="path">—</td><td class="path">nexusDbClean</td><td class="c"><span class="pill p-na">local only</span></td></tr>
     <tr data-ext="0" data-mcp="0"><td class="idx">14</td><td class="cmd">wp db report</td><td class="path">—</td><td class="path">nexusDbReport</td><td class="c"><span class="pill p-na">local only</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">15</td><td class="cmd">wp db search-replace</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">16</td><td class="cmd">wp post create</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">17</td><td class="cmd">wp post update</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">18</td><td class="cmd">wp post delete</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">19</td><td class="cmd">wp user-list</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-mcp="0"><td class="idx">20</td><td class="cmd">wp option-get</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-mcp="1"><td class="idx">21</td><td class="cmd">wp health</td><td class="path">wp_site_health <span style="color:var(--warn)">(local only)</span></td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">15</td><td class="cmd">wp db search-replace</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">16</td><td class="cmd">wp post create</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">17</td><td class="cmd">wp post update</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">18</td><td class="cmd">wp post delete</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">19</td><td class="cmd">wp user-list</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-mcp="0"><td class="idx">20</td><td class="cmd">wp option-get</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="0" data-mcp="1"><td class="idx">21</td><td class="cmd">wp health</td><td class="path">wp_site_health <span style="color:var(--warn)">(not ported)</span></td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
     <tr data-ext="0" data-mcp="0"><td class="idx">22</td><td class="cmd">wp users</td><td class="path">—</td><td class="path">nexusSiteUsers</td><td class="c"><span class="pill p-na">graph DB</span></td></tr>
   </tbody>
 </table>
 
 <div class="finding alert">
-  <h4>Three of 22, not four — and two failure modes worth knowing</h4>
-  <p><code>wp health</code> is wired to the MCP path, but <code>wp_site_health</code> is local-only
-  and ignores <code>ssh_target</code>. Verified live: it fails with
-  <code>Site "undefined" not found.</code> — and it fails <em>because</em> MCP is available; with
-  MCP down it falls back to <code>nexusWpCommand</code>, which has no external branch either.
-  Separately, <code>nexusWpCommand</code> on an <code>ssh:</code> target dies with
-  <code>Cannot read properties of undefined (reading 'split')</code> — a raw TypeError, not a
-  diagnosis. Also unrelated but real: <code>wp health</code> prints its error and <strong>exits
-  0</strong>.</p>
+  <h4>Five that do not work, for three different reasons</h4>
+  <p><code>wp db scan/clean/report</code> are local-only by design — separate resolvers
+  (<code>nexusDbScan</code>, etc.), not routed through <code>nexusWpCommand</code>.
+  <code>wp health</code> is wired to the MCP path but <code>wp_site_health</code> was not ported
+  onto <code>resolveTransport</code>, so it fails with <code>Site "undefined" not found.</code>
+  when MCP is available; with MCP down it falls back to <code>nexusWpCommand</code>, which now
+  works. <code>wp users</code> reads the graph DB, not WP-CLI. Unrelated but real:
+  <code>wp health</code> prints its error and <strong>exits 0</strong>.</p>
 </div>
 
 <h2><span class="num">§3</span>MCP tools — servicing and reach</h2>
@@ -232,57 +222,44 @@ output can never use it.</p>
     <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_plugin_activate</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
     <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_plugin_deactivate</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
     <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_plugin_update</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
-    <tr data-ext="1" data-dead="1" data-local="0" data-op="write"><td class="cmd">wp_core_update</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-dead">dead</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
-    <tr data-ext="1" data-dead="1" data-local="0" data-op="write"><td class="cmd">wp_theme_activate</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-dead">dead</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
-    <tr data-ext="1" data-dead="1" data-local="0" data-op="write"><td class="cmd">wp_post_create</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-dead">dead</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
-    <tr data-ext="1" data-dead="1" data-local="0" data-op="write"><td class="cmd">wp_post_update</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-dead">dead</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
-    <tr data-ext="1" data-dead="1" data-local="0" data-op="write"><td class="cmd">wp_post_delete</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-dead">dead</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_core_update</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_theme_activate</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_post_create</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_post_update</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_post_delete</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_search_replace</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="read"><td class="cmd">wp_site_health</td><td class="path">resolveTransport</td><td class="path">wpcli_read</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
     <tr data-ext="0" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_eval</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">blocked</span></td><td class="c"><span class="pill p-no">blocked</span></td></tr>
     <tr data-ext="0" data-dead="0" data-local="1" data-op=""><td class="cmd">wp_db_export</td><td class="path">resolveSite</td><td class="path">—</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">no</span></td><td class="c"><span class="pill p-no">no</span></td></tr>
     <tr data-ext="0" data-dead="0" data-local="1" data-op=""><td class="cmd">wp_import_database</td><td class="path">resolveSite</td><td class="path">—</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">no</span></td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-dead="0" data-local="1" data-op=""><td class="cmd">wp_search_replace</td><td class="path">resolveSite</td><td class="path">—</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">no</span></td><td class="c"><span class="pill p-no">no</span></td></tr>
-    <tr data-ext="0" data-dead="0" data-local="1" data-op=""><td class="cmd">wp_site_health</td><td class="path">resolveSite</td><td class="path">—</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">no</span></td><td class="c"><span class="pill p-no">no</span></td></tr>
   </tbody>
 </table>
 
 <div class="legend">
   <span><span class="pill p-ok">yes</span> works</span>
-  <span><span class="pill p-dead">dead</span> resolves a transport, then the MCP whitelist refuses it</span>
-  <span><span class="pill p-no">no / blocked</span> unreachable or policy-blocked</span>
+  <span><span class="pill p-no">no / blocked</span> local-only or policy-blocked</span>
 </div>
 
-<p class="note">"Dead" is exactly the five tools <code>policy.ts:7</code> claims — verified by
-intersecting each tool's <code>&lt;arg0&gt; &lt;arg1&gt;</code> against
-<code>MCP_REMOTE_POLICY</code>'s 14-command whitelist.</p>
+<p class="note">All <code>resolveTransport</code> tools work on all three targets. The five tools
+previously "dead" on WPE (<code>core_update</code>, <code>theme_activate</code>,
+<code>post_create/update/delete</code>) now work because the whitelist that refused them is gone.
+<code>wp_search_replace</code> and <code>wp_site_health</code> were ported from
+<code>resolveSite</code>.</p>
 
 <h2><span class="num">§4</span>Limits, by target and route</h2>
 
 <table>
-  <thead><tr><th>Route</th><th>Command policy</th><th>Environment gate</th><th>Other</th></tr></thead>
+  <thead><tr><th>Target</th><th>Command policy</th><th>Environment gate</th></tr></thead>
   <tbody>
     <tr>
       <td><strong>Local</strong> — any surface</td>
       <td>none</td>
       <td>exempt — <code>isGatedHost(host)</code> is <code>host !== 'local'</code></td>
-      <td>—</td>
     </tr>
     <tr>
-      <td><strong>WP Engine</strong> via MCP tool</td>
-      <td><code>MCP_REMOTE_POLICY</code>: 14-command whitelist <em>and</em> blocklist (<code>eval</code>, <code>eval-file</code>, <code>shell</code>, <code>db query</code>, <code>db cli</code>)</td>
-      <td><code>remoteOperationPermissions</code></td>
-      <td>—</td>
-    </tr>
-    <tr>
-      <td><strong>WP Engine</strong> via <code>nexusWpCommand</code></td>
-      <td>inline blocklist only (<code>db query</code>, <code>eval</code>, <code>eval-file</code>, <code>shell</code>), <code>startsWith</code> matching, no whitelist</td>
-      <td><code>remoteOperationPermissions</code></td>
-      <td>—</td>
-    </tr>
-    <tr>
-      <td><strong>External</strong> via <code>resolveTransport</code></td>
-      <td><code>EXTERNAL_REMOTE_POLICY</code>: blocklist only, <strong>no whitelist</strong></td>
-      <td><code>remoteOperationPermissions</code>, keyed on the <strong>most restrictive</strong> of the registered label and the target suffix</td>
-      <td>—</td>
+      <td><strong>Remote</strong> (WPE or external, any surface)</td>
+      <td><code>REMOTE_POLICY</code>: blocklist only (<code>eval</code>, <code>eval-file</code>, <code>shell</code>, <code>db query</code>, <code>db cli</code>), <strong>no whitelist</strong></td>
+      <td><code>remoteOperationPermissions</code>: from install cache (WPE) or <strong>most restrictive</strong> of registered label and target suffix (external)</td>
     </tr>
   </tbody>
 </table>
@@ -311,37 +288,33 @@ and external alike. External additionally takes the most restrictive of two labe
   permissions above — <code>types.ts:299</code> says "Replaces wpeAllowedEnvironments",
   <code>schemas.ts:77</code> marks it "legacy — kept for migration", and
   <code>operation-permissions.ts:133</code> is the one-way converter. Any claim that it "blocks
-  SSH/WP-CLI on production by default" is false; nothing consults it. That claim currently
-  appears in CLAUDE.md's Known Pitfalls.</p>
+  SSH/WP-CLI on production by default" is false; nothing consults it.</p>
 </div>
 
-<h3>What migrating <code>nexusWpCommand</code> onto <code>resolveTransport</code> would cost</h3>
-<p>Every argv the CLI sends, scored against <code>MCP_REMOTE_POLICY</code>'s whitelist.
-<strong>Eight of the 17</strong> <code>nexusWpCommand</code> commands would stop working on
-WP&nbsp;Engine if migrated as-is:</p>
-<p style="font-family:var(--mono);font-size:13.5px;color:var(--no)">
-theme activate &middot; core update &middot; db export &middot; db import &middot; search-replace
-&middot; post create &middot; post update &middot; post delete</p>
-<p>The other nine — <code>plugin install/activate/deactivate/update</code>,
-<code>theme list</code>, <code>core version</code>, <code>user list</code>,
-<code>option get</code>, <code>site health</code> — are whitelisted and would survive. So the
-migration cannot adopt MCP's policy unchanged: it must either pass a CLI-shaped policy through
-<code>resolveTransport</code>, or unify the two policies deliberately.</p>
+<h3>The unified policy</h3>
+<p>All remote targets now share one policy (<code>REMOTE_POLICY</code>,
+<code>transport/policy.ts</code>): blocklist-only, no whitelist. This was three separate policies
+before. The unification chose blocklist-only for two measured reasons:</p>
+<ol style="max-width:78ch;color:var(--dim)">
+  <li>Adopting the whitelist would break 8 of the 17 CLI commands on WP&nbsp;Engine — a capability
+  regression for existing users.</li>
+  <li>The whitelist protected less than it appeared: no MCP tool accepts arbitrary command arrays,
+  and the one free-form tool (<code>wp_eval</code>) is in the blocklist.</li>
+</ol>
+<p>Removing the whitelist grants agents five capabilities they lacked before
+(<code>core_update</code>, <code>theme_activate</code>, <code>post_create/update/delete</code>) —
+capabilities a human at the CLI already had. What protects production is the permission gate, not
+the command policy.</p>
 
-<h2><span class="num">§5</span>The open question</h2>
-<p>Two problems of very different size:</p>
-<ul>
-  <li><strong>Agents</strong> — declare <code>ssh_target</code> and <code>wp_path</code> on 15 tool
-  schemas. Small, mechanical, unlocks 14 operations immediately. Worth doing regardless of the
-  other half.</li>
-  <li><strong>CLI</strong> — real plumbing. 19 of 22 commands route through
-  <code>nexusWpCommand</code>, which has no <code>external</code> branch. Teaching it one requires
-  deciding how to classify arbitrary argv as read or write, since <code>resolveTransport</code>
-  needs an operation to run the environment gate.</li>
-</ul>
-<p>Which baseline should external hosts target — <strong>the CLI's WP&nbsp;Engine behaviour</strong>
-(arbitrary WP-CLI with a blocklist, what a human gets today) or <strong>the tool set</strong>
-(structured, 14 operations, what an agent gets)?</p>
+<h2><span class="num">§5</span>Summary — surface is unified</h2>
+<p><strong>CLI:</strong> 17 of 22 commands reach an external host. <code>nexusWpCommand</code>
+delegates to <code>resolveTransport</code>, so every command routed through it works on Local,
+WP&nbsp;Engine and external hosts.</p>
+<p><strong>MCP tools:</strong> 17 of 19 work on all three targets. All
+<code>resolveTransport</code> tools declare <code>ssh_target</code> and <code>wp_path</code> in
+their <code>inputSchema</code>, so agents can discover them.</p>
+<p><strong>One policy, three targets.</strong> <code>REMOTE_POLICY</code> (blocklist-only) applies
+to WPE and external hosts alike. The environment permission gate is the same table for both.</p>
 
 <footer>
   Generated from source on 2026-08-04. Markdown twin with regeneration commands:

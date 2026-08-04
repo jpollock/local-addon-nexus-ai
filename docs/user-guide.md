@@ -419,27 +419,33 @@ Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not L
 - The alias is a `Host` entry in `~/.ssh/config`. Nexus stores no key material and never writes anything to your server.
 - The WordPress path is discovered automatically; `--path` is only needed when discovery finds nothing or finds several installs.
 - `--env` defaults to `production` for a host you have not registered before; re-running `nexus host add` without `--env` leaves an existing host's label alone. Writes are refused on production by default (see Settings > Nexus AI > Operation Permissions).
-- The registered environment is the write gate, and a target suffix cannot loosen it: a host registered as `production` still refuses writes when addressed as `ssh:<alias>@development`. Relabel it with `nexus host add <alias> --env development`.
+- **The registered environment is the write gate, and a target suffix cannot loosen it.** A host registered as `production` still refuses writes when addressed as `ssh:<alias>@development`. The gate keys off the more restrictive of the two labels. To enable writes, re-register: `nexus host add <alias> --env development`.
+- **A `@staging` suffix cannot override a host's registered environment.** This is a behavior change from earlier versions: a suffix can only make the gate more restrictive, never less.
 - If key-based login is not set up, `nexus host test` tells you the exact `ssh-copy-id` command to run. You run it; Nexus does not.
 - Aliases must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`. A `user@host` form or an IPv6 literal is rejected — put those in a `~/.ssh/config` `Host` block and use the block's name.
 
-**Which `nexus wp` commands work against a registered host — read this before relying on it.**
+**Which `nexus wp` commands work against a registered host.**
 
-Once a host is registered you address it as `ssh:<alias>@<environment>`, with no `--path` needed. But only four of the 22 `nexus wp` subcommands currently reach an external host:
+Once a host is registered you address it as `ssh:<alias>@<environment>`, with no `--path` needed. **17 of the 22 `nexus wp` subcommands reach an external host** — every command that routes through the `nexusWpCommand` GraphQL resolver.
+
+**The 5 that do NOT work:**
+- `wp db scan`, `wp db clean`, `wp db report` — local-only by design (analyze the database of a running Local site)
+- `wp health` — MCP tool not yet ported; works when MCP is down (falls back to `nexusWpCommand`)
+- `wp users` — reads the graph DB, not WP-CLI
+
+**All others work**, including writes like `wp plugin update`, `wp theme activate`, `wp core update`, `wp post create/update/delete`, and `wp db search-replace`. On a host registered as `production`, writes are refused by default:
 
 ```bash
-nexus wp core version   ssh:<alias>@<environment>          # read
-nexus wp plugin list    ssh:<alias>@<environment>          # read
-nexus wp health         ssh:<alias>@<environment>          # read
-nexus wp plugin update  ssh:<alias>@<environment> <slug>   # write
+nexus wp plugin update ssh:<alias>@production <slug>      # refused
+nexus wp plugin update ssh:<alias>@development <slug>     # still refused — registered production
+nexus wp core version   ssh:<alias>@production            # allowed — read
 ```
 
-Every other `nexus wp` subcommand routes through a path that understands Local and WP Engine targets only, and will fail on an `ssh:` target. Broader support is planned.
-
-`wp plugin update` is the one write, which makes it the way to see the environment gate in action. On a host registered as `production`:
+To enable writes, re-register the host as `development` or `staging`:
 
 ```bash
-nexus wp plugin update ssh:<alias>@development <slug>   # refused — registered production
+nexus host add <alias> --env development
+nexus wp plugin update ssh:<alias>@development <slug>     # now allowed
 ```
 
 ### WP Engine Commands (`nexus wpe`)
