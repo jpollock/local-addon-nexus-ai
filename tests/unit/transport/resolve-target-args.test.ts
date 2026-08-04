@@ -140,12 +140,14 @@ describe('classifyWpCliOp', () => {
   it.each([
     ['plugin list'], ['plugin get'], ['theme list'], ['theme get'], ['core version'],
     ['user list'], ['user get'], ['option get'], ['site health'],
-    ['post list'], ['post get'], ['post-type list'], ['db export'],
+    ['post list'], ['post get'], ['post-type list'],
   ])('classifies %s as a read', (c) => {
     expect(classifyWpCliOp(c.split(' '))).toBe('wpcli_read');
   });
 
-  it.each([['plugin install x'], ['core update'], ['db import f.sql'], ['post delete 1']])(
+  // `db export` reads the database but writes the dump to the SSH login
+  // directory — the web root on many hosts. It is a write.
+  it.each([['plugin install x'], ['core update'], ['db export'], ['db import f.sql'], ['post delete 1']])(
     'classifies %s as a write', (c) => {
       expect(classifyWpCliOp(c.split(' '))).toBe('wpcli');
     });
