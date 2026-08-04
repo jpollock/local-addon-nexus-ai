@@ -28,9 +28,9 @@ describe('resolveSite', () => {
     expect(result?.id).toBe('abc123');
   });
 
-  test('resolves by partial name', () => {
+  test('DOES NOT resolve by partial name (substring match)', () => {
     const result = resolveSite('woo', siteData);
-    expect(result?.id).toBe('def456');
+    expect(result).toBeNull();
   });
 
   test('resolves by domain', () => {
@@ -46,12 +46,23 @@ describe('resolveSite', () => {
     expect(resolveSite('', siteData)).toBeNull();
   });
 
-  test('prefers exact name over partial match', () => {
-    const data = createSiteData([
-      { id: '1', name: 'Blog', path: '/blog', domain: 'blog.local' },
-      { id: '2', name: 'My Blog Site', path: '/myblog', domain: 'myblog.local' },
-    ]);
-    const result = resolveSite('Blog', data);
-    expect(result?.id).toBe('1');
+  test('still resolves exact name', () => {
+    const result = resolveSite('WooCommerce Store', siteData);
+    expect(result?.id).toBe('def456');
+  });
+
+  test('still resolves exact ID', () => {
+    const result = resolveSite('ghi789', siteData);
+    expect(result?.id).toBe('ghi789');
+  });
+
+  test('still resolves exact domain', () => {
+    const result = resolveSite('myblog.local', siteData);
+    expect(result?.id).toBe('abc123');
+  });
+
+  test('case-insensitive exact name still resolves', () => {
+    const result = resolveSite('CLIENT SITE', siteData);
+    expect(result?.id).toBe('ghi789');
   });
 });
