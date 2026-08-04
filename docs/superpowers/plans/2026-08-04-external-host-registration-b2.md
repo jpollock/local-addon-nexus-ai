@@ -1122,6 +1122,7 @@ git commit -m "feat(transport): read stored wpPath and WP-CLI path back from the
 **Files:**
 - Modify: `src/main/graphql/schema.ts` (append a new `extend type Mutation` block plus types, following the existing pattern at `:1667`)
 - Modify: `src/main/graphql/resolvers.ts` (add to the `Mutation` resolver map, beside `nexusWpCommand` at `:1611`)
+- Create: `tests/unit/graphql/host-resolvers.test.ts`
 
 **Interfaces:**
 - Consumes: `probeExternalHost` (Task 4); `externalSiteId`, `upsertExternalProfile`, `listExternalProfiles`, `removeExternalProfile`, `getExternalProfile` (Task 2)
@@ -1369,17 +1370,191 @@ function toHostReport(r: ProbeReport) {
 
 `nexusHostAdd` returns `success: true, registered: false` on a probe failure — the mutation worked, the host did not qualify. `success: false` is reserved for the mutation itself failing. The CLI distinguishes them.
 
-- [ ] **Step 3: Typecheck and build**
+- [ ] **Step 3: Write the resolver tests**
+
+These are the spec §6 command-level cases. `createResolvers({ services, registry })` (`resolvers.ts:147`) can be called directly with a mock context — `tests/unit/graphql/resolvers.test.ts:19` already establishes the `makeServices()` pattern for the split resolver modules; this file does the same for the monolith.
+
+Create `tests/unit/graphql/host-resolvers.test.ts`:
+
+```ts
+const probeMock = jest.fn();
+jest.mock('../../../src/main/external/probeExternalHost', () => ({
+  probeExternalHost: (...args: any[]) => probeMock(...args),
+}));
+
+import { createResolvers } from '../../../src/main/graphql/resolvers';
+import { STORAGE_KEYS } from '../../../src/common/constants';
+
+function okReport(over: Record<string, unknown> = {}) {
+  return {
+    ok: true,
+    alias: 'h1',
+    resolved: { hostname: '203.0.113.10', user: 'deploy', port: '2222' },
+    wpPath: '/home/u/public_html',
+    wpVersion: '6.8.1',
+    wpCliVersion: '2.12.0',
+    siteUrl: 'https://example.com',
+    ...over,
+  };
+}
+
+function failReport(kind = 'auth-failed') {
+  return {
+    ok: false,
+    alias: 'h1',
+    resolved: { hostname: '203.0.113.10', user: 'deploy', port: '2222' },
+    failure: { kind, detail: 'Permission denied (publickey,password).', remedy: 'ssh-copy-id ...' },
+  };
+}
+
+function ctx() {
+  const store: Record<string, any> = {};
+  const upserted: any[] = [];
+  return {
+    upserted,
+    store,
+    context: {
+      services: {
+        registryStorage: {
+          get: (k: string) => store[k],
+          set: (k: string, v: unknown) => { store[k] = v; },
+        },
+        graphService: { upsertSite: async (s: any) => { upserted.push(s); } },
+        logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+      },
+      registry: {},
+    } as any,
+  };
+}
+
+const profiles = (store: Record<string, any>) => store[STORAGE_KEYS.EXTERNAL_SITE_PROFILES] ?? {};
+
+beforeEach(() => probeMock.mockReset());
+
+describe('nexusHostAdd', () => {
+  it('persists the profile and a site row on success', async () => {
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    const r = await createResolvers(c.context).Mutation.nexusHostAdd(null, { alias: 'h1' });
+    expect(r.registered).toBe(true);
+    expect(profiles(c.store).h1.wpPath).toBe('/home/u/public_html');
+    expect(c.upserted).toHaveLength(1);
+    expect(c.upserted[0].source).toBe('external');
+    expect(c.upserted[0].host).toBe('external');
+  });
+
+  it('derives domain from siteUrl, not the alias', async () => {
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    await createResolvers(c.context).Mutation.nexusHostAdd(null, { alias: 'h1' });
+    expect(c.upserted[0].domain).toBe('example.com');
+  });
+
+  it('falls back to the alias when siteUrl is absent', async () => {
+    probeMock.mockResolvedValue(okReport({ siteUrl: undefined }));
+    const c = ctx();
+    await createResolvers(c.context).Mutation.nexusHostAdd(null, { alias: 'h1' });
+    expect(c.upserted[0].domain).toBe('h1');
+  });
+
+  it('persists nothing when the probe fails', async () => {
+    probeMock.mockResolvedValue(failReport());
+    const c = ctx();
+    const r = await createResolvers(c.context).Mutation.nexusHostAdd(null, { alias: 'h1' });
+    expect(r.success).toBe(true);      // the mutation worked
+    expect(r.registered).toBe(false);  // the host did not qualify
+    expect(r.report.failure.kind).toBe('auth-failed');
+    expect(profiles(c.store)).toEqual({});
+    expect(c.upserted).toHaveLength(0);
+  });
+
+  it('rejects an invalid environment without probing', async () => {
+    const c = ctx();
+    const r = await createResolvers(c.context).Mutation.nexusHostAdd(
+      null, { alias: 'h1', environment: 'prod' });
+    expect(r.success).toBe(false);
+    expect(r.error).toContain('prod');
+    expect(probeMock).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent — a second add preserves firstSeenAt', async () => {
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    const m = createResolvers(c.context).Mutation;
+    await m.nexusHostAdd(null, { alias: 'h1' });
+    const first = profiles(c.store).h1.firstSeenAt;
+    await m.nexusHostAdd(null, { alias: 'h1' });
+    expect(Object.keys(profiles(c.store))).toEqual(['h1']);
+    expect(profiles(c.store).h1.firstSeenAt).toBe(first);
+  });
+});
+
+describe('nexusHostProbe', () => {
+  it('never persists, even on success', async () => {
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    const r = await createResolvers(c.context).Mutation.nexusHostProbe(null, { alias: 'h1' });
+    expect(r.report.ok).toBe(true);
+    expect(profiles(c.store)).toEqual({});
+    expect(c.upserted).toHaveLength(0);
+  });
+
+  it('flattens resolved into hostname/user/port', async () => {
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    const r = await createResolvers(c.context).Mutation.nexusHostProbe(null, { alias: 'h1' });
+    expect(r.report.hostname).toBe('203.0.113.10');
+    expect(r.report.user).toBe('deploy');
+    expect(r.report.port).toBe('2222');
+  });
+});
+
+describe('nexusHostRemove', () => {
+  it('clears the profile and deactivates the site row', async () => {
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    const m = createResolvers(c.context).Mutation;
+    await m.nexusHostAdd(null, { alias: 'h1' });
+    const r = await m.nexusHostRemove(null, { alias: 'h1' });
+    expect(r.removed).toBe(true);
+    expect(profiles(c.store)).toEqual({});
+    expect(c.upserted.at(-1).is_active).toBe(false);
+  });
+
+  it('reports removed:false for an unknown alias and writes no row', async () => {
+    const c = ctx();
+    const r = await createResolvers(c.context).Mutation.nexusHostRemove(null, { alias: 'nope' });
+    expect(r.removed).toBe(false);
+    expect(c.upserted).toHaveLength(0);
+  });
+});
+
+describe('nexusHostList', () => {
+  it('returns the registered hosts', async () => {
+    probeMock.mockResolvedValue(okReport());
+    const c = ctx();
+    const m = createResolvers(c.context).Mutation;
+    await m.nexusHostAdd(null, { alias: 'h1' });
+    const r = await m.nexusHostList();
+    expect(r.hosts.map((h: any) => h.alias)).toEqual(['h1']);
+  });
+});
+```
+
+`withQueue` wraps most of these resolvers. If it defers work in a way that makes a bare `await` insufficient, adapt the test — do not remove `withQueue` from the resolvers to make tests simpler.
+
+- [ ] **Step 4: Run the tests, typecheck and build**
 
 ```bash
+npx jest tests/unit/graphql/
 npx tsc --noEmit && npm run build
 ```
-Expected: clean.
+Expected: PASS and clean.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add src/main/graphql/schema.ts src/main/graphql/resolvers.ts
+git add src/main/graphql/schema.ts src/main/graphql/resolvers.ts tests/unit/graphql/host-resolvers.test.ts
 git commit -m "feat(graphql): nexusHostProbe/Add/List/Remove mutations"
 ```
 
@@ -1780,7 +1955,7 @@ git commit -m "docs(external): document host registration invariants"
 | §8 risk 3 two creation paths | Task 6 `nexusHostRemove` deactivates whatever row exists |
 | §8 risk 4 slow search | Task 4 `SEARCH_MAXDEPTH`, fixed roots, `head -20` |
 
-**Gaps against the spec, deliberate:** §6 asks for command-level tests that `test` never persists and that `remove` clears both stores. Those live in the GraphQL resolvers, which this codebase does not unit-test (there is no resolver test harness); they are covered by the Task 8 live run instead. If the implementer finds an existing resolver test harness, add them there.
+**Gaps against the spec:** none outstanding. This section previously claimed §6's command-level tests (`test` never persists, `remove` clears both stores) were untestable because "this codebase does not unit-test the resolvers — there is no resolver test harness." That was wrong: `tests/unit/graphql/resolvers.test.ts:19` has a `makeServices()` harness, and `createResolvers({ services, registry })` (`resolvers.ts:147`) can be called directly. Task 6 Step 3 now carries those tests. Checked before dispatching Task 6, not assumed.
 
 **Type consistency:** `ProbeReport.resolved` is a nested object in TypeScript and three flat scalars in GraphQL — `toHostReport` is the only bridge, and Task 6 defines it. `ExternalSiteProfile.wpCliPath` (store) maps to `ExternalSshTransport`'s `wpCliBin` (constructor) and `buildExternalWpCliCommand`'s `wpCliBin` (third parameter); the names differ because one is a stored fact and the other is an argument, and Task 5 is where they meet.
 
