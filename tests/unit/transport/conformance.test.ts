@@ -196,6 +196,39 @@ describe('LocalTransport', () => {
   });
 });
 
+describe('LocalTransport — stopped site', () => {
+  function svc(status: string) {
+    return {
+      wpCliRun: jest.fn().mockResolvedValue({ stdout: 'ran', success: true }),
+      getSiteStatus: jest.fn().mockReturnValue(status),
+    } as any;
+  }
+
+  it('refuses with an actionable message when the site is not running', async () => {
+    const s = svc('halted');
+    const t = new LocalTransport('id-1', 'mysite', s);
+    const res = await t.runWpCli(['core', 'version']);
+    expect(res.success).toBe(false);
+    expect(res.stdout).toContain('mysite');
+    expect(res.stdout).toContain('halted');
+    expect(res.stdout).toMatch(/start it first/i);
+    expect(s.wpCliRun).not.toHaveBeenCalled();
+  });
+
+  it('runs normally when the site is running', async () => {
+    const s = svc('running');
+    const res = await new LocalTransport('id-1', 'mysite', s).runWpCli(['core', 'version']);
+    expect(res.success).toBe(true);
+    expect(s.wpCliRun).toHaveBeenCalled();
+  });
+
+  it('runs when the host cannot report status, rather than refusing', async () => {
+    const s = { wpCliRun: jest.fn().mockResolvedValue({ stdout: 'ran', success: true }) } as any;
+    const res = await new LocalTransport('id-1', 'mysite', s).runWpCli(['core', 'version']);
+    expect(res.success).toBe(true);
+  });
+});
+
 describe('ExternalSshTransport', () => {
   beforeEach(() => {
     spawnMock.mockReset();

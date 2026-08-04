@@ -5,7 +5,7 @@ import type {
 
 export class LocalTransport implements SiteTransport {
   readonly kind: TransportKind = 'local';
-  readonly siteRef: SiteRef;
+  readonly siteRef: SiteRef & { kind: 'local' };
 
   constructor(
     private readonly siteId: string,
@@ -19,7 +19,19 @@ export class LocalTransport implements SiteTransport {
     return true;
   }
 
-  runWpCli(args: string[], opts?: RunOpts): Promise<WpCliResult> {
+  async runWpCli(args: string[], opts?: RunOpts): Promise<WpCliResult> {
+    // Checked here, not at the call site: nexusWpCommand used to do this and
+    // MCP tools did not, so the same request gave different errors depending on
+    // which surface asked. getSiteStatus is optional on the bridge — when it is
+    // absent, run rather than refuse.
+    const status = this.localServices.getSiteStatus?.(this.siteId);
+    if (status && status !== 'running') {
+      return {
+        stdout: `Site "${this.siteRef.siteName}" is ${status}. Start it first.`,
+        success: false,
+      };
+    }
+
     // Call with two arguments when opts is absent. Passing an explicit
     // `undefined` third argument is runtime-equivalent but arity-visible:
     // Jest's toHaveBeenCalledWith is arity-strict, and pre-existing suites
