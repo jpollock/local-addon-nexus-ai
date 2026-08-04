@@ -9,7 +9,7 @@ import { STORAGE_KEYS } from '../../../../common/constants';
 // Command Security (moved to src/main/transport/policy.ts)
 // ---------------------------------------------------------------------------
 // BLOCKED_COMMANDS, ALLOWED_REMOTE_COMMANDS, and isBlockedCommand have been
-// replaced by MCP_REMOTE_POLICY and checkCommand in the transport layer.
+// replaced by REMOTE_POLICY and checkCommand in the transport layer.
 
 // ---------------------------------------------------------------------------
 // Target Resolution

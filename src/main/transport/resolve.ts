@@ -3,7 +3,7 @@ import { resolveTarget } from '../mcp/modules/wp-cli/remote-exec';
 import type { SiteTransport } from './types';
 import { WpeSshTransport } from './WpeSshTransport';
 import { LocalTransport } from './LocalTransport';
-import { withPolicy, MCP_REMOTE_POLICY, EXTERNAL_REMOTE_POLICY } from './policy';
+import { withPolicy, REMOTE_POLICY } from './policy';
 import { parseTarget } from '../../common/target';
 import { error } from '../mcp/modules/wp-cli/preflight';
 import {
@@ -74,7 +74,7 @@ export async function resolveTransport(
     const wpPath = explicitPath ?? profile?.wpPath;
     return withPolicy(
       new ExternalSshTransport(parsed.alias, wpPath, profile?.wpCliPath),
-      EXTERNAL_REMOTE_POLICY,
+      REMOTE_POLICY,
     );
   }
 
@@ -82,9 +82,9 @@ export async function resolveTransport(
   if ('content' in target) return target;
 
   if (target.type === 'remote') {
-    // MCP's whitelist applied HERE, not in each tool. Local transports are
-    // deliberately ungated: the old wrapper only ever ran on the remote branch.
-    return withPolicy(new WpeSshTransport(target.installName), MCP_REMOTE_POLICY);
+    // Every remote target gets the same blocklist-only policy. Local transports
+    // are deliberately ungated: the old wrapper only ever ran on the remote branch.
+    return withPolicy(new WpeSshTransport(target.installName), REMOTE_POLICY);
   }
   return new LocalTransport(target.site.id, target.site.name, services.localServices!);
 }

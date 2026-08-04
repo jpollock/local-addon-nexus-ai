@@ -1,14 +1,26 @@
 /**
- * Command policy for remote execution.
+ * Command policy for remote execution — ONE policy for every remote target.
  *
- * The MCP and GraphQL paths enforce DIFFERENT rules today: MCP applies a
- * 14-command whitelist plus a 5-entry blocklist; GraphQL applies a 4-entry
- * blocklist and no whitelist. That divergence is real and load-bearing — the
- * CLI relies on operations the MCP whitelist forbids, and five MCP tools have
- * remote paths that can never succeed because of it.
+ * This was three constants: MCP's 14-command whitelist plus blocklist, a
+ * GraphQL blocklist with no consumers, and a blocklist-only external policy.
+ * They are unified here on blocklist-only. Two reasons, both measured:
  *
- * Spec 0 PRESERVES the divergence. Unifying it is a separate spec with its own
- * decisions. Do not "tidy" these two constants into one.
+ *  - Unifying UPWARD onto the whitelist would break 8 of the 17 CLI commands
+ *    on WP Engine (theme activate, core update, db export, db import,
+ *    search-replace, post create/update/delete). That is a capability
+ *    regression for existing users.
+ *  - The whitelist protected less than it appeared to. No MCP tool accepts an
+ *    arbitrary command array — every tool emits a fixed command shape, and the
+ *    one free-form tool (wp_eval) is in the blocklist below. So removing the
+ *    whitelist grants agents exactly five tools (core update, theme activate,
+ *    post create/update/delete) — capabilities a human at the CLI already had.
+ *
+ * IF A FUTURE MCP TOOL EVER ACCEPTS A FREE-FORM COMMAND ARRAY, that second
+ * reason dies and the whitelist question must be reopened.
+ *
+ * What still protects production is the permission gate, not this list:
+ * wpcli/push are refused on production and delete is refused everywhere
+ * (DEFAULT_OPERATION_PERMISSIONS, mcp/utils/operation-permissions.ts).
  */
 
 import type { SiteTransport } from './types';
@@ -20,50 +32,7 @@ export interface CommandPolicy {
   allowed?: Set<string>;
 }
 
-export const MCP_REMOTE_POLICY: CommandPolicy = {
-  blocked: ['eval', 'eval-file', 'shell', 'db query', 'db cli'],
-  allowed: new Set([
-    'plugin list', 'plugin install', 'plugin activate', 'plugin deactivate', 'plugin update',
-    'theme list',
-    'core version',
-    'user list',
-    'option get',
-    'site health',
-    'post list', 'post get', 'post-type list',
-  ]),
-};
-
-/**
- * GRAPHQL_REMOTE_POLICY currently has no consumers in src/ — the live GraphQL
- * checks remain inline at src/main/graphql/resolvers.ts:1627 and
- * src/main/graphql/resolvers/wp-cli.ts:12.
- *
- * It is NOT semantically equivalent to the live checks. The live code uses
- * startsWith-only matching; adopting this constant would tighten to
- * startsWith || includes(' ' + x), which would refuse commands like
- * "plugin install shell-script" (currently permitted). That is a behavior
- * change, not a refactor.
- */
-export const GRAPHQL_REMOTE_POLICY: CommandPolicy = {
-  blocked: ['db query', 'eval', 'eval-file', 'shell'],
-};
-
-/**
- * Policy for arbitrary SSH hosts: blocklist only, deliberately no whitelist.
- *
- * MCP_REMOTE_POLICY's 14-command whitelist is what makes five MCP tools
- * permanently dead on WP Engine. Applying it here would reproduce that on day
- * one and contradict the full-parity decision for external hosts.
- *
- * External hosts are therefore more permissive than WPE-via-MCP. That is
- * intended: the whitelist is vestigial, the user named the host explicitly, and
- * the environment gate still applies — registration defaults to production, so
- * writes are refused until a host is deliberately labelled otherwise.
- *
- * Do NOT unify this with the other two policies. That is a separate decision
- * with its own spec.
- */
-export const EXTERNAL_REMOTE_POLICY: CommandPolicy = {
+export const REMOTE_POLICY: CommandPolicy = {
   blocked: ['eval', 'eval-file', 'shell', 'db query', 'db cli'],
 };
 
