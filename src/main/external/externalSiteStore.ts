@@ -11,6 +11,13 @@ export interface ExternalSiteProfile {
   alias: string;
   /** WordPress root, passed as --path. Absent means WP-CLI searches from the login dir. */
   wpPath?: string;
+  /**
+   * Absolute path to WP-CLI, stored only when it is NOT on the remote's
+   * non-interactive PATH. Undefined means plain `wp` works. Discovered by the
+   * registration probe; without persisting it, every later command repeats the
+   * same "wp: command not found" the probe already diagnosed.
+   */
+  wpCliPath?: string;
   environment: 'production' | 'staging' | 'development';
   firstSeenAt: number;
   lastSeenAt: number;
@@ -38,8 +45,9 @@ export function listExternalProfiles(storage: Storage): ExternalSiteProfile[] {
  *
  * `firstSeenAt` is preserved from any existing record — it answers "when did
  * this host enter the fleet", which a later sighting must not overwrite.
- * `wpPath` is only replaced when the incoming profile supplies one: a command
- * run without --path must not erase a path already discovered.
+ * `wpPath` and `wpCliPath` are only replaced when the incoming profile supplies
+ * them: a command run without --path, or a sighting that never probed for the
+ * binary, must not erase what registration discovered.
  */
 export function upsertExternalProfile(storage: Storage, profile: ExternalSiteProfile): void {
   const all = readAll(storage);
@@ -48,6 +56,19 @@ export function upsertExternalProfile(storage: Storage, profile: ExternalSitePro
     ...profile,
     firstSeenAt: existing?.firstSeenAt ?? profile.firstSeenAt,
     wpPath: profile.wpPath ?? existing?.wpPath,
+    wpCliPath: profile.wpCliPath ?? existing?.wpCliPath,
   };
   storage.set(STORAGE_KEYS.EXTERNAL_SITE_PROFILES, all);
+}
+
+/**
+ * Forget a host. Returns false when the alias was not registered, and writes
+ * nothing in that case — a no-op must not rewrite the whole record.
+ */
+export function removeExternalProfile(storage: Storage, alias: string): boolean {
+  const all = readAll(storage);
+  if (!(alias in all)) return false;
+  delete all[alias];
+  storage.set(STORAGE_KEYS.EXTERNAL_SITE_PROFILES, all);
+  return true;
 }

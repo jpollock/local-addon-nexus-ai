@@ -1,13 +1,15 @@
 import {
-  externalSiteId, getExternalProfile, upsertExternalProfile, listExternalProfiles,
+  externalSiteId, getExternalProfile, upsertExternalProfile, listExternalProfiles, removeExternalProfile,
 } from '../../../src/main/external/externalSiteStore';
 
 function fakeStorage() {
   const data = new Map<string, unknown>();
-  return {
+  const storage: any = {
     get: (k: string) => data.get(k) ?? null,
-    set: (k: string, v: unknown) => { data.set(k, v); },
+    set: (k: string, v: unknown) => { data.set(k, v); storage.writeCount++; },
+    writeCount: 0,
   };
+  return storage;
 }
 
 describe('externalSiteId', () => {
@@ -68,5 +70,59 @@ describe('external site profiles', () => {
     upsertExternalProfile(s, { alias: 'a', environment: 'production', firstSeenAt: 1, lastSeenAt: 1 });
     upsertExternalProfile(s, { alias: 'b', environment: 'staging', firstSeenAt: 1, lastSeenAt: 1 });
     expect(listExternalProfiles(s).map(p => p.alias).sort()).toEqual(['a', 'b']);
+  });
+});
+
+describe('wpCliPath', () => {
+  it('round-trips an absolute WP-CLI path', () => {
+    const s = fakeStorage() as any;
+    upsertExternalProfile(s, {
+      alias: 'h1', environment: 'production', wpCliPath: '/usr/local/bin/wp',
+      firstSeenAt: 1, lastSeenAt: 1,
+    });
+    expect(getExternalProfile(s, 'h1')?.wpCliPath).toBe('/usr/local/bin/wp');
+  });
+
+  it('is not erased by a later upsert that omits it', () => {
+    const s = fakeStorage() as any;
+    upsertExternalProfile(s, {
+      alias: 'h1', environment: 'production', wpCliPath: '/usr/local/bin/wp',
+      firstSeenAt: 1, lastSeenAt: 1,
+    });
+    upsertExternalProfile(s, { alias: 'h1', environment: 'production', firstSeenAt: 2, lastSeenAt: 2 });
+    expect(getExternalProfile(s, 'h1')?.wpCliPath).toBe('/usr/local/bin/wp');
+  });
+
+  it('is replaced when a later upsert supplies a different one', () => {
+    const s = fakeStorage() as any;
+    upsertExternalProfile(s, {
+      alias: 'h1', environment: 'production', wpCliPath: '/usr/local/bin/wp',
+      firstSeenAt: 1, lastSeenAt: 1,
+    });
+    upsertExternalProfile(s, {
+      alias: 'h1', environment: 'production', wpCliPath: '/opt/wp',
+      firstSeenAt: 2, lastSeenAt: 2,
+    });
+    expect(getExternalProfile(s, 'h1')?.wpCliPath).toBe('/opt/wp');
+  });
+});
+
+describe('removeExternalProfile', () => {
+  it('removes only the named alias and reports true', () => {
+    const s = fakeStorage() as any;
+    upsertExternalProfile(s, { alias: 'h1', environment: 'production', firstSeenAt: 1, lastSeenAt: 1 });
+    upsertExternalProfile(s, { alias: 'h2', environment: 'staging', firstSeenAt: 1, lastSeenAt: 1 });
+    expect(removeExternalProfile(s, 'h1')).toBe(true);
+    expect(getExternalProfile(s, 'h1')).toBeNull();
+    expect(getExternalProfile(s, 'h2')).not.toBeNull();
+  });
+
+  it('reports false for an unknown alias and writes nothing', () => {
+    const s = fakeStorage() as any;
+    upsertExternalProfile(s, { alias: 'h1', environment: 'production', firstSeenAt: 1, lastSeenAt: 1 });
+    const writesBefore = s.writeCount;
+    expect(removeExternalProfile(s, 'nope')).toBe(false);
+    expect(s.writeCount).toBe(writesBefore);
+    expect(listExternalProfiles(s)).toHaveLength(1);
   });
 });
