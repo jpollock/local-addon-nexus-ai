@@ -1,4 +1,5 @@
 import type { AssistantContext, AssistantFilter, QueryPlan, FleetInsight, AssistantResponse } from '../../common/types';
+import { toSiteSource } from '../../common/types';
 import { isPhpEol, getPhpEolDate, PLUGIN_CATEGORIES } from './wordpress-knowledge';
 
 // ---------------------------------------------------------------------------
@@ -177,7 +178,7 @@ export function executeAssistantFilter(
             id: row.id, name: row.name,
             meta: [row.php_version ? `PHP ${row.php_version}` : null, row.wp_version ? `WP ${row.wp_version}` : null].filter(Boolean).join(' · '),
             tag: phpEol ? 'EOL' : undefined, tagKind: phpEol ? 'warn' : undefined,
-            source: row.source === 'local' ? 'local' : 'wpe',
+            source: toSiteSource(row.source),
           });
         }
       } catch { /* db unavailable */ }
@@ -224,7 +225,7 @@ export function executeAssistantFilter(
           id: row.id, name: row.name,
           meta: `PHP ${row.php_version}${row.wp_version ? ` · WP ${row.wp_version}` : ''}`,
           tag: phpEol ? 'EOL' : undefined, tagKind: phpEol ? 'warn' : undefined,
-          source: row.source === 'local' ? 'local' : 'wpe',
+          source: toSiteSource(row.source),
         });
       }
     } catch { /* db unavailable */ }
@@ -247,7 +248,7 @@ export function executeAssistantFilter(
             meta: `${row.name} · v${row.version ?? '?'}`,
             tag: row.is_active ? 'active' : 'inactive',
             tagKind: row.is_active ? 'ok' : 'info',
-            source: row.source === 'local' ? 'local' : 'wpe',
+            source: toSiteSource(row.source),
           });
         }
       } catch { /* db unavailable */ }
@@ -289,7 +290,7 @@ export function executeAssistantFilter(
             meta: `${row.name} · v${row.version ?? '?'}`,
             tag: row.is_active ? 'active' : 'inactive',
             tagKind: row.is_active ? 'ok' : 'info',
-            source: row.source === 'local' ? 'local' : 'wpe',
+            source: toSiteSource(row.source),
           });
         }
       } catch { /* db unavailable */ }

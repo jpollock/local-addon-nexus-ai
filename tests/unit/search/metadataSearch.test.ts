@@ -6,11 +6,11 @@ const mockDbWithPlugin = {
   prepare: jest.fn().mockImplementation((sql: string) => ({
     all: jest.fn().mockReturnValue(
       sql.includes('FROM plugins')
-        ? [{ site_id: 'wpe-abc', slug: 'elementor/elementor.php', name: 'Elementor', version: '3.21.0', is_active: 1, site_name: 'acme-prod', source: 'wpe-capi' }]
+        ? [{ site_id: 'wpe-abc', slug: 'elementor/elementor.php', name: 'Elementor', version: '3.21.0', is_active: 1, site_name: 'acme-prod', source: 'wpe' }]
         : sql.includes('php_version')
-        ? [{ id: 'wpe-abc', name: 'acme-prod', source: 'wpe-capi' }]
+        ? [{ id: 'wpe-abc', name: 'acme-prod', source: 'wpe' }]
         : sql.includes('wp_version')
-        ? [{ id: 'wpe-abc', name: 'acme-prod', source: 'wpe-capi' }]
+        ? [{ id: 'wpe-abc', name: 'acme-prod', source: 'wpe' }]
         : []
     ),
   })),

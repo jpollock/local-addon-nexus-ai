@@ -37,4 +37,24 @@ describe('sites.source semantics', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it("no code collapses a non-local source to 'wpe'", () => {
+    // The TypeScript half of the same bug the SQL scan above guards. Nine of
+    // these existed; each turned an external site into a WP Engine install.
+    // Use toSiteSource(row.source) instead.
+    const offenders: string[] = [];
+    for (const file of walkTsFiles(SRC)) {
+      fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+        // Skip comments. The docblock on SiteSource in common/types.ts quotes
+        // this exact pattern to explain why it is forbidden, and flagging the
+        // explanation as a violation would make the test unpassable.
+        const trimmed = line.trim();
+        if (trimmed.startsWith('*') || trimmed.startsWith('//') || trimmed.startsWith('/*')) return;
+        if (/===\s*'local'\s*\?\s*'local'\s*:\s*'wpe'/.test(line)) {
+          offenders.push(`${path.relative(SRC, file)}:${i + 1}`);
+        }
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
 });

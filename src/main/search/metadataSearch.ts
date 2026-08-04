@@ -1,4 +1,5 @@
 import type { MetadataSearchResult } from '../../common/types';
+import { toSiteSource } from '../../common/types';
 
 // ---------------------------------------------------------------------------
 // Plugin category taxonomy — maps concept names to known plugin slugs.
@@ -166,7 +167,7 @@ export function searchMetadata(
             matchKind: 'php-version',
             siteId: row.id,
             siteName: row.name,
-            siteSource: row.source === 'local' ? 'local' : 'wpe',
+            siteSource: toSiteSource(row.source),
             field: 'php_version',
             value: `PHP ${row.php_version}`,
             score: 1 - i * 0.05, // rank by position
@@ -189,7 +190,7 @@ export function searchMetadata(
             matchKind: 'wp-version',
             siteId: row.id,
             siteName: row.name,
-            siteSource: row.source === 'local' ? 'local' : 'wpe',
+            siteSource: toSiteSource(row.source),
             field: 'wp_version',
             value: `WP ${row.wp_version}`,
             score: 1 - i * 0.05,
@@ -219,7 +220,7 @@ export function searchMetadata(
             matchKind: 'plugin',
             siteId: row.site_id,
             siteName: row.site_name,
-            siteSource: row.source === 'local' ? 'local' : 'wpe',
+            siteSource: toSiteSource(row.source),
             field: row.slug,
             value: `${row.is_active ? 'active' : 'inactive'} · v${row.version ?? '?'}`,
             score: row.is_active ? 1.0 : 0.7,
@@ -267,7 +268,7 @@ export function searchMetadata(
           results.push({
             type: 'site-metadata', matchKind: 'plugin',
             siteId: row.site_id, siteName: row.site_name,
-            siteSource: row.source === 'local' ? 'local' : 'wpe',
+            siteSource: toSiteSource(row.source),
             field: row.slug,
             value: `${row.is_active ? 'active' : 'inactive'} · v${row.version ?? '?'}`,
             score: row.is_active ? 1.0 : 0.7,
@@ -288,7 +289,7 @@ export function searchMetadata(
             results.push({
               type: 'site-metadata', matchKind: kind as any,
               siteId: row.id, siteName: row.name,
-              siteSource: row.source === 'local' ? 'local' : 'wpe',
+              siteSource: toSiteSource(row.source),
               field: col, value: label, score: 0.9,
             });
           }
