@@ -1,6 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
 import { ok, error } from './preflight';
+import { resolveTransport } from '../../../transport';
 import { withSiteRunning } from '../with-site-running';
 
 export const siteHealthHandler: McpToolHandler = {
@@ -9,36 +9,43 @@ export const siteHealthHandler: McpToolHandler = {
     description:
       'Run WordPress site health check — returns core version, database status, active theme, ' +
       'plugin/theme counts, and basic diagnostics. ' +
-      'LOCAL SITES ONLY — use nexus_site_audit or wp_plugin_list for remote WPE installs. ' +
+      'Works on local sites (site=), remote WPE installs via SSH (install_name=), and external SSH hosts (ssh_target=). ' +
       'Run this after plugin updates or before local_wpe_push to confirm no regressions.',
     inputSchema: {
       type: 'object',
       properties: {
-        site: { type: 'string', description: 'Site name, ID, or domain' },
+        site: { type: 'string', description: 'Local site name, ID, or domain' },
+        install_name: { type: 'string', description: 'WPE install name for remote execution via SSH' },
+        ssh_target: {
+          type: 'string',
+          description: 'External SSH host, as ssh:<alias>@<production|staging|development>. The alias is a Host entry in the user\'s ~/.ssh/config. Register one with `nexus host add`.',
+        },
+        wp_path: {
+          type: 'string',
+          description: 'Absolute WordPress root on an external host. Usually unnecessary — a registered host supplies its own discovered path.',
+        },
       },
-      required: ['site'],
     },
     isAvailable: (services) => !!services.localServices,
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
-    if (!site) return error(`Site "${args.site}" not found.`);
+    const transport = await resolveTransport(args, services, 'wpcli_read');
+    if ('content' in transport) return transport;
 
-    return withSiteRunning(site.id, services, async () => {
-      const wpCli = services.localServices!;
-
+    // Helper to run the health check commands via the transport
+    const runHealthCheck = async (siteName: string) => {
       // Run multiple lightweight WP-CLI commands in parallel to build a health report
       const [versionResult, pluginResult, themeResult, optionResult, dbResult] = await Promise.allSettled([
-        wpCli.wpCliRun(site.id, ['core', 'version']),
-        wpCli.wpCliRun(site.id, ['plugin', 'list', '--format=json']),
-        wpCli.wpCliRun(site.id, ['theme', 'list', '--format=json']),
-        wpCli.wpCliRun(site.id, ['option', 'get', 'blogname']),
-        wpCli.wpCliRun(site.id, ['db', 'size', '--format=json']),
+        transport.runWpCli(['core', 'version']),
+        transport.runWpCli(['plugin', 'list', '--format=json']),
+        transport.runWpCli(['theme', 'list', '--format=json']),
+        transport.runWpCli(['option', 'get', 'blogname']),
+        transport.runWpCli(['db', 'size', '--format=json']),
       ]);
 
       const lines: string[] = [];
-      lines.push(`## Site Health: ${site.name}`);
+      lines.push(`## Site Health: ${siteName}`);
       lines.push('');
 
       // WordPress version
@@ -49,10 +56,6 @@ export const siteHealthHandler: McpToolHandler = {
       // Site name from options
       if (optionResult.status === 'fulfilled' && optionResult.value.success) {
         lines.push(`**Site Title:** ${(optionResult.value.stdout ?? '').trim()}`);
-      }
-
-      if (site.domain) {
-        lines.push(`**Domain:** ${site.domain}`);
       }
 
       lines.push('');
@@ -122,6 +125,25 @@ export const siteHealthHandler: McpToolHandler = {
       }
 
       return ok(lines.join('\n'));
-    });
+    };
+
+    // Get the site name from the transport's siteRef
+    const getSiteName = (): string => {
+      if (transport.siteRef.kind === 'local') return transport.siteRef.siteName;
+      if (transport.siteRef.kind === 'wpe') return transport.siteRef.installName;
+      if (transport.siteRef.kind === 'external') return transport.siteRef.alias;
+      return 'site';
+    };
+
+    const siteName = getSiteName();
+
+    // For local sites only: use withSiteRunning to auto-start halted sites.
+    // This is specific to local sites — remote targets have no site to start and no id to pass.
+    if (transport.kind === 'local' && transport.siteRef.kind === 'local') {
+      return withSiteRunning(transport.siteRef.siteId, services, async () => runHealthCheck(siteName));
+    }
+
+    // For remote and external SSH: run directly without withSiteRunning
+    return runHealthCheck(siteName);
   },
 };
