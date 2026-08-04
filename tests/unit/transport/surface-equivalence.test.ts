@@ -1,3 +1,10 @@
+/**
+ * The CLI and MCP surfaces were unified onto one policy, one router, one
+ * classifier. This suite asserts that a command's outcome depends on the
+ * target and the command, never on which surface asked. If they drift apart
+ * again, one of these properties fails.
+ */
+
 import { REMOTE_POLICY, checkCommand } from '../../../src/main/transport/policy';
 import { classifyWpCliOp } from '../../../src/main/transport/classify';
 import { isOperationAllowed, DEFAULT_OPERATION_PERMISSIONS } from '../../../src/main/mcp/utils/operation-permissions';
@@ -14,6 +21,32 @@ const CLI_COMMANDS: string[][] = [
   ['user','list'], ['option','get','siteurl'], ['site','health'],
 ];
 
+/**
+ * Expected classification for each command. Reads are in WPCLI_READ_COMMANDS
+ * (classify.ts:2-12); everything else fails closed to 'wpcli'.
+ * A misclassification silently opens a write on production, so these must be pinned.
+ */
+const COMMAND_CLASSIFICATIONS: Array<[string[], 'wpcli_read' | 'wpcli']> = [
+  [['plugin','list'], 'wpcli_read'],
+  [['plugin','install','x'], 'wpcli'],
+  [['plugin','activate','x'], 'wpcli'],
+  [['plugin','deactivate','x'], 'wpcli'],
+  [['plugin','update','x'], 'wpcli'],
+  [['theme','list'], 'wpcli_read'],
+  [['theme','activate','x'], 'wpcli'],
+  [['core','version'], 'wpcli_read'],
+  [['core','update'], 'wpcli'],
+  [['db','export'], 'wpcli_read'],
+  [['db','import','f.sql'], 'wpcli'],
+  [['search-replace','a','b'], 'wpcli'],
+  [['post','create'], 'wpcli'],
+  [['post','update','1'], 'wpcli'],
+  [['post','delete','1'], 'wpcli'],
+  [['user','list'], 'wpcli_read'],
+  [['option','get','siteurl'], 'wpcli_read'],
+  [['site','health'], 'wpcli_read'],
+];
+
 describe('surface equivalence', () => {
   it('no CLI command is blocked by the unified policy', () => {
     const blocked = CLI_COMMANDS.filter((c) => checkCommand(c, REMOTE_POLICY) !== null);
@@ -26,10 +59,8 @@ describe('surface equivalence', () => {
     }
   });
 
-  it.each(CLI_COMMANDS)('classifies %j identically regardless of caller', (...c) => {
-    const cmd = c as string[];
-    expect(classifyWpCliOp(cmd)).toBe(classifyWpCliOp([...cmd]));
-    expect(['wpcli', 'wpcli_read']).toContain(classifyWpCliOp(cmd));
+  it.each(COMMAND_CLASSIFICATIONS)('classifies %j as %s', (cmd, expectedOp) => {
+    expect(classifyWpCliOp(cmd)).toBe(expectedOp);
   });
 
   it('refuses every write on production and permits every read', () => {
