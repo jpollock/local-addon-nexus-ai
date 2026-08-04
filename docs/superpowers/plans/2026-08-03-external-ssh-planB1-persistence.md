@@ -201,6 +201,11 @@ Nine expressions read `row.source === 'local' ? 'local' : 'wpe'`. Each relabels 
     const offenders: string[] = [];
     for (const file of walkTsFiles(SRC)) {
       fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+        // Skip comments. The docblock on SiteSource in common/types.ts quotes
+        // this exact pattern to explain why it is forbidden, and flagging the
+        // explanation as a violation would make the test unpassable.
+        const trimmed = line.trim();
+        if (trimmed.startsWith('*') || trimmed.startsWith('//') || trimmed.startsWith('/*')) return;
         if (/===\s*'local'\s*\?\s*'local'\s*:\s*'wpe'/.test(line)) {
           offenders.push(`${path.relative(SRC, file)}:${i + 1}`);
         }
@@ -216,7 +221,9 @@ Nine expressions read `row.source === 'local' ? 'local' : 'wpe'`. Each relabels 
 npx jest tests/unit/graph/source-semantics.test.ts
 ```
 
-Expected: FAIL listing exactly 9 offenders across 2 files. If the count differs, record the actual list in your report and fix all of them.
+Expected: FAIL listing exactly 9 offenders across 2 files — `AssistantService.ts` (4) and `metadataSearch.ts` (5).
+
+If it lists a line in `common/types.ts`, the comment-skipping guard is not working: that file's `SiteSource` docblock quotes the forbidden pattern deliberately, to explain why it is forbidden. Fix the guard, not the docblock. If the count differs for any other reason, record the actual list in your report and fix all of them.
 
 - [ ] **Step 3: Replace all nine**
 
