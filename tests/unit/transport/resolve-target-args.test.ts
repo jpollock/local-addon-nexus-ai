@@ -4,7 +4,7 @@ import { classifyWpCliOp } from '../../../src/main/transport/classify';
 function services(opts: { localSites?: string[]; wpeInstalls?: string[] } = {}) {
   const sites = Object.fromEntries((opts.localSites ?? []).map((n) => [n, { id: `id-${n}`, name: n }]));
   return {
-    siteData: { getSites: () => sites, getSite: (id: string) => (sites as any)[id] ?? null },
+    siteData: { getSites: () => sites, getSite: (id: string) => Object.values(sites).find((s: any) => s.id === id) ?? null },
     graphService: {
       getDb: () => ({
         prepare: () => ({
