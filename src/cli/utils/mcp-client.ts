@@ -112,12 +112,27 @@ export async function callMcpTool(
  * Translate a CLI target string to MCP tool arguments.
  *
  *   jppblank@local           → { site: 'jppblank' }
- *   wpe:install-name         → { install_name: 'install-name' }
- *   name@production          → { install_name: 'name' }
- *   bare-name                → { site: 'bare-name' }
+ *   wpe:install-name         → { install_name: 'install-name', install_name_explicit: true }
+ *   name@production          → { install_name: 'name', install_name_explicit: true }
+ *   bare-name                → { install_name: 'bare-name' }
  *   ssh:alias@environment    → { ssh_target: 'ssh:alias@environment' }
+ *
+ * THE TWO EXPLICIT FORMS CARRY `install_name_explicit: true`, for the same
+ * reason resolveTargetArgs does on the GraphQL route. `resolveTarget`
+ * (mcp/modules/wp-cli/remote-exec.ts) treats a bare `install_name` as
+ * *possibly a local site name* and looks that up first — correct for an MCP
+ * tool, where the argument really is ambiguous, and wrong here, where `wpe:`
+ * or an `@production` suffix means the user already said "remote". Without the
+ * flag, `wpe:acct/acme-prod@production` runs against whatever install a *local*
+ * site named `acme-prod` is linked to, or fails with "not connected to WP
+ * Engine". Local sites named after the install they were pulled from make that
+ * collision ordinary. `wp plugin update` takes this path, so the silent
+ * mis-target is a write.
+ *
+ * The bare-name branch below is deliberately left ambiguous: local-first is the
+ * right default when the user typed no prefix at all.
  */
-export function targetToMcpArgs(target: string): Record<string, string> {
+export function targetToMcpArgs(target: string): Record<string, string | boolean> {
   if (target.startsWith('ssh:')) {
     // Passed whole; resolveTransport parses it. wp_path is added separately by
     // the calling command from its --path option.
@@ -129,11 +144,11 @@ export function targetToMcpArgs(target: string): Record<string, string> {
   if (target.startsWith('wpe:')) {
     // wpe:account/install@env — extract just the install name
     const installPart = target.slice('wpe:'.length).split('@')[0].split('/').pop() ?? target;
-    return { install_name: installPart };
+    return { install_name: installPart, install_name_explicit: true };
   }
   const envMatch = target.match(/^(.+?)@(production|staging|development)$/);
   if (envMatch) {
-    return { install_name: envMatch[1] };
+    return { install_name: envMatch[1], install_name_explicit: true };
   }
   // Bare name: pass as install_name so WPE resolution is attempted.
   // The MCP tool resolveTarget() will also check local sites if install_name
