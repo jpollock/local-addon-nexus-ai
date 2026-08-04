@@ -33,7 +33,10 @@ describe('resolveSshConfig', () => {
   });
 
   it('falls back to the alias and sane defaults when ssh -G yields nothing', async () => {
-    const cfg = await resolveSshConfig('example', async () => ({ code: 255, stdout: '', stderr: 'boom' }));
+    // code 0, deliberately: the EMPTY STDOUT drives the fallback, not the exit
+    // code. `ssh -G` resolves and never validates, so nothing here may gate on
+    // its status — a 255 fixture would read as though something did.
+    const cfg = await resolveSshConfig('example', async () => ({ code: 0, stdout: '', stderr: 'boom' }));
     expect(cfg).toEqual({ hostname: 'example', user: '', port: '22' });
   });
 });
@@ -219,6 +222,32 @@ describe('probeExternalHost — gate 3', () => {
     expect(r.failure?.kind).toBe('multiple-wordpress');
     expect(r.candidates).toEqual(['/home/u/a', '/home/u/b']);
     expect(r.failure?.remedy).toContain('--path');
+  });
+
+  it('leaves candidates undefined when exactly one root is found', async () => {
+    // The field means "there was a choice to make". A one-element array said
+    // the opposite to anything reading candidates?.length.
+    const r = await probeExternalHost('example', { exec: router(HAPPY) });
+    expect(r.ok).toBe(true);
+    expect(r.wpPath).toBe('/home/u/public_html');
+    expect(r.candidates).toBeUndefined();
+  });
+
+  it('leaves candidates undefined when --path skipped the search', async () => {
+    const r = await probeExternalHost('example', {
+      wpPath: '/srv/wp',
+      exec: router([CONNECT_OK, WP_ON_PATH, WP_VERSION, CORE_VERSION, SITEURL]),
+    });
+    expect(r.candidates).toBeUndefined();
+  });
+
+  it('leaves candidates undefined on a gate-4 failure after a single-root search', async () => {
+    const r = await probeExternalHost('example', {
+      exec: router([CONNECT_OK, WP_ON_PATH, WP_VERSION, FIND_ONE,
+        [/'core' 'version'/, { code: 1, stdout: '', stderr: 'Error: not a WordPress installation.' }]]),
+    });
+    expect(r.failure?.kind).toBe('wordpress-not-found');
+    expect(r.candidates).toBeUndefined();
   });
 
   it('deduplicates repeated roots rather than calling them ambiguous', async () => {

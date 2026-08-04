@@ -29,7 +29,13 @@ export interface ProbeReport {
   wpVersion?: string;
   /** From `option get siteurl`. Absent when the DB is unreachable — not a failure. */
   siteUrl?: string;
-  /** WordPress roots found when discovery was ambiguous. */
+  /**
+   * The WordPress roots discovery found, set ONLY when there was more than one
+   * and the probe therefore refused with `multiple-wordpress`. Undefined
+   * everywhere else — a `--path` run, and a search that resolved to exactly one
+   * root, are both "nothing to choose between", and a one-element array said
+   * the opposite to anyone reading `candidates?.length`.
+   */
   candidates?: string[];
   failure?: ProbeFailure;
 }
@@ -39,10 +45,39 @@ export interface ProbeOptions {
   exec?: SshExec;
 }
 
+/**
+ * TCP connect only, not the session. Short on purpose: an unreachable host
+ * should fail while the user is watching rather than burn a whole step timeout
+ * on a SYN that is never answered.
+ */
 const CONNECT_TIMEOUT_SEC = 10;
+/**
+ * Per-step ceiling for the commands that only print — `command -v wp`, the
+ * fallback-path loop, `wp --version`, `wp core version`, `option get siteurl`.
+ * Generous for a print, deliberately: WP-CLI boots WordPress, and on a cold,
+ * oversubscribed shared host that genuinely takes seconds.
+ */
 const STEP_TIMEOUT_MS = 20000;
 /** Discovery walks the filesystem; it gets longer than a command that just prints. */
 const DISCOVERY_TIMEOUT_MS = 30000;
+
+/**
+ * THE SUM HAS A CONSEQUENCE. These timeouts are sequential, so a probe that
+ * hits every ceiling legitimately runs for
+ *
+ *   SSH_CONFIG_DUMP_TIMEOUT_MS (5s, sshExec.ts)
+ *   + 6 x STEP_TIMEOUT_MS (connect, `command -v wp`, fallback search,
+ *       `--version`, `core version`, `option get siteurl`)
+ *   + DISCOVERY_TIMEOUT_MS (30s)
+ *   = 155s
+ *
+ * before it returns anything at all. A client that gives up sooner does not
+ * cancel the probe — `nexus host add` would print a timeout and exit 1 while
+ * this function goes on to succeed and register the host, reporting failure for
+ * an operation that worked. HOST_PROBE_CLIENT_TIMEOUT_MS in
+ * src/cli/commands/host.ts must therefore stay above this sum; raise any
+ * timeout above and raise that one too.
+ */
 
 /** Roots searched for wp-config.php, and the depth limit. Never an unbounded walk. */
 const SEARCH_ROOTS = ['"$HOME"', '/var/www/html', '/srv/www'];
@@ -146,7 +181,6 @@ export async function probeExternalHost(alias: string, opts: ProbeOptions = {}):
 
   // ---- Gate 3: find the WordPress root ------------------------------------
   let wpPath = opts.wpPath;
-  let candidates: string[] | undefined;
 
   if (!wpPath) {
     // Bounded: fixed roots, fixed depth. `2>/dev/null` swallows unreadable and
@@ -173,8 +207,8 @@ export async function probeExternalHost(alias: string, opts: ProbeOptions = {}):
         `Choose one:\n  nexus host add ${alias} --path ${roots[0]}`,
         { wpCliPath, wpCliVersion, candidates: roots });
     }
+    // Exactly one root: no ambiguity, so no candidates. See the field's docblock.
     wpPath = roots[0];
-    candidates = roots;
   }
 
   // ---- Gate 4: is it really WordPress? ------------------------------------
@@ -183,7 +217,7 @@ export async function probeExternalHost(alias: string, opts: ProbeOptions = {}):
     return fail(alias, resolved, 'wordpress-not-found',
       reason(core) || `wp core version exited with code ${core.code}`,
       `Check the path, then re-run:\n  nexus host add ${alias} --path <correct-path>`,
-      { wpCliPath, wpCliVersion, wpPath, candidates });
+      { wpCliPath, wpCliVersion, wpPath });
   }
 
   // Best-effort. `option get` needs a working DB connection, and a broken DB is
@@ -200,6 +234,5 @@ export async function probeExternalHost(alias: string, opts: ProbeOptions = {}):
     wpPath,
     wpVersion: core.stdout.trim(),
     siteUrl,
-    candidates,
   };
 }
