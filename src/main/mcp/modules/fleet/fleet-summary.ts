@@ -32,13 +32,15 @@ export const fleetSummaryHandler: McpToolHandler = {
       try {
         const db = graphService.getDb();
         if (db) {
+          // Remote sites of every kind: WPE installs and external SSH hosts.
+          // Add new remote kinds here; `!= 'local'` is forbidden (see source-semantics.test.ts).
           wpeSites = db.prepare(
-            "SELECT name, wp_version, php_version FROM sites WHERE source = 'wpe' AND is_active = 1"
+            "SELECT name, wp_version, php_version FROM sites WHERE source IN ('wpe', 'external') AND is_active = 1"
           ).all() as WpeSite[];
           wpePluginRows = db.prepare(`
             SELECT p.slug, p.name, p.is_active, s.name as site_name
             FROM plugins p JOIN sites s ON p.site_id = s.id
-            WHERE s.source = 'wpe' AND s.is_active = 1
+            WHERE s.source IN ('wpe', 'external') AND s.is_active = 1
           `).all() as (WpePlugin & { site_name: string })[];
         }
       } catch { /* graph unavailable */ }

@@ -266,8 +266,10 @@ function pluginSyncFreshnessWarning(graphService: any, sourceFilter: string): st
     const now = Date.now();
 
     // Check the oldest last_sync_at across relevant sites
+    // Remote sites of every kind: WPE installs and external SSH hosts.
+    // Add new remote kinds here; `!= 'local'` is forbidden (see source-semantics.test.ts).
     const q = sourceFilter === 'wpe'
-      ? "SELECT MIN(last_sync_at) as oldest, COUNT(*) as total, COUNT(CASE WHEN last_sync_at IS NULL THEN 1 END) as never_synced FROM sites WHERE source='wpe' AND is_active=1"
+      ? "SELECT MIN(last_sync_at) as oldest, COUNT(*) as total, COUNT(CASE WHEN last_sync_at IS NULL THEN 1 END) as never_synced FROM sites WHERE source IN ('wpe', 'external') AND is_active=1"
       : sourceFilter === 'local'
       ? "SELECT MIN(last_sync_at) as oldest, COUNT(*) as total, COUNT(CASE WHEN last_sync_at IS NULL THEN 1 END) as never_synced FROM sites WHERE source='local' AND is_active=1"
       : "SELECT MIN(last_sync_at) as oldest, COUNT(*) as total, COUNT(CASE WHEN last_sync_at IS NULL THEN 1 END) as never_synced FROM sites WHERE is_active=1";

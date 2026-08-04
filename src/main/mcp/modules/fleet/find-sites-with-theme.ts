@@ -74,11 +74,13 @@ export const findSitesWithThemeHandler: McpToolHandler = {
       try {
         const db = graphService.getDb();
         if (db) {
+          // Remote sites of every kind: WPE installs and external SSH hosts.
+          // Add new remote kinds here; `!= 'local'` is forbidden (see source-semantics.test.ts).
           const rows = db.prepare(`
             SELECT t.slug, t.name, t.version, t.is_active, s.name as site_name
             FROM themes t
             JOIN sites s ON t.site_id = s.id
-            WHERE s.source = 'wpe'
+            WHERE s.source IN ('wpe', 'external')
               AND (LOWER(t.slug) = ? OR LOWER(t.name) LIKE ?)
           `).all(queryLower, `%${queryLower}%`) as Array<{
             slug: string; name: string; version: string; is_active: number; site_name: string;
@@ -96,7 +98,7 @@ export const findSitesWithThemeHandler: McpToolHandler = {
           }
 
           const wpeCount = (db.prepare(
-            "SELECT COUNT(*) as c FROM sites WHERE source = 'wpe'"
+            "SELECT COUNT(*) as c FROM sites WHERE source IN ('wpe', 'external')"
           ).get() as { c: number })?.c ?? 0;
           wpeTotal = wpeCount;
         }
