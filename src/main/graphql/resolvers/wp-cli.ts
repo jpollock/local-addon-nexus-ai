@@ -15,18 +15,17 @@
  *
  * Both resolvers route every target type — local, WP Engine, external SSH —
  * through resolveTransport, which owns target resolution, the command policy
- * and the environment gate. Neither resolveTransport nor ToolRegistry.call()'s
- * chokepoint audits this path, so both resolvers write their own
- * auditDirectOperation entry on every outcome.
+ * and the environment gate.
  *
- * BOTH audit, including nexusWpPluginList, which is a pure read. That is a
- * deliberate exception to "read-only resolvers must not be audited"
- * (auditDirectOperation.ts). The rule exists to stop high-volume reads swamping
- * operation-audit.log; these two resolvers are one entry per typed CLI command,
- * they are the CLI's only direct route to a production WP Engine install or an
- * arbitrary SSH host, and nexusWpCommand already audits reads such as
- * `core version` for the same reason. Do not generalise the exception: a read
- * that runs in a loop, or from a UI poll, still must not be audited.
+ * ONLY nexusWpCommand audits. It runs arbitrary argv and can mutate, so it is
+ * Tier 2/3 by nature, and neither resolveTransport nor ToolRegistry.call()'s
+ * chokepoint covers this path — it therefore writes its own
+ * auditDirectOperation entry on every outcome, including refused resolution.
+ *
+ * nexusWpPluginList deliberately does NOT audit: `plugin list` cannot mutate,
+ * and read-only paths are not audited (CLAUDE.md, auditDirectOperation.ts).
+ * That rule is about volume as much as compliance value, and this resolver is
+ * high-volume.
  */
 
 import type { NexusServices } from '../../types/nexus-services';
@@ -147,6 +146,13 @@ export function createWpCliResolvers(services: NexusServices) {
      * undefined (reading 'split')". `nexus wp plugin list <ssh-target>
      * --json` reaches it directly (wp.ts:31 skips the MCP path for --json),
      * as does the plain form whenever the MCP server is down.
+     *
+     * NOT AUDITED, unlike nexusWpCommand above. `plugin list` cannot mutate,
+     * and this resolver is high-volume — fleet views, health checks, the CLI
+     * and agents all reach it. Writing an entry per call would flood
+     * operation-audit.log with records nobody will ever need, which is exactly
+     * the harm CLAUDE.md's "read-only paths are not audited" rule prevents.
+     * nexusWpCommand is audited because it runs arbitrary argv and can mutate.
      */
     nexusWpPluginList: async (_parent: ResolverParent, { target }: { target: string }) => {
       return withQueue(async () => {
@@ -155,19 +161,8 @@ export function createWpCliResolvers(services: NexusServices) {
         // computes for it.
         const operation = classifyWpCliOp(PLUGIN_LIST_ARGV);
 
-        let resolved: SiteRef | undefined;
-        const audit = (outcome: 'success' | 'failure', err?: string) =>
-          auditDirectOperation(services, {
-            operation: 'cli.wp.plugin.list',
-            target,
-            parameters: { target, ...(resolved ? { resolved } : {}) },
-            outcome,
-            error: err,
-          });
-
         try {
           if (!services.localServices) {
-            audit('failure', 'Local services not available');
             return { success: false, error: 'Local services not available', plugins: [] };
           }
 
@@ -175,29 +170,23 @@ export function createWpCliResolvers(services: NexusServices) {
           const transport = await resolveTransport(args, services, operation);
           if ('content' in transport) {
             const msg = (transport.content?.[0] as { text?: string } | undefined)?.text ?? 'Target could not be resolved';
-            audit('failure', msg);
             return { success: false, error: msg, plugins: [] };
           }
-          resolved = transport.siteRef;
 
           const result = await transport.runWpCli(PLUGIN_LIST_ARGV);
           if (!result.success && result.exitCode !== 0) {
             // Both SSH transports fold their error text into stdout.
             const raw = result.stdout || result.stderr || 'Failed to list plugins';
-            const msg = annotatePluginListFailure(raw, transport.siteRef);
-            audit('failure', msg);
-            return { success: false, error: msg, plugins: [] };
+            return { success: false, error: annotatePluginListFailure(raw, transport.siteRef), plugins: [] };
           }
 
           let parsed: any[];
           try {
             parsed = JSON.parse(result.stdout || '[]');
           } catch {
-            audit('failure', 'Failed to parse plugin list JSON');
             return { success: false, error: 'Failed to parse plugin list JSON', plugins: [] };
           }
 
-          audit('success');
           return {
             success: true,
             plugins: parsed.map((p: any) => ({
@@ -210,9 +199,7 @@ export function createWpCliResolvers(services: NexusServices) {
             })),
           };
         } catch (e: any) {
-          const msg = e?.message ?? String(e);
-          audit('failure', msg);
-          return { success: false, error: msg, plugins: [] };
+          return { success: false, error: e?.message ?? String(e), plugins: [] };
         }
       });
     },

@@ -7,6 +7,9 @@
  * delegation to resolveTransport (the one router) and — just as important —
  * that the `cli.wp.command` audit entry survives on every outcome, since
  * neither resolveTransport nor ToolRegistry.call()'s chokepoint audits here.
+ *
+ * nexusWpPluginList is the read-only counterpart and writes NO audit entry;
+ * that is pinned too.
  */
 
 const auditMock = jest.fn();
@@ -173,28 +176,39 @@ describe('nexusWpPluginList', () => {
     ]);
   });
 
-  it('returns the refusal instead of throwing, and audits it', async () => {
+  it('returns the refusal instead of throwing', async () => {
     resolveTransportMock.mockResolvedValue({ content: [{ text: 'Operation blocked: nope' }], isError: true });
     const r = await list('ssh:box@production');
     expect(r.success).toBe(false);
     expect(r.error).toContain('Operation blocked');
     expect(r.plugins).toEqual([]);
-    expect(auditMock.mock.calls[0][1]).toMatchObject({
-      operation: 'cli.wp.plugin.list', outcome: 'failure',
-    });
   });
 
-  it('audits success with the resolved identity', async () => {
-    resolveTransportMock.mockResolvedValue(
-      transport({ stdout: '[]', success: true }, { kind: 'wpe', installName: 'acme-prod' }));
-    await list('acme-prod');
-    expect(auditMock).toHaveBeenCalledTimes(1);
-    expect(auditMock.mock.calls[0][1]).toMatchObject({
-      operation: 'cli.wp.plugin.list', outcome: 'success',
-    });
-    expect(auditMock.mock.calls[0][1].parameters).toMatchObject({
-      resolved: { kind: 'wpe', installName: 'acme-prod' },
-    });
+  /**
+   * The correct behaviour is that NO entry is written. `plugin list` cannot
+   * mutate, and read-only paths are not audited (CLAUDE.md; the docblock on
+   * auditDirectOperation) — the rule is about volume as much as compliance
+   * value, and fleet views, health checks, the CLI and agents all reach this
+   * resolver. The sibling nexusWpCommand in the same module DOES audit, which
+   * is what makes it worth pinning that this one does not: sharing a module
+   * and a router is not a reason to share the audit.
+   */
+  it('writes no audit entry, on any outcome', async () => {
+    const outcomes: Array<() => void> = [
+      () => resolveTransportMock.mockResolvedValue(
+        transport({ stdout: '[]', success: true }, { kind: 'wpe', installName: 'acme-prod' })),
+      () => resolveTransportMock.mockResolvedValue(
+        { content: [{ text: 'Operation blocked' }], isError: true }),
+      () => resolveTransportMock.mockResolvedValue(transport({ stdout: 'boom', success: false })),
+      () => resolveTransportMock.mockResolvedValue(transport({ stdout: 'not json', success: true })),
+      () => resolveTransportMock.mockRejectedValue(new Error('graph db exploded')),
+    ];
+    for (const setUp of outcomes) {
+      auditMock.mockReset();
+      setUp();
+      await list('acme-prod');
+      expect(auditMock).not.toHaveBeenCalled();
+    }
   });
 
   it('keeps the WPE hostname hint on a failed remote lookup', async () => {
@@ -204,7 +218,6 @@ describe('nexusWpPluginList', () => {
     const r = await list('wpe:acct/nope@production');
     expect(r.success).toBe(false);
     expect(r.error).toContain('nope.ssh.wpengine.net');
-    expect(auditMock.mock.calls[0][1]).toMatchObject({ outcome: 'failure' });
   });
 
   it('does not dress up an external host failure as a WPE one', async () => {
@@ -219,15 +232,13 @@ describe('nexusWpPluginList', () => {
     const r = await list('ssh:box@production');
     expect(r.success).toBe(false);
     expect(r.error).toBe('Failed to parse plugin list JSON');
-    expect(auditMock.mock.calls[0][1]).toMatchObject({ outcome: 'failure' });
   });
 
-  it('audits a thrown exception', async () => {
+  it('returns a thrown exception as an error result', async () => {
     resolveTransportMock.mockRejectedValue(new Error('graph db exploded'));
     const r = await list('ssh:box@production');
     expect(r.success).toBe(false);
     expect(r.error).toBe('graph db exploded');
-    expect(auditMock.mock.calls[0][1]).toMatchObject({ outcome: 'failure', error: 'graph db exploded' });
   });
 });
 

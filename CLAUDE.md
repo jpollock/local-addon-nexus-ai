@@ -223,19 +223,15 @@ every MCP-routed call.
 - Read-only paths are not audited — they would swamp the file with no
   compliance value. `auditDirectOperation` has no tier gate for the same reason:
   only call it for things that mutate, which makes them Tier 2/3 by nature.
-  **One documented exception:** the two resolvers in
-  `graphql/resolvers/wp-cli.ts` audit unconditionally, including
-  `nexusWpPluginList`, which is a pure read. They are the CLI's only direct
-  route to a production WP Engine install or an arbitrary SSH host, they write
-  one entry per typed command, and `nexusWpCommand` already audits reads such
-  as `core version` because its argv is withheld. Do not generalise it — a read
-  in a loop, or from a UI poll, still must not be audited.
+  `nexusWpPluginList` is the worked example: it shares a module and a router
+  with the audited `nexusWpCommand`, and is still not audited, because
+  `plugin list` cannot mutate and the resolver is high-volume.
 - An operation refused by `isOperationAllowed` now audits the refusal as
   `outcome: 'failure'` in `nexusWpCommand`. The resolver itself audits;
   `resolveTransport` does not.
 
 **Naming:** `<surface>.<resource>.<action>`, lowercase, dot-separated —
-`cli.wp.command`, `cli.wp.plugin.list`, `wpe.install.delete`, `wpe.install.copy`, `wpe.user.create`,
+`cli.wp.command`, `wpe.install.delete`, `wpe.install.copy`, `wpe.user.create`,
 `ipc.wp.core.update`, `bulk.plugin.update`. `target` is the install name, site
 id, or other resource identifier. (Chokepoint writes use the raw tool name, e.g.
 `wpe_delete_install`, so both shapes appear in the file.)
@@ -255,9 +251,10 @@ id, or other resource identifier. (Chokepoint writes use the raw tool name, e.g.
 **Covered:** all MCP tools (chokepoint 1); all agent-contributed tools
 (chokepoint 2); every mutating WPE CAPI resolver in `resolvers.ts` and
 `resolvers/wpe.ts` (user/site/install/domain/SSL/SSH-key create-update-delete,
-`install_copy`, cache purge, backup create); `nexusWpCommand` and
-`nexusWpPluginList` (local, WP Engine and external SSH — both live in
-`resolvers/wp-cli.ts`, which resolvers.ts spreads rather than duplicates);
+`install_copy`, cache purge, backup create); `nexusWpCommand` on local, WP
+Engine and external SSH targets (it lives in `resolvers/wp-cli.ts`, which
+resolvers.ts spreads rather than duplicates — its read-only sibling
+`nexusWpPluginList` is deliberately not audited);
 IPC `UPGRADE_WP`, `REMOVE_WP_AI` plugin deactivation, `WPE_DIAGNOSE` remote
 WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates.
 
