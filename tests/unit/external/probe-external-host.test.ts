@@ -56,7 +56,7 @@ function router(routes: Array<[RegExp, RawSshResult]>, seen: string[][] = []): S
 
 const CONNECT_OK: [RegExp, RawSshResult] = [/echo nexus-ok/, ok('nexus-ok\n')];
 const WP_ON_PATH: [RegExp, RawSshResult] = [/command -v wp/, ok('/usr/bin/wp\n')];
-const WP_VERSION: [RegExp, RawSshResult] = [/--version/, ok('WP-CLI 2.12.0\n')];
+const WP_VERSION: [RegExp, RawSshResult] = [/'--version'/, ok('WP-CLI 2.12.0\n')];
 const FIND_ONE: [RegExp, RawSshResult] = [/wp-config\.php/, ok('/home/u/public_html/wp-config.php\n')];
 const CORE_VERSION: [RegExp, RawSshResult] = [/'core' 'version'/, ok('6.8.1\n')];
 const SITEURL: [RegExp, RawSshResult] = [/'option' 'get' 'siteurl'/, ok('https://example.com\n')];
