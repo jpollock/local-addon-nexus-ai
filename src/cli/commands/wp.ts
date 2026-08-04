@@ -994,7 +994,8 @@ wpCommand
 
       if (loadMcpConnectionInfo()) {
         try {
-          const { text, isError } = await callMcpTool('wp_site_health', targetToMcpArgs(target));
+          // 30 second timeout: wp_site_health fans out to five sequential WP-CLI calls (core version, plugin list, theme list, blogname, db size) over SSH
+          const { text, isError } = await callMcpTool('wp_site_health', targetToMcpArgs(target), { timeout: 30000 });
           if (isError) {
             console.error(`\n❌ ${text}`);
             process.exit(1);
@@ -1002,28 +1003,14 @@ wpCommand
           console.log(text);
           return;
         } catch {
-          // MCP server unreachable — fall through to GraphQL
+          // MCP server unreachable — fall through to error message
         }
       }
 
-      const client = getClient();
-
-      const result = await client.mutate<{ nexusWpCommand: any }>(`
-        mutation($target: String!, $command: [String!]!) {
-          nexusWpCommand(target: $target, command: $command) {
-            success
-            error
-            stdout
-          }
-        }
-      `, { target, command: options.json ? ['site', 'health', '--format=json'] : ['site', 'health'] });
-
-      if (!result.nexusWpCommand.success) {
-        console.error(`\n❌ ${result.nexusWpCommand.error}`);
-        process.exit(1);
-      }
-
-      console.log(result.nexusWpCommand.stdout);
+      // wp health requires the MCP server — there is no single WP-CLI command that replicates it
+      console.error('\n❌ The wp health command requires the MCP server to be running.');
+      console.error('   Run `nexus mcp status` to diagnose, or `nexus mcp restart` to restart it.');
+      process.exit(1);
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
       process.exit(1);
