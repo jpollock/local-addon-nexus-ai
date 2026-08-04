@@ -114,6 +114,56 @@ implementation didn't get the update.
 
 ---
 
+## 3a. What about the non-`wp` surfaces?
+
+Two different questions hide behind this, with different answers.
+
+### External-host reach: `wp` genuinely is most of it
+
+Only **52 of the 152** CLI commands take a site or target at all. Of those:
+
+| group | target-taking | meaningful on an external host? |
+|---|---|---|
+| `wp` | 21 of 22 | **yes — all of them** |
+| `sites` | 14 of 17 | **no.** `start`, `stop`, `restart`, `create`, `delete`, `config-xdebug`, `logs`, `refresh` are Local lifecycle operations. You cannot start someone else's VPS. |
+| `ai` | 7 of 9 | in principle — installing the connector plugin over SSH would work. Nobody has asked for it. |
+| `content` | 5 of 7 | yes, but Spec 1 §9 deferred it deliberately: pulling every post over SSH and embedding it is a real cost the user should choose. |
+| `wpe` | 2 of 46 | **no.** WP Engine platform operations. Spec 1: platform tools are "structurally absent, not unimplemented". |
+| `audit`, `blueprints`, `fleet` | 1 each | marginal |
+
+The remaining 100 commands take no target — `agent`, `settings`, `skills`, `sync`,
+`host`, `mcp`, `system`, `gateway`, and the 44 account-level `wpe` commands.
+
+So scoping the external-host work to `wp` is not convenience. `sites` is Local
+lifecycle and `wpe` is WPE platform; both are structurally absent for external hosts
+by design.
+
+**The one non-`wp` external gap that is real: fleet visibility.** 6 MCP fleet modules
+were widened to include external sites, **6 remain WPE-only**, and **11 GraphQL
+resolver queries still filter `source='wpe'`**. External sites therefore appear in
+some fleet views and not others — worse than uniform absence, because you cannot tell
+which surfaces to trust. This is Plan B1's unfinished work and deserves its own slice.
+
+### Duplication: product-wide, but the dangerous part is not
+
+| signal | count |
+|---|---|
+| direct `services.localServices` call sites in resolvers | **397** |
+| resolvers delegating via `registry.call` | **10** |
+| resolvers re-implementing the permission gate | **5** |
+| hand-rolled command blocklists | **3** |
+
+The implementation duplication is everywhere — 397 against 10. But **all five gate
+sites and all three blocklists hard-code `wpe:`**, and two of the gates plus all three
+blocklists live inside `nexusWpCommand`.
+
+That matters for sequencing. Most of the 397 are local-only operations that
+legitimately need no gate, so their duplication is cosmetic debt. The duplication that
+can actually cause a safety failure — policy and permission drift — is **eight sites,
+all on WPE remote paths**, and the `wp` slice covers all eight.
+
+---
+
 ## 4. Recommendation
 
 **Make the GraphQL resolvers thin wrappers over the tool registry**, rather than
@@ -130,10 +180,21 @@ The mechanism already exists and is proven — `registry.call(tool, args, servic
   about it and everything would route through it;
 - the ~127 duplicate resolver implementations shrink to argument marshalling.
 
-This is a large change and it should be staged. The `wp` surface is the right first
-slice: it has the worked analysis (`docs/wp-cli-surface-matrix.md`), the smallest
-module (19 tools / 22 commands), and the sharpest existing pain. It also proves or
-disproves the approach cheaply before the other 13 modules commit to it.
+This is a large change and it should be staged:
+
+1. **The `wp` surface.** Fixes external parity *and* all eight of the dangerous
+   duplication sites identified in §3a. Highest value per unit of risk, has the worked
+   analysis (`docs/wp-cli-surface-matrix.md`), and is the smallest module (19 tools /
+   22 commands) — so it proves or disproves the approach cheaply before 13 more
+   modules commit to it.
+2. **Fleet visibility.** 6 MCP modules and 11 resolver queries still filter
+   `source='wpe'`. Independent of slice 1, mechanical, and it finishes Plan B1.
+3. **The remaining ~127 duplicate resolvers.** Real debt, but overwhelmingly
+   local-only operations where drift is cosmetic rather than a safety problem.
+   Convert opportunistically as each module is touched — not as a campaign.
+
+`content` and `ai` against external hosts are product decisions rather than debt, and
+should be decided deliberately rather than defaulted into.
 
 **What must be measured before each later slice**, because the `wp` slice showed
 reasoning is not enough — four assumptions were wrong there, including a documented
