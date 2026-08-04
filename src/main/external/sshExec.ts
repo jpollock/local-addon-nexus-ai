@@ -20,12 +20,17 @@ export const defaultSshExec: SshExec = (args, timeoutMs) =>
   new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
+    let resolved = false;
     const proc = spawn('ssh', args, { stdio: ['ignore', 'pipe', 'pipe'], timeout: timeoutMs });
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
     proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
-    proc.on('close', (code) => resolve({ code, stdout, stderr }));
-    proc.on('error', (err: Error) =>
-      resolve({ code: null, stdout: '', stderr: '', spawnError: err.message }));
+    // Both 'close' and 'error' fire on a spawn failure; the first to fire wins.
+    proc.on('close', (code) => {
+      if (!resolved) { resolved = true; resolve({ code, stdout, stderr }); }
+    });
+    proc.on('error', (err: Error) => {
+      if (!resolved) { resolved = true; resolve({ code: null, stdout: '', stderr: '', spawnError: err.message }); }
+    });
   });
 
 export interface ResolvedSshConfig {
