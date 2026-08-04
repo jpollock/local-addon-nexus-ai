@@ -280,6 +280,54 @@ const REPORTS_BASE = _path.join(
   'agents', 'security-sentinel', 'reports',
 );
 
+// ─── Host and addon file allowlists (FS-01, FS-03) ──────────────────────────
+//
+// These name files that the *host* and *this addon itself* install. A file here is expected;
+// anything else in the same location is reported.
+//
+// Both lists were wrong, and wrong in the worst direction: they omitted files we install
+// ourselves, so FS-01 raised a **critical** "PHP file in mu-plugins" on 15 of 15 local sites for
+// `nexus-hub-bridge.php`, and FS-03 raised "unknown PHP in web root" on all 15 for Local's
+// `local-xdebuginfo.php`. A security tool whose loudest signal fires on its own installer,
+// every run, on every site, trains its reader to ignore it — the false positive is not a
+// cosmetic bug, it is the failure mode.
+//
+// They are module-level constants rather than literals buried in two PHP heredocs so that the
+// tests below can assert against them and so the two cannot drift apart independently.
+//
+// KNOWN WEAKNESS — this is name trust. Nothing verifies that the file named
+// `nexus-hub-bridge.php` is ours; an attacker who knows the list can adopt a name on it. The
+// real fix is checksum verification against a manifest of what the addon and host actually
+// wrote, which the pre-execution byte scan is designed to provide. Until then, prefer adding a
+// name here over shipping a known false critical, and treat the list as a triage aid rather
+// than an integrity check.
+
+const KNOWN_MU_PLUGINS = [
+  // WP Engine platform
+  'wpe-wp-sign-on-plugin.php', 'wpe-cache-plugin.php', 'wpengine-security-auditor.php',
+  'mu-plugin.php', 'slt-force-strong-passwords.php', 'wpe-update-source-selector.php',
+  // Local by WP Engine
+  'site-compat-layer.php',
+  // This addon. Verified present on 15/15 local sites; nexus-hub-bridge.php was the omission
+  // that produced the false critical.
+  'nexus-ai-connector-config.php', 'nexus-hub-bridge.php',
+];
+
+const KNOWN_ROOT_PHP = [
+  // WordPress core docroot files
+  'index.php', 'wp-activate.php', 'wp-blog-header.php', 'wp-comments-post.php',
+  'wp-config.php', 'wp-cron.php', 'wp-links-opml.php', 'wp-load.php',
+  'wp-login.php', 'wp-mail.php', 'wp-settings.php', 'wp-signup.php',
+  'wp-trackback.php', 'xmlrpc.php', 'wp-config-sample.php',
+  // Local injects this into every docroot it manages. Verified on 15/15 local sites.
+  'local-xdebuginfo.php',
+];
+
+/** Render a JS string array as a PHP array literal, single-quote escaped. */
+function phpStringArray(items) {
+  return `[${items.map(s => `'${String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`).join(',')}]`;
+}
+
 const contributedTools = {
   /** Trigger a targeted security scan for a specific site on demand. */
   scan: {
@@ -606,7 +654,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators },
+  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators, KNOWN_MU_PLUGINS, KNOWN_ROOT_PHP, phpStringArray },
 };
 
 // ─── Log-backed checks (LOG-AUTH, LOG-PROBE, LOG-ENUM, LOG-DIST) ────────────
@@ -2034,14 +2082,9 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     code: `
       $dir = WPMU_PLUGIN_DIR;
       $files = glob("$dir/*.php") ?: [];
-      $unexpected = array_filter($files, function($f) {
-        $basename = basename($f);
-        // WPE managed mu-plugins are expected
-        $known = ['wpe-wp-sign-on-plugin.php','wpe-cache-plugin.php',
-                  'wpengine-security-auditor.php','mu-plugin.php',
-                  'slt-force-strong-passwords.php','wpe-update-source-selector.php',
-                  'nexus-ai-connector-config.php','site-compat-layer.php'];
-        return !in_array($basename, $known);
+      $known = ${phpStringArray(KNOWN_MU_PLUGINS)};
+      $unexpected = array_filter($files, function($f) use ($known) {
+        return !in_array(basename($f), $known);
       });
       echo json_encode(array_values($unexpected));
     `,
@@ -2119,10 +2162,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         ABSPATH . 'wp-content/uploads',
       ];
       $rootPhp = glob(ABSPATH . '*.php') ?: [];
-      $knownRoot = ['index.php','wp-activate.php','wp-blog-header.php','wp-comments-post.php',
-                    'wp-config.php','wp-cron.php','wp-links-opml.php','wp-load.php',
-                    'wp-login.php','wp-mail.php','wp-settings.php','wp-signup.php',
-                    'wp-trackback.php','xmlrpc.php','wp-config-sample.php'];
+      $knownRoot = ${phpStringArray(KNOWN_ROOT_PHP)};
       $found = [];
       foreach ($rootPhp as $f) {
         if (!in_array(basename($f), $knownRoot)) {
@@ -2905,12 +2945,10 @@ function scoreAdminAccount(user, _allAdminUsers, attackTimestamp) {
 
 // ─── Tier 3: Checklist-driven remediation ────────────────────────────────────
 
-const KNOWN_MU_PLUGINS = [
-  'wpe-wp-sign-on-plugin.php', 'wpe-cache-plugin.php',
-  'wpengine-security-auditor.php', 'mu-plugin.php',
-  'slt-force-strong-passwords.php', 'wpe-update-source-selector.php',
-  'nexus-ai-connector-config.php', 'site-compat-layer.php',
-];
+// KNOWN_MU_PLUGINS lived here as a second, independent copy of the list FS-01 used — same eight
+// names, same omission of nexus-hub-bridge.php. Detection and remediation disagreeing about
+// which mu-plugins are legitimate is how a remediation step deletes a file the scan considered
+// fine, or spares one it flagged. There is now a single definition; see it for the full note.
 
 const ATTACKER_PLUGIN_SLUGS = [
   'fileorganizer', 'filester', 'wp-compat', 'file-manager-advanced',
