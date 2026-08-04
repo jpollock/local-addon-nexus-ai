@@ -280,6 +280,13 @@ table for WP&nbsp;Engine and external:</p>
 <p>On production, <strong>reads are permitted and writes are refused</strong> — for WP&nbsp;Engine
 and external alike. External additionally takes the most restrictive of two labels.</p>
 
+<p><code>wp db export</code> classifies as <code>wpcli</code>, <strong>not</strong>
+<code>wpcli_read</code>. It only reads the database, but it writes the dump to disk: with no
+path argument WP-CLI drops <code>&lt;dbname&gt;-&lt;date&gt;.sql</code> into the SSH login
+directory, which is the web root on many shared hosts and VPS layouts — every user hash and
+every option row at a guessable URL. It was in <code>WPCLI_READ_COMMANDS</code> and is not any
+more, so it is refused on production like any other write.</p>
+
 <div class="finding alert">
   <h4><code>wpeAllowedEnvironments</code> is dead code</h4>
   <p>All four exported functions of <code>mcp/utils/environment-filter.ts</code> have
