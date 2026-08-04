@@ -11,11 +11,13 @@
  */
 import { McpToolHandler, McpToolResult } from '../../types';
 import { groupByVersion, compareVersions } from './version-utils';
+import type { SiteSource } from '../../../../common/types';
+import { toSiteSource } from '../../../../common/types';
 
 interface SiteRecord {
   id: string;
   name: string;
-  source: 'local' | 'wpe';
+  source: SiteSource;
   wp_version: string | null;
   php_version: string | null;
 }
@@ -70,7 +72,7 @@ export const findOutdatedSitesHandler: McpToolHandler = {
           const params = sourceFilter === 'all' ? [] : [sourceFilter];
           const rows = db.prepare(q).all(...params) as SiteRecord[];
           for (const r of rows) {
-            graphSites.set(r.id, { ...r, source: (r.source ?? 'local') as 'local' | 'wpe' });
+            graphSites.set(r.id, { ...r, source: toSiteSource(r.source) });
           }
         }
       } catch { /* graph unavailable */ }

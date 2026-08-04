@@ -8,7 +8,7 @@
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS, POLL_INTERVALS } from '../../common/constants';
 import { injectThemeVars } from '../utils/theme';
-import type { NexusSettings } from '../../common/types';
+import type { NexusSettings, SiteSource } from '../../common/types';
 import { nexusStore } from '../store/NexusStateManager';
 import type { NexusState } from '../store/NexusStateManager';
 import { EventStatsCards } from './EventStatsCards';
@@ -83,7 +83,7 @@ interface SiteListItem {
   status: string;
   isWpe: boolean;
   indexed: boolean;
-  source?: 'local' | 'wpe';
+  source?: SiteSource;
   wpVersion?: string;
   linkedLocalSite?: { id: string; name: string }; // For WPE sites: which local site is linked
   wpeInstallId?: string; // For WPE sites: the install ID

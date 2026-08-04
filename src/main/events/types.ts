@@ -2,6 +2,8 @@
  * WordPress event types and data structures
  */
 
+import type { SiteSource } from '../../common/types';
+
 export type EventType =
   | 'post_created'
   | 'post_updated'
@@ -111,7 +113,7 @@ export interface Site {
   is_active: boolean;
   created_at: number;
   updated_at: number;
-  source?: 'local' | 'wpe';
+  source?: SiteSource;
   environment?: 'production' | 'staging' | 'development';
   remote_install_id?: string;
   remote_domain?: string;

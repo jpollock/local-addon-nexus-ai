@@ -26,6 +26,32 @@ export interface StartupStatus {
 }
 
 // ---------------------------------------------------------------------------
+// Site Sources
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a site lives. Widened from a closed 'local' | 'wpe' union, which was
+ * duplicated inline in eleven places and caused a whole bug class: code wrote
+ * `x === 'local' ? 'local' : 'wpe'`, so any third value silently became a WP
+ * Engine install. Add new kinds here, not inline.
+ */
+export type SiteSource = 'local' | 'wpe' | 'external';
+
+const SITE_SOURCES: readonly string[] = ['local', 'wpe', 'external'];
+
+/**
+ * Narrow a raw database value to a SiteSource.
+ *
+ * Unrecognised values become 'local', matching the `TEXT DEFAULT "local"`
+ * column default. Deliberately NOT 'wpe': defaulting an unknown kind to WP
+ * Engine is exactly the failure this replaces, and it would put a site into
+ * WPE-specific code paths that cannot serve it.
+ */
+export function toSiteSource(raw: string | null | undefined): SiteSource {
+  return SITE_SOURCES.includes(raw as string) ? (raw as SiteSource) : 'local';
+}
+
+// ---------------------------------------------------------------------------
 // Vector Store
 // ---------------------------------------------------------------------------
 
@@ -429,7 +455,7 @@ export interface MetadataSearchResult {
   matchKind: 'plugin' | 'theme' | 'wp-version' | 'php-version';
   siteId: string;
   siteName: string;
-  siteSource: 'local' | 'wpe';
+  siteSource: SiteSource;
   field: string;    // e.g. "elementor/elementor.php"
   value: string;    // e.g. "active · v3.21.0"
   score: number;    // 0–1
@@ -494,7 +520,7 @@ export interface QueryPlan {
     meta: string;
     tag?: string;
     tagKind?: 'warn' | 'ok' | 'info';
-    source: 'local' | 'wpe';
+    source: SiteSource;
   }>;
   contentResults?: Array<{
     siteId: string;

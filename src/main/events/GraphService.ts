@@ -18,6 +18,7 @@ import {
   StorageHealthData,
   IssueData,
 } from './types';
+import type { SiteSource } from '../../common/types';
 
 export interface GraphServiceOptions {
   dbPath: string;
@@ -462,7 +463,7 @@ export class GraphService {
     };
   }
 
-  async listSites(options?: { active_only?: boolean; source?: 'local' | 'wpe' }): Promise<Site[]> {
+  async listSites(options?: { active_only?: boolean; source?: SiteSource }): Promise<Site[]> {
     if (!this.db) throw new Error('Database not initialized');
 
     let query = 'SELECT * FROM sites';

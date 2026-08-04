@@ -1,11 +1,12 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { HOUR_MS, DAY_MS } from '../../../twin/twin-helpers';
+import type { SiteSource } from '../../../../common/types';
 
 interface Match {
   siteName: string;
   version: string;
   status: string;
-  source: 'local' | 'wpe';
+  source: SiteSource;
   lastIndexed?: number;
 }
 

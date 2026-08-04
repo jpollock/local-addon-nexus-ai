@@ -1,5 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { DAY_MS } from '../../../twin/twin-helpers';
+import type { SiteSource } from '../../../../common/types';
 
 interface ThemeMatch {
   siteName: string;
@@ -8,7 +9,7 @@ interface ThemeMatch {
   status: string;
   isChildTheme: boolean;
   parentTheme?: string;
-  source: 'local' | 'wpe';
+  source: SiteSource;
   lastIndexed?: number;
 }
 

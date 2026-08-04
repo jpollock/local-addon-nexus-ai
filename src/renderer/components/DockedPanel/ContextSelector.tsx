@@ -1,10 +1,11 @@
 import React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
+import type { SiteSource } from '../../../common/types';
 
 interface SiteOption {
   id: string;
   name: string;
-  source: 'local' | 'wpe';
+  source: SiteSource;
   environment?: string;
 }
 

@@ -19,6 +19,8 @@
  *     link in the data. Use it to surface freshness to users.
  */
 
+import type { SiteSource } from '../../common/types';
+
 // ---------------------------------------------------------------------------
 // Provenance
 // ---------------------------------------------------------------------------
@@ -90,7 +92,7 @@ export interface SiteDigitalTwin {
   siteName: string;
   domain: string;
   path: string;
-  source: 'local' | 'wpe';
+  source: SiteSource;
 
   // ── Core WP attributes ────────────────────────────────────────────────────
   wpVersion?: string;
