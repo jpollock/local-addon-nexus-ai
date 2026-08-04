@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WP-CLI Surface Matrix — Nexus AI</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --panel2:#1c212a; --line:#2a313d;
+    --fg:#e6e9ef; --dim:#98a2b3; --faint:#6b7482;
+    --ok:#51bb7b; --no:#e5636d; --warn:#e0a458; --info:#5aa9e6;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 24px 96px}
+  header{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:32px}
+  h1{margin:0 0 8px;font-size:28px;letter-spacing:-.02em}
+  h2{margin:48px 0 8px;font-size:20px;letter-spacing:-.01em}
+  h2 .num{color:var(--faint);font-weight:400;margin-right:10px}
+  h3{margin:28px 0 8px;font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+  p{margin:0 0 14px;color:var(--dim);max-width:78ch}
+  p strong,li strong{color:var(--fg)}
+  code{font-family:var(--mono);font-size:.88em;background:var(--panel2);
+       padding:1px 5px;border-radius:4px;color:#c9d3e0;white-space:nowrap}
+  a{color:var(--info)}
+  .meta{color:var(--faint);font-size:13px;font-family:var(--mono)}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:28px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .card .n{font-size:30px;font-weight:650;letter-spacing:-.02em;line-height:1.1}
+  .card .l{font-size:12px;color:var(--dim);margin-top:6px;text-transform:uppercase;letter-spacing:.06em}
+  .card .s{font-size:12px;color:var(--faint);margin-top:3px}
+  .card.good .n{color:var(--ok)} .card.bad .n{color:var(--no)}
+  .card.warn .n{color:var(--warn)} .card.info .n{color:var(--info)}
+
+  .finding{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--info);
+           border-radius:8px;padding:14px 18px;margin:14px 0}
+  .finding.alert{border-left-color:var(--warn)}
+  .finding.good{border-left-color:var(--ok)}
+  .finding h4{margin:0 0 6px;font-size:14px;color:var(--fg)}
+  .finding p{margin:0;font-size:14px}
+
+  table{width:100%;border-collapse:collapse;margin:14px 0 8px;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--faint);font-weight:600;font-size:11px;text-transform:uppercase;
+     letter-spacing:.07em;background:var(--panel);position:sticky;top:0;z-index:2}
+  tbody tr:hover{background:var(--panel)}
+  td.c{text-align:center;width:88px}
+  .cmd{font-family:var(--mono);font-size:13px;color:#cfe0f5;white-space:nowrap}
+  .path{font-family:var(--mono);font-size:12.5px;color:var(--dim)}
+  .idx{color:var(--faint);width:34px;text-align:right;font-family:var(--mono);font-size:12px}
+
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;
+        font-weight:600;letter-spacing:.02em;white-space:nowrap}
+  .p-ok{background:rgba(81,187,123,.14);color:var(--ok)}
+  .p-no{background:rgba(229,99,109,.13);color:var(--no)}
+  .p-dead{background:rgba(224,164,88,.14);color:var(--warn)}
+  .p-na{background:rgba(107,116,130,.15);color:var(--faint)}
+
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 4px;align-items:center}
+  .filters .lbl{font-size:12px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-right:2px}
+  button.f{background:var(--panel2);color:var(--dim);border:1px solid var(--line);
+           border-radius:999px;padding:5px 13px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  button.f:hover{color:var(--fg);border-color:#3a4351}
+  button.f[aria-pressed="true"]{background:var(--info);border-color:var(--info);color:#08121c;font-weight:600}
+  .hidden{display:none}
+  .count{font-size:12px;color:var(--faint);margin-left:auto;font-family:var(--mono)}
+
+  .note{font-size:13px;color:var(--faint);margin:6px 0 0}
+  ul{color:var(--dim);max-width:78ch;padding-left:20px}
+  li{margin-bottom:7px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--faint);margin:10px 0 0}
+  footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);
+         font-size:13px;color:var(--faint)}
+  @media print{body{background:#fff;color:#000}.filters{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>WP-CLI Surface Matrix</h1>
+  <p style="margin-bottom:10px">What Nexus can do with WP-CLI, on which kind of site, through which route — and what stops it.</p>
+  <div class="meta">
+    branch <strong style="color:#cfe0f5">feat/non-wpe-host-support</strong> &middot;
+    2026-08-04 &middot; every row read from source, several verified live
+  </div>
+</header>
+
+<p>This page exists because the question <em>"what can Nexus do with WP-CLI, where?"</em>
+got answered five different ways in one session, wrongly more than once. The denominators
+kept shifting — CLI <em>commands</em>, MCP <em>tools</em>, GraphQL <em>call sites</em> and
+WP-CLI <em>verbs</em> are four different populations, and mixing them is what produced
+"~80 commands". There are 22.</p>
+
+<div class="cards">
+  <div class="card"><div class="n">22</div><div class="l">CLI subcommands</div><div class="s">nexus wp …</div></div>
+  <div class="card"><div class="n">19</div><div class="l">MCP tools</div><div class="s">wp_* handlers</div></div>
+  <div class="card good"><div class="n">22</div><div class="l">work on Local</div><div class="s">no policy, no gate</div></div>
+  <div class="card warn"><div class="n">~18</div><div class="l">CLI → WP Engine</div><div class="s">4-item blocklist</div></div>
+  <div class="card bad"><div class="n">3</div><div class="l">CLI → external</div><div class="s">of 22</div></div>
+  <div class="card info"><div class="n">14</div><div class="l">MCP tools → external</div><div class="s">if reachable</div></div>
+</div>
+
+<h2><span class="num">§1</span>The findings that matter</h2>
+
+<div class="finding good">
+  <h4>The agent gap is discoverability, not capability</h4>
+  <p><code>ssh_target</code> is declared in no tool's <code>inputSchema</code> — but
+  <code>McpServer.ts:303</code> reads <code>params.arguments</code> and passes it through with
+  <strong>no JSON-Schema validation and no stripping of unknown keys</strong>, and
+  <code>resolveTransport</code> checks <code>args.ssh_target</code> first. An agent that already
+  knows the parameter name can drive <strong>14 tools</strong> against an external host today.
+  It simply cannot discover that the parameter exists. Declaring it on 15 schemas is small,
+  mechanical, and unlocks all 14 immediately.</p>
+</div>
+
+<div class="finding alert">
+  <h4>External hosts already have the most permissive policy of the three</h4>
+  <p><code>EXTERNAL_REMOTE_POLICY</code> is blocklist-only by deliberate choice in Spec 1 —
+  applying MCP's whitelist would have reproduced the five dead WPE tools on day one. So the
+  restriction on external hosts is <strong>not policy, it is plumbing</strong>. The "policy fork"
+  that opened this investigation does not exist.</p>
+</div>
+
+<div class="finding alert">
+  <h4>A human at the CLI gets more on WP Engine than an agent does</h4>
+  <p>The CLI's <code>nexusWpCommand</code> route applies a 4-item blocklist and no whitelist.
+  The MCP route applies a 14-command whitelist, which is why five tools have remote paths that
+  can never succeed. <code>policy.ts:7</code> calls the divergence "real and load-bearing"; Spec 0
+  preserved it deliberately.</p>
+</div>
+
+<div class="finding">
+  <h4>Four tools have no remote path at all</h4>
+  <p><code>db export</code>, <code>import database</code>, <code>search replace</code> and
+  <code>site health</code> call <code>resolveSite</code>, not <code>resolveTransport</code>.
+  <code>search-replace</code> against a remote host is domain migration and <code>db export</code>
+  is how you get a backup off a VPS — arguably the two most valuable things to have on someone
+  else's box. The CLI reaches them on WP&nbsp;Engine only through
+  <code>nexusWpCommand</code>'s arbitrary argv.</p>
+</div>
+
+<h2><span class="num">§2</span>CLI subcommands — how each is serviced</h2>
+<p><strong>MCP-first</strong> means the command tries <code>callMcpTool</code> and silently falls
+back to GraphQL when the MCP server is unreachable. <code>--json</code> <strong>skips the MCP path
+by design</strong> (<code>wp.ts:30</code> — "MCP returns markdown, not structured data"), so JSON
+output can never use it.</p>
+
+<div class="filters">
+  <span class="lbl">Show</span>
+  <button class="f" data-t="cli" data-f="all" aria-pressed="true">All 22</button>
+  <button class="f" data-t="cli" data-f="ext" aria-pressed="false">Reaches external</button>
+  <button class="f" data-t="cli" data-f="noext" aria-pressed="false">Does not</button>
+  <button class="f" data-t="cli" data-f="mcp" aria-pressed="false">Has MCP path</button>
+  <span class="count" id="cli-count"></span>
+</div>
+
+<table id="cli">
+  <thead><tr>
+    <th class="idx">#</th><th>Command</th><th>MCP tool tried</th><th>GraphQL path</th>
+    <th class="c">External</th>
+  </tr></thead>
+  <tbody>
+    <tr data-ext="1" data-mcp="1"><td class="idx">1</td><td class="cmd">wp plugin list</td><td class="path">wp_plugin_list</td><td class="path">nexusWpPluginList</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">2</td><td class="cmd">wp plugin install</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">3</td><td class="cmd">wp plugin activate</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">4</td><td class="cmd">wp plugin deactivate</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="1" data-mcp="1"><td class="idx">5</td><td class="cmd">wp plugin update</td><td class="path">wp_plugin_update</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">6</td><td class="cmd">wp theme list</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">7</td><td class="cmd">wp theme activate</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="1" data-mcp="1"><td class="idx">8</td><td class="cmd">wp core version</td><td class="path">wp_core_version</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">9</td><td class="cmd">wp core update</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">10</td><td class="cmd">wp db export</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">11</td><td class="cmd">wp db import</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">12</td><td class="cmd">wp db scan</td><td class="path">—</td><td class="path">nexusDbScan</td><td class="c"><span class="pill p-na">local only</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">13</td><td class="cmd">wp db clean</td><td class="path">—</td><td class="path">nexusDbClean</td><td class="c"><span class="pill p-na">local only</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">14</td><td class="cmd">wp db report</td><td class="path">—</td><td class="path">nexusDbReport</td><td class="c"><span class="pill p-na">local only</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">15</td><td class="cmd">wp db search-replace</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">16</td><td class="cmd">wp post create</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">17</td><td class="cmd">wp post update</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">18</td><td class="cmd">wp post delete</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">19</td><td class="cmd">wp user-list</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">20</td><td class="cmd">wp option-get</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="1"><td class="idx">21</td><td class="cmd">wp health</td><td class="path">wp_site_health <span style="color:var(--warn)">(local only)</span></td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-mcp="0"><td class="idx">22</td><td class="cmd">wp users</td><td class="path">—</td><td class="path">nexusSiteUsers</td><td class="c"><span class="pill p-na">graph DB</span></td></tr>
+  </tbody>
+</table>
+
+<div class="finding alert">
+  <h4>Three of 22, not four — and two failure modes worth knowing</h4>
+  <p><code>wp health</code> is wired to the MCP path, but <code>wp_site_health</code> is local-only
+  and ignores <code>ssh_target</code>. Verified live: it fails with
+  <code>Site "undefined" not found.</code> — and it fails <em>because</em> MCP is available; with
+  MCP down it falls back to <code>nexusWpCommand</code>, which has no external branch either.
+  Separately, <code>nexusWpCommand</code> on an <code>ssh:</code> target dies with
+  <code>Cannot read properties of undefined (reading 'split')</code> — a raw TypeError, not a
+  diagnosis. Also unrelated but real: <code>wp health</code> prints its error and <strong>exits
+  0</strong>.</p>
+</div>
+
+<h2><span class="num">§3</span>MCP tools — servicing and reach</h2>
+
+<div class="filters">
+  <span class="lbl">Show</span>
+  <button class="f" data-t="mcp" data-f="all" aria-pressed="true">All 19</button>
+  <button class="f" data-t="mcp" data-f="ext" aria-pressed="false">Works on external</button>
+  <button class="f" data-t="mcp" data-f="dead" aria-pressed="false">Dead on WPE</button>
+  <button class="f" data-t="mcp" data-f="local" aria-pressed="false">Local only</button>
+  <button class="f" data-t="mcp" data-f="read" aria-pressed="false">Reads</button>
+  <button class="f" data-t="mcp" data-f="write" aria-pressed="false">Writes</button>
+  <span class="count" id="mcp-count"></span>
+</div>
+
+<table id="mcp">
+  <thead><tr>
+    <th>Tool</th><th>Servicing</th><th>Operation</th>
+    <th class="c">Local</th><th class="c">WP Engine</th><th class="c">External</th>
+  </tr></thead>
+  <tbody>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="read"><td class="cmd">wp_core_version</td><td class="path">resolveTransport</td><td class="path">wpcli_read</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="read"><td class="cmd">wp_option_get</td><td class="path">resolveTransport</td><td class="path">wpcli_read</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="read"><td class="cmd">wp_plugin_list</td><td class="path">resolveTransport</td><td class="path">wpcli_read</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="read"><td class="cmd">wp_theme_list</td><td class="path">resolveTransport</td><td class="path">wpcli_read</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="read"><td class="cmd">wp_user_list</td><td class="path">resolveTransport</td><td class="path">wpcli_read</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_plugin_install</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_plugin_activate</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_plugin_deactivate</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_plugin_update</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="1" data-local="0" data-op="write"><td class="cmd">wp_core_update</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-dead">dead</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="1" data-local="0" data-op="write"><td class="cmd">wp_theme_activate</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-dead">dead</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="1" data-local="0" data-op="write"><td class="cmd">wp_post_create</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-dead">dead</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="1" data-local="0" data-op="write"><td class="cmd">wp_post_update</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-dead">dead</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="1" data-dead="1" data-local="0" data-op="write"><td class="cmd">wp_post_delete</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-dead">dead</span></td><td class="c"><span class="pill p-ok">yes</span></td></tr>
+    <tr data-ext="0" data-dead="0" data-local="0" data-op="write"><td class="cmd">wp_eval</td><td class="path">resolveTransport</td><td class="path">wpcli</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">blocked</span></td><td class="c"><span class="pill p-no">blocked</span></td></tr>
+    <tr data-ext="0" data-dead="0" data-local="1" data-op=""><td class="cmd">wp_db_export</td><td class="path">resolveSite</td><td class="path">—</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">no</span></td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-dead="0" data-local="1" data-op=""><td class="cmd">wp_import_database</td><td class="path">resolveSite</td><td class="path">—</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">no</span></td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-dead="0" data-local="1" data-op=""><td class="cmd">wp_search_replace</td><td class="path">resolveSite</td><td class="path">—</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">no</span></td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="0" data-dead="0" data-local="1" data-op=""><td class="cmd">wp_site_health</td><td class="path">resolveSite</td><td class="path">—</td><td class="c"><span class="pill p-ok">yes</span></td><td class="c"><span class="pill p-no">no</span></td><td class="c"><span class="pill p-no">no</span></td></tr>
+  </tbody>
+</table>
+
+<div class="legend">
+  <span><span class="pill p-ok">yes</span> works</span>
+  <span><span class="pill p-dead">dead</span> resolves a transport, then the MCP whitelist refuses it</span>
+  <span><span class="pill p-no">no / blocked</span> unreachable or policy-blocked</span>
+</div>
+
+<p class="note">"Dead" is exactly the five tools <code>policy.ts:7</code> claims — verified by
+intersecting each tool's <code>&lt;arg0&gt; &lt;arg1&gt;</code> against
+<code>MCP_REMOTE_POLICY</code>'s 14-command whitelist.</p>
+
+<h2><span class="num">§4</span>Limits, by target and route</h2>
+
+<table>
+  <thead><tr><th>Route</th><th>Command policy</th><th>Environment gate</th><th>Other</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Local</strong> — any surface</td>
+      <td>none</td>
+      <td>exempt — <code>isGatedHost(host)</code> is <code>host !== 'local'</code></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><strong>WP Engine</strong> via MCP tool</td>
+      <td><code>MCP_REMOTE_POLICY</code>: 14-command whitelist <em>and</em> blocklist (<code>eval</code>, <code>eval-file</code>, <code>shell</code>, <code>db query</code>, <code>db cli</code>)</td>
+      <td><code>remoteOperationPermissions</code>; <code>wpcli</code> writes refused on production</td>
+      <td><code>wpeAllowedEnvironments</code> defaults to <code>['staging','development']</code> — <strong>SSH/WP-CLI is off on production entirely</strong></td>
+    </tr>
+    <tr>
+      <td><strong>WP Engine</strong> via <code>nexusWpCommand</code></td>
+      <td>inline blocklist only (<code>db query</code>, <code>eval</code>, <code>eval-file</code>, <code>shell</code>), <code>startsWith</code> matching, no whitelist</td>
+      <td>same</td>
+      <td>same</td>
+    </tr>
+    <tr>
+      <td><strong>External</strong> via <code>resolveTransport</code></td>
+      <td><code>EXTERNAL_REMOTE_POLICY</code>: blocklist only, <strong>no whitelist</strong></td>
+      <td>most-restrictive of the registered label and the target suffix; <code>wpcli</code> writes refused on production</td>
+      <td><code>wpeAllowedEnvironments</code> does <strong>not</strong> apply to external hosts</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2><span class="num">§5</span>The open question</h2>
+<p>Two problems of very different size:</p>
+<ul>
+  <li><strong>Agents</strong> — declare <code>ssh_target</code> and <code>wp_path</code> on 15 tool
+  schemas. Small, mechanical, unlocks 14 operations immediately. Worth doing regardless of the
+  other half.</li>
+  <li><strong>CLI</strong> — real plumbing. 19 of 22 commands route through
+  <code>nexusWpCommand</code>, which has no <code>external</code> branch. Teaching it one requires
+  deciding how to classify arbitrary argv as read or write, since <code>resolveTransport</code>
+  needs an operation to run the environment gate.</li>
+</ul>
+<p>Which baseline should external hosts target — <strong>the CLI's WP&nbsp;Engine behaviour</strong>
+(arbitrary WP-CLI with a blocklist, what a human gets today) or <strong>the tool set</strong>
+(structured, 14 operations, what an agent gets)?</p>
+
+<footer>
+  Generated from source on 2026-08-04. Markdown twin with regeneration commands:
+  <code>docs/wp-cli-surface-matrix.md</code>. If this looks stale, re-derive it — the scripts are
+  in §6 of the markdown.
+</footer>
+
+</div>
+<script>
+(function(){
+  function wire(tableId, countId){
+    var table = document.getElementById(tableId);
+    var rows = Array.prototype.slice.call(table.tBodies[0].rows);
+    var btns = Array.prototype.slice.call(
+      document.querySelectorAll('button.f[data-t="'+tableId+'"]'));
+    var count = document.getElementById(countId);
+    function apply(f){
+      var shown = 0;
+      rows.forEach(function(r){
+        var ok =
+          f === 'all'   ? true :
+          f === 'ext'   ? r.dataset.ext === '1' :
+          f === 'noext' ? r.dataset.ext === '0' :
+          f === 'mcp'   ? r.dataset.mcp === '1' :
+          f === 'dead'  ? r.dataset.dead === '1' :
+          f === 'local' ? r.dataset.local === '1' :
+          f === 'read'  ? r.dataset.op === 'read' :
+          f === 'write' ? r.dataset.op === 'write' : true;
+        r.classList.toggle('hidden', !ok);
+        if (ok) shown++;
+      });
+      count.textContent = shown + ' of ' + rows.length + ' shown';
+    }
+    btns.forEach(function(b){
+      b.addEventListener('click', function(){
+        btns.forEach(function(o){ o.setAttribute('aria-pressed', String(o === b)); });
+        apply(b.dataset.f);
+      });
+    });
+    apply('all');
+  }
+  wire('cli','cli-count');
+  wire('mcp','mcp-count');
+})();
+</script>
+</body>
+</html>
