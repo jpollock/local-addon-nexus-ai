@@ -34,12 +34,12 @@ describe('resolveSite edge cases', () => {
     expect(result?.id).toBe('blog1');
   });
 
-  test('partial Unicode match (Japanese)', () => {
+  test('partial Unicode match does not resolve (Japanese)', () => {
     const data = createSiteData([
       { id: 'jp1', name: 'テストサイト', path: '/sites/jp', domain: 'jp.local' },
     ]);
     const result = resolveSite('テスト', data);
-    expect(result?.id).toBe('jp1');
+    expect(result).toBeNull();
   });
 
   test('mixed Unicode and ASCII name', () => {
@@ -58,12 +58,12 @@ describe('resolveSite edge cases', () => {
     expect(result?.id).toBe('emoji1');
   });
 
-  test('partial emoji match', () => {
+  test('partial emoji match does not resolve', () => {
     const data = createSiteData([
       { id: 'emoji2', name: '🚀 Launch Site', path: '/sites/emoji', domain: 'emoji.local' },
     ]);
     const result = resolveSite('launch', data);
-    expect(result?.id).toBe('emoji2');
+    expect(result).toBeNull();
   });
 
   test('Korean name — exact match', () => {
