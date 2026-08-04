@@ -26,6 +26,47 @@ export function escapeShellArg(arg: string): string {
 }
 
 /**
+ * An SSH host alias that is safe to place in ssh's argv.
+ *
+ * Deliberately narrower than what ssh itself accepts. `Host` patterns may in
+ * principle contain more, but everything a real alias needs is here and the
+ * class of value this excludes is the dangerous one.
+ */
+const SAFE_SSH_ALIAS = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/**
+ * Reject an alias that ssh would not read as a hostname.
+ *
+ * CLOSES AN ARGV-INJECTION CLASS — do not delete this as redundant with a
+ * caller-side check. ssh reads its first non-option argument as `[user@]host`,
+ * so an alias beginning with `-` is parsed as an *option* instead:
+ * `-oProxyCommand=<cmd>` in argv position makes ssh execute `<cmd>` on the
+ * local machine. No amount of quoting downstream helps, because the value never
+ * reaches a shell — it is argv.
+ *
+ * Not reachable through today's call sites: the remote command is the only
+ * other positional and always contains a space, so ssh rejects the invocation
+ * with `hostname contains invalid characters` before dialling. That is an
+ * accident of the current command set, not a guarantee —
+ * `buildExternalWpCliCommand([])` already returns a bare `wp`, and one
+ * single-token remote command would make this live.
+ *
+ * Enforced HERE rather than in `nexus host add` / `nexus host test` / the
+ * target parser because this module is the only place an SSH invocation is
+ * constructed (see the module docblock). Every entry point — the host
+ * commands, `ssh:<alias>@<env>` targets, and anything added later — therefore
+ * passes through it by construction, with no per-command copy to forget.
+ */
+export function assertSafeSshAlias(alias: string): void {
+  if (!SAFE_SSH_ALIAS.test(alias)) {
+    throw new Error(
+      `Invalid SSH host alias '${alias}'. An alias must start with a letter or digit `
+      + 'and may contain only letters, digits, dots, hyphens and underscores.',
+    );
+  }
+}
+
+/**
  * Build a WP-CLI command string for SSH execution.
  *
  * HAZARD: the ternary is all-or-nothing. RunOpts accepts skipThemes, but this
@@ -125,6 +166,7 @@ export function buildExternalSshArgs(
   remoteCommand: string,
   opts?: { connectTimeoutSec?: number },
 ): string[] {
+  assertSafeSshAlias(alias);
   const connectTimeout = opts?.connectTimeoutSec
     ? ['-o', `ConnectTimeout=${opts.connectTimeoutSec}`]
     : [];
@@ -148,5 +190,6 @@ export function buildExternalSshArgs(
  * No -F /dev/null, for the same reason as buildExternalSshArgs.
  */
 export function buildSshConfigDumpArgs(alias: string): string[] {
+  assertSafeSshAlias(alias);
   return ['-G', alias];
 }

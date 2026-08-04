@@ -102,3 +102,40 @@ describe('buildSshConfigDumpArgs', () => {
 it('pins the external SSH timeout', () => {
   expect(EXTERNAL_SSH_TIMEOUT_MS).toBe(20000);
 });
+
+describe('alias validation — argv injection', () => {
+  it('rejects an alias that ssh would read as an option', () => {
+    // -oProxyCommand=<cmd> in argv position makes ssh run <cmd> locally.
+    expect(() => buildExternalSshArgs('-oProxyCommand=touch /tmp/pwned', 'wp core version'))
+      .toThrow(/Invalid SSH host alias/);
+  });
+
+  it('rejects a bare leading hyphen', () => {
+    expect(() => buildExternalSshArgs('-h1', 'echo ok')).toThrow(/Invalid SSH host alias/);
+  });
+
+  it('rejects shell and argv metacharacters, whitespace and empty', () => {
+    for (const bad of ['a b', 'a;b', 'a|b', 'a$b', 'a`b', 'a\nb', 'user@host', 'a/b', '']) {
+      expect(() => buildExternalSshArgs(bad, 'echo ok')).toThrow(/Invalid SSH host alias/);
+    }
+  });
+
+  it('guards the ssh -G path too, not just the connect path', () => {
+    // resolveSshConfig is the FIRST thing the probe runs, so this is the first
+    // place a hostile alias would reach ssh.
+    expect(() => buildSshConfigDumpArgs('-oProxyCommand=id')).toThrow(/Invalid SSH host alias/);
+  });
+
+  it('accepts the alias shapes real ssh config files use', () => {
+    for (const good of ['h1', 'acme-box', 'web-01.prod_eu', 'a', 'A1', '9lives', 'x.y-z_1']) {
+      expect(() => buildExternalSshArgs(good, 'echo ok')).not.toThrow();
+      expect(() => buildSshConfigDumpArgs(good)).not.toThrow();
+    }
+  });
+
+  it('leaves the WPE builder untouched — its argv is pinned elsewhere', () => {
+    // Named so nobody "helpfully" extends the alias check to install names.
+    const { buildWpeSshArgs } = require('../../../src/main/transport/ssh-args');
+    expect(() => buildWpeSshArgs('-weird-install', 'wp core version', '/k')).not.toThrow();
+  });
+});
