@@ -391,6 +391,42 @@ const MAX_TIER2_PER_SWEEP = 3;
 // the sentinel does a bounded top-up so a security sweep cannot turn into a fleet-wide SSH job.
 const MAX_REFRESH_PER_SWEEP = 10;
 
+/**
+ * Which sites a scheduled sweep is allowed to touch.
+ *
+ * Scanning is opt-in per site. The cron trigger carries no event, so nothing in the trigger
+ * narrows the scope — without this the fleet-wide default is whatever happens to be in
+ * graph.db, which here is 375 sites nobody chose.
+ *
+ * `scanScope` in the agent's settings:
+ *   { mode: 'explicit', siteIds: [...] }  — scan exactly these. THE DEFAULT.
+ *   { mode: 'all' }                       — scan everything, chosen deliberately.
+ *
+ * Absent or malformed settings resolve to explicit-with-an-empty-list, which scans **nothing**
+ * and says so. That asymmetry is the whole point: `scanScope ?? { mode: 'all' }` would be the
+ * same permissive-default bug that made this agent sweep the fleet unattended for weeks, just
+ * spelled differently. An empty list is a configuration the user has not finished, and the safe
+ * reading of "I don't know which sites you meant" is none of them.
+ *
+ * An explicitly-triggered run (wpe:sync.completed for one install, or Run Now) is not
+ * constrained by this — the user named the target.
+ */
+function resolveScanScope(settings, log) {
+  const raw = settings && typeof settings === 'object' ? settings.scanScope : undefined;
+
+  if (raw && raw.mode === 'all') {
+    return { mode: 'all', siteIds: null };
+  }
+  const siteIds = Array.isArray(raw?.siteIds)
+    ? raw.siteIds.filter(id => typeof id === 'string' && id.length > 0)
+    : [];
+
+  if (raw && raw.mode !== 'explicit' && raw.mode !== undefined) {
+    log?.warn?.(`security-sentinel: unrecognised scanScope.mode "${raw.mode}" — treating as 'explicit'`);
+  }
+  return { mode: 'explicit', siteIds: new Set(siteIds) };
+}
+
 /** Map with bounded concurrency, preserving input order. Rejections surface as {error}. */
 async function mapWithConcurrency(items, limit, fn) {
   const results = new Array(items.length);
@@ -516,7 +552,7 @@ module.exports = {
   ],
   contributes: { tools: contributedTools },
 
-  async run({ event, tools, ai, log, state, autonomy }) {
+  async run({ event, tools, ai, log, state, autonomy, settings }) {
     const scope = getScanScope(event);
     const scopeLabel = scope.installId || scope.installName || 'fleet-wide';
 
@@ -543,6 +579,45 @@ module.exports = {
       log.error(`security-sentinel: collectFleetData threw: ${err.message}\n${err.stack}`);
       return { verdict: 'error', findings: [], sites: {} };
     }
+    // Opt-in scoping. Only applies to a sweep nothing else narrowed — an event naming one
+    // install, or a Run Now against a target, is the user pointing at a site directly.
+    const isUnscopedSweep = !scope.installId && !scope.installName;
+    if (isUnscopedSweep) {
+      const scanScope = resolveScanScope(settings, log);
+      if (scanScope.mode === 'all') {
+        log.warn(
+          `security-sentinel: scanScope is 'all' — sweeping every site in graph.db (${installs.length}). ` +
+          `Tier 2 is capped at ${MAX_TIER2_PER_SWEEP} per sweep; the rest are deferred.`,
+        );
+      } else {
+        const before = installs.length;
+        installs = installs.filter(i => scanScope.siteIds.has(i.id) || scanScope.siteIds.has(i.name));
+        if (scanScope.siteIds.size === 0) {
+          log.warn(
+            `security-sentinel: no sites are opted in to scheduled scanning, so this sweep checked NOTHING. ` +
+            `Choose sites in the agent's settings, or select "scan every site" there. ` +
+            `(${before} site(s) are known but unselected.)`,
+          );
+          return {
+            verdict: 'skipped', findings: [], sites: {},
+            summary: `No sites opted in to scheduled scanning — ${before} known, 0 scanned. Nothing was checked.`,
+          };
+        }
+        const missing = [...scanScope.siteIds].filter(
+          id => !installs.some(i => i.id === id || i.name === id),
+        );
+        log.info(
+          `security-sentinel: scanScope 'explicit' — ${installs.length} of ${before} known site(s) opted in` +
+          (missing.length ? ` (${missing.length} selected site(s) not found in graph.db: ${missing.slice(0, 5).join(', ')})` : ''),
+        );
+        if (missing.length) {
+          // A selected site that no longer resolves is a silent coverage hole — the user believes
+          // it is being scanned.
+          log.warn(`security-sentinel: ${missing.length} opted-in site(s) could not be resolved and were NOT scanned`);
+        }
+      }
+    }
+
     log.info(`security-sentinel: ${installs.length} install(s) to check`);
 
     const allInstallResults = [];
@@ -785,7 +860,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators, KNOWN_MU_PLUGINS, KNOWN_ROOT_PHP, phpStringArray, mapWithConcurrency, FLEET_CONCURRENCY, MAX_TIER2_PER_SWEEP, MAX_REFRESH_PER_SWEEP },
+  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators, KNOWN_MU_PLUGINS, KNOWN_ROOT_PHP, phpStringArray, mapWithConcurrency, resolveScanScope, FLEET_CONCURRENCY, MAX_TIER2_PER_SWEEP, MAX_REFRESH_PER_SWEEP },
 };
 
 // ─── Log-backed checks (LOG-AUTH, LOG-PROBE, LOG-ENUM, LOG-DIST) ────────────

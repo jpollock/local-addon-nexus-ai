@@ -280,6 +280,29 @@ export function getAgentAutonomy(agentId: string): 'suggest' | 'ask' | 'auto' {
 }
 
 /**
+ * The agent's whole settings record, read-only, for `ctx.settings`.
+ *
+ * Every setting above is plumbed by hand — one exported getter and one line in
+ * buildAgentContext each. That does not scale past the handful that exist, and it means an
+ * agent cannot read a setting the runtime has not been taught about, so agent-specific
+ * configuration has nowhere to live.
+ *
+ * Returns a shallow copy: an agent mutating its own settings object must not write back into
+ * the shared cache that the scheduler and event bus read.
+ *
+ * Deliberately NOT permissive. `getAgentSetting`'s `?? true` fallback is the reason
+ * security-sentinel ran a fleet-wide sweep every 15 minutes for weeks with nothing configured
+ * (see seedAgentDefaultsIfMissing below). A caller reading raw settings gets `{}` when nothing
+ * is known, and must decide for itself what absence means — the safe reading, not the
+ * convenient one.
+ */
+export function getAgentSettings(agentId: string): Readonly<Record<string, unknown>> {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  const raw = cache?.get(agentId);
+  return raw && typeof raw === 'object' ? { ...raw } : {};
+}
+
+/**
  * Seed safe defaults for agents never before persisted to agent-settings.json.
  * A freshly-discovered agent must NOT auto-run: enabled:true (usable via chat / Run Now /
  * contributed tools) but scheduleEnabled:false and eventsEnabled:false (no automatic cron

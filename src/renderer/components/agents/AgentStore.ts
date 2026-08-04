@@ -63,12 +63,26 @@ export interface ActivityEvent {
   summary?: string;             // free-text Site Content Report from AgentResult.summary
 }
 
+/**
+ * Which sites a *scheduled* run may touch. A run the user targets directly — Run Now, or an
+ * event naming one install — is not constrained by this.
+ *
+ * 'explicit' with an empty siteIds scans nothing, deliberately. The alternative, treating
+ * "nothing configured" as "scan everything", is the exact shape of the bug that had
+ * security-sentinel sweeping 375 sites every 15 minutes with nobody having chosen anything.
+ */
+export interface AgentScanScope {
+  mode: 'explicit' | 'all';
+  siteIds: string[];
+}
+
 export interface AgentSettings {
   enabled: boolean;
   scheduleEnabled: boolean;
   cadence: string;  // '*/15 * * * *' | '0 * * * *' | '0 */6 * * *' | '0 0 * * *' | '0 0 * * 0'
   eventsEnabled: boolean;
   subscribedEvents: Record<string, boolean>;
+  scanScope: AgentScanScope;
 }
 
 export interface AgentState {
@@ -168,6 +182,10 @@ class AgentStore {
       cadence: '*/15 * * * *',
       eventsEnabled: true,
       subscribedEvents: {},
+      // Opt-in. No site is scanned on a schedule until the user picks it, or picks "every site".
+      // The main process applies the same rule independently (resolveScanScope in the agent) —
+      // this default is the UI's view of it, not the enforcement.
+      scanScope: { mode: 'explicit', siteIds: [] },
     };
   }
 

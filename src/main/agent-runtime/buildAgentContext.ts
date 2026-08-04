@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../logging/Logger';
 import { rotateIfNeeded, pruneOldFiles } from '../logging/rotate';
-import { getAgentAutonomy } from '../ipc-handlers';
+import { getAgentAutonomy, getAgentSettings } from '../ipc-handlers';
 import { NexusToolProvider } from './NexusToolProvider';
 import { AgentAIClient } from './AgentAIClient';
 import { AgentDbManager } from './AgentDbManager';
@@ -171,6 +171,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
     ai: aiClient,
     log: agentLog,
     autonomy: getAgentAutonomy(agentName),
+    settings: getAgentSettings(agentName),
     credentials,
     db,
     fullRun: fullRun ?? false,
