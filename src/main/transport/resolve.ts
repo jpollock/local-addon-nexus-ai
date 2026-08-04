@@ -8,6 +8,7 @@ import { parseTarget } from '../../common/target';
 import { error } from '../mcp/modules/wp-cli/preflight';
 import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
 import { ExternalSshTransport } from './ExternalSshTransport';
+import { getExternalProfile } from '../external/externalSiteStore';
 
 /**
  * Resolve MCP tool args to a transport. Delegates target resolution (and
@@ -47,8 +48,17 @@ export async function resolveTransport(
       );
     }
 
-    const wpPath = typeof args.wp_path === 'string' ? args.wp_path : undefined;
-    return withPolicy(new ExternalSshTransport(parsed.alias, wpPath), EXTERNAL_REMOTE_POLICY);
+    // Registration (nexus host add) stores what the probe discovered. Reading it
+    // back here is the whole point: otherwise a registered host still needs
+    // --path on every command. An explicit wp_path wins — the user meant it.
+    const storage = (services as any).registryStorage;
+    const profile = storage ? getExternalProfile(storage, parsed.alias) : null;
+    const explicitPath = typeof args.wp_path === 'string' ? args.wp_path : undefined;
+    const wpPath = explicitPath ?? profile?.wpPath;
+    return withPolicy(
+      new ExternalSshTransport(parsed.alias, wpPath, profile?.wpCliPath),
+      EXTERNAL_REMOTE_POLICY,
+    );
   }
 
   const target = await resolveTarget(args as any, services, operation as any);

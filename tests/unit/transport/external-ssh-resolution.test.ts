@@ -1,5 +1,6 @@
 import { resolveTransport } from '../../../src/main/transport';
 import type { NexusServices } from '../../../src/main/mcp/types';
+import { STORAGE_KEYS } from '../../../src/common/constants';
 
 const mockServices: NexusServices = {
   siteData: {
@@ -45,5 +46,55 @@ describe('resolveTransport — external SSH', () => {
     } else {
       fail('Expected external-ssh transport');
     }
+  });
+});
+
+describe('resolveTransport — stored external profile', () => {
+  function servicesWithProfile(profile: any) {
+    const store: Record<string, unknown> = {};
+    // STORAGE_KEYS.EXTERNAL_SITE_PROFILES is `nexus-ai_external_site_profiles`
+    // (src/common/constants.ts:307). Import the constant; never hardcode it.
+    if (profile) store[STORAGE_KEYS.EXTERNAL_SITE_PROFILES] = { [profile.alias]: profile };
+    return {
+      registryStorage: {
+        get: (k: string) => store[k],
+        set: (k: string, v: unknown) => { store[k] = v; },
+      },
+    } as any;
+  }
+
+  it('uses the stored wpPath when no --path is given', async () => {
+    const services = servicesWithProfile({
+      alias: 'h1', wpPath: '/home/u/public_html', environment: 'production',
+      firstSeenAt: 1, lastSeenAt: 1,
+    });
+    const t: any = await resolveTransport({ ssh_target: 'ssh:h1@production' }, services, 'wpcli_read');
+    expect(t.wpPath ?? t.inner?.wpPath).toBe('/home/u/public_html');
+  });
+
+  it('lets an explicit wp_path override the stored one', async () => {
+    const services = servicesWithProfile({
+      alias: 'h1', wpPath: '/home/u/public_html', environment: 'production',
+      firstSeenAt: 1, lastSeenAt: 1,
+    });
+    const t: any = await resolveTransport(
+      { ssh_target: 'ssh:h1@production', wp_path: '/srv/other' }, services, 'wpcli_read');
+    expect(t.wpPath ?? t.inner?.wpPath).toBe('/srv/other');
+  });
+
+  it('passes the stored wpCliPath through', async () => {
+    const services = servicesWithProfile({
+      alias: 'h1', wpCliPath: '/opt/cpanel/composer/bin/wp', environment: 'production',
+      firstSeenAt: 1, lastSeenAt: 1,
+    });
+    const t: any = await resolveTransport({ ssh_target: 'ssh:h1@production' }, services, 'wpcli_read');
+    expect(t.wpCliBin ?? t.inner?.wpCliBin).toBe('/opt/cpanel/composer/bin/wp');
+  });
+
+  it('resolves an unregistered alias without throwing', async () => {
+    const t: any = await resolveTransport(
+      { ssh_target: 'ssh:unknown@production' }, servicesWithProfile(null), 'wpcli_read');
+    expect(t).toBeDefined();
+    expect('content' in t).toBe(false);
   });
 });

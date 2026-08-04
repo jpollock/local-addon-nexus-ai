@@ -232,7 +232,7 @@ describe('ExternalSshTransport', () => {
       fakeProc({ code: 127, stderr: 'bash: wp: command not found' }));
     const res = await new ExternalSshTransport('acme-box').runWpCli(['core', 'version']);
     expect(res.success).toBe(false);
-    expect(res.stdout).toMatch(/not implemented yet/i);
+    expect(res.stdout).toMatch(/nexus host test/i);
   });
 
   it('hints about --path when WordPress is not found', async () => {

@@ -33,9 +33,9 @@ function runSsh(alias: string, remoteCommand: string): Promise<RawSshResult> {
 function annotateFailure(stderr: string): string {
   const text = stderr.trim();
   if (/command not found|wp: not found/i.test(text)) {
-    return `${text}\n\nHint: WP-CLI ('wp') was not found on the remote host. `
-      + `Automatic WP-CLI provisioning is not implemented yet — install WP-CLI on the host, `
-      + `or make sure it is on the login shell's PATH.`;
+    return `${text}\n\nHint: WP-CLI ('wp') was not found on the remote host's non-interactive `
+      + `PATH. Run 'nexus host test <alias>' — it searches the usual locations and will tell you `
+      + `whether WP-CLI is missing or just off PATH.`;
   }
   if (/does not seem to be a WordPress installation/i.test(text)) {
     return `${text}\n\nHint: pass --path=/path/to/wordpress if WordPress is not in the `
@@ -55,7 +55,12 @@ export class ExternalSshTransport implements SiteTransport {
   readonly kind: TransportKind = 'external-ssh';
   readonly siteRef: SiteRef;
 
-  constructor(private readonly alias: string, private readonly wpPath?: string) {
+  constructor(
+    readonly alias: string,
+    readonly wpPath?: string,
+    /** Absolute WP-CLI path when it is off the remote's PATH; undefined means `wp`. */
+    readonly wpCliBin?: string,
+  ) {
     this.siteRef = { kind: 'external', alias };
   }
 
@@ -65,7 +70,7 @@ export class ExternalSshTransport implements SiteTransport {
   }
 
   async runWpCli(args: string[], _opts?: RunOpts): Promise<WpCliResult> {
-    const res = await runSsh(this.alias, buildExternalWpCliCommand(args, this.wpPath));
+    const res = await runSsh(this.alias, buildExternalWpCliCommand(args, this.wpPath, this.wpCliBin));
     if (res.spawnError !== undefined) return { stdout: res.spawnError, success: false };
     if (res.code === 0) return { stdout: res.stdout, success: true };
     // Timeout: spawn kills the child with SIGTERM, yielding code=null and empty stderr
