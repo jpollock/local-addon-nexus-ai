@@ -160,6 +160,7 @@ git commit -m "feat(transport): one remote command policy, blocklist only"
 
 **Files:**
 - Create: `src/main/transport/resolveTargetArgs.ts`, `src/main/transport/classify.ts`
+- Modify: `src/main/graphql/resolvers.ts:40-56` — delete the local copies, import from `classify.ts`
 - Test: `tests/unit/transport/resolve-target-args.test.ts`
 
 **Interfaces:**
@@ -356,17 +357,27 @@ export function resolveTargetArgs(
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 4: Delete the originals from `resolvers.ts` in the same commit**
 
-```bash
-npx jest tests/unit/transport/resolve-target-args.test.ts && npx tsc --noEmit
+`classifyWpCliOp` and `WPCLI_READ_COMMANDS` were moved, not copied. Delete lines 40-56 of `src/main/graphql/resolvers.ts` and add:
+
+```ts
+import { classifyWpCliOp } from '../transport/classify';
 ```
-Expected: PASS (21 tests), clean typecheck.
 
-- [ ] **Step 5: Commit**
+The resolver's existing call sites (`resolvers.ts:1697`, `:1778`) keep working unchanged — same name, same signature. Do this now rather than in Task 4, so the two copies never coexist on a commit a reviewer sees.
+
+- [ ] **Step 5: Run tests**
 
 ```bash
-git add src/main/transport/resolveTargetArgs.ts src/main/transport/classify.ts tests/unit/transport/resolve-target-args.test.ts
+npx jest tests/unit/transport/ tests/unit/graphql/ && npx tsc --noEmit
+```
+Expected: PASS (21 new tests), clean typecheck. `grep -c "WPCLI_READ_COMMANDS" src/main/graphql/resolvers.ts` must return 0.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/main/transport/resolveTargetArgs.ts src/main/transport/classify.ts src/main/graphql/resolvers.ts tests/unit/transport/resolve-target-args.test.ts
 git commit -m "feat(transport): target-string mapper and shared op classifier"
 ```
 
@@ -648,7 +659,6 @@ Replace the entire `nexusWpCommand` body (`resolvers.ts:1635` to just before `ne
 Note on the return shape, already checked so you do not have to: `WpCliResult` (`mcp/local-services-bridge.ts:17-23`) is `{ stdout: string | null; success: boolean; stderr?: string | null; exitCode?: number }` — the last two are documented "Not always present". `ExternalSshTransport` and `WpeSshTransport` fold their error text into `stdout` and set neither, which is why the mapping above falls back through `stderr → stdout → 'Command failed'` and synthesises an exit code. Preserve `okRun`'s `|| result.exitCode === 0` clause; the old body had it and some bridge paths report success only that way.
 
 Then delete from `resolvers.ts`:
-- `WPCLI_READ_COMMANDS` and `classifyWpCliOp` (lines 40-56) — moved in Task 2
 - the `blockedRemoteCommands` array and all three uses
 - both `isOperationAllowed` calls that this resolver owned, and their `getEffectiveSettings` / `WPE_INSTALL_CACHE` lookups
 
@@ -709,8 +719,12 @@ function transportBackedFiles(): string[] {
 describe('transport-backed tool schemas', () => {
   const files = transportBackedFiles();
 
-  it('finds the expected number of transport-backed tools', () => {
-    expect(files.length).toBe(15);
+  // Deliberately a floor, not an equality. Tasks 6-8 port four more tools onto
+  // resolveTransport, which would break `toBe(15)` — and the rule this test
+  // encodes is "every transport-backed tool advertises ssh_target", which must
+  // keep holding as tools are added, not stop at a snapshot.
+  it('finds at least the 15 transport-backed tools known today', () => {
+    expect(files.length).toBeGreaterThanOrEqual(15);
   });
 
   it.each(files)('%s declares ssh_target and wp_path', (f) => {
@@ -800,6 +814,9 @@ Two things to preserve:
 - `withSiteRunning` currently wraps the work. It takes a **local site id**, so it cannot apply to a remote target. Keep it on the local path only; skip it when the transport is not local (`transport.kind !== 'local'`).
 - Update the description: it says "LOCAL SITES ONLY — use nexus_site_audit or wp_plugin_list for remote WPE installs." That stops being true.
 
+
+**Also declare `ssh_target` and `wp_path` on this tool's `inputSchema`**, using the exact property blocks from Task 5. `tests/unit/mcp/tool-schemas.test.ts` discovers transport-backed tools dynamically, so porting a tool without adding the keys turns that suite red — which is the test doing its job.
+
 - [ ] **Step 4: Run tests**
 
 ```bash
@@ -855,6 +872,9 @@ it('resolves as a write, so it is refused on production by default', async () =>
 
 Swap `resolveSite`/`localServices` for `resolveTransport(args, services, 'wpcli')` and `transport.runWpCli([...])`. Keep any `--dry-run` default exactly as it is — do not change destructive-operation defaults in a refactor.
 
+
+**Also declare `ssh_target` and `wp_path` on this tool's `inputSchema`**, using the exact property blocks from Task 5. `tests/unit/mcp/tool-schemas.test.ts` discovers transport-backed tools dynamically, so porting a tool without adding the keys turns that suite red — which is the test doing its job.
+
 - [ ] **Step 4: Run tests**
 
 ```bash
@@ -903,6 +923,8 @@ it('exports from an external SSH host', async () => {
 - [ ] **Step 3: Implement, or report**
 
 Port exactly as Tasks 6 and 7 did, or report `DONE_WITH_CONCERNS` with your Step 1 findings and change nothing.
+
+**If you do port either tool, also declare `ssh_target` and `wp_path` on its `inputSchema`**, using the exact property blocks from Task 5. `tests/unit/mcp/tool-schemas.test.ts` discovers transport-backed tools dynamically, so porting a tool without adding the keys turns that suite red — which is the test doing its job.
 
 - [ ] **Step 4: Run tests**
 
