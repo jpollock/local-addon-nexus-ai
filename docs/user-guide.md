@@ -403,6 +403,25 @@ nexus wp db clean <site>      # clean database (dry-run by default)
 nexus wp db report <site>     # print saved health report
 ```
 
+### External Host Commands (`nexus host`)
+
+```bash
+nexus host add <alias> [--path <dir>] [--env <environment>] [-y|--yes] [--json]
+nexus host test <alias> [--path <dir>] [--json]
+nexus host list [--json]
+nexus host remove <alias> [-y|--yes]
+```
+
+Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not Local — addressed by a `~/.ssh/config` Host alias.
+
+**Key points:**
+
+- The alias is a `Host` entry in `~/.ssh/config`. Nexus stores no key material and never writes anything to your server.
+- The WordPress path is discovered automatically; `--path` is only needed when discovery finds nothing or finds several installs.
+- `--env` defaults to `production`. Writes are refused on production by default (see Settings > Nexus AI > Operation Permissions).
+- Once a host is registered, address it as `ssh:<alias>@<environment>` — for example `nexus wp core version ssh:myhost@production` — with no `--path` needed.
+- If key-based login is not set up, `nexus host test` tells you the exact `ssh-copy-id` command to run. You run it; Nexus does not.
+
 ### WP Engine Commands (`nexus wpe`)
 
 ```bash

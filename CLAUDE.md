@@ -100,6 +100,29 @@ Native modules (sqlite-vec, onnxruntime) can register background threads/handles
 
 ---
 
+## External SSH Hosts
+
+Sites that are neither Local nor WP Engine, reached by a `~/.ssh/config` alias.
+Target syntax: `ssh:<alias>@<production|staging|development>`.
+
+- **Nexus never writes to the user's server.** No WP-CLI upload, no
+  `ssh-copy-id` execution. The probe detects, searches known locations, and
+  prints the command for the user to run. Do not add an upload path.
+- **No key material is stored.** The alias carries host, user, port, key,
+  ProxyJump and agent settings. This is why `buildExternalSshArgs` must never
+  pass `-F /dev/null` — the WPE builder does, deliberately, and copying that
+  across breaks every bastion setup while looking like a network fault.
+- **`ssh -G` resolves, it does not validate.** It exits 0 for an alias in no
+  config file, echoing the alias back as hostname with the local username and
+  port 22. Nothing may gate on its exit code; connectivity is the real gate.
+- **The probe stores `wpPath` and `wpCliPath`, and `resolveTransport` reads
+  them back.** If you add a new field the probe discovers, wire it through
+  `resolve.ts` too or it is write-only.
+- Probe commands are read-only, so they are not audited. `host add`/`remove`
+  mutate only local addon state and never reach `services.localServices`.
+
+---
+
 ## Logging & Audit
 
 **Two audit files**, both under `~/Library/Application Support/Local/nexus-ai/`,
