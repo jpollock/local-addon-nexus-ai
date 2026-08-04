@@ -135,17 +135,18 @@ Target syntax: `ssh:<alias>@<production|staging|development>`.
   it cannot override a host registered as `production`. This is deliberate: the
   environment now comes from the install cache (for WPE) or the most restrictive
   of the registered label and the typed suffix (for external).
-- **17 of the 22 `nexus wp` subcommands reach an external host** (every command
+- **18 of the 22 `nexus wp` subcommands reach an external host** (every command
   routed through `nexusWpCommand`), up from 3 before the unification.
   `nexusWpCommand` now delegates to `resolveTransport` via `resolveTargetArgs`,
-  so an `ssh:` target works on all of them. Three are MCP-first (`wp plugin list`,
-  `wp plugin update`, `wp core version`), trying `callMcpTool` and falling back
-  to GraphQL when MCP is unreachable; the other 14 go straight through
+  so an `ssh:` target works on all of them. Four are MCP-first (`wp plugin list`,
+  `wp plugin update`, `wp core version`, `wp health`), trying `callMcpTool` and
+  falling back to GraphQL when MCP is unreachable; the other 14 go straight through
   `nexusWpCommand`. All `resolveTransport`-backed MCP tools now declare
   `ssh_target` and `wp_path` in their `inputSchema`, so agents can discover them.
-  The 5 that do NOT work: `db scan/clean/report` (local-only by design, separate
-  resolvers), `health` (MCP tool not ported onto `resolveTransport`), and `users`
-  (reads the graph DB, not WP-CLI).
+  The 4 that do NOT work: `db scan/clean/report` (local-only by design, separate
+  resolvers) and `users` (reads the graph DB, not WP-CLI). `wp health` used to
+  fail with `Site "undefined" not found.` because `wp_site_health` was local-only;
+  it was ported onto `resolveTransport` and now works on all three targets.
 - **The probe bypasses both `withPolicy(EXTERNAL_REMOTE_POLICY)` and
   `isOperationAllowed`.** `probeExternalHost` calls `sshExec` directly, so
   neither layer is in its path. This is accepted, not overlooked: its command

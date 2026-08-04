@@ -52,21 +52,20 @@ design** (`wp.ts:30` — "MCP returns markdown, not structured data").
 | 18 | `wp post delete` | — | `nexusWpCommand` | **yes** |
 | 19 | `wp user-list` | — | `nexusWpCommand` | **yes** |
 | 20 | `wp option-get` | — | `nexusWpCommand` | **yes** |
-| 21 | `wp health` | `wp_site_health` | `nexusWpCommand` | **no** — see below |
+| 21 | `wp health` | `wp_site_health` | `nexusWpCommand` | **yes** (MCP-first) |
 | 22 | `wp users` | — | `nexusSiteUsers` | n/a — reads the graph DB, not WP-CLI |
 
-**17 of 22 reach an external host** — every command routed through `nexusWpCommand`,
-which now delegates to `resolveTransport`. Three are MCP-first (plugin list, plugin
-update, core version), falling back to `nexusWpCommand` when MCP is unreachable.
+**18 of 22 reach an external host** — every command routed through `nexusWpCommand`,
+which now delegates to `resolveTransport`. Four are MCP-first (plugin list, plugin
+update, core version, health), trying the MCP tool and falling back to `nexusWpCommand`
+when MCP is unreachable.
 
-**`wp health` still fails** because `wp_site_health` (the MCP tool) was not ported
-onto `resolveTransport` and ignores `ssh_target`. It fails with
-`Site "undefined" not found.` when MCP is available; with MCP down it falls back
-to `nexusWpCommand`, which now works.
+**`wp health` used to fail with `Site "undefined" not found.`** because `wp_site_health`
+was local-only. It was ported onto `resolveTransport` in this change and now works on
+all three targets.
 
-**The 5 that do not work:**
+**The 4 that do not work:**
 - `db scan`, `db clean`, `db report` — local-only by design (separate resolvers)
-- `health` — broken MCP path (tool not ported)
 - `users` — reads the graph DB, not WP-CLI
 
 **Known defect, unrelated to external hosts:** `wp health` prints its error and
@@ -179,10 +178,10 @@ everywhere (`DEFAULT_OPERATION_PERMISSIONS`, `mcp/utils/operation-permissions.ts
 
 ## 5. Summary — surface is unified
 
-**CLI:** 17 of 22 commands reach an external host. `nexusWpCommand` delegates to
+**CLI:** 18 of 22 commands reach an external host. `nexusWpCommand` delegates to
 `resolveTransport`, so every command routed through it works on Local, WPE and
-external hosts. Five do not: three are local-only by design (db scanner), one
-has a broken MCP path (health), and one reads the graph DB (users).
+external hosts. Four do not: three are local-only by design (db scanner), and
+one reads the graph DB (users).
 
 **MCP tools:** 17 of 19 work on all three targets. Two are local-only (db export,
 import database) because they depend on local filesystem state or Local's own

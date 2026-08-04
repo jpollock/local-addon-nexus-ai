@@ -426,12 +426,13 @@ Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not L
 
 **Which `nexus wp` commands work against a registered host.**
 
-Once a host is registered you address it as `ssh:<alias>@<environment>`, with no `--path` needed. **17 of the 22 `nexus wp` subcommands reach an external host** — every command that routes through the `nexusWpCommand` GraphQL resolver.
+Once a host is registered you address it as `ssh:<alias>@<environment>`, with no `--path` needed. **18 of the 22 `nexus wp` subcommands reach an external host** — every command that routes through the `nexusWpCommand` GraphQL resolver.
 
-**The 5 that do NOT work:**
+**The 4 that do NOT work:**
 - `wp db scan`, `wp db clean`, `wp db report` — local-only by design (analyze the database of a running Local site)
-- `wp health` — MCP tool not yet ported; works when MCP is down (falls back to `nexusWpCommand`)
 - `wp users` — reads the graph DB, not WP-CLI
+
+`wp health` used to fail with `Site "undefined" not found.` but was ported in this change and now works on all three targets.
 
 **All others work**, including writes like `wp plugin update`, `wp theme activate`, `wp core update`, `wp post create/update/delete`, and `wp db search-replace`. On a host registered as `production`, writes are refused by default:
 

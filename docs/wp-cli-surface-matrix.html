@@ -102,7 +102,7 @@ WP-CLI <em>verbs</em> are four different populations, and mixing them is what pr
   <div class="card"><div class="n">22</div><div class="l">CLI subcommands</div><div class="s">nexus wp …</div></div>
   <div class="card"><div class="n">19</div><div class="l">MCP tools</div><div class="s">wp_* handlers</div></div>
   <div class="card good"><div class="n">22</div><div class="l">work on Local</div><div class="s">no policy, no gate</div></div>
-  <div class="card good"><div class="n">17</div><div class="l">CLI → external</div><div class="s">of 22 — unified</div></div>
+  <div class="card good"><div class="n">18</div><div class="l">CLI → external</div><div class="s">of 22 — unified</div></div>
   <div class="card good"><div class="n">17</div><div class="l">MCP tools → external</div><div class="s">of 19 — ported</div></div>
   <div class="card info"><div class="n">1</div><div class="l">remote policy</div><div class="s">blocklist-only</div></div>
 </div>
@@ -112,7 +112,7 @@ WP-CLI <em>verbs</em> are four different populations, and mixing them is what pr
 <div class="finding good">
   <h4>The surfaces are unified — one router, one policy</h4>
   <p><code>nexusWpCommand</code> now delegates to <code>resolveTransport</code>, so
-  <strong>17 of 22 CLI commands</strong> reach an external host — every command routed through
+  <strong>18 of 22 CLI commands</strong> reach an external host — every command routed through
   it works on Local, WP&nbsp;Engine and external hosts. All three targets share one policy
   (<code>REMOTE_POLICY</code>): blocklist-only, no whitelist. The divergence between what a human
   at the CLI could do and what an agent could do is gone.</p>
@@ -178,20 +178,19 @@ output can never use it.</p>
     <tr data-ext="1" data-mcp="0"><td class="idx">18</td><td class="cmd">wp post delete</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
     <tr data-ext="1" data-mcp="0"><td class="idx">19</td><td class="cmd">wp user-list</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
     <tr data-ext="1" data-mcp="0"><td class="idx">20</td><td class="cmd">wp option-get</td><td class="path">—</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
-    <tr data-ext="0" data-mcp="1"><td class="idx">21</td><td class="cmd">wp health</td><td class="path">wp_site_health <span style="color:var(--warn)">(not ported)</span></td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-no">no</span></td></tr>
+    <tr data-ext="1" data-mcp="1"><td class="idx">21</td><td class="cmd">wp health</td><td class="path">wp_site_health</td><td class="path">nexusWpCommand</td><td class="c"><span class="pill p-ok">yes</span></td></tr>
     <tr data-ext="0" data-mcp="0"><td class="idx">22</td><td class="cmd">wp users</td><td class="path">—</td><td class="path">nexusSiteUsers</td><td class="c"><span class="pill p-na">graph DB</span></td></tr>
   </tbody>
 </table>
 
-<div class="finding alert">
-  <h4>Five that do not work, for three different reasons</h4>
+<div class="finding">
+  <h4>Four that do not work, for two reasons</h4>
   <p><code>wp db scan/clean/report</code> are local-only by design — separate resolvers
   (<code>nexusDbScan</code>, etc.), not routed through <code>nexusWpCommand</code>.
-  <code>wp health</code> is wired to the MCP path but <code>wp_site_health</code> was not ported
-  onto <code>resolveTransport</code>, so it fails with <code>Site "undefined" not found.</code>
-  when MCP is available; with MCP down it falls back to <code>nexusWpCommand</code>, which now
-  works. <code>wp users</code> reads the graph DB, not WP-CLI. Unrelated but real:
-  <code>wp health</code> prints its error and <strong>exits 0</strong>.</p>
+  <code>wp users</code> reads the graph DB, not WP-CLI. <code>wp health</code> used to fail with
+  <code>Site "undefined" not found.</code> because <code>wp_site_health</code> was local-only; it
+  was ported onto <code>resolveTransport</code> in this change and now works on all three targets.
+  Unrelated but real: <code>wp health</code> prints its error and <strong>exits 0</strong>.</p>
 </div>
 
 <h2><span class="num">§3</span>MCP tools — servicing and reach</h2>
@@ -307,7 +306,7 @@ capabilities a human at the CLI already had. What protects production is the per
 the command policy.</p>
 
 <h2><span class="num">§5</span>Summary — surface is unified</h2>
-<p><strong>CLI:</strong> 17 of 22 commands reach an external host. <code>nexusWpCommand</code>
+<p><strong>CLI:</strong> 18 of 22 commands reach an external host. <code>nexusWpCommand</code>
 delegates to <code>resolveTransport</code>, so every command routed through it works on Local,
 WP&nbsp;Engine and external hosts.</p>
 <p><strong>MCP tools:</strong> 17 of 19 work on all three targets. All
