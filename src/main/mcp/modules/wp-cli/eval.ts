@@ -22,7 +22,7 @@ export const evalHandler: McpToolHandler = {
       properties: {
         site: {
           type: 'string',
-          description: 'Local site name, ID, or domain. Do NOT use for remote WPE installs.',
+          description: 'Local site name, ID, or domain. Local sites only — use install_name for WPE installs or ssh_target for external hosts.',
         },
         ssh_target: {
           type: 'string',
