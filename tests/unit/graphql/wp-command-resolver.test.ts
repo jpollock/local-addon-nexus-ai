@@ -20,6 +20,7 @@ jest.mock('../../../src/main/transport', () => ({
 }));
 
 import { createResolvers } from '../../../src/main/graphql/resolvers';
+import { createWpCliResolvers } from '../../../src/main/graphql/resolvers/wp-cli';
 
 function ctx(sites: string[] = []) {
   const s = Object.fromEntries(sites.map((n) => [n, { id: `id-${n}`, name: n }]));
@@ -227,5 +228,30 @@ describe('nexusWpPluginList', () => {
     expect(r.success).toBe(false);
     expect(r.error).toBe('graph db exploded');
     expect(auditMock.mock.calls[0][1]).toMatchObject({ outcome: 'failure', error: 'graph db exploded' });
+  });
+});
+
+/**
+ * resolvers/wp-cli.ts used to be a shadow copy: a second nexusWpCommand with
+ * its own blocklist, its own target resolution, and neither an audit call nor a
+ * permission gate. It was dead — createResolvers in resolvers.ts wins module
+ * resolution for './graphql/resolvers' — but it would have gone live, silently,
+ * the day the in-progress resolver split landed.
+ *
+ * There is now one implementation. Comparing the function source is the only
+ * check that actually catches a re-divergence: both objects are fresh closures
+ * from the same factory, so identity comparison would fail and a shape
+ * comparison would pass against a hand-written duplicate.
+ */
+describe('no shadow WP-CLI resolver', () => {
+  it('resolvers.ts serves the resolvers/wp-cli.ts implementation itself', () => {
+    const c = ctx();
+    const shared: any = createWpCliResolvers(c.services);
+    const all: any = createResolvers(c);
+
+    expect(Object.keys(shared).sort()).toEqual(['nexusWpCommand', 'nexusWpPluginList']);
+    for (const name of Object.keys(shared)) {
+      expect(all.Mutation[name].toString()).toBe(shared[name].toString());
+    }
   });
 });

@@ -325,11 +325,30 @@ describe('nexusWpCommand', () => {
     expect(result.exitCode).toBe(1);
   });
 
-  test('blocks dangerous commands on WPE sites', async () => {
-    const services = makeServices({
-      localServices: { getSiteStatus: jest.fn() } as any,
+  /**
+   * This module used to carry its own four-item blocklist. It now delegates to
+   * resolveTransport, so `eval` is refused twice over: the environment gate
+   * refuses every write on production, and REMOTE_POLICY refuses eval on any
+   * remote target. Both are asserted — the gate alone would pass on staging.
+   */
+  function wpeServices(environment: string) {
+    return makeServices({
+      localServices: {
+        getSiteStatus: jest.fn(),
+        isCAPIAvailable: () => true,
+        isSSHKeyAvailable: () => true,
+      } as any,
+      registryStorage: {
+        get: (key: string) =>
+          key.endsWith('wpe_install_cache')
+            ? { installs: [{ installName: 'install', environment }], syncedAt: Date.now() }
+            : {},
+      } as any,
     });
-    const resolvers = createWpCliResolvers(services);
+  }
+
+  test('refuses a write on a production WPE install at the environment gate', async () => {
+    const resolvers = createWpCliResolvers(wpeServices('production'));
 
     const result = await resolvers.nexusWpCommand(
       undefined,
@@ -337,7 +356,19 @@ describe('nexusWpCommand', () => {
     );
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('blocked on remote sites');
+    expect(result.error).toContain('not permitted on "production"');
+  });
+
+  test('blocks eval on a WPE install even where the gate would allow the write', async () => {
+    const resolvers = createWpCliResolvers(wpeServices('staging'));
+
+    const result = await resolvers.nexusWpCommand(
+      undefined,
+      { target: 'wpe:acct/install@staging', command: ['eval', '$x = 1;'] }
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('blocked for security reasons on remote sites');
   });
 
   test('returns error when site not found', async () => {
