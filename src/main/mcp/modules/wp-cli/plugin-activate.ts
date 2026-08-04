@@ -8,13 +8,21 @@ export const pluginActivateHandler: McpToolHandler = {
     name: 'wp_plugin_activate',
     description:
       'Activate an installed but inactive WordPress plugin. ' +
-      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Works on local sites (site=), remote WPE installs via SSH (install_name=), and external SSH hosts (ssh_target=). ' +
       'Plugin must already be installed — use wp_plugin_install first if not.',
     inputSchema: {
       type: 'object',
       properties: {
         site: { type: 'string', description: 'Local site name, ID, or domain' },
         install_name: { type: 'string', description: 'WPE install name for remote execution via SSH' },
+        ssh_target: {
+          type: 'string',
+          description: 'External SSH host, as ssh:<alias>@<production|staging|development>. The alias is a Host entry in the user\'s ~/.ssh/config. Register one with `nexus host add`.',
+        },
+        wp_path: {
+          type: 'string',
+          description: 'Absolute WordPress root on an external host. Usually unnecessary — a registered host supplies its own discovered path.',
+        },
         slug: { type: 'string', description: 'Plugin slug to activate' },
       },
       required: ['slug'],

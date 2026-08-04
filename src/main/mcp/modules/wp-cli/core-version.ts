@@ -7,12 +7,20 @@ import { freshnessFooter } from '../../../twin/twin-helpers';
 export const coreVersionHandler: McpToolHandler = {
   definition: {
     name: 'wp_core_version',
-    description: 'Get the current WordPress core version. Works on local sites (site=) and remote WPE installs via SSH (install_name=). Use this before wp_core_update to see if an upgrade is available, or to confirm a version after updating. Also returns whether core update is available when site is running.',
+    description: 'Get the current WordPress core version. Works on local sites (site=), remote WPE installs via SSH (install_name=), and external SSH hosts (ssh_target=). Use this before wp_core_update to see if an upgrade is available, or to confirm a version after updating. Also returns whether core update is available when site is running.',
     inputSchema: {
       type: 'object',
       properties: {
         site: { type: 'string', description: 'Local site name, ID, or domain' },
         install_name: { type: 'string', description: 'WPE install name for remote execution via SSH' },
+        ssh_target: {
+          type: 'string',
+          description: 'External SSH host, as ssh:<alias>@<production|staging|development>. The alias is a Host entry in the user\'s ~/.ssh/config. Register one with `nexus host add`.',
+        },
+        wp_path: {
+          type: 'string',
+          description: 'Absolute WordPress root on an external host. Usually unnecessary — a registered host supplies its own discovered path.',
+        },
       },
     },
     isAvailable: (services) => !!services.localServices,

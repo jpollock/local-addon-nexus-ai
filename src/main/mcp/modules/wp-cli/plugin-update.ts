@@ -8,7 +8,7 @@ export const pluginUpdateHandler: McpToolHandler = {
     name: 'wp_plugin_update',
     description:
       'Update one or all WordPress plugins to their latest versions. ' +
-      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Works on local sites (site=), remote WPE installs via SSH (install_name=), and external SSH hosts (ssh_target=). ' +
       'Use slug="--all" to update every plugin in one call. ' +
       'Run wp_plugin_list first to see installed versions. ' +
       'If a plugin fails to update, it may require a WP core update first — run wp_core_update then retry.',
@@ -17,6 +17,14 @@ export const pluginUpdateHandler: McpToolHandler = {
       properties: {
         site: { type: 'string', description: 'Local site name, ID, or domain' },
         install_name: { type: 'string', description: 'WPE install name for remote execution via SSH' },
+        ssh_target: {
+          type: 'string',
+          description: 'External SSH host, as ssh:<alias>@<production|staging|development>. The alias is a Host entry in the user\'s ~/.ssh/config. Register one with `nexus host add`.',
+        },
+        wp_path: {
+          type: 'string',
+          description: 'Absolute WordPress root on an external host. Usually unnecessary — a registered host supplies its own discovered path.',
+        },
         slug: { type: 'string', description: 'Plugin slug to update. Use "--all" to update all plugins.' },
       },
       required: ['slug'],

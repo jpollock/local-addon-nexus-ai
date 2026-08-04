@@ -8,7 +8,7 @@ export const themeActivateHandler: McpToolHandler = {
     name: 'wp_theme_activate',
     description:
       'Activate a WordPress theme by slug. ' +
-      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Works on local sites (site=), remote WPE installs via SSH (install_name=), and external SSH hosts (ssh_target=). ' +
       'Runs with --skip-themes internally, so it works even when the currently active theme ' +
       'crashes WordPress on bootstrap (e.g. theme requires a newer WP API than is installed). ' +
       'Use this for crash recovery: switch to a compatible theme (twentytwentyone, twentytwentytwo) ' +
@@ -19,6 +19,14 @@ export const themeActivateHandler: McpToolHandler = {
       properties: {
         site: { type: 'string', description: 'Local site name, ID, or domain' },
         install_name: { type: 'string', description: 'WPE install name for remote execution via SSH' },
+        ssh_target: {
+          type: 'string',
+          description: 'External SSH host, as ssh:<alias>@<production|staging|development>. The alias is a Host entry in the user\'s ~/.ssh/config. Register one with `nexus host add`.',
+        },
+        wp_path: {
+          type: 'string',
+          description: 'Absolute WordPress root on an external host. Usually unnecessary — a registered host supplies its own discovered path.',
+        },
         slug: {
           type: 'string',
           description: 'Theme slug to activate (e.g. "twentytwentyone", "twentytwentytwo", "astra")',

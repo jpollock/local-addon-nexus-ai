@@ -8,7 +8,7 @@ export const wpPostUpdateHandler: McpToolHandler = {
     name: 'wp_post_update',
     description:
       'Update an existing WordPress post, page, or custom post type by ID. ' +
-      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Works on local sites (site=), remote WPE installs via SSH (install_name=), and external SSH hosts (ssh_target=). ' +
       'Only provided fields are updated — omitted fields are left unchanged. ' +
       'Use wp_eval on local sites (or wp_option_get) to find post IDs if unknown.',
     inputSchema: {
@@ -21,6 +21,14 @@ export const wpPostUpdateHandler: McpToolHandler = {
         install_name: {
           type: 'string',
           description: 'WPE install name (remote sites)',
+        },
+        ssh_target: {
+          type: 'string',
+          description: 'External SSH host, as ssh:<alias>@<production|staging|development>. The alias is a Host entry in the user\'s ~/.ssh/config. Register one with `nexus host add`.',
+        },
+        wp_path: {
+          type: 'string',
+          description: 'Absolute WordPress root on an external host. Usually unnecessary — a registered host supplies its own discovered path.',
         },
         post_id: {
           type: 'number',

@@ -14,7 +14,7 @@ export const evalHandler: McpToolHandler = {
       'wp_theme_activate (theme switching, including crash recovery), ' +
       'wp_option_get / wp_search_replace (options/data), ' +
       'wp_core_update / wp_core_version (WordPress core). ' +
-      'LOCAL SITES ONLY — blocked on remote WPE installs for security. ' +
+      'Works on local sites (site=), remote WPE installs via SSH (install_name=), and external SSH hosts (ssh_target=), though eval is blocked on remote targets by policy. ' +
       'Use skip_themes=true when the active theme crashes WordPress on bootstrap (e.g. theme requires newer WP API). ' +
       'Use skip_plugins=true when a plugin conflict prevents WordPress from loading.',
     inputSchema: {
@@ -23,6 +23,14 @@ export const evalHandler: McpToolHandler = {
         site: {
           type: 'string',
           description: 'Local site name, ID, or domain. Do NOT use for remote WPE installs.',
+        },
+        ssh_target: {
+          type: 'string',
+          description: 'External SSH host, as ssh:<alias>@<production|staging|development>. The alias is a Host entry in the user\'s ~/.ssh/config. Register one with `nexus host add`.',
+        },
+        wp_path: {
+          type: 'string',
+          description: 'Absolute WordPress root on an external host. Usually unnecessary — a registered host supplies its own discovered path.',
         },
         code: {
           type: 'string',

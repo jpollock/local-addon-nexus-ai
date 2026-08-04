@@ -8,6 +8,7 @@ export const coreUpdateHandler: McpToolHandler = {
     name: 'wp_core_update',
     description:
       'Update WordPress core to the latest version (or a specific version). ' +
+      'Works on local sites (site=), remote WPE installs via SSH (install_name=), and external SSH hosts (ssh_target=). ' +
       'Run wp_core_version first to see the current version. ' +
       'After updating core, re-run wp_plugin_update --all to catch any plugins blocked by WP version requirements.',
     inputSchema: {
@@ -15,6 +16,14 @@ export const coreUpdateHandler: McpToolHandler = {
       properties: {
         site: { type: 'string', description: 'Local site name, ID, or domain' },
         install_name: { type: 'string', description: 'WPE install name for remote execution via SSH' },
+        ssh_target: {
+          type: 'string',
+          description: 'External SSH host, as ssh:<alias>@<production|staging|development>. The alias is a Host entry in the user\'s ~/.ssh/config. Register one with `nexus host add`.',
+        },
+        wp_path: {
+          type: 'string',
+          description: 'Absolute WordPress root on an external host. Usually unnecessary — a registered host supplies its own discovered path.',
+        },
         version: {
           type: 'string',
           description: 'Specific version to update to (e.g. "6.9.4"). Omit for latest.',

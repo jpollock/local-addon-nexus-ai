@@ -8,7 +8,7 @@ export const pluginInstallHandler: McpToolHandler = {
     name: 'wp_plugin_install',
     description:
       'Install a WordPress plugin from WordPress.org by slug, optionally pinning a specific version. ' +
-      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Works on local sites (site=), remote WPE installs via SSH (install_name=), and external SSH hosts (ssh_target=). ' +
       'Use version= to install an older or specific version (e.g. version="5.7" for Contact Form 7 5.7, version="7.4.0" for WooCommerce 7.4.0). ' +
       'Set activate=true to activate immediately after install. ' +
       'WordPress.org only — for premium plugins not on .org, upload the zip via WP Admin.',
@@ -17,6 +17,14 @@ export const pluginInstallHandler: McpToolHandler = {
       properties: {
         site: { type: 'string', description: 'Local site name, ID, or domain' },
         install_name: { type: 'string', description: 'WPE install name for remote execution via SSH' },
+        ssh_target: {
+          type: 'string',
+          description: 'External SSH host, as ssh:<alias>@<production|staging|development>. The alias is a Host entry in the user\'s ~/.ssh/config. Register one with `nexus host add`.',
+        },
+        wp_path: {
+          type: 'string',
+          description: 'Absolute WordPress root on an external host. Usually unnecessary — a registered host supplies its own discovered path.',
+        },
         slug: { type: 'string', description: 'Plugin slug (e.g. "contact-form-7", "woocommerce")' },
         version: { type: 'string', description: 'Specific version to install (e.g. "5.7", "7.4.0"). Omit for latest.' },
         activate: { type: 'boolean', description: 'Activate after install. Defaults to false.' },

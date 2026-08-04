@@ -8,7 +8,7 @@ export const wpPostDeleteHandler: McpToolHandler = {
     name: 'wp_post_delete',
     description:
       'Delete a WordPress post, page, or custom post type by ID. ' +
-      'Works on local sites (site=) and remote WPE installs via SSH (install_name=). ' +
+      'Works on local sites (site=), remote WPE installs via SSH (install_name=), and external SSH hosts (ssh_target=). ' +
       'Default (force=false) moves to trash — recoverable from WP Admin. ' +
       'Set force=true to permanently delete, bypassing trash.',
     inputSchema: {
@@ -21,6 +21,14 @@ export const wpPostDeleteHandler: McpToolHandler = {
         install_name: {
           type: 'string',
           description: 'WPE install name (remote sites)',
+        },
+        ssh_target: {
+          type: 'string',
+          description: 'External SSH host, as ssh:<alias>@<production|staging|development>. The alias is a Host entry in the user\'s ~/.ssh/config. Register one with `nexus host add`.',
+        },
+        wp_path: {
+          type: 'string',
+          description: 'Absolute WordPress root on an external host. Usually unnecessary — a registered host supplies its own discovered path.',
         },
         post_id: {
           type: 'number',

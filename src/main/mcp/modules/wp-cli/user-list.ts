@@ -6,12 +6,20 @@ import { withSiteRunning } from '../with-site-running';
 export const userListHandler: McpToolHandler = {
   definition: {
     name: 'wp_user_list',
-    description: 'List WordPress users with their ID, login, email, display name, and roles. Works on local sites (site=) and remote WPE installs via SSH (install_name=). Useful for auditing access, finding admin accounts, or identifying test users before cleanup.',
+    description: 'List WordPress users with their ID, login, email, display name, and roles. Works on local sites (site=), remote WPE installs via SSH (install_name=), and external SSH hosts (ssh_target=). Useful for auditing access, finding admin accounts, or identifying test users before cleanup.',
     inputSchema: {
       type: 'object',
       properties: {
         site: { type: 'string', description: 'Local site name, ID, or domain' },
         install_name: { type: 'string', description: 'WPE install name for remote execution via SSH' },
+        ssh_target: {
+          type: 'string',
+          description: 'External SSH host, as ssh:<alias>@<production|staging|development>. The alias is a Host entry in the user\'s ~/.ssh/config. Register one with `nexus host add`.',
+        },
+        wp_path: {
+          type: 'string',
+          description: 'Absolute WordPress root on an external host. Usually unnecessary — a registered host supplies its own discovered path.',
+        },
       },
     },
     isAvailable: (services) => !!services.localServices,
