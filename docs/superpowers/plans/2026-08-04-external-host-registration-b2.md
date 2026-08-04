@@ -1213,13 +1213,23 @@ Append to `src/main/graphql/schema.ts`:
 
 - [ ] **Step 2: Add the resolvers**
 
+Use **top-level imports**, not inline `require()`. `tool-registry.ts` uses inline `require` for these same modules, but that is not a pattern to copy here: nothing in `probeExternalHost` → `sshExec` → `ssh-args` or in `externalSiteStore` → `constants` imports `resolvers.ts`, so there is no cycle to break, and `resolvers.ts` imports everything else at the top (`:32`). Add near the existing imports:
+
+```ts
+import { probeExternalHost } from '../external/probeExternalHost';
+import type { ProbeReport } from '../external/probeExternalHost';
+import {
+  externalSiteId, getExternalProfile, listExternalProfiles,
+  removeExternalProfile, upsertExternalProfile,
+} from '../external/externalSiteStore';
+```
+
 Add to the `Mutation` map in `resolvers.ts`:
 
 ```ts
       nexusHostProbe: async (_p: ResolverParent, { alias, path }: { alias: string; path?: string }) => {
         return withQueue(async () => {
           try {
-            const { probeExternalHost } = require('../external/probeExternalHost');
             const report = await probeExternalHost(alias, { wpPath: path ?? undefined });
             return { success: true, error: null, report: toHostReport(report) };
           } catch (e: any) {
@@ -1246,7 +1256,6 @@ Add to the `Mutation` map in `resolvers.ts`:
               return { success: false, registered: false, report: null, error: 'Storage not available' };
             }
 
-            const { probeExternalHost } = require('../external/probeExternalHost');
             const report = await probeExternalHost(alias, { wpPath: path ?? undefined });
 
             // Refuse on any probe failure: a typo must not litter the fleet with
@@ -1255,7 +1264,6 @@ Add to the `Mutation` map in `resolvers.ts`:
               return { success: true, registered: false, report: toHostReport(report), error: null };
             }
 
-            const { externalSiteId, upsertExternalProfile } = require('../external/externalSiteStore');
             const now = Date.now();
             upsertExternalProfile(storage, {
               alias,
@@ -1296,7 +1304,6 @@ Add to the `Mutation` map in `resolvers.ts`:
         try {
           const storage = (services as any).registryStorage;
           if (!storage) return { success: false, error: 'Storage not available', hosts: [] };
-          const { listExternalProfiles } = require('../external/externalSiteStore');
           return { success: true, error: null, hosts: listExternalProfiles(storage) };
         } catch (e: any) {
           return { success: false, error: e?.message ?? String(e), hosts: [] };
@@ -1308,8 +1315,6 @@ Add to the `Mutation` map in `resolvers.ts`:
           try {
             const storage = (services as any).registryStorage;
             if (!storage) return { success: false, error: 'Storage not available', removed: false };
-            const { externalSiteId, removeExternalProfile, getExternalProfile } =
-              require('../external/externalSiteStore');
 
             const profile = getExternalProfile(storage, alias);
             const removed = removeExternalProfile(storage, alias);
@@ -1343,8 +1348,8 @@ Add to the `Mutation` map in `resolvers.ts`:
 Add this helper near the other module-level helpers in `resolvers.ts` (flattening `resolved` into the three scalar fields the schema declares):
 
 ```ts
-/** Flatten a ProbeReport into the GraphQL shape. */
-function toHostReport(r: any) {
+/** Flatten a ProbeReport into the GraphQL shape (resolved.* becomes three scalars). */
+function toHostReport(r: ProbeReport) {
   return {
     ok: r.ok,
     alias: r.alias,
