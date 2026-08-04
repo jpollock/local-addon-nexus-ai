@@ -49,7 +49,22 @@ describe('external site profiles', () => {
     expect(p.firstSeenAt).toBe(1000);   // original wins
     expect(p.lastSeenAt).toBe(2000);
     expect(p.wpPath).toBe('/b');        // latest wins
-    expect(p.environment).toBe('production');
+    // ...but NOT the environment: this is a sighting (the default), and the
+    // environment is the write gate. Only a 'registration' write may change it.
+    expect(p.environment).toBe('staging');
+  });
+
+  it('returns the merged profile, not the input', () => {
+    const s = fakeStorage() as any;
+    upsertExternalProfile(s, {
+      alias: 'acme-box', wpPath: '/a', environment: 'staging', firstSeenAt: 1000, lastSeenAt: 1000,
+    });
+    const merged = upsertExternalProfile(s, {
+      alias: 'acme-box', environment: 'production', firstSeenAt: 9999, lastSeenAt: 2000,
+    });
+    expect(merged).toEqual(getExternalProfile(s, 'acme-box'));
+    expect(merged.environment).toBe('staging');
+    expect(merged.wpPath).toBe('/a');
   });
 
   it('does not lose an existing wpPath when a later call omits it', () => {
@@ -104,6 +119,54 @@ describe('wpCliPath', () => {
       firstSeenAt: 2, lastSeenAt: 2,
     });
     expect(getExternalProfile(s, 'h1')?.wpCliPath).toBe('/opt/wp');
+  });
+});
+
+describe('environment — sighting vs registration', () => {
+  it('a sighting never changes a registered environment', () => {
+    // `nexus wp core version ssh:prod-box@development` is a permitted read.
+    // It must not relabel a production host on its way through.
+    const s = fakeStorage() as any;
+    upsertExternalProfile(s, {
+      alias: 'prod-box', environment: 'production', firstSeenAt: 1, lastSeenAt: 1,
+    }, 'registration');
+    upsertExternalProfile(s, {
+      alias: 'prod-box', environment: 'development', firstSeenAt: 2, lastSeenAt: 2,
+    }, 'sighting');
+    expect(getExternalProfile(s, 'prod-box')!.environment).toBe('production');
+  });
+
+  it('defaults to sighting when no source is given', () => {
+    // The conservative behaviour must be what a forgetful call site gets.
+    const s = fakeStorage() as any;
+    upsertExternalProfile(s, {
+      alias: 'prod-box', environment: 'production', firstSeenAt: 1, lastSeenAt: 1,
+    }, 'registration');
+    upsertExternalProfile(s, {
+      alias: 'prod-box', environment: 'development', firstSeenAt: 2, lastSeenAt: 2,
+    });
+    expect(getExternalProfile(s, 'prod-box')!.environment).toBe('production');
+  });
+
+  it('a sighting still sets the environment for a host it has never seen', () => {
+    // No registration to protect, so the suffix is the only signal there is —
+    // this is B1's lazy-registration behaviour and it must survive.
+    const s = fakeStorage() as any;
+    upsertExternalProfile(s, {
+      alias: 'new-box', environment: 'staging', firstSeenAt: 1, lastSeenAt: 1,
+    }, 'sighting');
+    expect(getExternalProfile(s, 'new-box')!.environment).toBe('staging');
+  });
+
+  it('a registration overrides what a sighting stored', () => {
+    const s = fakeStorage() as any;
+    upsertExternalProfile(s, {
+      alias: 'box', environment: 'production', firstSeenAt: 1, lastSeenAt: 1,
+    }, 'sighting');
+    upsertExternalProfile(s, {
+      alias: 'box', environment: 'development', firstSeenAt: 2, lastSeenAt: 2,
+    }, 'registration');
+    expect(getExternalProfile(s, 'box')!.environment).toBe('development');
   });
 });
 

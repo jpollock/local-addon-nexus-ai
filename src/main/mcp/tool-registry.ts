@@ -36,13 +36,18 @@ export async function maybeUpsertExternalSite(
     const now = Date.now();
     const wpPath = typeof args.wp_path === 'string' ? args.wp_path : undefined;
 
-    upsertExternalProfile(registryStorage, {
+    // 'sighting', explicitly: `parsed.environment` is the suffix on whatever
+    // target string this command happened to use, not a label the user chose
+    // for the host. A registered environment must survive it — the store
+    // enforces that, and the merged result is what the sites row must carry so
+    // the fleet UI does not show the suffix instead of the registration.
+    const stored = upsertExternalProfile(registryStorage, {
       alias: parsed.alias,
       wpPath,
       environment: parsed.environment,
       firstSeenAt: now,
       lastSeenAt: now,
-    });
+    }, 'sighting');
 
     await graphService.upsertSite({
       id: externalSiteId(parsed.alias),
@@ -52,7 +57,7 @@ export async function maybeUpsertExternalSite(
       domain: parsed.alias,
       source: 'external',
       host: 'external',
-      environment: parsed.environment,
+      environment: stored.environment,
       is_active: true,
       created_at: now,
       updated_at: now,

@@ -59,6 +59,25 @@ describe('maybeUpsertExternalSite', () => {
     expect(g.upsertSite).not.toHaveBeenCalled();
   });
 
+  it('never relabels a registered host from the target suffix', async () => {
+    // `nexus wp core version ssh:prod-box@development` is a permitted read on
+    // every environment, so it succeeds — and used to permanently relabel the
+    // host as development in BOTH the profile and the sites row.
+    const s = fakeStorage() as any;
+    const g = fakeGraph();
+    const { getExternalProfile, upsertExternalProfile } =
+      require('../../../src/main/external/externalSiteStore');
+    upsertExternalProfile(s, {
+      alias: 'prod-box', environment: 'production', firstSeenAt: 1, lastSeenAt: 1,
+    }, 'registration');
+
+    await maybeUpsertExternalSite(
+      { ssh_target: 'ssh:prod-box@development' }, true, s, g as any);
+
+    expect(getExternalProfile(s, 'prod-box').environment).toBe('production');
+    expect(g.rows[0].environment).toBe('production');
+  });
+
   it('does not upsert when succeeded=false even with valid ssh_target', async () => {
     // Regression test for Finding 1: a handler returning { isError: true } must not
     // write a fleet row. Previously the hardcoded `true` in tool-registry.ts:177 did.

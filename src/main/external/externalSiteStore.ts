@@ -41,24 +41,58 @@ export function listExternalProfiles(storage: Storage): ExternalSiteProfile[] {
 }
 
 /**
- * Merge a profile in.
+ * Why a profile is being written.
+ *
+ * - `'registration'` — `nexus host add`. The user named this host's
+ *   environment on purpose (or accepted the default for a host that has none),
+ *   so the incoming label wins. This is the only way to relabel a host.
+ * - `'sighting'` — the lazy upsert in `ToolRegistry.call()`. It knows only the
+ *   suffix on the target string of whatever command happened to run, and
+ *   `nexus wp core version ssh:prod-box@development` is a *permitted read* on
+ *   every environment. Letting that write the label would permanently relabel
+ *   a production host as development, in the profile and in the fleet UI, as a
+ *   side effect of a successful read.
+ *
+ * The default is `'sighting'` deliberately: a call site that forgets to say
+ * gets the conservative behaviour rather than the destructive one.
+ */
+export type ProfileWriteSource = 'registration' | 'sighting';
+
+/**
+ * Merge a profile in and return the stored result.
  *
  * `firstSeenAt` is preserved from any existing record — it answers "when did
  * this host enter the fleet", which a later sighting must not overwrite.
  * `wpPath` and `wpCliPath` are only replaced when the incoming profile supplies
  * them: a command run without --path, or a sighting that never probed for the
  * binary, must not erase what registration discovered.
+ * `environment` is protected by the same reasoning and needed it most — see
+ * ProfileWriteSource. It is the write gate (`resolveTransport` gates on the
+ * more restrictive of it and the target's), so a sighting that could lower it
+ * would be a permission downgrade, not just a wrong label.
+ *
+ * The merged profile is returned so a caller can write a matching `sites` row
+ * without re-deriving values the merge may have overridden.
  */
-export function upsertExternalProfile(storage: Storage, profile: ExternalSiteProfile): void {
+export function upsertExternalProfile(
+  storage: Storage,
+  profile: ExternalSiteProfile,
+  source: ProfileWriteSource = 'sighting',
+): ExternalSiteProfile {
   const all = readAll(storage);
   const existing = all[profile.alias];
-  all[profile.alias] = {
+  const merged: ExternalSiteProfile = {
     ...profile,
     firstSeenAt: existing?.firstSeenAt ?? profile.firstSeenAt,
     wpPath: profile.wpPath ?? existing?.wpPath,
     wpCliPath: profile.wpCliPath ?? existing?.wpCliPath,
+    environment: source === 'registration'
+      ? profile.environment
+      : (existing?.environment ?? profile.environment),
   };
+  all[profile.alias] = merged;
   storage.set(STORAGE_KEYS.EXTERNAL_SITE_PROFILES, all);
+  return merged;
 }
 
 /**
