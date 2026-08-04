@@ -104,9 +104,12 @@ describe('nexusHostAdd', () => {
     const m = createResolvers(c.context).Mutation as any;
     await m.nexusHostAdd(null, { alias: 'h1' });
     const first = profiles(c.store).h1.firstSeenAt;
+    const lastFirst = profiles(c.store).h1.lastSeenAt;
+    await new Promise((r) => setTimeout(r, 2));
     await m.nexusHostAdd(null, { alias: 'h1' });
     expect(Object.keys(profiles(c.store))).toEqual(['h1']);
     expect(profiles(c.store).h1.firstSeenAt).toBe(first);
+    expect(profiles(c.store).h1.lastSeenAt).toBeGreaterThan(lastFirst);
   });
 });
 
