@@ -34,6 +34,13 @@ export type ResolvedTarget = LocalTarget | RemoteTarget;
  * - If `install_name` is provided, resolves via CAPI to get the install name.
  * - If `site` is provided, resolves as a local site.
  * - Returns an error result if neither is valid.
+ *
+ * `install_name_explicit: true` says the caller already knows the target is a
+ * WP Engine install, so the local-site lookup below is skipped and the name is
+ * used literally. Only `resolveTargetArgs` sets it, for a `wpe:`-prefixed
+ * target or a bare name it has already resolved in the graph DB. Callers that
+ * pass a bare `install_name` — every MCP tool — are unaffected: there the
+ * argument really can be either, and local-first is the right default.
  */
 export async function resolveTarget(
   args: Record<string, unknown>,
@@ -41,6 +48,7 @@ export async function resolveTarget(
   operation: 'wpcli_read' | 'wpcli' = 'wpcli',
 ): Promise<ResolvedTarget | McpToolResult> {
   const installName = args.install_name as string | undefined;
+  const installNameIsExplicit = args.install_name_explicit === true;
   const siteQuery = args.site as string | undefined;
 
   if (installName) {
@@ -63,8 +71,10 @@ export async function resolveTarget(
     const settings = getEffectiveSettings((services as any).registryStorage);
 
     // Resolve install_name: it could be a local site name (look up its WPE connection)
-    // or a direct WPE install name. Try local site first.
-    const site = resolveSite(installName, services.siteData);
+    // or a direct WPE install name. Try local site first — unless the caller
+    // already established it is an install, in which case a local site that
+    // happens to share the name must not hijack the target.
+    const site = installNameIsExplicit ? null : resolveSite(installName, services.siteData);
     if (site) {
       const installInfo = await services.localServices.resolveWpeInstall(site.id);
       if (installInfo) {

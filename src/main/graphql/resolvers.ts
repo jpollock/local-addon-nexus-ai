@@ -39,6 +39,7 @@ import {
 import { classifyWpCliOp } from '../transport/classify';
 import { resolveTargetArgs } from '../transport/resolveTargetArgs';
 import { resolveTransport } from '../transport';
+import type { SiteRef } from '../transport';
 
 /** The root value for GraphQL resolvers — always null/undefined for Query/Mutation. */
 type ResolverParent = unknown;
@@ -1624,11 +1625,20 @@ export function createResolvers(context: ResolverContext) {
           // calls; all three now live in resolveTransport, which is why an
           // ssh: target works here at all.
           const operation = classifyWpCliOp(command);
+
+          // The resolved identity, recorded in the audit entry once it is known.
+          // `target` alone cannot carry it: a bare name that falls back to a WP
+          // Engine install reads identically to a local site name, which would
+          // make arbitrary WP-CLI on production indistinguishable from a local
+          // run — the highest-blast-radius direct-call path in the addon, and
+          // the one whose argv is withheld. Absent on the paths where nothing
+          // was resolved, which is itself accurate.
+          let resolved: SiteRef | undefined;
           const audit = (outcome: 'success' | 'failure', err?: string) =>
             auditDirectOperation(services, {
               operation: 'cli.wp.command',
               target,
-              parameters: { target, command },
+              parameters: { target, command, ...(resolved ? { resolved } : {}) },
               outcome,
               error: err,
             });
@@ -1646,6 +1656,7 @@ export function createResolvers(context: ResolverContext) {
               audit('failure', msg);
               return { success: false, error: msg, stdout: '', stderr: '', exitCode: 1 };
             }
+            resolved = transport.siteRef;
 
             const result = await transport.runWpCli(command);
             // WpCliResult carries stdout + success always, and stderr/exitCode

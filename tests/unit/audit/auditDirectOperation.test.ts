@@ -269,6 +269,11 @@ describe('direct-call audit coverage — GraphQL resolvers', () => {
     // including a refusal, where nothing has been resolved to name.
     expect(entries[0].target).toBe('wpe:acme/acme-prod@staging');
     expect(entries[0].parameters.target).toBe('wpe:acme/acme-prod@staging');
+    // Remoteness, which `parameters.remote` used to carry, now rides on the
+    // resolved identity — and it names the install as well. An entry for
+    // arbitrary WP-CLI on a production install must never read the same as a
+    // local run, especially with the argv withheld.
+    expect(entries[0].parameters.resolved).toEqual({ kind: 'wpe', installName: 'acme-prod' });
     // CHANGED EXPECTATION (withhold list): the argv is withheld, not recorded.
     // Everything that identifies the operation still survives, which is the
     // property the withheld marker exists to preserve.
@@ -299,6 +304,11 @@ describe('direct-call audit coverage — GraphQL resolvers', () => {
     expect(entries[0].operation).toBe('cli.wp.command');
     expect(entries[0].target).toBe('mysite@local');
     expect(entries[0].parameters.target).toBe('mysite@local');
+    // The other half of the pair: a local run says so, and cannot be mistaken
+    // for the remote entry above.
+    expect(entries[0].parameters.resolved).toEqual({
+      kind: 'local', siteId: 's1', siteName: 'mysite',
+    });
 
     fs.rmSync(dir, { recursive: true, force: true });
   });

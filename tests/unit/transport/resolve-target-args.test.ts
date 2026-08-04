@@ -1,5 +1,6 @@
 import { resolveTargetArgs } from '../../../src/main/transport/resolveTargetArgs';
 import { classifyWpCliOp } from '../../../src/main/transport/classify';
+import { resolveTransport } from '../../../src/main/transport';
 
 function services(opts: { localSites?: string[]; wpeInstalls?: string[] } = {}) {
   const sites = Object.fromEntries((opts.localSites ?? []).map((n) => [n, { id: `id-${n}`, name: n }]));
@@ -27,7 +28,16 @@ describe('resolveTargetArgs', () => {
 
   it('maps a wpe: target to install_name, keeping only the install portion', () => {
     expect(resolveTargetArgs('wpe:acct/myinstall@production', services()))
-      .toEqual({ install_name: 'myinstall' });
+      .toEqual({ install_name: 'myinstall', install_name_explicit: true });
+  });
+
+  // THE MIS-TARGETING HAZARD. resolveTarget reads a bare `install_name` as
+  // "possibly a local site name" and looks that up FIRST. Without the explicit
+  // flag, `wpe:acct/clash@production` runs against whatever install the local
+  // site `clash` is linked to — a different install, silently, on production.
+  it('marks a wpe: target explicit even when a local site shares the name', () => {
+    expect(resolveTargetArgs('wpe:acct/clash@production', services({ localSites: ['clash'] })))
+      .toEqual({ install_name: 'clash', install_name_explicit: true });
   });
 
   it('maps an explicit @local target to site', () => {
@@ -43,12 +53,12 @@ describe('resolveTargetArgs', () => {
   // THE HAZARD. Deleting the fallback must fail this test.
   it('maps a bare name that is NOT local but IS a WPE install to install_name', () => {
     expect(resolveTargetArgs('myinstall', services({ wpeInstalls: ['myinstall'] })))
-      .toEqual({ install_name: 'myinstall' });
+      .toEqual({ install_name: 'myinstall', install_name_explicit: true });
   });
 
   it('is case-insensitive on the WPE fallback lookup', () => {
     expect(resolveTargetArgs('MyInstall', services({ wpeInstalls: ['myinstall'] })))
-      .toEqual({ install_name: 'myinstall' });
+      .toEqual({ install_name: 'myinstall', install_name_explicit: true });
   });
 
   it('prefers a local site over a WPE install of the same name', () => {
@@ -63,6 +73,66 @@ describe('resolveTargetArgs', () => {
   it('does not throw when the graph DB is unavailable', () => {
     const s = services(); s.graphService = undefined;
     expect(resolveTargetArgs('nope', s)).toEqual({ site: 'nope' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The mapper → resolveTarget boundary
+// ---------------------------------------------------------------------------
+
+describe('an explicit wpe: target is not hijacked by a same-named local site', () => {
+  /**
+   * A local site called `clash` that was pulled from a DIFFERENT install. This
+   * is ordinary, not exotic: Local sites are routinely named after the install
+   * they came from, and `install_copy` / staging pulls make the names diverge.
+   */
+  function clashServices() {
+    const sites = { 'id-clash': { id: 'id-clash', name: 'clash' } };
+    const resolveWpeInstall = jest.fn(async () => ({
+      installName: 'a-completely-different-install',
+      installId: 'i-9',
+      remoteSiteId: '',
+      primaryDomain: 'other.wpengine.com',
+      environment: 'production',
+    }));
+    return {
+      resolveWpeInstall,
+      services: {
+        localServices: {
+          isCAPIAvailable: () => true,
+          isSSHKeyAvailable: () => true,
+          resolveWpeInstall,
+        },
+        siteData: { getSites: () => sites, getSite: (id: string) => (sites as any)[id] ?? null },
+        graphService: { getDb: () => undefined },
+        registryStorage: { get: () => null, set: jest.fn() },
+        logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+      } as any,
+    };
+  }
+
+  it('routes an explicit wpe: target to that install, not to the install the local site is linked to', async () => {
+    const { services: svc, resolveWpeInstall } = clashServices();
+
+    const transport = await resolveTransport(
+      resolveTargetArgs('wpe:acct/clash@production', svc), svc, 'wpcli_read',
+    );
+
+    expect('content' in transport).toBe(false);
+    expect((transport as any).siteRef).toEqual({ kind: 'wpe', installName: 'clash' });
+    // The local site was never consulted, so it could not have redirected us.
+    expect(resolveWpeInstall).not.toHaveBeenCalled();
+  });
+
+  it('leaves a BARE install_name resolving local-first — every MCP tool relies on it', async () => {
+    const { services: svc, resolveWpeInstall } = clashServices();
+
+    const transport = await resolveTransport({ install_name: 'clash' }, svc, 'wpcli_read');
+
+    expect((transport as any).siteRef).toEqual({
+      kind: 'wpe', installName: 'a-completely-different-install',
+    });
+    expect(resolveWpeInstall).toHaveBeenCalledWith('id-clash');
   });
 });
 
