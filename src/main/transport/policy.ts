@@ -98,14 +98,14 @@ export function checkCommand(args: string[], policy: CommandPolicy): string | nu
  * Only runWpCli is gated. deleteRemoteFile is Sentinel's deliberate WP-CLI
  * bypass and was never covered by the old wrapper.
  */
-export function withPolicy(transport: SiteTransport, policy: CommandPolicy): SiteTransport & { inner?: SiteTransport } {
+export function withPolicy(transport: SiteTransport, policy: CommandPolicy): SiteTransport {
   return {
     kind: transport.kind,
     siteRef: transport.siteRef,
-    supports: (cap: import('./types').Capability) => transport.supports(cap),
+    supports: (cap) => transport.supports(cap),
     probe: () => transport.probe(),
-    deleteRemoteFile: (p: string) => transport.deleteRemoteFile(p),
-    async runWpCli(args: string[], opts?: import('./types').RunOpts) {
+    deleteRemoteFile: (p) => transport.deleteRemoteFile(p),
+    async runWpCli(args, opts) {
       const blocked = checkCommand(args, policy);
       if (blocked) {
         return {
@@ -115,6 +115,5 @@ export function withPolicy(transport: SiteTransport, policy: CommandPolicy): Sit
       }
       return transport.runWpCli(args, opts);
     },
-    inner: transport, // Expose for testing
   };
 }

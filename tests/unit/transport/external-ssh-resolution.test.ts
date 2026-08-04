@@ -1,6 +1,23 @@
+import { EventEmitter } from 'events';
+
+const spawnMock = jest.fn();
+jest.mock('child_process', () => ({ spawn: (...args: any[]) => spawnMock(...args) }));
+
 import { resolveTransport } from '../../../src/main/transport';
 import type { NexusServices } from '../../../src/main/mcp/types';
 import { STORAGE_KEYS } from '../../../src/common/constants';
+
+function fakeProc(opts: { code?: number; stdout?: string; stderr?: string } = {}) {
+  const proc: any = new EventEmitter();
+  proc.stdout = new EventEmitter();
+  proc.stderr = new EventEmitter();
+  setImmediate(() => {
+    if (opts.stdout) proc.stdout.emit('data', Buffer.from(opts.stdout));
+    if (opts.stderr) proc.stderr.emit('data', Buffer.from(opts.stderr));
+    proc.emit('close', opts.code ?? 0);
+  });
+  return proc;
+}
 
 const mockServices: NexusServices = {
   siteData: {
@@ -11,6 +28,11 @@ const mockServices: NexusServices = {
 } as unknown as NexusServices;
 
 describe('resolveTransport — external SSH', () => {
+  beforeEach(() => {
+    spawnMock.mockReset();
+    spawnMock.mockImplementation(() => fakeProc({ stdout: 'ok' }));
+  });
+
   it('resolves ssh_target to an external-ssh transport', async () => {
     const transport = await resolveTransport(
       { ssh_target: 'ssh:acme-box@staging' },
@@ -50,6 +72,11 @@ describe('resolveTransport — external SSH', () => {
 });
 
 describe('resolveTransport — stored external profile', () => {
+  beforeEach(() => {
+    spawnMock.mockReset();
+    spawnMock.mockImplementation(() => fakeProc({ stdout: 'ok' }));
+  });
+
   function servicesWithProfile(profile: any) {
     const store: Record<string, unknown> = {};
     // STORAGE_KEYS.EXTERNAL_SITE_PROFILES is `nexus-ai_external_site_profiles`
@@ -68,8 +95,11 @@ describe('resolveTransport — stored external profile', () => {
       alias: 'h1', wpPath: '/home/u/public_html', environment: 'production',
       firstSeenAt: 1, lastSeenAt: 1,
     });
-    const t: any = await resolveTransport({ ssh_target: 'ssh:h1@production' }, services, 'wpcli_read');
-    expect(t.wpPath ?? t.inner?.wpPath).toBe('/home/u/public_html');
+    const t = await resolveTransport({ ssh_target: 'ssh:h1@production' }, services, 'wpcli_read');
+    if ('content' in t) fail('Expected transport, got error');
+    await t.runWpCli(['core', 'version']);
+    const remoteCommand = spawnMock.mock.calls[0][1].at(-1);
+    expect(remoteCommand).toContain("--path='/home/u/public_html'");
   });
 
   it('lets an explicit wp_path override the stored one', async () => {
@@ -77,9 +107,13 @@ describe('resolveTransport — stored external profile', () => {
       alias: 'h1', wpPath: '/home/u/public_html', environment: 'production',
       firstSeenAt: 1, lastSeenAt: 1,
     });
-    const t: any = await resolveTransport(
+    const t = await resolveTransport(
       { ssh_target: 'ssh:h1@production', wp_path: '/srv/other' }, services, 'wpcli_read');
-    expect(t.wpPath ?? t.inner?.wpPath).toBe('/srv/other');
+    if ('content' in t) fail('Expected transport, got error');
+    await t.runWpCli(['core', 'version']);
+    const remoteCommand = spawnMock.mock.calls[0][1].at(-1);
+    expect(remoteCommand).toContain("--path='/srv/other'");
+    expect(remoteCommand).not.toContain('/home/u/public_html');
   });
 
   it('passes the stored wpCliPath through', async () => {
@@ -87,12 +121,15 @@ describe('resolveTransport — stored external profile', () => {
       alias: 'h1', wpCliPath: '/opt/cpanel/composer/bin/wp', environment: 'production',
       firstSeenAt: 1, lastSeenAt: 1,
     });
-    const t: any = await resolveTransport({ ssh_target: 'ssh:h1@production' }, services, 'wpcli_read');
-    expect(t.wpCliBin ?? t.inner?.wpCliBin).toBe('/opt/cpanel/composer/bin/wp');
+    const t = await resolveTransport({ ssh_target: 'ssh:h1@production' }, services, 'wpcli_read');
+    if ('content' in t) fail('Expected transport, got error');
+    await t.runWpCli(['core', 'version']);
+    const remoteCommand = spawnMock.mock.calls[0][1].at(-1);
+    expect(remoteCommand).toMatch(/^'\/opt\/cpanel\/composer\/bin\/wp' /);
   });
 
   it('resolves an unregistered alias without throwing', async () => {
-    const t: any = await resolveTransport(
+    const t = await resolveTransport(
       { ssh_target: 'ssh:unknown@production' }, servicesWithProfile(null), 'wpcli_read');
     expect(t).toBeDefined();
     expect('content' in t).toBe(false);
