@@ -80,6 +80,10 @@ hostCommand
         process.exit(success && report?.ok ? 0 : 1);
       }
       if (!success) { console.error(`✗ ${error}`); process.exit(1); }
+      if (!report) {
+        console.error(`✗ ${alias}: no report returned by the addon.`);
+        process.exit(1);
+      }
       if (!report.ok) { printFailure(report); process.exit(1); }
 
       console.log(`\n✓ ${alias} is reachable and running WordPress.`);
@@ -116,6 +120,10 @@ hostCommand
 
         const pr = probe.nexusHostProbe;
         if (!pr.success) { console.error(`✗ ${pr.error}`); process.exit(1); }
+        if (!pr.report) {
+          console.error(`✗ ${alias}: probe returned no report.`);
+          process.exit(1);
+        }
         if (!pr.report.ok) { printFailure(pr.report); process.exit(1); }
 
         printReport(pr.report);
@@ -143,7 +151,14 @@ hostCommand
         process.exit(registered ? 0 : 1);
       }
       if (!success) { console.error(`✗ ${error}`); process.exit(1); }
-      if (!registered) { printFailure(report); process.exit(1); }
+      if (!registered) {
+        if (!report) {
+          console.error(`✗ ${alias}: registration failed with no report.`);
+          process.exit(1);
+        }
+        printFailure(report);
+        process.exit(1);
+      }
 
       console.log(`\n✓ Added ${alias} to the fleet.`);
       printReport(report);
