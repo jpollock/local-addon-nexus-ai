@@ -673,18 +673,23 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const twinService = deps.nexusServices?.twinService;
       const twins = twinService ? (twinService.getAll() ?? []) : [];
 
-      // WPE sites from graph DB
+      // WPE + external sites from graph DB — kept as separate arrays so
+      // wpeSync/totalWpe stay WPE-only and don't silently absorb external
+      // hosts under the wrong label.
       let wpeSites: any[] = [];
+      let externalSites: any[] = [];
       try {
         const db = graphService.getDb();
         if (db) {
           wpeSites = db.prepare("SELECT id, wp_version, php_version, last_sync_at FROM sites WHERE source='wpe' AND is_active=1").all() as any[];
+          externalSites = db.prepare("SELECT id, wp_version, php_version, last_sync_at FROM sites WHERE source='external' AND is_active=1").all() as any[];
         }
       } catch { /* graph may not be ready */ }
 
       const totalLocal = twins.length;
       const totalWpe = wpeSites.length;
-      const total = totalLocal + totalWpe;
+      const totalExternal = externalSites.length;
+      const total = totalLocal + totalWpe + totalExternal;
 
       // Completeness counts (local twins only)
       const completeness = { none: 0, filesystem: 0, metadata: 0, indexed: 0 };
@@ -725,6 +730,18 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         phpVersionMap.set(phpV, (phpVersionMap.get(phpV) ?? 0) + 1);
       }
 
+      // Add external site versions + staleness
+      for (const site of externalSites) {
+        if (site.last_sync_at && now - site.last_sync_at > DAY_MS) staleCount++;
+
+        const wpV = site.wp_version ?? 'unknown';
+        wpVersionMap.set(wpV, (wpVersionMap.get(wpV) ?? 0) + 1);
+
+        const rawPhp = site.php_version ?? 'unknown';
+        const phpV = rawPhp === 'unknown' ? 'unknown' : normalizePhp(rawPhp);
+        phpVersionMap.set(phpV, (phpVersionMap.get(phpV) ?? 0) + 1);
+      }
+
       // Sort versions by count desc, unknown last; keep top 5 + "other"
       const sortVersions = (map: Map<string, number>) => {
         const entries = Array.from(map.entries()).map(([version, count]) => ({ version, count }));
@@ -746,15 +763,21 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         synced: wpeSites.filter((s: any) => !!s.wp_version).length,
         neverSynced: wpeSites.filter((s: any) => !s.wp_version).length,
       };
+      const externalSync = {
+        synced: externalSites.filter((s: any) => !!s.wp_version).length,
+        neverSynced: externalSites.filter((s: any) => !s.wp_version).length,
+      };
 
       return {
         total,
         totalLocal,
         totalWpe,
+        totalExternal,
         wpVersions: sortVersions(wpVersionMap),
         phpVersions: sortVersions(phpVersionMap),
         completeness,
         wpeSync,
+        externalSync,
         staleCount,
         neverScannedCount,
       };
@@ -786,12 +809,12 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
         }
       }
 
-      // WPE sites from graph DB — active plugins
+      // WPE + external sites from graph DB — active plugins
       try {
         const db = graphService.getDb();
         if (db) {
           const rows = db.prepare(
-            "SELECT p.slug, p.name FROM plugins p JOIN sites s ON s.id = p.site_id WHERE s.source='wpe' AND p.is_active=1"
+            "SELECT p.slug, p.name FROM plugins p JOIN sites s ON s.id = p.site_id WHERE s.source IN ('wpe','external') AND s.is_active=1 AND p.is_active=1"
           ).all() as Array<{ slug: string; name: string }>;
 
           for (const row of rows) {
