@@ -333,6 +333,35 @@ known and deliberate: `resolveWpeGraphSite`'s bare-name fallback still has no
 change bare-name resolution for deactivated WPE installs and wants its own
 change.
 
+**External hosts refresh on an opt-in timer.** `ExternalRefreshScheduler`
+(`src/main/startup/ExternalRefreshScheduler.ts`) collects the same L1+L2 set
+`WpeRefreshScheduler` does, gated on `externalRefreshAutoEnabled` (**default
+false**) with `externalRefreshIntervalHours` (default 24). `nexus host refresh
+<alias>` runs one host on demand regardless of the setting.
+
+It collects in **four batched SSH round trips**, not sixteen calls:
+`buildExternalWpCliBatch` joins commands with indexed `<<<NEXUS:N>>>`
+delimiters. This exists because `buildExternalSshArgs` sets no `ControlMaster`
+and must not — shared hosting commonly caps `MaxSessions`, a command-line `-o`
+overrides the user's own `~/.ssh/config`, and `ControlPersist` would hold a
+socket open to a third party's production server. A batch's exit code is only
+its last sub-command's, so **nothing may gate on it** — the indexed parse is the
+source of truth.
+
+`php_version` comes from `wp --info` (JSON first, `PHP version:` line as
+fallback), because WP Engine's CAPI has no external equivalent and `wp eval` is
+blocked by `REMOTE_POLICY`.
+
+**Anything that did not parse is written NULL, never a default**, and a host
+that failed keeps its previous data — `writeExternalHostData` enforces both.
+`php_version` must never fall back to `'8.0'`.
+
+Selection filters `is_active = 1`, because `nexusHostRemove` soft-deletes and a
+removed host must never be reconnected to.
+
+**L3 (content indexing) is not implemented for external hosts** — Spec 4b. They
+show 0% Searchable in Data Completeness, which is the true number.
+
 ---
 
 ## Logging & Audit

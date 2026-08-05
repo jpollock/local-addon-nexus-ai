@@ -410,6 +410,7 @@ nexus host add <alias> [--path <dir>] [--env <environment>] [-y|--yes] [--json]
 nexus host test <alias> [--path <dir>] [--json]
 nexus host list [--json]
 nexus host remove <alias> [-y|--yes]
+nexus host refresh <alias>
 ```
 
 Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not Local — addressed by a `~/.ssh/config` Host alias.
@@ -423,6 +424,7 @@ Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not L
 - **A `@staging` suffix cannot override a host's registered environment.** This is a behavior change from earlier versions: a suffix can only make the gate more restrictive, never less.
 - If key-based login is not set up, `nexus host test` tells you the exact `ssh-copy-id` command to run. You run it; Nexus does not.
 - Aliases must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`. A `user@host` form or an IPv6 literal is rejected — put those in a `~/.ssh/config` `Host` block and use the block's name.
+- `nexus host refresh <alias>` collects WordPress version, PHP version, and plugin/theme metadata from a registered host on demand. It is **read-only** — it never writes anything to the remote server, the same guarantee as `host add`/`host test`. Plugin and theme data appear in fleet views only after the first refresh; before that, a registered host shows empty data. External hosts also refresh automatically on a timer (disabled by default — see Settings > Nexus AI), but `host refresh` runs immediately regardless of that setting.
 
 **Which `nexus wp` commands work against a registered host.**
 
