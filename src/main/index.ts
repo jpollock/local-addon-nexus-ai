@@ -20,6 +20,7 @@ import { registerWpCliTools } from './mcp/modules/wp-cli/index';
 import { registerWpeTools } from './mcp/modules/wpe/index';
 import { registerCompositeTools } from './mcp/modules/composite/index';
 import { registerDbScannerTools } from './mcp/modules/db-scanner/index';
+import { registerSentinelScanTools } from './mcp/modules/sentinel-scan/index';
 import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
 import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence/index';
 import { registerIwTools } from './mcp/modules/iw/index';
@@ -393,6 +394,7 @@ export default function main(context: any): void {
   registerWpeTools(registry);
   registerCompositeTools(registry);
   registerDbScannerTools(registry);
+  registerSentinelScanTools(registry);
   registerWpConnectorTools(registry);
   registerFleetIntelligenceTools(registry);
   registerIwTools(registry);

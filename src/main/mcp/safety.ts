@@ -29,6 +29,9 @@ export const TIER_OVERRIDES: Record<string, SafetyTier> = {
   wp_user_list: 1,
   wp_option_get: 1,
   wp_site_health: 1,
+  // Byte-level read of a stopped site: no PHP, no mutation, no site start. Tier 2 (the
+  // default for anything absent) would write a line per site per sweep to operation-audit.log.
+  scan_site_files: 1,
   wpe_status: 1,
   wpe_get_install_usage: 1,
   wpe_get_account_usage: 1,

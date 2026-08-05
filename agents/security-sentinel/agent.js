@@ -549,6 +549,8 @@ module.exports = {
     'local_operation_status', 'compare_sites', 'wp_plugin_list', 'wp_eval',
     'get_log_aggregates', 'fetch_log_window',
     'local_wpe_link',
+    // Byte-level filesystem read. Tier 1, needs no running site — see runByteScan below.
+    'scan_site_files',
   ],
   contributes: { tools: contributedTools },
 
@@ -691,6 +693,16 @@ module.exports = {
             log.info(`security-sentinel: resolved log siteId for "${install.name}": ${logSiteId}`);
           }
         } catch { /* no WPE link — use install name */ }
+      }
+
+      // Byte-level filesystem check — the first Tier 1 signal derived from the site's actual
+      // contents rather than cached metadata.
+      try {
+        const byteResult = await runByteScan(install, tools, log);
+        signals.push(...byteResult.signals);
+        coverage.filesystem = byteResult.available === true;
+      } catch (err) {
+        log.warn(`security-sentinel: byte scan failed for ${install.name}: ${err.message} (skipping)`);
       }
 
       let attackSummary = null;
@@ -860,7 +872,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators, fmtIntegrity, pushWpContentDeletion, KNOWN_MU_PLUGINS, KNOWN_ROOT_PHP, phpStringArray, mapWithConcurrency, resolveScanScope, FLEET_CONCURRENCY, MAX_TIER2_PER_SWEEP, MAX_REFRESH_PER_SWEEP },
+  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators, fmtIntegrity, pushWpContentDeletion, runByteScan, KNOWN_MU_PLUGINS, KNOWN_ROOT_PHP, phpStringArray, mapWithConcurrency, resolveScanScope, FLEET_CONCURRENCY, MAX_TIER2_PER_SWEEP, MAX_REFRESH_PER_SWEEP },
 };
 
 // ─── Log-backed checks (LOG-AUTH, LOG-PROBE, LOG-ENUM, LOG-DIST) ────────────
@@ -1087,6 +1099,59 @@ async function runLogChecks(siteId, tools, log) {
   };
 
   return { signals, attackSummary, available: true, evidence, metrics };
+}
+
+// ─── Byte-level filesystem check (Tier 1) ───────────────────────────────────
+
+/**
+ * Read the install's mu-plugins directory as bytes.
+ *
+ * This is the first Tier 1 check that looks at the filesystem at all. Until now Tier 1 declared
+ * `filesystem: false` in its own coverage literal and meant it: a webshell was invisible unless
+ * something else escalated the site to Tier 2, and Tier 2 would then *execute* it on the way to
+ * finding it — `--skip-plugins` filters `active_plugins` and does nothing about mu-plugins.
+ *
+ * Cheap enough to run on every site in a sweep: measured at 54 ms for 33 installs, against
+ * stopped sites, with no clone and no PHP.
+ *
+ * Local sites only for now. A WPE install has no local bytes to read until the SSH FileSource
+ * lands, and claiming coverage we do not have is the failure this whole effort is about.
+ */
+async function runByteScan(install, tools, log) {
+  if (install.source !== 'local') return { signals: [], available: false };
+
+  let text;
+  try {
+    const result = await tools.invoke('scan_site_files', { site: install.name });
+    text = typeof result === 'string' ? result : result?.content?.[0]?.text ?? '';
+  } catch (err) {
+    log.warn(`[bytes] scan_site_files failed for ${install.name}: ${err.message}`);
+    return { signals: [], available: false };
+  }
+
+  if (!text || /^NOT SCANNED/m.test(text)) {
+    log.info(`[bytes] ${install.name} not scannable: ${String(text).slice(0, 160)}`);
+    return { signals: [], available: false };
+  }
+
+  const signals = [];
+  const section = text.match(/### Unexpected mu-plugins \((\d+)\)([\s\S]*?)(?=\n### |$)/);
+  if (section) {
+    const files = [...section[2].matchAll(/^- `([^`]+)` — (\d+) bytes/gm)]
+      .map(m => ({ path: m[1], bytes: Number(m[2]) }));
+    if (files.length > 0) {
+      signals.push({
+        id: 'FS-01', severity: 'critical', category: 'active-compromise',
+        installName: install.name,
+        title: `PHP file(s) in mu-plugins/: ${files.map(f => f.path.split('/').pop()).join(', ')}`,
+        detail:
+          `Read as bytes with the site stopped — nothing was executed. mu-plugins load on every ` +
+          `request and cannot be deactivated from wp-admin: ${files.map(f => `${f.path} (${f.bytes} bytes)`).join(', ')}`,
+        evidence: files.map(f => f.path),
+      });
+    }
+  }
+  return { signals, available: true };
 }
 
 // ─── Tier 1: Absolute checks (ABS-01 to ABS-06) ────────────────────────────────
