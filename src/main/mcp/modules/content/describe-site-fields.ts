@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveSite, resolveRemoteGraphSite } from '../../site-resolver';
 import { buildFieldCatalog, formatFieldCatalog } from './field-catalog';
+import { vectorSiteId } from '../../../vector-store/vectorSiteId';
 
 /**
  * describe_site_fields — report the site's indexed structured fields (per post
@@ -44,23 +45,22 @@ export const describeSiteFieldsHandler: McpToolHandler = {
       // arbitrary row. Decline rather than guess (as core_version does).
       const graphService = (services as any).graphService;
       const db = graphService?.getDb?.();
-      const rows = (db?.prepare(
-        "SELECT id, name, source FROM sites WHERE source IN ('wpe','external') AND name=?",
-      ).all(args.site) ?? []) as Array<{ id: string; name: string; source: string }>;
-      if (rows.length === 0) {
+      const result = resolveRemoteGraphSite(db, args.site);
+      if (result.kind === 'none') {
         return error(`Site "${args.site}" not found. For WPE installs use the install name. Run wpe_sync_sites first if missing.`);
       }
-      if (rows.length > 1) {
-        const kinds = rows.map((r) => (r.source === 'external' ? `ssh:${r.name}` : `wpe:<account>/${r.name}`));
+      if (result.kind === 'ambiguous') {
         return error(
-          `"${args.site}" matches ${rows.length} sites across sources — specify which one: ${kinds.join(', ')}`,
+          `"${args.site}" matches ${result.matches.length} sites across sources — specify which one: ${result.matches.join(', ')}`,
         );
       }
-      siteId = rows[0].id;
-      siteName = rows[0].name;
+      siteId = result.siteId;
+      siteName = result.siteName;
     }
 
-    const docs = await services.vectorStore.getAllDocuments(siteId);
+    // vectorSiteId: external ids are `ssh:<alias>`; the vector store's
+    // table-name validation rejects colons. No-op for local/WPE ids.
+    const docs = await services.vectorStore.getAllDocuments(vectorSiteId(siteId));
     if (docs.length === 0) {
       return error(`Site "${siteName}" has no indexed content. Run reindex_site first.`);
     }

@@ -94,6 +94,7 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { ipcMain } = require('electron');
 import { CloudflareTransmitter } from './telemetry/CloudflareTransmitter';
+import { vectorSiteId } from './vector-store/vectorSiteId';
 
 /**
  * Safe IPC handler registration - removes existing handler first to prevent
@@ -850,7 +851,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const targetSiteId = validated.siteIds?.[0];
 
       if (targetSiteId) {
-        const results = await vectorStore.search(targetSiteId, queryVector, { limit: maxResults });
+        // vectorSiteId: external ids are `ssh:<alias>`; the vector store's
+        // table-name validation rejects colons. No-op for local/WPE ids.
+        const results = await vectorStore.search(vectorSiteId(targetSiteId), queryVector, { limit: maxResults });
         const site = siteData.getSite(targetSiteId);
         return {
           results: results.map((r: any) => ({ ...r, siteId: targetSiteId, siteName: site?.name ?? targetSiteId })),
@@ -861,7 +864,7 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       const entries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed' || e.state === 'stale');
       const allResults: any[] = [];
       for (const entry of entries) {
-        const results = await vectorStore.search(entry.siteId, queryVector, { limit: maxResults });
+        const results = await vectorStore.search(vectorSiteId(entry.siteId), queryVector, { limit: maxResults });
         const site = siteData.getSite(entry.siteId);
         for (const r of results) {
           allResults.push({ ...r, siteId: entry.siteId, siteName: site?.name ?? entry.siteName });

@@ -2782,11 +2782,13 @@ export function createResolvers(context: ResolverContext) {
               graphSiteIds = rows.map((r) => r.id);
             } catch { /* skip graph */ }
           }
+          // vectorSiteId: external ids are `ssh:<alias>`; the vector store's
+          // table-name validation rejects colons. No-op for local/WPE ids.
           const allSiteIds = [
-            ...indexEntries.map((e: any) => e.siteId),
-            ...graphSiteIds,
+            ...indexEntries.map((e: any) => vectorSiteId(e.siteId)),
+            ...graphSiteIds.map((id) => vectorSiteId(id)),
           ];
-          const siteNames = new Map(indexEntries.map((e: any) => [e.siteId, e.siteName || e.siteId]));
+          const siteNames = new Map(indexEntries.map((e: any) => [vectorSiteId(e.siteId), e.siteName || e.siteId]));
 
           const matchMap = await services.vectorStore.searchAcrossSites(
             allSiteIds,
