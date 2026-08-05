@@ -185,3 +185,139 @@ describe('nexus_get_site_twin — canAnswer() integration', () => {
     expect(getText(result)).toContain('No twin found');
   });
 });
+
+describe('nexus_get_site_twin — WPE/external resolution via the graph', () => {
+  function makeRemoteServices(opts: {
+    rows?: Array<{ id: string; name: string; source: string }>;
+    fullRow?: Record<string, unknown>;
+    getFromGraph?: jest.Mock;
+  } = {}): NexusServices {
+    const { rows = [], fullRow, getFromGraph = jest.fn().mockReturnValue(makeTwin({ source: 'external' })) } = opts;
+
+    const db = {
+      prepare: jest.fn().mockImplementation((sql: string) => {
+        if (sql.includes('WHERE id = ?')) {
+          return { get: jest.fn().mockReturnValue(fullRow) };
+        }
+        return { all: jest.fn().mockReturnValue(rows) };
+      }),
+    };
+
+    return {
+      vectorStore: {} as any,
+      embeddingService: {} as any,
+      contentPipeline: {} as any,
+      indexRegistry: {} as any,
+      fileScanner: {} as any,
+      siteData: {
+        // Not a Local site — forces the graph fallback path.
+        getSite: jest.fn().mockReturnValue(undefined),
+        getSites: jest.fn().mockReturnValue({}),
+      },
+      logger: { info: jest.fn(), error: jest.fn() } as any,
+      twinService: {
+        get: jest.fn(),
+        getFromGraph,
+        format: jest.fn().mockReturnValue('### hostinger-test\n**Completeness:** Metadata'),
+        getFreshness: jest.fn().mockReturnValue({ staleFields: [], requiresRunningFields: [] }),
+        canAnswer: jest.fn().mockReturnValue({ can: true, confidence: 'high' }),
+      } as any,
+      graphService: { getDb: jest.fn().mockReturnValue(db) } as any,
+    } as any;
+  }
+
+  it('resolves a bare external alias via the graph and builds the twin from it', async () => {
+    const fullRow = { id: 'ssh:hostinger-test', name: 'hostinger-test', source: 'external', wp_version: '6.5' };
+    const getFromGraph = jest.fn().mockReturnValue(makeTwin({ source: 'external', siteId: 'ssh:hostinger-test' }));
+    const services = makeRemoteServices({
+      rows: [{ id: 'ssh:hostinger-test', name: 'hostinger-test', source: 'external' }],
+      fullRow,
+      getFromGraph,
+    });
+
+    const result = await getSiteTwinHandler.execute({ site: 'hostinger-test' }, services);
+
+    expect(result.isError).toBeUndefined();
+    expect(getFromGraph).toHaveBeenCalledWith(fullRow, services.graphService);
+  });
+
+  it('strips an ssh:<alias>@env target prefix before looking up the graph', async () => {
+    const fullRow = { id: 'ssh:hostinger-test', name: 'hostinger-test', source: 'external' };
+    const getFromGraph = jest.fn().mockReturnValue(makeTwin({ source: 'external' }));
+    const services = makeRemoteServices({
+      rows: [{ id: 'ssh:hostinger-test', name: 'hostinger-test', source: 'external' }],
+      fullRow,
+      getFromGraph,
+    });
+
+    const result = await getSiteTwinHandler.execute({ site: 'ssh:hostinger-test@production' }, services);
+
+    expect(result.isError).toBeUndefined();
+    expect(getFromGraph).toHaveBeenCalledWith(fullRow, services.graphService);
+  });
+
+  it('strips an incomplete ssh:<alias> prefix (no @env) the same way', async () => {
+    const fullRow = { id: 'ssh:hostinger-test', name: 'hostinger-test', source: 'external' };
+    const getFromGraph = jest.fn().mockReturnValue(makeTwin({ source: 'external' }));
+    const services = makeRemoteServices({
+      rows: [{ id: 'ssh:hostinger-test', name: 'hostinger-test', source: 'external' }],
+      fullRow,
+      getFromGraph,
+    });
+
+    const result = await getSiteTwinHandler.execute({ site: 'ssh:hostinger-test' }, services);
+
+    expect(result.isError).toBeUndefined();
+    expect(getFromGraph).toHaveBeenCalledWith(fullRow, services.graphService);
+  });
+
+  it('strips a wpe:account/install@env target prefix before looking up the graph', async () => {
+    const fullRow = { id: 'wpe-abc123', name: 'myinstall', source: 'wpe' };
+    const getFromGraph = jest.fn().mockReturnValue(makeTwin({ source: 'wpe' }));
+    const services = makeRemoteServices({
+      rows: [{ id: 'wpe-abc123', name: 'myinstall', source: 'wpe' }],
+      fullRow,
+      getFromGraph,
+    });
+
+    const result = await getSiteTwinHandler.execute({ site: 'wpe:myaccount/myinstall@production' }, services);
+
+    expect(result.isError).toBeUndefined();
+    expect(getFromGraph).toHaveBeenCalledWith(fullRow, services.graphService);
+  });
+
+  it('declines with disambiguated forms when the name collides across sources', async () => {
+    const services = makeRemoteServices({
+      rows: [
+        { id: 'wpe-abc123', name: 'dupe', source: 'wpe' },
+        { id: 'ssh:dupe', name: 'dupe', source: 'external' },
+      ],
+    });
+
+    const result = await getSiteTwinHandler.execute({ site: 'dupe' }, services);
+
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain('matches 2 sites across sources');
+    expect(getText(result)).toContain('ssh:dupe');
+    expect(getText(result)).toContain('wpe:<account>/dupe');
+  });
+
+  it('returns not-found when the name matches nothing local or remote', async () => {
+    const services = makeRemoteServices({ rows: [] });
+
+    const result = await getSiteTwinHandler.execute({ site: 'nowhere' }, services);
+
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain('not found');
+  });
+
+  it('returns not-found (not a crash) when graphService is unavailable', async () => {
+    const services = makeRemoteServices({ rows: [] });
+    (services as any).graphService = undefined;
+
+    const result = await getSiteTwinHandler.execute({ site: 'hostinger-test' }, services);
+
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain('not found');
+  });
+});

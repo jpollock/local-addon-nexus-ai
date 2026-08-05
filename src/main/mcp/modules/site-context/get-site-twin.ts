@@ -7,8 +7,22 @@
  * with per-field provenance.
  */
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveSite, resolveRemoteGraphSite } from '../../site-resolver';
 import { freshnessFooter } from '../../../twin/twin-helpers';
+
+/**
+ * Callers (including chat agents) sometimes pass full target syntax
+ * (`ssh:alias@env`, `wpe:account/install@env`) even though this tool's
+ * `site` argument is documented as a bare name/ID/domain. Strip the prefix
+ * so both forms resolve to the same graph lookup by name.
+ */
+function extractLookupName(query: string): string {
+  const sshMatch = query.match(/^ssh:([^@]+)/);
+  if (sshMatch) return sshMatch[1];
+  const wpeMatch = query.match(/^wpe:(?:[^/]+\/)?([^@]+)/);
+  if (wpeMatch) return wpeMatch[1];
+  return query;
+}
 
 export const getSiteTwinHandler: McpToolHandler = {
   definition: {
@@ -37,14 +51,34 @@ export const getSiteTwinHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
-    if (!site) return error(`Site "${args.site}" not found`);
-
     const twinService = services.twinService;
     if (!twinService) return error('Digital twin service not available');
 
-    const twin = twinService.get(site.id);
-    if (!twin) return error(`No twin found for site "${args.site}"`);
+    const site = resolveSite(args.site as string, services.siteData);
+    let twin;
+
+    if (site) {
+      twin = twinService.get(site.id);
+      if (!twin) return error(`No twin found for site "${args.site}"`);
+    } else {
+      // Not a Local site — try WPE/external via the graph. M14: names collide
+      // across sources, so resolveRemoteGraphSite declines rather than guesses.
+      const graphService = (services as any).graphService;
+      const db = graphService?.getDb?.();
+      const resolved = resolveRemoteGraphSite(db, extractLookupName(args.site as string));
+
+      if (resolved.kind === 'none') {
+        return error(`Site "${args.site}" not found`);
+      }
+      if (resolved.kind === 'ambiguous') {
+        return error(
+          `"${args.site}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`,
+        );
+      }
+
+      const graphSite = db.prepare('SELECT * FROM sites WHERE id = ?').get(resolved.siteId);
+      twin = twinService.getFromGraph(graphSite, graphService);
+    }
 
     const report = twinService.format(twin, { showSources: !!(args.show_sources) });
     const freshness = twinService.getFreshness(twin);
