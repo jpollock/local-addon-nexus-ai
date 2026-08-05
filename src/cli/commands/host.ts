@@ -354,4 +354,39 @@ hostCommand
     }
   });
 
+// ============================================================================
+// host index
+// ============================================================================
+
+hostCommand
+  .command('index <alias>')
+  .description('Content-index a registered external host now, for semantic search')
+  .action(async (alias: string) => {
+    try {
+      // Same extended budget as host refresh: content indexing over SSH is not
+      // faster than metadata refresh, and the default client timeout is too
+      // short for this class of command.
+      const client = getClient({ timeout: HOST_PROBE_CLIENT_TIMEOUT_MS });
+      const result = await client.mutate<{ nexusHostIndex: any }>(`
+        mutation($alias: String!) {
+          nexusHostIndex(alias: $alias) {
+            success error documentCount
+          }
+        }
+      `, { alias });
+
+      const { success, error, documentCount } = result.nexusHostIndex;
+      if (!success) {
+        console.error(`\n✗ ${error}`);
+        process.exit(1);
+      }
+      console.log(`\n✓ Indexed ${alias}`);
+      console.log(`  Documents:  ${documentCount ?? 'not collected'}`);
+      console.log('');
+    } catch (e: any) {
+      console.error(`✗ ${e.message}`);
+      process.exit(1);
+    }
+  });
+
 export { hostCommand };

@@ -2205,6 +2205,14 @@ export const typeDefs = gql`
     themeCount: Int
   }
 
+  "Result of indexing one external SSH host's content."
+  type NexusHostIndexResult {
+    success: Boolean!
+    error: String
+    "Documents indexed, null when the batch failed before completing."
+    documentCount: Int
+  }
+
   extend type Mutation {
     "Probe an external SSH host. Persists nothing."
     nexusHostProbe(alias: String!, path: String): NexusHostProbeResult!
@@ -2216,5 +2224,7 @@ export const typeDefs = gql`
     nexusHostRemove(alias: String!): NexusHostRemoveResult!
     "Collect WordPress metadata from a registered external host now."
     nexusHostRefresh(alias: String!): NexusHostRefreshResult!
+    "Content-index a registered external host now, for semantic search."
+    nexusHostIndex(alias: String!): NexusHostIndexResult!
   }
 `;

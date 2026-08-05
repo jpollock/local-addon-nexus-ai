@@ -42,6 +42,7 @@ import { createWpCliResolvers } from './resolvers/wp-cli';
 import { resolveTransport } from '../transport';
 import { collectExternalHostData } from '../startup/collectExternalHostData';
 import { writeExternalHostData } from '../startup/writeExternalHostData';
+import { ExternalContentIndexService } from '../events/ExternalContentIndexService';
 
 /** The root value for GraphQL resolvers — always null/undefined for Query/Mutation. */
 type ResolverParent = unknown;
@@ -5547,6 +5548,46 @@ export function createResolvers(context: ResolverContext) {
             success: false, error: e?.message ?? String(e),
             wpVersion: null, phpVersion: null, pluginCount: null, themeCount: null,
           };
+        }
+      },
+
+      // Same read-only-from-the-remote-host reasoning as nexusHostRefresh above:
+      // `wp post list` is the only remote command this path issues. The only
+      // mutation is local (graph `content` table, vector store, IndexRegistry),
+      // so this is not audited, matching nexusHostRefresh and nexusWpPluginList.
+      nexusHostIndex: async (_parent: ResolverParent, { alias }: { alias: string }) => {
+        try {
+          const db = services.graphService?.getDb?.();
+          const row = db?.prepare(
+            "SELECT id, name, environment FROM sites WHERE source='external' AND is_active=1 AND LOWER(name)=?"
+          ).get(alias.toLowerCase()) as { id: string; name: string; environment: string | null } | undefined;
+          if (!row) {
+            return {
+              success: false,
+              error: `"${alias}" is not a registered external host. Run \`nexus host add ${alias}\` first.`,
+              documentCount: null,
+            };
+          }
+
+          const target = `ssh:${row.name}@${row.environment ?? 'production'}`;
+          const transport = await resolveTransport({ ssh_target: target }, services, 'wpcli_read');
+          if (transport && typeof transport === 'object' && 'content' in transport) {
+            const msg = (transport.content?.[0] as { text?: string } | undefined)?.text ?? 'Could not reach host';
+            return { success: false, error: msg, documentCount: null };
+          }
+
+          const indexService = new ExternalContentIndexService({
+            graphService: services.graphService as any,
+            embeddingService: services.embeddingService as any,
+            vectorStore: services.vectorStore as any,
+            indexRegistry: services.indexRegistry as any,
+            logger: console,
+          });
+          const result = await indexService.indexOne(transport as any, row.id, row.name);
+
+          return { success: true, error: null, documentCount: result.documentCount };
+        } catch (e: any) {
+          return { success: false, error: e?.message ?? String(e), documentCount: null };
         }
       },
     },
