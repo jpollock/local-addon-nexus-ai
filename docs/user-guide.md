@@ -413,7 +413,7 @@ nexus host remove <alias> [-y|--yes]
 nexus host refresh <alias>
 ```
 
-Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not Local — addressed by a `~/.ssh/config` Host alias.
+Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not Local — addressed by a `~/.ssh/config` Host alias. Registered hosts and their access-permission overrides are visible in Settings → Nexus AI → Access & Permissions, and the refresh schedule is managed in Settings → Nexus AI → Sync Schedule.
 
 **Key points:**
 
@@ -425,14 +425,14 @@ Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not L
 - If key-based login is not set up, `nexus host test` tells you the exact `ssh-copy-id` command to run. You run it; Nexus does not.
 - Aliases must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`. A `user@host` form or an IPv6 literal is rejected — put those in a `~/.ssh/config` `Host` block and use the block's name.
 - `nexus host refresh <alias>` collects WordPress version, PHP version, and plugin/theme metadata from a registered host on demand. It is **read-only** — it never writes anything to the remote server, the same guarantee as `host add`/`host test`. Plugin and theme data appear in fleet views only after the first refresh; before that, a registered host shows empty data. External hosts can also refresh automatically on a timer, disabled by default, but `host refresh` runs immediately regardless of that setting.
-- **Turning the automatic refresh on.** There is no UI row for it yet, so the CLI is the only way:
+- **Turning the automatic refresh on.** Open Settings → Nexus AI → Sync Schedule → External SSH Hosts and toggle the refresh switch. You can also adjust the interval (default 24 hours). This takes effect immediately — you do **not** need to restart Local. For scripting, the CLI commands still work identically:
 
   ```bash
   nexus settings set externalRefreshAutoEnabled true
   nexus settings set externalRefreshIntervalHours 12   # optional, default 24
   ```
 
-  This takes effect immediately — you do **not** need to restart Local. (Before v0.2.x this setting only took effect on restart.) Turn it back off with `nexus settings set externalRefreshAutoEnabled false`.
+  Turn it back off with `nexus settings set externalRefreshAutoEnabled false`.
 - **PHP version on shared hosting.** Nexus reads the PHP version with `wp --info`, which needs PHP's `proc_open`. Many shared hosts disable it (`disable_functions=proc_open`). On such a host the PHP version is reported as unknown permanently rather than guessed — and because health scoring for an external host requires a known PHP version, that host will not receive a health score. Everything else (WordPress version, plugins, themes, counts) still collects normally.
 
 **Which `nexus wp` commands work against a registered host.**
