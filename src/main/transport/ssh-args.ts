@@ -142,6 +142,18 @@ export function buildWpeSshArgs(
 export const EXTERNAL_SSH_TIMEOUT_MS = 20000;
 
 /**
+ * Batches run several WP-CLI invocations in ONE SSH session — Batch A alone is 18.
+ * Measured against a real shared host: 22-23.5s across three runs, already over
+ * EXTERNAL_SSH_TIMEOUT_MS's 20s single-command budget. When that fired, spawn
+ * SIGTERMed the child and the parser read whatever partial stdout had arrived:
+ * the trailing sections came back null, honest but silently incomplete, every time.
+ *
+ * 60s is that measured figure times a comfortable margin over the largest current
+ * batch, not a guess. Grow the batch and re-measure before trusting it.
+ */
+export const EXTERNAL_SSH_BATCH_TIMEOUT_MS = 60000;
+
+/**
  * WP-CLI command for an arbitrary host.
  *
  * No --skip-plugins/--skip-themes: those exist for WP Engine's mu-plugin

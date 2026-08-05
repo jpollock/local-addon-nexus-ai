@@ -323,7 +323,12 @@ hostCommand
   .description('Collect WordPress metadata from a registered external host now')
   .action(async (alias: string) => {
     try {
-      const client = getClient();
+      // Same extended budget as host add/test: a full four-batch refresh is
+      // measured at 40s+, well over the client library's default. With the
+      // default, the CLI printed failure and exited 1 while the server kept
+      // running and wrote real data seconds later — inviting the user to re-run
+      // and double the load on a third party's production server.
+      const client = getClient({ timeout: HOST_PROBE_CLIENT_TIMEOUT_MS });
       const result = await client.mutate<{ nexusHostRefresh: any }>(`
         mutation($alias: String!) {
           nexusHostRefresh(alias: $alias) {

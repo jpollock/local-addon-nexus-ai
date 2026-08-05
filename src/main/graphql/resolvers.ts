@@ -238,6 +238,19 @@ export function createResolvers(context: ResolverContext) {
           }
 
           services.registryStorage!.set(STORAGE_KEYS.SETTINGS, current);
+
+          // Make the CLI path settings-reactive, exactly as the IPC path is.
+          // Without this, `nexus settings set externalRefreshAutoEnabled true`
+          // reported success and changed nothing until Local was restarted —
+          // and there is no renderer UI row for that setting, so the CLI is the
+          // only way to set it. A scheduler fault must not turn a successful
+          // write into a reported failure, hence the isolating try.
+          try {
+            services.onSettingsUpdated?.();
+          } catch (cbErr: any) {
+            services.logger?.warn?.('[NexusAI] onSettingsUpdated failed after nexusUpdateSettings:', cbErr?.message);
+          }
+
           return { success: true, settings: JSON.stringify(current) };
         } catch (err: any) {
           return { success: false, error: err.message };
@@ -2587,13 +2600,19 @@ export function createResolvers(context: ResolverContext) {
             //              only writer of that table is the MU-plugin webhook, which
             //              exists on Local sites alone. A remote site can never have an
             //              event, so the factor was a fixed 100 awarded for absent data.
-            //   external → nothing. Nothing populates plugin/theme rows for an external
-            //              host (there is no refresh mechanism — an open product
-            //              decision), and php_version/site_url are empty. Scoring
-            //              security/performance off zero plugin rows produced "no
-            //              security plugin detected" and full plugin-hygiene credit from
-            //              the same absence, in a response that separately reports
-            //              `plugins: null`.
+            //   external → depends on the data actually present, see `externalScoreable`
+            //              below. External hosts DO have a refresh mechanism now
+            //              (ExternalRefreshScheduler / `nexus host refresh`), so a
+            //              refreshed host has plugin rows and a php_version and is
+            //              scored on security + performance like a WPE install. An
+            //              unrefreshed one has neither and is not scored at all:
+            //              scoring security/performance off zero plugin rows produced
+            //              "no security plugin detected" and full plugin-hygiene credit
+            //              from the same absence, in a response that separately reports
+            //              `plugins: null`. The gate is data presence, not host class.
+            //              (A host whose PHP disables proc_open never gets a
+            //              php_version — `wp --info` cannot run — so it stays unscored
+            //              however often it refreshes.)
             if (!db) {
               return {
                 success: false,

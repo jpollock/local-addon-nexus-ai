@@ -150,6 +150,15 @@ export interface NexusServices {
   gatewayAuthToken?: string;
   /** Credential manager for OAuth flows. Added in Task 9 — optional for backward compat. */
   credentialManager?: import('../credentials/CredentialManager').CredentialManager;
+  /**
+   * Re-read settings and restart/stop every settings-driven scheduler. Assigned in
+   * `src/main/index.ts`; the same closure the IPC UPDATE_SETTINGS handler gets. Exposed
+   * here so the GraphQL `nexusUpdateSettings` mutation (the `nexus settings set` path,
+   * which has no access to IpcHandlerDeps) is settings-reactive too — without it a CLI
+   * settings write only took effect after Local was restarted. Mirrored in
+   * `src/main/types/nexus-services.ts`, which declares the same container.
+   */
+  onSettingsUpdated?: () => void;
 }
 
 /**

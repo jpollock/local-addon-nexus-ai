@@ -113,6 +113,8 @@ const DEFAULT_SETTINGS: NexusSettings = {
   excludedSiteIds: [],
   wpeSyncAutoEnabled: false,    // opt-in: user must explicitly enable WPE sync
   wpeRefreshAutoEnabled: false, // opt-in: user must explicitly enable SSH refresh
+  externalRefreshIntervalHours: 24,   // how often to refresh external SSH hosts
+  externalRefreshAutoEnabled: false,  // opt-in: user must explicitly enable external SSH refresh
   chatRetentionDays: 30 as (7 | 30 | 90 | null),
 };
 
@@ -1853,12 +1855,18 @@ Answer:`,
       let externalTotal = 0, externalConfigured = 0, externalSearchable = 0;
       if (db) {
         const externalSites = db.prepare(
-          "SELECT id, wp_version FROM sites WHERE source = 'external' AND is_active = 1"
-        ).all() as Array<{ id: string; wp_version: string | null }>;
+          "SELECT id, wp_version, last_sync_at FROM sites WHERE source = 'external' AND is_active = 1"
+        ).all() as Array<{ id: string; wp_version: string | null; last_sync_at: number | null }>;
         externalTotal = externalSites.length;
         for (const site of externalSites) {
           if (site.wp_version) externalConfigured++;
           if (indexedSet.has(site.id)) externalSearchable++;
+          // Fold into lastUpdatedMs exactly as the WPE block does — without this
+          // an external-only user saw lastUpdatedMs: null even right after a refresh.
+          if (site.last_sync_at) {
+            const ms = site.last_sync_at;
+            if (!lastUpdatedMs || ms > lastUpdatedMs) lastUpdatedMs = ms;
+          }
         }
       }
 

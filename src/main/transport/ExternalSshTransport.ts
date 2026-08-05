@@ -5,18 +5,23 @@ import type {
 } from './types';
 import {
   buildExternalSshArgs, buildExternalWpCliCommand, buildExternalWpCliBatch,
-  parseWpCliBatchOutput, EXTERNAL_SSH_TIMEOUT_MS,
+  parseWpCliBatchOutput, EXTERNAL_SSH_TIMEOUT_MS, EXTERNAL_SSH_BATCH_TIMEOUT_MS,
 } from './ssh-args';
 
 type RawSshResult = { code: number | null; stdout: string; stderr: string; spawnError?: string };
 
-function runSsh(alias: string, remoteCommand: string): Promise<RawSshResult> {
+/**
+ * `timeoutMs` is a parameter, not the module constant, because a batch of 18
+ * WP-CLI invocations in one session takes measurably longer than the single
+ * command EXTERNAL_SSH_TIMEOUT_MS was sized for. See EXTERNAL_SSH_BATCH_TIMEOUT_MS.
+ */
+function runSsh(alias: string, remoteCommand: string, timeoutMs: number = EXTERNAL_SSH_TIMEOUT_MS): Promise<RawSshResult> {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
     const proc = spawn('ssh', buildExternalSshArgs(alias, remoteCommand), {
       stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: EXTERNAL_SSH_TIMEOUT_MS,
+      timeout: timeoutMs,
     });
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
     proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
@@ -99,9 +104,27 @@ export class ExternalSshTransport implements SiteTransport {
   async runWpCliBatch(commands: string[][]): Promise<(string | null)[]> {
     if (commands.length === 0) return [];
     const remote = buildExternalWpCliBatch(commands, this.wpPath, this.wpCliBin);
-    const res = await runSsh(this.alias, remote);
+    const res = await runSsh(this.alias, remote, EXTERNAL_SSH_BATCH_TIMEOUT_MS);
     if (res.spawnError !== undefined) return new Array(commands.length).fill(null);
-    return parseWpCliBatchOutput(res.stdout, commands.length);
+
+    const parsed = parseWpCliBatchOutput(res.stdout, commands.length);
+
+    // A timeout SIGTERMs the child, so partial stdout is parsed and the trailing
+    // sections silently come back null. That is honest but invisible: without
+    // this warning the only symptom is missing columns in the database hours
+    // later. code === null with no stderr is the same timeout signature runWpCli
+    // keys off.
+    if (res.code === null && !res.stderr.trim()) {
+      const missing = parsed.filter((v) => v === null).length;
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[NexusAI] Batched WP-CLI to '${this.alias}' timed out after `
+        + `${EXTERNAL_SSH_BATCH_TIMEOUT_MS / 1000}s; ${missing} of ${commands.length} `
+        + `commands produced no output and will be recorded as "not collected".`
+      );
+    }
+
+    return parsed;
   }
 
   /**

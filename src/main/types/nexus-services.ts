@@ -181,4 +181,20 @@ export interface NexusServices {
   /** Agent dispatcher — routes contributed tool calls to the appropriate agent handler. */
   dispatcher?: import('../agent-runtime/AgentDispatcher').AgentDispatcher;
 
+  // ── Settings reactivity ─────────────────────────────────────────────────
+
+  /**
+   * Re-read settings and restart/stop every settings-driven scheduler.
+   *
+   * Assigned in `src/main/index.ts`; the same closure the IPC UPDATE_SETTINGS
+   * handler receives as `onSettingsUpdated`. Exposed here so the GraphQL
+   * `nexusUpdateSettings` mutation — the path `nexus settings set` uses, which
+   * has no access to IpcHandlerDeps — is settings-reactive too. Without it a
+   * CLI settings write only took effect after Local was restarted.
+   *
+   * Optional because it is assigned after the container is constructed, and
+   * absent entirely in tests that build a partial container.
+   */
+  onSettingsUpdated?: () => void;
+
 }

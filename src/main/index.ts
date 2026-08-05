@@ -453,9 +453,15 @@ export default function main(context: any): void {
   // Halted-site refresh and WPE refresh schedulers — declared before the async IIFE
   // so the onSettingsUpdated closure (registered outside the IIFE) can capture them.
   // Assigned inside the IIFE once their dependencies are available.
-  let haltedRefreshScheduler: HaltedSiteRefreshScheduler;
-  let wpeRefreshScheduler: WpeRefreshScheduler;
-  let externalRefreshScheduler: ExternalRefreshScheduler;
+  //
+  // Typed `| undefined` deliberately: onSettingsUpdated is now reachable from the
+  // GraphQL mutation as well as IPC, and registerIpcHandlers (which sets
+  // bulkOpManager, the old de-facto readiness guard) runs synchronously *before*
+  // the async IIFE that assigns these. A settings write landing in that window
+  // must be a no-op for the not-yet-created scheduler, not a TypeError.
+  let haltedRefreshScheduler: HaltedSiteRefreshScheduler | undefined;
+  let wpeRefreshScheduler: WpeRefreshScheduler | undefined;
+  let externalRefreshScheduler: ExternalRefreshScheduler | undefined;
 
   // Agent platform: scheduler and daemon manager declared here so the before-quit
   // handler and onSettingsUpdated closure can reach them. Assigned inside the IIFE.
@@ -491,6 +497,83 @@ export default function main(context: any): void {
     ids.forEach(id => { names[id] = sites[id]?.name ?? id; });
     return names;
   };
+
+  /**
+   * Re-read settings and restart/stop every settings-driven scheduler.
+   *
+   * Two callers, deliberately:
+   *   1. the IPC UPDATE_SETTINGS handler (`ipc-handlers.ts`), the renderer path;
+   *   2. the GraphQL `nexusUpdateSettings` mutation, the path `nexus settings set`
+   *      uses — reached via `nexusServices.onSettingsUpdated`, assigned below.
+   *
+   * Before (2) existed, `nexus settings set externalRefreshAutoEnabled true`
+   * wrote the value and returned success while no scheduler ever started, so the
+   * only way to enable external host refresh was to restart Local. There is no
+   * renderer UI row for it, so the CLI is currently the *only* way to set it.
+   *
+   * Each scheduler is guarded: this can now be invoked before the async init IIFE
+   * has constructed them.
+   */
+  const onSettingsUpdated = () => {
+    if (nexusServices?.bulkOpManager) {
+      opportunisticScheduler.restart({
+        bulkOpManager: nexusServices.bulkOpManager,
+        siteData: siteDataAccessor,
+        getSettings: getSchedulerSettings,
+        buildSiteNames: buildSiteNamesLocal,
+        logger: localLogger,
+      });
+    }
+
+    // Restart halted-site refresh scheduler with updated interval from settings.
+    const newHaltedIntervalHours = (registryStorage.get(STORAGE_KEYS.SETTINGS) as { haltedSiteRefreshIntervalHours?: number } | null)?.haltedSiteRefreshIntervalHours ?? 24;
+    haltedRefreshScheduler?.restart(newHaltedIntervalHours * 60 * 60 * 1000);
+
+    // Restart (or stop) WPE refresh scheduler based on updated settings.
+    const updatedWpeSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeRefreshIntervalHours?: number; wpeRefreshAutoEnabled?: boolean } | null;
+    const newWpeRefreshHours = updatedWpeSettings?.wpeRefreshIntervalHours ?? 24;
+    const newWpeRefreshEnabled = updatedWpeSettings?.wpeRefreshAutoEnabled === true;
+    if (newWpeRefreshEnabled) {
+      wpeRefreshScheduler?.restart(newWpeRefreshHours * 60 * 60 * 1000);
+    } else {
+      wpeRefreshScheduler?.stop();
+    }
+
+    // Restart (or stop) the external SSH host refresh scheduler.
+    const updatedExternal = registryStorage.get(STORAGE_KEYS.SETTINGS) as
+      { externalRefreshIntervalHours?: number; externalRefreshAutoEnabled?: boolean } | null;
+    const newExternalHours = updatedExternal?.externalRefreshIntervalHours ?? 24;
+    if (updatedExternal?.externalRefreshAutoEnabled === true) {
+      externalRefreshScheduler?.restart(newExternalHours * 60 * 60 * 1000);
+      localLogger.info(`[NexusAI] External SSH host refresh enabled by preference (every ${newExternalHours}h)`);
+    } else {
+      externalRefreshScheduler?.stop();
+      localLogger.info('[NexusAI] External SSH host refresh disabled by preference — scheduler stopped');
+    }
+
+    // Restart (or stop) WPE content index scheduler based on updated settings.
+    const newContentSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeContentIndexAutoEnabled?: boolean; wpeContentIndexIntervalHours?: number } | null;
+    const newContentEnabled = newContentSettings?.wpeContentIndexAutoEnabled === true;
+    const newContentHours = newContentSettings?.wpeContentIndexIntervalHours ?? 24;
+    if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
+    wpeContentIndexTimer = null;
+    if (newContentEnabled) startWpeContentIndexScheduler(newContentHours);
+
+    // Re-resolve agent provider when settings change (API key rotation, provider switch).
+    // agentRunner is stored on nexusServices so it's accessible here even though it was
+    // declared in the conditional if (agentDb) block above.
+    if (nexusServices.agentRunner) {
+      const updatedSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
+      const updatedProvider = getAIProvider(registryStorage, updatedSettings);
+      nexusServices.agentRunner.setProvider(updatedProvider);
+    }
+  };
+
+  // Exposed on the service container so the GraphQL resolver module — which
+  // receives only { registry, services } — can reach it. nexusServices is
+  // captured by reference by createResolvers above, so a late assignment is
+  // visible there (the same pattern the Sprint 2/3 services use).
+  nexusServices.onSettingsUpdated = onSettingsUpdated;
 
   // Async initialization
   (async () => {
@@ -1016,57 +1099,7 @@ export default function main(context: any): void {
     nexusServices,
     wpeSyncService,
     metadataCache,
-    onSettingsUpdated: () => {
-      if (!nexusServices?.bulkOpManager) return;
-      opportunisticScheduler.restart({
-        bulkOpManager: nexusServices.bulkOpManager,
-        siteData: siteDataAccessor,
-        getSettings: getSchedulerSettings,
-        buildSiteNames: buildSiteNamesLocal,
-        logger: localLogger,
-      });
-
-      // Restart halted-site refresh scheduler with updated interval from settings.
-      const newHaltedIntervalHours = (registryStorage.get(STORAGE_KEYS.SETTINGS) as { haltedSiteRefreshIntervalHours?: number } | null)?.haltedSiteRefreshIntervalHours ?? 24;
-      haltedRefreshScheduler.restart(newHaltedIntervalHours * 60 * 60 * 1000);
-
-      // Restart (or stop) WPE refresh scheduler based on updated settings.
-      const updatedWpeSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeRefreshIntervalHours?: number; wpeRefreshAutoEnabled?: boolean } | null;
-      const newWpeRefreshHours = updatedWpeSettings?.wpeRefreshIntervalHours ?? 24;
-      const newWpeRefreshEnabled = updatedWpeSettings?.wpeRefreshAutoEnabled === true;
-      if (newWpeRefreshEnabled) {
-        wpeRefreshScheduler.restart(newWpeRefreshHours * 60 * 60 * 1000);
-      } else {
-        wpeRefreshScheduler.stop();
-      }
-
-      // Restart (or stop) the external SSH host refresh scheduler.
-      const updatedExternal = registryStorage.get(STORAGE_KEYS.SETTINGS) as
-        { externalRefreshIntervalHours?: number; externalRefreshAutoEnabled?: boolean } | null;
-      const newExternalHours = updatedExternal?.externalRefreshIntervalHours ?? 24;
-      if (updatedExternal?.externalRefreshAutoEnabled === true) {
-        externalRefreshScheduler.restart(newExternalHours * 60 * 60 * 1000);
-      } else {
-        externalRefreshScheduler.stop();
-      }
-
-      // Restart (or stop) WPE content index scheduler based on updated settings.
-      const newContentSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeContentIndexAutoEnabled?: boolean; wpeContentIndexIntervalHours?: number } | null;
-      const newContentEnabled = newContentSettings?.wpeContentIndexAutoEnabled === true;
-      const newContentHours = newContentSettings?.wpeContentIndexIntervalHours ?? 24;
-      if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
-      wpeContentIndexTimer = null;
-      if (newContentEnabled) startWpeContentIndexScheduler(newContentHours);
-
-      // Re-resolve agent provider when settings change (API key rotation, provider switch).
-      // agentRunner is stored on nexusServices so it's accessible here even though it was
-      // declared in the conditional if (agentDb) block above.
-      if (nexusServices.agentRunner) {
-        const updatedSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
-        const updatedProvider = getAIProvider(registryStorage, updatedSettings);
-        nexusServices.agentRunner.setProvider(updatedProvider);
-      }
-    },
+    onSettingsUpdated,
     emitNexusState,
   });
 
