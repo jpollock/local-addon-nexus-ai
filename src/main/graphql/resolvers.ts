@@ -2504,6 +2504,9 @@ export function createResolvers(context: ResolverContext) {
        * Accepts local (@local), WPE (wpe:), or external (ssh:) targets.
        */
       nexusFleetSiteHealth: async (_parent: ResolverParent, { target }: { target: string }) => {
+        // M10: this resolver runs resolveTargetArgs, up to four graph queries and a
+        // full score calculation — it belongs on the shared queue like its siblings.
+        return withQueue(async () => {
         try {
           if (!services.healthCalculator) {
             return {
@@ -2706,6 +2709,7 @@ export function createResolvers(context: ResolverContext) {
             health: null,
           };
         }
+        });
       },
 
       nexusFleetSearch: async (_parent: ResolverParent, { query, limit }: { query: string; limit?: number }) => {

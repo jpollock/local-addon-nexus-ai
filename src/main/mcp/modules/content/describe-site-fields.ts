@@ -40,16 +40,24 @@ export const describeSiteFieldsHandler: McpToolHandler = {
       siteId = localSite.id;
       siteName = localSite.name;
     } else {
+      // M14: names collide across sources; an unordered `LIMIT 1` picks an
+      // arbitrary row. Decline rather than guess (as core_version does).
       const graphService = (services as any).graphService;
       const db = graphService?.getDb?.();
-      const row = db?.prepare(
-        "SELECT id, name FROM sites WHERE source IN ('wpe','external') AND name=? LIMIT 1",
-      ).get(args.site) as { id: string; name: string } | undefined;
-      if (!row) {
+      const rows = (db?.prepare(
+        "SELECT id, name, source FROM sites WHERE source IN ('wpe','external') AND name=?",
+      ).all(args.site) ?? []) as Array<{ id: string; name: string; source: string }>;
+      if (rows.length === 0) {
         return error(`Site "${args.site}" not found. For WPE installs use the install name. Run wpe_sync_sites first if missing.`);
       }
-      siteId = row.id;
-      siteName = row.name;
+      if (rows.length > 1) {
+        const kinds = rows.map((r) => (r.source === 'external' ? `ssh:${r.name}` : `wpe:<account>/${r.name}`));
+        return error(
+          `"${args.site}" matches ${rows.length} sites across sources — specify which one: ${kinds.join(', ')}`,
+        );
+      }
+      siteId = rows[0].id;
+      siteName = rows[0].name;
     }
 
     const docs = await services.vectorStore.getAllDocuments(siteId);

@@ -503,8 +503,10 @@ sitesCommand
         }
       }
 
-      // Display external sites
-      if (external && external.length > 0) {
+      // Display external sites.
+      // M13: honour the scope flags — an external SSH host is neither a WPE
+      // install nor a Local site, so both --wpe-only and --local-only exclude it.
+      if (!options.wpeOnly && !options.localOnly && external && external.length > 0) {
         console.log('\nExternal SSH Hosts:');
         for (const site of external) {
           console.log(`  ${site.alias} (${site.environment})`);

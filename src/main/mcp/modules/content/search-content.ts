@@ -100,18 +100,27 @@ export const searchContentHandler: McpToolHandler = {
       siteId = localSite.id;
       siteName = localSite.name;
     } else {
-      // Try to find as WPE install or external host in graph DB
+      // Try to find as WPE install or external host in graph DB.
+      // M14: names collide across sources, so an unordered `LIMIT 1` returns
+      // whichever row SQLite happens to reach first. Decline rather than guess —
+      // the same treatment core_version already applies.
       const graphService = (services as any).graphService;
       const db = graphService?.getDb?.();
-      const row = db?.prepare(
-        "SELECT id, name FROM sites WHERE source IN ('wpe','external') AND name=? LIMIT 1"
-      ).get(args.site) as { id: string; name: string } | undefined;
+      const rows = (db?.prepare(
+        "SELECT id, name, source FROM sites WHERE source IN ('wpe','external') AND name=?"
+      ).all(args.site) ?? []) as Array<{ id: string; name: string; source: string }>;
 
-      if (!row) {
+      if (rows.length === 0) {
         return error(`Site "${args.site}" not found. For WPE installs, use the install name (e.g. "testjpp1"). Run wpe_sync_sites first if the install is missing.`);
       }
-      siteId = row.id;
-      siteName = row.name;
+      if (rows.length > 1) {
+        const kinds = rows.map((r) => (r.source === 'external' ? `ssh:${r.name}` : `wpe:<account>/${r.name}`));
+        return error(
+          `"${args.site}" matches ${rows.length} sites across sources — specify which one: ${kinds.join(', ')}`
+        );
+      }
+      siteId = rows[0].id;
+      siteName = rows[0].name;
     }
 
     const indexEntry = services.indexRegistry.get(siteId);

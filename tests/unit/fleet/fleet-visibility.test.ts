@@ -1035,7 +1035,16 @@ describe('nexusFleetSiteHealth accepts all three target types', () => {
 
     const r = await (createResolvers(context).Mutation as any).nexusFleetSiteHealth(null, { target: 'local-site@local' });
     expect(r.success).toBe(true);
-    expect(r.health.score).toBe(75);
+
+    // Assert the resolver's own work, not the mock's return value. It resolves
+    // the Local site to its id, passes the full factor set, and derives status
+    // from the score it gets back (75 → warning).
+    expect(context.services.healthCalculator.calculateScore).toHaveBeenCalledWith(
+      'local-1',
+      expect.objectContaining({ domain: 'local.local', phpVersion: '8.2' }),
+      ['security', 'performance', 'maintenance', 'activity', 'stability'],
+    );
+    expect(r.health.status).toBe('warning');
   });
 
   it('derives severity from factor scores (critical at 40, warning at 70, healthy at 90)', async () => {

@@ -13,8 +13,11 @@ import type { NexusServices } from '../mcp/types';
  * supplied — so the behaviour lives here or nowhere. Deleting it breaks that
  * command silently, with a "site not found" error rather than a clue.
  *
- * A name that matches neither returns `{ site: name }` on purpose, so the
- * caller produces the familiar "Site not found" message.
+ * A name that matches neither returns `{ site: name }` — the caller's raw
+ * spelling — on purpose, so the caller produces the familiar "Site not found"
+ * message naming what the user typed. When a Local site DOES match, the site's
+ * own `name` is returned instead, because downstream resolvers re-resolve
+ * case-sensitively.
  *
  * EVERY `install_name` THIS MAPPER EMITS CARRIES `install_name_explicit: true`.
  * `resolveTarget` treats a bare `install_name` as *possibly a local site name*
@@ -66,7 +69,12 @@ export function resolveTargetArgs(
     );
   }
 
-  if (localSite) return { site: name };
+  // M11: return the site's OWN name, not the caller's spelling. `resolveSite`
+  // here matches case-insensitively (and on id/domain), but resolvers.ts's
+  // `resolveSite` re-resolves case-sensitively on name/id/domain — so echoing
+  // back `MySite` for a site named `mysite` produced a "Site not found" a step
+  // later. Returning the canonical name closes the mismatch at the source.
+  if (localSite) return { site: localSite.name };
 
   // Reached only after resolveSite came back empty, so re-running the local
   // lookup downstream cannot change the answer — but the flag keeps the

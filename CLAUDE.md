@@ -175,10 +175,21 @@ Target syntax: `ssh:<alias>@<production|staging|development>`.
 - **`resolveTransport` does not audit.** `nexusWpCommand` must keep calling
   `auditDirectOperation` itself, on both outcomes.
 - **Fleet means local + WPE + SSH.** The graph `sites` table holds all three
-  (`source` is `'local' | 'wpe' | 'external'`), so a fleet query filters
-  `source IN ('local','wpe','external')` — never `source='wpe'`, and never
-  `source != 'local'`. Queries keying on `remote_install_id`, `wpe_site_id`,
-  `account_id` or CAPI are WP Engine by nature and stay as they are.
+  (`source` is `'local' | 'wpe' | 'external'`). A fleet query must cover the
+  external source — `source='wpe'` alone is the bug this plan removed, and
+  `source != 'local'` is forbidden (it silently absorbs any future source; see
+  `source-semantics.test.ts`). **But the list is not always all three.** Every
+  fleet resolver here filters `source IN ('wpe','external')`, deliberately,
+  **because local sites are merged in from Local's own store** (see "Fleet
+  counts" below) — adding `'local'` to those queries reintroduces a
+  double-count. Use `IN ('local','wpe','external')` only where the graph is the
+  *sole* source for the query, e.g. `resolveWpeGraphSite`'s bare-name lookup.
+  Queries keying on `remote_install_id`, `wpe_site_id`, `account_id` or CAPI
+  are WP Engine by nature and stay as they are.
+- **A coverage metric's numerator and denominator must span the same source
+  set.** `fleet_overview` counted `wp_version` across WPE + external and
+  divided by the WPE-only count, inside a line labelled "(CAPI)". For a user
+  with SSH hosts and no WP Engine account it printed `1 of 0`.
 - **External hosts have no background refresh.** Nothing populates their plugin
   and theme rows, so they appear in fleet views with empty data until a command
   is run against them. That is the external refresh schedule, still an open
@@ -189,13 +200,38 @@ Target syntax: `ssh:<alias>@<production|staging|development>`.
 ## Fleet counts — what is real and what is not
 
 **Local's store and the graph disagree, and each is authoritative for different
-things.** `sites.json` holds 71 Local sites; the graph holds 33 rows with
-`source='local'`, because a local site only gets a graph row once indexed.
-Nothing reconciles them. So: **count local sites from `services.siteData`, and
-count WPE and external from the graph.** `nexusFleetHealth` and
-`nexusFleetSummary` both do this. A fleet count taken purely from the graph
-undercounts by ~38 sites; one taken purely from `siteData` misses every remote
-site.
+things.** A local site only gets a graph row once indexed, and nothing
+reconciles the two. So: **count local sites from Local's own store, and count
+WPE and external from the graph.** A fleet count taken purely from the graph
+undercounts local badly; one taken purely from Local's store misses every
+remote site.
+
+**There are THREE local populations across the fleet resolvers, not two — and
+they disagree with each other:**
+
+| population | read via | used by |
+|---|---|---|
+| Local's site store | `services.siteData.getSites()` | `nexusFleetHealth`'s `localSites` |
+| twin cache | `services.twinService.getAll()` | `nexusFleetSummary`, `fleet_overview` |
+| content index | `services.indexRegistry.listAll()` filtered to `state === 'indexed'` | the health scores in `nexusFleetHealth` |
+
+Only the first is the count of Local sites. The third is a small subset and is
+the reason `healthyCount` / `warningCount` / `criticalCount` are **not** a
+fleet-wide figure — `sitesScored` is their denominator and must be printed with
+them.
+
+**Measure, do not copy the numbers.** This section previously carried "71 Local
+sites" and "312 of 403", both stale, and both propagated into derived claims.
+Measured 2026-08-04: `sites.json` **113** Local sites, graph `source='local'`
+**33** rows, **365** active rows total (331 WPE + 33 local + 1 external), of
+which **312** have plugin rows and **249** have theme rows. Re-run the counts
+before quoting them:
+
+```bash
+node -e "const D=require('better-sqlite3');const p=require('os').homedir()+'/Library/Application Support/Local/nexus-ai/graph.db';const db=new D(p,{readonly:true});
+console.log(db.prepare('SELECT source,is_active,COUNT(*) c FROM sites GROUP BY source,is_active').all());
+console.log(db.prepare('SELECT COUNT(DISTINCT p.site_id) c FROM plugins p JOIN sites s ON s.id=p.site_id WHERE s.is_active=1').all());"
+```
 
 Consequence: `runningSites + haltedSites === localSites`, and neither sums to
 `totalSites`. That is correct — `getSiteStatus` is a Local concept and Nexus
@@ -212,22 +248,52 @@ field reads as an all-clear on the one number a user acts on. If you add
 persistence for this, it needs a column, a migration, all 11 writers, and a
 staleness policy.
 
-**Plugin and theme totals cover only sites the graph has scanned** — 312 of 403
-have plugin rows, 249 have theme rows. Report the coverage
+**Plugin and theme totals cover only sites the graph has scanned** — 312 of the
+365 active rows have plugin rows, 249 have theme rows. Report the coverage
 (`sitesWithPluginData` / `sitesWithThemeData`), do not imply a complete count.
 Do not name such a count "indexed": in this codebase `indexed` already means
 the content index (`indexRegistry`, `state === 'indexed'`), which is a
 different population and the one that feeds the health scores.
 
-**Health scoring is Local-shaped; remote targets evaluate a subset.**
-`calculateMaintenance` reads `indexRegistry` keyed by Local site id and
-`calculateActivity` reads local-only event and content tables, so both score 0
-for a WPE or external target — 35% of the weight, enough to render a healthy
-production install as `critical` with "has never been indexed" as its top
-issue. `calculateScore` therefore takes an optional factor list; remote targets
-pass `['security','performance','stability']` and the weights are renormalised
-**inside** the calculator. `SiteHealth.factorsEvaluated` reports the basis. If
-you make maintenance or activity work for remote sites, widen that list.
+**Health scoring is Local-shaped. Evaluate a factor only where its inputs exist
+for that target.** `calculateScore` takes an optional factor list and
+renormalises the weights **inside** the calculator;
+`SiteHealth.factorsEvaluated` reports the basis, and the CLI names the factors
+whenever fewer than five were used.
+
+| target | factors | why the rest are excluded |
+|---|---|---|
+| local | all five | all inputs present |
+| wpe | `security`, `performance` | plugin rows exist (312 of 365 active rows) |
+| external | **none** — `score` and `status` are `null` | 0 plugin rows, no `php_version`, no `site_url` |
+
+- `calculateMaintenance` reads `indexRegistry` keyed by Local site id and
+  `calculateActivity` reads local-only event and content tables, so both score
+  **0** for any remote target — 35% of the weight, enough to render a healthy
+  production install `critical` with "has never been indexed" as its top issue.
+- `calculateStability` counts failed `event_queue` rows. Live, `event_queue`
+  holds 4 rows, **all local**, and its only writer is `HttpEventInterface.ts`,
+  fed by the MU-plugin webhook that exists only on Local sites. A remote site
+  can never have an event, so the factor was a constant **100 awarded for
+  having no data** — the same defect as maintenance/activity with the sign
+  flipped, which is why it survived a round of review.
+- For an **external** host, `security` and `performance` were being scored off
+  a plugin list this branch documents as permanently empty: zero rows earned
+  full plugin-hygiene credit *and* produced "No security plugin detected", in
+  the same response that returns `plugins: null`. External hosts are therefore
+  not scored at all. `calculateScore` **throws** on an empty factor list — a
+  score over zero factors is not a low score, it is not a score.
+- If you give external hosts a refresh mechanism (an open product decision — do
+  not build one unasked), widen the list then, not before.
+
+**Never default an unknown input to a plausible value to keep a score
+computable.** `phpVersion: row.php_version || '8.0'` invented a version for 46
+of 331 active WPE installs and the one external row, collecting 20/25 security
+and 30/40 performance points for it — ~27% of a remote site's score, invented
+for 14% of production installs. The calculator already has the honest path
+(`scorePhpVersion(undefined)` → `PHP version unknown`). Pass `undefined`. (The
+identical default on the *local* path is pre-existing and left alone: Local's
+store supplies a real version there.)
 
 **The HTTPS check reads `site_url`, not `domain`.** Domains are stored bare —
 zero of 365 active rows carry a scheme — so `domain.startsWith('https')` used
@@ -240,9 +306,22 @@ penalty**: unknown is not insecure.
 `psbtest2` and `testjppstg` each exist as both a `wpe` install and a Local
 site. Any name-keyed query must constrain by `source`, and a bare-name lookup
 that cannot disambiguate must decline rather than pick — see
-`resolveTargetArgs`, which throws with the three disambiguated forms, and
+`resolveTargetArgs`, which throws with the three disambiguated forms;
 `wp_core_version`'s cached fallback, which returns nothing when a name matches
-more than one row.
+more than one row; and `search_site_content` / `describe_site_fields`, which
+list the matches and refuse. An unordered `... AND name=? LIMIT 1` is not a
+lookup, it is a coin toss.
+
+**`nexus host remove` soft-deletes.** It sets `is_active = 0` and resets
+`domain` back to the alias; there is no per-site delete in `GraphService`, and
+the retention sweep hard-deletes inactive rows later. So **every** external
+lookup needs `is_active = 1` — `sites list`, `sites get`, and
+`nexusFleetSiteHealth` all did not, and a removed host kept appearing (with a
+clobbered domain) after `host list` had stopped showing it. One exception is
+known and deliberate: `resolveWpeGraphSite`'s bare-name fallback still has no
+`is_active` filter for any source, WPE included; adding one there would also
+change bare-name resolution for deactivated WPE installs and wants its own
+change.
 
 ---
 
