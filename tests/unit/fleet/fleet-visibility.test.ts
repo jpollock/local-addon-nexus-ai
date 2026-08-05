@@ -42,7 +42,7 @@ describe('fleet queries include external sites', () => {
     });
 
     await graphService.upsertSite({
-      id: 'ext-site-1',
+      id: 'ssh:ext-host',
       name: 'ext-host',
       source: 'external',
       host: 'external',
@@ -130,6 +130,17 @@ describe('fleet queries include external sites', () => {
     // Verify the external site ID was included in the search
     const searchCall = vectorStore.searchAcrossSites.mock.calls[0];
     const siteIds = searchCall[0];
-    expect(siteIds).toContain('ext-site-1');
+    expect(siteIds).toContain('ssh:ext-host');
+  });
+
+  it('nexusSitesGet handles explicit ssh: targets', async () => {
+    const r = await (createResolvers(ctx()).Mutation as any).nexusSitesGet(
+      null,
+      { target: 'ssh:ext-host@production' }
+    );
+    expect(r.success).toBe(true);
+    expect(r.site.name).toBe('ext-host');
+    expect(r.site.siteKind).toBe('external');
+    expect(r.site.status).toBe('remote');
   });
 });
