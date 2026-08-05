@@ -72,17 +72,20 @@ sitesCommand
 
       // Human-readable output
       const isWpe = site.siteKind === 'wpe';
+      const isExternal = site.siteKind === 'external';
       console.log(`\n${site.name}`);
       console.log('─'.repeat(Math.max(site.name.length, 40)));
       if (isWpe) {
         console.log(`Type:         🌐 WP Engine Environment`);
+      } else if (isExternal) {
+        console.log(`Type:         🔗 Remote`);
       } else {
         console.log(`Status:       ${site.status === 'running' ? '🟢 Running' : '⚫ Halted'}`);
       }
       console.log(`Domain:       ${site.domain || 'N/A'}`);
       if (site.siteUrl)    console.log(`Site URL:     ${site.siteUrl}`);
       if (site.adminEmail) console.log(`Admin email:  ${site.adminEmail}`);
-      if (!isWpe) console.log(`Path:         ${site.path}`);
+      if (!isWpe && !isExternal) console.log(`Path:         ${site.path}`);
 
       // Versions
       if (site.wpVersion)    console.log(`WordPress:    ${site.wpVersion}`);

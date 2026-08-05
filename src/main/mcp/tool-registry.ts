@@ -49,12 +49,23 @@ export async function maybeUpsertExternalSite(
       lastSeenAt: now,
     }, 'sighting');
 
+    // Preserve the existing domain if registration has already discovered it.
+    // A lazy sighting has nothing better than the alias, so overwriting a real
+    // domain would silently degrade fleet visibility every time a command runs.
+    const siteId = externalSiteId(parsed.alias);
+    const db = (graphService as any).getDb?.();
+    let domain = parsed.alias;
+    if (db) {
+      const existing = db.prepare('SELECT domain FROM sites WHERE id=?').get(siteId) as { domain?: string } | undefined;
+      if (existing?.domain && existing.domain !== parsed.alias) {
+        domain = existing.domain;
+      }
+    }
+
     await graphService.upsertSite({
-      id: externalSiteId(parsed.alias),
+      id: siteId,
       name: parsed.alias,
-      // No domain is known without querying the site; the alias is the stable
-      // human-facing identifier until B2's registration probe can fill it in.
-      domain: parsed.alias,
+      domain,
       source: 'external',
       host: 'external',
       environment: stored.environment,
