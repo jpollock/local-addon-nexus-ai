@@ -197,7 +197,15 @@ export function buildExternalWpCliBatch(
   if (commands.length === 0) return '';
   return commands
     .map((args, i) =>
-      `${buildExternalWpCliCommand(args, wpPath, wpCliBin)}; echo '${WP_CLI_BATCH_DELIMITER}${i + 1}>>>'`)
+      // `echo;` forces a newline before the delimiter regardless of whether the
+      // command's own output ended in one — WP-CLI's --format=count and some
+      // --format=json output do not. Without it, the delimiter glues onto the
+      // previous line, the anchored regex in parseWpCliBatchOutput never matches,
+      // and the parser silently folds that command's output (plus the literal,
+      // now-unrecognised marker text) into whichever section closes next — a
+      // WRONG value, not a missing one. The extra blank line this adds is
+      // absorbed by parseWpCliBatchOutput's existing `.trim()`.
+      `${buildExternalWpCliCommand(args, wpPath, wpCliBin)}; echo; echo '${WP_CLI_BATCH_DELIMITER}${i + 1}>>>'`)
     .join('; ');
 }
 

@@ -8,7 +8,7 @@ describe('buildExternalWpCliBatch', () => {
   it('joins commands with indexed delimiters', () => {
     const cmd = buildExternalWpCliBatch([['core', 'version'], ['option', 'get', 'siteurl']]);
     expect(cmd).toBe(
-      "wp 'core' 'version'; echo '<<<NEXUS:1>>>'; wp 'option' 'get' 'siteurl'; echo '<<<NEXUS:2>>>'"
+      "wp 'core' 'version'; echo; echo '<<<NEXUS:1>>>'; wp 'option' 'get' 'siteurl'; echo; echo '<<<NEXUS:2>>>'"
     );
   });
 
@@ -31,6 +31,13 @@ describe('buildExternalWpCliBatch', () => {
 
   it('returns an empty string for no commands', () => {
     expect(buildExternalWpCliBatch([])).toBe('');
+  });
+
+  it('forces a newline before the delimiter, so a no-trailing-newline command cannot glue onto it', () => {
+    const cmd = buildExternalWpCliBatch([['core', 'version']]);
+    // The delimiter must be preceded by its own bare `echo`, not appended
+    // directly after the command with only the join semicolon between them.
+    expect(cmd).toBe("wp 'core' 'version'; echo; echo '<<<NEXUS:1>>>'");
   });
 });
 
@@ -62,5 +69,22 @@ describe('parseWpCliBatchOutput', () => {
 
   it('returns all nulls for empty output', () => {
     expect(parseWpCliBatchOutput('', 2)).toEqual([null, null]);
+  });
+
+  it('end-to-end: a command whose output has no trailing newline does not corrupt the NEXT section', () => {
+    // Simulates real WP-CLI --format=count output (a bare number, no trailing \n)
+    // followed by a second command whose output DOES end in a newline.
+    const stdout = '5\n<<<NEXUS:1>>>\nhttps://example.com\n\n<<<NEXUS:2>>>\n';
+    const result = parseWpCliBatchOutput(stdout, 2);
+    expect(result).toEqual(['5', 'https://example.com']);
+    // Specifically: section 2 must be the clean site URL, not a merge containing
+    // section 1's value or the literal delimiter text.
+    expect(result[1]).not.toContain('NEXUS');
+    expect(result[1]).not.toContain('5');
+  });
+
+  it('three commands, middle one has no trailing newline, none of the three values leak into each other', () => {
+    const stdout = 'v1\n<<<NEXUS:1>>>\n' + '42' + '\n<<<NEXUS:2>>>\n' + 'v3\n<<<NEXUS:3>>>\n';
+    expect(parseWpCliBatchOutput(stdout, 3)).toEqual(['v1', '42', 'v3']);
   });
 });
