@@ -244,7 +244,9 @@ contentCommand
       console.log(`Documents:     ${status.documentCount}`);
       console.log(`Chunks:        ${status.chunkCount}`);
       if (status.lastIndexed) {
-        console.log(`Last Indexed:  ${new Date(status.lastIndexed).toLocaleString()}`);
+        // The schema types lastIndexed as String, so it arrives as "1785965923684".
+        // new Date(<numeric string>) is Invalid Date — coerce first.
+        console.log(`Last Indexed:  ${new Date(Number(status.lastIndexed)).toLocaleString()}`);
       }
       if (status.errorMessage) {
         console.log(`Error:         ${status.errorMessage}`);
@@ -304,7 +306,7 @@ contentCommand
           console.log(`  ${stateIcon} ${site.siteName}`);
           console.log(`     Documents: ${site.documentCount}, Chunks: ${site.chunkCount}`);
           if (site.lastIndexed) {
-            console.log(`     Last indexed: ${new Date(site.lastIndexed).toLocaleString()}`);
+            console.log(`     Last indexed: ${new Date(Number(site.lastIndexed)).toLocaleString()}`);
           }
           console.log('');
         }
