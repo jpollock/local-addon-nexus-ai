@@ -52,7 +52,9 @@ describe('HealthScoreCalculator', () => {
 
     expect(result).toHaveProperty('overall');
     expect(result).toHaveProperty('factors');
+    expect(result).toHaveProperty('factorsEvaluated');
     expect(result).toHaveProperty('issues');
+    expect(result).toHaveProperty('issuesByCategory');
     expect(result).toHaveProperty('recommendations');
     expect(result.factors).toHaveProperty('security');
     expect(result.factors).toHaveProperty('performance');
@@ -62,6 +64,7 @@ describe('HealthScoreCalculator', () => {
     expect(result.overall).toBeGreaterThanOrEqual(0);
     expect(result.overall).toBeLessThanOrEqual(100);
     expect(Array.isArray(result.issues)).toBe(true);
+    expect(Array.isArray(result.issuesByCategory)).toBe(true);
     expect(Array.isArray(result.recommendations)).toBe(true);
   });
 
@@ -353,5 +356,114 @@ describe('HealthScoreCalculator', () => {
     expect(result.overall).toBeLessThanOrEqual(100);
     expect(result.factors.maintenance).toBe(0);
     expect(result.issues.length).toBeGreaterThan(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // issuesByCategory tests
+  // -------------------------------------------------------------------------
+  it('should populate issuesByCategory when sites have problems in multiple factors', async () => {
+    // Mock a site with security and performance issues
+    mockGraphService.listPlugins.mockResolvedValue([]); // No security or cache plugins
+    mockIndexRegistry.get.mockReturnValue({ state: 'indexed', lastIndexedAt: Date.now() - ONE_DAY_MS });
+
+    const result = await calculator.calculateScore('site-1', {
+      phpVersion: '7.3.0', // Outdated
+      domain: 'http://example.com', // Not HTTPS
+    });
+
+    // Verify issuesByCategory is populated with category fields
+    expect(result.issuesByCategory.length).toBeGreaterThan(0);
+    const securityIssues = result.issuesByCategory.filter((i) => i.category === 'security');
+    expect(securityIssues.length).toBeGreaterThan(0); // Should have HTTPS and PHP issues
+    expect(securityIssues.every((i) => 'message' in i && 'category' in i)).toBe(true);
+  });
+
+  it('should include issues from multiple categories when problems span factors', async () => {
+    mockGraphService.listPlugins.mockResolvedValue([]); // Missing plugins
+    mockIndexRegistry.get.mockReturnValue(undefined); // Not indexed
+
+    const result = await calculator.calculateScore('site-1', {
+      phpVersion: '7.4.0',
+      domain: 'example.com', // No scheme
+    });
+
+    const categories = new Set(result.issuesByCategory.map((i) => i.category));
+    // Should have issues from at least security, performance, and maintenance
+    expect(categories.size).toBeGreaterThan(1);
+    expect(categories.has('security')).toBe(true);
+    expect(categories.has('maintenance')).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // HTTPS check tests (siteUrl preferred, no-scheme handling)
+  // -------------------------------------------------------------------------
+  it('should not report HTTPS issue when siteUrl is https://', async () => {
+    const result = await calculator.calculateScore('site-1', {
+      phpVersion: '8.1.0',
+      siteUrl: 'https://example.com/wp',
+      domain: 'example.com', // no scheme
+    });
+
+    const httpsIssue = result.issues.find((i) => i.includes('HTTPS'));
+    expect(httpsIssue).toBeUndefined();
+  });
+
+  it('should report HTTPS issue when siteUrl is http://', async () => {
+    const result = await calculator.calculateScore('site-1', {
+      phpVersion: '8.1.0',
+      siteUrl: 'http://example.com/wp',
+    });
+
+    const httpsIssue = result.issues.find((i) => i.includes('HTTPS'));
+    expect(httpsIssue).toBeDefined();
+  });
+
+  it('should not report HTTPS issue when neither siteUrl nor domain has a scheme', async () => {
+    const result = await calculator.calculateScore('site-1', {
+      phpVersion: '8.1.0',
+      domain: 'example.com',
+    });
+
+    const httpsIssue = result.issues.find((i) => i.includes('HTTPS'));
+    expect(httpsIssue).toBeUndefined();
+  });
+
+  // -------------------------------------------------------------------------
+  // Optional factors parameter tests
+  // -------------------------------------------------------------------------
+  it('should evaluate only the requested factors when factorsToEvaluate is partial', async () => {
+    const result = await calculator.calculateScore(
+      'site-1',
+      { phpVersion: '8.1.0', domain: 'example.com' },
+      ['security', 'performance', 'stability']
+    );
+
+    expect(result.factorsEvaluated).toEqual(['security', 'performance', 'stability']);
+    // Issues should only come from evaluated factors
+    const categories = new Set(result.issuesByCategory.map((i) => i.category));
+    expect(categories.has('maintenance')).toBe(false);
+    expect(categories.has('activity')).toBe(false);
+  });
+
+  it('should renormalize weights when evaluating a subset of factors', async () => {
+    mockGraphService.listPlugins.mockResolvedValue([
+      { slug: 'wordfence' }, // Security plugin
+      { slug: 'wp-rocket' }, // Cache plugin
+    ]);
+
+    const resultAllFactors = await calculator.calculateScore(
+      'site-1',
+      { phpVersion: '8.3.0', siteUrl: 'https://example.com' }
+    );
+
+    const resultThreeFactors = await calculator.calculateScore(
+      'site-1',
+      { phpVersion: '8.3.0', siteUrl: 'https://example.com' },
+      ['security', 'performance', 'stability']
+    );
+
+    // Both should score well since security/performance/stability are strong
+    // The three-factor version should be >= all-factors because it excludes weak maintenance/activity
+    expect(resultThreeFactors.overall).toBeGreaterThanOrEqual(resultAllFactors.overall);
   });
 });

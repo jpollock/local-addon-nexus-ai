@@ -9,6 +9,8 @@
  * - Stability (10%): Failed event count
  */
 
+export type FactorName = 'security' | 'performance' | 'maintenance' | 'activity' | 'stability';
+
 export interface HealthBreakdown {
   overall: number;
   factors: {
@@ -18,6 +20,7 @@ export interface HealthBreakdown {
     activity: number;
     stability: number;
   };
+  factorsEvaluated: FactorName[];
   issues: string[];
   issuesByCategory: Array<{ category: string; message: string }>;
   recommendations: string[];
@@ -62,10 +65,17 @@ export class HealthScoreCalculator {
 
   /**
    * Calculate a full health breakdown for a single site.
+   *
+   * @param siteId Site identifier
+   * @param siteInfo Site metadata (domain, siteUrl, phpVersion)
+   * @param factorsToEvaluate Optional subset of factors to evaluate. Defaults to all five.
+   *   Remote sites should pass ['security', 'performance', 'stability'] — maintenance and
+   *   activity are Local-only. Weights are renormalized over the evaluated set.
    */
   async calculateScore(
     siteId: string,
-    siteInfo: { phpVersion?: string; domain?: string },
+    siteInfo: { phpVersion?: string; domain?: string; siteUrl?: string },
+    factorsToEvaluate: FactorName[] = ['security', 'performance', 'maintenance', 'activity', 'stability'],
   ): Promise<HealthBreakdown> {
     // Fetch plugins once and share across factor checks
     let plugins: Array<{ slug: string; name: string }> = [];
@@ -75,49 +85,68 @@ export class HealthScoreCalculator {
       // If we can't fetch plugins, proceed with empty list
     }
 
-    const [security, performance, maintenance, activity, stability] = await Promise.all([
-      this.calculateSecurity(siteInfo, plugins),
-      this.calculatePerformance(siteInfo, plugins),
-      this.calculateMaintenance(siteId),
-      this.calculateActivity(siteId),
-      this.calculateStability(siteId),
-    ]);
+    const evaluateSet = new Set(factorsToEvaluate);
 
-    const factors = {
-      security: security.score,
-      performance: performance.score,
-      maintenance: maintenance.score,
-      activity: activity.score,
-      stability: stability.score,
+    // Compute only the requested factors
+    const results: Record<FactorName, FactorResult> = {
+      security: { score: 0, issues: [] },
+      performance: { score: 0, issues: [] },
+      maintenance: { score: 0, issues: [] },
+      activity: { score: 0, issues: [] },
+      stability: { score: 0, issues: [] },
     };
 
-    const overall = Math.round(
-      factors.security * WEIGHTS.security +
-      factors.performance * WEIGHTS.performance +
-      factors.maintenance * WEIGHTS.maintenance +
-      factors.activity * WEIGHTS.activity +
-      factors.stability * WEIGHTS.stability,
-    );
+    if (evaluateSet.has('security')) {
+      results.security = await this.calculateSecurity(siteInfo, plugins);
+    }
+    if (evaluateSet.has('performance')) {
+      results.performance = await this.calculatePerformance(siteInfo, plugins);
+    }
+    if (evaluateSet.has('maintenance')) {
+      results.maintenance = await this.calculateMaintenance(siteId);
+    }
+    if (evaluateSet.has('activity')) {
+      results.activity = await this.calculateActivity(siteId);
+    }
+    if (evaluateSet.has('stability')) {
+      results.stability = await this.calculateStability(siteId);
+    }
 
-    const issues = [
-      ...security.issues,
-      ...performance.issues,
-      ...maintenance.issues,
-      ...activity.issues,
-      ...stability.issues,
-    ];
+    const factors = {
+      security: results.security.score,
+      performance: results.performance.score,
+      maintenance: results.maintenance.score,
+      activity: results.activity.score,
+      stability: results.stability.score,
+    };
 
-    const issuesByCategory = [
-      ...security.issues.map((message) => ({ category: 'security', message })),
-      ...performance.issues.map((message) => ({ category: 'performance', message })),
-      ...maintenance.issues.map((message) => ({ category: 'maintenance', message })),
-      ...activity.issues.map((message) => ({ category: 'activity', message })),
-      ...stability.issues.map((message) => ({ category: 'stability', message })),
-    ];
+    // Renormalize weights over the factors actually evaluated
+    let weightSum = 0;
+    for (const factor of factorsToEvaluate) {
+      weightSum += WEIGHTS[factor];
+    }
+
+    let overall = 0;
+    for (const factor of factorsToEvaluate) {
+      const weight = WEIGHTS[factor] / weightSum;
+      overall += factors[factor] * weight;
+    }
+    overall = Math.round(overall);
+
+    // Collect issues only from evaluated factors
+    const issues: string[] = [];
+    const issuesByCategory: Array<{ category: string; message: string }> = [];
+
+    for (const factor of factorsToEvaluate) {
+      issues.push(...results[factor].issues);
+      for (const message of results[factor].issues) {
+        issuesByCategory.push({ category: factor, message });
+      }
+    }
 
     const recommendations = this.generateRecommendations(factors);
 
-    return { overall, factors, issues, issuesByCategory, recommendations };
+    return { overall, factors, factorsEvaluated: factorsToEvaluate, issues, issuesByCategory, recommendations };
   }
 
   /**
@@ -199,17 +228,23 @@ export class HealthScoreCalculator {
   // ---------------------------------------------------------------------------
 
   private async calculateSecurity(
-    siteInfo: { phpVersion?: string; domain?: string },
+    siteInfo: { phpVersion?: string; domain?: string; siteUrl?: string },
     plugins: Array<{ slug: string }>,
   ): Promise<FactorResult> {
     let score = 0;
     const issues: string[] = [];
 
     // SSL check (25 points)
-    if (siteInfo.domain && siteInfo.domain.startsWith('https')) {
+    // Prefer site_url (carries scheme), fall back to domain if it carries one.
+    // When neither has a scheme, emit no issue and apply no penalty — unknown is not insecure.
+    const urlToCheck = siteInfo.siteUrl || siteInfo.domain || '';
+    if (urlToCheck.startsWith('https://')) {
       score += 25;
-    } else {
+    } else if (urlToCheck.startsWith('http://')) {
       issues.push('Site is not using HTTPS');
+    } else {
+      // No scheme information available — apply no penalty, emit no issue
+      score += 25;
     }
 
     // PHP version check (25 points)

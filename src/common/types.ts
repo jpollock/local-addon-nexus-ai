@@ -673,6 +673,8 @@ export interface Issue {
 /**
  * Health score breakdown for a site
  */
+export type FactorName = 'security' | 'performance' | 'maintenance' | 'activity' | 'stability';
+
 export interface HealthBreakdown {
   overall: number;
   factors: {
@@ -682,7 +684,9 @@ export interface HealthBreakdown {
     activity: number;
     stability: number;
   };
+  factorsEvaluated: FactorName[];
   issues: string[];
+  issuesByCategory: Array<{ category: string; message: string }>;
   recommendations: string[];
 }
 
