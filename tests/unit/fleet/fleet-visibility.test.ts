@@ -613,3 +613,276 @@ describe('nexusFleetHealth includes all sources', () => {
     expect(r.summary.sitesWithThemeData).toBe(1); // only wpe-2 has themes
   });
 });
+
+describe('nexusFleetSiteHealth accepts all three target types', () => {
+  let graphService: GraphService;
+  let testDbPath: string;
+
+  beforeEach(async () => {
+    testDbPath = path.join(__dirname, `test-site-health-${Date.now()}.db`);
+    graphService = new GraphService(testDbPath);
+    await graphService.initialize();
+  });
+
+  afterEach(async () => {
+    await graphService.close();
+    if (fs.existsSync(testDbPath)) {
+      fs.unlinkSync(testDbPath);
+    }
+  });
+
+  function ctx() {
+    return {
+      services: {
+        graphService,
+        logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+        siteData: {
+          getSite: jest.fn().mockReturnValue(undefined),
+          getSites: jest.fn().mockReturnValue({}),
+        },
+        healthCalculator: {
+          calculateScore: jest.fn().mockResolvedValue({
+            overall: 75,
+            factors: {
+              security: 80,
+              performance: 70,
+              maintenance: 60,
+              activity: 50,
+              stability: 90,
+            },
+            issues: ['Security: Outdated plugins detected'],
+            recommendations: [],
+            issuesByCategory: [
+              { category: 'security', message: 'Outdated plugins detected' },
+            ],
+          }),
+        },
+      },
+      registry: {},
+    } as any;
+  }
+
+  it.each(['wpe:acct/wpe-install@production', 'ssh:ext-host@production'])(
+    'resolves %s instead of reporting "not found: undefined"', async (target) => {
+      // Seed the corresponding site
+      if (target.startsWith('wpe:')) {
+        await graphService.upsertSite({
+          id: 'wpe-1',
+          name: 'wpe-install',
+          source: 'wpe',
+          host: 'wpe',
+          domain: 'wpe.wpengine.com',
+          remote_install_id: 'wpe-1',
+          is_active: true,
+          wp_version: '6.8.0',
+          php_version: '8.1',
+          created_at: Date.now(),
+          updated_at: Date.now(),
+        });
+      } else {
+        await graphService.upsertSite({
+          id: 'ssh:ext-host',
+          name: 'ext-host',
+          source: 'external',
+          host: 'external',
+          domain: 'example.com',
+          is_active: true,
+          wp_version: '6.8.0',
+          php_version: '8.3',
+          created_at: Date.now(),
+          updated_at: Date.now(),
+        });
+      }
+
+      const r = await (createResolvers(ctx()).Mutation as any).nexusFleetSiteHealth(null, { target });
+      expect(r.success).toBe(true);
+      expect(r.error ?? '').not.toContain('undefined');
+    }
+  );
+
+  it('surfaces the ambiguous-bare-name error with all three disambiguated forms', async () => {
+    // Seed a local site AND an active wpe install both named 'blog'
+    await graphService.upsertSite({
+      id: 'wpe-blog',
+      name: 'blog',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'blog.wpengine.com',
+      remote_install_id: 'wpe-blog',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const context = ctx();
+    context.services.siteData.getSite = jest.fn().mockReturnValue({
+      id: 'local-blog',
+      name: 'blog',
+      domain: 'blog.local',
+    });
+
+    const r = await (createResolvers(context).Mutation as any).nexusFleetSiteHealth(null, { target: 'blog' });
+    expect(r.success).toBe(false);
+    expect(r.error).toContain('blog@local');
+    expect(r.error).toContain('wpe:');
+    expect(r.error).toContain('ssh:');
+  });
+
+  it('reports real plugin and theme counts, not zeros', async () => {
+    // Seed a site with 3 plugins (2 active) and 2 themes (1 active)
+    await graphService.upsertSite({
+      id: 'test-site',
+      name: 'test-site',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'test.wpengine.com',
+      remote_install_id: 'test-site',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertPlugin({
+      site_id: 'test-site',
+      slug: 'plugin-1',
+      name: 'Plugin 1',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertPlugin({
+      site_id: 'test-site',
+      slug: 'plugin-2',
+      name: 'Plugin 2',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertPlugin({
+      site_id: 'test-site',
+      slug: 'plugin-3',
+      name: 'Plugin 3',
+      version: '1.0.0',
+      is_active: false,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertTheme({
+      site_id: 'test-site',
+      slug: 'theme-1',
+      name: 'Theme 1',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertTheme({
+      site_id: 'test-site',
+      slug: 'theme-2',
+      name: 'Theme 2',
+      version: '1.0.0',
+      is_active: false,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetSiteHealth(null, { target: 'wpe:acct/test-site@production' });
+    expect(r.success).toBe(true);
+    expect(r.health.plugins).toEqual({ total: 3, active: 2, outdated: null });
+    expect(r.health.themes).toEqual({ total: 2, active: 1, outdated: null });
+  });
+
+  it('returns null rather than zero for a site with no indexed plugin data', async () => {
+    // Seed a site with no plugins or themes
+    await graphService.upsertSite({
+      id: 'empty-site',
+      name: 'empty-site',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'empty.wpengine.com',
+      remote_install_id: 'empty-site',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetSiteHealth(null, { target: 'wpe:acct/empty-site@production' });
+    expect(r.success).toBe(true);
+    expect(r.health.plugins).toBeNull();
+    expect(r.health.themes).toBeNull();
+  });
+
+  it('returns real issues with category and severity, not an empty list', async () => {
+    // Seed a site
+    await graphService.upsertSite({
+      id: 'test-site',
+      name: 'test-site',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'test.wpengine.com',
+      remote_install_id: 'test-site',
+      is_active: true,
+      wp_version: '6.8.0',
+      php_version: '8.1',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetSiteHealth(null, { target: 'wpe:acct/test-site@production' });
+    expect(r.success).toBe(true);
+    expect(r.health.issues.length).toBeGreaterThan(0);
+    expect(['security', 'performance', 'maintenance', 'activity', 'stability'])
+      .toContain(r.health.issues[0].category);
+    expect(['critical', 'warning', 'healthy']).toContain(r.health.issues[0].severity);
+  });
+
+  it('reports the WordPress version from the graph', async () => {
+    await graphService.upsertSite({
+      id: 'test-site',
+      name: 'test-site',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'test.wpengine.com',
+      remote_install_id: 'test-site',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetSiteHealth(null, { target: 'wpe:acct/test-site@production' });
+    expect(r.success).toBe(true);
+    expect(r.health.wordpress.version).toBe('6.8.0');
+    expect(r.health.wordpress.updateAvailable).toBeNull();
+  });
+
+  it('works for local sites too', async () => {
+    const context = ctx();
+    context.services.siteData.getSites = jest.fn().mockReturnValue({
+      'local-1': {
+        id: 'local-1',
+        name: 'local-site',
+        domain: 'local.local',
+        phpVersion: '8.2',
+      },
+    });
+
+    const r = await (createResolvers(context).Mutation as any).nexusFleetSiteHealth(null, { target: 'local-site@local' });
+    expect(r.success).toBe(true);
+    expect(r.health.score).toBe(75);
+  });
+});

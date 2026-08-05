@@ -1047,26 +1047,31 @@ export const typeDefs = gql`
   type PluginHealth {
     total: Int!
     active: Int!
-    outdated: Int!
+    "Update availability is not tracked. null means unknown."
+    outdated: Int
   }
 
   type ThemeHealth {
     total: Int!
     active: Int!
-    outdated: Int!
+    "Update availability is not tracked. null means unknown."
+    outdated: Int
   }
 
   type WordPressHealth {
     version: String!
-    updateAvailable: Boolean!
+    "Update availability is not tracked. null means unknown."
+    updateAvailable: Boolean
   }
 
   type SiteHealth {
     status: String!
     score: Int!
     issues: [HealthIssue!]!
-    plugins: PluginHealth!
-    themes: ThemeHealth!
+    "null means the site has not been indexed."
+    plugins: PluginHealth
+    "null means the site has not been indexed."
+    themes: ThemeHealth
     wordpress: WordPressHealth!
   }
 

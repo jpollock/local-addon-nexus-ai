@@ -32,6 +32,7 @@ import pLimit from 'p-limit';
 import { withQueue, parseTarget } from './resolver-utils';
 import { probeExternalHost } from '../external/probeExternalHost';
 import type { ProbeReport } from '../external/probeExternalHost';
+import { resolveTargetArgs } from '../transport/resolveTargetArgs';
 import {
   externalSiteId, getExternalProfile, listExternalProfiles,
   removeExternalProfile, upsertExternalProfile,
@@ -2454,10 +2455,12 @@ export function createResolvers(context: ResolverContext) {
         });
       },
 
+      /**
+       * Get health breakdown for a single site.
+       * Accepts local (@local), WPE (wpe:), or external (ssh:) targets.
+       */
       nexusFleetSiteHealth: async (_parent: ResolverParent, { target }: { target: string }) => {
         try {
-          const parsed = parseTarget(target);
-
           if (!services.healthCalculator) {
             return {
               success: false,
@@ -2466,44 +2469,141 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const site = resolveSite(parsed.siteName!, services.siteData);
-          if (!site) {
+          // Resolve target to determine site type and identity
+          const targetArgs = resolveTargetArgs(target, services);
+
+          let siteId: string;
+          let siteInfo: { domain: string; phpVersion: string };
+          let wpVersion: string | null = null;
+
+          if ('site' in targetArgs) {
+            // Local site
+            const siteName = targetArgs.site as string;
+            const site = resolveSite(siteName, services.siteData);
+            if (!site) {
+              return {
+                success: false,
+                error: `Site not found: ${siteName}`,
+                health: null,
+              };
+            }
+            siteId = site.id;
+            siteInfo = {
+              domain: site.domain || '',
+              phpVersion: (site as any)?.phpVersion || '8.0',
+            };
+            // wp_version for local sites would come from graph if indexed
+            const db = services.graphService?.getDb?.();
+            if (db) {
+              try {
+                const row = db.prepare("SELECT wp_version FROM sites WHERE id = ?").get(siteId) as { wp_version?: string } | undefined;
+                wpVersion = row?.wp_version || null;
+              } catch {
+                // Graph unavailable
+              }
+            }
+          } else if ('install_name' in targetArgs || 'ssh_target' in targetArgs) {
+            // Remote site (WPE or external) - look up in graph
+            const db = services.graphService?.getDb?.();
+            if (!db) {
+              return {
+                success: false,
+                error: 'Graph database unavailable for remote site lookup',
+                health: null,
+              };
+            }
+
+            let row: { id: string; domain: string; php_version?: string; wp_version?: string } | undefined;
+
+            if ('install_name' in targetArgs) {
+              // WPE install - match by name and source
+              const installName = targetArgs.install_name as string;
+              row = db.prepare(
+                "SELECT id, domain, php_version, wp_version FROM sites WHERE source = 'wpe' AND LOWER(name) = ? LIMIT 1"
+              ).get(installName.toLowerCase()) as typeof row;
+            } else {
+              // External SSH - match by name (the alias) and source
+              const sshTarget = targetArgs.ssh_target as string;
+              const parsed = parseTarget(sshTarget);
+              const alias = parsed.alias!;
+              row = db.prepare(
+                "SELECT id, domain, php_version, wp_version FROM sites WHERE source = 'external' AND name = ? LIMIT 1"
+              ).get(alias) as typeof row;
+            }
+
+            if (!row) {
+              return {
+                success: false,
+                error: `Remote site not found in graph database`,
+                health: null,
+              };
+            }
+
+            siteId = row.id;
+            siteInfo = {
+              domain: row.domain || '',
+              phpVersion: row.php_version || '8.0',
+            };
+            wpVersion = row.wp_version || null;
+          } else {
             return {
               success: false,
-              error: `Site not found: ${parsed.siteName}`,
+              error: 'Invalid target format',
               health: null,
             };
           }
 
-          const siteInfo = {
-            domain: site.domain || '',
-            phpVersion: (site as any)?.phpVersion || '8.0',
-          };
-
-          const scores = await services.healthCalculator!.calculateAllScores([site.id], { [site.id]: siteInfo });
-          const score = scores[site.id] || 0;
+          // Calculate score using the singular method to get full breakdown
+          const breakdown = await services.healthCalculator.calculateScore(siteId, siteInfo);
+          const { overall: score, factors, issuesByCategory } = breakdown;
 
           const status = score >= 80 ? 'healthy' : score >= 50 ? 'warning' : 'critical';
+
+          // Map issues to GraphQL shape with severity derived from factor scores
+          const issues = issuesByCategory.map(({ category, message }) => {
+            const factorScore = factors[category as keyof typeof factors] || 0;
+            const severity = factorScore >= 80 ? 'healthy' : factorScore >= 50 ? 'warning' : 'critical';
+            return { severity, message, category };
+          });
+
+          // Get plugin and theme counts from graph
+          const db = services.graphService?.getDb?.();
+          let plugins: { total: number; active: number; outdated: null } | null = null;
+          let themes: { total: number; active: number; outdated: null } | null = null;
+
+          if (db) {
+            try {
+              const pluginRow = db.prepare(
+                "SELECT COUNT(*) AS total, SUM(is_active) AS active FROM plugins WHERE site_id = ?"
+              ).get(siteId) as { total: number; active: number } | undefined;
+
+              if (pluginRow && pluginRow.total > 0) {
+                plugins = { total: pluginRow.total, active: pluginRow.active, outdated: null };
+              }
+
+              const themeRow = db.prepare(
+                "SELECT COUNT(*) AS total, SUM(is_active) AS active FROM themes WHERE site_id = ?"
+              ).get(siteId) as { total: number; active: number } | undefined;
+
+              if (themeRow && themeRow.total > 0) {
+                themes = { total: themeRow.total, active: themeRow.active, outdated: null };
+              }
+            } catch {
+              // Graph query failed, leave as null
+            }
+          }
 
           return {
             success: true,
             health: {
               status,
               score,
-              issues: [],
-              plugins: {
-                total: 0,
-                active: 0,
-                outdated: 0,
-              },
-              themes: {
-                total: 0,
-                active: 0,
-                outdated: 0,
-              },
+              issues,
+              plugins,
+              themes,
               wordpress: {
-                version: 'unknown',
-                updateAvailable: false,
+                version: wpVersion || 'unknown',
+                updateAvailable: null,
               },
             },
           };

@@ -184,9 +184,31 @@ fleetCommand
       console.log(`\nSite Health: ${target}`);
       console.log('─'.repeat(50));
       console.log(`Status:        ${statusIcon} ${health.status} (score: ${health.score}/100)`);
-      console.log(`WordPress:     ${health.wordpress.version}${health.wordpress.updateAvailable ? ' → update available' : ''}`);
-      console.log(`Plugins:       ${health.plugins.active}/${health.plugins.total} active (${health.plugins.outdated} outdated)`);
-      console.log(`Themes:        ${health.themes.active}/${health.themes.total} active (${health.themes.outdated} outdated)`);
+
+      const wpUpdateMsg = health.wordpress.updateAvailable === null
+        ? ''
+        : health.wordpress.updateAvailable
+          ? ' → update available'
+          : '';
+      console.log(`WordPress:     ${health.wordpress.version}${wpUpdateMsg}`);
+
+      if (health.plugins) {
+        const outdatedMsg = health.plugins.outdated === null
+          ? 'update status not tracked'
+          : `${health.plugins.outdated} outdated`;
+        console.log(`Plugins:       ${health.plugins.active}/${health.plugins.total} active (${outdatedMsg})`);
+      } else {
+        console.log(`Plugins:       no data (site not indexed)`);
+      }
+
+      if (health.themes) {
+        const outdatedMsg = health.themes.outdated === null
+          ? 'update status not tracked'
+          : `${health.themes.outdated} outdated`;
+        console.log(`Themes:        ${health.themes.active}/${health.themes.total} active (${outdatedMsg})`);
+      } else {
+        console.log(`Themes:        no data (site not indexed)`);
+      }
 
       if (health.issues.length > 0) {
         console.log(`\nIssues (${health.issues.length}):`);
