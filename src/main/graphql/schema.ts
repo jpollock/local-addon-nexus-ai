@@ -89,11 +89,31 @@ export const typeDefs = gql`
     lastSyncedAt: String
   }
 
+  "An external SSH-reachable host, registered with nexus host add."
+  type ExternalSite {
+    "SSH config alias — the name used in ssh:<alias>@<environment> targets"
+    alias: String!
+    "Graph row id, of the form ssh:<alias>"
+    id: ID!
+    "Registered environment: production, staging or development"
+    environment: String!
+    "Primary domain, if discovered by the probe"
+    domain: String
+    "WordPress version, if known"
+    wpVersion: String
+    "PHP version, if known"
+    phpVersion: String
+    "When the host was last synced, epoch ms"
+    lastSyncAt: Float
+  }
+
   type NexusSitesListResult {
     "Local sites"
     local: [LocalSite!]!
     "WPE sites"
     wpe: [WpeSite!]!
+    "External SSH hosts"
+    external: [ExternalSite!]!
   }
 
   type SiteDetails {

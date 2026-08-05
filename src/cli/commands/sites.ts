@@ -432,14 +432,23 @@ sitesCommand
               phpVersion
               linkedTo
             }
+            external {
+              alias
+              id
+              environment
+              domain
+              wpVersion
+              phpVersion
+              lastSyncAt
+            }
           }
         }
       `);
 
-      const { local, wpe } = result.nexusSitesList;
+      const { local, wpe, external } = result.nexusSitesList;
 
       if (options.json) {
-        console.log(JSON.stringify({ local, wpe }, null, 2));
+        console.log(JSON.stringify({ local, wpe, external }, null, 2));
         return;
       }
 
@@ -485,6 +494,21 @@ sitesCommand
             if (site.domain) {
               console.log(`    Domain: ${site.domain}`);
             }
+          }
+        }
+      }
+
+      // Display external sites
+      if (external && external.length > 0) {
+        console.log('\nExternal SSH Hosts:');
+        for (const site of external) {
+          console.log(`  ${site.alias} (${site.environment})`);
+          console.log(`    Target: ssh:${site.alias}@${site.environment}`);
+          if (site.domain) {
+            console.log(`    Domain: ${site.domain}`);
+          }
+          if (site.wpVersion) {
+            console.log(`    WordPress: ${site.wpVersion}`);
           }
         }
       }

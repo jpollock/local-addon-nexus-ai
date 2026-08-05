@@ -47,6 +47,7 @@ describe('fleet queries include external sites', () => {
       source: 'external',
       host: 'external',
       domain: 'example.com',
+      environment: 'production',
       is_active: true,
       wp_version: '6.8.0',
       php_version: '8.3',
@@ -299,6 +300,56 @@ describe('fleet queries include external sites', () => {
       expect(text).toContain('not found');
       expect(text).not.toContain('WordPress 6.');
     }
+  });
+
+  it('nexusSitesList includes registered external hosts', async () => {
+    const r = await (createResolvers(ctx()).Mutation as any).nexusSitesList();
+    expect(r.external).toHaveLength(1);
+    expect(r.external[0]).toMatchObject({
+      alias: 'ext-host',
+      id: 'ssh:ext-host',
+      environment: 'production',
+      wpVersion: '6.8.0',
+    });
+  });
+
+  it('nexusSitesList reports an empty php_version as null, not an empty string', async () => {
+    // Update the external site to have an empty php_version
+    await graphService.upsertSite({
+      id: 'ssh:ext-host',
+      name: 'ext-host',
+      source: 'external',
+      host: 'external',
+      domain: 'example.com',
+      is_active: true,
+      wp_version: '6.8.0',
+      php_version: '',
+      environment: 'production',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusSitesList();
+    expect(r.external[0].phpVersion).toBeNull();
+  });
+
+  it('nexusSitesList returns external: [] rather than failing when the graph is unavailable', async () => {
+    const noGraphCtx = {
+      services: {
+        graphService: { getDb: () => undefined },
+        twinService: { getAll: jest.fn().mockReturnValue([]) },
+        logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+        siteData: {
+          getSite: jest.fn().mockReturnValue(undefined),
+          getSites: jest.fn().mockReturnValue({}),
+        },
+      },
+      registry: {},
+    } as any;
+
+    const r = await (createResolvers(noGraphCtx).Mutation as any).nexusSitesList();
+    expect(r.external).toEqual([]);
+    expect(r.local).toBeDefined();
   });
 });
 

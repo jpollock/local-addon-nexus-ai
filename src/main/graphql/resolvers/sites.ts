@@ -134,10 +134,35 @@ export function createSiteResolvers(services: NexusServices) {
           console.warn('[Nexus GraphQL] WPE install processing error:', wpeErr.message);
         }
 
-        return { local, wpe };
+        // Build external sites list from the graph
+        let external: any[] = [];
+        try {
+          const db = services.graphService?.getDb();
+          if (db) {
+            const externalRows = db.prepare(`
+              SELECT id, name, environment, domain, wp_version, php_version, last_sync_at
+              FROM sites
+              WHERE source = 'external'
+            `).all() as any[];
+
+            external = externalRows.map((row: any) => ({
+              alias: row.name,
+              id: row.id,
+              environment: row.environment || 'unknown',
+              domain: row.domain || null,
+              wpVersion: row.wp_version || null,
+              phpVersion: row.php_version === '' ? null : (row.php_version || null),
+              lastSyncAt: row.last_sync_at || null,
+            }));
+          }
+        } catch (externalErr: any) {
+          console.warn('[Nexus GraphQL] External sites unavailable:', externalErr.message);
+        }
+
+        return { local, wpe, external };
       } catch (error: any) {
         console.error('[Nexus GraphQL] nexusSitesList error:', error.message);
-        return { local: [], wpe: [] };
+        return { local: [], wpe: [], external: [] };
       }
     },
 
