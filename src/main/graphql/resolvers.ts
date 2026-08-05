@@ -77,7 +77,7 @@ function resolveWpeGraphSite(query: string, graphService: NexusServices['graphSe
   const q = query.toLowerCase();
 
   // Exact name match first, then domain
-  const rows = db.prepare("SELECT * FROM sites WHERE source='wpe'").all() as any[];
+  const rows = db.prepare("SELECT * FROM sites WHERE source IN ('local','wpe','external')").all() as any[];
   const byName = rows.find((r: any) => r.name?.toLowerCase() === q);
   if (byName) return byName;
   const byDomain = rows.find((r: any) => r.domain?.toLowerCase() === q || r.remote_domain?.toLowerCase() === q);
@@ -1325,17 +1325,17 @@ export function createResolvers(context: ResolverContext) {
           // Local site twins
           const localTwins = services.twinService.getAll() ?? [];
 
-          // WPE-only graph sites (minimal twin shape for aggregation)
-          const wpeTwins: any[] = [];
+          // Graph sites (WPE + external, minimal twin shape for aggregation)
+          const graphTwins: any[] = [];
           try {
             if (graphService?.getDb?.()) {
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               const db = graphService.getDb()!;
-              const wpeRows = db.prepare("SELECT * FROM sites WHERE source='wpe'").all() as any[];
-              for (const row of wpeRows) {
+              const graphRows = db.prepare("SELECT * FROM sites WHERE source IN ('wpe','external')").all() as any[];
+              for (const row of graphRows) {
                 const hasPlugins = db.prepare('SELECT COUNT(*) as c FROM plugins WHERE site_id=?').get(row.id) as { c: number };
                 const comp = hasPlugins.c > 0 ? 'metadata' : (row.wp_version ? 'filesystem' : 'none');
-                wpeTwins.push({
+                graphTwins.push({
                   siteName: row.name,
                   wpVersion: row.wp_version ?? undefined,
                   phpVersion: row.php_version ?? undefined,
@@ -1349,9 +1349,9 @@ export function createResolvers(context: ResolverContext) {
                 });
               }
             }
-          } catch { /* WPE graph optional */ }
+          } catch { /* graph optional */ }
 
-          const twins = [...localTwins, ...wpeTwins];
+          const twins = [...localTwins, ...graphTwins];
 
           const completeness = { none: 0, filesystem: 0, metadata: 0, indexed: 0 };
           let staleCount = 0;
@@ -1446,20 +1446,20 @@ export function createResolvers(context: ResolverContext) {
 
           const localTwins = services.twinService.getAll() ?? [];
 
-          // Supplement with WPE graph sites (plugins from graph plugins table)
-          const wpePluginTwins: any[] = [];
+          // Supplement with graph sites (WPE + external, plugins from graph plugins table)
+          const graphPluginTwins: any[] = [];
           try {
             const graphService = services.graphService;
             if (graphService?.getDb?.()) {
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               const db = graphService.getDb()!;
-              const wpeRows = db.prepare("SELECT id, name FROM sites WHERE source='wpe'").all() as any[];
-              for (const row of wpeRows) {
+              const graphRows = db.prepare("SELECT id, name FROM sites WHERE source IN ('wpe','external')").all() as any[];
+              for (const row of graphRows) {
                 const pluginRows = db.prepare(
                   'SELECT slug as name, name as title, is_active FROM plugins WHERE site_id=?'
                 ).all(row.id) as any[];
                 if (pluginRows.length) {
-                  wpePluginTwins.push({
+                  graphPluginTwins.push({
                     siteName: row.name,
                     completeness: 'metadata',
                     plugins: pluginRows.map((p: any) => ({
@@ -1473,7 +1473,7 @@ export function createResolvers(context: ResolverContext) {
             }
           } catch { /* optional */ }
 
-          const twins = [...localTwins, ...wpePluginTwins];
+          const twins = [...localTwins, ...graphPluginTwins];
 
           const pluginMap = new Map<string, {
             slug: string;
@@ -1567,16 +1567,16 @@ export function createResolvers(context: ResolverContext) {
 
           const localTwins = services.twinService.getAll() ?? [];
           const graphService = services.graphService;
-          const wpeTwins: any[] = [];
+          const graphTwins: any[] = [];
 
           try {
             if (graphService?.getDb?.()) {
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               const rows = graphService.getDb()!
-                .prepare("SELECT name, wp_version, php_version FROM sites WHERE source='wpe' AND is_active=1")
+                .prepare("SELECT name, wp_version, php_version, source FROM sites WHERE source IN ('wpe','external') AND is_active=1")
                 .all() as any[];
               for (const row of rows) {
-                wpeTwins.push({ siteName: row.name, wpVersion: row.wp_version, phpVersion: row.php_version, source: 'wpe' });
+                graphTwins.push({ siteName: row.name, wpVersion: row.wp_version, phpVersion: row.php_version, source: row.source });
               }
             }
           } catch { /* optional */ }
@@ -1584,7 +1584,7 @@ export function createResolvers(context: ResolverContext) {
           const normalizePhp = (v?: string) => v ? (v.match(/^(\d+\.\d+)/)?.[1] ?? v) : 'unknown';
           const all = [
             ...localTwins.map((t: any) => ({ siteName: t.siteName, wpVersion: t.wpVersion, phpVersion: t.phpVersion, source: 'local' })),
-            ...wpeTwins,
+            ...graphTwins,
           ];
 
           const matched = all.filter((s) => {
@@ -2438,18 +2438,18 @@ export function createResolvers(context: ResolverContext) {
 
           const indexEntries = services.indexRegistry.listAll();
           const graphService = services.graphService;
-          let wpeSiteIds: string[] = [];
+          let graphSiteIds: string[] = [];
           if (graphService?.getDb?.()) {
             try {
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-              const rows = graphService.getDb()!!.prepare("SELECT id FROM sites WHERE source='wpe'").all() as Array<{ id: string }>;
-              wpeSiteIds = rows.map((r) => r.id);
-            } catch { /* skip wpe */ }
+              const rows = graphService.getDb()!!.prepare("SELECT id FROM sites WHERE source IN ('wpe','external')").all() as Array<{ id: string }>;
+              graphSiteIds = rows.map((r) => r.id);
+            } catch { /* skip graph */ }
           }
           const allSiteIds = [
             ...indexEntries.map((e: any) => e.siteId),
-            ...wpeSiteIds,
+            ...graphSiteIds,
           ];
           const siteNames = new Map(indexEntries.map((e: any) => [e.siteId, e.siteName || e.siteId]));
 
