@@ -45,6 +45,7 @@ interface SettingsTabState {
   sites: SiteItem[];
   wpeAccounts: WpeAccount[];
   wpeInstalls: WpeInstall[];
+  externalHosts: Array<{ alias: string; environment: string; domain: string }>;
   loading: boolean;
   excludedExpanded: boolean;
   accessExpanded: boolean;
@@ -94,6 +95,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     sites: [],
     wpeAccounts: [],
     wpeInstalls: [],
+    externalHosts: [],
     loading: true,
     excludedExpanded: false,
     accessExpanded: false,
@@ -114,11 +116,12 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
 
   async loadAll(): Promise<void> {
     const ipc = this.props.electron.ipcRenderer;
-    const [settings, sitesResult, accounts, installs] = await Promise.all([
+    const [settings, sitesResult, accounts, installs, externalHosts] = await Promise.all([
       ipc.invoke(IPC_CHANNELS.GET_SETTINGS).catch(() => null),
       ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => ({ sites: [] })),
       ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_WPE_INSTALLS_CACHE).catch(() => []),
+      ipc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS).catch(() => []),
     ]);
     if (!this.mounted) return;
     this.setState({
@@ -126,6 +129,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       sites: sitesResult?.sites ?? [],
       wpeAccounts: Array.isArray(accounts) ? accounts : [],
       wpeInstalls: Array.isArray(installs) ? installs : [],
+      externalHosts: Array.isArray(externalHosts) ? externalHosts : [],
       loading: false,
     });
   }
@@ -200,6 +204,16 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     const val = parseInt(e.target.value, 10);
     const hours = isNaN(val) || val < 1 ? 1 : val > 168 ? 168 : val;
     this.saveSetting({ wpeContentIndexIntervalHours: hours });
+  };
+
+  handleExternalRefreshAutoEnabledChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    this.saveSetting({ externalRefreshAutoEnabled: e.target.checked });
+  };
+
+  handleExternalRefreshIntervalChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const val = parseInt(e.target.value, 10);
+    const hours = isNaN(val) || val < 1 ? 1 : val > 168 ? 168 : val;
+    this.saveSetting({ externalRefreshIntervalHours: hours });
   };
 
   // ── WPE Access handlers ──────────────────────────────────────────────────
@@ -364,6 +378,37 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
         ),
       ),
 
+      (() => {
+        const { wpeAccounts } = this.state;
+        if (wpeAccounts.length === 0) return null;
+        const accountFilter = settings.wpeAccountFilter;
+        const allAccountIds = wpeAccounts.map(a => a.id);
+        const includedIds: string[] = accountFilter ?? allAccountIds;
+        const allIncluded = !accountFilter || includedIds.length === allAccountIds.length;
+        return React.createElement('div', { style: { marginBottom: 14 } },
+          React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 } },
+            React.createElement('span', { style: { fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: 'var(--nxai-card-sub, #6b7280)' } }, 'WP Engine accounts'),
+            React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)' } }, '— included accounts are synced and refreshed on the schedule below'),
+          ),
+          React.createElement('div', {
+            style: { display: 'flex', flexWrap: 'wrap' as const, gap: 5, padding: '9px 12px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 7, maxHeight: 110, overflowY: 'auto' as const },
+          },
+            ...wpeAccounts.map(a => {
+              const on = allIncluded || includedIds.includes(a.id);
+              return React.createElement('span', {
+                key: a.id,
+                title: on ? 'Click to exclude this account' : 'Click to include this account',
+                style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, userSelect: 'none' as const, background: on ? 'rgba(81,187,123,0.12)' : 'rgba(128,128,128,0.06)', color: on ? '#51BB7B' : 'var(--nxai-status-neutral, #9ca3af)', border: on ? '1px solid rgba(81,187,123,0.3)' : '1px dashed var(--nxai-card-border, #30363d)', opacity: on ? 1 : 0.6 },
+                onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handleAccountScopeToggle(a.id, !on); },
+              },
+                React.createElement('span', { style: { fontSize: 9 } }, on ? '✓' : '✗'),
+                a.nickname ?? a.name ?? a.id,
+              );
+            }),
+          ),
+        );
+      })(),
+
       sublabel('WP Engine Installs'),
       React.createElement('div', { style: cardStyle },
         React.createElement('div', { style: rowStyle },
@@ -433,19 +478,57 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
           ),
         ),
       ),
+
+      sublabel('External SSH Hosts'),
+      React.createElement('div', { style: { marginBottom: 6 } },
+        this.state.externalHosts.length === 0
+          ? React.createElement('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub, #6b7280)', padding: '4px 0 10px' } },
+              'No external hosts registered. Run `nexus host add <alias>` from the CLI.')
+          : React.createElement('div', {
+              style: { display: 'flex', flexWrap: 'wrap' as const, gap: 5, padding: '9px 12px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: '7px 7px 0 0', borderBottom: 'none' },
+            },
+              ...this.state.externalHosts.map(h =>
+                React.createElement('span', {
+                  key: h.alias,
+                  title: `${h.domain || h.alias} — ${h.environment}`,
+                  style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(128,128,128,0.06)', color: 'var(--nxai-status-neutral, #9ca3af)', border: '1px dashed var(--nxai-card-border, #30363d)' },
+                }, h.alias),
+              ),
+            ),
+      ),
+      React.createElement('div', { style: { ...cardStyle, borderTopLeftRadius: this.state.externalHosts.length ? 0 : 8, borderTopRightRadius: this.state.externalHosts.length ? 0 : 8 } },
+        React.createElement('div', { style: { ...rowStyle, borderBottom: 'none' } },
+          React.createElement('div', { style: rowLabelStyle },
+            React.createElement('div', { style: rowTitleStyle }, 'Metadata refresh for external hosts'),
+            React.createElement('div', { style: rowSubStyle }, 'Off by default. Nexus does not SSH into a third-party host on a timer unless you ask it to.'),
+          ),
+          React.createElement('div', { style: rowControlStyle },
+            React.createElement('input', {
+              type: 'checkbox',
+              checked: settings.externalRefreshAutoEnabled ?? false,
+              onChange: this.handleExternalRefreshAutoEnabledChange,
+              title: 'Enable automatic external host metadata refresh',
+            }),
+            React.createElement('input', {
+              type: 'number', min: 1, max: 168,
+              value: settings.externalRefreshIntervalHours ?? 24,
+              onChange: this.handleExternalRefreshIntervalChange,
+              disabled: !(settings.externalRefreshAutoEnabled ?? false),
+              style: { ...numInputStyle, opacity: (settings.externalRefreshAutoEnabled ?? false) ? 1 : 0.4 },
+            }),
+            React.createElement('span', { style: unitStyle }, 'hrs'),
+          ),
+        ),
+      ),
     );
   }
 
   renderWpeAccessSection(): React.ReactNode {
-    const { settings, wpeAccounts, wpeInstalls, expandedOps, addingException, installSearch, accessExpanded } = this.state;
+    const { settings, wpeInstalls, expandedOps, addingException, installSearch, accessExpanded } = this.state;
     if (!settings) return null;
 
     const perms = settings.wpeOperationPermissions ?? {};
     const exceptions = settings.wpeSiteExceptions ?? [];
-    const accountFilter = settings.wpeAccountFilter;
-    const allAccountIds = wpeAccounts.map(a => a.id);
-    const includedIds: string[] = accountFilter ?? allAccountIds;
-    const allIncluded = !accountFilter || includedIds.length === allAccountIds.length;
 
     const getPermVal = (op: WpeOperation, env: WpeEnv): boolean => {
       const custom = (perms as any)[op]?.[env];
@@ -474,7 +557,6 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     const blockedForPush = !getPermVal('push', 'production');
     const blockedForDelete = !getPermVal('delete', 'production');
     const summaryParts: string[] = [];
-    if (wpeAccounts.length > 0) summaryParts.push(`${includedIds.length} account${includedIds.length !== 1 ? 's' : ''}`);
     const blockedItems: string[] = [];
     if (blockedForWrite) blockedItems.push('SSH write');
     if (blockedForPush) blockedItems.push('push');
@@ -630,33 +712,6 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       );
     };
 
-    const accountsBar = wpeAccounts.length > 0 ? React.createElement('div', {
-      style: { marginBottom: 14 },
-    },
-      // Label + explanation
-      React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 } },
-        React.createElement('span', { style: { fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: 'var(--nxai-card-sub, #6b7280)' } }, 'Account scope'),
-        React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)' } }, '— click to include / exclude accounts from the permissions below'),
-      ),
-      // Scrollable pill container — all accounts visible
-      React.createElement('div', {
-        style: { display: 'flex', flexWrap: 'wrap' as const, gap: 5, padding: '9px 12px', background: 'var(--nxai-card-bg, #21262d)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 7, maxHeight: 110, overflowY: 'auto' as const },
-      },
-        ...wpeAccounts.map(a => {
-          const on = allIncluded || includedIds.includes(a.id);
-          return React.createElement('span', {
-            key: a.id,
-            title: on ? 'Click to exclude this account' : 'Click to include this account',
-            style: { fontSize: 11, padding: '3px 8px', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, userSelect: 'none' as const, background: on ? 'rgba(81,187,123,0.12)' : 'rgba(128,128,128,0.06)', color: on ? '#51BB7B' : 'var(--nxai-status-neutral, #9ca3af)', border: on ? '1px solid rgba(81,187,123,0.3)' : '1px dashed var(--nxai-card-border, #30363d)', opacity: on ? 1 : 0.6 },
-            onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handleAccountScopeToggle(a.id, !on); },
-          },
-            React.createElement('span', { style: { fontSize: 9 } }, on ? '✓' : '✗'),
-            a.nickname ?? a.name ?? a.id,
-          );
-        }),
-      ),
-    ) : null;
-
     return React.createElement('div', {
       style: { border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 8, overflow: 'hidden', marginBottom: 14 },
     },
@@ -676,7 +731,6 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       accessExpanded ? React.createElement('div', {
         style: { borderTop: '1px solid var(--nxai-card-border, #30363d)', padding: 16, background: 'rgba(255,255,255,0.01)' },
       },
-        accountsBar,
         React.createElement('div', { style: { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub, #6b7280)', marginBottom: 9 } }, 'Operation Permissions'),
         ...OPERATIONS.map(renderOpCard),
         React.createElement('div', {
