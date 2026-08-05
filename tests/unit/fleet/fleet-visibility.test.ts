@@ -257,4 +257,47 @@ describe('fleet queries include external sites', () => {
       expect(text).toContain('price');
     }
   });
+
+  it('wp_core_version refuses to serve cached version on name collision', async () => {
+    const { coreVersionHandler } = require('../../../src/main/mcp/modules/wp-cli/core-version');
+
+    // Seed a name collision: same name under two different sources
+    await graphService.upsertSite({
+      id: 'collision-local',
+      name: 'collision-site',
+      source: 'local',
+      host: 'local',
+      domain: 'collision.local',
+      is_active: true,
+      wp_version: '6.7.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertSite({
+      id: 'collision-wpe',
+      name: 'collision-site',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'collision.wpengine.com',
+      remote_install_id: 'collision-wpe',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const result = await coreVersionHandler.execute(
+      { site: 'collision-site' },
+      ctx().services
+    );
+
+    // Should return the original error (site not found), NOT a cached version
+    expect('content' in result).toBe(true);
+    if ('content' in result) {
+      const text = (result.content[0] as any).text;
+      expect(text).toContain('not found');
+      expect(text).not.toContain('WordPress 6.');
+    }
+  });
 });

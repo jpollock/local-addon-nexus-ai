@@ -47,7 +47,7 @@ export const fleetOverviewHandler: McpToolHandler = {
               COUNT(*) as count,
               SUM(post_count) as total_posts,
               SUM(user_count) as total_users,
-              COUNT(CASE WHEN wp_version IS NOT NULL AND source IN ('wpe','external') THEN 1 END) as with_wp_version,
+              COUNT(CASE WHEN wp_version IS NOT NULL THEN 1 END) as with_wp_version,
               COUNT(CASE WHEN post_count IS NOT NULL THEN 1 END) as with_post_count,
               MAX(last_post_at) as most_recent_post,
               COUNT(CASE WHEN source = 'wpe' THEN 1 END) as wpe_count

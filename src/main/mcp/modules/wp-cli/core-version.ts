@@ -42,10 +42,16 @@ export const coreVersionHandler: McpToolHandler = {
           const db = services.graphService?.getDb?.();
           if (db) {
             try {
-              const row = db.prepare(
-                "SELECT name, wp_version, last_sync_at FROM sites WHERE source IN ('local','wpe','external') AND LOWER(name)=? AND wp_version IS NOT NULL LIMIT 1"
-              ).get(query.toLowerCase()) as { name: string; wp_version: string; last_sync_at: number } | undefined;
-              if (row?.wp_version) {
+              // Check for name collisions across sources — refuse to guess if ambiguous
+              const rows = db.prepare(
+                "SELECT name, wp_version, last_sync_at, source FROM sites WHERE LOWER(name)=? AND wp_version IS NOT NULL"
+              ).all(query.toLowerCase()) as Array<{ name: string; wp_version: string; last_sync_at: number; source: string }>;
+
+              if (rows.length > 1) {
+                // Name collision — do not guess which site the user meant
+                // Fall through to return the original error
+              } else if (rows.length === 1) {
+                const row = rows[0];
                 const ageMs = Date.now() - (row.last_sync_at ?? 0);
                 const ageHours = Math.floor(ageMs / 3600000);
                 const ageNote = ageHours < 1 ? 'synced recently'
@@ -76,7 +82,7 @@ export const coreVersionHandler: McpToolHandler = {
         if (db) {
           try {
             const row = db.prepare(
-              "SELECT wp_version, last_sync_at FROM sites WHERE source IN ('local','wpe','external') AND name=? AND wp_version IS NOT NULL LIMIT 1"
+              "SELECT wp_version, last_sync_at FROM sites WHERE source='wpe' AND name=? AND wp_version IS NOT NULL LIMIT 1"
             ).get(transport.siteRef.installName) as { wp_version: string; last_sync_at: number } | undefined;
             if (row?.wp_version) {
               const ageMs = Date.now() - (row.last_sync_at ?? 0);
