@@ -206,7 +206,7 @@ Expected: `totalSites` is 1 (Local only) and `totalPlugins` is 0.
 
 - [ ] **Step 3: Implement**
 
-Count sites and plugins/themes from the graph DB; keep the `getSiteStatus` loop over `siteData` for running/halted only. Add `localSites` to the returned summary, to `NexusFleetHealthSummary` in `src/main/graphql/schema.ts`, and to the CLI's query and output in `src/cli/commands/fleet.ts` — a field added to the resolver but not the query is invisible.
+Count sites and plugins/themes from the graph DB; keep the `getSiteStatus` loop over `siteData` for running/halted only. Add `localSites` to the returned summary, to `FleetHealthSummary` in `src/main/graphql/schema.ts:1011`, and to the CLI's query and output in `src/cli/commands/fleet.ts` — a field added to the resolver but not the query is invisible.
 
 If `themes` has no rows for any source, still write the query; returning a real 0 differs from returning a hardcoded one.
 
@@ -339,4 +339,4 @@ git commit -m "docs(fleet): fleet is local + WPE + SSH"
 
 **Placeholders:** none. Counts are measured from the live graph DB (`local 33 · wpe 346, 331 active · external 1`; plugins `local 30/342 · wpe 294/4523 · external 0`), not estimated. Two places tell the implementer to check reality rather than trust the plan — the fleet test fixture in Task 1 and whether each query already excludes local — because both are cheap to confirm and expensive to assume.
 
-**Type consistency:** `localSites` is added to the summary in Task 3 and must appear in three places — the resolver, `NexusFleetHealthSummary` in `schema.ts`, and the CLI query in `fleet.ts`. Task 3 names all three.
+**Type consistency:** `localSites` is added to the summary in Task 3 and must appear in three places — the resolver, `FleetHealthSummary` in `schema.ts:1011`, and the CLI query in `fleet.ts`. Task 3 names all three.
