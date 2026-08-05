@@ -196,6 +196,9 @@ export const IPC_CHANNELS = {
   GET_WPE_ACCOUNTS: `${ADDON_PREFIX}:wpe:get-accounts`,
   GET_WPE_INSTALLS_CACHE: `${ADDON_PREFIX}:wpe:get-installs-cache`,
 
+  // External SSH Hosts
+  GET_EXTERNAL_HOSTS: `${ADDON_PREFIX}:get-external-hosts`,
+
   // UI Navigation
   NAVIGATE_TO_PREFERENCES: `${ADDON_PREFIX}:ui:navigate-to-preferences`,
 

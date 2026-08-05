@@ -964,6 +964,23 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.GET_EXTERNAL_HOSTS, () => {
+    try {
+      const db = graphService?.getDb?.();
+      if (!db) return [];
+      const rows = db.prepare(
+        "SELECT name, environment, domain FROM sites WHERE source = 'external' AND is_active = 1"
+      ).all() as Array<{ name: string; environment: string | null; domain: string | null }>;
+      return rows.map((r) => ({
+        alias: r.name,
+        environment: r.environment ?? 'production',
+        domain: r.domain ?? '',
+      }));
+    } catch {
+      return [];
+    }
+  });
+
   safeHandle(IPC_CHANNELS.GET_SETTINGS, () => {
     try {
       const raw = registryStorage.get(STORAGE_KEYS.SETTINGS) as any;
