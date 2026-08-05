@@ -138,11 +138,21 @@ So scoping the external-host work to `wp` is not convenience. `sites` is Local
 lifecycle and `wpe` is WPE platform; both are structurally absent for external hosts
 by design.
 
-**The one non-`wp` external gap that is real: fleet visibility.** 6 MCP fleet modules
-were widened to include external sites, **6 remain WPE-only**, and **11 GraphQL
-resolver queries still filter `source='wpe'`**. External sites therefore appear in
-some fleet views and not others — worse than uniform absence, because you cannot tell
-which surfaces to trust. This is Plan B1's unfinished work and deserves its own slice.
+**The one non-`wp` external gap that is real: fleet visibility.** All 6 MCP fleet
+modules (`fleet-overview`, `fleet-plugins`, `fleet-themes`, `fleet-health`,
+`find-sites-with-plugin`, `find-sites-with-theme`) were widened in Tasks 1-4 to include
+external sites. **5 GraphQL resolver queries still filter `source='wpe'`** (at lines 459,
+1255, 2531, 3277, 4942 in `resolvers.ts`), all of them deliberately: 459 and 3277 are
+inside `nexusWpeSiteStatus` and `nexusContentSearchAll`, which are scoped to WPE by name;
+1255, 2531, and 4942 are in WPE-specific resolvers (`nexusWpeDiagnose`,
+`nexusWpeResolveSite`, `nexusWpeResolveInstallName`) that key on `remote_install_id` or
+CAPI and are WPE by nature. `nexusContentSearchAll:3277` is excluded by design: external
+content indexing is opt-in per Spec 1 §9 and is not built, so widening it would search
+zero documents. All remaining `source='wpe'` queries in the MCP layer (16 total) are
+likewise in the `wpe/` module — `deep-refresh.ts`, `detect-drift.ts`, `fleet-versions.ts`,
+`helpers.ts`, `wpe-link.ts` — and are legitimately WPE platform operations that key on
+`remote_install_id`, `wpe_site_id` or `account_id`. External sites now appear uniformly
+across all fleet views.
 
 ### Duplication: product-wide, but the dangerous part is not
 

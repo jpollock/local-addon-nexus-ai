@@ -174,6 +174,75 @@ Target syntax: `ssh:<alias>@<production|staging|development>`.
   this; it keys off which argument was supplied.
 - **`resolveTransport` does not audit.** `nexusWpCommand` must keep calling
   `auditDirectOperation` itself, on both outcomes.
+- **Fleet means local + WPE + SSH.** The graph `sites` table holds all three
+  (`source` is `'local' | 'wpe' | 'external'`), so a fleet query filters
+  `source IN ('local','wpe','external')` — never `source='wpe'`, and never
+  `source != 'local'`. Queries keying on `remote_install_id`, `wpe_site_id`,
+  `account_id` or CAPI are WP Engine by nature and stay as they are.
+- **External hosts have no background refresh.** Nothing populates their plugin
+  and theme rows, so they appear in fleet views with empty data until a command
+  is run against them. That is the external refresh schedule, still an open
+  product decision — do not add a scheduler without one.
+
+---
+
+## Fleet counts — what is real and what is not
+
+**Local's store and the graph disagree, and each is authoritative for different
+things.** `sites.json` holds 71 Local sites; the graph holds 33 rows with
+`source='local'`, because a local site only gets a graph row once indexed.
+Nothing reconciles them. So: **count local sites from `services.siteData`, and
+count WPE and external from the graph.** `nexusFleetHealth` and
+`nexusFleetSummary` both do this. A fleet count taken purely from the graph
+undercounts by ~38 sites; one taken purely from `siteData` misses every remote
+site.
+
+Consequence: `runningSites + haltedSites === localSites`, and neither sums to
+`totalSites`. That is correct — `getSiteStatus` is a Local concept and Nexus
+does not start or stop a remote host.
+
+**Update availability is not persisted anywhere.** Neither `plugins` nor
+`themes` has an `update_version` / `latest_version` column, and
+`GraphService.upsertPlugin` writes only eight columns across 11 call sites.
+Every `updateAvailable` in the codebase is computed live from WP-CLI's
+`update_version` at query time, or from a live wp.org lookup in
+`SiteDataResolver`. Fleet-wide outdated counts therefore **cannot** be served
+from the graph, and are reported as `null` — never `0`. A `0` in an *outdated*
+field reads as an all-clear on the one number a user acts on. If you add
+persistence for this, it needs a column, a migration, all 11 writers, and a
+staleness policy.
+
+**Plugin and theme totals cover only sites the graph has scanned** — 312 of 403
+have plugin rows, 249 have theme rows. Report the coverage
+(`sitesWithPluginData` / `sitesWithThemeData`), do not imply a complete count.
+Do not name such a count "indexed": in this codebase `indexed` already means
+the content index (`indexRegistry`, `state === 'indexed'`), which is a
+different population and the one that feeds the health scores.
+
+**Health scoring is Local-shaped; remote targets evaluate a subset.**
+`calculateMaintenance` reads `indexRegistry` keyed by Local site id and
+`calculateActivity` reads local-only event and content tables, so both score 0
+for a WPE or external target — 35% of the weight, enough to render a healthy
+production install as `critical` with "has never been indexed" as its top
+issue. `calculateScore` therefore takes an optional factor list; remote targets
+pass `['security','performance','stability']` and the weights are renormalised
+**inside** the calculator. `SiteHealth.factorsEvaluated` reports the basis. If
+you make maintenance or activity work for remote sites, widen that list.
+
+**The HTTPS check reads `site_url`, not `domain`.** Domains are stored bare —
+zero of 365 active rows carry a scheme — so `domain.startsWith('https')` used
+to fire "Site is not using HTTPS" on 100% of sites, wrongly, including every
+WPE install. `site_url` carries a real scheme (273 of 331 WPE rows: 240 https,
+29 http). When neither carries a scheme the check emits **no issue and no
+penalty**: unknown is not insecure.
+
+**Names collide across sources.** `goldenecomm`, `jpp0413p`, `myloop`,
+`psbtest2` and `testjppstg` each exist as both a `wpe` install and a Local
+site. Any name-keyed query must constrain by `source`, and a bare-name lookup
+that cannot disambiguate must decline rather than pick — see
+`resolveTargetArgs`, which throws with the three disambiguated forms, and
+`wp_core_version`'s cached fallback, which returns nothing when a name matches
+more than one row.
 
 ---
 
