@@ -74,3 +74,40 @@ export function resolveRemoteGraphSite(db: any, name: unknown): RemoteGraphSiteR
   }
   return { kind: 'ok', siteId: rows[0].id, siteName: rows[0].name, source: rows[0].source };
 }
+
+/**
+ * Outcome of resolving a bare name against ALL three fleet sources
+ * (local, wpe, external) in one call. Local is checked first, then the
+ * graph, using resolveRemoteGraphSite's collision-decline logic.
+ */
+export type AnySiteResult =
+  | { kind: 'ok'; id: string; name: string; source: 'local' | 'wpe' | 'external' }
+  | { kind: 'none' }
+  | { kind: 'ambiguous'; matches: string[] };
+
+/**
+ * Resolve a bare name/ID/domain against Local's own site store first, then
+ * fall back to the graph for WPE and external hosts via resolveRemoteGraphSite.
+ * Use this in any MCP tool that currently calls resolveSite() alone and needs
+ * WPE/external support too.
+ */
+export function resolveAnySite(
+  query: string,
+  siteData: SiteDataAccessor,
+  graphService: { getDb?: () => any } | undefined,
+): AnySiteResult {
+  const local = resolveSite(query, siteData);
+  if (local) {
+    return { kind: 'ok', id: local.id, name: local.name, source: 'local' };
+  }
+
+  const db = graphService?.getDb?.();
+  const remote = resolveRemoteGraphSite(db, query);
+  if (remote.kind === 'ok') {
+    return { kind: 'ok', id: remote.siteId, name: remote.siteName, source: remote.source as 'wpe' | 'external' };
+  }
+  if (remote.kind === 'ambiguous') {
+    return { kind: 'ambiguous', matches: remote.matches };
+  }
+  return { kind: 'none' };
+}
