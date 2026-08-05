@@ -2644,7 +2644,17 @@ export function createResolvers(context: ResolverContext) {
             };
             wpVersion = row.wp_version || null;
 
-            factorsToEvaluate = isExternal ? [] : ['security', 'performance'];
+            // External hosts become scoreable once L2 data actually exists —
+            // a plugin row (Task 1-6 populate these on demand) and a real
+            // php_version. Otherwise stay at the existing "no data" path.
+            const hasPlugins = isExternal && (db.prepare(
+              'SELECT COUNT(*) as c FROM plugins WHERE site_id = ?'
+            ).get(row.id) as { c: number }).c > 0;
+            const externalScoreable = hasPlugins && !!row.php_version;
+
+            factorsToEvaluate = isExternal
+              ? (externalScoreable ? ['security', 'performance'] : [])
+              : ['security', 'performance'];
           } else {
             return {
               success: false,

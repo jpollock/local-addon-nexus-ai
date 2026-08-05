@@ -1,7 +1,32 @@
+// --- FLEET_COMPLETENESS IPC channel capture --------------------------------
+// FLEET_COMPLETENESS is registered via safeHandle/ipcMain.handle inside
+// registerIpcHandlers — it is not exported as a plain function, so it cannot
+// be called directly. This mirrors the pattern in
+// tests/unit/audit/sentinelExecuteAudit.test.ts. The mock must be set up
+// before anything transitively requires 'electron' (createResolvers does,
+// via KeyVault.ts), or the jest.mock factory runs before `mockIpc` is
+// initialized (TDZ).
+class MockIpcMain {
+  handlers = new Map<string, Function>();
+  handle(channel: string, handler: Function) { this.handlers.set(channel, handler); }
+  on() { /* sync channels irrelevant here */ }
+  removeHandler(channel: string) { this.handlers.delete(channel); }
+  removeAllListeners() { /* no-op in tests */ }
+  invoke(channel: string, ...args: any[]) {
+    const handler = this.handlers.get(channel);
+    if (!handler) throw new Error(`No handler registered for ${channel}`);
+    return handler({}, ...args);
+  }
+}
+const mockIpc = new MockIpcMain();
+jest.mock('electron', () => ({ ipcMain: mockIpc, shell: { openPath: jest.fn() }, app: { getPath: () => '/tmp' } }));
+
 import * as path from 'path';
 import * as fs from 'fs';
 import { GraphService } from '../../../src/main/events/GraphService';
 import { createResolvers } from '../../../src/main/graphql/resolvers';
+import { registerIpcHandlers } from '../../../src/main/ipc-handlers';
+import { IPC_CHANNELS } from '../../../src/common/constants';
 
 describe('fleet queries include external sites', () => {
   let graphService: GraphService;
@@ -1232,5 +1257,254 @@ describe('nexusFleetSiteHealth accepts all three target types', () => {
     const r = await (createResolvers(context).Mutation as any).nexusFleetSiteHealth(null, { target: 'local-site@local' });
     expect(r.success).toBe(true);
     expect(r.health.factorsEvaluated).toEqual(['security', 'performance', 'maintenance', 'activity', 'stability']);
+  });
+});
+
+describe('FLEET_COMPLETENESS counts external hosts', () => {
+  let graphService: GraphService;
+  let testDbPath: string;
+
+  function registerDeps(localSites: Record<string, any> = {}) {
+    const noop = () => {};
+    const deps: any = {
+      siteData: { getSite: () => null, getSites: () => localSites },
+      localServicesBridge: {},
+      indexRegistry: { listAll: () => [], get: () => null, update: noop },
+      embeddingService: {},
+      contentPipeline: {},
+      vectorStore: {},
+      registryStorage: { get: () => null, set: noop },
+      localLogger: { info: noop, warn: noop, error: noop, debug: noop },
+      getMcpServer: () => null,
+      getStartupStatus: () => ({ ready: true, phase: 'ready' }),
+      graphService,
+      eventProcessor: {},
+      vectorDbPath: '/tmp/nexus-test-vectors.db',
+    };
+    registerIpcHandlers(deps);
+  }
+
+  beforeEach(async () => {
+    testDbPath = path.join(__dirname, `test-fleet-completeness-${Date.now()}-${Math.random()}.db`);
+    graphService = new GraphService(testDbPath);
+    await graphService.initialize();
+  });
+
+  afterEach(async () => {
+    await graphService.close();
+    if (fs.existsSync(testDbPath)) {
+      fs.unlinkSync(testDbPath);
+    }
+  });
+
+  it('counts external hosts', async () => {
+    await graphService.upsertSite({
+      id: 'local-1',
+      name: 'local-site',
+      source: 'local',
+      host: 'local',
+      domain: 'local.local',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertSite({
+      id: 'wpe-1',
+      name: 'wpe-site',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'wpe.wpengine.com',
+      remote_install_id: 'wpe-1',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertSite({
+      id: 'ssh:ext-host',
+      name: 'ext-host',
+      source: 'external',
+      host: 'external',
+      domain: 'example.com',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    // Local site count comes from Local's own store (siteData.getSites()),
+    // not the graph — see CLAUDE.md "Fleet counts". The graph row above
+    // supplies `configured` for it.
+    registerDeps({ 'local-1': { id: 'local-1', name: 'local-site' } });
+    const r: any = mockIpc.invoke(IPC_CHANNELS.FLEET_COMPLETENESS);
+    expect(r.total).toBe(3); // denominator now includes external
+    expect(r.scanned).toBe(3);
+    expect(r.configured).toBe(3); // all three have wp_version
+    expect(r.searchable).toBe(0); // none indexed — honest, not hidden
+  });
+
+  it('excludes an inactive (removed) external host from the count', async () => {
+    await graphService.upsertSite({
+      id: 'ssh:ext-active',
+      name: 'ext-active',
+      source: 'external',
+      host: 'external',
+      domain: 'active.example.com',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertSite({
+      id: 'ssh:ext-removed',
+      name: 'ext-removed',
+      source: 'external',
+      host: 'external',
+      domain: 'ext-removed',
+      is_active: false,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    registerDeps();
+    const r: any = mockIpc.invoke(IPC_CHANNELS.FLEET_COMPLETENESS);
+    expect(r.total).toBe(1);
+  });
+});
+
+describe('nexusFleetSiteHealth scores an external host once it has data', () => {
+  let graphService: GraphService;
+  let testDbPath: string;
+
+  beforeEach(async () => {
+    testDbPath = path.join(__dirname, `test-external-health-${Date.now()}-${Math.random()}.db`);
+    graphService = new GraphService(testDbPath);
+    await graphService.initialize();
+  });
+
+  afterEach(async () => {
+    await graphService.close();
+    if (fs.existsSync(testDbPath)) {
+      fs.unlinkSync(testDbPath);
+    }
+  });
+
+  function ctx() {
+    return {
+      services: {
+        graphService,
+        logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+        siteData: {
+          getSite: jest.fn().mockReturnValue(undefined),
+          getSites: jest.fn().mockReturnValue({}),
+        },
+        healthCalculator: {
+          calculateScore: jest.fn().mockResolvedValue({
+            overall: 82,
+            factors: { security: 85, performance: 79 },
+            factorsEvaluated: ['security', 'performance'],
+            issues: [],
+            issuesByCategory: [],
+            recommendations: [],
+          }),
+        },
+      },
+      registry: {},
+    } as any;
+  }
+
+  it('scores an external host once it has plugins and a PHP version', async () => {
+    await graphService.upsertSite({
+      id: 'ssh:myhost',
+      name: 'myhost',
+      source: 'external',
+      host: 'external',
+      domain: 'myhost.example.com',
+      is_active: true,
+      wp_version: '6.8.0',
+      php_version: '8.2.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertPlugin({
+      site_id: 'ssh:myhost',
+      slug: 'plugin-1',
+      name: 'Plugin 1',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertPlugin({
+      site_id: 'ssh:myhost',
+      slug: 'plugin-2',
+      name: 'Plugin 2',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any)
+      .nexusFleetSiteHealth(null, { target: 'ssh:myhost@production' });
+    expect(r.health.score).not.toBeNull();
+    expect(r.health.factorsEvaluated).toEqual(['security', 'performance']);
+  });
+
+  it('still declines to score an external host with no data', async () => {
+    await graphService.upsertSite({
+      id: 'ssh:bare',
+      name: 'bare',
+      source: 'external',
+      host: 'external',
+      domain: 'bare.example.com',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any)
+      .nexusFleetSiteHealth(null, { target: 'ssh:bare@production' });
+    expect(r.health.score).toBeNull();
+    expect(r.health.status).toBeNull();
+  });
+
+  it('never evaluates stability for an external host', async () => {
+    await graphService.upsertSite({
+      id: 'ssh:myhost',
+      name: 'myhost',
+      source: 'external',
+      host: 'external',
+      domain: 'myhost.example.com',
+      is_active: true,
+      wp_version: '6.8.0',
+      php_version: '8.2.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertPlugin({
+      site_id: 'ssh:myhost',
+      slug: 'plugin-1',
+      name: 'Plugin 1',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any)
+      .nexusFleetSiteHealth(null, { target: 'ssh:myhost@production' });
+    expect(r.health.factorsEvaluated).not.toContain('stability');
   });
 });

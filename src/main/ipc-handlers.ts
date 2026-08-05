@@ -1845,12 +1845,29 @@ Answer:`,
         }
       }
 
-      const total = allLocalSites.length + wpeTotal;
+      // ── External SSH hosts ───────────────────────────────────────────────
+      // Same shape as the WPE block: Configured means the graph has a
+      // wp_version, Searchable means an IndexRegistry entry exists. Until
+      // Spec 4b there is no external content indexing, so searchable will
+      // read 0 — that is the true number, not a gap to hide.
+      let externalTotal = 0, externalConfigured = 0, externalSearchable = 0;
+      if (db) {
+        const externalSites = db.prepare(
+          "SELECT id, wp_version FROM sites WHERE source = 'external' AND is_active = 1"
+        ).all() as Array<{ id: string; wp_version: string | null }>;
+        externalTotal = externalSites.length;
+        for (const site of externalSites) {
+          if (site.wp_version) externalConfigured++;
+          if (indexedSet.has(site.id)) externalSearchable++;
+        }
+      }
+
+      const total = allLocalSites.length + wpeTotal + externalTotal;
       return {
         total,
         scanned: total,                              // all known sites are L1
-        configured: localConfigured + wpeConfigured,
-        searchable: localSearchable + wpeSearchable,
+        configured: localConfigured + wpeConfigured + externalConfigured,
+        searchable: localSearchable + wpeSearchable + externalSearchable,
         lastUpdatedMs,
         graphReady: !!db,  // false on first render if graph.db not yet initialized
       } as import('../common/types').FleetCompleteness;
