@@ -34,6 +34,12 @@ export const scanSiteFilesHandler: McpToolHandler = {
       type: 'object',
       properties: {
         site: { type: 'string', description: 'Site name, ID, or domain' },
+        deep: {
+          type: 'boolean',
+          description:
+            'Also walk wp-content for obfuscation chains, unexpected web-root PHP, PHP under uploads, and ELF binaries. '
+            + 'Roughly 25x slower (~1.4s vs ~1.6ms per site), so it is off by default and belongs to an escalated or explicitly scoped scan, not a fleet sweep.',
+        },
       },
       required: ['site'],
     },
@@ -44,7 +50,7 @@ export const scanSiteFilesHandler: McpToolHandler = {
     const site = resolveSite(args.site as string, services.siteData);
     if (!site) return error(`Site "${args.site}" not found.`);
 
-    const report = await scanLocalSite(site);
+    const report = await scanLocalSite(site, { deep: args.deep === true });
 
     if (report.unscannable) {
       // An unscannable install is reported as an error, not as an empty clean result. This is
@@ -74,6 +80,21 @@ export const scanSiteFilesHandler: McpToolHandler = {
       lines.push('');
     } else {
       lines.push('### mu-plugins', '', 'No unexpected files.', '');
+    }
+
+    const fsr = report.checks.filesystem;
+    if (fsr) {
+      const section = (title: string, items: string[]) => {
+        lines.push(`### ${title} (${items.length})`, '');
+        if (items.length === 0) lines.push('None.', '');
+        else { for (const i of items.slice(0, 100)) lines.push(`- ${i}`); 
+               if (items.length > 100) lines.push(`- …and ${items.length - 100} more`);
+               lines.push(''); }
+      };
+      section('Obfuscation chains (FS-02)', fsr.obfuscation.map((h) => `\`${h.file}\` — ${h.pattern}`));
+      section('Unexpected web-root / content PHP (FS-03)', fsr.rootAndContent.map((h) => `\`${h.path}\` — ${h.reason}`));
+      section('PHP under uploads (FS-04)', fsr.uploadsPhp.map((p) => `\`${p}\``));
+      section('ELF binaries (FS-06)', fsr.elf.map((h) => `\`${h.path}\` — ${h.size} bytes`));
     }
 
     lines.push('### Examined', '');
