@@ -462,8 +462,32 @@ describe('HealthScoreCalculator', () => {
       ['security', 'performance', 'stability']
     );
 
-    // Both should score well since security/performance/stability are strong
-    // The three-factor version should be >= all-factors because it excludes weak maintenance/activity
-    expect(resultThreeFactors.overall).toBeGreaterThanOrEqual(resultAllFactors.overall);
+    const resultTwoFactors = await calculator.calculateScore(
+      'site-1',
+      { phpVersion: '8.3.0', siteUrl: 'https://example.com' },
+      ['security', 'performance']
+    );
+
+    // Exact values, not an inequality. With this suite's mocks maintenance and
+    // activity both score 0, so `toBeGreaterThanOrEqual` passed even with
+    // renormalization removed entirely — the two totals were merely equal.
+    //
+    // Factor scores under these mocks: security 100 (https + PHP 8.3 + wordfence
+    // + 2 plugins), performance 40 (PHP 8.3 only; wp-rocket matches neither the
+    // cache nor the image-optimisation slug list), maintenance 0, activity 0,
+    // stability 100 (no failed events).
+    //
+    //   all five → .30(100) + .25(40) + .20(0) + .15(0) + .10(100)        = 50
+    //   sec/perf/stab, renormalised over 0.65 → (30 + 10 + 10) / 0.65     = 77
+    //   sec/perf,      renormalised over 0.55 → (30 + 10) / 0.55          = 73
+    expect(resultAllFactors.overall).toBe(50);
+    expect(resultThreeFactors.overall).toBe(77);
+    expect(resultTwoFactors.overall).toBe(73);
+  });
+
+  it('refuses to score an empty factor set rather than returning a number', async () => {
+    await expect(
+      calculator.calculateScore('site-1', { phpVersion: '8.3.0' }, [])
+    ).rejects.toThrow(/not scoreable/);
   });
 });

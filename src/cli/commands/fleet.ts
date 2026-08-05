@@ -192,17 +192,23 @@ fleetCommand
         return;
       }
 
-      const statusIcon = health.status === 'healthy' ? '✅' : health.status === 'warning' ? '⚠️' : '❌';
-
       console.log(`\nSite Health: ${target}`);
       console.log('─'.repeat(50));
 
-      // Show partial factor basis when not all five factors were evaluated
       const allFactors = ['security', 'performance', 'maintenance', 'activity', 'stability'];
-      const factorBasis = health.factorsEvaluated && health.factorsEvaluated.length < allFactors.length
-        ? `, from ${health.factorsEvaluated.join('/')}`
-        : '';
-      console.log(`Status:        ${statusIcon} ${health.status} (score: ${health.score}/100${factorBasis})`);
+      const evaluated: string[] = health.factorsEvaluated ?? [];
+
+      if (health.score == null || health.status == null || evaluated.length === 0) {
+        // Nothing about this target is scoreable. Say so — do not print a number.
+        console.log(`Status:        — not enough data to score (run a command against this host first)`);
+      } else {
+        const statusIcon = health.status === 'healthy' ? '✅' : health.status === 'warning' ? '⚠️' : '❌';
+        // Name the factors when the score covers less than all five.
+        const factorBasis = evaluated.length < allFactors.length
+          ? `, from ${evaluated.join('/')}`
+          : '';
+        console.log(`Status:        ${statusIcon} ${health.status} (score: ${health.score}/100${factorBasis})`);
+      }
 
       const wpUpdateMsg = health.wordpress.updateAvailable === null
         ? ''

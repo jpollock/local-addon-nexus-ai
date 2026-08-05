@@ -2501,7 +2501,7 @@ export function createResolvers(context: ResolverContext) {
           const targetArgs = resolveTargetArgs(target, services);
 
           let siteId: string;
-          let siteInfo: { domain: string; phpVersion: string; siteUrl?: string };
+          let siteInfo: { domain: string; phpVersion?: string; siteUrl?: string };
           let wpVersion: string | null = null;
           let factorsToEvaluate: Array<'security' | 'performance' | 'maintenance' | 'activity' | 'stability'>;
 
@@ -2519,6 +2519,10 @@ export function createResolvers(context: ResolverContext) {
             siteId = site.id;
             siteInfo = {
               domain: site.domain || '',
+              // C3 note: this `|| '8.0'` is pre-existing on the LOCAL path and is
+              // deliberately left alone. Local sites get a real phpVersion from
+              // Local's own store; the remote path's identical default was
+              // introduced by this branch and has been removed there.
               phpVersion: (site as any)?.phpVersion || '8.0',
             };
 
@@ -2537,8 +2541,23 @@ export function createResolvers(context: ResolverContext) {
 
             factorsToEvaluate = ['security', 'performance', 'maintenance', 'activity', 'stability'];
           } else if ('install_name' in targetArgs || 'ssh_target' in targetArgs) {
-            // Remote site (WPE or external) — only security/performance/stability apply
-            // (maintenance and activity are Local-only: they read indexRegistry and getRecentEvents)
+            // Remote site (WPE or external). Evaluate a factor only where its inputs
+            // exist for that target — the same rule that already excluded maintenance
+            // and activity for remote sites:
+            //
+            //   wpe      → security, performance. Plugin rows exist (populated by the
+            //              WPE sync/deep-refresh path). `stability` is NOT evaluated:
+            //              calculateStability counts failed `event_queue` rows, and the
+            //              only writer of that table is the MU-plugin webhook, which
+            //              exists on Local sites alone. A remote site can never have an
+            //              event, so the factor was a fixed 100 awarded for absent data.
+            //   external → nothing. Nothing populates plugin/theme rows for an external
+            //              host (there is no refresh mechanism — an open product
+            //              decision), and php_version/site_url are empty. Scoring
+            //              security/performance off zero plugin rows produced "no
+            //              security plugin detected" and full plugin-hygiene credit from
+            //              the same absence, in a response that separately reports
+            //              `plugins: null`.
             if (!db) {
               return {
                 success: false,
@@ -2548,6 +2567,7 @@ export function createResolvers(context: ResolverContext) {
             }
 
             let row: { id: string; domain: string; php_version?: string; wp_version?: string; site_url?: string; remote_install_id?: string } | undefined;
+            const isExternal = 'ssh_target' in targetArgs;
 
             if ('install_name' in targetArgs) {
               // M1: Add is_active filter; M3: prefer remote_install_id when available
@@ -2557,12 +2577,14 @@ export function createResolvers(context: ResolverContext) {
               ).get(installName, installName.toLowerCase()) as typeof row;
             } else {
               // M2: Use LOWER() for external alias match; M3: prefer id
+              // I7: is_active = 1 — `nexus host remove` soft-deletes, and without this
+              // a removed host still reports health.
               const sshTarget = targetArgs.ssh_target as string;
               const parsed = parseTarget(sshTarget);
               const alias = parsed.alias!;
               const expectedId = externalSiteId(alias);
               row = db.prepare(
-                "SELECT id, domain, php_version, wp_version, site_url FROM sites WHERE source = 'external' AND (id = ? OR LOWER(name) = ?) LIMIT 1"
+                "SELECT id, domain, php_version, wp_version, site_url FROM sites WHERE source = 'external' AND is_active = 1 AND (id = ? OR LOWER(name) = ?) LIMIT 1"
               ).get(expectedId, alias.toLowerCase()) as typeof row;
             }
 
@@ -2577,12 +2599,16 @@ export function createResolvers(context: ResolverContext) {
             siteId = row.id;
             siteInfo = {
               domain: row.domain || '',
-              phpVersion: row.php_version || '8.0',
+              // C3: no default. 46 of 331 active WPE rows and every external row have
+              // no php_version; `|| '8.0'` invented one and collected 20/25 security
+              // and 30/40 performance points for it. The calculator already reports
+              // `PHP version unknown` for undefined — let it.
+              phpVersion: row.php_version || undefined,
               siteUrl: row.site_url || undefined,
             };
             wpVersion = row.wp_version || null;
 
-            factorsToEvaluate = ['security', 'performance', 'stability'];
+            factorsToEvaluate = isExternal ? [] : ['security', 'performance'];
           } else {
             return {
               success: false,
@@ -2591,18 +2617,27 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          // Calculate score with the applicable factor set
-          const breakdown = await services.healthCalculator.calculateScore(siteId, siteInfo, factorsToEvaluate);
-          const { overall: score, factors, issuesByCategory, factorsEvaluated } = breakdown;
+          // Calculate score with the applicable factor set.
+          // An empty factor set is not scoreable: report null rather than a number
+          // derived from data that does not exist.
+          let score: number | null = null;
+          let status: string | null = null;
+          let issues: Array<{ severity: string; message: string; category: string }> = [];
+          const factorsEvaluated: string[] = [...factorsToEvaluate];
 
-          const status = score >= 80 ? 'healthy' : score >= 50 ? 'warning' : 'critical';
+          if (factorsToEvaluate.length > 0) {
+            const breakdown = await services.healthCalculator.calculateScore(siteId, siteInfo, factorsToEvaluate);
+            score = breakdown.overall;
+            status = score >= 80 ? 'healthy' : score >= 50 ? 'warning' : 'critical';
 
-          // Map issues to GraphQL shape with severity derived from factor scores
-          const issues = issuesByCategory.map(({ category, message }) => {
-            const factorScore = factors[category as keyof typeof factors] || 0;
-            const severity = factorScore >= 80 ? 'healthy' : factorScore >= 50 ? 'warning' : 'critical';
-            return { severity, message, category };
-          });
+            // Map issues to GraphQL shape with severity derived from factor scores
+            const { factors, issuesByCategory } = breakdown;
+            issues = issuesByCategory.map(({ category, message }) => {
+              const factorScore = factors[category as keyof typeof factors] || 0;
+              const severity = factorScore >= 80 ? 'healthy' : factorScore >= 50 ? 'warning' : 'critical';
+              return { severity, message, category };
+            });
+          }
 
           // Get plugin and theme counts from graph
           let plugins: { total: number; active: number; outdated: null } | null = null;

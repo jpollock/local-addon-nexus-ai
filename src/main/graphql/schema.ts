@@ -1085,9 +1085,16 @@ export const typeDefs = gql`
   }
 
   type SiteHealth {
-    status: String!
-    score: Int!
-    "Factors evaluated for this site. Remote sites evaluate fewer factors than local ones."
+    "null when factorsEvaluated is empty — the target has no scoreable inputs."
+    status: String
+    "null when factorsEvaluated is empty — the target has no scoreable inputs."
+    score: Int
+    """
+    Factors evaluated for this site. Local sites evaluate all five; WP Engine
+    installs evaluate security and performance; external SSH hosts evaluate
+    none (empty list) because nothing populates their plugin, PHP or site_url
+    data. An empty list means score and status are null.
+    """
     factorsEvaluated: [String!]!
     issues: [HealthIssue!]!
     "null means the site has not been indexed."

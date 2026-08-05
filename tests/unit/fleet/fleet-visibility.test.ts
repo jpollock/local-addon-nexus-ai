@@ -750,7 +750,22 @@ describe('nexusFleetSiteHealth accepts all three target types', () => {
 
       const r = await (createResolvers(ctx()).Mutation as any).nexusFleetSiteHealth(null, { target });
       expect(r.success).toBe(true);
-      expect(r.error ?? '').not.toContain('undefined');
+      expect(r.error ?? null).toBeNull();
+
+      // Assert the target actually resolved to the seeded row, rather than
+      // merely that the error string does not say "undefined" — which cannot
+      // fail once success is true.
+      expect(r.health.wordpress.version).toBe('6.8.0');
+
+      if (target.startsWith('wpe:')) {
+        expect(r.health.factorsEvaluated).toEqual(['security', 'performance']);
+        expect(typeof r.health.score).toBe('number');
+      } else {
+        // External hosts have no scoreable inputs — see C2.
+        expect(r.health.factorsEvaluated).toEqual([]);
+        expect(r.health.score).toBeNull();
+        expect(r.health.status).toBeNull();
+      }
     }
   );
 
@@ -1019,7 +1034,7 @@ describe('nexusFleetSiteHealth accepts all three target types', () => {
     expect(r.health.wordpress.version).toBe('6.9.0'); // WPE row's version, not local's
   });
 
-  it('remote sites evaluate only security/performance/stability factors', async () => {
+  it('WPE installs evaluate security and performance only — never stability', async () => {
     await graphService.upsertSite({
       id: 'wpe-1',
       name: 'wpe-install',
@@ -1035,7 +1050,80 @@ describe('nexusFleetSiteHealth accepts all three target types', () => {
 
     const r = await (createResolvers(ctx()).Mutation as any).nexusFleetSiteHealth(null, { target: 'wpe:acct/wpe-install@production' });
     expect(r.success).toBe(true);
-    expect(r.health.factorsEvaluated).toEqual(['security', 'performance', 'stability']);
+    // `stability` counts failed event_queue rows, which only the Local MU-plugin
+    // webhook writes. A remote site can never have one, so including it awarded
+    // a fixed 100 for absent data — 15.4% of the score.
+    expect(r.health.factorsEvaluated).toEqual(['security', 'performance']);
+    expect(r.health.factorsEvaluated).not.toContain('stability');
+  });
+
+  it('does not invent a PHP version for a WPE row that has none', async () => {
+    await graphService.upsertSite({
+      id: 'wpe-nophp',
+      name: 'wpe-nophp',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'nophp.wpengine.com',
+      remote_install_id: 'wpe-nophp',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const context = ctx();
+    await (createResolvers(context).Mutation as any).nexusFleetSiteHealth(null, { target: 'wpe:acct/wpe-nophp@production' });
+
+    // 46 of 331 active WPE rows carry no php_version. `|| '8.0'` invented one
+    // and collected security/performance points for it; the calculator's own
+    // "PHP version unknown" path is the honest answer.
+    const [, siteInfo] = context.services.healthCalculator.calculateScore.mock.calls[0];
+    expect(siteInfo.phpVersion).toBeUndefined();
+  });
+
+  it('external hosts are not scored at all — score and status are null', async () => {
+    await graphService.upsertSite({
+      id: 'ssh:ext-host',
+      name: 'ext-host',
+      source: 'external',
+      host: 'external',
+      domain: 'example.com',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const context = ctx();
+    const r = await (createResolvers(context).Mutation as any).nexusFleetSiteHealth(null, { target: 'ssh:ext-host@production' });
+
+    expect(r.success).toBe(true);
+    expect(r.health.factorsEvaluated).toEqual([]);
+    expect(r.health.score).toBeNull();
+    expect(r.health.status).toBeNull();
+    expect(r.health.issues).toEqual([]);
+    // Nothing populates plugin rows for an external host, so no factor may be
+    // scored from their absence — the calculator is never called.
+    expect(context.services.healthCalculator.calculateScore).not.toHaveBeenCalled();
+    // Real data still flows through.
+    expect(r.health.wordpress.version).toBe('6.8.0');
+  });
+
+  it('a removed (soft-deleted) external host reports no health', async () => {
+    await graphService.upsertSite({
+      id: 'ssh:gone-host',
+      name: 'gone-host',
+      source: 'external',
+      host: 'external',
+      domain: 'gone-host',
+      is_active: false,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetSiteHealth(null, { target: 'ssh:gone-host@production' });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/not found/i);
   });
 
   it('local sites evaluate all five factors', async () => {

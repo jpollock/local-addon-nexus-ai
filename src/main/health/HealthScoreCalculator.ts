@@ -69,14 +69,30 @@ export class HealthScoreCalculator {
    * @param siteId Site identifier
    * @param siteInfo Site metadata (domain, siteUrl, phpVersion)
    * @param factorsToEvaluate Optional subset of factors to evaluate. Defaults to all five.
-   *   Remote sites should pass ['security', 'performance', 'stability'] — maintenance and
-   *   activity are Local-only. Weights are renormalized over the evaluated set.
+   *   Evaluate a factor only where its inputs exist for that target:
+   *     - local    → all five.
+   *     - wpe      → ['security', 'performance']. `maintenance` and `activity` read
+   *                  indexRegistry and local event/content tables; `stability` counts
+   *                  failed `event_queue` rows, which only the Local MU-plugin webhook
+   *                  ever writes — so it is a constant 100 awarded for absent data.
+   *     - external → nothing is scoreable; do not call this, report a null score.
+   *   Weights are renormalized over the evaluated set.
+   *
+   *   An empty list throws. A score over zero factors is not a low score, it is not a
+   *   score at all, and returning a number for it is the fabrication this signature
+   *   exists to prevent.
    */
   async calculateScore(
     siteId: string,
     siteInfo: { phpVersion?: string; domain?: string; siteUrl?: string },
     factorsToEvaluate: FactorName[] = ['security', 'performance', 'maintenance', 'activity', 'stability'],
   ): Promise<HealthBreakdown> {
+    if (factorsToEvaluate.length === 0) {
+      throw new Error(
+        'calculateScore requires at least one factor. An empty factor set is not scoreable — report a null score instead of calling this.',
+      );
+    }
+
     // Fetch plugins once and share across factor checks
     let plugins: Array<{ slug: string; name: string }> = [];
     try {
