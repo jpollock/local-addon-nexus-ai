@@ -39,6 +39,14 @@ type MockContextOverrides = {
   trigger?: Trigger
   /** Whether this is a full (non-incremental) run (default: false). */
   fullRun?: boolean
+  /**
+   * The agent's persisted settings (default: {}).
+   *
+   * The default is empty on purpose. An agent must behave safely when nothing is configured —
+   * that is precisely the state a test should exercise, and defaulting to a populated object
+   * would hide the case that matters.
+   */
+  settings?: Record<string, unknown>
 }
 
 function makeMockToolProvider(mocks: ToolMocks = {}): ToolProvider {
@@ -143,6 +151,7 @@ export function mockContext(overrides: MockContextOverrides = {}): AgentContext 
     state: makeMockStateStore(),
     log: makeMockLogger(),
     autonomy: overrides.autonomy ?? 'auto',
+    settings: overrides.settings ?? {},
     credentials: {
       getToken: async (provider: string) => { throw new NotConnectedError(provider); },
       getStatus: async () => 'not_connected' as const,

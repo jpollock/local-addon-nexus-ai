@@ -34,7 +34,7 @@ import { registerLifecycleHooks } from './content/lifecycle-hooks';
 import { createLocalServicesBridge } from './mcp/local-services-bridge';
 import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
-import { registerIpcHandlers, getAgentSetting, seedAgentDefaultsIfMissing } from './ipc-handlers';
+import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing } from './ipc-handlers';
 import { initializeProviders } from './chat/providers/index';
 import { ChatService } from './chat/ChatService';
 import { registerChatIpcHandlers } from './chat/chat-ipc-handlers';
@@ -590,7 +590,8 @@ export default function main(context: any): void {
             } else if (trigger.type === 'event') {
               unsubs.push(
                 agentEventBus.subscribe(trigger.pattern, async (event) => {
-                  if (!getAgentSetting(agent.name, 'eventsEnabled')) return;
+                  // `enabled` too — see canAutoRun. A disabled agent must not run on an event.
+                  if (!canAutoRun(agent.name, 'event')) return;
                   await agentRunner.run(agent, event).catch((err: Error) => {
                     localLogger.error(`[NexusAI] Agent "${agent.name}" event trigger failed: ${err.message}`);
                   });

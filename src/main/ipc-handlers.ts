@@ -267,11 +267,25 @@ async function withSiteRunning<T>(
   }
 }
 
+import { canAutoRunWith, AutoRunKind } from './agent-runtime/auto-run-gate';
+
 // Shared agent settings — populated by AGENT_SETTINGS_UPDATE IPC, read by scheduler/event bus
 let _agentSettingsDepsRef: IpcHandlerDeps | null = null;
 export function getAgentSetting(agentId: string, key: 'enabled' | 'scheduleEnabled' | 'eventsEnabled'): boolean {
   const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
   return cache?.get(agentId)?.[key] ?? true; // default true (permissive before settings sync)
+}
+
+/**
+ * May an automatic trigger start this agent right now?
+ *
+ * Thin wrapper: reads the settings cache and delegates to the pure predicate in
+ * agent-runtime/auto-run-gate.ts, where the reasoning lives. Both the cron path
+ * (AgentScheduler) and the event path (index.ts) go through here so they cannot drift apart.
+ */
+export function canAutoRun(agentId: string, kind: AutoRunKind): boolean {
+  const cache: Map<string, any> | undefined = (_agentSettingsDepsRef as any)?.__agentSettingsCache;
+  return canAutoRunWith(cache?.get(agentId), kind);
 }
 
 export function getAgentAutonomy(agentId: string): 'suggest' | 'ask' | 'auto' {
