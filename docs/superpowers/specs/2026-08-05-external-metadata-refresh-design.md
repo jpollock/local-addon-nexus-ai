@@ -156,6 +156,14 @@ This is the exact set `WpeRefreshScheduler` collects, with one addition and one 
   `wp --info` does not bootstrap WordPress, so it still answers on a host whose WordPress
   install is broken, and it reports the version of the PHP binary WP-CLI itself runs under —
   which is the same thing `wp eval 'echo phpversion();'` would have returned.
+
+  **Known limitation, verified against a real registered host:** `wp --info` needs
+  `proc_open`, and shared hosts commonly set `disable_functions=proc_open`. There it fails
+  with `Error: Cannot do 'Process::run': The PHP functions proc_open() and/or proc_close()
+  are disabled.` On such a host `php_version` is permanently NULL — not "NULL until the next
+  refresh" — and because `externalScoreable` requires it (§9), the host is never scored.
+  That is honest rather than wrong, and it is accepted for this plan: an alternative
+  PHP-version source needs its own design, and `wp eval` is not a substitute.
 - Plugins and themes are parsed as JSON, so batches B and C stay separate — mixing JSON with
   delimited scalars invites a parser that is clever instead of obvious.
 

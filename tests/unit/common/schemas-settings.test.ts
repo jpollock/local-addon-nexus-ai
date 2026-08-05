@@ -119,6 +119,15 @@ describe('UpdateSettingsSchema — known fields are accepted', () => {
     expect(result.wpeSiteExceptions).toHaveLength(1);
     expect(result.wpeAccountFilter).toEqual(['account-abc']);
   });
+
+  it('accepts both external refresh keys', () => {
+    const parsed = UpdateSettingsSchema.parse({
+      externalRefreshAutoEnabled: true,
+      externalRefreshIntervalHours: 12,
+    });
+    expect(parsed.externalRefreshAutoEnabled).toBe(true);
+    expect(parsed.externalRefreshIntervalHours).toBe(12);
+  });
 });
 
 describe('UpdateSettingsSchema — invalid values are rejected', () => {
@@ -146,5 +155,10 @@ describe('UpdateSettingsSchema — invalid values are rejected', () => {
     expect(() => validateInput(UpdateSettingsSchema, {
       wpeOperationPermissions: { wpcli: { production: 'false' } },
     })).toThrow(/Validation failed/);
+  });
+
+  it('rejects an out-of-range externalRefreshIntervalHours', () => {
+    expect(() => UpdateSettingsSchema.parse({ externalRefreshIntervalHours: 0 })).toThrow();
+    expect(() => UpdateSettingsSchema.parse({ externalRefreshIntervalHours: 999 })).toThrow();
   });
 });

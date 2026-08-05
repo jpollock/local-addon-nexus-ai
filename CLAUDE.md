@@ -190,10 +190,13 @@ Target syntax: `ssh:<alias>@<production|staging|development>`.
   set.** `fleet_overview` counted `wp_version` across WPE + external and
   divided by the WPE-only count, inside a line labelled "(CAPI)". For a user
   with SSH hosts and no WP Engine account it printed `1 of 0`.
-- **External hosts have no background refresh.** Nothing populates their plugin
-  and theme rows, so they appear in fleet views with empty data until a command
-  is run against them. That is the external refresh schedule, still an open
-  product decision — do not add a scheduler without one.
+- **External hosts refresh only if the user opts in.** Historically nothing
+  populated their plugin and theme rows, so they appeared in fleet views with
+  empty data until a command was run against them; the refresh schedule was left
+  as an open product decision. **That decision has since been made** — see
+  "External host metadata refresh" below for `ExternalRefreshScheduler`. It is
+  off by default, so an un-opted-in user still sees the empty-data behaviour
+  described here, and `nexus host refresh <alias>` is the manual path.
 
 ---
 
@@ -275,7 +278,7 @@ whenever fewer than five were used.
 |---|---|---|
 | local | all five | all inputs present |
 | wpe | `security`, `performance` | plugin rows exist (312 of 365 active rows) |
-| external | **none** — `score` and `status` are `null` | 0 plugin rows, no `php_version`, no `site_url` |
+| external | **none** unless refreshed — `score` and `status` are `null` | until a refresh runs: 0 plugin rows, no `php_version`, no `site_url` |
 
 - `calculateMaintenance` reads `indexRegistry` keyed by Local site id and
   `calculateActivity` reads local-only event and content tables, so both score
@@ -288,13 +291,20 @@ whenever fewer than five were used.
   having no data** — the same defect as maintenance/activity with the sign
   flipped, which is why it survived a round of review.
 - For an **external** host, `security` and `performance` were being scored off
-  a plugin list this branch documents as permanently empty: zero rows earned
+  a plugin list that was, at the time, permanently empty: zero rows earned
   full plugin-hygiene credit *and* produced "No security plugin detected", in
-  the same response that returns `plugins: null`. External hosts are therefore
-  not scored at all. `calculateScore` **throws** on an empty factor list — a
-  score over zero factors is not a low score, it is not a score.
-- If you give external hosts a refresh mechanism (an open product decision — do
-  not build one unasked), widen the list then, not before.
+  the same response that returns `plugins: null`. An external host with no
+  collected data is therefore not scored at all. `calculateScore` **throws** on
+  an empty factor list — a score over zero factors is not a low score, it is not
+  a score.
+- **External hosts now have a refresh mechanism** (`ExternalRefreshScheduler` /
+  `nexus host refresh`, see below), so the list is widened *per host, from the
+  data actually present*: `externalScoreable = hasPlugins && !!row.php_version`
+  (`resolvers.ts`). A refreshed host is scored on `security` + `performance`
+  like a WPE install; an unrefreshed one is still not scored. Do not widen it
+  unconditionally — the gate is data presence, not host class. Note that a host
+  whose PHP blocks `proc_open` never satisfies the `php_version` half (see
+  below), so it stays unscored no matter how many refreshes run.
 
 **Never default an unknown input to a plausible value to keep a score
 computable.** `phpVersion: row.php_version || '8.0'` invented a version for 46
@@ -351,6 +361,31 @@ source of truth.
 `php_version` comes from `wp --info` (JSON first, `PHP version:` line as
 fallback), because WP Engine's CAPI has no external equivalent and `wp eval` is
 blocked by `REMOTE_POLICY`.
+
+**`wp --info` requires `proc_open`, and shared hosts commonly disable it** —
+`disable_functions=proc_open` makes it fail with `Cannot do 'Process::run': The
+PHP functions proc_open() and/or proc_close() are disabled.` (verified against a
+real registered host). On such a host `php_version` stays **permanently** NULL —
+it will not eventually populate on a later refresh cycle — and because
+`externalScoreable` requires it, the host is never scored. That is a known design
+gap, not a data defect: NULL is the honest answer and must never become a
+fabricated `'8.0'`. An alternative PHP-version source needs its own design.
+
+**Settings written through the GraphQL mutation are reactive.**
+`nexusUpdateSettings` calls `services.onSettingsUpdated?.()` after a successful
+write (the same closure `src/main/index.ts` hands the IPC handler), so
+`nexus settings set externalRefreshAutoEnabled true` starts the scheduler
+immediately. Before that wiring, only the IPC path was reactive and the CLI —
+the *only* way to set this, as no renderer UI row exists — silently required a
+Local restart. A new settings-driven scheduler must be wired into
+`onSettingsUpdated`, not into one caller of it.
+
+**Batched calls get their own timeout.** `EXTERNAL_SSH_BATCH_TIMEOUT_MS` (60s)
+is separate from `EXTERNAL_SSH_TIMEOUT_MS` (20s, sized for one command): Batch A
+is 18 invocations and measured 22–23.5s on a real host, i.e. over the
+single-command budget. `runWpCliBatch` also logs a warning naming how many
+sections were lost when a batch does time out, because the honest-NULL result is
+otherwise invisible until someone inspects the database.
 
 **Anything that did not parse is written NULL, never a default**, and a host
 that failed keeps its previous data — `writeExternalHostData` enforces both.

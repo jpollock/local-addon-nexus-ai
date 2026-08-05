@@ -1,4 +1,5 @@
 import { REMOTE_POLICY, checkCommand, withPolicy } from '../../../src/main/transport/policy';
+import { ExternalSshTransport } from '../../../src/main/transport/ExternalSshTransport';
 import type { SiteTransport } from '../../../src/main/transport/types';
 
 describe('REMOTE_POLICY — one policy for every remote target', () => {
@@ -86,6 +87,16 @@ function makeExternalLikeTransport(batchImpl?: (c: string[][]) => Promise<(strin
 }
 
 describe('withPolicy forwards runWpCliBatch', () => {
+  // Every other test here hand-builds an object literal that already has
+  // runWpCliBatch, so deleting the method from the concrete class would leave
+  // them all green — the exact blind spot that let the original bug survive six
+  // tasks. This one composes the REAL class with the REAL wrapper. It never
+  // SSHes anywhere: constructing the transport opens no connection.
+  it('forwards runWpCliBatch from a real ExternalSshTransport', () => {
+    const wrapped = withPolicy(new ExternalSshTransport('some-alias'), REMOTE_POLICY);
+    expect(typeof wrapped.runWpCliBatch).toBe('function');
+  });
+
   it('forwards runWpCliBatch when the wrapped transport has one', async () => {
     const batchImpl = jest.fn(async (c: string[][]) => c.map(() => 'ok'));
     const wrapped = withPolicy(makeExternalLikeTransport(batchImpl), REMOTE_POLICY);
