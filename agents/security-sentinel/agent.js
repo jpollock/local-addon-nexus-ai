@@ -346,20 +346,11 @@ const KNOWN_MU_PLUGINS = [
   'nexus-ai-connector-config.php', 'nexus-hub-bridge.php',
 ];
 
-const KNOWN_ROOT_PHP = [
-  // WordPress core docroot files
-  'index.php', 'wp-activate.php', 'wp-blog-header.php', 'wp-comments-post.php',
-  'wp-config.php', 'wp-cron.php', 'wp-links-opml.php', 'wp-load.php',
-  'wp-login.php', 'wp-mail.php', 'wp-settings.php', 'wp-signup.php',
-  'wp-trackback.php', 'xmlrpc.php', 'wp-config-sample.php',
-  // Local injects this into every docroot it manages. Verified on 15/15 local sites.
-  'local-xdebuginfo.php',
-];
+// KNOWN_ROOT_PHP and phpStringArray lived here to build PHP array literals for FS-01 and
+// FS-03. Both checks now read bytes in Node (src/main/sentinel/scanner), so the docroot
+// allowlist lives there and nothing here generates PHP from it. KNOWN_MU_PLUGINS stays —
+// Tier 3 remediation still uses it, and a test asserts it agrees with the scanner's copy.
 
-/** Render a JS string array as a PHP array literal, single-quote escaped. */
-function phpStringArray(items) {
-  return `[${items.map(s => `'${String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`).join(',')}]`;
-}
 
 // ─── Fleet sweep cost controls ──────────────────────────────────────────────
 //
@@ -759,7 +750,24 @@ module.exports = {
         } else {
           tier2Count++;
           log.phase('Tier 2', `Deep investigation: ${install.name} (${tier2Count}/${MAX_TIER2_PER_SWEEP})`);
-          const plan = await tier2Investigate(install, signals, tools, ai, log, state, 20000, autonomy, attackSummary);
+
+          // Filesystem detection runs HERE — against the original install, stopped, before any
+          // sandbox exists. Creating the sandbox executes site code (local_clone_site starts it
+          // and runs four search-replace passes), so anything that can be learned from bytes
+          // must be learned first, or it is learned from a copy the act of copying has changed.
+          let preflightSignals = [];
+          try {
+            const deepScan = await runByteScan(install, tools, log, { deep: true });
+            preflightSignals = deepScan.signals;
+            log.info(
+              `[Tier 2] Pre-flight byte scan of ${install.name}: ${preflightSignals.length} finding(s), ` +
+              `nothing executed` + (deepScan.available ? '' : ' (UNAVAILABLE — filesystem not examined)'),
+            );
+          } catch (err) {
+            log.warn(`[Tier 2] Pre-flight byte scan failed for ${install.name}: ${err.message}`);
+          }
+
+          const plan = await tier2Investigate(install, signals, tools, ai, log, state, 20000, autonomy, attackSummary, preflightSignals);
           if (plan) latestPlan = plan;
         }
       } else {
@@ -872,7 +880,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators, fmtIntegrity, pushWpContentDeletion, runByteScan, KNOWN_MU_PLUGINS, KNOWN_ROOT_PHP, phpStringArray, mapWithConcurrency, resolveScanScope, FLEET_CONCURRENCY, MAX_TIER2_PER_SWEEP, MAX_REFRESH_PER_SWEEP },
+  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators, fmtIntegrity, pushWpContentDeletion, runByteScan, KNOWN_MU_PLUGINS, mapWithConcurrency, resolveScanScope, FLEET_CONCURRENCY, MAX_TIER2_PER_SWEEP, MAX_REFRESH_PER_SWEEP },
 };
 
 // ─── Log-backed checks (LOG-AUTH, LOG-PROBE, LOG-ENUM, LOG-DIST) ────────────
@@ -1117,12 +1125,12 @@ async function runLogChecks(siteId, tools, log) {
  * Local sites only for now. A WPE install has no local bytes to read until the SSH FileSource
  * lands, and claiming coverage we do not have is the failure this whole effort is about.
  */
-async function runByteScan(install, tools, log) {
+async function runByteScan(install, tools, log, { deep = false } = {}) {
   if (install.source !== 'local') return { signals: [], available: false };
 
   let text;
   try {
-    const result = await tools.invoke('scan_site_files', { site: install.name });
+    const result = await tools.invoke('scan_site_files', { site: install.name, deep });
     text = typeof result === 'string' ? result : result?.content?.[0]?.text ?? '';
   } catch (err) {
     log.warn(`[bytes] scan_site_files failed for ${install.name}: ${err.message}`);
@@ -1151,6 +1159,39 @@ async function runByteScan(install, tools, log) {
       });
     }
   }
+  if (deep) {
+    // Each deep section is `### <title> (<n>)` followed by `- \`path\` — detail` lines.
+    const sectionItems = (heading) => {
+      const m = text.match(new RegExp(`### ${heading} \\((\\d+)\\)([\\s\\S]*?)(?=\\n### |$)`));
+      if (!m) return [];
+      return [...m[2].matchAll(/^- `([^`]+)`(?: — (.*))?$/gm)].map(x => ({ path: x[1], detail: x[2] ?? '' }));
+    };
+
+    const push = (id, severity, heading, title, detail) => {
+      const items = sectionItems(heading);
+      if (items.length === 0) return;
+      signals.push({
+        id, severity, category: 'active-compromise', installName: install.name,
+        title: title(items),
+        detail: `${detail} Read as bytes with the site stopped — nothing was executed.`,
+        evidence: items.map(i => i.detail ? `${i.path} ${i.detail}` : i.path),
+      });
+    };
+
+    push('FS-02', 'critical', 'Obfuscation chains \\(FS-02\\)',
+      (i) => `Obfuscation chains in ${i.length} file(s)`,
+      'Encoded payloads or eval of a variable inside plugin, mu-plugin or theme code.');
+    push('FS-03', 'critical', 'Unexpected web-root / content PHP \\(FS-03\\)',
+      (i) => `Unexpected PHP: ${i.length} file(s)`,
+      'PHP in the web root that is not part of WordPress, or obfuscated code under languages/ or uploads/.');
+    push('FS-04', 'critical', 'PHP under uploads \\(FS-04\\)',
+      (i) => `${i.length} PHP file(s) under uploads/`,
+      'The uploads directory is writable by the web server and should never contain executable PHP.');
+    push('FS-06', 'critical', 'ELF binaries \\(FS-06\\)',
+      (i) => `${i.length} ELF binary/binaries in wp-content`,
+      'Native executables under wp-content. Note that legitimate image-optimiser plugins ship these.');
+  }
+
   return { signals, available: true };
 }
 
@@ -2246,7 +2287,7 @@ async function runNetworkIndicators(fsSignals, installName, sandboxName, tools, 
   }
 }
 
-async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000, autonomy = 'auto', attackSummary = null) {
+async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _pollIntervalMs = 20000, autonomy = 'auto', attackSummary = null, preflightSignals = []) {
   // DEV MODE: cooldown disabled for iteration speed
   // TODO: re-enable before production by uncommenting below
   // if (state.isCoolingDown(`tier2:${install.id}`, 24 * 60 * 60 * 1000)) {
@@ -2397,161 +2438,27 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
 
   log.info(`[Tier 2] Running filesystem checks...`);
 
-  // Filesystem checks via wp_eval (runs inside Local sandbox, not live site)
   const fsSignals = [];
 
-  // FS-01: PHP files in mu-plugins/
-  const muPluginResult = await tools.invoke('wp_eval', {
-    site: sandboxName,
-    skip_plugins: true,
-    skip_themes: true,
-    code: `
-      $dir = WPMU_PLUGIN_DIR;
-      $files = glob("$dir/*.php") ?: [];
-      $known = ${phpStringArray(KNOWN_MU_PLUGINS)};
-      $unexpected = array_filter($files, function($f) use ($known) {
-        return !in_array(basename($f), $known);
-      });
-      echo json_encode(array_values($unexpected));
-    `,
-  });
-  try {
-    const muFiles = JSON.parse(extractResult(muPluginResult) || '[]');
-    if (muFiles.length > 0) {
-      fsSignals.push({
-        id: 'FS-01', severity: 'critical', category: 'active-compromise',
-        installName: install.name,
-        title: `PHP file(s) in mu-plugins/: ${muFiles.map(f => f.split('/').pop()).join(', ')}`,
-        detail: `Unexpected PHP files in mu-plugins/ load on every request and cannot be deactivated: ${muFiles.join(', ')}`,
-        fix: `Remove via SSH: rm ${muFiles.join(' ')}`,
-      });
-    }
-  } catch {}
+  // Filesystem detection reads the ORIGINAL install as bytes, and it already happened — before
+  // this function created the sandbox, in the pre-flight above. That ordering is the point.
+  //
+  // What it replaces: FS-01, FS-02, FS-03, FS-04 and FS-06 as wp_eval against the clone. Every
+  // one of those booted WordPress on a possibly-compromised copy in order to ask it about
+  // itself, and `skip_plugins` does not skip mu-plugins — WP-CLI implements it as four filters
+  // on `active_plugins` while wp-settings.php includes mu-plugins from disk unconditionally. A
+  // harness demonstrated the consequence: code loaded at mu-plugin time installed an ob_start()
+  // rewriter and turned a correct BACKDOOR-PRESENT result into "clean".
+  //
+  // They also inspected a MUTATED copy: local_clone_site runs isMultisite plus four
+  // wp search-replace passes, and local_wpe_pull runs installWP + updateWPConfig + changeDomain.
+  //
+  // Verified equivalent before the swap: a golden baseline captured from the wp_eval semantics
+  // across 33 installs and 82,068 PHP files matched the byte implementation on 33 of 33 sites.
+  fsSignals.push(...preflightSignals);
 
-  // FS-02: Obfuscation chains
-  const obfuscationResult = await tools.invoke('wp_eval', {
-    site: sandboxName,
-    skip_plugins: true,
-    skip_themes: true,
-    code: `
-      $dirs = [WP_CONTENT_DIR . '/plugins', WP_CONTENT_DIR . '/mu-plugins', WP_CONTENT_DIR . '/themes'];
-      $patterns = [
-        '/eval\\s*\\(\\s*base64_decode/',
-        '/eval\\s*\\(\\s*gzinflate\\s*\\(\\s*base64_decode/',
-        '/eval\\s*\\(\\s*gzuncompress\\s*\\(\\s*base64_decode/',
-        '/eval\\s*\\(\\s*str_rot13/',
-        '/base64_decode.*base64_decode/s',
-        '/eval\\s*\\(\\s*\\$/',
-        '/assert\\s*\\(\\s*\\$/',
-        '/create_function\\s*\\(/',
-        '/preg_replace\\s*\\(\\s*[\\'"].*\\/e/',
-      ];
-      $found = [];
-      foreach ($dirs as $dir) {
-        if (!is_dir($dir)) continue;
-        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $file) {
-          if ($file->getExtension() !== 'php') continue;
-          if ($file->getSize() > 5 * 1024 * 1024) continue; // skip files > 5MB
-          $content = file_get_contents($file->getPathname());
-          foreach ($patterns as $pattern) {
-            if (preg_match($pattern, $content)) {
-              $found[] = ['file' => str_replace(ABSPATH, '', $file->getPathname()), 'pattern' => $pattern];
-              break;
-            }
-          }
-        }
-      }
-      echo json_encode($found);
-    `,
-  });
-  try {
-    const obfFiles = JSON.parse(extractResult(obfuscationResult) || '[]');
-    if (obfFiles.length > 0) {
-      fsSignals.push({
-        id: 'FS-02', severity: 'critical', category: 'active-compromise',
-        installName: install.name,
-        title: `Obfuscated code (eval+base64/gzinflate/rot13) found in ${obfFiles.length} file(s)`,
-        detail: `Files containing obfuscation chains: ${obfFiles.map(f => f.file || f).join(', ')}`,
-        fix: 'Inspect each file. Delete if not part of a legitimate plugin/theme. Compare with original plugin source.',
-        evidence: obfFiles.map(f => typeof f === 'string' ? f : `${f.file} — pattern: ${f.pattern || '?'}`),
-      });
-    }
-  } catch {}
-
-  // FS-03: PHP files in unexpected non-plugin locations: languages/, web root, uploads/ (obfuscated)
-  const broadScanResult = await tools.invoke('wp_eval', {
-    site: sandboxName, skip_plugins: true, skip_themes: true,
-    code: `
-      $patterns = ['/eval\\s*\\(.*base64_decode/s', '/eval\\s*\\(.*gzinflate/s', '/eval\\s*\\(.*str_rot13/s'];
-      $scanDirs = [
-        ABSPATH . 'wp-content/languages',
-        ABSPATH . 'wp-content/uploads',
-      ];
-      $rootPhp = glob(ABSPATH . '*.php') ?: [];
-      $knownRoot = ${phpStringArray(KNOWN_ROOT_PHP)};
-      $found = [];
-      foreach ($rootPhp as $f) {
-        if (!in_array(basename($f), $knownRoot)) {
-          $found[] = ['path' => str_replace(ABSPATH, '', $f), 'reason' => 'unknown PHP in web root'];
-        }
-      }
-      foreach ($scanDirs as $dir) {
-        if (!is_dir($dir)) continue;
-        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $file) {
-          if ($file->getExtension() !== 'php') continue;
-          $content = @file_get_contents($file->getPathname());
-          foreach ($patterns as $p) {
-            if (preg_match($p, $content)) {
-              $found[] = ['path' => str_replace(ABSPATH, '', $file->getPathname()), 'reason' => 'obfuscated code'];
-              break;
-            }
-          }
-        }
-      }
-      echo json_encode($found);
-    `,
-  });
-  try {
-    const broadFiles = JSON.parse(extractResult(broadScanResult) || '[]');
-    if (broadFiles.length > 0) {
-      fsSignals.push({
-        id: 'FS-03', severity: 'critical', category: 'active-compromise',
-        installName: install.name,
-        title: `Suspicious PHP files outside plugins/themes: ${broadFiles.length} file(s)`,
-        detail: 'PHP files were found in unexpected locations (web root, languages/, uploads/) or contain obfuscation.',
-        fix: 'Delete unknown PHP files from web root and languages/. PHP should not exist in uploads/.',
-        evidence: broadFiles.map(f => `${f.path} (${f.reason})`),
-      });
-    }
-  } catch {}
-
-  // FS-04: PHP files in uploads/
-  const uploadsResult = await tools.invoke('wp_eval', {
-    site: sandboxName,
-    skip_plugins: true,
-    skip_themes: true,
-    code: `
-      $uploads = wp_upload_dir();
-      $dir = $uploads['basedir'];
-      $phpFiles = [];
-      foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $file) {
-        if ($file->getExtension() === 'php') $phpFiles[] = $file->getPathname();
-      }
-      echo json_encode($phpFiles);
-    `,
-  });
-  try {
-    const phpUploads = JSON.parse(extractResult(uploadsResult) || '[]');
-    if (phpUploads.length > 0) {
-      fsSignals.push({
-        id: 'FS-04', severity: 'critical', category: 'active-compromise',
-        installName: install.name,
-        title: `PHP file(s) found in uploads/: ${phpUploads.map(f => f.split('/').pop()).join(', ')}`,
-        detail: `PHP files in uploads/ can be executed by visiting their URL directly: ${phpUploads.join(', ')}`,
-        fix: 'Delete all PHP files from uploads/. Add .htaccess rule to deny PHP execution in uploads.',
-      });
-    }
-  } catch {}
+  // FS-05 (.htaccess), ABS-08 and ABS-09 still run as wp_eval against the sandbox — they are
+  // not ported yet. Their presence is why the sandbox still exists at this point.
 
   // FS-05: Suspicious .htaccess rules — PHP re-enable, external redirects, auto_prepend/append_file
   const htaccessResult = await tools.invoke('wp_eval', {
@@ -2589,43 +2496,6 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
         detail: 'htaccess files with rules that re-enable PHP execution or redirect to external domains were found.',
         fix: 'Review each file. Remove rules that allow PHP in uploads/ or redirect to external domains.',
         evidence: htaccessFindings.map(f => `${f.path}: ${f.reason} — ${(f.snippet || '').slice(0, 80)}`),
-      });
-    }
-  } catch {}
-
-  // FS-06: ELF binary detection in wp-content/
-  const elfResult = await tools.invoke('wp_eval', {
-    site: sandboxName, skip_plugins: true, skip_themes: true,
-    code: `
-      $dir = WP_CONTENT_DIR;
-      $found = [];
-      $skipExts = ['php','js','css','html','htm','txt','md','json','xml','svg','png','jpg','jpeg','gif','webp','woff','woff2','ttf','eot','ico','map','pot','po','mo','log','ini','conf'];
-      foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)) as $f) {
-        if (!$f->isFile()) continue;
-        $ext = strtolower($f->getExtension());
-        if (in_array($ext, $skipExts)) continue;
-        $fh = @fopen($f->getPathname(), 'rb');
-        if (!$fh) continue;
-        $header = fread($fh, 4);
-        fclose($fh);
-        // ELF header: \x7fELF
-        if ($header === "\x7fELF") {
-          $found[] = ['path' => str_replace(WP_CONTENT_DIR, 'wp-content', $f->getPathname()), 'size' => $f->getSize()];
-        }
-      }
-      echo json_encode($found);
-    `,
-  });
-  try {
-    const elfs = JSON.parse(extractResult(elfResult) || '[]');
-    if (elfs.length > 0) {
-      fsSignals.push({
-        id: 'FS-06', severity: 'critical', category: 'active-compromise',
-        installName: install.name,
-        title: `ELF binary (Linux executable) found in wp-content: ${elfs.length} file(s)`,
-        detail: 'Linux executables inside wp-content/ are not legitimate WordPress files. They are likely backdoors or crypto miners.',
-        fix: 'Delete immediately. Investigate when each was placed using filesystem timestamps and access logs.',
-        evidence: elfs.map(f => `${f.path} (${(f.size / 1024).toFixed(1)} KB)`),
       });
     }
   } catch {}

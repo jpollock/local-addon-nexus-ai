@@ -140,3 +140,44 @@ describe('The scan is wired into the sweep and declared', () => {
     expect(handler).not.toMatch(/^import .*withSiteRunning/m);
   });
 });
+
+describe('Tier 2 filesystem detection no longer executes the site', () => {
+  const fs2 = require('fs');
+  const path2 = require('path');
+  const src2 = fs2.readFileSync(
+    path2.join(__dirname, '../../../../agents/security-sentinel/agent.js'), 'utf8');
+
+  it('FS-01, FS-02, FS-03, FS-04 and FS-06 have no wp_eval block left', () => {
+    // Each of these booted WordPress on a possibly-compromised clone to ask it about itself.
+    for (const id of ['FS-01', 'FS-02', 'FS-03', 'FS-04', 'FS-06']) {
+      expect(src2).not.toMatch(new RegExp(`//\\s*${id}:`));
+    }
+  });
+
+  it('FS-05, ABS-08 and ABS-09 are honestly still wp_eval — not yet ported', () => {
+    // Their presence is the reason the sandbox still exists at that point in Tier 2. Claiming
+    // otherwise would be exactly the overstated-coverage failure this work is about.
+    for (const id of ['FS-05', 'ABS-08', 'ABS-09']) {
+      expect(src2).toMatch(new RegExp(`//\\s*${id}:`));
+    }
+  });
+
+  it('runs the byte scan BEFORE tier2Investigate, which is what creates the sandbox', () => {
+    // Ordering is the whole point: local_clone_site starts the site and runs four
+    // search-replace passes, so anything learnable from bytes must be learned first or it is
+    // learned from a copy the act of copying has already changed.
+    const preflight = src2.indexOf('Pre-flight byte scan of');
+    const call = src2.indexOf('const plan = await tier2Investigate(');
+    expect(preflight).toBeGreaterThan(-1);
+    expect(preflight).toBeLessThan(call);
+  });
+
+  it('passes the pre-flight findings into Tier 2 rather than rescanning', () => {
+    expect(src2).toMatch(/tier2Investigate\([^)]*preflightSignals\)/);
+    expect(src2).toContain('fsSignals.push(...preflightSignals)');
+  });
+
+  it('deep mode asks the tool for the deep scan', () => {
+    expect(src2).toContain("tools.invoke('scan_site_files', { site: install.name, deep })");
+  });
+});
