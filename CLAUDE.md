@@ -206,19 +206,29 @@ WPE and external from the graph.** A fleet count taken purely from the graph
 undercounts local badly; one taken purely from Local's store misses every
 remote site.
 
-**There are THREE local populations across the fleet resolvers, not two — and
+**There are THREE site populations across the fleet resolvers, not two — and
 they disagree with each other:**
 
-| population | read via | used by |
-|---|---|---|
-| Local's site store | `services.siteData.getSites()` | `nexusFleetHealth`'s `localSites` |
-| twin cache | `services.twinService.getAll()` | `nexusFleetSummary`, `fleet_overview` |
-| content index | `services.indexRegistry.listAll()` filtered to `state === 'indexed'` | the health scores in `nexusFleetHealth` |
+| population | read via | used by | measured 2026-08-04 |
+|---|---|---|---|
+| Local's site store | `services.siteData.getSites()` | `nexusFleetHealth`'s `localSites` | 118, all Local |
+| twin cache | `services.twinService.getAll()` | `nexusFleetSummary`, `fleet_overview` | Local only |
+| content index | `services.indexRegistry.listAll()` filtered to `state === 'indexed'` | the health scores in `nexusFleetHealth` | 423 — **297 of them WPE install ids**, not Local |
 
-Only the first is the count of Local sites. The third is a small subset and is
-the reason `healthyCount` / `warningCount` / `criticalCount` are **not** a
-fleet-wide figure — `sitesScored` is their denominator and must be printed with
-them.
+Only the first is the count of Local sites. **The third is not a Local
+population** — it is easy to assume it is, because `calculateMaintenance` keys
+`indexRegistry` by Local site id, but WPE installs get indexed too and 70% of
+its entries are theirs. `healthyCount` / `warningCount` / `criticalCount` are
+computed over it, so they are neither a fleet figure nor a Local figure;
+`sitesScored` is their denominator and must be printed with them.
+
+Two pre-existing defects live in that loop and are not yet fixed:
+`localSiteData[entry.siteId]` misses for every WPE entry (so `domain` is `''`
+and `phpVersion` falls back to a fabricated `'8.0'`), and `calculateAllScores`
+uses the default all-five factor set, so maintenance and activity score 0 for
+those same entries — the exact defect the per-target factor list fixes in
+`nexusFleetSiteHealth`. Fixing this means giving `calculateAllScores` a
+per-target factor list too.
 
 **Measure, do not copy the numbers.** This section previously carried "71 Local
 sites" and "312 of 403", both stale, and both propagated into derived claims.

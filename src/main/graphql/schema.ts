@@ -1037,15 +1037,16 @@ export const typeDefs = gql`
     runningSites: Int!
     haltedSites: Int!
     """
-    Health counts cover ONLY content-indexed Local sites (indexRegistry entries
-    with state === 'indexed'). They are not a fleet-wide figure: they exclude
-    every WP Engine install, every external SSH host, and every un-indexed Local
-    site. sitesScored is their denominator — report it alongside them.
+    Health counts cover ONLY sites with a content-index entry in state
+    'indexed' — a mixed population of Local sites and WP Engine installs, and
+    NOT a fleet-wide figure. Measured 2026-08-04: 423 of 450 sites, of which
+    297 are WPE install ids and 126 are not. sitesScored is their denominator —
+    report it alongside them, never bare.
     """
     healthyCount: Int!
     warningCount: Int!
     criticalCount: Int!
-    "Number of sites the health counts above were computed over (content-indexed Local sites)"
+    "Number of sites the health counts above were computed over (sites with a content index)"
     sitesScored: Int!
     "Total plugin rows from active sites in the graph DB"
     totalPlugins: Int!

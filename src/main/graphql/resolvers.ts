@@ -2441,10 +2441,21 @@ export function createResolvers(context: ResolverContext) {
           const totalSites = localSites + remoteSites;
 
           // Get content-indexed sites for health scoring.
-          // I5: this population is content-indexed LOCAL sites only — a small
-          // subset of totalSites. `sitesScored` below is its denominator so the
+          //
+          // I5: this is NOT the set of local sites and it is NOT the fleet. It
+          // is whatever carries an indexRegistry entry in state 'indexed' —
+          // measured 2026-08-04, 423 entries against 118 Local sites, 297 of
+          // them WPE install ids. `sitesScored` below is its denominator so the
           // caller can qualify the counts rather than print them bare next to a
-          // fleet-wide total that is several times larger.
+          // fleet-wide total several times larger.
+          //
+          // Two known defects live in the loop below and are deliberately NOT
+          // fixed here (they predate this branch and want their own change):
+          // `localSiteData[entry.siteId]` misses for every WPE entry, so
+          // `domain` is '' and `phpVersion` falls back to a fabricated '8.0';
+          // and `calculateAllScores` uses the default all-five factor set, so
+          // maintenance and activity score 0 for those same WPE entries — the
+          // very thing nexusFleetSiteHealth's per-target factor list fixes.
           const entries = services.indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
           const siteInfoMap: Record<string, any> = {};
 
