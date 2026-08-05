@@ -860,7 +860,7 @@ module.exports = {
   },
 
   // Exported for unit testing only
-  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators, KNOWN_MU_PLUGINS, KNOWN_ROOT_PHP, phpStringArray, mapWithConcurrency, resolveScanScope, FLEET_CONCURRENCY, MAX_TIER2_PER_SWEEP, MAX_REFRESH_PER_SWEEP },
+  _test: { parseSqlResult, getScanScope, collectFleetData, runAbsoluteChecks, llmUserAudit, runExposureChecks, loadBaseline, storeBaseline, runRelativeChecks, runFleetCorrelation, runLogChecks, tier2Investigate, llmSynthesis, tier3Remediate, buildRemediationChecklist, executeChecklist, collectSpecialistData, runContentExamination, runRootFileAnalysis, runObfuscationDecoder, runCoreDiff, runElfStrings, runNetworkIndicators, fmtIntegrity, pushWpContentDeletion, KNOWN_MU_PLUGINS, KNOWN_ROOT_PHP, phpStringArray, mapWithConcurrency, resolveScanScope, FLEET_CONCURRENCY, MAX_TIER2_PER_SWEEP, MAX_REFRESH_PER_SWEEP },
 };
 
 // ─── Log-backed checks (LOG-AUTH, LOG-PROBE, LOG-ENUM, LOG-DIST) ────────────
@@ -1428,7 +1428,36 @@ function runRelativeChecks(install, baseline) {
 // Collect raw data from sandbox for specialist AI calls.
 // Returns strings suitable for embedding in specialist prompts.
 // All nested behavioral response objects are always present with safe fallbacks.
-async function collectSpecialistData(sandboxName, siteUrl, tools) {
+/**
+ * Render a CHK-01/CHK-02 verdict for a specialist prompt.
+ *
+ * The distinction that has to survive into the prompt is unavailable-vs-clean. A specialist told
+ * "no failures" reasons very differently from one told "no manifest existed, so nothing was
+ * compared" — and CHK-01 returns exactly that second case for any WordPress build wordpress.org
+ * does not publish (release candidates, nightlies, custom builds).
+ */
+function fmtIntegrity(kind, result) {
+  if (!result) return `(${kind} integrity check did not run)`;
+  if (result.status === 'unavailable') {
+    return `NOT VERIFIED — ${result.reason || 'no checksum manifest available'}. `
+         + `Zero ${kind} files were compared. This is not evidence of integrity.`;
+  }
+  const failures = Array.isArray(result.failures) ? result.failures : [];
+  if (failures.length === 0) {
+    const n = kind === 'core' ? (result.verified ?? 0) : (result.verified ?? 0);
+    const scope = kind === 'core'
+      ? `${n} core file(s) matched wordpress.org`
+      : `${n} of ${result.activeTotal ?? '?'} active plugin(s) matched wordpress.org`;
+    const gap = kind === 'plugin' && (result.unverifiable?.length || result.capped)
+      ? ` NOT verified: ${(result.unverifiable || []).length} plugin(s) publish no manifest`
+        + (result.capped ? `, ${result.capped} beyond the scan cap` : '') + '.'
+      : '';
+    return `${scope}, no mismatches.${gap}`;
+  }
+  return `${failures.length} ${kind} file(s) FAILED checksum:\n` + failures.slice(0, 40).join('\n');
+}
+
+async function collectSpecialistData(sandboxName, siteUrl, tools, integrity = {}) {
   const results = await Promise.allSettled([
 
     // Plugin directory listing with mtimes
@@ -1513,7 +1542,8 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
       skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
       code: `
         global $wpdb;
-        $posts = $wpdb->get_results("SELECT ID, post_title, LEFT(post_content, 500) AS content_preview, post_status, post_type FROM {$wpdb->posts} LIMIT 200", ARRAY_A);
+        /* content_preview was selected here and never rendered — fmtPosts formats only status, type and title. 200 rows x 500 chars fetched and discarded every scan. DB-01 scans post content properly; this collector only needs the inventory. */
+        $posts = $wpdb->get_results("SELECT ID, post_title, post_status, post_type FROM {$wpdb->posts} LIMIT 200", ARRAY_A);
         echo json_encode($posts);
       `,
     }),
@@ -1532,12 +1562,6 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
         $extra = array_diff($tables, $prefixed);
         echo json_encode(['autoloaded' => $auto, 'critical' => $critical, 'nonStandardTables' => array_values($extra)]);
       `,
-    }),
-
-    // WP core checksums
-    tools.invoke('wp_eval', {
-      site: sandboxName, skip_plugins: true, skip_themes: true,
-      code: `echo shell_exec('wp --skip-plugins --skip-themes core verify-checksums 2>&1');`,
     }),
 
     // Behavioral: external HTTP checks
@@ -1576,8 +1600,9 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
   const scanResult  = parseJson(get(3), '{"matches":[],"scanned":0}');
   const posts       = parseJson(get(4));
   const dbData      = parseJson(get(5), '{"autoloaded":[],"critical":[],"nonStandardTables":[]}');
-  const coreChecks  = typeof get(6) === 'string' ? get(6) : JSON.stringify(get(6));
-  const behavioral  = typeof get(7) === 'object' && get(7) !== null ? get(7) : {};
+  // Index 6 was a duplicate core-checksum collector; it is gone and behavioral moved up.
+  // If you add a collector, append it — these indices are positional and a test pins them.
+  const behavioral  = typeof get(6) === 'object' && get(6) !== null ? get(6) : {};
 
   // Safe fallback shape for all behavioral response objects
   const emptyResponse = { status: 0, headers: {}, bodyPreview: '' };
@@ -1631,8 +1656,12 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
     autoloadedOptionsRaw:   fmtAutoload,
 
     // For integrity
-    coreChecksums:          String(coreChecks).slice(0, 1000),
-    pluginChecksums:        '(not collected — mark all plugins as unverifiable)',
+    // Reuse CHK-01/CHK-02's already-parsed verdicts. Previously this was a second, redundant
+    // `wp core verify-checksums` truncated to 1000 chars, and pluginChecksums was a hardcoded
+    // string telling the specialist to treat every plugin as unverifiable — even though CHK-02
+    // had, in the same run, verified them.
+    coreChecksums:          fmtIntegrity('core', integrity.core),
+    pluginChecksums:        fmtIntegrity('plugin', integrity.plugin),
     configPhpMtime:         '(captured via filesystem scan above)',
 
     // For pattern
@@ -1665,7 +1694,10 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
     samplingLimits: (() => {
       const POSTS_LIMIT = 200;
       const AUTOLOAD_LIMIT = 50;
-      const postsGot = (dbData.posts || []).length;
+      // Read `posts` (collector 4), not `dbData` (collector 5 — options and tables). dbData.posts
+      // is always undefined, so postsGot was always 0, so this always reported "fewer than the
+      // limit, so the full set was examined" — a completeness claim that was never checked.
+      const postsGot = (posts || []).length;
       const autoloadGot = (dbData.autoloaded || []).length;
       const line = (label, got, limit) => got >= limit
         ? `- ${label}: ${got} rows returned (query limit ${limit}) — table may contain more; the remainder was NOT examined.`
@@ -1675,7 +1707,7 @@ async function collectSpecialistData(sandboxName, siteUrl, tools) {
         line('wp_options (autoloaded)', autoloadGot, AUTOLOAD_LIMIT),
         '- wp_usermeta: not collected in this run.',
         '- wp_comments: not collected in this run.',
-        '- post_content truncated to the first 500 characters per row.',
+        '- post_content is NOT provided to this specialist; DB-01 scans it separately.',
       ].join('\n');
     })(),
   };
@@ -2746,11 +2778,17 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     site: sandboxName, skip_plugins: true, skip_themes: true, // raw $wpdb query — do not detonate live plugin code
     code: `
       global $wpdb;
-      $admins = $wpdb->get_col(
+      // Prefixed meta_key — "{$wpdb->prefix}capabilities", never the literal 'wp_capabilities'.
+      // Same bug as FS-MISMATCH above: on any install with a non-wp_ prefix this returned zero
+      // admins, so DB-03 examined nobody's usermeta and reported clean. WP Engine randomises the
+      // prefix, so that is every production target.
+      $capKey = $wpdb->prefix . 'capabilities';
+      $admins = $wpdb->get_col($wpdb->prepare(
         "SELECT u.ID FROM {$wpdb->users} u
          JOIN {$wpdb->usermeta} m ON u.ID = m.user_id
-         WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'"
-      );
+         WHERE m.meta_key = %s AND m.meta_value LIKE '%administrator%'",
+        $capKey
+      ));
       $suspicious = [];
       if ($admins) {
         $meta = $wpdb->get_results(
@@ -2823,6 +2861,13 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
     }
   } catch {}
 
+  // Hoisted so collectSpecialistData can reuse them instead of re-running the same work.
+  // Collector 6 used to shell out to `wp core verify-checksums` inside this very function,
+  // duplicating CHK-01 below — a second full core hash of the same tree, a nested wp-cli
+  // process, and a result truncated to 1000 chars before the specialist ever saw it.
+  let coreIntegrity = null;
+  let pluginIntegrity = null;
+
   // CHK-01: WP core file integrity via wordpress.org checksums API (no nested wp-cli)
   log.info(`[Tier 2] Running core integrity checks...`);
   try {
@@ -2879,6 +2924,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
       `,
     });
     const coreCheck = JSON.parse(extractResult(coreCheckResult) || '{"status":"unavailable","failures":[]}');
+    coreIntegrity = coreCheck;
     if (coreCheck.status === 'unavailable') {
       // Surfaced as a finding, not swallowed. Silence here reads as "core is intact", which is
       // the single most misleading thing this agent can imply about a site it never checked.
@@ -2966,6 +3012,7 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
       `,
     });
     const pluginCheck = JSON.parse(extractResult(pluginCheckResult) || '{"status":"unavailable","failures":[]}');
+    pluginIntegrity = pluginCheck;
     if (pluginCheck.failures.length > 0) {
       fsSignals.push({
         id: 'CHK-02', severity: 'critical', category: 'active-compromise',
@@ -3028,7 +3075,8 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
   // Collect raw data for all specialists in parallel
   log.phase('Data collection', `Gathering filesystem, DB and behavioral data for ${install.name}`);
   const siteUrl = siteUrlFor(install, log);
-  const specialistData = await collectSpecialistData(sandboxName, siteUrl, tools);
+  const specialistData = await collectSpecialistData(sandboxName, siteUrl, tools,
+    { core: coreIntegrity, plugin: pluginIntegrity });
 
   // Fan out to five parallel specialist AI calls — each is pure reasoning over provided data
   log.phase('Specialist analysis', `Running 5 parallel specialist checks on ${install.name}`);
@@ -3295,6 +3343,39 @@ const SIGNAL_REMEDIATION_STEP = {
 // hoisted).
 module.exports._test.SIGNAL_REMEDIATION_STEP = SIGNAL_REMEDIATION_STEP;
 
+/**
+ * Build a checklist step that deletes the files named in a signal's evidence, scoped to
+ * wp-content. Shared by 5c (ABS-09) and 5e (FS-06), which were duplicate implementations of
+ * byte-identical PHP.
+ *
+ * The realpath prefix check is the containment: evidence strings are attacker-influenced — they
+ * are paths found on the compromised site — so a `../../` escape must not reach unlink.
+ *
+ * NOTE: executableCommand is null, so neither step reaches production; it runs against the
+ * sandbox copy only. That is a pre-existing coverage gap, not a property of this refactor.
+ */
+function pushWpContentDeletion(checklist, allSignals, sandboxName, { step, signalId, label }) {
+  const signal = allSignals.find(s => s.id === signalId);
+  if (!signal || !Array.isArray(signal.evidence) || signal.evidence.length === 0) return;
+
+  const paths = signal.evidence
+    .map(e => String(e).split(' ')[0])
+    .filter(f => f && f.startsWith('wp-content/'));
+  if (paths.length === 0) return;
+
+  checklist.push({
+    step,
+    action: label(paths.length),
+    executableCommand: null,
+    toolName: 'wp_eval',
+    toolArgs: {
+      site: sandboxName, skip_plugins: true, skip_themes: true,
+      code: `$paths = ${phpJson(paths)}; $base = rtrim(WP_CONTENT_DIR, '/'); foreach ($paths as $rel) { $full = realpath(ABSPATH . $rel); if ($full === false || strpos($full, $base . '/') !== 0) continue; @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists(ABSPATH . $rel))); echo json_encode($remaining);`,
+    },
+    expectedEmpty: true,
+  });
+}
+
 function buildRemediationChecklist(install, allSignals, sandboxName, options = {}) {
   // Protected admin accounts must be pinned to a value that comes from OUTSIDE the
   // scanned site — the WPE portal account owner / agent config — never from the
@@ -3340,7 +3421,7 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
       toolName: 'wp_eval',
       toolArgs: {
         site: sandboxName,
-        code: `global $wpdb; $admins = $wpdb->get_results("SELECT u.ID, u.user_login, u.user_email, u.user_registered FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = 'wp_capabilities' AND m.meta_value LIKE '%administrator%'", ARRAY_A); $scoreAdmin = function($username, $email, $registered, $attackTimestamp) { $score = 0; if (preg_match('/^[a-z]{6,10}$/', $username) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $username)) $score += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $username)) $score += 60; if (!$email || substr($email, -12) === '@example.com') $score += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($username))) $score += 20; if ($registered && $attackTimestamp) { $diffMin = abs(strtotime($registered) - strtotime($attackTimestamp)) / 60; if ($diffMin <= 10) $score += 30; } return $score; }; $attackTimestamp = null; foreach ($admins as $u) { $ps = 0; if (preg_match('/^[a-z]{6,10}$/', $u['user_login']) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $u['user_login'])) $ps += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $u['user_login'])) $ps += 60; if (!$u['user_email'] || substr($u['user_email'], -12) === '@example.com') $ps += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($u['user_login']))) $ps += 20; if ($ps > 80) { $attackTimestamp = $u['user_registered']; break; } } $loginDisabled = []; $demoted = []; $appKeysDeleted = []; $flagged = []; $protected = array_map('strtolower', ${protectedJson}); /* allowlist injected from agent config — NOT read from the scanned site's DB */ foreach ($admins as $u) { $score = $scoreAdmin($u['user_login'], $u['user_email'], $u['user_registered'], $attackTimestamp); if (in_array(strtolower((string) $u['user_email']), $protected, true) || $score < 30) continue; if ($score >= 50) { $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID'], 'meta_key' => '_application_passwords']); $appKeysDeleted[] = $u['user_login']; } if ($score > 95) { wp_set_password(wp_generate_password(64, true, true), $u['ID']); $wpuser = new WP_User($u['ID']); $wpuser->set_role(''); delete_user_meta($u['ID'], 'session_tokens'); $loginDisabled[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'LOGIN DISABLED — reversible; approve before push']; } elseif ($score >= 50) { wp_update_user(['ID' => $u['ID'], 'role' => 'subscriber']); delete_user_meta($u['ID'], 'session_tokens'); $demoted[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'REVIEW REQUIRED']; } else { $flagged[] = ['username' => $u['user_login'], 'score' => $score]; } } echo json_encode(['login_disabled' => $loginDisabled, 'demoted' => $demoted, 'app_keys_deleted' => $appKeysDeleted, 'flagged' => $flagged]);`,
+        code: `global $wpdb; /* prefixed meta_key — the literal 'wp_capabilities' finds nobody on a randomised prefix, which silently made this remediation step a no-op that still reported success */ $capKey = $wpdb->prefix . 'capabilities'; $admins = $wpdb->get_results($wpdb->prepare("SELECT u.ID, u.user_login, u.user_email, u.user_registered FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID = m.user_id WHERE m.meta_key = %s AND m.meta_value LIKE '%administrator%'", $capKey), ARRAY_A); $scoreAdmin = function($username, $email, $registered, $attackTimestamp) { $score = 0; if (preg_match('/^[a-z]{6,10}$/', $username) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $username)) $score += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $username)) $score += 60; if (!$email || substr($email, -12) === '@example.com') $score += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($username))) $score += 20; if ($registered && $attackTimestamp) { $diffMin = abs(strtotime($registered) - strtotime($attackTimestamp)) / 60; if ($diffMin <= 10) $score += 30; } return $score; }; $attackTimestamp = null; foreach ($admins as $u) { $ps = 0; if (preg_match('/^[a-z]{6,10}$/', $u['user_login']) && !preg_match('/^(admin|backup|system|editor|author|manager)/', $u['user_login'])) $ps += 60; if (preg_match('/^admin_[A-Z0-9]{4,}$/', $u['user_login'])) $ps += 60; if (!$u['user_email'] || substr($u['user_email'], -12) === '@example.com') $ps += 35; if (preg_match('/adminb[ao]ck|adminsyst|adminbak|wp_adm/', strtolower($u['user_login']))) $ps += 20; if ($ps > 80) { $attackTimestamp = $u['user_registered']; break; } } $loginDisabled = []; $demoted = []; $appKeysDeleted = []; $flagged = []; $protected = array_map('strtolower', ${protectedJson}); /* allowlist injected from agent config — NOT read from the scanned site's DB */ foreach ($admins as $u) { $score = $scoreAdmin($u['user_login'], $u['user_email'], $u['user_registered'], $attackTimestamp); if (in_array(strtolower((string) $u['user_email']), $protected, true) || $score < 30) continue; if ($score >= 50) { $wpdb->delete($wpdb->usermeta, ['user_id' => $u['ID'], 'meta_key' => '_application_passwords']); $appKeysDeleted[] = $u['user_login']; } if ($score > 95) { wp_set_password(wp_generate_password(64, true, true), $u['ID']); $wpuser = new WP_User($u['ID']); $wpuser->set_role(''); delete_user_meta($u['ID'], 'session_tokens'); $loginDisabled[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'LOGIN DISABLED — reversible; approve before push']; } elseif ($score >= 50) { wp_update_user(['ID' => $u['ID'], 'role' => 'subscriber']); delete_user_meta($u['ID'], 'session_tokens'); $demoted[] = ['username' => $u['user_login'], 'score' => $score, 'note' => 'REVIEW REQUIRED']; } else { $flagged[] = ['username' => $u['user_login'], 'score' => $score]; } } echo json_encode(['login_disabled' => $loginDisabled, 'demoted' => $demoted, 'app_keys_deleted' => $appKeysDeleted, 'flagged' => $flagged]);`,
       },
       expectedEmpty: false,
     });
@@ -3546,27 +3627,14 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
     }
   }
 
-  // Step 5c: Remove injected check_file.php and other suspicious internal files — only if ABS-09 fired
-  const abs09Signal = allSignals.find(s => s.id === 'ABS-09');
-  if (abs09Signal && abs09Signal.evidence && abs09Signal.evidence.length > 0) {
-    const injectedPaths = abs09Signal.evidence
-      .map(e => e.split(' ')[0])
-      .filter(f => f && f.startsWith('wp-content/'));
-    if (injectedPaths.length > 0) {
-      const injectedPhp = phpJson(injectedPaths);
-      checklist.push({
-        step: '5c',
-        action: `Remove injected files in plugins: ${injectedPaths.length} file(s)`,
-        executableCommand: null,
-        toolName: 'wp_eval',
-        toolArgs: {
-          site: sandboxName, skip_plugins: true, skip_themes: true,
-          code: `$paths = ${injectedPhp}; $base = rtrim(WP_CONTENT_DIR, '/'); foreach ($paths as $rel) { $full = realpath(ABSPATH . $rel); if ($full === false || strpos($full, $base . '/') !== 0) continue; @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists(ABSPATH . $rel))); echo json_encode($remaining);`,
-        },
-        expectedEmpty: true,
-      });
-    }
-  }
+  // Steps 5c and 5e: delete evidence-listed files under wp-content.
+  // These were two copies of byte-identical PHP differing only in the input array and the
+  // label. One builder now serves both, so a fix to the realpath containment check cannot land
+  // in one and miss the other.
+  pushWpContentDeletion(checklist, allSignals, sandboxName, {
+    step: '5c', signalId: 'ABS-09',
+    label: (n) => `Remove injected files in plugins: ${n} file(s)`,
+  });
 
   // Step 5d: Delete spam posts — only if DB-01 fired
   const db01Signal = allSignals.find(s => s.id === 'DB-01');
@@ -3590,27 +3658,10 @@ function buildRemediationChecklist(install, allSignals, sandboxName, options = {
     }
   }
 
-  // Step 5e: Remove ELF binaries — only if FS-06 fired
-  const fs06Signal = allSignals.find(s => s.id === 'FS-06');
-  if (fs06Signal && fs06Signal.evidence && fs06Signal.evidence.length > 0) {
-    const elfPaths = fs06Signal.evidence
-      .map(e => e.split(' ')[0])
-      .filter(f => f && f.startsWith('wp-content/'));
-    if (elfPaths.length > 0) {
-      const elfPathsPhp = phpJson(elfPaths);
-      checklist.push({
-        step: '5e',
-        action: `Remove ${elfPaths.length} ELF binaries from wp-content`,
-        executableCommand: null,
-        toolName: 'wp_eval',
-        toolArgs: {
-          site: sandboxName, skip_plugins: true, skip_themes: true,
-          code: `$paths = ${elfPathsPhp}; $base = rtrim(WP_CONTENT_DIR, '/'); foreach ($paths as $rel) { $full = realpath(ABSPATH . $rel); if ($full === false || strpos($full, $base . '/') !== 0) continue; @unlink($full); } $remaining = array_values(array_filter($paths, fn($rel) => file_exists(ABSPATH . $rel))); echo json_encode($remaining);`,
-        },
-        expectedEmpty: true,
-      });
-    }
-  }
+  pushWpContentDeletion(checklist, allSignals, sandboxName, {
+    step: '5e', signalId: 'FS-06',
+    label: (n) => `Remove ${n} ELF binaries from wp-content`,
+  });
 
   // Step 6: Shuffle authentication salts
   checklist.push({
