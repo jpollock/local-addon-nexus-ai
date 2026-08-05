@@ -1,6 +1,7 @@
 import { McpToolHandler, McpToolResult, NexusServices } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveSite, resolveRemoteGraphSite } from '../../site-resolver';
 import { indexFreshnessWarning } from '../../../twin/twin-helpers';
+import { vectorSiteId } from '../../../vector-store/vectorSiteId';
 import type { MetadataFilter } from '../../../../common/types';
 
 export function formatCustomFields(metadataJson: string): string {
@@ -105,22 +106,18 @@ export const searchContentHandler: McpToolHandler = {
       // whichever row SQLite happens to reach first. Decline rather than guess —
       // the same treatment core_version already applies.
       const graphService = (services as any).graphService;
-      const db = graphService?.getDb?.();
-      const rows = (db?.prepare(
-        "SELECT id, name, source FROM sites WHERE source IN ('wpe','external') AND name=?"
-      ).all(args.site) ?? []) as Array<{ id: string; name: string; source: string }>;
+      const resolved = resolveRemoteGraphSite(graphService?.getDb?.(), args.site);
 
-      if (rows.length === 0) {
+      if (resolved.kind === 'none') {
         return error(`Site "${args.site}" not found. For WPE installs, use the install name (e.g. "testjpp1"). Run wpe_sync_sites first if the install is missing.`);
       }
-      if (rows.length > 1) {
-        const kinds = rows.map((r) => (r.source === 'external' ? `ssh:${r.name}` : `wpe:<account>/${r.name}`));
+      if (resolved.kind === 'ambiguous') {
         return error(
-          `"${args.site}" matches ${rows.length} sites across sources — specify which one: ${kinds.join(', ')}`
+          `"${args.site}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`
         );
       }
-      siteId = rows[0].id;
-      siteName = rows[0].name;
+      siteId = resolved.siteId;
+      siteName = resolved.siteName;
     }
 
     const indexEntry = services.indexRegistry.get(siteId);
@@ -131,7 +128,9 @@ export const searchContentHandler: McpToolHandler = {
     const queryVector = await services.embeddingService.embed(args.query as string);
     const limit = Math.min(Math.max((args.limit as number) || 5, 1), 20);
 
-    const results = await services.vectorStore.search(siteId, queryVector, {
+    // vectorSiteId: external ids are `ssh:<alias>`; the vector store stores them
+    // colon-free. No-op for local/WPE ids, so applied unconditionally.
+    const results = await services.vectorStore.search(vectorSiteId(siteId), queryVector, {
       limit,
       postType: args.postType as string | undefined,
       relevanceFloor: args.min_score as number | undefined,

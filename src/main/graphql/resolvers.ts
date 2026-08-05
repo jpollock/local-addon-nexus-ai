@@ -43,6 +43,9 @@ import { resolveTransport } from '../transport';
 import { collectExternalHostData } from '../startup/collectExternalHostData';
 import { writeExternalHostData } from '../startup/writeExternalHostData';
 import { ExternalContentIndexService } from '../events/ExternalContentIndexService';
+import { vectorSiteId } from '../vector-store/vectorSiteId';
+import { resolveRemoteGraphSite } from '../mcp/site-resolver';
+import { ensureContentIndexedAtColumn } from '../startup/ExternalContentIndexScheduler';
 
 /** The root value for GraphQL resolvers — always null/undefined for Query/Mutation. */
 type ResolverParent = unknown;
@@ -3341,14 +3344,38 @@ export function createResolvers(context: ResolverContext) {
       nexusContentSearch: async (_parent: ResolverParent, { target, query, limit }: { target: string; query: string; limit?: number }) => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          let siteId: string;
 
-          if (!site) {
-            return {
-              success: false,
-              error: `Site not found: ${parsed.siteName}`,
-              results: [],
-            };
+          if (parsed.type === 'local') {
+            const site = resolveSite(parsed.siteName!, services.siteData);
+            if (!site) {
+              return {
+                success: false,
+                error: `Site not found: ${parsed.siteName}`,
+                results: [],
+              };
+            }
+            siteId = site.id;
+          } else {
+            // WPE or external — resolve via the graph, same fallback and
+            // collision policy search_site_content uses.
+            const lookupName = parsed.type === 'external' ? parsed.alias : parsed.installName;
+            const resolved = resolveRemoteGraphSite(services.graphService?.getDb?.(), lookupName);
+            if (resolved.kind === 'none') {
+              return {
+                success: false,
+                error: `Site "${target}" not found in the graph database.`,
+                results: [],
+              };
+            }
+            if (resolved.kind === 'ambiguous') {
+              return {
+                success: false,
+                error: `"${lookupName}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`,
+                results: [],
+              };
+            }
+            siteId = resolved.siteId;
           }
 
           if (!services.vectorStore || !services.embeddingService) {
@@ -3360,7 +3387,8 @@ export function createResolvers(context: ResolverContext) {
           }
 
           const queryVector = await services.embeddingService.embed(query);
-          const searchResults = await services.vectorStore.search(site.id, queryVector, {
+          // vectorSiteId: external ids are `ssh:<alias>`; no-op for local/WPE.
+          const searchResults = await services.vectorStore.search(vectorSiteId(siteId), queryVector, {
             limit: limit || 10,
             relevanceFloor: 0.3,
           });
@@ -3405,15 +3433,19 @@ export function createResolvers(context: ResolverContext) {
               wpeSiteIds = rows.map((r) => r.id);
             } catch { /* skip wpe */ }
           }
+          // vectorSiteId: external ids are `ssh:<alias>`; the vector store's
+          // table names cannot contain a colon. No-op for local/WPE ids.
+          // The map returned by searchAcrossSites is keyed by the id passed in,
+          // so siteNames must be keyed the same way.
           const allSiteIds = [
-            ...indexEntries.map((e: any) => e.siteId),
-            ...wpeSiteIds,
+            ...indexEntries.map((e: any) => vectorSiteId(e.siteId)),
+            ...wpeSiteIds.map((id) => vectorSiteId(id)),
           ];
 
           // Single tableNames() call + batched search — avoids filesystem lock contention
           interface Hit { siteId: string; siteName: string; score: number; title: string; content: string; postType: string }
           const hits: Hit[] = [];
-          const siteNames = new Map(indexEntries.map((e: any) => [e.siteId, e.siteName || e.siteId]));
+          const siteNames = new Map(indexEntries.map((e: any) => [vectorSiteId(e.siteId), e.siteName || e.siteId]));
 
           const matchMap = await services.vectorStore!.searchAcrossSites(
             allSiteIds,
@@ -3523,17 +3555,39 @@ export function createResolvers(context: ResolverContext) {
       nexusContentIndexStatus: async (_parent: ResolverParent, { target }: { target: string }) => {
         try {
           const parsed = parseTarget(target);
-          const site = resolveSite(parsed.siteName!, services.siteData);
+          let siteId: string;
 
-          if (!site) {
-            return {
-              success: false,
-              error: `Site not found: ${parsed.siteName}`,
-              status: null,
-            };
+          if (parsed.type === 'local') {
+            const site = resolveSite(parsed.siteName!, services.siteData);
+            if (!site) {
+              return {
+                success: false,
+                error: `Site not found: ${parsed.siteName}`,
+                status: null,
+              };
+            }
+            siteId = site.id;
+          } else {
+            const lookupName = parsed.type === 'external' ? parsed.alias : parsed.installName;
+            const resolved = resolveRemoteGraphSite(services.graphService?.getDb?.(), lookupName);
+            if (resolved.kind === 'none') {
+              return {
+                success: false,
+                error: `Site "${target}" not found in the graph database.`,
+                status: null,
+              };
+            }
+            if (resolved.kind === 'ambiguous') {
+              return {
+                success: false,
+                error: `"${lookupName}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`,
+                status: null,
+              };
+            }
+            siteId = resolved.siteId;
           }
 
-          const indexEntry = services.indexRegistry.get(site.id);
+          const indexEntry = services.indexRegistry.get(siteId);
 
           if (!indexEntry) {
             return {
@@ -5584,6 +5638,16 @@ export function createResolvers(context: ResolverContext) {
             logger: console,
           });
           const result = await indexService.indexOne(transport as any, row.id, row.name);
+
+          // Stamp the same staleness column the scheduler reads, so a host
+          // indexed by hand is not redundantly re-indexed on the next cycle.
+          // The scheduler may never have run in this process (it is opt-in),
+          // so the column is ensured here rather than assumed.
+          try {
+            if (ensureContentIndexedAtColumn(db, console)) {
+              db!.prepare('UPDATE sites SET content_indexed_at = ? WHERE id = ?').run(Date.now(), row.id);
+            }
+          } catch { /* best-effort staleness stamp, matches the scheduler's tolerance */ }
 
           return { success: true, error: null, documentCount: result.documentCount };
         } catch (e: any) {

@@ -268,10 +268,12 @@ describe('fleet queries include external sites', () => {
       context.services
     );
 
-    // Should succeed and call search with the external site ID
+    // Should succeed and call search with the external site ID, translated to
+    // the vector store's colon-free form (vectorSiteId) — the write path stores
+    // it that way, so the read path must ask for it that way.
     expect('content' in result).toBe(true);
     expect(context.services.vectorStore.search).toHaveBeenCalledWith(
-      'ssh:ext-host',
+      'ssh_ext-host',
       expect.any(Array),
       expect.any(Object)
     );

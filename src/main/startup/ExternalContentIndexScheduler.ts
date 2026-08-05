@@ -23,6 +23,37 @@ const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const CONCURRENCY = 3;
 
 /**
+ * Add `sites.content_indexed_at` if it is missing.
+ *
+ * Shared because the scheduler is not the only writer: `nexusHostIndex`
+ * (`nexus host index <alias>`) stamps the same column, and it can run in a
+ * process where the scheduler is disabled and has therefore never run. Both
+ * writers must be able to guarantee the column exists.
+ *
+ * Best-effort: a failure here must never break the operation that needed it.
+ * Returns true when the column is present afterwards.
+ */
+export function ensureContentIndexedAtColumn(
+  db: any,
+  logger?: { info: (...a: any[]) => void; warn: (...a: any[]) => void },
+): boolean {
+  if (!db) return false;
+  try {
+    const exists = db.prepare(
+      `SELECT COUNT(*) as c FROM pragma_table_info('sites') WHERE name='content_indexed_at'`
+    ).get() as { c: number };
+    if (!exists.c) {
+      db.exec(`ALTER TABLE sites ADD COLUMN content_indexed_at INTEGER`);
+      logger?.info('[ExternalContentIndex] Added column sites.content_indexed_at');
+    }
+    return true;
+  } catch (err: any) {
+    logger?.warn('[ExternalContentIndex] Could not add content_indexed_at column:', err?.message);
+    return false;
+  }
+}
+
+/**
  * Content-index registered external SSH hosts on an interval. Mirrors
  * ExternalRefreshScheduler's shape exactly. Independent SSH session per host
  * per cycle — no ControlMaster to piggyback on (see Spec 4a §6), so this does
@@ -77,17 +108,7 @@ export class ExternalContentIndexScheduler {
 
   private ensureColumn(db: any): void {
     if (this.columnEnsured) return;
-    try {
-      const exists = db.prepare(
-        `SELECT COUNT(*) as c FROM pragma_table_info('sites') WHERE name='content_indexed_at'`
-      ).get() as { c: number };
-      if (!exists.c) {
-        db.exec(`ALTER TABLE sites ADD COLUMN content_indexed_at INTEGER`);
-        this.logger.info('[ExternalContentIndexScheduler] Added column sites.content_indexed_at');
-      }
-    } catch (err: any) {
-      this.logger.warn('[ExternalContentIndexScheduler] Could not add content_indexed_at column:', err?.message);
-    }
+    ensureContentIndexedAtColumn(db, this.logger);
     this.columnEnsured = true;
   }
 

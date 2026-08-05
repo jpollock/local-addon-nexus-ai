@@ -1,5 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveSite, resolveRemoteGraphSite } from '../../site-resolver';
 
 export const getIndexStatusHandler: McpToolHandler = {
   definition: {
@@ -20,18 +20,36 @@ export const getIndexStatusHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
-    if (!site) {
-      return error(`Site "${args.site}" not found`);
+    // Local first, then the graph for WPE installs and external SSH hosts —
+    // the same fallback (and the same collision policy) search_site_content uses.
+    let siteId: string;
+    let siteName: string;
+
+    const localSite = resolveSite(args.site as string, services.siteData);
+    if (localSite) {
+      siteId = localSite.id;
+      siteName = localSite.name;
+    } else {
+      const resolved = resolveRemoteGraphSite((services as any).graphService?.getDb?.(), args.site);
+      if (resolved.kind === 'none') {
+        return error(`Site "${args.site}" not found`);
+      }
+      if (resolved.kind === 'ambiguous') {
+        return error(
+          `"${args.site}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`
+        );
+      }
+      siteId = resolved.siteId;
+      siteName = resolved.siteName;
     }
 
-    const entry = services.indexRegistry.get(site.id);
+    const entry = services.indexRegistry.get(siteId);
     if (!entry) {
-      return ok(`Site "${site.name}" has not been indexed yet. Start the site to trigger indexing.`);
+      return ok(`Site "${siteName}" has not been indexed yet. Start the site to trigger indexing.`);
     }
 
     const lines = [
-      `## Index Status: ${site.name}`,
+      `## Index Status: ${siteName}`,
       `**State:** ${entry.state}`,
       `**Documents:** ${entry.documentCount}`,
       `**Chunks:** ${entry.chunkCount}`,

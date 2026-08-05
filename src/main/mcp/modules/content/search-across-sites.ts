@@ -1,5 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
 import { IndexEntry } from '../../../../common/types';
+import { vectorSiteId } from '../../../vector-store/vectorSiteId';
 
 export const searchAcrossSitesHandler: McpToolHandler = {
   definition: {
@@ -48,7 +49,9 @@ export const searchAcrossSitesHandler: McpToolHandler = {
     let totalResults = 0;
 
     for (const entry of indexedSites) {
-      const results = await services.vectorStore.search(entry.siteId, queryVector, {
+      // vectorSiteId: external ids are `ssh:<alias>`; the vector store stores
+      // them colon-free. No-op for local/WPE ids.
+      const results = await services.vectorStore.search(vectorSiteId(entry.siteId), queryVector, {
         limit: limitPerSite,
         relevanceFloor: args.min_score as number | undefined,
       });

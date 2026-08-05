@@ -100,6 +100,48 @@ describe('nexusHostIndex', () => {
       'ssh:myhost',
       'myhost',
     );
+
+    // A manual index stamps the same staleness column the scheduler reads, so
+    // the next scheduler cycle does not redundantly re-index this host. The
+    // column is created here if the scheduler has never run in this process.
+    const stamped = graphService.getDb()!
+      .prepare('SELECT content_indexed_at FROM sites WHERE id = ?')
+      .get('ssh:myhost') as { content_indexed_at: number | null };
+    expect(stamped.content_indexed_at).toEqual(expect.any(Number));
+    expect(stamped.content_indexed_at! > 0).toBe(true);
+  });
+
+  it('does not stamp content_indexed_at when the host could not be reached', async () => {
+    await graphService.upsertSite({
+      id: 'ssh:unreachable',
+      name: 'unreachable',
+      source: 'external',
+      host: 'external',
+      domain: 'unreachable',
+      environment: 'production',
+      is_active: true,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    mockResolveTransport.mockResolvedValue({
+      content: [{ type: 'text', text: 'Could not reach host' }],
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusHostIndex(null, { alias: 'unreachable' });
+    expect(r.success).toBe(false);
+
+    // The column may not exist at all on this fresh db — either way, nothing
+    // was stamped.
+    const cols = graphService.getDb()!
+      .prepare(`SELECT COUNT(*) as c FROM pragma_table_info('sites') WHERE name='content_indexed_at'`)
+      .get() as { c: number };
+    if (cols.c) {
+      const row = graphService.getDb()!
+        .prepare('SELECT content_indexed_at FROM sites WHERE id = ?')
+        .get('ssh:unreachable') as { content_indexed_at: number | null };
+      expect(row.content_indexed_at).toBeNull();
+    }
   });
 
   it('surfaces a permission refusal as an error', async () => {
