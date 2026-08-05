@@ -272,7 +272,15 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     const exceptions = this.getEffectiveExceptions().filter(
       e => !(e.targetRef === targetRef && e.environment === environment),
     );
-    this.saveSetting({ remoteSiteExceptions: exceptions });
+    const patch: Partial<NexusSettings> = { remoteSiteExceptions: exceptions };
+    // If this leaves the array empty AND the only reason it wasn't already empty was the
+    // deprecated key, clear that too — otherwise the fallback in getEffectiveExceptions
+    // (and the real permission gate, which uses the identical fallback) resurrects the
+    // exception this action was meant to remove.
+    if (exceptions.length === 0 && this.state.settings?.wpeSiteExceptions?.length) {
+      patch.wpeSiteExceptions = [];
+    }
+    this.saveSetting(patch);
   };
 
   handleAccountScopeToggle = (accountId: string, included: boolean): void => {
@@ -814,7 +822,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       this.renderAutoIndexingSection(),
       sectionHeader('Sync Schedule'),
       this.renderSyncScheduleSection(),
-      sectionHeader('WPE Access & Permissions'),
+      sectionHeader('Access & Permissions'),
       this.renderWpeAccessSection(),
     );
   }

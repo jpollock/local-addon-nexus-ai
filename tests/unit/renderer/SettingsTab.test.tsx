@@ -207,6 +207,45 @@ describe('SettingsTab — exception picker writes targetRef', () => {
     expect(textOf(tree)).not.toContain('old');
   });
 
+  it('removing a legacy user\'s last exception clears wpeSiteExceptions too, so the fallback cannot resurrect it', async () => {
+    const electron = mockElectron({
+      [IPC_CHANNELS.GET_SETTINGS]: {
+        autoIndex: true, excludedSiteIds: [],
+        wpeSiteExceptions: [{ installName: 'legacy-store', environment: 'production', overrides: { wpcli: false } }],
+      },
+    });
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.handleSiteExceptionRemove('wpe:legacy-store', 'production');
+    expect(electron.ipcRenderer.invoke).toHaveBeenCalledWith(
+      IPC_CHANNELS.UPDATE_SETTINGS,
+      { remoteSiteExceptions: [], wpeSiteExceptions: [] },
+    );
+  });
+
+  it('removing one of two legacy exceptions does NOT clear wpeSiteExceptions, since the array is still non-empty', async () => {
+    const electron = mockElectron({
+      [IPC_CHANNELS.GET_SETTINGS]: {
+        autoIndex: true, excludedSiteIds: [],
+        wpeSiteExceptions: [
+          { installName: 'legacy-store', environment: 'production', overrides: { wpcli: false } },
+          { installName: 'other-store', environment: 'production', overrides: { wpcli: false } },
+        ],
+      },
+    });
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.handleSiteExceptionRemove('wpe:legacy-store', 'production');
+    expect(electron.ipcRenderer.invoke).toHaveBeenCalledWith(
+      IPC_CHANNELS.UPDATE_SETTINGS,
+      { remoteSiteExceptions: [{ targetRef: 'wpe:other-store', environment: 'production', overrides: { wpcli: false } }] },
+    );
+  });
+
   it('the exception picker lists external hosts in a separate group from WPE installs', async () => {
     const electron = mockElectron({
       [IPC_CHANNELS.GET_WPE_INSTALLS_CACHE]: [{ installName: 'mystore', environment: 'production', primaryDomain: 'mystore.wpengine.com' }],
