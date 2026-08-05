@@ -2340,18 +2340,52 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          const allSites = services.siteData.getSites();
-          const siteIds = Object.keys(allSites);
+          if (!services.graphService?.getDb?.()) {
+            return {
+              success: false,
+              error: 'Graph service not available',
+              summary: null,
+            };
+          }
+
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          const db = services.graphService.getDb()!;
+
+          // Count all active sites from graph DB (all three sources)
+          const allActiveSites = db
+            .prepare('SELECT id, source FROM sites WHERE is_active = 1')
+            .all() as Array<{ id: string; source: string }>;
+
+          const totalSites = allActiveSites.length;
+          const localSites = allActiveSites.filter((s) => s.source === 'local').length;
+
+          // Count plugins and themes joined to active sites only
+          const totalPlugins = db
+            .prepare(`
+              SELECT COUNT(*) as count
+              FROM plugins p
+              INNER JOIN sites s ON p.site_id = s.id
+              WHERE s.is_active = 1
+            `)
+            .get() as { count: number };
+
+          const totalThemes = db
+            .prepare(`
+              SELECT COUNT(*) as count
+              FROM themes t
+              INNER JOIN sites s ON t.site_id = s.id
+              WHERE s.is_active = 1
+            `)
+            .get() as { count: number };
+
+          // Count Local sites by status (running/halted is Local-only)
+          const localSiteData = services.siteData.getSites();
+          const localSiteIds = Object.keys(localSiteData);
 
           let runningSites = 0;
           let haltedSites = 0;
-          let totalPlugins = 0;
-          let outdatedPlugins = 0;
-          let totalThemes = 0;
-          let outdatedThemes = 0;
 
-          // Count sites by status
-          for (const id of siteIds) {
+          for (const id of localSiteIds) {
             const status = services.localServices?.getSiteStatus?.(id) || 'unknown';
             if (status === 'running') runningSites++;
             else haltedSites++;
@@ -2362,7 +2396,7 @@ export function createResolvers(context: ResolverContext) {
           const siteInfoMap: Record<string, any> = {};
 
           for (const entry of entries) {
-            const site = allSites[entry.siteId];
+            const site = localSiteData[entry.siteId];
             siteInfoMap[entry.siteId] = {
               domain: site?.domain || '',
               phpVersion: (site as any)?.phpVersion || '8.0',
@@ -2386,16 +2420,17 @@ export function createResolvers(context: ResolverContext) {
           return {
             success: true,
             summary: {
-              totalSites: siteIds.length,
+              totalSites,
+              localSites,
               runningSites,
               haltedSites,
               healthyCount,
               warningCount,
               criticalCount,
-              totalPlugins,
-              outdatedPlugins,
-              totalThemes,
-              outdatedThemes,
+              totalPlugins: totalPlugins.count,
+              outdatedPlugins: null,
+              totalThemes: totalThemes.count,
+              outdatedThemes: null,
             },
           };
         } catch (error: any) {

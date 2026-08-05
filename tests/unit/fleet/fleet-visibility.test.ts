@@ -301,3 +301,203 @@ describe('fleet queries include external sites', () => {
     }
   });
 });
+
+describe('nexusFleetHealth includes all sources', () => {
+  let graphService: GraphService;
+  let testDbPath: string;
+
+  beforeEach(async () => {
+    testDbPath = path.join(__dirname, `test-fleet-health-${Date.now()}.db`);
+    graphService = new GraphService(testDbPath);
+    await graphService.initialize();
+  });
+
+  afterEach(async () => {
+    await graphService.close();
+    if (fs.existsSync(testDbPath)) {
+      fs.unlinkSync(testDbPath);
+    }
+  });
+
+  function ctx() {
+    return {
+      services: {
+        graphService,
+        logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+        siteData: {
+          getSite: jest.fn().mockReturnValue(undefined),
+          getSites: jest.fn().mockReturnValue({}),
+        },
+        localServices: {
+          getSiteStatus: jest.fn().mockReturnValue('running'),
+        },
+        indexRegistry: {
+          listAll: jest.fn().mockReturnValue([]),
+        },
+        healthCalculator: {
+          calculateAllScores: jest.fn().mockResolvedValue({}),
+        },
+      },
+      registry: {},
+    } as any;
+  }
+
+  it('counts all three sources, and plugin totals are no longer always zero', async () => {
+    // Seed: 1 local, 1 wpe, 1 external — all active
+    await graphService.upsertSite({
+      id: 'local-1',
+      name: 'local-site',
+      source: 'local',
+      host: 'local',
+      domain: 'local.local',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertSite({
+      id: 'wpe-1',
+      name: 'wpe-site',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'wpe.wpengine.com',
+      remote_install_id: 'wpe-1',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertSite({
+      id: 'ssh:ext-1',
+      name: 'ext-site',
+      source: 'external',
+      host: 'external',
+      domain: 'ext.example.com',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    // Add plugins to the wpe and local sites
+    await graphService.upsertPlugin({
+      site_id: 'wpe-1',
+      slug: 'wpe-plugin',
+      name: 'WPE Plugin',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertPlugin({
+      site_id: 'local-1',
+      slug: 'local-plugin',
+      name: 'Local Plugin',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetHealth();
+    expect(r.success).toBe(true);
+    expect(r.summary.totalSites).toBe(3);
+    expect(r.summary.localSites).toBe(1);
+    expect(r.summary.totalPlugins).toBeGreaterThan(0); // was hardcoded 0
+  });
+
+  it('running + halted counts only Local sites', async () => {
+    // Seed 1 local, 1 wpe
+    await graphService.upsertSite({
+      id: 'local-1',
+      name: 'local-site',
+      source: 'local',
+      host: 'local',
+      domain: 'local.local',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertSite({
+      id: 'wpe-1',
+      name: 'wpe-site',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'wpe.wpengine.com',
+      remote_install_id: 'wpe-1',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    // Mock siteData to only return local-1
+    const context = ctx();
+    context.services.siteData.getSites = jest.fn().mockReturnValue({
+      'local-1': { id: 'local-1', name: 'local-site' },
+    });
+
+    const r = await (createResolvers(context).Mutation as any).nexusFleetHealth();
+    expect(r.success).toBe(true);
+    expect(r.summary.runningSites + r.summary.haltedSites).toBe(r.summary.localSites);
+  });
+
+  it('reports outdated counts as unknown rather than a false all-clear', async () => {
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetHealth();
+    expect(r.success).toBe(true);
+    expect(r.summary.outdatedPlugins).toBeNull();
+    expect(r.summary.outdatedThemes).toBeNull();
+  });
+
+  it('excludes inactive sites from the totals', async () => {
+    // Seed one active and one inactive
+    await graphService.upsertSite({
+      id: 'active-1',
+      name: 'active-site',
+      source: 'local',
+      host: 'local',
+      domain: 'active.local',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertSite({
+      id: 'inactive-1',
+      name: 'inactive-site',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'inactive.wpengine.com',
+      remote_install_id: 'inactive-1',
+      is_active: false, // inactive
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    // Add plugin to inactive site
+    await graphService.upsertPlugin({
+      site_id: 'inactive-1',
+      slug: 'inactive-plugin',
+      name: 'Inactive Plugin',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetHealth();
+    expect(r.success).toBe(true);
+    expect(r.summary.totalSites).toBe(1); // only the active one
+    expect(r.summary.totalPlugins).toBe(0); // plugin belongs to inactive site
+  });
+});

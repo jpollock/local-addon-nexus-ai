@@ -75,6 +75,7 @@ fleetCommand
             error
             summary {
               totalSites
+              localSites
               runningSites
               haltedSites
               healthyCount
@@ -103,10 +104,19 @@ fleetCommand
 
       console.log('\nFleet Health Summary');
       console.log('─'.repeat(50));
-      console.log(`Sites:         ${summary.totalSites} total (${summary.runningSites} running, ${summary.haltedSites} halted)`);
+      const remoteSites = summary.totalSites - summary.localSites;
+      console.log(`Sites:         ${summary.totalSites} total — ${summary.localSites} local (${summary.runningSites} running, ${summary.haltedSites} halted), ${remoteSites} remote`);
       console.log(`Health:        ${summary.healthyCount} healthy, ${summary.warningCount} warnings, ${summary.criticalCount} critical`);
-      console.log(`Plugins:       ${summary.totalPlugins} total (${summary.outdatedPlugins} outdated)`);
-      console.log(`Themes:        ${summary.totalThemes} total (${summary.outdatedThemes} outdated)`);
+
+      const pluginStatus = summary.outdatedPlugins !== null
+        ? `${summary.outdatedPlugins} outdated`
+        : 'update status not tracked';
+      console.log(`Plugins:       ${summary.totalPlugins} total (${pluginStatus})`);
+
+      const themeStatus = summary.outdatedThemes !== null
+        ? `${summary.outdatedThemes} outdated`
+        : 'update status not tracked';
+      console.log(`Themes:        ${summary.totalThemes} total (${themeStatus})`);
       console.log('');
     } catch (error: any) {
       console.error(`Error: ${error.message}`);
