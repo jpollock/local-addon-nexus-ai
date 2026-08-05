@@ -47,6 +47,8 @@ export interface SiteLike {
   id?: string;
   name?: string;
   path?: string;
+  /** Primary domain, used to judge whether a RewriteRule target is external. */
+  domain?: string;
 }
 
 function readDefine(source: string, constant: string): string | null {

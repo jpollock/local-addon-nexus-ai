@@ -2,15 +2,18 @@ import { LocalFileSource } from './LocalFileSource';
 import { resolveScanRoot, SiteLike } from './resolveScanRoot';
 import { checkMuPlugins, MuPluginResult } from './checks/muPlugins';
 import { scanFilesystem, FilesystemScanResult } from './checks/filesystem';
+import { scanDirectiveFiles, DirectiveScanResult } from './checks/directives';
 
 export { LocalFileSource } from './LocalFileSource';
 export { resolveScanRoot } from './resolveScanRoot';
 export { checkMuPlugins } from './checks/muPlugins';
 export { scanFilesystem } from './checks/filesystem';
+export { scanDirectiveFiles } from './checks/directives';
 export type { FileSource, FileEntry, FileStat, WalkResult } from './FileSource';
 export type { ScanRoot, SiteLike } from './resolveScanRoot';
 export type { MuPluginResult, MuPluginFinding } from './checks/muPlugins';
 export type { FilesystemScanResult } from './checks/filesystem';
+export type { DirectiveScanResult, DirectiveFinding } from './checks/directives';
 
 /**
  * Files the host and this addon install into mu-plugins.
@@ -54,7 +57,7 @@ export interface ScanReport {
    * checked", never as "clean" — that distinction is the reason the whole scanner exists.
    */
   unscannable?: { reason: string; detail: string };
-  checks: { muPlugins?: MuPluginResult; filesystem?: FilesystemScanResult };
+  checks: { muPlugins?: MuPluginResult; filesystem?: FilesystemScanResult; directives?: DirectiveScanResult };
   /** What was inspected, in the report's own words. */
   coverage: string[];
   /** What was NOT inspected. Never omitted, even when empty. */
@@ -104,6 +107,13 @@ export async function scanLocalSite(site: SiteLike, options: ScanOptions = {}): 
   const filesystem = options.deep
     ? await scanFilesystem(source, { contentDir: root.contentDir, knownRootPhp: KNOWN_ROOT_PHP })
     : undefined;
+  // Deep only. The intent was to run this always — .user.ini is the one persistence slot
+  // wp_eval structurally cannot see — but finding a handful of directive files requires walking
+  // the whole install, which took the shallow scan from 41 ms to 15.5 s across the fleet.
+  // Measured, not assumed; the same regression as wiring the filesystem walk in unconditionally.
+  const directives = options.deep
+    ? await scanDirectiveFiles(source, { siteHost: site?.domain ?? null })
+    : undefined;
 
   const coverage: string[] = [];
   const notChecked: string[] = [];
@@ -133,8 +143,15 @@ export async function scanLocalSite(site: SiteLike, options: ScanOptions = {}): 
     // invites the reader to assume the rest of the filesystem was looked at.
     notChecked.push('filesystem beyond mu-plugins — deep scan not requested (obfuscation, web-root PHP, uploads PHP, ELF binaries)');
   }
+  if (directives) {
+    coverage.push(
+      `directive files — ${directives.filesExamined.length} examined (.htaccess, .user.ini, php.ini)`,
+    );
+    notChecked.push(...directives.knownGaps.map((g) => `directives ${g}`));
+  } else {
+    notChecked.push('.htaccess, .user.ini and php.ini directives — deep scan not requested');
+  }
   notChecked.push(
-    '.htaccess and .user.ini directives',
     'database contents (injected posts, autoloaded options, usermeta)',
     'core and plugin checksums',
   );
@@ -142,7 +159,7 @@ export async function scanLocalSite(site: SiteLike, options: ScanOptions = {}): 
   return {
     site: name,
     webRoot: root.webRoot,
-    checks: { muPlugins, filesystem },
+    checks: { muPlugins, filesystem, directives },
     coverage,
     notChecked,
     durationMs: Date.now() - started,
