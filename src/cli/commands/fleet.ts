@@ -81,6 +81,7 @@ fleetCommand
               healthyCount
               warningCount
               criticalCount
+              sitesScored
               totalPlugins
               outdatedPlugins
               totalThemes
@@ -108,7 +109,13 @@ fleetCommand
       console.log('─'.repeat(50));
       const remoteSites = summary.totalSites - summary.localSites;
       console.log(`Sites:         ${summary.totalSites} total — ${summary.localSites} local (${summary.runningSites} running, ${summary.haltedSites} halted), ${remoteSites} remote`);
-      console.log(`Health:        ${summary.healthyCount} healthy, ${summary.warningCount} warnings, ${summary.criticalCount} critical`);
+      // Health scores cover content-indexed Local sites only — a small subset of
+      // totalSites. Qualify it the way the plugin and theme lines below are.
+      const scored = summary.sitesScored ?? 0;
+      console.log(
+        `Health:        ${summary.healthyCount} healthy, ${summary.warningCount} warnings, ${summary.criticalCount} critical ` +
+        `(from ${scored} of ${summary.totalSites} sites — content-indexed local sites only)`
+      );
 
       const pluginStatus = summary.outdatedPlugins != null
         ? `${summary.outdatedPlugins} outdated`

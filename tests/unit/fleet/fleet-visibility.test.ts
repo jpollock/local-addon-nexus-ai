@@ -180,7 +180,7 @@ describe('fleet queries include external sites', () => {
     }
   });
 
-  it('fleet_overview counts wp_version across all sources, and wpe_count stays WPE-only', async () => {
+  it('fleet_overview reports WPE and external coverage over their own denominators', async () => {
     const { fleetOverviewHandler } = require('../../../src/main/mcp/modules/fleet-intelligence/fleet-overview');
 
     const result = await fleetOverviewHandler.execute({}, ctx().services);
@@ -189,12 +189,37 @@ describe('fleet queries include external sites', () => {
     if ('content' in result) {
       const text = (result.content[0] as any).text;
 
-      // Should show 2 remote sites (wpe + external)
+      // Still 2 remote sites (1 wpe + 1 external)
       expect(text).toContain('2 remote');
 
-      // Should show WP version coverage: 2 sites have wp_version (wpe+external), but denominator is WPE-only (1)
-      // This proves the numerator was widened but the denominator stayed narrow
-      expect(text).toMatch(/With WP version.*2 of 1/);
+      // Each coverage metric is counted over the population it is divided by.
+      // The old assertion here was `2 of 1` — a numerator spanning both sources
+      // over a WPE-only denominator, inside a metric labelled "(CAPI)".
+      expect(text).toMatch(/With WP version \(CAPI\):\*\* 1 of 1/);
+      expect(text).not.toMatch(/With WP version.*2 of 1/);
+
+      // External hosts are reported as themselves, not folded into "installs".
+      expect(text).toContain('### External SSH Hosts');
+      expect(text).toMatch(/\*\*Hosts:\*\* 1/);
+      expect(text).toMatch(/With WP version:\*\* 1 of 1/);
+    }
+  });
+
+  it('fleet_overview never prints a WPE denominator of 0 when only external hosts exist', async () => {
+    const { fleetOverviewHandler } = require('../../../src/main/mcp/modules/fleet-intelligence/fleet-overview');
+
+    // Deactivate the WPE row so external hosts are the entire remote fleet —
+    // the shape that used to print "With WP version (CAPI): 1 of 0".
+    const db = graphService.getDb()!;
+    db.prepare("UPDATE sites SET is_active = 0 WHERE source = 'wpe'").run();
+
+    const result = await fleetOverviewHandler.execute({}, ctx().services);
+    expect('content' in result).toBe(true);
+    if ('content' in result) {
+      const text = (result.content[0] as any).text;
+      expect(text).not.toContain('of 0');
+      expect(text).not.toContain('### WP Engine Installs');
+      expect(text).toContain('### External SSH Hosts');
     }
   });
 
@@ -311,6 +336,64 @@ describe('fleet queries include external sites', () => {
       environment: 'production',
       wpVersion: '6.8.0',
     });
+  });
+
+  it('nexusSitesList drops a host that `nexus host remove` soft-deleted', async () => {
+    // nexusHostRemove sets is_active = false and resets domain back to the alias.
+    // Without an is_active filter the host stayed in `sites list` — with its
+    // domain clobbered — while `host list` correctly omitted it.
+    await graphService.upsertSite({
+      id: 'ssh:ext-host',
+      name: 'ext-host',
+      source: 'external',
+      host: 'external',
+      domain: 'ext-host',
+      environment: 'production',
+      is_active: false,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusSitesList();
+    expect(r.external).toEqual([]);
+  });
+
+  it('nexusSitesGet refuses a soft-deleted external host', async () => {
+    await graphService.upsertSite({
+      id: 'ssh:ext-host',
+      name: 'ext-host',
+      source: 'external',
+      host: 'external',
+      domain: 'ext-host',
+      environment: 'production',
+      is_active: false,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusSitesGet(null, { target: 'ssh:ext-host@production' });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/not found/i);
+  });
+
+  it('nexusSitesGet labels an external host by bare name as external, not WP Engine', async () => {
+    const context = ctx();
+    context.services.localServices = {
+      getSiteStatus: jest.fn().mockReturnValue('halted'),
+      resolveSiteObject: jest.fn().mockReturnValue(undefined),
+    };
+    context.services.indexRegistry = { get: jest.fn().mockReturnValue(undefined) };
+
+    // No Local site of this name, so the bare name falls through to the graph.
+    // `nexus sites get hostinger-test` used to print "🌐 WP Engine Environment"
+    // for exactly this row, because buildWpeSiteDetails hardcoded siteKind.
+    const r = await (createResolvers(context).Mutation as any).nexusSitesGet(null, { target: 'ext-host' });
+    expect(r.success).toBe(true);
+    expect(r.site.siteKind).toBe('external');
+
+    const wpe = await (createResolvers(context).Mutation as any).nexusSitesGet(null, { target: 'wpe-install' });
+    expect(wpe.success).toBe(true);
+    expect(wpe.site.siteKind).toBe('wpe');
   });
 
   it('nexusSitesList reports an empty php_version as null, not an empty string', async () => {

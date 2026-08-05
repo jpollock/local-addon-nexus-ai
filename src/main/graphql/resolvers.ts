@@ -24,6 +24,7 @@ import { buildCredentialSyncPhp, SUPPORTED_PROVIDERS, PROVIDER_TO_WP_OPTION } fr
 import { switchProviderForSite } from '../mcp/modules/wp-connector/switch-provider';
 import { autoSyncCredentials } from '../mcp/modules/wp-connector/auto-sync';
 import { STORAGE_KEYS, EXCLUDED_POST_TYPES } from '../../common/constants';
+import { toSiteSource } from '../../common/types';
 import { getApiKey, KeyVault } from '../security/KeyVault';
 import { auditDirectOperation } from '../audit/auditDirectOperation';
 import type { NexusServices } from '../types/nexus-services';
@@ -89,16 +90,24 @@ function resolveWpeGraphSite(query: string, graphService: NexusServices['graphSe
 }
 
 /**
- * Build SiteDetails fields for a WPE graph row (no local site object)
+ * Build SiteDetails fields for a graph row (no local site object).
+ *
+ * `resolveWpeGraphSite` searches all three sources, so this must report the
+ * source it was actually given. Hardcoding `siteKind: 'wpe'` made
+ * `nexus sites get <alias>` print "🌐 WP Engine Environment" for an external
+ * SSH host — the exact mislabelling the `ssh:` branch was added to stop.
  */
 function buildWpeSiteDetails(graphSite: any, twin: any, twinAge: string | null): any {
+  const siteKind = toSiteSource(graphSite.source);
   return {
     id: graphSite.id,
     name: graphSite.name,
     domain: graphSite.domain ?? graphSite.remote_domain ?? null,
     path: '',
-    status: 'remote',
-    siteKind: 'wpe',
+    // A local-source row reached here only because the site is absent from
+    // Local's store, so no running/halted status is known for it.
+    status: siteKind === 'local' ? 'unknown' : 'remote',
+    siteKind,
     wpVersion:            twin?.wpVersion ?? graphSite.wp_version ?? null,
     phpVersion:           twin?.phpVersion ?? graphSite.php_version ?? null,
     mysqlVersion:         null,
@@ -441,10 +450,14 @@ export function createResolvers(context: ResolverContext) {
           try {
             const db = services.graphService?.getDb();
             if (db) {
+              // I7: `nexus host remove` soft-deletes (is_active = 0) and resets
+              // domain back to the alias. Without this filter a removed host
+              // stayed in `sites list` — with its domain clobbered — while
+              // `host list` correctly omitted it.
               const externalRows = db.prepare(`
                 SELECT id, name, environment, domain, wp_version, php_version, last_sync_at
                 FROM sites
-                WHERE source = 'external'
+                WHERE source = 'external' AND is_active = 1
               `).all() as any[];
 
               external = externalRows.map((row: any) => ({
@@ -503,8 +516,9 @@ export function createResolvers(context: ResolverContext) {
             const alias = parsed.alias!;
             const siteId = externalSiteId(alias);
             const rows = graphService?.getDb?.()
+              // I7: is_active = 1 — a soft-deleted host must not resolve.
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-              ? (graphService.getDb()!.prepare("SELECT * FROM sites WHERE source='external'").all() as any[])
+              ? (graphService.getDb()!.prepare("SELECT * FROM sites WHERE source='external' AND is_active = 1").all() as any[])
               : [];
             const graphSite = rows.find((r: any) => r.id === siteId) ?? null;
 
@@ -2426,7 +2440,11 @@ export function createResolvers(context: ResolverContext) {
 
           const totalSites = localSites + remoteSites;
 
-          // Get content-indexed sites for health scoring
+          // Get content-indexed sites for health scoring.
+          // I5: this population is content-indexed LOCAL sites only — a small
+          // subset of totalSites. `sitesScored` below is its denominator so the
+          // caller can qualify the counts rather than print them bare next to a
+          // fleet-wide total that is several times larger.
           const entries = services.indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
           const siteInfoMap: Record<string, any> = {};
 
@@ -2462,6 +2480,7 @@ export function createResolvers(context: ResolverContext) {
               healthyCount,
               warningCount,
               criticalCount,
+              sitesScored: indexedSiteIds.length,
               totalPlugins,
               outdatedPlugins: null,
               totalThemes,

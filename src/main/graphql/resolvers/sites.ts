@@ -139,10 +139,12 @@ export function createSiteResolvers(services: NexusServices) {
         try {
           const db = services.graphService?.getDb();
           if (db) {
+            // I7: `nexus host remove` soft-deletes (is_active = 0); without this
+            // filter a removed host stays in `sites list`.
             const externalRows = db.prepare(`
               SELECT id, name, environment, domain, wp_version, php_version, last_sync_at
               FROM sites
-              WHERE source = 'external'
+              WHERE source = 'external' AND is_active = 1
             `).all() as any[];
 
             external = externalRows.map((row: any) => ({

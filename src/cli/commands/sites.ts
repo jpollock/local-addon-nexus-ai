@@ -80,7 +80,12 @@ sitesCommand
       } else if (isExternal) {
         console.log(`Type:         🔗 Remote`);
       } else {
-        console.log(`Status:       ${site.status === 'running' ? '🟢 Running' : '⚫ Halted'}`);
+        // Only 'running' and 'halted' are real answers. Anything else (a graph-only
+        // row for a site no longer in Local's store) is unknown, not halted.
+        const statusLabel = site.status === 'running' ? '🟢 Running'
+          : site.status === 'halted' || site.status === 'stopped' ? '⚫ Halted'
+          : `❔ ${site.status ?? 'unknown'}`;
+        console.log(`Status:       ${statusLabel}`);
       }
       console.log(`Domain:       ${site.domain || 'N/A'}`);
       if (site.siteUrl)    console.log(`Site URL:     ${site.siteUrl}`);

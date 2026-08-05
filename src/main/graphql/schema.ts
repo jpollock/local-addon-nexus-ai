@@ -1036,9 +1036,17 @@ export const typeDefs = gql`
     "Running/halted counts apply only to Local sites (Nexus does not start/stop remote hosts)"
     runningSites: Int!
     haltedSites: Int!
+    """
+    Health counts cover ONLY content-indexed Local sites (indexRegistry entries
+    with state === 'indexed'). They are not a fleet-wide figure: they exclude
+    every WP Engine install, every external SSH host, and every un-indexed Local
+    site. sitesScored is their denominator — report it alongside them.
+    """
     healthyCount: Int!
     warningCount: Int!
     criticalCount: Int!
+    "Number of sites the health counts above were computed over (content-indexed Local sites)"
+    sitesScored: Int!
     "Total plugin rows from active sites in the graph DB"
     totalPlugins: Int!
     "Update availability is not persisted in the graph DB, so these are null rather than a false all-clear"

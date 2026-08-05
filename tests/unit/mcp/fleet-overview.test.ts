@@ -15,10 +15,18 @@ function makeLocalTwin(overrides: Partial<SiteDigitalTwin> & { userCount?: numbe
   } as SiteDigitalTwin;
 }
 
+/**
+ * `wpeCount` here is the count of ALL remote rows (the probe query). The
+ * aggregate row carries per-source columns because every coverage metric must
+ * be divided by the population it was counted over — a numerator spanning WPE
+ * + external over a WPE-only denominator printed "1 of 0".
+ */
 function makeDb(wpeCount: number, wpeAggRow?: any) {
   const aggRow = wpeAggRow ?? {
     count: wpeCount, total_posts: wpeCount * 50, total_users: wpeCount * 3,
-    with_wp_version: wpeCount, with_post_count: wpeCount, most_recent_post: null,
+    with_post_count: wpeCount, most_recent_post: null,
+    wpe_count: wpeCount, wpe_with_wp_version: wpeCount, wpe_with_post_count: wpeCount,
+    external_count: 0, external_with_wp_version: 0,
   };
   return {
     prepare: jest.fn().mockImplementation((sql: string) => {
@@ -95,13 +103,55 @@ describe('fleet_overview MCP tool', () => {
     test('notes partial sync when not all WPE installs SSH-synced', async () => {
       const db = makeDb(100, {
         count: 100, total_posts: 500, total_users: 50,
-        with_wp_version: 100, with_post_count: 10, most_recent_post: null,
+        with_post_count: 10, most_recent_post: null,
+        wpe_count: 100, wpe_with_wp_version: 100, wpe_with_post_count: 10,
+        external_count: 0, external_with_wp_version: 0,
       });
       const twins = [makeLocalTwin()];
       const result = await fleetOverviewHandler.execute({}, makeServices(db, twins));
       const text = getText(result);
       // 10 of 100 synced = 10%
       expect(text).toMatch(/10%|10 of 100/);
+    });
+  });
+
+  describe('mixed and external-only remote fleets', () => {
+    test('reports WPE and external coverage against their own denominators', async () => {
+      // 3 remote rows: 2 WPE (1 with a wp_version) and 1 external (with one).
+      const db = makeDb(3, {
+        count: 3, total_posts: 100, total_users: 5,
+        with_post_count: 2, most_recent_post: null,
+        wpe_count: 2, wpe_with_wp_version: 1, wpe_with_post_count: 2,
+        external_count: 1, external_with_wp_version: 1,
+      });
+      const result = await fleetOverviewHandler.execute({}, makeServices(db, [makeLocalTwin()]));
+      const text = getText(result);
+
+      expect(text).toContain('### WP Engine Installs');
+      expect(text).toMatch(/\*\*Installs:\*\* 2/);
+      expect(text).toMatch(/With WP version \(CAPI\):\*\* 1 of 2/);
+
+      expect(text).toContain('### External SSH Hosts');
+      expect(text).toMatch(/\*\*Hosts:\*\* 1/);
+      expect(text).toMatch(/With WP version:\*\* 1 of 1/);
+    });
+
+    test('an external-only fleet never prints a WPE denominator of 0', async () => {
+      const db = makeDb(1, {
+        count: 1, total_posts: null, total_users: null,
+        with_post_count: 0, most_recent_post: null,
+        wpe_count: 0, wpe_with_wp_version: 0, wpe_with_post_count: 0,
+        external_count: 1, external_with_wp_version: 1,
+      });
+      const result = await fleetOverviewHandler.execute({}, makeServices(db, [makeLocalTwin()]));
+      const text = getText(result);
+
+      // The defect: "With WP version (CAPI): 1 of 0" for a user with SSH hosts
+      // and no WP Engine account.
+      expect(text).not.toContain('of 0');
+      expect(text).not.toContain('### WP Engine Installs');
+      expect(text).toContain('### External SSH Hosts');
+      expect(text).toMatch(/With WP version:\*\* 1 of 1/);
     });
   });
 

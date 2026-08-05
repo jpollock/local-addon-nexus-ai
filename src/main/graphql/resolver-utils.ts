@@ -10,6 +10,7 @@ import type { NexusServices } from '../types/nexus-services';
 import type { GraphService } from '../events/GraphService';
 import PQueue from 'p-queue';
 import { parseTarget as parseTargetShared } from '../../common/target';
+import { toSiteSource } from '../../common/types';
 export type { ParsedTarget } from '../../common/target';
 
 // ---------------------------------------------------------------------------
@@ -61,7 +62,9 @@ export function resolveWpeGraphSite(query: string, graphService: GraphService | 
   if (!db) return null;
   const q = query.toLowerCase();
 
-  const rows = db.prepare("SELECT * FROM sites WHERE source='wpe'").all() as Record<string, unknown>[];
+  // All three sources — matches resolvers.ts's copy. A bare name can be a WPE
+  // install, an external SSH alias, or an indexed Local site.
+  const rows = db.prepare("SELECT * FROM sites WHERE source IN ('local','wpe','external')").all() as Record<string, unknown>[];
   const byName = rows.find((r) => (r.name as string)?.toLowerCase() === q);
   if (byName) return byName;
   const byDomain = rows.find(
@@ -114,18 +117,25 @@ export interface TwinData {
   asOf?: number | null;
 }
 
+/**
+ * Report the source the graph row actually carries. Hardcoding `'wpe'` made
+ * `nexus sites get <alias>` label an external SSH host a WP Engine environment.
+ */
 export function buildWpeSiteDetails(
   graphSite: Record<string, unknown>,
   twin: TwinData | null,
   twinAge: string | null
 ): Record<string, unknown> {
+  const siteKind = toSiteSource(graphSite.source as string | null | undefined);
   return {
     id: graphSite.id,
     name: graphSite.name,
     domain: graphSite.domain ?? graphSite.remote_domain ?? null,
     path: '',
-    status: 'remote',
-    siteKind: 'wpe',
+    // A local-source row reached here only because the site is absent from
+    // Local's store, so no running/halted status is known for it.
+    status: siteKind === 'local' ? 'unknown' : 'remote',
+    siteKind,
     wpVersion:            twin?.wpVersion ?? graphSite.wp_version ?? null,
     phpVersion:           twin?.phpVersion ?? graphSite.php_version ?? null,
     mysqlVersion:         null,
