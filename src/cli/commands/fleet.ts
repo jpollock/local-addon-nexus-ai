@@ -126,16 +126,17 @@ fleetCommand
     }
   });
 
-fleetCommand
-  .command('site-health <target>')
-  .description('Individual site health details')
-  .option('--json', 'Output as JSON')
-  .action(async (target, options) => {
-    try {
-      parseTarget(target);
-      const client = getClient();
-
-      const result = await client.mutate<{ nexusFleetSiteHealth: any }>(`
+/**
+ * The exact document `nexus fleet site-health` sends.
+ *
+ * Exported so a test can execute *this string* against the built schema.
+ * A resolver-level test cannot catch a missing field selection — it bypasses
+ * GraphQL field selection entirely — which is how `factorsEvaluated` shipped
+ * as `undefined` at runtime while two unit tests asserted its contents.
+ * Consumed by the `site-health` action below (the `health.*` reads at
+ * "Status:" / "WordPress:" / "Plugins:" / "Themes:").
+ */
+export const SITE_HEALTH_QUERY = `
         mutation($target: String!) {
           nexusFleetSiteHealth(target: $target) {
             success
@@ -143,6 +144,7 @@ fleetCommand
             health {
               status
               score
+              factorsEvaluated
               issues {
                 severity
                 message
@@ -165,7 +167,18 @@ fleetCommand
             }
           }
         }
-      `, { target });
+      `;
+
+fleetCommand
+  .command('site-health <target>')
+  .description('Individual site health details')
+  .option('--json', 'Output as JSON')
+  .action(async (target, options) => {
+    try {
+      parseTarget(target);
+      const client = getClient();
+
+      const result = await client.mutate<{ nexusFleetSiteHealth: any }>(SITE_HEALTH_QUERY, { target });
 
       const { success, error, health } = result.nexusFleetSiteHealth;
 
