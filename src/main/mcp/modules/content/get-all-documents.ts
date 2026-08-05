@@ -1,5 +1,6 @@
 import { McpToolHandler, McpToolResult } from '../../types';
-import { resolveSite } from '../../site-resolver';
+import { resolveAnySite } from '../../site-resolver';
+import { vectorSiteId } from '../../../vector-store/vectorSiteId';
 
 function ok(text: string): McpToolResult {
   return { content: [{ type: 'text', text }] };
@@ -41,13 +42,19 @@ export const getAllDocumentsHandler: McpToolHandler = {
   },
 
   async execute(args, services): Promise<McpToolResult> {
-    const site = resolveSite(args.site as string, services.siteData);
-    if (!site) return error(`Site "${args.site}" not found`);
+    const resolved = resolveAnySite(args.site as string, services.siteData, (services as any).graphService);
+    if (resolved.kind === 'none') return error(`Site "${args.site}" not found`);
+    if (resolved.kind === 'ambiguous') {
+      return error(`"${args.site}" matches ${resolved.matches.length} sites across sources — specify which one: ${resolved.matches.join(', ')}`);
+    }
+    const site = { id: resolved.id, name: resolved.name };
 
     const includeEmbeddings = (args.include_embeddings as boolean | undefined) ?? false;
     const fullContent = (args.full_content as boolean | undefined) ?? false;
 
-    const docs = await services.vectorStore.getAllDocuments(site.id);
+    // vectorSiteId: external ids are `ssh:<alias>`; the vector store's
+    // table-name validation rejects colons. No-op for local/WPE ids.
+    const docs = await services.vectorStore.getAllDocuments(vectorSiteId(site.id));
 
     if (docs.length === 0) {
       return ok(
