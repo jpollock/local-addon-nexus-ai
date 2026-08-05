@@ -67,6 +67,8 @@ export const UpdateSettingsSchema = z.object({
   haltedSiteRefreshIntervalHours: z.number().int().min(1).max(168).optional(),
   wpeRefreshIntervalHours: z.number().int().min(1).max(168).optional(),
   wpeRefreshAutoEnabled: z.boolean().optional(),
+  externalRefreshIntervalHours: z.number().int().min(1).max(168).optional(),
+  externalRefreshAutoEnabled: z.boolean().optional(),
   localContentIndexIntervalHours: z.number().int().min(0).max(168).optional(),
   localContentIndexAutoEnabled: z.boolean().optional(),
   wpeAccountFilter: z.array(z.string()).nullable().optional(),

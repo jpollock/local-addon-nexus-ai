@@ -52,6 +52,7 @@ import { SiteMetadataCache } from './metadata/SiteMetadataCache';
 import { StartupSiteScanner } from './startup/StartupSiteScanner';
 import { HaltedSiteRefreshScheduler } from './startup/HaltedSiteRefreshScheduler';
 import { WpeRefreshScheduler } from './startup/WpeRefreshScheduler';
+import { ExternalRefreshScheduler } from './startup/ExternalRefreshScheduler';
 import { SiteDigitalTwinService } from './twin/SiteDigitalTwinService';
 import { SmartSearchHandler } from './smart-search/SmartSearchHandler';
 import { SynonymStore } from './smart-search/SynonymStore';
@@ -454,6 +455,7 @@ export default function main(context: any): void {
   // Assigned inside the IIFE once their dependencies are available.
   let haltedRefreshScheduler: HaltedSiteRefreshScheduler;
   let wpeRefreshScheduler: WpeRefreshScheduler;
+  let externalRefreshScheduler: ExternalRefreshScheduler;
 
   // Agent platform: scheduler and daemon manager declared here so the before-quit
   // handler and onSettingsUpdated closure can reach them. Assigned inside the IIFE.
@@ -853,6 +855,25 @@ export default function main(context: any): void {
         localLogger.info('[NexusAI] WPE SSH refresh auto-run disabled by preference — scheduler not started');
       }
 
+      // Scheduled SSH refresh for registered external (non-WPE, non-Local) hosts.
+      // Opt-in, off by default — Nexus does not connect to a third party's server
+      // on a timer unless the user asked.
+      const externalRefreshSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as
+        { externalRefreshIntervalHours?: number; externalRefreshAutoEnabled?: boolean } | null;
+      const externalRefreshHours = externalRefreshSettings?.externalRefreshIntervalHours ?? 24;
+      const externalRefreshEnabled = externalRefreshSettings?.externalRefreshAutoEnabled === true; // opt-in
+      externalRefreshScheduler = new ExternalRefreshScheduler({
+        graphService: graphService as any,
+        services: nexusServices,
+        intervalMs: externalRefreshHours * 60 * 60 * 1000,
+        logger: localLogger,
+      });
+      if (externalRefreshEnabled) {
+        externalRefreshScheduler.start();
+      } else {
+        localLogger.info('[NexusAI] External SSH host refresh auto-run disabled by preference — scheduler not started');
+      }
+
       // WPE content index scheduler — interval-based, triggers indexAllWpeContent.
       const wpeContentIndexSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as { wpeContentIndexAutoEnabled?: boolean; wpeContentIndexIntervalHours?: number } | null;
       const wpeContentIndexEnabled = wpeContentIndexSettings?.wpeContentIndexAutoEnabled === true;
@@ -1017,6 +1038,16 @@ export default function main(context: any): void {
         wpeRefreshScheduler.restart(newWpeRefreshHours * 60 * 60 * 1000);
       } else {
         wpeRefreshScheduler.stop();
+      }
+
+      // Restart (or stop) the external SSH host refresh scheduler.
+      const updatedExternal = registryStorage.get(STORAGE_KEYS.SETTINGS) as
+        { externalRefreshIntervalHours?: number; externalRefreshAutoEnabled?: boolean } | null;
+      const newExternalHours = updatedExternal?.externalRefreshIntervalHours ?? 24;
+      if (updatedExternal?.externalRefreshAutoEnabled === true) {
+        externalRefreshScheduler.restart(newExternalHours * 60 * 60 * 1000);
+      } else {
+        externalRefreshScheduler.stop();
       }
 
       // Restart (or stop) WPE content index scheduler based on updated settings.

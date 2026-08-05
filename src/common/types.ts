@@ -347,6 +347,8 @@ export interface NexusSettings {
   haltedSiteRefreshIntervalHours?: number; // How often to refresh halted local sites (default: 24)
   wpeRefreshIntervalHours?: number;         // How often to run WPE SSH refresh cycle (default: 24)
   wpeRefreshAutoEnabled?: boolean;          // Whether WPE SSH site-info refresh is enabled (default: false — opt-in)
+  externalRefreshIntervalHours?: number;    // How often to refresh external SSH hosts (default: 24)
+  externalRefreshAutoEnabled?: boolean;     // Whether external SSH host refresh is enabled (default: false — opt-in)
   wpeAccountFilter?: string[] | null;       // Account IDs to deep-scan; null/undefined = all accounts
   /** WPE environment types Nexus is allowed to access. Default: staging + development only.
    *  Set to include 'production' to enable production access. */
