@@ -3423,16 +3423,16 @@ export function createResolvers(context: ResolverContext) {
           // Embed the query
           const queryVector = await services.embeddingService.embed(query);
 
-          // Search all indexed site IDs (local + WPE)
+          // Search all indexed site IDs (local + WPE + external)
           const indexEntries = services.indexRegistry.listAll();
           const graphService = services.graphService;
-          let wpeSiteIds: string[] = [];
+          let remoteSiteIds: string[] = [];
           if (graphService?.getDb?.()) {
             try {
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-              const rows = graphService.getDb()!!.prepare("SELECT id FROM sites WHERE source='wpe'").all() as Array<{ id: string }>;
-              wpeSiteIds = rows.map((r) => r.id);
+              const rows = graphService.getDb()!!.prepare("SELECT id FROM sites WHERE source IN ('wpe','external')").all() as Array<{ id: string }>;
+              remoteSiteIds = rows.map((r) => r.id);
             } catch { /* skip wpe */ }
           }
           // vectorSiteId: external ids are `ssh:<alias>`; the vector store's
@@ -3441,7 +3441,7 @@ export function createResolvers(context: ResolverContext) {
           // so siteNames must be keyed the same way.
           const allSiteIds = [
             ...indexEntries.map((e: any) => vectorSiteId(e.siteId)),
-            ...wpeSiteIds.map((id) => vectorSiteId(id)),
+            ...remoteSiteIds.map((id) => vectorSiteId(id)),
           ];
 
           // Single tableNames() call + batched search — avoids filesystem lock contention
@@ -5150,10 +5150,34 @@ export function createResolvers(context: ResolverContext) {
           } catch { /* graph may not be ready */ }
         }
 
-        // Detect linked pair: same name appears in both local and WPE
+        // 3. Check external SSH hosts in graph DB
+        if (db) {
+          try {
+            const extRows = db.prepare(
+              "SELECT name, environment, ssh_last_sync_at FROM sites WHERE source='external' AND LOWER(name)=? AND is_active=1 LIMIT 5"
+            ).all(nameLower) as any[];
+
+            for (const row of extRows) {
+              const env = row.environment ?? 'production';
+              const lastSyncAt = row.ssh_last_sync_at ? new Date(row.ssh_last_sync_at).toISOString() : null;
+
+              matches.push({
+                target: `ssh:${row.name}@${env}`,
+                label: `${row.name} (SSH, ${env})`,
+                type: 'external',
+                status: 'active',
+                lastSyncAt,
+                isLive: false,
+              });
+            }
+          } catch { /* graph may not be ready */ }
+        }
+
+        // Detect linked pair: same name appears in local and either remote source
         const hasLocal = matches.some((m) => m.type === 'local');
         const hasWpe = matches.some((m) => m.type === 'wpe');
-        const isLinked = hasLocal && hasWpe;
+        const hasExternal = matches.some((m) => m.type === 'external');
+        const isLinked = hasLocal && (hasWpe || hasExternal);
 
         return { name, matches, isLinked };
       },

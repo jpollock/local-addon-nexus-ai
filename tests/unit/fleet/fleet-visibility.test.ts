@@ -186,6 +186,45 @@ describe('fleet queries include external sites', () => {
     expect(r.site.status).toBe('remote');
   });
 
+  it('nexusContentSearchAll includes the external site in its search-all id list', async () => {
+    // Same mock shape as the existing 'nexusFleetSearch includes the external
+    // site' test above in this file — nexusContentSearchAll uses the identical
+    // searchAcrossSites path, just via indexRegistry.listAll() + a raw WPE/
+    // external id query instead of nexusFleetSearch's own id-gathering code.
+    const vectorStore = {
+      searchAcrossSites: jest.fn().mockResolvedValue(new Map()),
+    };
+    const embeddingService = {
+      embed: jest.fn().mockResolvedValue(new Array(384).fill(0)),
+    };
+    const context = ctx();
+    context.services.vectorStore = vectorStore;
+    context.services.embeddingService = embeddingService;
+    context.services.indexRegistry = {
+      listAll: jest.fn().mockReturnValue([]),
+    };
+
+    const r = await (createResolvers(context).Mutation as any).nexusContentSearchAll(
+      null,
+      { query: 'test' },
+    );
+
+    expect(r.success).toBe(true);
+    const searchCall = vectorStore.searchAcrossSites.mock.calls[0];
+    const siteIds = searchCall[0];
+    expect(siteIds).toContain('ssh_ext-host');
+  });
+
+  it('nexusResolveTarget resolves a registered external alias', async () => {
+    const result = await (createResolvers(ctx()).Mutation as any).nexusResolveTarget(null, { name: 'ext-host' });
+
+    expect(result.matches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ target: 'ssh:ext-host@production', type: 'external' }),
+      ]),
+    );
+  });
+
   it('wp_core_version falls back to a cached version for an external site', async () => {
     // Import the handler
     const { coreVersionHandler } = require('../../../src/main/mcp/modules/wp-cli/core-version');
