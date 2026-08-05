@@ -53,6 +53,7 @@ const RESOURCES: ResourceDef[] = [
 export function registerResources(
   registry: InstructionRegistry,
   storage?: RegistryStorage,
+  graphService?: { getDb?: () => any },
 ): void {
   const resourceDir = __dirname;
 
@@ -81,7 +82,7 @@ export function registerResources(
       description: 'Current WPE installs and local sites with IDs and links — read before any WPE workflow',
       mimeType: 'text/markdown',
       read: async () => {
-        const text = buildFleetSnapshot(storage);
+        const text = buildFleetSnapshot(storage, graphService);
         return { text, mimeType: 'text/markdown' };
       },
     });
@@ -96,7 +97,10 @@ export function registerResources(
  * Only include: local sites + WPE installs linked to local sites + a note
  * to use nexus_list_sites for the full fleet.
  */
-export function buildFleetSnapshotForInstructions(storage: RegistryStorage): string | null {
+export function buildFleetSnapshotForInstructions(
+  storage: RegistryStorage,
+  graphService?: { getDb?: () => any },
+): string | null {
   try {
     const wpeCache = storage.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as { installs: any[]; syncedAt: number } | null;
     const indexRegistry = (storage.get(STORAGE_KEYS.INDEX_REGISTRY) ?? {}) as Record<string, any>;
@@ -124,6 +128,28 @@ export function buildFleetSnapshotForInstructions(storage: RegistryStorage): str
       lines.push(localSites.join('\n'));
       lines.push('');
       hasData = true;
+    }
+
+    // External SSH hosts — read directly from the graph.
+    try {
+      const db = graphService?.getDb?.();
+      if (db) {
+        const rows = db.prepare(
+          "SELECT name, environment FROM sites WHERE source = 'external' AND is_active = 1"
+        ).all() as Array<{ name: string; environment: string | null }>;
+        if (rows.length > 0) {
+          lines.push('### External SSH Hosts');
+          lines.push('_Use ssh:<alias>@<environment> as the target for wp_* tools._');
+          for (const r of rows) {
+            const env = r.environment ?? 'production';
+            lines.push(`- **${r.name}** [${env}] — target: ssh:${r.name}@${env}`);
+          }
+          lines.push('');
+          hasData = true;
+        }
+      }
+    } catch {
+      // graph unavailable — non-fatal
     }
 
     // WPE installs — ONLY the ones linked to a local site, plus any explicitly
@@ -164,7 +190,7 @@ export function buildFleetSnapshotForInstructions(storage: RegistryStorage): str
  * NOTE: WPE install data (install_name, install_id, environment) is cached
  * after CAPI sync runs. Local site data comes from the index registry.
  */
-function buildFleetSnapshot(storage: RegistryStorage): string {
+function buildFleetSnapshot(storage: RegistryStorage, graphService?: { getDb?: () => any }): string {
   const lines: string[] = ['# Fleet State (from local cache)\n'];
 
   try {
@@ -223,6 +249,30 @@ function buildFleetSnapshot(storage: RegistryStorage): string {
     } else {
       lines.push('## Local Sites\n');
       lines.push('_No indexed sites. Run nexus_list_sites to discover sites._');
+    }
+
+    // External SSH hosts — read directly from the graph (WPE + local sites above
+    // come from electron-store caches; this is the one population only graph.db has).
+    try {
+      const db = graphService?.getDb?.();
+      if (db) {
+        const rows = db.prepare(
+          "SELECT name, environment, domain FROM sites WHERE source = 'external' AND is_active = 1"
+        ).all() as Array<{ name: string; environment: string | null; domain: string | null }>;
+        if (rows.length > 0) {
+          lines.push('## External SSH Hosts\n');
+          lines.push('| name | environment | domain | target |');
+          lines.push('|---|---|---|---|');
+          for (const r of rows) {
+            const env = r.environment ?? 'production';
+            lines.push(`| ${r.name} | ${env} | ${r.domain || '—'} | ssh:${r.name}@${env} |`);
+          }
+          lines.push('');
+          lines.push('_Use ssh:<alias>@<environment> as the target for wp_* tools._');
+        }
+      }
+    } catch {
+      // graph unavailable — non-fatal, omit the section
     }
 
   } catch {

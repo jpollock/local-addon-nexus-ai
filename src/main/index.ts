@@ -809,7 +809,7 @@ export default function main(context: any): void {
       }
 
       const instructionRegistry = new InstructionRegistry();
-      registerAllInstructions(instructionRegistry, registryStorage);
+      registerAllInstructions(instructionRegistry, registryStorage, graphService);
 
       // Load previous run's token/port before clearing — reused for config stability.
       // Delete first so the file only exists when a server is actually bound.

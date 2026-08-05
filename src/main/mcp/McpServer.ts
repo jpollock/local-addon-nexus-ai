@@ -275,7 +275,7 @@ export class McpServer {
         let sessionInstructions = instructions;
         if (this.registryStorage) {
           try {
-            const fleetSnapshot = buildFleetSnapshotForInstructions(this.registryStorage);
+            const fleetSnapshot = buildFleetSnapshotForInstructions(this.registryStorage, this.services.graphService);
             if (fleetSnapshot) {
               sessionInstructions = (instructions || '') + '\n\n' + fleetSnapshot;
             }

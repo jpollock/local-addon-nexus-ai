@@ -85,7 +85,8 @@ export class InstructionRegistry {
 export function registerAllInstructions(
   registry: InstructionRegistry,
   registryStorage?: import('../../content/IndexRegistry').RegistryStorage,
+  graphService?: { getDb?: () => any },
 ): void {
   registry.setInstructions(INSTRUCTIONS);
-  registerResources(registry, registryStorage);
+  registerResources(registry, registryStorage, graphService);
 }
