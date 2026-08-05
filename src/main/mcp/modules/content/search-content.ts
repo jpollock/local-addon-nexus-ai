@@ -100,11 +100,11 @@ export const searchContentHandler: McpToolHandler = {
       siteId = localSite.id;
       siteName = localSite.name;
     } else {
-      // Try to find as WPE install in graph DB
+      // Try to find as WPE install or external host in graph DB
       const graphService = (services as any).graphService;
       const db = graphService?.getDb?.();
       const row = db?.prepare(
-        "SELECT id, name FROM sites WHERE source='wpe' AND name=? LIMIT 1"
+        "SELECT id, name FROM sites WHERE source IN ('wpe','external') AND name=? LIMIT 1"
       ).get(args.site) as { id: string; name: string } | undefined;
 
       if (!row) {

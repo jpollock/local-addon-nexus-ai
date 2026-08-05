@@ -43,7 +43,7 @@ export const coreVersionHandler: McpToolHandler = {
           if (db) {
             try {
               const row = db.prepare(
-                "SELECT name, wp_version, last_sync_at FROM sites WHERE source='wpe' AND LOWER(name)=? AND wp_version IS NOT NULL LIMIT 1"
+                "SELECT name, wp_version, last_sync_at FROM sites WHERE source IN ('local','wpe','external') AND LOWER(name)=? AND wp_version IS NOT NULL LIMIT 1"
               ).get(query.toLowerCase()) as { name: string; wp_version: string; last_sync_at: number } | undefined;
               if (row?.wp_version) {
                 const ageMs = Date.now() - (row.last_sync_at ?? 0);
@@ -76,7 +76,7 @@ export const coreVersionHandler: McpToolHandler = {
         if (db) {
           try {
             const row = db.prepare(
-              "SELECT wp_version, last_sync_at FROM sites WHERE source='wpe' AND name=? AND wp_version IS NOT NULL LIMIT 1"
+              "SELECT wp_version, last_sync_at FROM sites WHERE source IN ('local','wpe','external') AND name=? AND wp_version IS NOT NULL LIMIT 1"
             ).get(transport.siteRef.installName) as { wp_version: string; last_sync_at: number } | undefined;
             if (row?.wp_version) {
               const ageMs = Date.now() - (row.last_sync_at ?? 0);

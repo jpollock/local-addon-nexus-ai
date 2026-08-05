@@ -43,7 +43,7 @@ export const describeSiteFieldsHandler: McpToolHandler = {
       const graphService = (services as any).graphService;
       const db = graphService?.getDb?.();
       const row = db?.prepare(
-        "SELECT id, name FROM sites WHERE source='wpe' AND name=? LIMIT 1",
+        "SELECT id, name FROM sites WHERE source IN ('wpe','external') AND name=? LIMIT 1",
       ).get(args.site) as { id: string; name: string } | undefined;
       if (!row) {
         return error(`Site "${args.site}" not found. For WPE installs use the install name. Run wpe_sync_sites first if missing.`);
