@@ -222,6 +222,9 @@ export const IPC_CHANNELS = {
   AGENT_RUN_STARTED:    `${ADDON_PREFIX}:agent:run-started`,
   AGENT_RUN_COMPLETE:   `${ADDON_PREFIX}:agent:run-complete`,
   AGENT_SETTINGS_UPDATE:`${ADDON_PREFIX}:agent:settings-update`,
+  // Read the main process's persisted view. Without this the renderer had no way to learn
+  // what was actually on disk, so it guessed from localStorage and pushed the guess back.
+  AGENT_SETTINGS_GET:   `${ADDON_PREFIX}:agent:settings-get`,
   AGENT_REMOVE:         `${ADDON_PREFIX}:agent:remove`,
   AGENT_LOG_OPEN:       `${ADDON_PREFIX}:agent:log-open`,
 

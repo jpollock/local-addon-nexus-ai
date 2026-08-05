@@ -41,10 +41,19 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
     const update = () => this.forceUpdate();
     agentStore.subscribe(update);
     this.unsub = update;
-    // Sync agent settings to main process so scheduler/event-bus respects toggles
-    agentStore.setIpcSyncer((settings) => {
-      this.props.electron?.ipcRenderer?.invoke(IPC_CHANNELS.AGENT_SETTINGS_UPDATE, settings).catch(() => {});
-    });
+    // Hydrate from the persisted settings BEFORE registering the syncer. The renderer is the
+    // only writer, so if it registers first it pushes its localStorage guess over whatever is
+    // actually on disk — which is how an agent that had been switched off came back with a
+    // 15-minute cron. Read first, then echo.
+    const ipc = this.props.electron?.ipcRenderer;
+    Promise.resolve(ipc?.invoke(IPC_CHANNELS.AGENT_SETTINGS_GET))
+      .then((res: any) => agentStore.hydrateFromMain(res?.settings))
+      .catch(() => agentStore.hydrateFromMain(null))  // no channel (older main) — do not block the UI
+      .then(() => {
+        agentStore.setIpcSyncer((settings) => {
+          ipc?.invoke(IPC_CHANNELS.AGENT_SETTINGS_UPDATE, settings).catch(() => {});
+        });
+      });
   }
 
   componentWillUnmount() {

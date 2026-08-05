@@ -4629,22 +4629,41 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     const _raw = _fs.readFileSync(_agentSettingsFile, 'utf8');
     const _saved = JSON.parse(_raw) as Record<string, any>;
     for (const [agentId, s] of Object.entries(_saved)) {
+      // A field missing from the file means it was never configured, which must not read as
+      // "on" for the two flags that let an agent start itself. Matches seedAgentDefaultsIfMissing.
       agentSettingsCache.set(agentId, {
         enabled:         s.enabled         ?? true,
-        scheduleEnabled: s.scheduleEnabled ?? true,
-        eventsEnabled:   s.eventsEnabled   ?? true,
+        scheduleEnabled: s.scheduleEnabled ?? false,
+        eventsEnabled:   s.eventsEnabled   ?? false,
         autonomy:        s.autonomy        ?? 'ask',
       });
     }
   } catch { /* file absent on first run — permissive defaults are correct */ }
 
+  // Lets the renderer hydrate from what is actually persisted instead of guessing from its own
+  // localStorage. The renderer is the writer, so without a reader it could only ever push its
+  // guess back over the truth.
+  safeHandle(IPC_CHANNELS.AGENT_SETTINGS_GET, () => {
+    const snapshot: Record<string, any> = {};
+    for (const [id, v] of agentSettingsCache.entries()) snapshot[id] = { ...v };
+    return { ok: true, settings: snapshot };
+  });
+
   safeHandle(IPC_CHANNELS.AGENT_SETTINGS_UPDATE, (_event, settings: Record<string, any>) => {
     for (const [agentId, s] of Object.entries(settings ?? {})) {
+      // Absent means "the renderer did not tell us", NOT "switch it on". These used to be
+      // `?? true`, so a renderer that had lost its localStorage — or simply had no entry for an
+      // agent — wrote scheduleEnabled:true over a safe on-disk value the moment the agents tab
+      // mounted. That is how security-sentinel came back to a 15-minute fleet sweep overnight
+      // after having been switched off. `enabled` stays permissive so an agent absent from the
+      // payload is still usable from chat; only the two flags that make an agent start ITSELF
+      // default to off, matching seedAgentDefaultsIfMissing.
+      const prev = agentSettingsCache.get(agentId);
       agentSettingsCache.set(agentId, {
-        enabled:         s.enabled         ?? true,
-        scheduleEnabled: s.scheduleEnabled ?? true,
-        eventsEnabled:   s.eventsEnabled   ?? true,
-        autonomy:        s.autonomy        ?? 'ask',
+        enabled:         s.enabled         ?? prev?.enabled         ?? true,
+        scheduleEnabled: s.scheduleEnabled ?? prev?.scheduleEnabled ?? false,
+        eventsEnabled:   s.eventsEnabled   ?? prev?.eventsEnabled   ?? false,
+        autonomy:        s.autonomy        ?? prev?.autonomy        ?? 'ask',
       });
     }
     // Persist to disk so next startup respects user's saved toggle state

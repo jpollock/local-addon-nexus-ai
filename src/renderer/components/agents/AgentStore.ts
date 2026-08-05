@@ -122,18 +122,49 @@ class AgentStore {
   private state: AgentState = { ...DEFAULT_STATE, ...loadPersisted() };
   private listeners = new Set<() => void>();
   private ipcSyncer: ((settings: Record<string, AgentSettings>) => void) | null = null;
+  /** True once main's persisted settings have been adopted — see hydrateFromMain. */
+  private hydrated = false;
+
+  /**
+   * Adopt what the main process has actually persisted.
+   *
+   * The renderer is the only writer of agent settings but never had a reader, so its
+   * localStorage copy was treated as truth and pushed over the disk file on mount. When the two
+   * disagreed — cleared browser storage, a new profile, an agent added since — the guess won.
+   *
+   * Disk wins for every agent it knows about. Anything the main process has never heard of keeps
+   * whatever the renderer has, so an unsaved in-flight edit is not discarded.
+   */
+  hydrateFromMain(persisted: Record<string, Partial<AgentSettings>> | null | undefined): void {
+    if (!persisted) { this.hydrated = true; return; }
+    const merged: Record<string, AgentSettings> = { ...this.state.agentSettings };
+    const autonomy: Record<string, any> = { ...this.state.autonomyById };
+    for (const [id, saved] of Object.entries(persisted)) {
+      merged[id] = { ...this.getDefaultSettings(id), ...(merged[id] ?? {}), ...saved } as AgentSettings;
+      if ((saved as any)?.autonomy) autonomy[id] = (saved as any).autonomy;
+    }
+    this.hydrated = true;
+    // Straight assignment, not setState: setState would push this right back at main, and the
+    // point is that main just told US.
+    this.state = { ...this.state, agentSettings: merged, autonomyById: autonomy };
+    savePersisted(this.state);
+    this.listeners.forEach(fn => fn());
+  }
 
   setIpcSyncer(fn: (settings: Record<string, AgentSettings>) => void): void {
     this.ipcSyncer = fn;
-    // Send current settings immediately on registration
-    fn(this.buildSyncPayload());
+    // Only echo state back to main once we know it is not a guess. Pushing here unconditionally
+    // is what let stale localStorage overwrite the persisted file on mount.
+    if (this.hydrated) fn(this.buildSyncPayload());
   }
 
   /** Merge agentSettings with autonomyById so the main process gets a single unified view. */
   private buildSyncPayload(): Record<string, AgentSettings> {
     const merged: Record<string, AgentSettings> = { ...this.state.agentSettings };
     for (const [id, autonomy] of Object.entries(this.state.autonomyById)) {
-      merged[id] = { ...(merged[id] ?? { enabled: true, scheduleEnabled: true, eventsEnabled: true }), autonomy } as any;
+      // Same reasoning as getDefaultSettings: an agent known only by its autonomy value has
+      // never had its triggers configured, so they are off.
+      merged[id] = { ...(merged[id] ?? { enabled: true, scheduleEnabled: false, eventsEnabled: false }), autonomy } as any;
     }
     return merged;
   }
@@ -162,11 +193,17 @@ class AgentStore {
   }
 
   getDefaultSettings(agentId: string): AgentSettings {
+    // An agent nobody has configured must not start ITSELF. `enabled: true` keeps it usable
+    // from chat and Run Now; the two automatic triggers are off until the user turns them on.
+    // These used to be `true`, and because getOrInitSettings seeds them into state — which
+    // immediately pushes to main and writes to disk — merely opening the agents tab could
+    // re-enable a 15-minute cron on an agent that had been switched off. Mirrors
+    // seedAgentDefaultsIfMissing in ipc-handlers; the two must stay in agreement.
     return {
       enabled: true,
-      scheduleEnabled: true,
+      scheduleEnabled: false,
       cadence: '*/15 * * * *',
-      eventsEnabled: true,
+      eventsEnabled: false,
       subscribedEvents: {},
     };
   }
