@@ -85,7 +85,8 @@ fleetCommand
               outdatedPlugins
               totalThemes
               outdatedThemes
-              indexedSites
+              sitesWithPluginData
+              sitesWithThemeData
             }
           }
         }
@@ -112,12 +113,12 @@ fleetCommand
       const pluginStatus = summary.outdatedPlugins != null
         ? `${summary.outdatedPlugins} outdated`
         : 'update status not tracked';
-      console.log(`Plugins:       ${summary.totalPlugins} total (across ${summary.indexedSites} indexed sites, ${pluginStatus})`);
+      console.log(`Plugins:       ${summary.totalPlugins} total (from ${summary.sitesWithPluginData} of ${summary.totalSites} sites, ${pluginStatus})`);
 
       const themeStatus = summary.outdatedThemes != null
         ? `${summary.outdatedThemes} outdated`
         : 'update status not tracked';
-      console.log(`Themes:        ${summary.totalThemes} total (across ${summary.indexedSites} indexed sites, ${themeStatus})`);
+      console.log(`Themes:        ${summary.totalThemes} total (from ${summary.sitesWithThemeData} of ${summary.totalSites} sites, ${themeStatus})`);
       console.log('');
     } catch (error: any) {
       console.error(`Error: ${error.message}`);

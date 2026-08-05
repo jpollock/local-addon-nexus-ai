@@ -527,4 +527,89 @@ describe('nexusFleetHealth includes all sources', () => {
     expect(r.summary.totalPlugins).toBe(0); // plugin belongs to inactive site
     expect(r.summary.totalThemes).toBe(0); // theme belongs to inactive site
   });
+
+  it('counts sites with plugin/theme data separately from total sites', async () => {
+    // Seed 3 active sites: 2 with plugin data, 1 without
+    await graphService.upsertSite({
+      id: 'wpe-1',
+      name: 'wpe-with-plugins',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'wpe1.wpengine.com',
+      remote_install_id: 'wpe-1',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertSite({
+      id: 'wpe-2',
+      name: 'wpe-with-themes',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'wpe2.wpengine.com',
+      remote_install_id: 'wpe-2',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertSite({
+      id: 'wpe-3',
+      name: 'wpe-empty',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'wpe3.wpengine.com',
+      remote_install_id: 'wpe-3',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    // Add plugins to wpe-1 only
+    await graphService.upsertPlugin({
+      site_id: 'wpe-1',
+      slug: 'plugin-1',
+      name: 'Plugin 1',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await graphService.upsertPlugin({
+      site_id: 'wpe-1',
+      slug: 'plugin-2',
+      name: 'Plugin 2',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    // Add themes to wpe-2 only
+    await graphService.upsertTheme({
+      site_id: 'wpe-2',
+      slug: 'theme-1',
+      name: 'Theme 1',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetHealth();
+    expect(r.success).toBe(true);
+    expect(r.summary.totalSites).toBe(3); // all 3 active remote sites
+    expect(r.summary.totalPlugins).toBe(2); // 2 plugins
+    expect(r.summary.sitesWithPluginData).toBe(1); // only wpe-1 has plugins
+    expect(r.summary.totalThemes).toBe(1); // 1 theme
+    expect(r.summary.sitesWithThemeData).toBe(1); // only wpe-2 has themes
+  });
 });

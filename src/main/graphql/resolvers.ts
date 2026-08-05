@@ -2358,44 +2358,41 @@ export function createResolvers(context: ResolverContext) {
           let remoteSites = 0;
           let totalPlugins = 0;
           let totalThemes = 0;
-          let indexedSites = localSites; // start with all local sites
+          let sitesWithPluginData = 0;
+          let sitesWithThemeData = 0;
 
           const db = services.graphService?.getDb?.();
           if (db) {
             try {
-              // Count remote sites (WPE + external only)
+              // Count remote sites (WPE + external only, NULL means local)
               const remoteCount = db
-                .prepare(`SELECT COUNT(*) as count FROM sites WHERE is_active = 1 AND (source = 'wpe' OR source = 'external' OR source IS NULL)`)
+                .prepare(`SELECT COUNT(*) as count FROM sites WHERE is_active = 1 AND source IN ('wpe', 'external')`)
                 .get() as { count: number };
               remoteSites = remoteCount.count;
 
-              // Count indexed sites for coverage statement
-              const allIndexed = db
-                .prepare(`SELECT COUNT(*) as count FROM sites WHERE is_active = 1`)
-                .get() as { count: number };
-              indexedSites = allIndexed.count;
-
-              // Count plugins joined to active sites only
+              // Count plugins and distinct sites with plugin data
               const pluginCount = db
                 .prepare(`
-                  SELECT COUNT(*) as count
+                  SELECT COUNT(*) as total, COUNT(DISTINCT p.site_id) as sites
                   FROM plugins p
                   INNER JOIN sites s ON p.site_id = s.id
                   WHERE s.is_active = 1
                 `)
-                .get() as { count: number };
-              totalPlugins = pluginCount.count;
+                .get() as { total: number; sites: number };
+              totalPlugins = pluginCount.total;
+              sitesWithPluginData = pluginCount.sites;
 
-              // Count themes joined to active sites only
+              // Count themes and distinct sites with theme data
               const themeCount = db
                 .prepare(`
-                  SELECT COUNT(*) as count
+                  SELECT COUNT(*) as total, COUNT(DISTINCT t.site_id) as sites
                   FROM themes t
                   INNER JOIN sites s ON t.site_id = s.id
                   WHERE s.is_active = 1
                 `)
-                .get() as { count: number };
-              totalThemes = themeCount.count;
+                .get() as { total: number; sites: number };
+              totalThemes = themeCount.total;
+              sitesWithThemeData = themeCount.sites;
             } catch {
               // Graph unavailable, degrade to local-only
             }
@@ -2403,7 +2400,7 @@ export function createResolvers(context: ResolverContext) {
 
           const totalSites = localSites + remoteSites;
 
-          // Get indexed sites for health scoring
+          // Get content-indexed sites for health scoring
           const entries = services.indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
           const siteInfoMap: Record<string, any> = {};
 
@@ -2443,7 +2440,8 @@ export function createResolvers(context: ResolverContext) {
               outdatedPlugins: null,
               totalThemes,
               outdatedThemes: null,
-              indexedSites, // for CLI coverage statement
+              sitesWithPluginData,
+              sitesWithThemeData,
             },
           };
         } catch (error: any) {

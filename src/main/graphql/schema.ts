@@ -1019,15 +1019,17 @@ export const typeDefs = gql`
     healthyCount: Int!
     warningCount: Int!
     criticalCount: Int!
-    "Total plugins across indexed sites only (local + remote that have been scanned)"
+    "Total plugin rows from active sites in the graph DB"
     totalPlugins: Int!
     "Update availability is not persisted in the graph DB, so these are null rather than a false all-clear"
     outdatedPlugins: Int
-    "Total themes across indexed sites only (local + remote that have been scanned)"
+    "Total theme rows from active sites in the graph DB"
     totalThemes: Int!
     outdatedThemes: Int
-    "Number of sites with indexed data (for plugin/theme coverage statement)"
-    indexedSites: Int!
+    "Number of sites that have plugin data in the graph DB"
+    sitesWithPluginData: Int!
+    "Number of sites that have theme data in the graph DB"
+    sitesWithThemeData: Int!
   }
 
   type NexusFleetHealthResult {
