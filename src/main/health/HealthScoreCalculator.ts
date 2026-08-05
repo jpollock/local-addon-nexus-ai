@@ -19,6 +19,7 @@ export interface HealthBreakdown {
     stability: number;
   };
   issues: string[];
+  issuesByCategory: Array<{ category: string; message: string }>;
   recommendations: string[];
 }
 
@@ -106,9 +107,17 @@ export class HealthScoreCalculator {
       ...stability.issues,
     ];
 
+    const issuesByCategory = [
+      ...security.issues.map((message) => ({ category: 'security', message })),
+      ...performance.issues.map((message) => ({ category: 'performance', message })),
+      ...maintenance.issues.map((message) => ({ category: 'maintenance', message })),
+      ...activity.issues.map((message) => ({ category: 'activity', message })),
+      ...stability.issues.map((message) => ({ category: 'stability', message })),
+    ];
+
     const recommendations = this.generateRecommendations(factors);
 
-    return { overall, factors, issues, recommendations };
+    return { overall, factors, issues, issuesByCategory, recommendations };
   }
 
   /**
