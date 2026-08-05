@@ -2252,25 +2252,48 @@ async function tier2Investigate(install, tier1Signals, tools, ai, log, state, _p
   // Two attempts previously lived at this point and both have been removed, because both were
   // measured and neither worked:
   //
-  // 1. Appending `disable_functions` to php.ini. This never applied even once. The probe
-  //    (`echo php_ini_loaded_file();`) runs through WP-CLI, i.e. the CLI SAPI, which loads no
-  //    php.ini at all — so the guard fell through and the block silently skipped. When it did
-  //    write, the file under Local/run/<siteId>/conf/php/ is regenerated from php.ini.hbs on
-  //    every start, so the `local_restart_site` performed to *apply* the change was the same
-  //    operation that erased it. And it targeted PHP-FPM while every check here runs on the CLI
-  //    SAPI. Measured on this machine: 20 failures to 10 believed successes, and zero php.ini
-  //    anywhere carrying its marker. It also cost ~30s per scan waiting for a pointless restart.
+  // 1. Appending `disable_functions` to php.ini. This never applied even once — but NOT for the
+  //    reason first recorded here. It wrote to the *compiled* file under
+  //    Local/run/<siteId>/conf/php/, which Local regenerates from the site's php.ini.hbs on
+  //    every start, and then called `local_restart_site` to apply it — the same operation that
+  //    erased it. Measured: 20 failures to 10 believed successes, zero php.ini anywhere carrying
+  //    its marker, ~30s per scan wasted on a pointless restart.
+  //
+  //    CORRECTION (measured 2026-08-05). This comment previously claimed the CLI SAPI "loads no
+  //    php.ini at all". That is false and it matters. Local's WpCliService sets PHPRC to the
+  //    site's PHP config dir (flywheel-local app/main/sites/WpCliService.ts:144-151), so wp-cli
+  //    *does* load it: with PHPRC set, php_ini_loaded_file() returns
+  //    run/<siteId>/conf/php/php.ini; without it, false. The durable write target is the
+  //    per-site template ~/Local Sites/<site>/conf/php/php.ini.hbs, where line 49 already
+  //    carries `disable_functions =` unset behind a Handlebars comment.
+  //
+  //    So hardening IS reachable on a Local sandbox — and constrains these checks too, which is
+  //    a cost, not a bonus: an egress-tight blocklist removes curl_exec, and CHK-01's
+  //    wordpress.org fetch dies with it.
   //
   // 2. Defining WP_HTTP_BLOCK_EXTERNAL in the sandbox's wp-config.php. This applied, but only
   //    constrains WordPress's own wp_remote_* API, which malware has no reason to use — and it
   //    mutated the evidence, which is worse than useless when the sandbox is meant to be a
   //    forensic artifact.
   //
-  // Even a correctly delivered blocklist would not contain this. Measured against Local's PHP:
-  // the list above left 5 of 8 egress channels open (stream_socket_client, file_get_contents and
-  // fopen on URLs, gethostbyname, mail), and `disable_classes` is accepted but inert for
-  // statically compiled extensions, so `new mysqli(...)` and `new SoapClient(...)` get out under
-  // any configuration. See docs/planning/2026-08-03-php-ini-scan-dir-hardening.md.
+  // Even a correctly delivered blocklist would not contain this. The list above left 5 of 8
+  // egress channels open (stream_socket_client, file_get_contents and fopen on URLs,
+  // gethostbyname, mail). A maximal block does reach 0 of 8, packet-verified, with the WordPress
+  // front end byte-identical — but two holes are structural and neither closes:
+  //
+  //   * `new mysqli(...)` / PDO open arbitrary outbound TCP and cannot be disabled without
+  //     breaking WordPress. Verified round-tripping a payload to a listener on 127.0.0.1:13399
+  //     under otherwise-complete hardening.
+  //   * `proc_open` must stay callable or WP-CLI cannot run at all ("Cannot do 'Process::run'"),
+  //     and proc_open is itself a complete exec primitive.
+  //
+  // CORRECTION (measured 2026-08-05): this comment previously said `disable_classes` is inert
+  // for statically compiled extensions "so new SoapClient(...) gets out under any
+  // configuration". False for SoapClient — `disable_classes=SoapClient` genuinely kills it and
+  // no packet arrives. Since SoapClient bypasses allow_url_fopen=0 entirely, disable_classes is
+  // the only control for it. The claim holds in effect for mysqli, but for a different reason:
+  // it cannot be disabled without breaking WordPress, not because the directive is ignored.
+  // See docs/planning/2026-08-03-php-ini-scan-dir-hardening.md.
   //
   // The real fix is not to execute the code at all: 21 of 22 Tier 2 units need only bytes and
   // belong in Node. See docs/planning/2026-08-03-sentinel-execution-model.md.

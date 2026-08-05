@@ -806,3 +806,51 @@ residual honestly:
 > environment-aware malware.
 
 Not "0 of 8".
+
+## CORRECTIONS (measured 2026-08-05)
+
+Three claims in this document are wrong. They are left in place above so the reasoning that
+followed from them is still legible, but do not act on them.
+
+1. **The render source is the per-site template, not the lightning-service one.** This document
+   says (~line 91) that php.ini is rendered from
+   `lightning-services/php-8.2.29+0/conf/php.ini.hbs`. It is rendered from the site's own
+   `~/Local Sites/<site>/conf/php/php.ini.hbs`, copied at provision time and thereafter never
+   overwritten (`SiteProvisionerService.copyConfigTemplates` skips a conf dir that already has
+   `.hbs` files). This inverts the conclusion: an addon edit to the per-site template **is**
+   durable across restarts.
+
+2. **The CLI SAPI does load a php.ini.** Local's `WpCliService.run` sets `PHPRC` to the site's
+   PHP config dir, so `wp eval` loads `run/<siteId>/conf/php/php.ini`. Measured: with `PHPRC`,
+   `php_ini_loaded_file()` returns that path; without it, `false`. The original hardening failed
+   because it wrote to the compiled file and then restarted — regenerating it — not because the
+   ini was unreachable.
+
+3. **`disable_classes` is not inert for SoapClient.** `disable_classes=SoapClient` kills it and
+   no packet arrives; SoapClient bypasses `allow_url_fopen=0`, so this is the only control for
+   it. The original claim holds in effect for `mysqli` but for a different reason: mysqli cannot
+   be disabled without breaking WordPress.
+
+### What a maximal block actually achieves
+
+0 of 8 canary channels open, packet-verified, with the WordPress 7.0 front end byte-identical to
+control (an `auto_prepend_file` shim restores callability without capability for `gethostbyname`
+and `mail`). Two holes remain structural:
+
+* `mysqli`/PDO — arbitrary outbound TCP, verified round-tripping a payload to 127.0.0.1:13399.
+* `proc_open` — must stay callable or WP-CLI dies outright, and is itself an exec primitive.
+
+Also: Imagick's `https:` delegate egresses under otherwise-complete hardening. The fix is to omit
+the `extension = …/imagick.so` line, not `disable_classes` — WordPress guards Imagick with
+`class_exists()` (`wp-includes/update.php:169`), and a disabled class still returns true, so
+`disable_classes=Imagick` 500s `/wp-admin/update-core.php`.
+
+### Standing verdict
+
+Do not build this. Containment exists to make executing hostile code safe; byte-level scanning
+makes execution unnecessary for 21 of 22 Tier 2 units. Hardening also constrains the agent's own
+checks — an egress-tight list removes `curl_exec`, so CHK-01's wordpress.org fetch dies with it.
+Revisit only once the byte scanner has landed and the sandbox's sole remaining justification is
+FS-MISMATCH; then harden the **clone** (the `.hbs` is inherited by `copyDirectory`), re-assert on
+every use (a lightning-service update fires `swapService` and wipes it), and treat a missing
+value in the compiled ini as a hard abort.
