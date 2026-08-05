@@ -162,3 +162,19 @@ describe('UpdateSettingsSchema — invalid values are rejected', () => {
     expect(() => UpdateSettingsSchema.parse({ externalRefreshIntervalHours: 999 })).toThrow();
   });
 });
+
+describe('external content-index settings survive the strict schema', () => {
+  it('accepts both keys', () => {
+    const parsed = UpdateSettingsSchema.parse({
+      externalContentIndexAutoEnabled: true,
+      externalContentIndexIntervalHours: 12,
+    });
+    expect(parsed.externalContentIndexAutoEnabled).toBe(true);
+    expect(parsed.externalContentIndexIntervalHours).toBe(12);
+  });
+
+  it('rejects an out-of-range interval', () => {
+    expect(() => UpdateSettingsSchema.parse({ externalContentIndexIntervalHours: 0 })).toThrow();
+    expect(() => UpdateSettingsSchema.parse({ externalContentIndexIntervalHours: 999 })).toThrow();
+  });
+});

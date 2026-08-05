@@ -115,6 +115,7 @@ const DEFAULT_SETTINGS: NexusSettings = {
   wpeRefreshAutoEnabled: false, // opt-in: user must explicitly enable SSH refresh
   externalRefreshIntervalHours: 24,   // how often to refresh external SSH hosts
   externalRefreshAutoEnabled: false,  // opt-in: user must explicitly enable external SSH refresh
+  externalContentIndexAutoEnabled: false,  // opt-in: user must explicitly enable external SSH content indexing
   chatRetentionDays: 30 as (7 | 30 | 90 | null),
 };
 

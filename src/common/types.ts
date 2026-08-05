@@ -349,6 +349,8 @@ export interface NexusSettings {
   wpeRefreshAutoEnabled?: boolean;          // Whether WPE SSH site-info refresh is enabled (default: false — opt-in)
   externalRefreshIntervalHours?: number;    // How often to refresh external SSH hosts (default: 24)
   externalRefreshAutoEnabled?: boolean;     // Whether external SSH host refresh is enabled (default: false — opt-in)
+  externalContentIndexIntervalHours?: number;    // How often to content-index external SSH hosts (default: 24)
+  externalContentIndexAutoEnabled?: boolean;     // Whether external SSH content indexing is enabled (default: false — opt-in)
   wpeAccountFilter?: string[] | null;       // Account IDs to deep-scan; null/undefined = all accounts
   /** WPE environment types Nexus is allowed to access. Default: staging + development only.
    *  Set to include 'production' to enable production access. */

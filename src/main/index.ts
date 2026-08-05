@@ -53,6 +53,8 @@ import { StartupSiteScanner } from './startup/StartupSiteScanner';
 import { HaltedSiteRefreshScheduler } from './startup/HaltedSiteRefreshScheduler';
 import { WpeRefreshScheduler } from './startup/WpeRefreshScheduler';
 import { ExternalRefreshScheduler } from './startup/ExternalRefreshScheduler';
+import { ExternalContentIndexScheduler } from './startup/ExternalContentIndexScheduler';
+import { ExternalContentIndexService } from './events/ExternalContentIndexService';
 import { SiteDigitalTwinService } from './twin/SiteDigitalTwinService';
 import { SmartSearchHandler } from './smart-search/SmartSearchHandler';
 import { SynonymStore } from './smart-search/SynonymStore';
@@ -461,6 +463,7 @@ export default function main(context: any): void {
   let haltedRefreshScheduler: HaltedSiteRefreshScheduler | undefined;
   let wpeRefreshScheduler: WpeRefreshScheduler | undefined;
   let externalRefreshScheduler: ExternalRefreshScheduler | undefined;
+  let externalContentIndexScheduler: ExternalContentIndexScheduler | undefined;
 
   // Agent platform: scheduler and daemon manager declared here so the before-quit
   // handler and onSettingsUpdated closure can reach them. Assigned inside the IIFE.
@@ -548,6 +551,18 @@ export default function main(context: any): void {
     } else {
       externalRefreshScheduler?.stop();
       localLogger.info('[NexusAI] External SSH host refresh disabled by preference — scheduler stopped');
+    }
+
+    // Restart (or stop) the external SSH content-index scheduler.
+    const updatedContentIndex = registryStorage.get(STORAGE_KEYS.SETTINGS) as
+      { externalContentIndexIntervalHours?: number; externalContentIndexAutoEnabled?: boolean } | null;
+    const newContentIndexHours = updatedContentIndex?.externalContentIndexIntervalHours ?? 24;
+    if (updatedContentIndex?.externalContentIndexAutoEnabled === true) {
+      externalContentIndexScheduler?.restart(newContentIndexHours * 60 * 60 * 1000);
+      localLogger.info(`[NexusAI] External SSH content indexing enabled by preference (every ${newContentIndexHours}h)`);
+    } else {
+      externalContentIndexScheduler?.stop();
+      localLogger.info('[NexusAI] External SSH content indexing disabled by preference — scheduler stopped');
     }
 
     // Restart (or stop) WPE content index scheduler based on updated settings.
@@ -954,6 +969,33 @@ export default function main(context: any): void {
         externalRefreshScheduler.start();
       } else {
         localLogger.info('[NexusAI] External SSH host refresh auto-run disabled by preference — scheduler not started');
+      }
+
+      // Scheduled content indexing for registered external (non-WPE, non-Local) hosts.
+      // Opt-in, off by default — Nexus does not connect to a third party's server
+      // on a timer unless the user asked.
+      const externalContentIndexSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as
+        { externalContentIndexIntervalHours?: number; externalContentIndexAutoEnabled?: boolean } | null;
+      const externalContentIndexHours = externalContentIndexSettings?.externalContentIndexIntervalHours ?? 24;
+      const externalContentIndexEnabled = externalContentIndexSettings?.externalContentIndexAutoEnabled === true; // opt-in
+      const externalContentIndexService = new ExternalContentIndexService({
+        graphService,
+        embeddingService,
+        vectorStore,
+        indexRegistry,
+        logger: localLogger,
+      });
+      externalContentIndexScheduler = new ExternalContentIndexScheduler({
+        graphService: graphService as any,
+        services: nexusServices,
+        indexService: externalContentIndexService,
+        intervalMs: externalContentIndexHours * 60 * 60 * 1000,
+        logger: localLogger,
+      });
+      if (externalContentIndexEnabled) {
+        externalContentIndexScheduler.start();
+      } else {
+        localLogger.info('[NexusAI] External SSH content indexing auto-run disabled by preference — scheduler not started');
       }
 
       // WPE content index scheduler — interval-based, triggers indexAllWpeContent.
