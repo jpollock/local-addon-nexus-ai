@@ -29,6 +29,15 @@ interface WpeSiteResult {
   type: 'wpe';
 }
 
+interface ExternalSiteResult {
+  id: string;
+  name: string;
+  domain: string;
+  alias: string;
+  environment: string;
+  type: 'external';
+}
+
 interface SidebarSearchPanelState {
   aiMode: boolean;
   assistantMode: boolean;
@@ -40,6 +49,7 @@ interface SidebarSearchPanelState {
   resultsCount: number | null;
   localResults: LocalSiteResult[];
   wpeResults: WpeSiteResult[];
+  externalResults: ExternalSiteResult[];
   expandedWpeId: string | null;
   pullingInstallId: string | null;
   pullResult: { installId: string; success: boolean; message: string } | null;
@@ -231,6 +241,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     resultsCount: null,
     localResults: [],
     wpeResults: [],
+    externalResults: [],
     expandedWpeId: null,
     pullingInstallId: null,
     pullResult: null,
@@ -268,7 +279,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
   clearAll = (): void => {
     this.setState({
       query: '', conversation: [], interpretedFilters: null,
-      resultsCount: null, localResults: [], wpeResults: [],
+      resultsCount: null, localResults: [], wpeResults: [], externalResults: [],
       error: null, pullResult: null, expandedWpeId: null,
       searchText: '',
       selectedPlugins: [], selectedThemes: [], selectedPhpVersions: [], selectedWpVersions: [],
@@ -314,7 +325,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     if (!this.state.query.trim() || this.state.loading) return;
 
     const queryText = this.state.query;
-    this.setState({ loading: true, error: null, interpretedFilters: null, resultsCount: null, localResults: [], wpeResults: [] });
+    this.setState({ loading: true, error: null, interpretedFilters: null, resultsCount: null, localResults: [], wpeResults: [], externalResults: [] });
 
     try {
       const result = await this.props.electron.ipcRenderer.invoke(
@@ -375,10 +386,12 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
     if (result.success) {
       const localResults: LocalSiteResult[] = result.local || [];
       const wpeResults: WpeSiteResult[] = result.wpe || [];
+      const externalResults: ExternalSiteResult[] = result.external || [];
       this.setState({
-        resultsCount: localResults.length + wpeResults.length,
+        resultsCount: localResults.length + wpeResults.length + externalResults.length,
         localResults,
         wpeResults,
+        externalResults,
         loading: false,
       });
     } else {
@@ -394,6 +407,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
       resultsCount: null,
       localResults: [],
       wpeResults: [],
+      externalResults: [],
       expandedWpeId: null,
       error: null,
       searchText: '',
@@ -462,7 +476,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
           this.setState({
             query: e.target.value,
             // Always clear results when typing — stale results while composing are confusing
-            resultsCount: null, localResults: [], wpeResults: [],
+            resultsCount: null, localResults: [], wpeResults: [], externalResults: [],
             interpretedFilters: null, error: null,
           }),
         rows: 2,
@@ -695,7 +709,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
   }
 
   renderResultsList(): React.ReactNode {
-    const { resultsCount, localResults, wpeResults, expandedWpeId } = this.state;
+    const { resultsCount, localResults, wpeResults, externalResults, expandedWpeId } = this.state;
     if (resultsCount === null) return null;
 
     if (resultsCount === 0) {
@@ -747,7 +761,7 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
       // Summary line
       React.createElement('div', {
         style: { fontSize: '12px', color: '#7dd87d', marginBottom: '4px', fontWeight: 600 },
-      }, `✓ Found ${resultsCount} site${resultsCount === 1 ? '' : 's'} (${localResults.length} local, ${wpeResults.length} WPE)`),
+      }, `✓ Found ${resultsCount} site${resultsCount === 1 ? '' : 's'} (${localResults.length} local, ${wpeResults.length} WPE, ${externalResults.length} external)`),
 
       // LOCAL SITES
       localResults.length > 0 ? React.createElement('div', null,
@@ -830,6 +844,26 @@ export class SidebarSearchPanel extends React.Component<SidebarSearchPanelProps,
             ) : null,
           );
         }),
+      ) : null,
+
+      // EXTERNAL HOSTS
+      externalResults.length > 0 ? React.createElement('div', null,
+        React.createElement('div', { style: sectionHeaderStyle }, `🔌 External Hosts (${externalResults.length})`),
+        externalResults.map((site: ExternalSiteResult) =>
+          React.createElement('div', {
+            key: site.id,
+            style: siteRowStyle,
+            title: `${site.alias} (${site.environment})`,
+          },
+            React.createElement('span', { style: siteNameStyle }, site.name),
+            React.createElement('span', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+              site.domain ? React.createElement('span', {
+                style: { fontSize: '11px', color: '#666' },
+              }, site.domain) : null,
+              React.createElement('span', { style: pillStyle }, site.environment),
+            ),
+          ),
+        ),
       ) : null,
     );
   }
