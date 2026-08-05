@@ -411,6 +411,7 @@ nexus host test <alias> [--path <dir>] [--json]
 nexus host list [--json]
 nexus host remove <alias> [-y|--yes]
 nexus host refresh <alias>
+nexus host index <alias>
 ```
 
 Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not Local — addressed by a `~/.ssh/config` Host alias. Registered hosts and their access-permission overrides are visible in Settings → Nexus AI → Access & Permissions, and the refresh schedule is managed in Settings → Nexus AI → Sync Schedule.
@@ -433,6 +434,13 @@ Manage WordPress sites on arbitrary SSH-reachable hosts — not WP Engine, not L
   ```
 
   Turn it back off with `nexus settings set externalRefreshAutoEnabled false`.
+- `nexus host index <alias>` content-indexes a registered host's posts and pages now, for
+  semantic search. It is **read-only**, the same guarantee as `host refresh`. External hosts can
+  also content-index automatically on a timer, disabled by default
+  (`externalContentIndexAutoEnabled`, `externalContentIndexIntervalHours`, default 24h) —
+  `host index` runs immediately regardless of that setting. A host's Searchable count in Data
+  Completeness only rises after its first successful `host index` (manual or scheduled); before
+  that it shows 0% Searchable, which is the true number.
 - **PHP version on shared hosting.** Nexus reads the PHP version with `wp --info`, which needs PHP's `proc_open`. Many shared hosts disable it (`disable_functions=proc_open`). On such a host the PHP version is reported as unknown permanently rather than guessed — and because health scoring for an external host requires a known PHP version, that host will not receive a health score. Everything else (WordPress version, plugins, themes, counts) still collects normally.
 
 **Which `nexus wp` commands work against a registered host.**

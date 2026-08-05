@@ -394,8 +394,26 @@ that failed keeps its previous data — `writeExternalHostData` enforces both.
 Selection filters `is_active = 1`, because `nexusHostRemove` soft-deletes and a
 removed host must never be reconnected to.
 
-**L3 (content indexing) is not implemented for external hosts** — Spec 4b. They
-show 0% Searchable in Data Completeness, which is the true number.
+**L3 (content indexing) is now implemented for external hosts.** This section
+used to say it was not (Spec 4b) and that Data Completeness always showed 0%
+Searchable for them — that was true until the scheduler and manual command
+below shipped; it is stale now that a host has been indexed at least once.
+
+**External hosts now content-index too, on their own opt-in schedule.**
+`ExternalContentIndexScheduler` (`src/main/startup/ExternalContentIndexScheduler.ts`) is
+independent of `ExternalRefreshScheduler` — a separate SSH session per host, because external
+SSH has no `ControlMaster` to piggyback a combined cycle onto the way `WPESyncService.syncContent`
+does for WP Engine. Gated on `externalContentIndexAutoEnabled` (**default false**) with
+`externalContentIndexIntervalHours` (default 24). `nexus host index <alias>` runs one host on
+demand regardless of the setting.
+
+**Vector-store site ids strip the colon.** `ssh:<alias>` fails `SqliteVecStore`'s
+`^[a-zA-Z0-9_-]+$` table-name validation; `vectorSiteId()` translates it to `ssh_<alias>` only
+at that boundary. The graph `content` table and `IndexRegistry` keep the real `ssh:<alias>` id.
+
+**Vector document metadata says `source: 'external'`, never `'wpe'`.** Copying WP Engine's
+hardcoded constant here would silently mislabel every external host's indexed content — this is
+the specific regression `ExternalContentIndexService`'s own test suite pins.
 
 ---
 
