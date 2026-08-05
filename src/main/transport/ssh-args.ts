@@ -166,6 +166,82 @@ export function buildExternalWpCliCommand(args: string[], wpPath?: string, wpCli
 }
 
 /**
+ * Delimiter prefix for batched WP-CLI output. The full marker is
+ * `<<<NEXUS:N>>>` where N is the 1-based index of the command that just ran.
+ *
+ * Indexed, not bare, on purpose: a sub-command that fails prints nothing, and a
+ * host that dies mid-stream stops emitting entirely. With bare delimiters both
+ * cases would shift every later section onto the wrong field. With indices the
+ * parser can leave the gap as null.
+ */
+export const WP_CLI_BATCH_DELIMITER = '<<<NEXUS:';
+
+/**
+ * Several WP-CLI commands as ONE remote command, so they cost one SSH
+ * handshake instead of N.
+ *
+ * buildExternalSshArgs sets no ControlMaster (see its docblock — forcing
+ * multiplexing onto an arbitrary host is not safe the way it is onto WP
+ * Engine), so without batching a 16-command refresh would be 16 full
+ * handshakes.
+ *
+ * Every argument goes through escapeShellArg via buildExternalWpCliCommand.
+ * The command set is fixed and closed at the call site; no caller-supplied
+ * string reaches the shell unescaped.
+ */
+export function buildExternalWpCliBatch(
+  commands: string[][],
+  wpPath?: string,
+  wpCliBin?: string,
+): string {
+  if (commands.length === 0) return '';
+  return commands
+    .map((args, i) =>
+      `${buildExternalWpCliCommand(args, wpPath, wpCliBin)}; echo '${WP_CLI_BATCH_DELIMITER}${i + 1}>>>'`)
+    .join('; ');
+}
+
+/**
+ * Split batched stdout back into one entry per command.
+ *
+ * Returns exactly `expectedCount` entries. An entry is null when its
+ * sub-command produced no output, or when its delimiter never arrived because
+ * the connection dropped. Never returns fewer entries and never shifts output
+ * from one command onto another — a wrong-but-plausible value is worse than a
+ * missing one.
+ *
+ * The batch's exit code is only the LAST sub-command's, so callers must not
+ * gate on it. This parse is the source of truth.
+ */
+export function parseWpCliBatchOutput(
+  stdout: string,
+  expectedCount: number,
+): (string | null)[] {
+  const sections: (string | null)[] = new Array(expectedCount).fill(null);
+  if (!stdout) return sections;
+
+  // Capture the index from each marker so gaps stay gaps.
+  const markerRe = new RegExp(`^${WP_CLI_BATCH_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)>>>$`);
+  let buffer: string[] = [];
+
+  for (const line of stdout.split('\n')) {
+    const m = line.trim().match(markerRe);
+    if (m) {
+      const idx = parseInt(m[1], 10) - 1;
+      const text = buffer.join('\n').trim();
+      if (idx >= 0 && idx < expectedCount) {
+        sections[idx] = text === '' ? null : text;
+      }
+      buffer = [];
+      continue;
+    }
+    buffer.push(line);
+  }
+
+  return sections;
+}
+
+/**
  * INVERTED RULE — read before changing.
  *
  * This must NOT pass `-F /dev/null`. buildWpeSshArgs passes it deliberately so

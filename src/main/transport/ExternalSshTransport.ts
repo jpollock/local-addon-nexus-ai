@@ -4,7 +4,8 @@ import type {
   Capability, DeleteResult, ProbeResult, RunOpts, SiteRef, SiteTransport, TransportKind,
 } from './types';
 import {
-  buildExternalSshArgs, buildExternalWpCliCommand, EXTERNAL_SSH_TIMEOUT_MS,
+  buildExternalSshArgs, buildExternalWpCliCommand, buildExternalWpCliBatch,
+  parseWpCliBatchOutput, EXTERNAL_SSH_TIMEOUT_MS,
 } from './ssh-args';
 
 type RawSshResult = { code: number | null; stdout: string; stderr: string; spawnError?: string };
@@ -84,6 +85,23 @@ export class ExternalSshTransport implements SiteTransport {
       stdout: annotateFailure(res.stderr) || `SSH exited with code ${res.code}`,
       success: false,
     };
+  }
+
+  /**
+   * Run several WP-CLI commands in ONE SSH round trip.
+   *
+   * Returns one entry per command, null where that command produced nothing.
+   * Deliberately does not surface the exit code: a compound command's status is
+   * only its last sub-command's, so it says nothing useful about the others.
+   * A connection-level failure returns all nulls, which callers must treat as
+   * "collected nothing" and NOT as "the site has nothing".
+   */
+  async runWpCliBatch(commands: string[][]): Promise<(string | null)[]> {
+    if (commands.length === 0) return [];
+    const remote = buildExternalWpCliBatch(commands, this.wpPath, this.wpCliBin);
+    const res = await runSsh(this.alias, remote);
+    if (res.spawnError !== undefined) return new Array(commands.length).fill(null);
+    return parseWpCliBatchOutput(res.stdout, commands.length);
   }
 
   /**
