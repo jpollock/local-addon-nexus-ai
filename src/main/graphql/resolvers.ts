@@ -578,7 +578,7 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          // ── Local not found — try WPE graph as fallback ───────────────────
+          // ── Local not found — try graph as fallback ───────────────────────
           const graphSite = resolveWpeGraphSite(parsed.siteName!, graphService);
           if (graphSite) {
             const twin = services.twinService?.getFromGraph?.(graphSite, graphService) ?? null;

@@ -53,6 +53,18 @@ describe('fleet queries include external sites', () => {
       created_at: Date.now(),
       updated_at: Date.now(),
     });
+
+    // Add a plugin to the external site so nexusFleetPlugins can surface it
+    await graphService.upsertPlugin({
+      site_id: 'ssh:ext-host',
+      slug: 'external-test-plugin',
+      name: 'External Test Plugin',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test Author',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
   });
 
   afterEach(async () => {
@@ -91,9 +103,10 @@ describe('fleet queries include external sites', () => {
   it('nexusFleetPlugins includes the external site', async () => {
     const r = await (createResolvers(ctx()).Mutation as any).nexusFleetPlugins(null, {});
     expect(r.success).toBe(true);
-    // The external site should appear in the twins array (even with no plugins)
-    // If it has no plugins, it won't be in the twins, but it should not be excluded
-    // Just verify no error and success=true for now
+    // The external site's plugin should appear in the results
+    const externalPlugin = r.plugins.find((p: any) => p.slug === 'external-test-plugin');
+    expect(externalPlugin).toBeDefined();
+    expect(externalPlugin.sites).toContain('ext-host');
   });
 
   it('nexusFleetVersionSites includes the external site', async () => {
