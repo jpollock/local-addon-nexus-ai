@@ -130,4 +130,29 @@ describe('writeExternalHostData — the honesty rule', () => {
     await writeExternalHostData(g as any, 'ssh:myhost', 'myhost', { plugins: [] }, NOW);
     expect(g._runCalls.some(([sql]) => /DELETE FROM plugins/i.test(sql))).toBe(true);
   });
+
+  it('a plugin-write failure does not prevent the theme write from landing, and does not throw', async () => {
+    const g = graph();
+    let call = 0;
+    g.upsertPlugin = jest.fn(async () => {
+      call += 1;
+      if (call === 2) throw new Error('constraint violation');
+      return 1;
+    });
+    const logger = { warn: jest.fn() };
+
+    await expect(writeExternalHostData(g as any, 'ssh:myhost', 'myhost', {
+      plugins: [
+        { slug: 'akismet', name: 'Akismet', version: '5.3', isActive: true },
+        { slug: 'jetpack', name: 'Jetpack', version: '13.0', isActive: true },
+        { slug: 'yoast', name: 'Yoast', version: '22.0', isActive: false },
+      ],
+      themes: [{ slug: 'tt4', name: 'TT4', version: '1.0', isActive: true }],
+    }, NOW, logger as any)).resolves.toBeUndefined();
+
+    // Theme write still ran despite the plugin block throwing.
+    expect(g.upsertTheme).toHaveBeenCalledWith(expect.objectContaining({ site_id: 'ssh:myhost', slug: 'tt4' }));
+    // The failure was surfaced, not silently swallowed.
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('plugin write failed'));
+  });
 });

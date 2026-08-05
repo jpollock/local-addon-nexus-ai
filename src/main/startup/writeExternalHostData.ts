@@ -8,6 +8,12 @@ export type GraphWriter = {
   getDb?: () => any;
 };
 
+export type WriteLogger = {
+  warn: (...args: any[]) => void;
+};
+
+const noopLogger: WriteLogger = { warn: () => {} };
+
 /**
  * Persist collected L1+L2 data for one external host.
  *
@@ -45,6 +51,14 @@ export type GraphWriter = {
  * established pattern for "column that upsertSite doesn't own" in this
  * codebase. Both writers already agree on this split; this one now matches
  * them instead of reinventing (and silently losing data via) a third shape.
+ *
+ * FAILURE ISOLATION: the extended-columns UPDATE, the plugin replace, and the
+ * theme replace are each wrapped independently. A DB fault partway through
+ * one (e.g. `upsertPlugin` throwing on the 3rd of 5 rows) must not prevent the
+ * others from running — in particular, a plugin-write fault must not silently
+ * drop a theme collection that succeeded in the same cycle. Failures are
+ * logged, not swallowed, since a caller may want to know a host's inventory
+ * didn't fully persist even though the cycle didn't throw.
  */
 export async function writeExternalHostData(
   graphService: GraphWriter,
@@ -52,6 +66,7 @@ export async function writeExternalHostData(
   alias: string,
   data: ExternalHostData,
   now: number,
+  logger: WriteLogger = noopLogger,
 ): Promise<void> {
   const collectedAnything = Object.keys(data).length > 0;
   if (!collectedAnything) {
@@ -78,12 +93,11 @@ export async function writeExternalHostData(
   }
 
   // Identity + the scalar columns upsertSite's own SQL actually persists.
-  // wp_version/php_version are COALESCE-guarded inside upsertSite itself, so
-  // when absent the key is omitted entirely rather than sent through as
-  // `undefined` — upsertSite reads `site.php_version ?? null` either way, but
-  // omitting keeps the call's own shape honest about what this cycle actually
-  // collected, and avoids relying on a caller happening to treat an
-  // explicit-undefined property the same as a missing one.
+  // wp_version/php_version are COALESCE-guarded inside upsertSite itself
+  // (`site.wp_version ?? null`), so a missing key and an explicit `undefined`
+  // value read identically there — omitting the key when uncollected is not
+  // load-bearing, just keeps the call's shape legible about what this cycle
+  // actually collected.
   const siteWrite: Record<string, unknown> = {
     id: siteId,
     name: alias,
@@ -150,22 +164,39 @@ export async function writeExternalHostData(
 
   // Inventories replace the previous set ONLY when this cycle collected one.
   // `undefined` means the batch failed; `[]` means the host really has none.
+  // Plugins and themes are isolated from each other: a fault partway through
+  // one must not abort the other, or a successful theme collection would be
+  // dropped as collateral damage from an unrelated plugin-write failure.
   if (data.plugins !== undefined) {
-    try { db?.prepare('DELETE FROM plugins WHERE site_id=?').run(siteId); } catch { /* keep going */ }
-    for (const p of data.plugins) {
-      await graphService.upsertPlugin({
-        site_id: siteId, slug: p.slug, name: p.name, version: p.version,
-        is_active: p.isActive, author: null, created_at: now, updated_at: now,
-      });
+    try {
+      try { db?.prepare('DELETE FROM plugins WHERE site_id=?').run(siteId); } catch { /* keep going */ }
+      for (const p of data.plugins) {
+        await graphService.upsertPlugin({
+          site_id: siteId, slug: p.slug, name: p.name, version: p.version,
+          is_active: p.isActive, author: null, created_at: now, updated_at: now,
+        });
+      }
+    } catch (err) {
+      logger.warn(
+        `[writeExternalHostData] plugin write failed for ${siteId}, inventory may be incomplete: `
+        + `${(err as Error)?.message ?? err}`
+      );
     }
   }
   if (data.themes !== undefined) {
-    try { db?.prepare('DELETE FROM themes WHERE site_id=?').run(siteId); } catch { /* keep going */ }
-    for (const t of data.themes) {
-      await graphService.upsertTheme({
-        site_id: siteId, slug: t.slug, name: t.name, version: t.version,
-        is_active: t.isActive, author: null, created_at: now, updated_at: now,
-      });
+    try {
+      try { db?.prepare('DELETE FROM themes WHERE site_id=?').run(siteId); } catch { /* keep going */ }
+      for (const t of data.themes) {
+        await graphService.upsertTheme({
+          site_id: siteId, slug: t.slug, name: t.name, version: t.version,
+          is_active: t.isActive, author: null, created_at: now, updated_at: now,
+        });
+      }
+    } catch (err) {
+      logger.warn(
+        `[writeExternalHostData] theme write failed for ${siteId}, inventory may be incomplete: `
+        + `${(err as Error)?.message ?? err}`
+      );
     }
   }
 }
