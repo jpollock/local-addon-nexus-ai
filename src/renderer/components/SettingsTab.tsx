@@ -556,12 +556,12 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       return custom !== undefined ? custom : WPE_OPERATION_DEFAULTS[op][env];
     };
 
-    const OPERATIONS: Array<{ id: WpeOperation; label: string; sub: string; icon: string }> = [
-      { id: 'pull',       label: 'Pull to local',              sub: 'Download files + database from WPE',                              icon: '⬇' },
-      { id: 'wpcli_read', label: 'WP-CLI over SSH (Read)',     sub: 'plugin list, core version, user list — read-only SSH commands',   icon: '⌨' },
-      { id: 'wpcli',      label: 'WP-CLI over SSH (Write)',    sub: 'plugin install/update, core update — modifying SSH commands',     icon: '⌨' },
-      { id: 'push',       label: 'Push to WPE',                sub: 'Overwrite remote with local files and DB',                        icon: '⬆' },
-      { id: 'delete',     label: 'Delete / Promote',           sub: 'Irreversible CAPI operations',                                    icon: '🗑' },
+    const OPERATIONS: Array<{ id: WpeOperation; label: string; sub: string; icon: string; scope: 'wpe' | 'both' }> = [
+      { id: 'pull',       label: 'Pull to local',              sub: 'Download files + database from WPE',                              icon: '⬇', scope: 'wpe' },
+      { id: 'wpcli_read', label: 'WP-CLI over SSH (Read)',     sub: 'plugin list, core version, user list — read-only SSH commands',   icon: '⌨', scope: 'both' },
+      { id: 'wpcli',      label: 'WP-CLI over SSH (Write)',    sub: 'plugin install/update, core update — modifying SSH commands',     icon: '⌨', scope: 'both' },
+      { id: 'push',       label: 'Push to WPE',                sub: 'Overwrite remote with local files and DB',                        icon: '⬆', scope: 'wpe' },
+      { id: 'delete',     label: 'Delete / Promote',           sub: 'Irreversible CAPI operations',                                    icon: '🗑', scope: 'wpe' },
     ];
 
     const renderToggle = (checked: boolean, onChange: (v: boolean) => void): React.ReactNode =>
@@ -596,10 +596,17 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       const stgOn = getPermVal(op.id, 'staging');
       const prdOn = getPermVal(op.id, 'production');
       const opExceptions = exceptions.filter(e => op.id in e.overrides);
+      const scopeChip = React.createElement('span', {
+        style: {
+          fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' as const, flexShrink: 0,
+          background: op.scope === 'both' ? 'rgba(90,169,230,0.14)' : 'rgba(224,164,88,0.14)',
+          color: op.scope === 'both' ? '#5aa9e6' : '#e0a458',
+        },
+      }, op.scope === 'both' ? 'WPE + SSH' : 'WPE only');
 
       return React.createElement('div', {
         key: op.id,
-        style: { border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 7, overflow: 'hidden', marginBottom: 5 },
+        style: { border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 7, overflow: 'hidden', marginBottom: 5, opacity: op.scope === 'wpe' ? 0.6 : 1 },
       },
         React.createElement('div', {
           style: { display: 'flex', alignItems: 'center', gap: 11, padding: '10px 13px', background: 'var(--nxai-card-bg, #21262d)', cursor: 'pointer' },
@@ -611,6 +618,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
             React.createElement('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub, #6b7280)', marginTop: 1 } }, op.sub),
           ),
           React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 } },
+            scopeChip,
             envPill('Dev', devOn),
             envPill('Stg', stgOn),
             envPill('Prd', prdOn),

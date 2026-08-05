@@ -228,3 +228,46 @@ describe('SettingsTab — exception picker writes targetRef', () => {
     expect(text).toContain('External SSH hosts');
   });
 });
+
+describe('SettingsTab — operation scope chips', () => {
+  it('labels wpcli_read and wpcli as WPE + SSH', async () => {
+    const electron = mockElectron();
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ accessExpanded: true });
+    const tree = instance.render();
+    const text = textOf(tree);
+    expect(text).toContain('WPE + SSH');
+  });
+
+  it('labels pull, push and delete as WPE only, and dims those rows', async () => {
+    const electron = mockElectron();
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ accessExpanded: true });
+    const tree = instance.render();
+    const wpeOnlyLabels = findAll(tree, (n) => textOf(n).trim() === 'WPE only');
+    expect(wpeOnlyLabels.length).toBe(3);
+    // At least one WPE-only row's container carries reduced opacity.
+    const dimmed = findAll(tree, (n) => n.props?.style?.opacity !== undefined && n.props.style.opacity < 1);
+    expect(dimmed.length).toBeGreaterThan(0);
+  });
+
+  it('does not hide WPE-only rows — pull, push and delete labels are all present', async () => {
+    const electron = mockElectron();
+    const instance: any = new SettingsTab({ electron });
+    (instance as any).mounted = true;
+    spySetState(instance);
+    await instance.loadAll();
+    instance.setState({ accessExpanded: true });
+    const tree = instance.render();
+    const text = textOf(tree);
+    expect(text).toContain('Pull to local');
+    expect(text).toContain('Push to WPE');
+    expect(text).toContain('Delete / Promote');
+  });
+});
