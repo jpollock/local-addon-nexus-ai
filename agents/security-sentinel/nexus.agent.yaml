@@ -8,8 +8,6 @@ author:
 triggers:
   - type: event
     pattern: wpe:sync.completed
-  - type: cron
-    expression: "*/15 * * * *"
 
 tools:
   - fleet_sql
