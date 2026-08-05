@@ -53,6 +53,11 @@ function makeDb(): InstanceType<typeof Database> {
     { id: 'wpe-stg',     name: 'wpe-stg',     source: 'wpe',   wp: '6.9', php: '7.4', posts: 10,  users: 2,  lastPost: NOW - 15*DAY, account_id: 'acc1' },
   ];
 
+  // External SSH hosts
+  const externalSites = [
+    { id: 'ssh:ext-host', name: 'ext-host', source: 'external', wp: '6.9', php: '8.1', posts: 12, users: 4, lastPost: NOW - 20*DAY, account_id: null },
+  ];
+
   const insertSite = db.prepare(
     `INSERT INTO sites VALUES (?,?,?,?,?,1,?,?,?,NULL,?,NULL)`,
   );
@@ -63,6 +68,9 @@ function makeDb(): InstanceType<typeof Database> {
     `INSERT INTO sites (id,name,source,wp_version,php_version,is_active,post_count,user_count,last_post_at,account_id) VALUES (?,?,?,?,?,1,?,?,?,?)`,
   );
   for (const s of wpeSites) {
+    insertWpe.run(s.id, s.name, s.source, s.wp, s.php, s.posts, s.users, s.lastPost, s.account_id);
+  }
+  for (const s of externalSites) {
     insertWpe.run(s.id, s.name, s.source, s.wp, s.php, s.posts, s.users, s.lastPost, s.account_id);
   }
 
@@ -438,6 +446,22 @@ describe('P3: source filter', () => {
     expect(results).toContain('newsite');
     expect(results).not.toContain('wpe-prod');
     expect(results).not.toContain('wpe-stg');
+  });
+});
+
+describe('P3: source filter — external hosts', () => {
+  const db = makeDb();
+
+  test('source=external returns only external hosts', () => {
+    const results = applyFilter(db, { source: 'external' });
+    expect(results).toContain('ext-host');
+    expect(results).not.toContain('myloop');
+    expect(results).not.toContain('wpe-prod');
+  });
+
+  test('an unfiltered query includes external hosts alongside local and WPE', () => {
+    const results = applyFilter(db, { recentPostDays: 30 });
+    expect(results).toContain('ext-host'); // updated 20d ago
   });
 });
 

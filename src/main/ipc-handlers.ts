@@ -2699,16 +2699,21 @@ Answer:`,
           // Convert query text to embedding vector
           const queryVector = await embeddingService.embed(validated.contentQuery);
 
-          // Search across all indexed sites (local + WPE)
+          // Search across all indexed sites (local + WPE + external)
           contentMatchingSiteIds = new Set<string>();
           const localSiteIds = Object.keys(allSites);
 
-          // Get WPE site IDs from graph
+          // Get WPE + external site IDs from graph. vectorSiteId() translates
+          // ssh:<alias> -> ssh_<alias> for the vector store call (colons are
+          // illegal in its table names); it's a no-op for WPE ids. Keep a
+          // translated->raw map so membership checks below can use the raw id
+          // the WPE/external per-site loops already key off.
           const wpeSites = await graphService.listSites({ source: 'wpe' });
-          const wpeSiteIds = wpeSites.map(s => s.id);
-
-          const allSearchableSiteIds = [...localSiteIds, ...wpeSiteIds];
-          localLogger.info(`[NexusAI] Searching ${localSiteIds.length} local + ${wpeSiteIds.length} WPE sites for content`);
+          const externalSites = await graphService.listSites({ source: 'external' });
+          const remoteSites = [...wpeSites, ...externalSites];
+          const translatedToRaw = new Map(remoteSites.map(s => [vectorSiteId(s.id), s.id]));
+          const allSearchableSiteIds = [...localSiteIds, ...remoteSites.map(s => vectorSiteId(s.id))];
+          localLogger.info(`[NexusAI] Searching ${localSiteIds.length} local + ${wpeSites.length} WPE + ${externalSites.length} external sites for content`);
 
           // Hybrid search: vector + FTS keyword boost, single tableNames() call
           const matchMap = await vectorStore.searchAcrossSites(
@@ -2718,7 +2723,7 @@ Answer:`,
             5,
           );
           for (const siteId of matchMap.keys()) {
-            contentMatchingSiteIds!.add(siteId);
+            contentMatchingSiteIds!.add(translatedToRaw.get(siteId) ?? siteId);
           }
 
           localLogger.info('[NexusAI] Content search found', contentMatchingSiteIds.size, 'sites with matching content');
@@ -3078,11 +3083,165 @@ Answer:`,
         }
       }
 
+      // Check external sites (remote sites only support content/plugin/WP version filters)
+      const externalSites = await graphService.listSites({ source: 'external' });
+      for (const externalSite of externalSites) {
+        let matches = true;
+
+        // Content filter - check if this site has matching content
+        if (contentMatchingSiteIds !== null) {
+          if (!contentMatchingSiteIds.has(externalSite.id)) {
+            matches = false;
+            continue;
+          }
+        }
+
+        // Text search (name or domain)
+        if (validated?.searchText && validated.searchText.trim()) {
+          const searchLower = validated.searchText.toLowerCase();
+          const nameMatch = externalSite.name?.toLowerCase().includes(searchLower);
+          const domainMatch = externalSite.domain?.toLowerCase().includes(searchLower);
+          if (!nameMatch && !domainMatch) {
+            matches = false;
+          }
+        }
+
+        // Plugin filter (use graph)
+        if (matches && validated?.plugins && validated.plugins.length > 0) {
+          if (db) {
+            const placeholders = validated.plugins.map(() => '?').join(',');
+            const pluginRow = db.prepare(`SELECT 1 FROM plugins WHERE site_id = ? AND slug IN (${placeholders}) LIMIT 1`)
+              .get(externalSite.id, ...validated.plugins);
+            if (!pluginRow) matches = false;
+          } else {
+            matches = false;
+          }
+        }
+
+        // Min plugin count filter
+        if (matches && validated?.minPluginCount && db) {
+          const row = db.prepare(`SELECT COUNT(*) as c FROM plugins WHERE site_id = ? AND is_active = 1`)
+            .get(externalSite.id) as { c: number } | undefined;
+          if (!row || row.c < validated.minPluginCount) matches = false;
+        }
+
+        // Min post count filter
+        if (matches && validated?.minPostCount) {
+          if (!externalSite.post_count || externalSite.post_count < validated.minPostCount) matches = false;
+        }
+
+        // Min user count filter — query users table (sites.user_count is not populated for WPE)
+        if (matches && validated?.minUserCount && db) {
+          const row = db.prepare(`SELECT COUNT(*) as c FROM users WHERE site_id = ?`).get(externalSite.id) as { c: number } | undefined;
+          if (!row || row.c < validated.minUserCount) matches = false;
+        }
+
+        // Stale post filter
+        if (matches && validated?.stalePostDays) {
+          const cutoff = Date.now() - validated.stalePostDays * 24 * 60 * 60 * 1000;
+          if (externalSite.last_post_at && externalSite.last_post_at > cutoff) matches = false;
+        }
+
+        // P0: recentPostDays
+        if (matches && validated?.recentPostDays) {
+          const cutoff = Date.now() - validated.recentPostDays * 24 * 60 * 60 * 1000;
+          if (!externalSite.last_post_at || externalSite.last_post_at < cutoff) matches = false;
+        }
+
+        // P1: phpEolOnly
+        const WPE_PHP_EOL = ['5.6','7.0','7.1','7.2','7.3','7.4','8.0','8.1'];
+        if (matches && validated?.phpEolOnly) {
+          const isEol = WPE_PHP_EOL.some(p => externalSite.php_version?.startsWith(p));
+          if (!isEol) matches = false;
+        }
+
+        // P1: wpVersionOlderThan
+        if (matches && validated?.wpVersionOlderThan) {
+          const norm = (v: string) => v.split('.').map(n => parseInt(n, 10).toString().padStart(5, '0')).join('.');
+          if (!externalSite.wp_version || norm(externalSite.wp_version) >= norm(validated.wpVersionOlderThan)) matches = false;
+        }
+
+        // P1: maxPostCount / maxUserCount
+        if (matches && validated?.maxPostCount != null) {
+          if (externalSite.post_count != null && externalSite.post_count >= validated.maxPostCount) matches = false;
+        }
+        if (matches && validated?.maxUserCount != null && db) {
+          const row = db.prepare(`SELECT COUNT(*) as c FROM users WHERE site_id = ?`).get(externalSite.id) as { c: number } | undefined;
+          if (row && row.c >= validated.maxUserCount) matches = false;
+        }
+
+        // P1: pluginVersion
+        if (matches && validated?.pluginVersion?.slug && validated?.pluginVersion?.olderThan && db) {
+          const { slug, olderThan } = validated.pluginVersion;
+          const norm = (v: string) => v.split('.').map(n => parseInt(n, 10).toString().padStart(5, '0')).join('.');
+          const row = db.prepare(`SELECT version FROM plugins WHERE site_id=? AND slug=? AND is_active=1 LIMIT 1`).get(externalSite.id, slug) as { version: string | null } | undefined;
+          if (!row?.version) { matches = false; }
+          else if (norm(row.version) >= norm(olderThan)) matches = false;
+        }
+
+        // P2: settings_json based (WPE sites)
+        if (matches && db && (validated?.commentsDisabled !== undefined || validated?.hiddenFromSearch !== undefined ||
+            validated?.selfRegistrationOpen !== undefined || validated?.staticFrontPage !== undefined ||
+            validated?.plainPermalinks !== undefined)) {
+          const row = db.prepare(`SELECT settings_json FROM sites WHERE id = ?`).get(externalSite.id) as { settings_json: string | null } | undefined;
+          if (!row?.settings_json) { matches = false; }
+          else {
+            const settings = JSON.parse(row.settings_json);
+            if (validated.commentsDisabled !== undefined) {
+              if (settings.default_comment_status === undefined) { matches = false; }
+              else { const closed = settings.default_comment_status === 'closed'; if (validated.commentsDisabled !== closed) matches = false; }
+            }
+            if (validated.hiddenFromSearch !== undefined) {
+              if (settings.blog_public === undefined) { matches = false; }
+              else { const hidden = settings.blog_public === '0'; if (validated.hiddenFromSearch !== hidden) matches = false; }
+            }
+            if (validated.selfRegistrationOpen !== undefined) {
+              if (settings.users_can_register === undefined) { matches = false; }
+              else { const open = settings.users_can_register === '1'; if (validated.selfRegistrationOpen !== open) matches = false; }
+            }
+            if (validated.staticFrontPage !== undefined) {
+              if (settings.show_on_front === undefined) { matches = false; }
+              else { const isStatic = settings.show_on_front === 'page'; if (validated.staticFrontPage !== isStatic) matches = false; }
+            }
+            if (validated.plainPermalinks !== undefined) {
+              if (settings.permalink_structure === undefined) { matches = false; }
+              else { const plain = settings.permalink_structure === ''; if (validated.plainPermalinks !== plain) matches = false; }
+            }
+          }
+        }
+
+        // P3: source filter — external loop, always source='external'
+        if (matches && validated?.source) {
+          if (validated.source !== 'external') matches = false;
+        }
+
+        // WP version filter (prefix match: "7" matches "7.0", "7.0.1")
+        if (matches && validated?.wpVersions && validated.wpVersions.length > 0) {
+          const siteWp = externalSite.wp_version ?? '';
+          const wpMatch = validated.wpVersions.some((v: string) =>
+            siteWp === v || siteWp.startsWith(v + '.') || siteWp.startsWith(v + '-'),
+          );
+          if (!siteWp || !wpMatch) {
+            matches = false;
+          }
+        }
+
+        // Skip theme filter for WPE sites (requires WP-CLI on running sites)
+        if (matches && validated?.themes && validated.themes.length > 0) {
+          matches = false; // WPE sites don't support theme filtering yet
+        }
+
+        if (matches) {
+          matchingSiteIds.push(externalSite.id);
+        }
+      }
+
       localLogger.info(`[NexusAI] Site Finder results: ${matchingSiteIds.length} total (local + WPE)`);
 
       // Build detailed results for UI display
       const localResults: Array<{ id: string; name: string; type: 'local' }> = [];
       const wpeResults: Array<{ id: string; name: string; domain: string; installId: string; type: 'wpe' }> = [];
+      const externalResults: Array<{ id: string; name: string; domain: string; alias: string; environment: string; type: 'external' }> = [];
 
       for (const siteId of matchingSiteIds) {
         // Check if it's a local site
@@ -3093,7 +3252,7 @@ Answer:`,
             type: 'local',
           });
         } else {
-          // It's a WPE site - get details from graph
+          // It's a WPE or external site — get details from graph
           const wpeSite = wpeSites.find(s => s.id === siteId);
           if (wpeSite) {
             wpeResults.push({
@@ -3103,17 +3262,30 @@ Answer:`,
               installId: wpeSite.remote_install_id || wpeSite.id,
               type: 'wpe',
             });
+          } else {
+            const externalSite = externalSites.find(s => s.id === siteId);
+            if (externalSite) {
+              externalResults.push({
+                id: externalSite.id,
+                name: externalSite.name,
+                domain: externalSite.domain || '',
+                alias: externalSite.name,
+                environment: externalSite.environment || 'production',
+                type: 'external',
+              });
+            }
           }
         }
       }
 
-      localLogger.info(`[NexusAI] Site Finder breakdown: ${localResults.length} local, ${wpeResults.length} WPE`);
+      localLogger.info(`[NexusAI] Site Finder breakdown: ${localResults.length} local, ${wpeResults.length} WPE, ${externalResults.length} external`);
 
       return {
         success: true,
         siteIds: matchingSiteIds,
         local: localResults,
         wpe: wpeResults,
+        external: externalResults,
       };
     } catch (err) {
       localLogger.error('[NexusAI] site-finder:apply failed:', (err as Error).message);

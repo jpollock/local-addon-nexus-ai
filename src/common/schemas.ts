@@ -454,7 +454,7 @@ export const SiteFinderFiltersSchema = z.object({
   staticFrontPage: z.boolean().optional(),
   plainPermalinks: z.boolean().optional(),
   // P3
-  source: z.enum(['local', 'wpe']).optional(),
+  source: z.enum(['local', 'wpe', 'external']).optional(),
   wpeEnvironment: z.enum(['production', 'staging', 'development']).optional(),
   minAdminCount: z.number().int().min(1).optional(),
 }).optional();
