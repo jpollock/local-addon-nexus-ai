@@ -51,7 +51,7 @@ interface SettingsTabState {
   accessExpanded: boolean;
   expandedOps: Set<string>;
   installSearch: string;
-  addingException: { op: string; installName: string; environment: string; allowing: boolean } | null;
+  addingException: { op: string; targetRef: string; environment: string; allowing: boolean } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,6 +145,27 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
       .catch(() => {});
   }
 
+  /** remoteSiteExceptions if present, else the deprecated wpeSiteExceptions — same fallback
+   *  order operation-permissions.ts's own read path already uses on the backend. */
+  private getEffectiveExceptions(): import('../../common/types').RemoteSiteException[] {
+    const s = this.state.settings;
+    if (!s) return [];
+    if (s.remoteSiteExceptions?.length) return s.remoteSiteExceptions;
+    if (s.wpeSiteExceptions?.length) {
+      return s.wpeSiteExceptions.map(e => ({ targetRef: `wpe:${e.installName}`, environment: e.environment, overrides: e.overrides }));
+    }
+    return [];
+  }
+
+  private getEffectivePermissions(): import('../../common/types').RemoteOperationPermissions {
+    const s = this.state.settings;
+    if (!s) return {};
+    if (s.remoteOperationPermissions && Object.keys(s.remoteOperationPermissions).length) {
+      return s.remoteOperationPermissions;
+    }
+    return s.wpeOperationPermissions ?? {};
+  }
+
   // ── Auto-indexing handlers ───────────────────────────────────────────────
 
   handleAutoIndexToggle = (): void => {
@@ -227,31 +248,31 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
   };
 
   handleOperationToggle = (operation: WpeOperation, env: WpeEnv, value: boolean): void => {
-    const perms = { ...(this.state.settings?.wpeOperationPermissions ?? {}) };
+    const perms = { ...this.getEffectivePermissions() };
     perms[operation] = {
       ...WPE_OPERATION_DEFAULTS[operation],
       ...(perms[operation] ?? {}),
       [env]: value,
     };
-    this.saveSetting({ wpeOperationPermissions: perms });
+    this.saveSetting({ remoteOperationPermissions: perms });
   };
 
-  handleSiteExceptionToggle = (installName: string, environment: string, operation: WpeOperation, value: boolean): void => {
-    const exceptions = [...(this.state.settings?.wpeSiteExceptions ?? [])];
-    const idx = exceptions.findIndex(e => e.installName === installName && e.environment === environment);
+  handleSiteExceptionToggle = (targetRef: string, environment: string, operation: WpeOperation, value: boolean): void => {
+    const exceptions = [...this.getEffectiveExceptions()];
+    const idx = exceptions.findIndex(e => e.targetRef === targetRef && e.environment === environment);
     if (idx >= 0) {
       exceptions[idx] = { ...exceptions[idx], overrides: { ...exceptions[idx].overrides, [operation]: value } };
     } else {
-      exceptions.push({ installName, environment, overrides: { [operation]: value } });
+      exceptions.push({ targetRef, environment, overrides: { [operation]: value } });
     }
-    this.saveSetting({ wpeSiteExceptions: exceptions });
+    this.saveSetting({ remoteSiteExceptions: exceptions });
   };
 
-  handleSiteExceptionRemove = (installName: string, environment: string): void => {
-    const exceptions = (this.state.settings?.wpeSiteExceptions ?? []).filter(
-      e => !(e.installName === installName && e.environment === environment),
+  handleSiteExceptionRemove = (targetRef: string, environment: string): void => {
+    const exceptions = this.getEffectiveExceptions().filter(
+      e => !(e.targetRef === targetRef && e.environment === environment),
     );
-    this.saveSetting({ wpeSiteExceptions: exceptions });
+    this.saveSetting({ remoteSiteExceptions: exceptions });
   };
 
   handleAccountScopeToggle = (accountId: string, included: boolean): void => {
@@ -527,8 +548,8 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
     const { settings, wpeInstalls, expandedOps, addingException, installSearch, accessExpanded } = this.state;
     if (!settings) return null;
 
-    const perms = settings.wpeOperationPermissions ?? {};
-    const exceptions = settings.wpeSiteExceptions ?? [];
+    const perms = this.getEffectivePermissions();
+    const exceptions = this.getEffectiveExceptions();
 
     const getPermVal = (op: WpeOperation, env: WpeEnv): boolean => {
       const custom = (perms as any)[op]?.[env];
@@ -626,16 +647,16 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
             : React.createElement('div', { style: { display: 'flex', flexDirection: 'column' as const, gap: 5, marginBottom: 8 } },
                 ...opExceptions.map(exc =>
                   React.createElement('div', {
-                    key: `${exc.installName}-${exc.environment}`,
+                    key: `${exc.targetRef}-${exc.environment}`,
                     style: { display: 'flex', alignItems: 'center', gap: 7, background: 'var(--nxai-card-bg, #21262d)', borderRadius: 6, padding: '6px 10px', fontSize: 12 },
                   },
-                    React.createElement('span', { style: { fontWeight: 500 } }, exc.installName),
+                    React.createElement('span', { style: { fontWeight: 500 } }, exc.targetRef),
                     React.createElement('span', { style: { fontSize: 10, color: 'var(--nxai-card-sub, #6b7280)', background: 'rgba(128,128,128,0.1)', borderRadius: 4, padding: '1px 6px' } }, exc.environment),
                     React.createElement('span', { style: { fontSize: 10, fontWeight: 700, color: exc.overrides[op.id] ? '#51BB7B' : '#f87171' } }, exc.overrides[op.id] ? 'allow' : 'block'),
                     React.createElement('span', { style: { flex: 1 } }),
                     React.createElement('span', {
                       style: { color: 'var(--nxai-status-neutral, #9ca3af)', cursor: 'pointer', fontSize: 14, padding: '0 3px', lineHeight: 1 },
-                      onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handleSiteExceptionRemove(exc.installName, exc.environment); },
+                      onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.handleSiteExceptionRemove(exc.targetRef, exc.environment); },
                     }, '×'),
                   ),
                 ),
@@ -646,41 +667,61 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
                 onClick: (e: React.MouseEvent) => e.stopPropagation(),
               },
                 React.createElement('input', {
-                  type: 'text', placeholder: 'Search installs…', value: installSearch, autoFocus: true,
+                  type: 'text', placeholder: 'Search installs and SSH hosts…', value: installSearch, autoFocus: true,
                   onChange: (e: any) => this.setState({ installSearch: e.target.value }),
                   style: { width: '100%', fontSize: 12, padding: '6px 8px', background: 'var(--nxai-code-bg, #1f1f1f)', border: '1px solid var(--nxai-card-border, #30363d)', borderRadius: 4, color: 'var(--nxai-card-text, #e6edf3)', fontFamily: 'inherit', marginBottom: 6 },
                 }),
-                React.createElement('div', { style: { maxHeight: 150, overflowY: 'auto' as const, display: 'flex', flexDirection: 'column' as const, gap: 2, marginBottom: 8 } },
+                React.createElement('div', { style: { maxHeight: 180, overflowY: 'auto' as const, display: 'flex', flexDirection: 'column' as const, gap: 2, marginBottom: 8 } },
                   (() => {
                     const q = installSearch.toLowerCase();
-                    const filtered = wpeInstalls.filter(i => !q || i.installName.toLowerCase().includes(q) || i.primaryDomain.toLowerCase().includes(q)).slice(0, 30);
-                    if (filtered.length === 0) {
-                      return [React.createElement('div', { key: 'empty', style: { fontSize: 11, color: 'var(--nxai-status-neutral, #9ca3af)', padding: '6px 4px', fontStyle: 'italic' as const } }, 'No installs found')];
-                    }
-                    return filtered.map(inst => {
-                      const isSelected = addingException?.installName === inst.installName;
-                      const envColor = inst.environment === 'production' ? '#f87171' : inst.environment === 'staging' ? '#fbbf24' : '#51BB7B';
+                    const wpeMatches = wpeInstalls.filter(i => !q || i.installName.toLowerCase().includes(q) || i.primaryDomain.toLowerCase().includes(q)).slice(0, 30);
+                    const externalMatches = this.state.externalHosts.filter(h => !q || h.alias.toLowerCase().includes(q) || h.domain.toLowerCase().includes(q)).slice(0, 30);
+
+                    const renderPick = (targetRef: string, label: string, environment: string, kind: 'wpe' | 'ssh') => {
+                      const isSelected = addingException?.targetRef === targetRef;
+                      const envColor = environment === 'production' ? '#f87171' : environment === 'staging' ? '#fbbf24' : '#51BB7B';
                       return React.createElement('div', {
-                        key: inst.installName,
+                        key: targetRef,
                         style: { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, cursor: 'pointer', background: isSelected ? 'rgba(59,130,246,0.15)' : 'transparent', border: isSelected ? '1px solid rgba(59,130,246,0.4)' : '1px solid transparent' },
-                        onClick: () => this.setState(prev => ({ addingException: prev.addingException ? { ...prev.addingException, installName: inst.installName, environment: inst.environment } : null })),
+                        onClick: () => this.setState(prev => ({ addingException: prev.addingException ? { ...prev.addingException, targetRef, environment } : null })),
                       },
                         React.createElement('div', { style: { width: 6, height: 6, borderRadius: '50%', background: envColor, flexShrink: 0 } }),
-                        React.createElement('span', { style: { flex: 1, fontSize: 12, fontWeight: 500 } }, inst.installName),
-                        React.createElement('span', { style: { fontSize: 10, color: 'var(--nxai-card-sub, #6b7280)' } }, inst.environment),
+                        React.createElement('span', { style: { flex: 1, fontSize: 12, fontWeight: 500 } }, label),
+                        React.createElement('span', {
+                          style: { fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', padding: '1px 5px', borderRadius: 3, textTransform: 'uppercase' as const, background: kind === 'wpe' ? 'rgba(224,164,88,0.14)' : 'rgba(90,169,230,0.16)', color: kind === 'wpe' ? '#e0a458' : '#5aa9e6' },
+                        }, kind),
+                        React.createElement('span', { style: { fontSize: 10, color: 'var(--nxai-card-sub, #6b7280)' } }, environment),
                         isSelected ? React.createElement('span', { style: { fontSize: 10, color: '#3b82f6' } }, '✓') : null,
                       );
-                    });
+                    };
+                    const groupLabel = (text: string) => React.createElement('div', {
+                      key: `grp-${text}`,
+                      style: { fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub, #6b7280)', padding: '6px 4px 2px' },
+                    }, text);
+
+                    if (wpeMatches.length === 0 && externalMatches.length === 0) {
+                      return [React.createElement('div', { key: 'empty', style: { fontSize: 11, color: 'var(--nxai-status-neutral, #9ca3af)', padding: '6px 4px', fontStyle: 'italic' as const } }, 'No installs or hosts found')];
+                    }
+                    const out: React.ReactNode[] = [];
+                    if (wpeMatches.length > 0) {
+                      out.push(groupLabel('WP Engine installs'));
+                      out.push(...wpeMatches.map(i => renderPick(`wpe:${i.installName}`, i.installName, i.environment, 'wpe')));
+                    }
+                    if (externalMatches.length > 0) {
+                      out.push(groupLabel('External SSH hosts'));
+                      out.push(...externalMatches.map(h => renderPick(`ssh:${h.alias}`, h.alias, h.environment, 'ssh')));
+                    }
+                    return out;
                   })(),
                 ),
                 React.createElement('div', { style: { borderTop: '1px solid var(--nxai-card-border, #30363d)', paddingTop: 8, display: 'flex', alignItems: 'center', gap: 8 } },
-                  addingException?.installName
+                  addingException?.targetRef
                     ? React.createElement('span', { style: { fontSize: 11, flex: 1 } },
-                        React.createElement('strong', null, addingException.installName),
+                        React.createElement('strong', null, addingException.targetRef),
                         ' · ',
                         React.createElement('span', { style: { color: 'var(--nxai-card-sub, #6b7280)' } }, addingException.environment),
                       )
-                    : React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-status-neutral, #9ca3af)', flex: 1, fontStyle: 'italic' as const } }, 'Select an install above'),
+                    : React.createElement('span', { style: { fontSize: 11, color: 'var(--nxai-status-neutral, #9ca3af)', flex: 1, fontStyle: 'italic' as const } }, 'Select an install or host above'),
                   React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer' } },
                     React.createElement('input', {
                       type: 'checkbox', checked: addingException?.allowing ?? true,
@@ -689,12 +730,12 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
                     React.createElement('span', { style: { color: (addingException?.allowing ?? true) ? '#51BB7B' : '#f87171' } }, (addingException?.allowing ?? true) ? 'Allow' : 'Block'),
                   ),
                   React.createElement('button', {
-                    style: { fontSize: 11, padding: '4px 10px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, cursor: addingException?.installName ? 'pointer' : 'not-allowed', opacity: addingException?.installName ? 1 : 0.5, fontFamily: 'inherit' },
-                    disabled: !addingException?.installName,
+                    style: { fontSize: 11, padding: '4px 10px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, cursor: addingException?.targetRef ? 'pointer' : 'not-allowed', opacity: addingException?.targetRef ? 1 : 0.5, fontFamily: 'inherit' },
+                    disabled: !addingException?.targetRef,
                     onClick: (e: React.MouseEvent) => {
                       e.stopPropagation();
-                      if (!addingException?.installName) return;
-                      this.handleSiteExceptionToggle(addingException.installName, addingException.environment, op.id as WpeOperation, addingException.allowing);
+                      if (!addingException?.targetRef) return;
+                      this.handleSiteExceptionToggle(addingException.targetRef, addingException.environment, op.id as WpeOperation, addingException.allowing);
                       this.setState({ addingException: null, installSearch: '' });
                     },
                   }, 'Save'),
@@ -706,7 +747,7 @@ export class SettingsTab extends React.Component<SettingsTabProps, SettingsTabSt
               )
             : React.createElement('button', {
                 style: { background: 'none', border: 'none', fontSize: 12, color: '#0ECAD4', cursor: 'pointer', padding: '3px 0', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 },
-                onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.setState({ addingException: { op: op.id, installName: '', environment: 'production', allowing: true } }); },
+                onClick: (e: React.MouseEvent) => { e.stopPropagation(); this.setState({ addingException: { op: op.id, targetRef: '', environment: 'production', allowing: true } }); },
               }, '+ Add site exception'),
         ) : null,
       );
