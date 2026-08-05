@@ -49,17 +49,57 @@ export interface FilesystemScanResult {
   durationMs: number;
 }
 
-/** FS-02, verbatim from agent.js. `[\s\S]*` is PHP's `/s` on the one pattern that has it. */
+/**
+ * FS-02 obfuscation patterns.
+ *
+ * TUNED against 82,068 PHP files across 33 real installs, plus a 9-shape must-catch corpus and a
+ * 6-shape must-not-catch corpus. The previous set produced 581 findings on that clean fleet,
+ * which is not a detector — it is noise that buries the one real thing. Every count below is
+ * measured, not estimated.
+ *
+ * REMOVED — three patterns that between them produced 250 findings and caught 0 of the 9
+ * malicious shapes:
+ *
+ *   - `assert\s*\(\s*\$`  (236 hits) matched ordinary type assertions:
+ *     `assert($i != $numValues - 1)`, `assert($parentType instanceof HasFieldsType)`. It was
+ *     aimed at assert()-as-eval, which requires a STRING argument and was removed in PHP 8.
+ *     The malicious shape `assert(base64_decode(...))` is still caught, by DECODE_INTO_EXEC.
+ *   - `create_function\s*\(`  (5 hits) — removed in PHP 8, so it cannot execute on any PHP
+ *     this tool targets. All five hits were documentation or legacy plugin code.
+ *   - `preg_replace\s*\(\s*['"].*\/e`  (9 hits) — the /e modifier was removed in PHP 7.
+ *     All nine hits were ordinary preg_replace calls.
+ *
+ * REPLACED — `base64_decode[\s\S]*base64_decode` (317 hits, the single largest source) matched
+ * any file mentioning base64_decode twice ANYWHERE, including once in a phpcs comment. Its
+ * successors, NESTED_DECODE and DECODE_INTO_EXEC, each score **0 hits on the clean fleet** while
+ * catching three of the nine malicious shapes between them, versus that pattern's two.
+ *
+ * KNOWN GAP, accepted deliberately: two independent adjacent base64_decode calls
+ * (`$a=base64_decode("x");$b=base64_decode("y");`) are no longer matched. A proximity window
+ * that catches it costs 18 false positives at 40 characters and 216 at 100, and the malicious
+ * form of that shape almost always feeds the result to eval/assert — which DECODE_INTO_EXEC
+ * catches.
+ */
 const OBFUSCATION_PATTERNS: Array<{ re: RegExp; label: string }> = [
-  { re: /eval\s*\(\s*base64_decode/,                        label: 'eval(base64_decode' },
-  { re: /eval\s*\(\s*gzinflate\s*\(\s*base64_decode/,       label: 'eval(gzinflate(base64_decode' },
-  { re: /eval\s*\(\s*gzuncompress\s*\(\s*base64_decode/,    label: 'eval(gzuncompress(base64_decode' },
-  { re: /eval\s*\(\s*str_rot13/,                            label: 'eval(str_rot13' },
-  { re: /base64_decode[\s\S]*base64_decode/,                label: 'base64_decode..base64_decode' },
-  { re: /eval\s*\(\s*\$/,                                   label: 'eval($' },
-  { re: /assert\s*\(\s*\$/,                                 label: 'assert($' },
-  { re: /create_function\s*\(/,                             label: 'create_function(' },
-  { re: /preg_replace\s*\(\s*['"].*\/e/,                    label: 'preg_replace(/e' },
+  // Direct eval of a decoder — the canonical loader. 0 hits on the clean fleet.
+  { re: /eval\s*\(\s*base64_decode/,                     label: 'eval(base64_decode' },
+  { re: /eval\s*\(\s*gzinflate\s*\(\s*base64_decode/,    label: 'eval(gzinflate(base64_decode' },
+  { re: /eval\s*\(\s*gzuncompress\s*\(\s*base64_decode/, label: 'eval(gzuncompress(base64_decode' },
+  { re: /eval\s*\(\s*str_rot13/,                         label: 'eval(str_rot13' },
+
+  // Decoder feeding a decoder — layered obfuscation has no legitimate use. 0 hits.
+  { re: /base64_decode\s*\(\s*(base64_decode|gzinflate|gzuncompress|str_rot13|strrev|rawurldecode)\s*\(/,
+    label: 'nested decode' },
+
+  // A decoded value reaching an execution sink. 0 hits, and it is what still catches
+  // assert(base64_decode(...)) now that the bare assert pattern is gone.
+  { re: /(eval|assert|preg_replace|create_function|call_user_func|system|exec|passthru|shell_exec)\s*\([^;]{0,80}base64_decode/,
+    label: 'decoded value into execution sink' },
+
+  // eval of a variable. 20 hits on the clean fleet — the only pattern retained with a non-zero
+  // false-positive rate, kept because it is the classic backdoor shape and 0.6 per site is a
+  // load a human can actually triage.
+  { re: /eval\s*\(\s*\$/,                                label: 'eval($' },
 ];
 
 /** FS-03's narrower set, applied only under languages/ and uploads/. */
@@ -82,7 +122,7 @@ const KNOWN_ISSUES = [
   'FS-02/03/04 match the extension case-sensitively, so evil.PHP is not examined',
   'FS-06 skips 28 extensions, so an ELF named miner.png is not examined',
   'FS-02 skips files larger than 5 MB',
-  'pattern set produces a high false-positive rate on legitimate vendor code (measured: 581 hits across 33 clean sites)',
+  'two independent adjacent base64_decode calls are not matched — see the note on the pattern set',
 ];
 
 /** PHP's getExtension(): everything after the final dot, case preserved. */

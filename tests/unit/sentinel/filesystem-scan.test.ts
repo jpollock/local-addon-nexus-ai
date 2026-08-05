@@ -37,25 +37,55 @@ beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fsscan-')); });
 afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
 
 describe('FS-02 obfuscation', () => {
+  // MUST CATCH — the malicious shapes. Measured: every one of these fires, and the set as a
+  // whole produces 20 hits across 82,068 real PHP files (was 581).
   it.each([
-    ['eval(base64_decode',           '<?php eval(base64_decode("x"));'],
-    ['eval(str_rot13',               '<?php eval(str_rot13("x"));'],
-    ['eval($',                       '<?php eval($x);'],
-    ['create_function(',             '<?php create_function("", "");'],
-    ['assert($',                     '<?php assert($x);'],
-  ])('matches %s', async (label, body) => {
+    ['eval(base64_decode',                 '<?php eval(base64_decode("ZWNobyAxOw=="));'],
+    ['eval(gzinflate(base64_decode',       '<?php eval(gzinflate(base64_decode("x")));'],
+    ['eval(str_rot13',                     '<?php eval(str_rot13("rpub 1;"));'],
+    ['eval($',                             '<?php $c="system"; eval($payload);'],
+    ['nested decode',                      '<?php $x = base64_decode(base64_decode("dGVzdA=="));'],
+    ['nested decode',                      '<?php echo base64_decode(str_rot13("x"));'],
+    ['decoded value into execution sink',  '<?php assert(base64_decode("ZWNobyAx"));'],
+    ['decoded value into execution sink',  '<?php system(base64_decode($_GET["c"]));'],
+  ])('catches %s', async (label, body) => {
     const { pub } = site({ 'wp-content/plugins/p/a.php': body });
     const r = await run(pub);
     expect(r.obfuscation).toHaveLength(1);
     expect(r.obfuscation[0].pattern).toBe(label);
   });
 
-  it('matches base64_decode twice across NEWLINES — the dotAll pattern', async () => {
-    // PHP's /s. In JS a bare `.` does not cross newlines, so this needs [\s\S] — getting it
-    // wrong silently loses the pattern that produces 317 of the 581 fleet hits.
-    const { pub } = site({ 'wp-content/plugins/p/a.php': '<?php\n$a = base64_decode("x");\n$b = base64_decode("y");\n' });
+  // MUST NOT CATCH — the shapes that produced 250 of the 581 findings on clean sites.
+  it.each([
+    ['an ordinary type assertion',   '<?php assert($i != $numValues - 1);'],
+    ['a type assertion with a message', "<?php assert($t instanceof HasFieldsType, 'ensured by validation');"],
+    ['an ordinary preg_replace',     "<?php preg_replace('/-template$/', '', $vars['dir']);"],
+    ['create_function in legacy code', "<?php create_function('', 'return 1;');"],
+    ['a single base64_decode',       '<?php $v = base64_decode($input);'],
+    ['base64_decode named in a comment', '<?php // phpcs:ignore ... base64_decode\n$v = base64_decode($x);'],
+  ])('does not fire on %s', async (_label, body) => {
+    const { pub } = site({ 'wp-content/plugins/p/a.php': body });
     const r = await run(pub);
-    expect(r.obfuscation[0].pattern).toBe('base64_decode..base64_decode');
+    expect(r.obfuscation).toHaveLength(0);
+  });
+
+  it('DEAD VECTORS are gone — they caught 0 of 9 malicious shapes and cost 250 findings', () => {
+    const labels = _internals.OBFUSCATION_PATTERNS.map((p: any) => p.label);
+    // assert()-as-eval needs a string argument, removed in PHP 8; create_function removed in
+    // PHP 8; the preg_replace /e modifier removed in PHP 7. None can execute on any PHP this
+    // tool targets, and each matched only legitimate code.
+    expect(labels).not.toContain('assert($');
+    expect(labels).not.toContain('create_function(');
+    expect(labels).not.toContain('preg_replace(/e');
+  });
+
+  it('KNOWN GAP: two independent adjacent base64_decode calls are no longer matched', async () => {
+    // Accepted deliberately. A proximity window that catches this costs 18 false positives at
+    // 40 characters and 216 at 100. The malicious form nearly always feeds an execution sink,
+    // which the sink pattern catches.
+    const { pub } = site({ 'wp-content/plugins/p/a.php': '<?php $a=base64_decode("x");$b=base64_decode("y");' });
+    const r = await run(pub);
+    expect(r.obfuscation).toHaveLength(0);
   });
 
   it('matches inside a file containing invalid UTF-8 bytes', async () => {
@@ -74,7 +104,7 @@ describe('FS-02 obfuscation', () => {
   });
 
   it('reports only the first matching pattern per file, as the original does', async () => {
-    const { pub } = site({ 'wp-content/plugins/p/a.php': '<?php eval(base64_decode("x")); eval($y); assert($z);' });
+    const { pub } = site({ 'wp-content/plugins/p/a.php': '<?php eval(base64_decode("x")); eval($y);' });
     const r = await run(pub);
     expect(r.obfuscation).toHaveLength(1);
   });
@@ -181,7 +211,7 @@ describe('Coverage and cost', () => {
     const r = await run(pub);
     expect(r.knownIssues.join(' ')).toMatch(/case-sensitively/);
     expect(r.knownIssues.join(' ')).toMatch(/miner\.png/);
-    expect(r.knownIssues.join(' ')).toMatch(/581 hits across 33 clean sites/);
+    expect(r.knownIssues.join(' ')).toMatch(/adjacent base64_decode/);
   });
 
   it('the deep walk is OFF by default — 25x the cost of the shallow check', async () => {
