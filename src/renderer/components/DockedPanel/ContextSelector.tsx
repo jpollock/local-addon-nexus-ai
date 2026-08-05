@@ -112,6 +112,22 @@ export class ContextSelector extends React.Component<Props, State> {
     } catch {
       /* ignore */
     }
+
+    try {
+      const externalHosts = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS);
+      if (Array.isArray(externalHosts) && externalHosts.length > 0) {
+        const externalOptions: SiteOption[] = externalHosts.map((h: { alias: string; environment: string; domain: string }) => ({
+          id: `ssh:${h.alias}`,
+          name: h.alias,
+          source: 'external' as const,
+          environment: h.environment,
+        }));
+        this.setState((prev) => ({ sites: [...prev.sites, ...externalOptions] }));
+      }
+    } catch {
+      // External hosts are optional context — failing to fetch them must not
+      // block the local/WPE site list from working.
+    }
   }
 
   handleOutsideClick(e: MouseEvent) {
@@ -149,9 +165,10 @@ export class ContextSelector extends React.Component<Props, State> {
     const { open, sites } = this.state;
     const localSites = sites.filter((s) => s.source === 'local');
     const remoteSites = sites.filter((s) => s.source === 'wpe');
+    const externalSites = sites.filter((s) => s.source === 'external');
     const allSelected = sites.length > 0 && selectedSiteIds.length === sites.length;
     const label = allSelected
-      ? `All sites · ${localSites.length} local · ${remoteSites.length} remote`
+      ? `All sites · ${localSites.length} local · ${remoteSites.length} remote · ${externalSites.length} external`
       : `${selectedSiteIds.length} site${selectedSiteIds.length !== 1 ? 's' : ''}`;
 
     return React.createElement(
@@ -184,6 +201,20 @@ export class ContextSelector extends React.Component<Props, State> {
               ? React.createElement('div', { style: styles.section }, 'Remote')
               : null,
             ...remoteSites.map((site) =>
+              React.createElement(
+                'div',
+                { key: site.id, style: styles.row, onClick: () => this.toggleSite(site.id) },
+                React.createElement('input', { type: 'checkbox', checked: selectedSiteIds.includes(site.id), readOnly: true }),
+                site.name,
+                site.environment
+                  ? React.createElement('span', { style: styles.badge }, site.environment)
+                  : null,
+              )
+            ),
+            externalSites.length > 0
+              ? React.createElement('div', { style: styles.section }, 'External')
+              : null,
+            ...externalSites.map((site) =>
               React.createElement(
                 'div',
                 { key: site.id, style: styles.row, onClick: () => this.toggleSite(site.id) },
