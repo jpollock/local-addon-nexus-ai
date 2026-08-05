@@ -39,6 +39,9 @@ import {
   removeExternalProfile, upsertExternalProfile,
 } from '../external/externalSiteStore';
 import { createWpCliResolvers } from './resolvers/wp-cli';
+import { resolveTransport } from '../transport';
+import { collectExternalHostData } from '../startup/collectExternalHostData';
+import { writeExternalHostData } from '../startup/writeExternalHostData';
 
 /** The root value for GraphQL resolvers — always null/undefined for Query/Mutation. */
 type ResolverParent = unknown;
@@ -5469,6 +5472,53 @@ export function createResolvers(context: ResolverContext) {
             return { success: false, error: e?.message ?? String(e), removed: false };
           }
         });
+      },
+
+      // This is read-only from the remote host's perspective — every WP-CLI
+      // command collectExternalHostData issues is a read. The only mutation
+      // is the local graph write, which writeExternalHostData already owns.
+      // Not audited, same reasoning as nexusWpPluginList: nothing here can
+      // mutate the remote host.
+      nexusHostRefresh: async (_parent: ResolverParent, { alias }: { alias: string }) => {
+        try {
+          const db = services.graphService?.getDb?.();
+          const row = db?.prepare(
+            "SELECT id, name, environment FROM sites WHERE source='external' AND is_active=1 AND LOWER(name)=?"
+          ).get(alias.toLowerCase()) as { id: string; name: string; environment: string | null } | undefined;
+          if (!row) {
+            return {
+              success: false,
+              error: `"${alias}" is not a registered external host. Run \`nexus host add ${alias}\` first.`,
+              wpVersion: null, phpVersion: null, pluginCount: null, themeCount: null,
+            };
+          }
+
+          const target = `ssh:${row.name}@${row.environment ?? 'production'}`;
+          const transport = await resolveTransport({ ssh_target: target }, services, 'wpcli_read');
+          if ('content' in transport) {
+            const msg = (transport.content?.[0] as { text?: string } | undefined)?.text ?? 'Could not reach host';
+            return {
+              success: false, error: msg,
+              wpVersion: null, phpVersion: null, pluginCount: null, themeCount: null,
+            };
+          }
+
+          const data = await collectExternalHostData(transport as any, console);
+          await writeExternalHostData(services.graphService as any, row.id, row.name, data, Date.now(), console);
+
+          return {
+            success: true, error: null,
+            wpVersion: data.wpVersion ?? null,
+            phpVersion: data.phpVersion ?? null,
+            pluginCount: data.plugins?.length ?? null,
+            themeCount: data.themes?.length ?? null,
+          };
+        } catch (e: any) {
+          return {
+            success: false, error: e?.message ?? String(e),
+            wpVersion: null, phpVersion: null, pluginCount: null, themeCount: null,
+          };
+        }
       },
     },
 

@@ -2191,6 +2191,20 @@ export const typeDefs = gql`
     removed: Boolean!
   }
 
+  "Result of refreshing one external SSH host's metadata."
+  type NexusHostRefreshResult {
+    success: Boolean!
+    error: String
+    "WordPress version collected, null when it could not be read."
+    wpVersion: String
+    "PHP version from wp --info, null when it could not be read."
+    phpVersion: String
+    "Plugins found, null when the plugin batch failed."
+    pluginCount: Int
+    "Themes found, null when the theme batch failed."
+    themeCount: Int
+  }
+
   extend type Mutation {
     "Probe an external SSH host. Persists nothing."
     nexusHostProbe(alias: String!, path: String): NexusHostProbeResult!
@@ -2200,5 +2214,7 @@ export const typeDefs = gql`
     nexusHostList: NexusHostListResult!
     "Forget an external SSH host."
     nexusHostRemove(alias: String!): NexusHostRemoveResult!
+    "Collect WordPress metadata from a registered external host now."
+    nexusHostRefresh(alias: String!): NexusHostRefreshResult!
   }
 `;

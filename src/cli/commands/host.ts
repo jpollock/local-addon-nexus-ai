@@ -314,4 +314,39 @@ hostCommand
     }
   });
 
+// ============================================================================
+// host refresh
+// ============================================================================
+
+hostCommand
+  .command('refresh <alias>')
+  .description('Collect WordPress metadata from a registered external host now')
+  .action(async (alias: string) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusHostRefresh: any }>(`
+        mutation($alias: String!) {
+          nexusHostRefresh(alias: $alias) {
+            success error wpVersion phpVersion pluginCount themeCount
+          }
+        }
+      `, { alias });
+
+      const { success, error, wpVersion, phpVersion, pluginCount, themeCount } = result.nexusHostRefresh;
+      if (!success) {
+        console.error(`\n✗ ${error}`);
+        process.exit(1);
+      }
+      console.log(`\n✓ Refreshed ${alias}`);
+      console.log(`  WordPress:  ${wpVersion ?? 'unknown'}`);
+      console.log(`  PHP:        ${phpVersion ?? 'unknown'}`);
+      console.log(`  Plugins:    ${pluginCount ?? 'not collected'}`);
+      console.log(`  Themes:     ${themeCount ?? 'not collected'}`);
+      console.log('');
+    } catch (e: any) {
+      console.error(`✗ ${e.message}`);
+      process.exit(1);
+    }
+  });
+
 export { hostCommand };
