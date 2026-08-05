@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mock — Remote Access &amp; Permissions for external SSH hosts</title>
+<title>Mock — Remote reach &amp; permissions, with external SSH hosts</title>
 <style>
   :root{
     --bg:#16181c; --panel:#202329; --row:#24272d; --row2:#282c33; --line:#31353d;
@@ -15,73 +15,86 @@
   body{margin:0;background:var(--bg);color:var(--fg);
     font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     -webkit-font-smoothing:antialiased}
-  .page{max-width:1120px;margin:0 auto;padding:28px 24px 80px}
-
-  .doc-head{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:22px}
+  .page{max-width:1180px;margin:0 auto;padding:28px 24px 90px}
+  .doc-head{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:8px}
   .doc-head h1{margin:0 0 6px;font-size:21px;letter-spacing:-.01em}
-  .doc-head p{margin:0;color:var(--dim);max-width:76ch;font-size:13.5px}
+  .doc-head p{margin:0 0 8px;color:var(--dim);max-width:82ch;font-size:13.5px}
 
   .toggle{display:inline-flex;background:var(--panel);border:1px solid var(--line);
     border-radius:8px;padding:3px;gap:3px;margin:18px 0 6px}
   .toggle button{background:none;border:0;color:var(--dim);font:inherit;font-size:13px;
     padding:6px 16px;border-radius:6px;cursor:pointer}
   .toggle button[aria-pressed="true"]{background:var(--blue);color:#08121c;font-weight:600}
-  .hint{font-size:12.5px;color:var(--faint);margin:0 0 16px}
+  .hint{font-size:12.5px;color:var(--faint);margin:0 0 18px}
 
-  .sect-label{font-size:11px;letter-spacing:.09em;text-transform:uppercase;
-    color:var(--dim);margin:26px 0 8px;font-weight:600}
-  .sect-label .chg{color:var(--amber);text-transform:none;letter-spacing:0;
-    font-weight:400;font-size:11.5px;margin-left:8px}
+  .sect{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);
+    margin:30px 0 8px;font-weight:600}
+  .sect .chg{color:var(--amber);text-transform:none;letter-spacing:0;font-weight:400;font-size:11.5px;margin-left:8px}
+  .axis{font-size:12.5px;color:var(--faint);margin:-4px 0 10px;max-width:80ch}
 
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-  .card-head{display:flex;align-items:center;gap:10px;padding:13px 16px;
-    border-bottom:1px solid var(--line)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:6px}
+  .card-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}
   .card-head .t{font-weight:600;font-size:14.5px}
-  .badge{font-size:10.5px;background:#2f3742;color:var(--dim);
-    padding:2px 7px;border-radius:4px;letter-spacing:.03em}
+  .badge{font-size:10.5px;background:#2f3742;color:var(--dim);padding:2px 7px;border-radius:4px}
   .card-head .summary{margin-left:auto;color:var(--dim);font-size:12.5px}
 
-  .subhead{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);
-    padding:12px 16px 6px}
-  .op{display:flex;align-items:center;gap:13px;background:var(--row);
-    margin:0 12px 8px;padding:12px 14px;border-radius:8px;border:1px solid transparent}
-  .op:last-of-type{margin-bottom:12px}
+  .sub{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding:13px 16px 7px}
+  .sub .lede{text-transform:none;letter-spacing:0;color:var(--dim);font-size:12px;margin-left:8px}
+
+  .chips{display:flex;flex-wrap:wrap;gap:7px;padding:0 16px 14px}
+  .chip{font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--line);
+    background:var(--row);color:var(--green);cursor:pointer;white-space:nowrap}
+  .chip.off{color:var(--faint);opacity:.6}
+  .chip .m{margin-right:5px;font-size:10px}
+
+  .op{display:flex;align-items:center;gap:13px;background:var(--row);margin:0 12px 8px;
+    padding:12px 14px;border-radius:8px;border:1px solid transparent}
   .op .icon{width:22px;text-align:center;color:var(--faint);font-size:15px;flex:none}
   .op .body{flex:1;min-width:0}
   .op .name{font-size:13.5px;font-weight:600}
   .op .desc{font-size:12px;color:var(--dim);margin-top:1px}
-  .op .envs{display:flex;gap:5px;align-items:center;flex:none}
+  .op .envs{display:flex;gap:5px;flex:none}
   .op .caret{color:var(--faint);flex:none;font-size:11px;width:12px}
+  .op.dimmed{opacity:.45}
+  .op.hl{border-color:rgba(90,169,230,.4);background:var(--row2)}
 
-  .pill{font-size:11px;font-weight:600;padding:2px 9px;border-radius:5px;letter-spacing:.02em}
+  .pill{font-size:11px;font-weight:600;padding:2px 9px;border-radius:5px}
   .pill.on{background:rgba(81,187,123,.15);color:var(--green)}
   .pill.off{background:rgba(229,99,109,.15);color:var(--red)}
   .pill.na{background:rgba(109,115,124,.13);color:var(--faint)}
-
   .scope{font-size:10px;font-weight:700;letter-spacing:.06em;padding:2px 6px;border-radius:4px;
     text-transform:uppercase;flex:none}
   .scope.both{background:rgba(90,169,230,.14);color:var(--blue)}
   .scope.wpe{background:rgba(224,164,88,.14);color:var(--amber)}
 
-  .op.dimmed{opacity:.45}
-  .op.hl{border-color:rgba(90,169,230,.45);background:var(--row2)}
+  .panel-open{margin:-4px 12px 12px;background:rgba(0,0,0,.2);border:1px solid var(--line);
+    border-radius:8px;padding:14px 16px}
+  .panel-open h5{margin:0 0 10px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .envrow{display:flex;align-items:center;gap:10px;padding:9px 0}
+  .envrow + .envrow{border-top:1px solid var(--line)}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .envrow .lbl{font-size:13.5px}
+  .sw{margin-left:auto;width:38px;height:21px;border-radius:11px;position:relative;flex:none}
+  .sw.on{background:var(--green)} .sw.off{background:#3d434c}
+  .sw::after{content:'';position:absolute;top:2px;width:17px;height:17px;border-radius:50%;background:#fff}
+  .sw.on::after{right:2px} .sw.off::after{left:2px}
 
-  .note{display:flex;gap:9px;background:rgba(90,169,230,.07);border-top:1px solid var(--line);
-    padding:11px 16px;font-size:12.5px;color:var(--dim)}
-  .note .i{color:var(--blue);flex:none}
+  .search{width:100%;background:#191c21;border:1px solid var(--blue);border-radius:7px;
+    color:var(--fg);padding:8px 11px;font:inherit;font-size:13px;margin-bottom:2px}
+  .picker{border:1px solid var(--line);border-top:0;border-radius:0 0 7px 7px;max-height:200px;overflow:auto}
+  .pick{display:flex;align-items:center;gap:9px;padding:8px 11px;font-size:13px}
+  .pick + .pick{border-top:1px solid var(--line)}
+  .pick:hover{background:var(--row2)}
+  .pick .env{margin-left:auto;font-size:11.5px;color:var(--faint)}
+  .pick .kind{font-size:9.5px;font-weight:700;letter-spacing:.05em;padding:1px 5px;border-radius:3px;text-transform:uppercase}
+  .kind.wpe{background:rgba(224,164,88,.14);color:var(--amber)}
+  .kind.ssh{background:rgba(90,169,230,.16);color:var(--blue)}
+  .grp{padding:6px 11px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--faint);background:rgba(0,0,0,.25)}
+  .none{font-size:12.5px;color:var(--dim);padding:2px 0 10px}
 
-  .exc{margin:0 12px 12px;border:1px dashed var(--line);border-radius:8px;padding:12px 14px;
-    background:rgba(0,0,0,.16)}
-  .exc h4{margin:0 0 9px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
-  .exc-row{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:13px}
-  .exc-row + .exc-row{border-top:1px solid var(--line)}
-  .ref{font-family:var(--mono);font-size:12.5px;color:#cfe0f5}
-  .exc-row .envs{margin-left:auto}
-  .addbtn{margin-top:9px;background:#2b3038;border:1px solid var(--line);color:var(--dim);
-    font:inherit;font-size:12.5px;padding:5px 12px;border-radius:6px;cursor:pointer}
-
-  .sched{display:flex;align-items:center;gap:12px;background:var(--row);
-    margin:0 12px 8px;padding:12px 14px;border-radius:8px}
+  .sched{display:flex;align-items:center;gap:12px;background:var(--row);margin:0 12px 8px;
+    padding:12px 14px;border-radius:8px}
   .sched:last-child{margin-bottom:12px}
   .sched .body{flex:1}
   .sched .name{font-size:13.5px;font-weight:600}
@@ -93,18 +106,21 @@
     color:var(--fg);padding:5px 8px;font:inherit;font-size:13px;text-align:center}
   .unit{color:var(--faint);font-size:12px;width:24px}
 
+  .note{display:flex;gap:9px;background:rgba(90,169,230,.07);border-top:1px solid var(--line);
+    padding:11px 16px;font-size:12.5px;color:var(--dim)}
+  .note .i{color:var(--blue);flex:none}
   .callout{border-left:3px solid var(--amber);background:var(--panel);border-radius:0 8px 8px 0;
     padding:13px 16px;margin:14px 0;font-size:13px;color:var(--dim)}
-  .callout b{color:var(--fg)}
+  .callout.bug{border-left-color:var(--red)}
   .callout.q{border-left-color:var(--blue)}
-  code{font-family:var(--mono);font-size:.9em;background:#191c21;padding:1px 5px;
-    border-radius:4px;color:#c9d3e0}
-  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--faint);margin:10px 2px 0}
-  footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);
-    font-size:12.5px;color:var(--faint)}
+  .callout b{color:var(--fg)}
+  code{font-family:var(--mono);font-size:.9em;background:#191c21;padding:1px 5px;border-radius:4px;color:#c9d3e0}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+  th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:600}
+  footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--faint)}
   .only-cur,.only-new{display:none}
-  body[data-v="cur"] .only-cur{display:block}
-  body[data-v="new"] .only-new{display:block}
+  body[data-v="cur"] .only-cur{display:block} body[data-v="new"] .only-new{display:block}
   body[data-v="cur"] .op.only-cur,body[data-v="new"] .op.only-new{display:flex}
 </style>
 </head>
@@ -112,237 +128,273 @@
 <div class="page">
 
 <div class="doc-head">
-  <h1>Remote Access &amp; Permissions — proposed changes</h1>
-  <p>The permissions section already governs external SSH hosts; the UI just doesn't say so, three of its
-  five rows don't apply to them, and per-host exceptions can't be created at all. This mocks the smallest
-  change that makes the screen honest.</p>
+  <h1>Remote reach &amp; permissions — thinking the feature through</h1>
+  <p>The screen conflates two independent things, which is why "does this cover external hosts?" was
+  hard to answer. <b>Account scope decides who Nexus contacts on a timer. Operation permissions decide
+  what may be done when someone asks.</b> They live in one card, and the scope label claims to control
+  the permissions. It does not.</p>
+</div>
+
+<div class="callout bug">
+  <b>Pre-existing bug, independent of external hosts.</b> The scope row says
+  <i>"click to include / exclude accounts from the permissions below"</i>. It does no such thing.
+  <code>wpeAccountFilter</code> has exactly two consumers in the main process — <code>WpeRefreshScheduler</code>'s
+  <code>getAccountFilter</code> (<code>index.ts:845</code>) and the manual sync (<code>wpe-sync.ts:49</code>) —
+  and <code>isOperationAllowed</code> contains no mention of an account at all.
+  <b>Deselecting an account stops syncing it. It revokes nothing.</b> A user who unticks
+  <i>Golden Ecomm</i> believing they have removed write access to its production installs still has it.
 </div>
 
 <div class="toggle" role="group">
   <button id="b-cur" onclick="setV('cur')" aria-pressed="false">Current</button>
   <button id="b-new" onclick="setV('new')" aria-pressed="true">Proposed</button>
 </div>
-<p class="hint">Toggle to compare. Amber notes mark what changed.</p>
+<p class="hint">Toggle to compare. The proposed view separates the two axes and adds external hosts to each.</p>
 
-<!-- ─────────── SCHEDULERS ─────────── -->
+<!-- ══════════ AXIS A ══════════ -->
 
-<div class="only-cur">
-  <div class="sect-label">WP Engine Installs</div>
-</div>
+<div class="only-cur"><div class="sect">WP Engine Installs</div></div>
 <div class="only-new">
-  <div class="sect-label">WP Engine Installs <span class="chg">— unchanged, and correctly WPE-only</span></div>
+  <div class="sect">Remote sync &amp; refresh <span class="chg">— Axis A: who Nexus contacts unprompted</span></div>
+  <div class="axis">Account scope moved here from the permissions card, because this is the only thing it
+  has ever controlled. Same setting, honest home.</div>
 </div>
 
 <div class="card">
-  <div class="sched">
-    <div class="body">
-      <div class="name">Metadata sync</div>
-      <div class="desc">Fetches wp_version, plugins, users via SSH for each install. Opens one SSH connection per install — production excluded by default.</div>
+  <div class="only-new">
+    <div class="sub">WP Engine accounts <span class="lede">— included accounts are synced and refreshed on the schedule below</span></div>
+    <div class="chips">
+      <span class="chip"><span class="m">✓</span>btwpe</span><span class="chip off"><span class="m">✕</span>dbrains</span>
+      <span class="chip"><span class="m">✓</span>devrel</span><span class="chip"><span class="m">✓</span>Unicorn</span>
+      <span class="chip"><span class="m">✓</span>AutoscaleAlpha</span><span class="chip"><span class="m">✓</span>esmv7us1l20jdr</span>
+      <span class="chip"><span class="m">✓</span>WPESupportTest</span><span class="chip off"><span class="m">✕</span>evalkedracka</span>
+      <span class="chip"><span class="m">✓</span>getflywheel</span><span class="chip"><span class="m">✓</span>Golden Ecomm</span>
+      <span class="chip"><span class="m">✓</span>jpollock911</span><span class="chip off"><span class="m">✕</span>nitropacksite</span>
+      <span class="chip"><span class="m">✓</span>Andonov</span><span class="chip"><span class="m">✓</span>w7579</span>
     </div>
+  </div>
+
+  <div class="sub">WP Engine schedules</div>
+  <div class="sched">
+    <div class="body"><div class="name">Metadata sync</div>
+      <div class="desc">wp_version, plugins, users via SSH. One SSH connection per install — production excluded by default.</div></div>
     <div class="chk">✓</div><input class="num" value="4"><span class="unit">hrs</span>
   </div>
   <div class="sched">
-    <div class="body">
-      <div class="name">Site info updates</div>
-      <div class="desc">URL, admin email, post count via SSH WP-CLI. Also uses one SSH connection per install.</div>
-    </div>
+    <div class="body"><div class="name">Site info updates</div>
+      <div class="desc">URL, admin email, post count via SSH WP-CLI.</div></div>
     <div class="chk">✓</div><input class="num" value="8"><span class="unit">hrs</span>
   </div>
   <div class="sched">
-    <div class="body">
-      <div class="name">Content index for WPE</div>
-      <div class="desc">Indexes post content for semantic search. Runs Metadata sync automatically in the same SSH session.</div>
-    </div>
+    <div class="body"><div class="name">Content index for WPE</div>
+      <div class="desc">Indexes post content for semantic search. Runs Metadata sync in the same SSH session.</div></div>
     <div class="chk">✓</div><input class="num" value="12"><span class="unit">hrs</span>
+  </div>
+
+  <div class="only-new">
+    <div class="sub">External SSH hosts <span class="lede">— registered with <code>nexus host add</code></span></div>
+    <div class="chips">
+      <span class="chip off"><span class="m">✕</span>hostinger-test</span>
+    </div>
+    <div class="sched" style="opacity:.55">
+      <div class="body"><div class="name">Metadata refresh for external hosts</div>
+        <div class="desc">Off by default. Nexus does not SSH into a third-party host on a timer unless you ask it to.</div></div>
+      <div class="chk off">✓</div><input class="num" value="24"><span class="unit">hrs</span>
+    </div>
   </div>
 </div>
 
 <div class="only-new">
   <div class="callout q">
-    <b>Open question, not mocked as a decision.</b> These three iterate
-    <code>sites WHERE remote_install_id IS NOT NULL</code>, so external hosts are never refreshed —
-    a registered external site never goes stale-then-refreshes the way a WPE install does.
-    Adding a parallel <b>External SSH Hosts</b> block with its own interval is one option; leaving
-    external hosts refresh-on-demand only is another. "How often should Nexus SSH into someone's
-    VPS unprompted" is a product call, not a port, so I've left the section exactly as it is.
+    <b>The external schedule is a product decision, mocked as off-by-default rather than assumed.</b>
+    <code>WpeRefreshScheduler</code> iterates installs with a <code>remote_install_id</code>, so external hosts are
+    never refreshed today and always show whatever the last on-demand command found. Defaulting to off keeps
+    that behaviour while making it visible and opt-in — Nexus reaching into somebody's VPS on a 4-hour timer
+    is a different proposition from reaching into a WP&nbsp;Engine install you already administer.
   </div>
 </div>
 
-<!-- ─────────── PERMISSIONS ─────────── -->
+<!-- ══════════ AXIS B ══════════ -->
 
-<div class="only-cur"><div class="sect-label">WPE Access &amp; Permissions</div></div>
-<div class="only-new"><div class="sect-label">Remote Access &amp; Permissions <span class="chg">— renamed: it governs WP&nbsp;Engine <em>and</em> external SSH hosts</span></div></div>
+<div class="only-cur"><div class="sect">WPE Access &amp; Permissions</div></div>
+<div class="only-new">
+  <div class="sect">Remote access &amp; permissions <span class="chg">— Axis B: what may be done when someone asks</span></div>
+  <div class="axis">Governs every remote target — WP&nbsp;Engine installs and external SSH hosts alike.
+  Local sites are exempt and always permitted.</div>
+</div>
 
 <div class="card">
   <div class="card-head">
-    <span class="t">Access &amp; Permissions</span>
-    <span class="badge">Advanced</span>
-    <span class="summary only-cur">production blocked for SSH write &amp; delete</span>
+    <span class="t">Access &amp; Permissions</span><span class="badge">Advanced</span>
+    <span class="summary only-cur">11 accounts · production blocked for SSH write &amp; delete</span>
     <span class="summary only-new">production blocked for SSH write &amp; delete</span>
   </div>
 
-  <div class="only-new">
-    <div class="note"><span class="i">◆</span><span>These permissions apply to <b>every remote target</b> —
-    WP&nbsp;Engine installs and external SSH hosts alike. Local sites are exempt and always permitted.</span></div>
-  </div>
-
-  <div class="subhead">Operation Permissions</div>
-
-  <!-- Pull -->
-  <div class="op only-cur">
-    <div class="icon">↓</div>
-    <div class="body"><div class="name">Pull to local</div>
-      <div class="desc">Download files + database from WPE</div></div>
-    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill on">Prd</span></div>
-    <div class="caret">▶</div>
-  </div>
-  <div class="op only-new dimmed">
-    <div class="icon">↓</div>
-    <div class="body"><div class="name">Pull to local</div>
-      <div class="desc">Download files + database from WPE</div></div>
-    <span class="scope wpe">WPE only</span>
-    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill on">Prd</span></div>
-    <div class="caret">▶</div>
-  </div>
-
-  <!-- Read -->
-  <div class="op only-cur">
-    <div class="icon">👁</div>
-    <div class="body"><div class="name">WP-CLI over SSH (Read)</div>
-      <div class="desc">plugin list, core version, user list — read-only SSH commands</div></div>
-    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill on">Prd</span></div>
-    <div class="caret">▶</div>
-  </div>
-  <div class="op only-new hl">
-    <div class="icon">👁</div>
-    <div class="body"><div class="name">WP-CLI over SSH (Read)</div>
-      <div class="desc">plugin list, core version, user list — read-only SSH commands</div></div>
-    <span class="scope both">WPE + SSH</span>
-    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill on">Prd</span></div>
-    <div class="caret">▶</div>
-  </div>
-
-  <!-- Write -->
-  <div class="op only-cur">
-    <div class="icon">👁</div>
-    <div class="body"><div class="name">WP-CLI over SSH (Write)</div>
-      <div class="desc">plugin install/update, core update — modifying SSH commands</div></div>
-    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill off">Prd</span></div>
-    <div class="caret">▶</div>
-  </div>
-  <div class="op only-new hl">
-    <div class="icon">👁</div>
-    <div class="body"><div class="name">WP-CLI over SSH (Write)</div>
-      <div class="desc">plugin install/update, core update — modifying SSH commands</div></div>
-    <span class="scope both">WPE + SSH</span>
-    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill off">Prd</span></div>
-    <div class="caret">▶</div>
-  </div>
-
-  <!-- Push -->
-  <div class="op only-cur">
-    <div class="icon">↑</div>
-    <div class="body"><div class="name">Push to WPE</div>
-      <div class="desc">Overwrite remote with local files and DB</div></div>
-    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill off">Prd</span></div>
-    <div class="caret">▶</div>
-  </div>
-  <div class="op only-new dimmed">
-    <div class="icon">↑</div>
-    <div class="body"><div class="name">Push to WPE</div>
-      <div class="desc">Overwrite remote with local files and DB</div></div>
-    <span class="scope wpe">WPE only</span>
-    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill off">Prd</span></div>
-    <div class="caret">▶</div>
-  </div>
-
-  <!-- Delete -->
-  <div class="op only-cur">
-    <div class="icon">🗑</div>
-    <div class="body"><div class="name">Delete / Promote</div>
-      <div class="desc">Irreversible CAPI operations</div></div>
-    <div class="envs"><span class="pill off">Dev</span><span class="pill off">Stg</span><span class="pill off">Prd</span></div>
-    <div class="caret">▶</div>
-  </div>
-  <div class="op only-new dimmed">
-    <div class="icon">🗑</div>
-    <div class="body"><div class="name">Delete / Promote</div>
-      <div class="desc">Irreversible CAPI operations</div></div>
-    <span class="scope wpe">WPE only</span>
-    <div class="envs"><span class="pill off">Dev</span><span class="pill off">Stg</span><span class="pill off">Prd</span></div>
-    <div class="caret">▶</div>
-  </div>
-
-  <!-- Exceptions -->
-  <div class="only-new">
-    <div class="exc">
-      <h4>Per-target exceptions <span style="color:var(--amber);text-transform:none;letter-spacing:0;font-weight:400">— can now name an SSH alias</span></h4>
-      <div class="exc-row">
-        <span class="ref">wpe:acme/acme-staging</span>
-        <span class="pill na">Stg</span>
-        <span style="color:var(--dim);font-size:12.5px">WP-CLI Write allowed</span>
-        <span class="envs"><span class="pill on">on</span></span>
-      </div>
-      <div class="exc-row">
-        <span class="ref">ssh:hostinger-test</span>
-        <span class="pill na">Prd</span>
-        <span style="color:var(--dim);font-size:12.5px">WP-CLI Write allowed</span>
-        <span class="envs"><span class="pill on">on</span></span>
-      </div>
-      <button class="addbtn">+ Add exception…</button>
+  <div class="only-cur">
+    <div class="sub">Account scope <span class="lede">— click to include / exclude accounts from the permissions below</span></div>
+    <div class="chips">
+      <span class="chip"><span class="m">✓</span>btwpe</span><span class="chip off"><span class="m">✕</span>dbrains</span>
+      <span class="chip"><span class="m">✓</span>devrel</span><span class="chip"><span class="m">✓</span>Unicorn</span>
+      <span class="chip"><span class="m">✓</span>AutoscaleAlpha</span><span class="chip"><span class="m">✓</span>esmv7us1l20jdr</span>
+      <span class="chip"><span class="m">✓</span>WPESupportTest</span><span class="chip off"><span class="m">✕</span>evalkedracka</span>
+      <span class="chip"><span class="m">✓</span>getflywheel</span><span class="chip"><span class="m">✓</span>Golden Ecomm</span>
+      <span class="chip"><span class="m">✓</span>jpollock911</span><span class="chip off"><span class="m">✕</span>nitropacksite</span>
+      <span class="chip"><span class="m">✓</span>Andonov</span><span class="chip"><span class="m">✓</span>w7579</span>
     </div>
   </div>
 
-  <div class="note only-cur"><span class="i">↓</span><span><b>Read-only operations</b> (installs, domains, SSL, usage metadata) are always permitted and cannot be disabled.</span></div>
-  <div class="note only-new"><span class="i">↓</span><span><b>Read-only operations</b> (installs, domains, SSL, usage metadata) are always permitted and cannot be disabled.</span></div>
+  <div class="only-new">
+    <div class="note"><span class="i">◆</span><span>Account scope moved to <b>Remote sync &amp; refresh</b> — it
+    only ever controlled syncing, never permissions.</span></div>
+  </div>
+
+  <div class="sub">Operation permissions</div>
+
+  <div class="op only-cur"><div class="icon">↓</div>
+    <div class="body"><div class="name">Pull to local</div><div class="desc">Download files + database from WPE</div></div>
+    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill on">Prd</span></div><div class="caret">▼</div></div>
+  <div class="op only-new dimmed"><div class="icon">↓</div>
+    <div class="body"><div class="name">Pull to local</div><div class="desc">Download files + database from WPE</div></div>
+    <span class="scope wpe">WPE only</span>
+    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill on">Prd</span></div><div class="caret">▶</div></div>
+
+  <!-- expanded panel: current shows Pull; proposed shows Write -->
+  <div class="only-cur">
+    <div class="panel-open">
+      <h5>Default by environment</h5>
+      <div class="envrow"><span class="dot" style="background:var(--green)"></span><span class="lbl">Development</span><span class="sw on"></span></div>
+      <div class="envrow"><span class="dot" style="background:var(--amber)"></span><span class="lbl">Staging</span><span class="sw on"></span></div>
+      <div class="envrow"><span class="dot" style="background:var(--red)"></span><span class="lbl">Production</span><span class="sw on"></span></div>
+      <h5 style="margin-top:16px">Site exceptions</h5>
+      <div class="none">No exceptions — all sites follow global defaults.</div>
+      <input class="search" placeholder="Search installs...">
+      <div class="picker">
+        <div class="pick"><span class="dot" style="background:var(--red)"></span>dbrains<span class="env">production</span></div>
+        <div class="pick"><span class="dot" style="background:var(--red)"></span>sprntndntchmbr<span class="env">production</span></div>
+        <div class="pick"><span class="dot" style="background:var(--red)"></span>acfprod<span class="env">production</span></div>
+        <div class="pick"><span class="dot" style="background:var(--amber)"></span>acfstg1<span class="env">staging</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="op only-cur"><div class="icon">👁</div>
+    <div class="body"><div class="name">WP-CLI over SSH (Read)</div><div class="desc">plugin list, core version, user list — read-only SSH commands</div></div>
+    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill on">Prd</span></div><div class="caret">▶</div></div>
+  <div class="op only-new hl"><div class="icon">👁</div>
+    <div class="body"><div class="name">WP-CLI over SSH (Read)</div><div class="desc">plugin list, core version, user list — read-only SSH commands</div></div>
+    <span class="scope both">WPE + SSH</span>
+    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill on">Prd</span></div><div class="caret">▶</div></div>
+
+  <div class="op only-cur"><div class="icon">👁</div>
+    <div class="body"><div class="name">WP-CLI over SSH (Write)</div><div class="desc">plugin install/update, core update — modifying SSH commands</div></div>
+    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill off">Prd</span></div><div class="caret">▶</div></div>
+  <div class="op only-new hl"><div class="icon">👁</div>
+    <div class="body"><div class="name">WP-CLI over SSH (Write)</div><div class="desc">plugin install/update, core update — modifying SSH commands</div></div>
+    <span class="scope both">WPE + SSH</span>
+    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill off">Prd</span></div><div class="caret">▼</div></div>
+
+  <div class="only-new">
+    <div class="panel-open">
+      <h5>Default by environment</h5>
+      <div class="envrow"><span class="dot" style="background:var(--green)"></span><span class="lbl">Development</span><span class="sw on"></span></div>
+      <div class="envrow"><span class="dot" style="background:var(--amber)"></span><span class="lbl">Staging</span><span class="sw on"></span></div>
+      <div class="envrow"><span class="dot" style="background:var(--red)"></span><span class="lbl">Production</span><span class="sw off"></span></div>
+
+      <h5 style="margin-top:16px">Target exceptions <span style="color:var(--amber);text-transform:none;letter-spacing:0;font-weight:400">— now covers SSH hosts too</span></h5>
+      <div class="none">No exceptions — all targets follow the defaults above.</div>
+      <input class="search" placeholder="Search installs and SSH hosts...">
+      <div class="picker">
+        <div class="grp">WP Engine installs</div>
+        <div class="pick"><span class="dot" style="background:var(--red)"></span>dbrains<span class="kind wpe">wpe</span><span class="env">production</span></div>
+        <div class="pick"><span class="dot" style="background:var(--red)"></span>sprntndntchmbr<span class="kind wpe">wpe</span><span class="env">production</span></div>
+        <div class="pick"><span class="dot" style="background:var(--amber)"></span>acfstg1<span class="kind wpe">wpe</span><span class="env">staging</span></div>
+        <div class="grp">External SSH hosts</div>
+        <div class="pick"><span class="dot" style="background:var(--red)"></span>hostinger-test<span class="kind ssh">ssh</span><span class="env">production</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="op only-cur"><div class="icon">↑</div>
+    <div class="body"><div class="name">Push to WPE</div><div class="desc">Overwrite remote with local files and DB</div></div>
+    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill off">Prd</span></div><div class="caret">▶</div></div>
+  <div class="op only-new dimmed"><div class="icon">↑</div>
+    <div class="body"><div class="name">Push to WPE</div><div class="desc">Overwrite remote with local files and DB</div></div>
+    <span class="scope wpe">WPE only</span>
+    <div class="envs"><span class="pill on">Dev</span><span class="pill on">Stg</span><span class="pill off">Prd</span></div><div class="caret">▶</div></div>
+
+  <div class="op only-cur"><div class="icon">🗑</div>
+    <div class="body"><div class="name">Delete / Promote</div><div class="desc">Irreversible CAPI operations</div></div>
+    <div class="envs"><span class="pill off">Dev</span><span class="pill off">Stg</span><span class="pill off">Prd</span></div><div class="caret">▶</div></div>
+  <div class="op only-new dimmed"><div class="icon">🗑</div>
+    <div class="body"><div class="name">Delete / Promote</div><div class="desc">Irreversible CAPI operations</div></div>
+    <span class="scope wpe">WPE only</span>
+    <div class="envs"><span class="pill off">Dev</span><span class="pill off">Stg</span><span class="pill off">Prd</span></div><div class="caret">▶</div></div>
+
+  <div class="note"><span class="i">↓</span><span><b>Read-only operations</b> (installs, domains, SSL, usage metadata) are always permitted and cannot be disabled.</span></div>
 </div>
 
-<div class="legend only-new">
-  <span><span class="scope both">WPE + SSH</span> applies to every remote target</span>
-  <span><span class="scope wpe">WPE only</span> no external equivalent — dimmed, still settable for WPE</span>
+<!-- ══════════ THE WHOLE FEATURE ══════════ -->
+
+<div class="sect" style="margin-top:34px">The whole feature, layer by layer</div>
+
+<table>
+  <thead><tr><th>Layer</th><th>WP Engine</th><th>External SSH</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><b>Sync scope</b></td><td>14 accounts, opt-out</td><td>no account concept</td>
+        <td>Move to Axis A. Scope external by <b>alias</b>, not account.</td></tr>
+    <tr><td><b>Schedules</b></td><td>3 intervals, on</td><td>never refreshed</td>
+        <td>One interval, <b>off by default</b>. Product decision.</td></tr>
+    <tr><td><b>Operation rows</b></td><td>5</td><td>2 — <code>wpcli_read</code>, <code>wpcli</code></td>
+        <td>Scope-chip; dim the three with no external equivalent.</td></tr>
+    <tr><td><b>Env defaults</b></td><td>Dev / Stg / Prd</td><td>same, set at registration</td>
+        <td><b>None.</b> Already works — verified live.</td></tr>
+    <tr><td><b>Target exceptions</b></td><td>install picker</td><td>unreachable</td>
+        <td>Picker gains a second group; write <code>targetRef</code>.</td></tr>
+    <tr><td><b>Setting keys</b></td><td><code>wpe*</code></td><td>same keys, via fallback</td>
+        <td>Write <code>remote*</code>; keep reading both.</td></tr>
+  </tbody>
+</table>
+
+<div class="callout bug">
+  <b>1. Account scope is mislabelled — fix regardless of external hosts.</b> It gates syncing, not
+  permissions. Either move it to Axis A as mocked, or relabel it in place. What it must not keep saying is
+  "exclude accounts from the permissions below", because someone will rely on that.
 </div>
-
-<!-- ─────────── WHAT CHANGES ─────────── -->
-
-<div class="sect-label" style="margin-top:34px">What actually changes in code</div>
 
 <div class="callout">
-  <b>1. Rename the section and the setting keys.</b> The backend already uses
-  <code>remoteOperationPermissions</code> / <code>remoteSiteExceptions</code>; Plan A renamed them and the UI
-  never followed, so <code>SettingsTab.tsx</code> still writes <code>wpeOperationPermissions</code> and the gate
-  survives only on a legacy fallback. Write the <code>remote*</code> keys and keep reading both, so existing
-  installs migrate silently.
-</div>
-
-<div class="callout">
-  <b>2. Mark the three WPE-only rows.</b> <code>Pull to local</code>, <code>Push to WPE</code> and
-  <code>Delete / Promote</code> have no external equivalent — an <code>ssh:</code> target only ever uses
-  <code>wpcli_read</code> and <code>wpcli</code>. Dimming with a scope chip is honest without hiding settings
-  that still matter for WP&nbsp;Engine. Hiding them entirely is the alternative; I'd rather not make a
-  WPE-relevant control vanish.
-</div>
-
-<div class="callout">
-  <b>3. Give exceptions a <code>targetRef</code>. This is the only functional bug.</b>
+  <b>2. Target exceptions cannot name an SSH host. The only functional bug in Axis B.</b>
   <code>SettingsTab.tsx:231</code> writes <code>{ installName, environment, overrides }</code> with no
   <code>targetRef</code>, and the matcher computes <code>e.targetRef ?? `wpe:${e.installName}`</code> — so a
-  UI-created exception is always <code>wpe:&lt;name&gt;</code> and can never match <code>ssh:&lt;alias&gt;</code>.
-  Today the per-target expanders are structurally WPE-only. Writing <code>targetRef</code> directly, and
-  offering registered SSH aliases in the picker, fixes it; the matcher already honours it.
+  UI-made exception is always <code>wpe:</code>-prefixed and can never match <code>ssh:&lt;alias&gt;</code>.
+  The matcher already honours <code>targetRef</code>; the picker just needs to send one, and to list
+  registered aliases beside installs.
+</div>
+
+<div class="callout">
+  <b>3. Scope-chip the operation rows, dim rather than hide.</b> Only Read and Write apply to an
+  <code>ssh:</code> target. Pull, Push and Delete/Promote are WPE platform operations — but they remain real
+  settings for WP&nbsp;Engine, so making them vanish would be worse than marking them.
+</div>
+
+<div class="callout">
+  <b>4. Write the <code>remote*</code> setting keys.</b> The backend was renamed in Plan A;
+  <code>SettingsTab.tsx</code> still writes <code>wpeOperationPermissions</code> and the gate works only
+  because <code>isOperationAllowed</code> falls back to the legacy key. Write the new names, keep reading
+  both, and existing installs migrate silently.
 </div>
 
 <footer>
-  Mock only — no code changed. Sits beside the evidence in
-  <code>docs/wp-cli-surface-matrix.md</code> and <code>docs/cli-mcp-equivalence-inventory.md</code>.
-  Styling approximates Local's dark theme; the real screen uses Local's own components.
+  Mock only — no code changed. Evidence in <code>docs/wp-cli-surface-matrix.md</code> and
+  <code>docs/cli-mcp-equivalence-inventory.md</code>. Styling approximates Local's dark theme; the real
+  screen uses Local's own components.
 </footer>
 
 </div>
 <script>
 function setV(v){
-  document.body.dataset.v = v;
-  document.getElementById('b-cur').setAttribute('aria-pressed', String(v==='cur'));
-  document.getElementById('b-new').setAttribute('aria-pressed', String(v==='new'));
+  document.body.dataset.v=v;
+  document.getElementById('b-cur').setAttribute('aria-pressed',String(v==='cur'));
+  document.getElementById('b-new').setAttribute('aria-pressed',String(v==='new'));
 }
 </script>
 </body>
