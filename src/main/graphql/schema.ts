@@ -1067,6 +1067,8 @@ export const typeDefs = gql`
   type SiteHealth {
     status: String!
     score: Int!
+    "Factors evaluated for this site. Remote sites evaluate fewer factors than local ones."
+    factorsEvaluated: [String!]!
     issues: [HealthIssue!]!
     "null means the site has not been indexed."
     plugins: PluginHealth

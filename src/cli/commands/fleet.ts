@@ -183,7 +183,13 @@ fleetCommand
 
       console.log(`\nSite Health: ${target}`);
       console.log('─'.repeat(50));
-      console.log(`Status:        ${statusIcon} ${health.status} (score: ${health.score}/100)`);
+
+      // Show partial factor basis when not all five factors were evaluated
+      const allFactors = ['security', 'performance', 'maintenance', 'activity', 'stability'];
+      const factorBasis = health.factorsEvaluated && health.factorsEvaluated.length < allFactors.length
+        ? `, from ${health.factorsEvaluated.join('/')}`
+        : '';
+      console.log(`Status:        ${statusIcon} ${health.status} (score: ${health.score}/100${factorBasis})`);
 
       const wpUpdateMsg = health.wordpress.updateAvailable === null
         ? ''

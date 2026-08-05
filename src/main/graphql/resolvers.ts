@@ -2469,15 +2469,19 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
+          // M6: Hoist getDb() call — used three times below
+          const db = services.graphService?.getDb?.();
+
           // Resolve target to determine site type and identity
           const targetArgs = resolveTargetArgs(target, services);
 
           let siteId: string;
-          let siteInfo: { domain: string; phpVersion: string };
+          let siteInfo: { domain: string; phpVersion: string; siteUrl?: string };
           let wpVersion: string | null = null;
+          let factorsToEvaluate: Array<'security' | 'performance' | 'maintenance' | 'activity' | 'stability'>;
 
           if ('site' in targetArgs) {
-            // Local site
+            // Local site — all five factors apply
             const siteName = targetArgs.site as string;
             const site = resolveSite(siteName, services.siteData);
             if (!site) {
@@ -2492,19 +2496,24 @@ export function createResolvers(context: ResolverContext) {
               domain: site.domain || '',
               phpVersion: (site as any)?.phpVersion || '8.0',
             };
-            // wp_version for local sites would come from graph if indexed
-            const db = services.graphService?.getDb?.();
+
+            // M4: wp_version/site_url for local sites from graph if indexed, constrain by source
             if (db) {
               try {
-                const row = db.prepare("SELECT wp_version FROM sites WHERE id = ?").get(siteId) as { wp_version?: string } | undefined;
+                const row = db.prepare(
+                  "SELECT wp_version, site_url FROM sites WHERE id = ? AND source = 'local'"
+                ).get(siteId) as { wp_version?: string; site_url?: string } | undefined;
                 wpVersion = row?.wp_version || null;
+                siteInfo.siteUrl = row?.site_url || undefined;
               } catch {
                 // Graph unavailable
               }
             }
+
+            factorsToEvaluate = ['security', 'performance', 'maintenance', 'activity', 'stability'];
           } else if ('install_name' in targetArgs || 'ssh_target' in targetArgs) {
-            // Remote site (WPE or external) - look up in graph
-            const db = services.graphService?.getDb?.();
+            // Remote site (WPE or external) — only security/performance/stability apply
+            // (maintenance and activity are Local-only: they read indexRegistry and getRecentEvents)
             if (!db) {
               return {
                 success: false,
@@ -2513,22 +2522,23 @@ export function createResolvers(context: ResolverContext) {
               };
             }
 
-            let row: { id: string; domain: string; php_version?: string; wp_version?: string } | undefined;
+            let row: { id: string; domain: string; php_version?: string; wp_version?: string; site_url?: string; remote_install_id?: string } | undefined;
 
             if ('install_name' in targetArgs) {
-              // WPE install - match by name and source
+              // M1: Add is_active filter; M3: prefer remote_install_id when available
               const installName = targetArgs.install_name as string;
               row = db.prepare(
-                "SELECT id, domain, php_version, wp_version FROM sites WHERE source = 'wpe' AND LOWER(name) = ? LIMIT 1"
-              ).get(installName.toLowerCase()) as typeof row;
+                "SELECT id, domain, php_version, wp_version, site_url, remote_install_id FROM sites WHERE source = 'wpe' AND is_active = 1 AND (remote_install_id = ? OR LOWER(name) = ?) LIMIT 1"
+              ).get(installName, installName.toLowerCase()) as typeof row;
             } else {
-              // External SSH - match by name (the alias) and source
+              // M2: Use LOWER() for external alias match; M3: prefer id
               const sshTarget = targetArgs.ssh_target as string;
               const parsed = parseTarget(sshTarget);
               const alias = parsed.alias!;
+              const expectedId = externalSiteId(alias);
               row = db.prepare(
-                "SELECT id, domain, php_version, wp_version FROM sites WHERE source = 'external' AND name = ? LIMIT 1"
-              ).get(alias) as typeof row;
+                "SELECT id, domain, php_version, wp_version, site_url FROM sites WHERE source = 'external' AND (id = ? OR LOWER(name) = ?) LIMIT 1"
+              ).get(expectedId, alias.toLowerCase()) as typeof row;
             }
 
             if (!row) {
@@ -2543,8 +2553,11 @@ export function createResolvers(context: ResolverContext) {
             siteInfo = {
               domain: row.domain || '',
               phpVersion: row.php_version || '8.0',
+              siteUrl: row.site_url || undefined,
             };
             wpVersion = row.wp_version || null;
+
+            factorsToEvaluate = ['security', 'performance', 'stability'];
           } else {
             return {
               success: false,
@@ -2553,9 +2566,9 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          // Calculate score using the singular method to get full breakdown
-          const breakdown = await services.healthCalculator.calculateScore(siteId, siteInfo);
-          const { overall: score, factors, issuesByCategory } = breakdown;
+          // Calculate score with the applicable factor set
+          const breakdown = await services.healthCalculator.calculateScore(siteId, siteInfo, factorsToEvaluate);
+          const { overall: score, factors, issuesByCategory, factorsEvaluated } = breakdown;
 
           const status = score >= 80 ? 'healthy' : score >= 50 ? 'warning' : 'critical';
 
@@ -2567,7 +2580,6 @@ export function createResolvers(context: ResolverContext) {
           });
 
           // Get plugin and theme counts from graph
-          const db = services.graphService?.getDb?.();
           let plugins: { total: number; active: number; outdated: null } | null = null;
           let themes: { total: number; active: number; outdated: null } | null = null;
 
@@ -2598,6 +2610,7 @@ export function createResolvers(context: ResolverContext) {
             health: {
               status,
               score,
+              factorsEvaluated,
               issues,
               plugins,
               themes,

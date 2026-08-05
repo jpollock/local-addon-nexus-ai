@@ -641,20 +641,23 @@ describe('nexusFleetSiteHealth accepts all three target types', () => {
           getSites: jest.fn().mockReturnValue({}),
         },
         healthCalculator: {
-          calculateScore: jest.fn().mockResolvedValue({
-            overall: 75,
-            factors: {
-              security: 80,
-              performance: 70,
-              maintenance: 60,
-              activity: 50,
-              stability: 90,
-            },
-            issues: ['Security: Outdated plugins detected'],
-            recommendations: [],
-            issuesByCategory: [
-              { category: 'security', message: 'Outdated plugins detected' },
-            ],
+          calculateScore: jest.fn().mockImplementation((_siteId, _siteInfo, factors = ['security', 'performance', 'maintenance', 'activity', 'stability']) => {
+            return Promise.resolve({
+              overall: 75,
+              factors: {
+                security: 80,
+                performance: 70,
+                maintenance: 60,
+                activity: 50,
+                stability: 90,
+              },
+              factorsEvaluated: factors,
+              issues: ['Outdated plugins detected'],
+              recommendations: [],
+              issuesByCategory: [
+                { category: 'security', message: 'Outdated plugins detected' },
+              ],
+            });
           }),
         },
       },
@@ -884,5 +887,119 @@ describe('nexusFleetSiteHealth accepts all three target types', () => {
     const r = await (createResolvers(context).Mutation as any).nexusFleetSiteHealth(null, { target: 'local-site@local' });
     expect(r.success).toBe(true);
     expect(r.health.score).toBe(75);
+  });
+
+  it('derives severity from factor scores (critical at 40, warning at 70, healthy at 90)', async () => {
+    await graphService.upsertSite({
+      id: 'test-site',
+      name: 'test-site',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'test.wpengine.com',
+      remote_install_id: 'test-site',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const context = ctx();
+    context.services.healthCalculator.calculateScore = jest.fn().mockResolvedValue({
+      overall: 60,
+      factors: {
+        security: 40,
+        performance: 70,
+        maintenance: 0,
+        activity: 0,
+        stability: 90,
+      },
+      factorsEvaluated: ['security', 'performance', 'stability'],
+      issues: [],
+      issuesByCategory: [
+        { category: 'security', message: 'Critical issue' },
+        { category: 'performance', message: 'Warning issue' },
+        { category: 'stability', message: 'Healthy issue' },
+      ],
+      recommendations: [],
+    });
+
+    const r = await (createResolvers(context).Mutation as any).nexusFleetSiteHealth(null, { target: 'wpe:acct/test-site@production' });
+    expect(r.success).toBe(true);
+    expect(r.health.issues).toHaveLength(3);
+
+    const criticalIssue = r.health.issues.find((i: any) => i.category === 'security');
+    expect(criticalIssue.severity).toBe('critical'); // factor score 40
+
+    const warningIssue = r.health.issues.find((i: any) => i.category === 'performance');
+    expect(warningIssue.severity).toBe('warning'); // factor score 70
+
+    const healthyIssue = r.health.issues.find((i: any) => i.category === 'stability');
+    expect(healthyIssue.severity).toBe('healthy'); // factor score 90
+  });
+
+  it('returns wpe row data when local and wpe sites collide by name', async () => {
+    // Seed a local site named 'blog'
+    const context = ctx();
+    context.services.siteData.getSites = jest.fn().mockReturnValue({
+      'local-blog': {
+        id: 'local-blog',
+        name: 'blog',
+        domain: 'blog.local',
+        phpVersion: '8.1',
+      },
+    });
+
+    // Seed a wpe install also named 'blog' with different wp_version
+    await graphService.upsertSite({
+      id: 'wpe-blog',
+      name: 'blog',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'blog.wpengine.com',
+      remote_install_id: 'wpe-blog',
+      is_active: true,
+      wp_version: '6.9.0', // Different from any local version
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(context).Mutation as any).nexusFleetSiteHealth(null, { target: 'wpe:acct/blog@production' });
+    expect(r.success).toBe(true);
+    expect(r.health.wordpress.version).toBe('6.9.0'); // WPE row's version, not local's
+  });
+
+  it('remote sites evaluate only security/performance/stability factors', async () => {
+    await graphService.upsertSite({
+      id: 'wpe-1',
+      name: 'wpe-install',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'wpe.wpengine.com',
+      remote_install_id: 'wpe-1',
+      is_active: true,
+      wp_version: '6.8.0',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetSiteHealth(null, { target: 'wpe:acct/wpe-install@production' });
+    expect(r.success).toBe(true);
+    expect(r.health.factorsEvaluated).toEqual(['security', 'performance', 'stability']);
+  });
+
+  it('local sites evaluate all five factors', async () => {
+    const context = ctx();
+    context.services.siteData.getSites = jest.fn().mockReturnValue({
+      'local-1': {
+        id: 'local-1',
+        name: 'local-site',
+        domain: 'local.local',
+        phpVersion: '8.2',
+      },
+    });
+
+    const r = await (createResolvers(context).Mutation as any).nexusFleetSiteHealth(null, { target: 'local-site@local' });
+    expect(r.success).toBe(true);
+    expect(r.health.factorsEvaluated).toEqual(['security', 'performance', 'maintenance', 'activity', 'stability']);
   });
 });
