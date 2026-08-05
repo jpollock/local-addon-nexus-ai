@@ -55,4 +55,13 @@ export interface SiteTransport {
 
   supports(cap: Capability): boolean;
   probe(): Promise<ProbeResult>;
+
+  /**
+   * Optional: several WP-CLI commands in ONE remote round trip. Only
+   * ExternalSshTransport implements this today — Local and WPE transports have
+   * no equivalent need for it. Declared here, not just on the concrete class,
+   * so withPolicy's wrapper (which returns a fresh object satisfying this
+   * interface, not the original instance) can forward it. See policy.ts.
+   */
+  runWpCliBatch?(commands: string[][]): Promise<(string | null)[]>;
 }

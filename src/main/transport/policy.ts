@@ -84,5 +84,31 @@ export function withPolicy(transport: SiteTransport, policy: CommandPolicy): Sit
       }
       return transport.runWpCli(args, opts);
     },
+    // Forward runWpCliBatch only when the wrapped transport actually has one —
+    // do not synthesize a fake capability for transports that don't support it.
+    ...(transport.runWpCliBatch ? {
+      async runWpCliBatch(commands: string[][]): Promise<(string | null)[]> {
+        // Every sub-command gets the same policy check runWpCli gives a single
+        // command — a batch is not a way around the blocklist. None of the
+        // collector's hardcoded commands (core version, --info, option get,
+        // plugin/theme list, post/user list-with-count) are on REMOTE_POLICY's
+        // blocklist today, so this should never fire for the real call sites —
+        // it exists for the same reason runWpCli's check exists: defense in
+        // depth against a future caller, not the current one.
+        //
+        // A batch has no per-command error channel (Task 1's contract is
+        // Promise<(string|null)[]>, nothing else), so a blocked sub-command
+        // fails the WHOLE batch closed — all nulls — rather than silently
+        // running the rest and hiding that one command was refused. Task 3's
+        // writer already treats an all-null result as "collected nothing" and
+        // writes nothing, which is the correct behavior here too.
+        for (const args of commands) {
+          if (checkCommand(args, policy)) {
+            return new Array(commands.length).fill(null);
+          }
+        }
+        return transport.runWpCliBatch!(commands);
+      },
+    } : {}),
   };
 }

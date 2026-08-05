@@ -1,4 +1,5 @@
 import { REMOTE_POLICY, checkCommand, withPolicy } from '../../../src/main/transport/policy';
+import type { SiteTransport } from '../../../src/main/transport/types';
 
 describe('REMOTE_POLICY — one policy for every remote target', () => {
   it('blocks exactly the five arbitrary-code commands', () => {
@@ -68,5 +69,56 @@ describe('withPolicy', () => {
     expect(t.deleteRemoteFile).toHaveBeenCalled();
     expect(t.probe).toHaveBeenCalled();
     expect(wrapped.kind).toBe('wpe-ssh');
+  });
+});
+
+function makeExternalLikeTransport(batchImpl?: (c: string[][]) => Promise<(string | null)[]>) {
+  const base: SiteTransport & { runWpCliBatch?: any } = {
+    kind: 'external-ssh' as any,
+    siteRef: { kind: 'external', alias: 'test' } as any,
+    supports: () => true,
+    probe: async () => ({ reachable: true }),
+    deleteRemoteFile: async () => ({ success: false, output: 'n/a' }),
+    runWpCli: async () => ({ stdout: '', success: true }),
+  };
+  if (batchImpl) (base as any).runWpCliBatch = batchImpl;
+  return base;
+}
+
+describe('withPolicy forwards runWpCliBatch', () => {
+  it('forwards runWpCliBatch when the wrapped transport has one', async () => {
+    const batchImpl = jest.fn(async (c: string[][]) => c.map(() => 'ok'));
+    const wrapped = withPolicy(makeExternalLikeTransport(batchImpl), REMOTE_POLICY);
+    expect(wrapped.runWpCliBatch).toBeDefined();
+    const result = await wrapped.runWpCliBatch!([['core', 'version'], ['option', 'get', 'siteurl']]);
+    expect(result).toEqual(['ok', 'ok']);
+    expect(batchImpl).toHaveBeenCalledWith([['core', 'version'], ['option', 'get', 'siteurl']]);
+  });
+
+  it('does not add runWpCliBatch when the wrapped transport has none (e.g. Local/WPE)', () => {
+    const wrapped = withPolicy(makeExternalLikeTransport(/* no batch impl */), REMOTE_POLICY);
+    expect(wrapped.runWpCliBatch).toBeUndefined();
+  });
+
+  it('fails the whole batch closed (all nulls) when any sub-command is blocked', async () => {
+    const batchImpl = jest.fn(async (c: string[][]) => c.map(() => 'should not run'));
+    const wrapped = withPolicy(makeExternalLikeTransport(batchImpl), REMOTE_POLICY);
+    const result = await wrapped.runWpCliBatch!([
+      ['core', 'version'],
+      ['eval', 'echo 1'],       // blocked by REMOTE_POLICY
+      ['option', 'get', 'siteurl'],
+    ]);
+    expect(result).toEqual([null, null, null]);
+    expect(batchImpl).not.toHaveBeenCalled();
+  });
+
+  it('permits a batch where no sub-command is blocked', async () => {
+    const batchImpl = jest.fn(async (c: string[][]) => c.map(() => 'ok'));
+    const wrapped = withPolicy(makeExternalLikeTransport(batchImpl), REMOTE_POLICY);
+    const result = await wrapped.runWpCliBatch!([
+      ['plugin', 'list', '--format=json'],
+      ['theme', 'list', '--format=json'],
+    ]);
+    expect(result).toEqual(['ok', 'ok']);
   });
 });
