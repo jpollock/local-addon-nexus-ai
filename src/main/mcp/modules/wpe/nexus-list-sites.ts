@@ -91,9 +91,26 @@ export const nexusListSitesHandler: McpToolHandler = {
       }
     }
 
+    // External SSH hosts — read directly from the graph, same query as
+    // GET_EXTERNAL_HOSTS (src/main/ipc-handlers.ts). No CAPI, no probe.
+    let externalSection: Array<{ alias: string; environment: string; domain: string }> = [];
+    try {
+      const db = (services as any).graphService?.getDb?.();
+      if (db) {
+        const rows = db.prepare(
+          "SELECT name, environment, domain FROM sites WHERE source = 'external' AND is_active = 1"
+        ).all() as Array<{ name: string; environment: string | null; domain: string | null }>;
+        externalSection = rows.map((r) => ({
+          alias: r.name,
+          environment: r.environment ?? 'production',
+          domain: r.domain ?? '',
+        }));
+      }
+    } catch { /* graph unavailable */ }
+
     // Build output
     const lines: string[] = [];
-    lines.push(`## Fleet (${localSection.length} local, ${wpeSection.length} WPE${capiError})`);
+    lines.push(`## Fleet (${localSection.length} local, ${wpeSection.length} WPE, ${externalSection.length} external${capiError})`);
     lines.push('');
     lines.push('Local sites = development copies. WP Engine installs = live environments.');
     lines.push('↔ indicates a linked pair (same site, different environments).');
@@ -142,7 +159,17 @@ export const nexusListSitesHandler: McpToolHandler = {
       }
     }
 
-    if (localSection.length === 0 && wpeSection.length === 0) {
+    if (externalSection.length > 0) {
+      lines.push('');
+      lines.push('### External SSH Hosts');
+      lines.push('Use ssh:<alias>@<environment> as the target for wp_* tools and search_site_content.');
+      for (const h of externalSection) {
+        const domainPart = h.domain ? ` (${h.domain})` : '';
+        lines.push(`- **${h.alias}**${domainPart} [${h.environment}] — target: ssh:${h.alias}@${h.environment}`);
+      }
+    }
+
+    if (localSection.length === 0 && wpeSection.length === 0 && externalSection.length === 0) {
       lines.push('');
       lines.push('No sites found.');
     }
