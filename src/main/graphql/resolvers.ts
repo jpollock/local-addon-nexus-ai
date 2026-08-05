@@ -2340,47 +2340,10 @@ export function createResolvers(context: ResolverContext) {
             };
           }
 
-          if (!services.graphService?.getDb?.()) {
-            return {
-              success: false,
-              error: 'Graph service not available',
-              summary: null,
-            };
-          }
-
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          const db = services.graphService.getDb()!;
-
-          // Count all active sites from graph DB (all three sources)
-          const allActiveSites = db
-            .prepare('SELECT id, source FROM sites WHERE is_active = 1')
-            .all() as Array<{ id: string; source: string }>;
-
-          const totalSites = allActiveSites.length;
-          const localSites = allActiveSites.filter((s) => s.source === 'local').length;
-
-          // Count plugins and themes joined to active sites only
-          const totalPlugins = db
-            .prepare(`
-              SELECT COUNT(*) as count
-              FROM plugins p
-              INNER JOIN sites s ON p.site_id = s.id
-              WHERE s.is_active = 1
-            `)
-            .get() as { count: number };
-
-          const totalThemes = db
-            .prepare(`
-              SELECT COUNT(*) as count
-              FROM themes t
-              INNER JOIN sites s ON t.site_id = s.id
-              WHERE s.is_active = 1
-            `)
-            .get() as { count: number };
-
-          // Count Local sites by status (running/halted is Local-only)
+          // Count Local sites from Local's store (authoritative for local)
           const localSiteData = services.siteData.getSites();
           const localSiteIds = Object.keys(localSiteData);
+          const localSites = localSiteIds.length;
 
           let runningSites = 0;
           let haltedSites = 0;
@@ -2390,6 +2353,55 @@ export function createResolvers(context: ResolverContext) {
             if (status === 'running') runningSites++;
             else haltedSites++;
           }
+
+          // Count remote sites from graph (authoritative for WPE + external)
+          let remoteSites = 0;
+          let totalPlugins = 0;
+          let totalThemes = 0;
+          let indexedSites = localSites; // start with all local sites
+
+          const db = services.graphService?.getDb?.();
+          if (db) {
+            try {
+              // Count remote sites (WPE + external only)
+              const remoteCount = db
+                .prepare(`SELECT COUNT(*) as count FROM sites WHERE is_active = 1 AND (source = 'wpe' OR source = 'external' OR source IS NULL)`)
+                .get() as { count: number };
+              remoteSites = remoteCount.count;
+
+              // Count indexed sites for coverage statement
+              const allIndexed = db
+                .prepare(`SELECT COUNT(*) as count FROM sites WHERE is_active = 1`)
+                .get() as { count: number };
+              indexedSites = allIndexed.count;
+
+              // Count plugins joined to active sites only
+              const pluginCount = db
+                .prepare(`
+                  SELECT COUNT(*) as count
+                  FROM plugins p
+                  INNER JOIN sites s ON p.site_id = s.id
+                  WHERE s.is_active = 1
+                `)
+                .get() as { count: number };
+              totalPlugins = pluginCount.count;
+
+              // Count themes joined to active sites only
+              const themeCount = db
+                .prepare(`
+                  SELECT COUNT(*) as count
+                  FROM themes t
+                  INNER JOIN sites s ON t.site_id = s.id
+                  WHERE s.is_active = 1
+                `)
+                .get() as { count: number };
+              totalThemes = themeCount.count;
+            } catch {
+              // Graph unavailable, degrade to local-only
+            }
+          }
+
+          const totalSites = localSites + remoteSites;
 
           // Get indexed sites for health scoring
           const entries = services.indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
@@ -2427,10 +2439,11 @@ export function createResolvers(context: ResolverContext) {
               healthyCount,
               warningCount,
               criticalCount,
-              totalPlugins: totalPlugins.count,
+              totalPlugins,
               outdatedPlugins: null,
-              totalThemes: totalThemes.count,
+              totalThemes,
               outdatedThemes: null,
+              indexedSites, // for CLI coverage statement
             },
           };
         } catch (error: any) {

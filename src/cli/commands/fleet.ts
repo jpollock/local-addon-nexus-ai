@@ -85,6 +85,7 @@ fleetCommand
               outdatedPlugins
               totalThemes
               outdatedThemes
+              indexedSites
             }
           }
         }
@@ -108,15 +109,15 @@ fleetCommand
       console.log(`Sites:         ${summary.totalSites} total — ${summary.localSites} local (${summary.runningSites} running, ${summary.haltedSites} halted), ${remoteSites} remote`);
       console.log(`Health:        ${summary.healthyCount} healthy, ${summary.warningCount} warnings, ${summary.criticalCount} critical`);
 
-      const pluginStatus = summary.outdatedPlugins !== null
+      const pluginStatus = summary.outdatedPlugins != null
         ? `${summary.outdatedPlugins} outdated`
         : 'update status not tracked';
-      console.log(`Plugins:       ${summary.totalPlugins} total (${pluginStatus})`);
+      console.log(`Plugins:       ${summary.totalPlugins} total (across ${summary.indexedSites} indexed sites, ${pluginStatus})`);
 
-      const themeStatus = summary.outdatedThemes !== null
+      const themeStatus = summary.outdatedThemes != null
         ? `${summary.outdatedThemes} outdated`
         : 'update status not tracked';
-      console.log(`Themes:        ${summary.totalThemes} total (${themeStatus})`);
+      console.log(`Themes:        ${summary.totalThemes} total (across ${summary.indexedSites} indexed sites, ${themeStatus})`);
       console.log('');
     } catch (error: any) {
       console.error(`Error: ${error.message}`);

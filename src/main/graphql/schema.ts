@@ -1009,21 +1009,25 @@ export const typeDefs = gql`
   # ============================================================================
 
   type FleetHealthSummary {
-    # Total active sites across all sources (local, WPE, external SSH)
+    "Total sites across all sources (local + WPE + external SSH)"
     totalSites: Int!
-    # Count of local sites only (running + halted = localSites)
+    "Count of local sites from Local's store (running + halted = localSites)"
     localSites: Int!
-    # Running/halted counts apply only to Local sites (Nexus does not start/stop remote hosts)
+    "Running/halted counts apply only to Local sites (Nexus does not start/stop remote hosts)"
     runningSites: Int!
     haltedSites: Int!
     healthyCount: Int!
     warningCount: Int!
     criticalCount: Int!
+    "Total plugins across indexed sites only (local + remote that have been scanned)"
     totalPlugins: Int!
-    # Update availability is not persisted in the graph DB, so these are null rather than a false all-clear
+    "Update availability is not persisted in the graph DB, so these are null rather than a false all-clear"
     outdatedPlugins: Int
+    "Total themes across indexed sites only (local + remote that have been scanned)"
     totalThemes: Int!
     outdatedThemes: Int
+    "Number of sites with indexed data (for plugin/theme coverage statement)"
+    indexedSites: Int!
   }
 
   type NexusFleetHealthResult {

@@ -343,19 +343,7 @@ describe('nexusFleetHealth includes all sources', () => {
   }
 
   it('counts all three sources, and plugin totals are no longer always zero', async () => {
-    // Seed: 1 local, 1 wpe, 1 external — all active
-    await graphService.upsertSite({
-      id: 'local-1',
-      name: 'local-site',
-      source: 'local',
-      host: 'local',
-      domain: 'local.local',
-      is_active: true,
-      wp_version: '6.8.0',
-      created_at: Date.now(),
-      updated_at: Date.now(),
-    });
-
+    // Seed: 1 wpe, 1 external in graph
     await graphService.upsertSite({
       id: 'wpe-1',
       name: 'wpe-site',
@@ -381,7 +369,7 @@ describe('nexusFleetHealth includes all sources', () => {
       updated_at: Date.now(),
     });
 
-    // Add plugins to the wpe and local sites
+    // Add plugins and themes to the remote sites
     await graphService.upsertPlugin({
       site_id: 'wpe-1',
       slug: 'wpe-plugin',
@@ -394,9 +382,9 @@ describe('nexusFleetHealth includes all sources', () => {
     });
 
     await graphService.upsertPlugin({
-      site_id: 'local-1',
-      slug: 'local-plugin',
-      name: 'Local Plugin',
+      site_id: 'ssh:ext-1',
+      slug: 'ext-plugin',
+      name: 'External Plugin',
       version: '1.0.0',
       is_active: true,
       author: 'Test',
@@ -404,27 +392,44 @@ describe('nexusFleetHealth includes all sources', () => {
       updated_at: Date.now(),
     });
 
-    const r = await (createResolvers(ctx()).Mutation as any).nexusFleetHealth();
-    expect(r.success).toBe(true);
-    expect(r.summary.totalSites).toBe(3);
-    expect(r.summary.localSites).toBe(1);
-    expect(r.summary.totalPlugins).toBeGreaterThan(0); // was hardcoded 0
-  });
-
-  it('running + halted counts only Local sites', async () => {
-    // Seed 1 local, 1 wpe
-    await graphService.upsertSite({
-      id: 'local-1',
-      name: 'local-site',
-      source: 'local',
-      host: 'local',
-      domain: 'local.local',
+    await graphService.upsertTheme({
+      site_id: 'wpe-1',
+      slug: 'wpe-theme',
+      name: 'WPE Theme',
+      version: '1.0.0',
       is_active: true,
-      wp_version: '6.8.0',
+      author: 'Test',
       created_at: Date.now(),
       updated_at: Date.now(),
     });
 
+    await graphService.upsertTheme({
+      site_id: 'ssh:ext-1',
+      slug: 'ext-theme',
+      name: 'External Theme',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    // Mock siteData with 1 local site
+    const context = ctx();
+    context.services.siteData.getSites = jest.fn().mockReturnValue({
+      'local-1': { id: 'local-1', name: 'local-site' },
+    });
+
+    const r = await (createResolvers(context).Mutation as any).nexusFleetHealth();
+    expect(r.success).toBe(true);
+    expect(r.summary.totalSites).toBe(3); // 1 local + 2 remote
+    expect(r.summary.localSites).toBe(1); // from siteData
+    expect(r.summary.totalPlugins).toBe(2); // was hardcoded 0
+    expect(r.summary.totalThemes).toBe(2); // was hardcoded 0
+  });
+
+  it('running + halted counts only Local sites', async () => {
+    // Seed 1 wpe in graph (simulates a remote site)
     await graphService.upsertSite({
       id: 'wpe-1',
       name: 'wpe-site',
@@ -438,15 +443,24 @@ describe('nexusFleetHealth includes all sources', () => {
       updated_at: Date.now(),
     });
 
-    // Mock siteData to only return local-1
+    // Mock siteData to return MORE local sites than are in the graph
+    // This is the real-world shape: Local's store has sites that haven't been indexed yet
     const context = ctx();
     context.services.siteData.getSites = jest.fn().mockReturnValue({
-      'local-1': { id: 'local-1', name: 'local-site' },
+      'local-1': { id: 'local-1', name: 'local-site-1' },
+      'local-2': { id: 'local-2', name: 'local-site-2' },
+      'local-3': { id: 'local-3', name: 'local-site-3' },
     });
+    // Mock all 3 as running
+    context.services.localServices.getSiteStatus = jest.fn().mockReturnValue('running');
 
     const r = await (createResolvers(context).Mutation as any).nexusFleetHealth();
     expect(r.success).toBe(true);
+    expect(r.summary.localSites).toBe(3); // from siteData
+    expect(r.summary.runningSites).toBe(3); // all running
+    expect(r.summary.haltedSites).toBe(0);
     expect(r.summary.runningSites + r.summary.haltedSites).toBe(r.summary.localSites);
+    expect(r.summary.totalSites).toBe(4); // 3 local + 1 wpe
   });
 
   it('reports outdated counts as unknown rather than a false all-clear', async () => {
@@ -457,13 +471,14 @@ describe('nexusFleetHealth includes all sources', () => {
   });
 
   it('excludes inactive sites from the totals', async () => {
-    // Seed one active and one inactive
+    // Seed one active WPE and one inactive WPE
     await graphService.upsertSite({
       id: 'active-1',
       name: 'active-site',
-      source: 'local',
-      host: 'local',
-      domain: 'active.local',
+      source: 'wpe',
+      host: 'wpe',
+      domain: 'active.wpengine.com',
+      remote_install_id: 'active-1',
       is_active: true,
       wp_version: '6.8.0',
       created_at: Date.now(),
@@ -483,7 +498,7 @@ describe('nexusFleetHealth includes all sources', () => {
       updated_at: Date.now(),
     });
 
-    // Add plugin to inactive site
+    // Add plugin and theme to inactive site
     await graphService.upsertPlugin({
       site_id: 'inactive-1',
       slug: 'inactive-plugin',
@@ -495,9 +510,21 @@ describe('nexusFleetHealth includes all sources', () => {
       updated_at: Date.now(),
     });
 
+    await graphService.upsertTheme({
+      site_id: 'inactive-1',
+      slug: 'inactive-theme',
+      name: 'Inactive Theme',
+      version: '1.0.0',
+      is_active: true,
+      author: 'Test',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
     const r = await (createResolvers(ctx()).Mutation as any).nexusFleetHealth();
     expect(r.success).toBe(true);
-    expect(r.summary.totalSites).toBe(1); // only the active one
+    expect(r.summary.totalSites).toBe(1); // only active-1 (remote); siteData mock returns {}
     expect(r.summary.totalPlugins).toBe(0); // plugin belongs to inactive site
+    expect(r.summary.totalThemes).toBe(0); // theme belongs to inactive site
   });
 });
