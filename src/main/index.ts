@@ -320,7 +320,6 @@ export default function main(context: any): void {
 
   // Initialize WPE sync service (Phase 1-2)
   const remoteContentExtractor = new RemoteContentExtractor({
-    localServices: localServicesBridge,
     logger: localLogger,
   });
   const wpeSyncService = new WPESyncService({

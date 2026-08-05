@@ -1,5 +1,8 @@
 /**
- * RemoteContentExtractor - Extracts content from WPE sites via WP-CLI
+ * RemoteContentExtractor - Extracts content from a remote site via WP-CLI
+ *
+ * Consumes a `SiteTransport` (WPE, external SSH, etc.) so it works against any
+ * target that can run WP-CLI remotely, not just WP Engine.
  *
  * Uses --post_type=any to get ALL published posts in a single SSH call,
  * regardless of post type registration. This is crucial because --skip-plugins
@@ -12,30 +15,27 @@
 import { ExtractedContent, ExtractedPost } from '../../common/types';
 import { EXCLUDED_POST_TYPES } from '../../common/constants';
 import { cleanWordPressContent } from './html-cleaner';
-import type { LocalServicesBridge } from '../mcp/local-services-bridge';
+import type { SiteTransport } from '../transport/types';
 
 export interface RemoteContentExtractorOptions {
-  localServices: LocalServicesBridge;
   logger?: any;
 }
 
 export class RemoteContentExtractor {
-  private localServices: LocalServicesBridge;
   private logger: any;
 
   constructor(options: RemoteContentExtractorOptions) {
-    this.localServices = options.localServices;
     this.logger = options.logger || console;
   }
 
   /**
-   * Extract all published content from a WPE install in a single SSH call.
+   * Extract all published content from a remote site in a single SSH call.
    * Uses --post_type=any so plugin-registered types (e.g. 'recipe') are
    * captured even when --skip-plugins prevents their registration.
    */
-  async extract(installName: string): Promise<ExtractedContent> {
+  async extract(transport: SiteTransport, siteLabel: string): Promise<ExtractedContent> {
     try {
-      this.logger.info(`[RemoteContentExtractor] Starting content extraction for ${installName}...`);
+      this.logger.info(`[RemoteContentExtractor] Starting content extraction for ${siteLabel}...`);
 
       // Load plugins AND themes so custom post types (e.g. 'recipe') are
       // registered and included when post_type=any is used. Without them, only
@@ -45,7 +45,7 @@ export class RemoteContentExtractor {
       // skipThemes: false is stated explicitly because the two flags are now
       // independent (ssh-args.ts). It used to be implied: skipPlugins: false
       // zeroed both. Dropping it would silently narrow this index.
-      const result = await this.localServices.remoteWpCliRun(installName, [
+      const result = await transport.runWpCli([
         'post',
         'list',
         '--post_type=any',
@@ -56,14 +56,14 @@ export class RemoteContentExtractor {
       ], { skipPlugins: false, skipThemes: false });
 
       if (!result.success || !result.stdout) {
-        this.logger.warn(`[RemoteContentExtractor] No posts returned for ${installName}`);
-        return this.emptyResult(installName);
+        this.logger.warn(`[RemoteContentExtractor] No posts returned for ${siteLabel}`);
+        return this.emptyResult(siteLabel);
       }
 
       const rawPosts = JSON.parse(result.stdout);
       if (!Array.isArray(rawPosts) || rawPosts.length === 0) {
-        this.logger.info(`[RemoteContentExtractor] No published posts in ${installName}`);
-        return this.emptyResult(installName);
+        this.logger.info(`[RemoteContentExtractor] No published posts in ${siteLabel}`);
+        return this.emptyResult(siteLabel);
       }
 
       // Filter out excluded post types client-side
@@ -79,7 +79,7 @@ export class RemoteContentExtractor {
       ).map(([t, n]) => `${t}:${n}`).join(', ');
 
       this.logger.info(
-        `[RemoteContentExtractor] ${installName}: ${rawPosts.length} total → ${filtered.length} indexable (${typeBreakdown})`
+        `[RemoteContentExtractor] ${siteLabel}: ${rawPosts.length} total → ${filtered.length} indexable (${typeBreakdown})`
       );
 
       const posts: ExtractedPost[] = filtered
@@ -104,24 +104,24 @@ export class RemoteContentExtractor {
         })
         .filter((p: ExtractedPost) => p.cleanedContent.trim().length > 0);
 
-      this.logger.info(`[RemoteContentExtractor] Extracted ${posts.length} posts with content from ${installName}`);
+      this.logger.info(`[RemoteContentExtractor] Extracted ${posts.length} posts with content from ${siteLabel}`);
 
       return {
         posts,
-        siteInfo: { name: installName, url: `${installName}.wpengine.com`, wpVersion: '' },
+        siteInfo: { name: siteLabel, url: '', wpVersion: '' },
         extractedAt: Date.now(),
       };
     } catch (error: any) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      this.logger.error(`[RemoteContentExtractor] Failed to extract from ${installName}:`, errorMsg);
+      this.logger.error(`[RemoteContentExtractor] Failed to extract from ${siteLabel}:`, errorMsg);
       throw error;
     }
   }
 
-  private emptyResult(installName: string): ExtractedContent {
+  private emptyResult(siteLabel: string): ExtractedContent {
     return {
       posts: [],
-      siteInfo: { name: installName, url: `${installName}.wpengine.com`, wpVersion: '' },
+      siteInfo: { name: siteLabel, url: '', wpVersion: '' },
       extractedAt: Date.now(),
     };
   }

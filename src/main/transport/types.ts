@@ -1,4 +1,5 @@
 import type { WpCliResult } from '../mcp/local-services-bridge';
+export type { WpCliResult };
 
 export type TransportKind = 'local' | 'wpe-ssh' | 'external-ssh' | 'external-rest';
 

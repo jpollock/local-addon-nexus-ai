@@ -12,6 +12,7 @@
 import { GraphService } from './GraphService';
 import { Site } from './types';
 import { RemoteContentExtractor } from '../content/RemoteContentExtractor';
+import { WpeSshTransport } from '../transport/WpeSshTransport';
 import { EmbeddingService } from '../embeddings/EmbeddingService';
 import type { IVectorStore } from '../vector-store/IVectorStore';
 import { VectorDocument } from '../../common/types';
@@ -449,7 +450,8 @@ export class WPESyncService {
       this.logger.info(`[WPESyncService] Starting content extraction for ${installName}...`);
 
       // Extract content via remote WP-CLI
-      const extracted = await this.remoteContentExtractor.extract(installName);
+      const wpeTransport = new WpeSshTransport(installName);
+      const extracted = await this.remoteContentExtractor.extract(wpeTransport, installName);
       this.logger.info(`[WPESyncService] Extraction complete. Posts found: ${extracted.posts?.length || 0}`);
 
       if (!extracted.posts || extracted.posts.length === 0) {
