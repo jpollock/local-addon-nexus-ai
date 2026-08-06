@@ -160,7 +160,12 @@ export class HealthScoreCalculator {
       }
     }
 
-    const recommendations = this.generateRecommendations(factors);
+    // Only the evaluated factors may drive recommendations. The unevaluated
+    // ones are still sitting at their {score: 0} initializer, so sorting the
+    // full record lowest-first floats them to the top and produces advice
+    // ("Investigate and resolve failed events") about dimensions the report
+    // has just said it could not evaluate for this target.
+    const recommendations = this.generateRecommendations(factors, factorsToEvaluate);
 
     return { overall, factors, factorsEvaluated: factorsToEvaluate, issues, issuesByCategory, recommendations };
   }
@@ -191,9 +196,18 @@ export class HealthScoreCalculator {
 
   /**
    * Generate top 5 actionable recommendations based on lowest-scoring factors.
+   *
+   * @param factors Full five-key factor record.
+   * @param factorsEvaluated The subset of factors that were genuinely evaluated.
+   *   Factors outside this list are still at their `{score: 0}` initializer and
+   *   must not produce advice — recommending a fix for a dimension the report
+   *   says it could not measure is the same fabrication as scoring it.
+   *   Defaults to every key in `factors`, so callers that evaluate all five
+   *   are unchanged.
    */
   generateRecommendations(
     factors: Record<string, number>,
+    factorsEvaluated: string[] = Object.keys(factors),
   ): string[] {
     const recommendationMap: Record<string, string[]> = {
       security: [
@@ -220,8 +234,10 @@ export class HealthScoreCalculator {
       ],
     };
 
-    // Sort factors from lowest to highest score
+    // Sort factors from lowest to highest score, over the evaluated subset only
+    const evaluated = new Set(factorsEvaluated);
     const sorted = Object.entries(factors)
+      .filter(([factor]) => evaluated.has(factor))
       .sort(([, a], [, b]) => a - b);
 
     const recommendations: string[] = [];

@@ -490,4 +490,81 @@ describe('HealthScoreCalculator', () => {
       calculator.calculateScore('site-1', { phpVersion: '8.3.0' }, [])
     ).rejects.toThrow(/not scoreable/);
   });
+
+  // -------------------------------------------------------------------------
+  // Recommendations must not name factors that were never evaluated
+  // -------------------------------------------------------------------------
+  describe('recommendations are scoped to the evaluated factors', () => {
+    const MAINTENANCE_RECS = [
+      'Re-index this site to keep search data fresh',
+      'Set up automatic indexing to avoid stale data',
+    ];
+    const ACTIVITY_RECS = [
+      'Publish or update content regularly to keep the site active',
+      'Monitor site events to detect issues early',
+    ];
+    const STABILITY_RECS = [
+      'Investigate and resolve failed events',
+      'Review error logs for recurring failures',
+    ];
+
+    it('never recommends maintenance/activity/stability for a security+performance-only target', async () => {
+      // A remote target: no index entry, no events, no content — so
+      // maintenance and activity sit at their {score: 0} initializer and would
+      // sort to the very top of an unfiltered lowest-first sort.
+      const result = await calculator.calculateScore(
+        'wpe-1',
+        { phpVersion: '7.2.0', siteUrl: 'http://example.com' },
+        ['security', 'performance'],
+      );
+
+      expect(result.factors.maintenance).toBe(0);
+      expect(result.factors.activity).toBe(0);
+      expect(result.factors.stability).toBe(0);
+
+      expect(result.recommendations.length).toBeGreaterThan(0);
+      for (const rec of [...MAINTENANCE_RECS, ...ACTIVITY_RECS, ...STABILITY_RECS]) {
+        expect(result.recommendations).not.toContain(rec);
+      }
+      // Everything it does say must come from security or performance.
+      const allowed = new Set([
+        'Enable SSL/HTTPS for your domain',
+        'Upgrade PHP to 8.1 or later',
+        'Install a security plugin (e.g., Wordfence, Sucuri)',
+        'Upgrade PHP to the latest stable version for better performance',
+        'Install a caching plugin (e.g., Redis Object Cache, WP Super Cache)',
+        'Install an image optimization plugin (e.g., Smush, EWWW, Imagify)',
+      ]);
+      for (const rec of result.recommendations) {
+        expect(allowed.has(rec)).toBe(true);
+      }
+    });
+
+    it('still recommends from the genuinely lowest-scoring factor on a full five-factor call', async () => {
+      // All five evaluated. With no index entry, maintenance genuinely scores 0
+      // and is genuinely the worst factor, so its advice is legitimate here.
+      const result = await calculator.calculateScore('site-1', {
+        phpVersion: '8.3.0',
+        siteUrl: 'https://example.com',
+      });
+
+      expect(result.factorsEvaluated).toHaveLength(5);
+      expect(result.recommendations).toContain(MAINTENANCE_RECS[0]);
+    });
+
+    it('generateRecommendations defaults to every key when no subset is given', () => {
+      const factors = { security: 90, performance: 90, maintenance: 0, activity: 90, stability: 90 };
+      const recs = calculator.generateRecommendations(factors);
+      expect(recs).toContain(MAINTENANCE_RECS[0]);
+    });
+
+    it('generateRecommendations ignores factors outside the evaluated subset', () => {
+      const factors = { security: 90, performance: 90, maintenance: 0, activity: 0, stability: 0 };
+      const recs = calculator.generateRecommendations(factors, ['security', 'performance']);
+      for (const rec of [...MAINTENANCE_RECS, ...ACTIVITY_RECS, ...STABILITY_RECS]) {
+        expect(recs).not.toContain(rec);
+      }
+      expect(recs.length).toBeGreaterThan(0);
+    });
+  });
 });
