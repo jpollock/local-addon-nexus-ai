@@ -197,6 +197,15 @@ Target syntax: `ssh:<alias>@<production|staging|development>`.
   "External host metadata refresh" below for `ExternalRefreshScheduler`. It is
   off by default, so an un-opted-in user still sees the empty-data behaviour
   described here, and `nexus host refresh <alias>` is the manual path.
+- **Fleet-wide discovery now includes external hosts.** `nexus_list_sites` (the
+  MCP tool agents are told to call first) and the `nexus://fleet/state` resource
+  both now query `graph.db WHERE source='external'` — before this fix, a
+  registered host was invisible to both, and a chat agent would confidently
+  report it as "not registered" even though it was. `nexusContentSearchAll`,
+  `nexusResolveTarget`, `SITE_FINDER_APPLY`, `GET_FLEET_SUMMARY`,
+  `GET_FLEET_PLUGINS`, and several fleet-scoped MCP tools
+  (`get_all_site_documents`, `compare_sites`, `detect_drift`, `get_site_health`)
+  had the same class of gap and are fixed the same way.
 
 ---
 

@@ -205,7 +205,7 @@ See [WP Connector](wp-connector.md) for full details.
 | `local_wpe_pull` | Pull a WPE environment into a local site |
 | `local_wpe_push` | Push a local site to a WPE environment (requires confirmation) |
 | `local_wpe_link` | Link a local site to a WPE install |
-| `nexus_list_sites` | Unified view of local sites + WPE installs |
+| `nexus_list_sites` | Unified view of local sites + WPE installs + external SSH hosts |
 
 Additional WPE management tools cover domains, SSL certificates, user management, environment promotion, fleet health, and go-live checklists. See [WP Engine Management Guide](WPE_REMOTE_MANAGEMENT_USER_GUIDE.md) for the complete tool reference.
 
