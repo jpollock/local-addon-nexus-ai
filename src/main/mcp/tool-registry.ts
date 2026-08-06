@@ -2,16 +2,24 @@ import { McpToolHandler, McpToolDefinition, McpToolResult, NexusServices } from 
 import { createLogger } from '../logging/Logger';
 import { getMetrics } from '../telemetry/MetricsCollector';
 import { getToolSafety } from './safety';
+import { parseTarget } from '../../common/target';
+import { findExternalSites } from './site-resolver';
+import { upsertExternalProfile } from '../external/externalSiteStore';
 
 const logger = createLogger('ToolRegistry');
 const metrics = getMetrics();
 
 /**
- * Record an external host in the fleet after a successful command against it.
+ * Refresh an external site's freshness after a successful command against it.
  *
- * With registration deferred to Plan B2, this is how an external site first
- * appears: use it once and it joins. Only successful calls qualify, so a
- * typo'd alias does not litter the fleet with unreachable hosts.
+ * This is a SIGHTING, not registration: `resolveTransport` already proved the
+ * alias/site pair exists and is permitted before the command it gated on ever
+ * ran, so by the time this runs there is nothing left to decide — only a
+ * lookup of the row that must already be there. If it isn't (a race, or a
+ * caller that bypassed `resolveTransport`), there is nothing to sight, and
+ * creating one here would be exactly the silent auto-registration this
+ * function used to do and no longer may. Registering a *new* host is the
+ * explicit picker's job, not a side effect of a read.
  *
  * Never throws. Persistence is a side benefit of a command the user already
  * got the answer to; a storage fault must not turn a successful call into a
@@ -21,61 +29,55 @@ export async function maybeUpsertExternalSite(
   args: Record<string, unknown>,
   succeeded: boolean,
   registryStorage: { get(k: string): unknown; set(k: string, v: unknown): void } | null | undefined,
-  graphService: { upsertSite(site: any): Promise<void> } | null | undefined,
+  graphService: { upsertSite(site: any): Promise<void>; getDb?: () => any } | null | undefined,
 ): Promise<void> {
   try {
     if (!succeeded) return;
     const sshTarget = typeof args.ssh_target === 'string' ? args.ssh_target : undefined;
     if (!sshTarget || !registryStorage || !graphService) return;
 
-    const { parseTarget } = require('../../common/target');
     const parsed = parseTarget(sshTarget);
     if (parsed.type !== 'external' || !parsed.alias) return;
 
-    const { externalSiteId, upsertExternalProfile } = require('../external/externalSiteStore');
+    const db = graphService.getDb?.();
+    // A successful call already proves the site resolved in resolveTransport,
+    // so this is a lookup of something that must already exist — not a guess.
+    // If it comes back empty (a race, or a call bypassing resolveTransport),
+    // there is nothing to sight: creating a row here is exactly the silent
+    // auto-registration this function used to do and no longer should.
+    const sites = findExternalSites(db, parsed.alias, parsed.site, 'id, name, domain, environment');
+    if (sites.length !== 1) return;
+    const site = sites[0];
+
     const now = Date.now();
-    const wpPath = typeof args.wp_path === 'string' ? args.wp_path : undefined;
 
-    // 'sighting', explicitly: `parsed.environment` is the suffix on whatever
-    // target string this command happened to use, not a label the user chose
-    // for the host. A registered environment must survive it — the store
-    // enforces that, and the merged result is what the sites row must carry so
-    // the fleet UI does not show the suffix instead of the registration.
-    const stored = upsertExternalProfile(registryStorage, {
-      alias: parsed.alias,
-      wpPath,
-      environment: parsed.environment,
-      firstSeenAt: now,
-      lastSeenAt: now,
-    }, 'sighting');
-
-    // Preserve the existing domain if registration has already discovered it.
-    // A lazy sighting has nothing better than the alias, so overwriting a real
-    // domain would silently degrade fleet visibility every time a command runs.
-    const siteId = externalSiteId(parsed.alias);
-    const db = (graphService as any).getDb?.();
-    let domain = parsed.alias;
-    if (db) {
-      const existing = db.prepare('SELECT domain FROM sites WHERE id=?').get(siteId) as { domain?: string } | undefined;
-      if (existing?.domain && existing.domain !== parsed.alias) {
-        domain = existing.domain;
-      }
-    }
+    // Preserve the existing domain — a sighting has nothing better than what
+    // registration already discovered.
+    let domain = site.domain;
+    if (!domain) domain = site.name;
 
     await graphService.upsertSite({
-      id: siteId,
-      name: parsed.alias,
+      id: site.id,
+      name: site.name,
       domain,
       source: 'external',
       host: 'external',
-      environment: stored.environment,
+      account_id: parsed.alias,
+      environment: site.environment,
       is_active: true,
       created_at: now,
       updated_at: now,
       last_sync_at: now,
     });
+
+    // Connection-level freshness — this alias is still reachable.
+    upsertExternalProfile(registryStorage, {
+      alias: parsed.alias,
+      firstSeenAt: now,
+      lastSeenAt: now,
+    } as any, 'sighting');
   } catch {
-    // Deliberately swallowed — see the docblock.
+    // Never let a sighting failure affect the caller's actual result.
   }
 }
 
